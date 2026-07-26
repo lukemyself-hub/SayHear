@@ -1,5 +1,17 @@
 # SayHear
 
+## TL;DR
+
+- 本文件路径由 matt skills 依赖，不得移动或改名。
+- 本文件是 SayHear 产品与领域术语、定义和禁用近义词的唯一权威来源。
+- 只在任务涉及命名、领域模型或跨模块接口时读取相关章节，不要求日常任务全文加载。
+- 功能规则读取 `docs/product/`，技术约束读取 `docs/architecture/`，决策原因读取
+  `docs/adr/`。
+
+## Status
+
+Accepted
+
 SayHear 接住用户对生活的自然表达，将被理解的交流沉淀为可信、可控制且持续生长的人生记录。
 
 ## 产品阶段
@@ -175,3 +187,9 @@ _Avoid_: Importance score, Emotional depth
 **No Journal Notice**:
 当天发生过交流但未达到 Journal Eligibility 时，下一天在 Journal 界面显示“交流内容较少，昨天无日记”一类状态；如果当天完全没有交流，则静默不生成 Journal，也不显示缺席提示。
 _Avoid_: Empty Journal, No-activity placeholder
+
+## References
+
+- [文档地图](docs/README.md)
+- [领域文档使用说明](docs/agents/domain.md)
+- [ADR 索引](docs/decisions.md)

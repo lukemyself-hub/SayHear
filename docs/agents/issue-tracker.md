@@ -1,5 +1,15 @@
 # Issue tracker: GitHub
 
+## TL;DR
+
+- Issues and PRDs for this repository live in GitHub Issues.
+- Read the target Issue, comments, labels, and acceptance criteria before issue-driven development.
+- Use this file only for Issue or PRD operations; ordinary local development does not need it.
+
+## Status
+
+Accepted
+
 Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
 ## Conventions
@@ -43,3 +53,8 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: find the first open, unblocked, and unassigned child in map order.
 - **Claim**: `gh issue edit <n> --add-assignee @me`.
 - **Resolve**: comment with the answer, close the child issue, then append a context pointer to the map’s Decisions-so-far.
+
+## References
+
+- [Documentation map](../README.md)
+- [Triage labels](triage-labels.md)

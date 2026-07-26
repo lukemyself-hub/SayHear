@@ -1,7 +1,6 @@
 # SayHear Agent 入口
 
-本文件只提供全局规则和文档导航。开始任务时只读本文件，不要预加载下列文档；
-根据任务实际涉及的范围按需读取。
+本文件只提供必要的全局规则和启动入口。
 
 ## 全局规则
 
@@ -9,33 +8,23 @@
 - 修复问题前先确认根因，完成后运行与风险相称的验证。
 - 未经明确要求，不提交、推送、重写历史、删除分支或工作树。
 - 不因实现便利改变产品定义。若任务会改变产品定位、Internal Core / External MVP
-  边界、用户信任或关键体验，先阅读产品文档并向 Luke 确认。
+  边界、用户信任或关键体验，先读取相关当前产品文档并向 Luke 确认。
 
-## 按需读取
+## 文档启动规则
 
-- **产品、设计、功能行为或范围决策**：阅读
-  [`docs/product/AI_Life_Journal_Product_Document_v0.1.md`](docs/product/AI_Life_Journal_Product_Document_v0.1.md)。
-  这是产品需求与背景的事实来源；不要在其他文件中重复 PRD。
-- **领域术语、领域模型或架构决策**：阅读 [`CONTEXT.md`](CONTEXT.md)、
-  相关 `docs/adr/`，以及 [`docs/agents/domain.md`](docs/agents/domain.md)。
-- **GitHub Issue 或 PRD 操作**：阅读
-  [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
-- **Issue 分诊或标签操作**：同时阅读
-  [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)。
+- 每个任务先读取 [`docs/README.md`](docs/README.md)，再按其路由只读取任务相关的
+  产品、SPEC、架构或术语文档。
+- 不默认读取 `docs/archive/`、完整历史决策、整套产品文档或整套架构。
+- 有 GitHub Issue 或 `docs/tasks/` working spec 时先读取任务本身，再读取它明确链接的
+  当前文档。
+- 只有需要理解决策原因或检查既有约束时，才读取 `docs/adr/` 中相关 ADR。
+- 发现文档与代码、SPEC 与 ADR 冲突时，明确指出冲突，不要自行猜测。
+- 一次任务中不要重复读取没有变化的长文档。
 
-对于已有 Issue 驱动的开发，先读取 Issue、评论和验收条件，再只补充与改动直接相关的
-上述文档。纯机械且需求明确的日常开发任务不需要读取完整产品文档。
+纯机械且需求明确的日常任务，读取本文件和文档地图后即可开始。
 
-## Agent skills
+## Agent 操作导航
 
-### Issue tracker
-
-Issues and PRDs are tracked in GitHub Issues for `lukemyself-hub/SayHear`. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Use the five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This is a single-context repository. See `docs/agents/domain.md`.
+- GitHub Issue 或 PRD 操作：[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)
+- Issue 分诊与标签：[`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)
+- 领域命名与 ADR 冲突检查：[`docs/agents/domain.md`](docs/agents/domain.md)
