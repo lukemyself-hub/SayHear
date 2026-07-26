@@ -3,9 +3,11 @@
 > Working Title: **AI Life Journal**  
 > 产品名称：TBD  
 > 文档版本：v0.1  
-> 产品形态：Web + iOS  
+> 长期产品形态：Web + iOS  
 > 首发市场：全球  
-> MVP 核心：Voice Live + Text Chat + AI-written Journal + Long-term Memory
+> Phase 1：**Internal Core**（Core Flow 1A / 1B，仅内部自用）  
+> Phase 2：**External MVP**（Web 必须；正式 iOS 待确认）  
+> External MVP 核心：Voice Live + Text Chat + AI-written Journal + Long-term Memory
 
 ---
 
@@ -275,7 +277,7 @@ OffPal 是一个独立的睡眠提醒 iOS App，与本项目没有产品或品�
 - 选择不同声音；
 - 在 Onboarding 中选择期望的交流风格。
 
-MVP 建议控制人格数量，以保证每一种人格都足够完整、稳定和高质量。
+External MVP 建议控制人格数量，以保证每一种人格都足够完整、稳定和高质量。
 
 建议首发提供 3 种人格方向：
 
@@ -336,7 +338,7 @@ AI 在交流中：
 - 确认情绪；
 - 判断用户是否还有未表达完的内容。
 
-对话完成后，AI 生成当天 Journal。
+对话完成后，AI 自动评估并在用户表达足以支撑真实记录时生成当天 Journal。
 
 ## 9.2 情绪发生时
 
@@ -367,7 +369,7 @@ Conversation 仍然长期保留，但不会成为主要浏览入口。
 
 ---
 
-# 10. MVP 核心循环
+# 10. 核心产品循环
 
 1. **Prompt**  
    App 在晚间发送自然邀请，而不是打卡提醒。
@@ -379,10 +381,10 @@ Conversation 仍然长期保留，但不会成为主要浏览入口。
    AI 进行共情回应和自然追问，确保用户感到自己被理解。
 
 4. **Close**  
-   AI 判断当天对话是否接近完成，并以自然方式结束。
+   AI 可以判断当天交流是否接近完成并自然收尾，但不能单独决定 Session 已结束。
 
 5. **Write**  
-   AI 以第三人称生成当天 Journal。
+   AI 以很低的证据门槛判断是否足以形成真实记录，并在成立时以第三人称生成当天 Journal。
 
 6. **Remember**  
    后台提取客观事实、人物、事件、情绪和长期理解。
@@ -394,7 +396,7 @@ Conversation 仍然长期保留，但不会成为主要浏览入口。
 
 # 11. 信息架构
 
-MVP 使用三个一级页面。
+External MVP 使用三个一级页面。
 
 ## 11.1 Talk
 
@@ -425,10 +427,15 @@ MVP 使用三个一级页面。
 - 支持复制；
 - 支持导出；
 - 不支持直接编辑；
-- MVP 不支持重新生成；
+- 不支持为了改变风格而随意重新生成；
+- 支持在 Journal Correction 后生成取代旧版本的新 Journal；
 - Conversation 在 Journal 下方弱化入口进入。
 
 Journal 是用户回看生活的主要界面。
+
+如果当天发生过交流但内容只足以确认一次问候或其他无法支撑真实记录的表达，
+下一天在 Journal 界面显示“交流内容较少，昨天无日记”一类明确状态。当天完全
+没有交流时静默跳过，不显示缺席提示或空 Journal。
 
 ## 11.3 Settings / Profile
 
@@ -454,7 +461,12 @@ User Profile 不放在首页，不作为日常交互对象，但用户可以主�
 - 每个自然日对应一个 Daily Session；
 - 当天可以多次继续同一个 Session；
 - 跨天必须创建新的 Session；
-- 跨午夜仍在进行中的对话，可以在结束后归入开始对话的日期；
+- 连续交流开始时确定其用户本地日期归属，过程中保持不变；
+- 跨午夜仍在进行中的交流不拆分、不迁移，完整归入开始交流的日期；
+- 连续交流只在用户明确表达结束，或达到版本化的无活动时间窗口后结束；
+- AI 的自然收尾或主观判断不能单独改变 Session 状态；
+- Journal 生成等待 Continuous Exchange End；
+- 交流结束后，在新本地日期发起的下一次交流创建新的 Daily Session；
 - 新一天打开 App 时，不延续上一天的对话 UI。
 
 ## 12.2 Conversation 与 Journal 的关系
@@ -468,12 +480,29 @@ User Profile 不放在首页，不作为日常交互对象，但用户可以主�
 
 ## 12.3 Journal 生成时机
 
-建议 MVP 支持两种触发：
+Internal Core 与 External MVP 支持两种自动生成条件：
 
-1. 用户明确结束当晚交流后立即生成；
-2. 当日结束后，如果 Session 有足够内容但未明确结束，由系统后台生成。
+1. 用户在交流中明确表达结束意图后立即评估，满足 Journal Eligibility 时生成；
+2. 当日结束后，如果 Session 有足够表达但未明确结束，由系统后台评估并生成。
 
-为避免错误生成，第二种方式需要设置最小内容阈值。
+跨午夜仍在进行的连续交流不因日期切换触发 Journal；系统等待交流自然结束后，
+再按该 Session 已固定的 `logical_date` 评估和生成。
+
+“交流结束”只由用户明确结束意图或版本化的无活动时间窗口决定。具体超时时长
+可以在 1A.1 固定回放样例、1A.4 Replay 和真实内部使用中调整，不作为永久产品常量；
+AI 自然收尾只影响对话表达，不直接推进领域状态。
+
+用户不需要点击“生成”或在发布前审核批准。Journal Eligibility 的门槛应当很低，
+只判断用户表达能否支撑至少一条真实记录，不能判断某件事是否重要、深刻或
+“值得写进日记”；日常琐事和事务性内容都可能成立，仅有 “Hi” 一类问候则可以
+不成立。
+
+当天完全没有 Conversation 时，系统静默跳过，不创建空 Journal 或缺席提示。
+当天发生过 Conversation 但未达到 Journal Eligibility 时，下一天在 Journal
+界面显示 No Journal Notice，说明“交流内容较少，昨天无日记”。该提示是日期状态，
+不是 Journal，也不进入 Journal 导出或长期记忆。
+
+同日后续表达使已发布 Journal 过期时，系统自动生成新的 Journal Version 取代旧版本。
 
 ---
 
@@ -500,7 +529,11 @@ Journal 应该记录：
 - 用户当时的情绪；
 - 事件对用户意味着什么；
 - 与过去记忆的合理联系；
-- 用户没有直接说出、但在对话中可以可靠理解的感受。
+- 有充分对话依据、但用户没有直接说出的 Journal Observation。
+
+Journal Observation 是 AI 的主观理解，不是用户已确认的事实。正文应使用
+“似乎”“听起来更像是”“也许真正让他在意的是”等自然语言表达不确定性，
+而不是显示技术标签或把推断写成确定结论。
 
 ## 13.3 写作边界
 
@@ -510,16 +543,19 @@ Journal 不应该：
 - 过度心理分析；
 - 把每件事情都写成成长；
 - 编造用户没有表达的信息；
+- 写入缺少充分对话依据的主观推断；
 - 使用夸张文学修辞掩盖事实；
 - 将 AI 的推断写成确定事实；
 - 对用户进行评价或说教。
 
 ## 13.4 用户控制
 
-MVP：
+Internal Core 与 External MVP：
 
 - 不支持直接编辑；
-- 不支持重新生成；
+- 不支持为了改变风格而随意重新生成；
+- 用户指出事实错误或被写成事实的不当推断后，纠正来源并生成取代旧版本的新 Journal；
+- Journal 自动交付，不要求用户手动触发或发布前批准；
 - 支持复制；
 - 支持导出。
 
@@ -527,7 +563,8 @@ MVP：
 
 > Journal 是 AI 对用户一天的观察，不是用户亲自撰写的文本。
 
-用户如需修改，可以复制或导出到其他工具中。
+Journal Correction 不把 Journal 变成用户亲自编辑的文本；它通过新的 Journal Version
+保留 AI 观察视角，同时让错误版本不再作为当前正式记录。
 
 ---
 
@@ -539,8 +576,8 @@ MVP：
 
 保存相对客观的信息：
 
-- 人物；
-- 关系；
+- 人物身份；
+- 有 User Evidence 与时间有效性的关系；
 - 工作；
 - 项目；
 - 地点；
@@ -562,6 +599,13 @@ MVP：
 - 用户近期的心理重心；
 - 用户发生了哪些变化。
 
+两类记忆在召回时必须保留不同的认识状态：
+
+- Objective Memory 可以使用“你之前说过……”等来源归属明确的表达，但不能暗示
+  SayHear 已独立核验其真实性；
+- AI Impression 必须使用“我有一个印象……”或“我可能理解为……”等观察性表达；
+- AI Impression 不能使用“我记得你就是……”等把主观判断说成确定事实的表达。
+
 ## 14.2 Profile 展现方式
 
 User Profile 以一篇自然语言 Bio 呈现，而不是数据库、关键词或表格。
@@ -576,16 +620,24 @@ Profile 应该明确区分：
 - AI 的主观观察；
 - 尚不确定的推断。
 
-## 14.3 MVP 用户权限
+## 14.3 用户权限
 
-MVP 中：
+Internal Core 与 External MVP 中：
 
 - Profile 对用户可见；
 - 用户不能直接编辑；
-- 用户不能逐条删除；
-- 暂不支持“你理解错了”的纠正机制。
+- 暂不提供完整 Profile 编辑界面；
+- 用户可以在对话中明确指出某条 Memory Claim 错误，或要求“不要记这个”；
+- 被纠正或要求忘记的 Claim 必须立即停止召回；
+- Memory Forget Request 不删除原始 Conversation 或已有 Journal；
+- 默认界面不为每条记忆展示技术化引用或专门的来源面板；
+- 当用户询问或质疑某条记忆时，SayHear 必须能在对话中说明它来自哪些日期、
+  哪些用户表达，并明确它属于 Objective Memory 还是 AI Impression；
+- 如果有效来源无法读取，SayHear 必须明确说明无法核实，不能生成一个看似合理的来源解释。
 
-这是一项明确的 MVP 取舍，但也是高风险设计点。后续版本应优先补充纠正与删除机制，以增强信任并减少错误记忆长期积累。
+Profile 的可视化逐条编辑与更细粒度内容删除可以延后，但 Memory Correction 与
+Memory Forget Request、Memory Source Explanation 必须从第一条可被未来召回的
+Memory Claim 开始成立。
 
 ## 14.4 后台工作流
 
@@ -602,6 +654,121 @@ MVP 中：
 
 4. Memory Retrieval  
    在每次对话中召回最相关记忆，而不是加载全部内容。
+
+## 14.5 Entity 身份处理
+
+SayHear 不应因为一个人物、地点或项目尚未完成结构化绑定，就默认打断用户追问。
+判断标准不是“Entity 是否完整”，而是身份歧义是否会实质改变 SayHear 对用户经历
+和想法的理解、当前回应、Journal 含义或未来 Memory 归属。
+
+- 现有身份唯一且置信度高时，绑定已有 Entity；
+- 用户明确介绍一个新的人、地点或项目时，创建 user-scoped、状态为 unresolved
+  的 Entity；仅仅同名不能触发自动合并；
+- 代词、多名候选或仍不清楚的指代只保留为未解析 EntityMention，不强行创建或
+  绑定 Entity；
+- 当歧义会实质影响理解、回应、Journal 或未来 Memory 时，可以紧扣当前表达自然
+  澄清一次；
+- 用户回答后，可以依据其明确陈述完成新建或绑定；Entity promotion、merge 或
+  split 还可以依据稳定的重复证据或用户纠正进行；
+- 用户简短回答、回避、拒绝或转换话题时，立即停止身份追问，保留未解析
+  EntityMention；
+- 未解析身份不阻止共情或 Journal。SayHear 应在现有证据支持的粒度上回应和记录，
+  使用原称呼或中性关系描述，不编造具体身份、关系或跨日连续性。
+- Entity 只代表人物的稳定身份；同事、朋友、伴侣、亲属等关系是有 User Evidence
+  与时间有效性的版本化 Objective Memory Claim，不是 Entity label 或 identity；
+- 每种可以独立成立、拥有独立 Evidence、时间范围、纠正或 Forget 状态的关系拥有
+  一个 logical Claim。同事和朋友可以同时成立，因此不能折叠为一个关系类型数组；
+- 同一稳定关系的状态或有效时间变化创建新的 ClaimVersion；开始另一种可独立关系
+  创建新的 logical Claim，结束其中一种关系不影响其他关系或 Entity；
+- “前任”是已经结束的伴侣 Claim 的当前称呼投影，不为同一事实复制一个
+  `former_partner` Claim；稳定亲属关系通常只保留一条 `valid_to = null` 的长期 Claim，
+  除非出现用户纠正或新的反向 Evidence；
+- 关系是否仍成立与具体日期分开表示。状态可以是 `current / ended / unknown`，
+  `valid_from / valid_to` 可以为空，并保留 `exact / month / year / approximate /
+  unknown` 的时间精度；
+- “她是我妈妈”可以是 `current` 且开始日期未知；“他以前是我同事”可以是
+  `ended` 且结束日期未知；“大概 2023 年夏天在一起”只能保存近似时间，不能补成
+  某个精确日期；
+- Evidence 发生日期不等于关系开始或结束日期。只要 `ended` 有充分 User Evidence，
+  即使 `valid_to` 未知，也可以投影“前任 / 前同事”；状态仍为 `unknown` 时不能生成
+  带确定含义的关系称呼；
+- 关系事实的真源是 Relationship Memory Claim。系统可以把 Claim 与其时间状态预计算
+  为可重建的 Relationship Resolver Hint，用于称呼解析和人物卡片，但 Hint 不能作为
+  关系事实、Evidence 或 Entity identity；
+- 关系称呼可以作为 EntityMention resolver 的提示，但不能单独完成身份绑定。
+  “我之前那个同事”仍可能指向多人，证据不足时必须保持 unresolved / ambiguous；
+- “妈妈 / Mom / 我妈”等关系称呼跨语言指向同一人物时，连续性来自有效的关系 Claim
+  与 Resolver Hint，不把这些称呼固化为 Entity identity；Context Compiler 可以把
+  Entity 与相关 Claim 合并为一张自然人物卡片，不向模型重复注入两份记忆。
+- 每个 Account 恰好拥有一个系统管理的 Self Entity，代表用户本人参与 Memory Claim
+  和人物关系；`user_id` 继续负责账号、权限与数据隔离，不替代领域身份；
+- Self Entity 不能与普通人物 Entity merge、split 或独立删除。Internal Owner
+  Full Purge 保留无正文的 Account–Self Entity 绑定，Account Deletion 才随账号删除；
+- 其他用户提到同一个现实人物时，仍创建在对方作用域内的私人 Entity，不与该人物
+  自己账号下的 Self Entity 跨用户合并。
+- Relationship Memory Claim 可以连接用户作用域内任意两个 Person Entity，不要求
+  其中一端必须是 Self Entity；`user_id` 表示这条理解属于谁，不表示用户一定是关系参与者；
+- 两个非 Self Entity 之间的关系必须来自用户直接表达，且双方身份都达到可绑定标准。
+  任一方仍为 unresolved / ambiguous 时不得创建 active Claim，也不为了补全关系图
+  强行追问或创建 Entity；
+- “Tom 是我姐姐 Lily 的丈夫”可以保存 `Lily —伴侣→ Tom`；它不能自动生成
+  `Self Entity —姐夫→ Tom`。只有用户后来明确称 Tom 为“我姐夫”时，才创建或确认
+  用户与 Tom 的直接关系 Claim；
+- 不自动执行亲属关系闭包、朋友的朋友推导、组织层级传播或其他社交图猜测；
+  第三方关系与 Resolver Hint 仍保持 user-scoped，不跨用户共享或合并。
+
+这项策略宁可暂时保留重复 Entity 或未解析 EntityMention，也不让错误绑定污染
+长期 Memory。
+
+Entity merge、split 或用户身份纠正发生后，SayHear 不遍历并重新生成全部历史
+Journal。系统通过 Entity、EntityMention、Evidence 与 JournalStatement 的反向血缘，
+只定位引用了受影响 Entity 的 Statement，并逐条重新验证：
+
+- 只是补全姓名、别名或统一两个实际相同的身份，且原叙述仍成立时，不修改 Journal；
+- 如果纠正后的 User Evidence 能确定原 Statement 把行为、关系或跨日联系归给了
+  错误的人，该 Statement 属于确定性事实错误或明显误导；
+- 用户明确纠正身份，或影响检查能够从纠正后的 User Evidence 确定错误时，
+  生成新的 Journal Version；
+- 如果现有 Evidence 仍无法确定原 Statement 是否错误，进入 `needs_review`，
+  不静默改写历史 Journal；
+- 未引用受影响 Entity 的 JournalStatement 不重新验证或生成。
+
+`needs_review` 只作用于受影响的 JournalStatement，不使整篇 Journal 下架：
+
+- 原 JournalVersion 继续保持 current 和可见，不删除或自动 supersede；
+- 受影响 Statement 标记为 `identity_review_pending`，暂停参与 Entity 关联、
+  跨日因果、未来 Recall 或其他人生叙事连接；
+- 不按定时任务反复重试，也不为了清理状态主动打断用户；
+- 新的相关 User Evidence、用户主动纠正，或用户打开该 Journal 时，可以按当前
+  Entity / Evidence revision 重新检查；相同 revision 下重复打开不重复运行；
+- 用户查看时只低调说明“这篇记录中有一处人物指代暂时无法确认”，不显示技术状态、
+  不弹窗，也不把处理变成用户待办；
+- 重新检查的结果只能是 `no_change`、`correction_required` 或
+  `still_ambiguous`：分别清除标记、生成新 JournalVersion，或继续等待未来 Evidence。
+
+Internal Core 可以在诊断界面显示待复核 Statement 与 Evidence，但这不是面向用户的
+Review Inbox。
+
+### Entity 身份变化对 Memory Claim 的影响
+
+Memory Claim 会主动影响未来回应，因此比历史 Journal 采用更保守的处理：
+
+- Entity merge、split 或身份纠正发生后，引用受影响 EntityVersion 的 Claim
+  立即停止进入 Recall 和 Profile；
+- 系统通过 Claim、EntityVersion 与 Evidence 的反向血缘，只复核受影响 Claim，
+  不扫描全部 Memory；
+- 旧 ClaimVersion 保持不可变，不能直接替换其 `entity_id`、Statement、confidence
+  或认识状态；
+- 只有身份和原始 User Evidence 重新验证通过，并创建新的 ClaimVersion 后，
+  该理解才能恢复 Recall；
+- 身份仍不确定时，新版本保持 `review_due`，继续排除 Recall 和 Profile；
+- 两个重复 Entity 合并时，不能把两边 Evidence 数量或 confidence 机械相加；
+  必须重新判断 Evidence 是否指向同一身份、是否重复，以及是否仍支持该 Claim；
+- 如果 Entity 变化使 Claim 的 canonical identity 改变，则创建新的 Memory Claim
+  identity，并 supersede 或 retract 旧 Claim，而不是改写原 logical Claim。
+
+这项规则接受 SayHear 暂时漏掉一条可能正确的记忆，也不让一个人的经历被召回到
+另一个人身上。
 
 ---
 
@@ -621,12 +788,24 @@ AI 在绝大多数情况下：
 
 ## 15.2 可以追问，但追问是为了理解
 
+真诚的关心和好奇是“被理解、被看见”的一部分。追问不只是补充事实，
+也可以让用户感受到自己的生活值得被认真了解。
+
 允许追问：
 
 - “当时你最难受的是什么？”
 - “你更介意他说的话，还是他没有理解你？”
 - “听起来这件事对你很重要，我理解得对吗？”
 - “你刚刚提到开心，但好像也有一点不踏实？”
+
+追问边界：
+
+- 每次 AI 回应最多提出一个问题，不堆叠多个问题；
+- 问题必须紧扣用户刚才主动表达的内容；
+- 用户愿意继续展开时，可以在后续轮次继续自然追问；
+- 用户简短回答、回避、拒绝或转换话题后，停止沿原方向追问；
+- 不为了数据完整而盘问用户；只有人物或事情的歧义会实质影响理解、回应、
+  Journal 或未来 Memory 时，才自然澄清一次。
 
 不允许默认追问：
 
@@ -645,7 +824,7 @@ AI 在绝大多数情况下：
 
 提醒不是目标追踪，不用于监督完成情况。
 
-## 15.4 MVP 明确不做
+## 15.4 核心产品明确不做
 
 - 行为支持；
 - 计划制定；
@@ -700,7 +879,7 @@ Onboarding 的目的不是收集大量用户资料，而是让用户在第一次
 
 ## 17.1 Web
 
-Web 的作用：
+Web 是 External MVP 的确定平台，其作用：
 
 - 降低首次体验门槛；
 - 便于传播和分享；
@@ -710,7 +889,7 @@ Web 的作用：
 
 ## 17.2 iOS
 
-iOS 的作用：
+iOS 是长期产品平台，其作用：
 
 - 承载日常高频使用；
 - 提供通知；
@@ -718,7 +897,10 @@ iOS 的作用：
 - 支持未来系统权限接入；
 - 成为长期使用的主要平台。
 
-## 17.3 MVP 跨端原则
+正式 iOS 是否进入 Phase 2 External MVP 仍待确认。当前工作假设倾向于
+External MVP 仅提供 Web，但这不是已确认决定。
+
+## 17.3 引入 iOS 后的跨端原则
 
 - 同一账号；
 - Conversation、Journal 和 Profile 云端同步；
@@ -728,11 +910,44 @@ iOS 的作用：
 
 ---
 
-# 18. MVP 范围
+# 18. 阶段范围
 
-## 18.1 MVP 必须包含
+## 18.1 Phase 1：Internal Core
+
+Internal Core 仅供内部自用，由 Core Flow 1A 和 1B 构成。Phase 1 默认只允许
+一个 Internal Owner Account 写入真实私人内容；其他评估账号或数据如未另行
+明确授权，只能使用合成或匿名化内容。
+
+必须覆盖：
+
+- 内部 Web 实验工具；
+- Text 多轮对话；
+- 正式 Realtime Voice 基线；
+- Daily Session；
+- 第三人称 Journal；
+- Evidence、Entity 与 Episode；
+- Reflection 与长期 Memory；
+- 后续对话中的 Memory Recall；
+- 内部 Replay、诊断和评估；
+- Core Flow 1A.1 起成立的 Minimum High-Risk Response 与回放测试；
+- 1A.1 中只有完整成功的 Assistant Response 进入后续 Context；流式中断时
+  明确显示失败并允许重试；
+- 内部数据的隐私、删除与审计基础。
+
+Internal Core 不建设临时 Push-to-Talk 产品路径。先用 Text 完成 Journal、Entity、
+Episode、Reflection、长期 Memory、未来召回和 Replay，再直接进入 Realtime Voice；
+Realtime 不可用时保留 Text 作为明确降级路径。
+
+Internal Core 不等于 External MVP，也不验证外部需求、留存、付费或消费者 UI。
+它不包含消费者注册、邀请、账号恢复、多用户生命周期、后台用户管理、订阅、
+消费者 Onboarding、正式 iOS 客户端或公开发布。所有私有领域数据仍必须带稳定
+`user_id`，避免 Phase 2 通过危险的数据迁移补做用户隔离。
+
+## 18.2 Phase 2：External MVP 当前基线
 
 - 账号系统；
+- 正式多用户身份、数据隔离和账号生命周期；
+- Web 消费者产品；
 - Onboarding；
 - AI 名字设置；
 - 3 个左右的人格选项；
@@ -741,20 +956,22 @@ iOS 的作用：
 - 文字聊天；
 - 每日独立 Session；
 - 当天 Session 多次续聊；
-- 跨端同步；
 - 第三人称 Journal；
 - Journal 时间线；
 - Conversation 弱化回看入口；
 - Journal 复制和导出；
+- Journal Correction；
 - 客观事实记忆；
 - AI Impression；
+- 对话内 Memory Correction 与 Memory Forget Request；
 - 用户可查看 Profile；
 - 订阅付费；
 - 限时体验；
 - 账号注销和数据删除；
+- 低调、异步的 Account Data Export；
 - 基础安全机制和内容风险处理。
 
-## 18.2 MVP 不包含
+## 18.3 External MVP 当前不包含
 
 - Calendar；
 - Photos；
@@ -763,11 +980,10 @@ iOS 的作用：
 - Music；
 - Screen Time；
 - 第三方生活数据；
-- Journal 编辑；
-- Journal 重新生成；
-- Profile 修改；
+- Journal 自由编辑；
+- 为改变风格而随意重新生成 Journal；
+- 完整 Profile 编辑界面；
 - Profile 单条删除；
-- Profile 纠错；
 - 行为建议；
 - 目标和计划；
 - Coach 模式；
@@ -777,6 +993,10 @@ iOS 的作用：
 - 虚拟世界；
 - AI 恋爱关系；
 - Day One 自动同步。
+
+## 18.4 External MVP 待确认
+
+- 正式 iOS 客户端是否进入 Phase 2。Web 已确定必须包含；当前倾向仅 Web。
 
 ---
 
@@ -788,8 +1008,9 @@ iOS 的作用：
 - 支持云端同步；
 - 接受第三方 LLM API；
 - 用户可导出 Journal；
-- 用户不可导出 Conversation；
-- 用户可以注销账号；
+- External MVP 面向真实用户前提供低调、异步的 Account Data Export，
+  包含 Conversation、Journal、Profile 与 Memory；
+- External MVP 面向真实用户前提供账号注销；
 - 注销后删除所有内容；
 - 产品目标是实现端到端加密。
 
@@ -799,9 +1020,9 @@ iOS 的作用：
 
 如果服务器或第三方模型需要读取用户对话明文来生成回应，那么在推理发生的时刻，数据就不能始终保持只有用户端可解密。
 
-因此 MVP 需要明确区分：
+因此 External MVP 需要明确区分：
 
-### 可在 MVP 实现
+### External MVP 必须实现
 
 - 传输加密；
 - 数据库静态加密；
@@ -825,9 +1046,9 @@ iOS 的作用：
 - 用户持有密钥的加密架构；
 - 支持私有模型部署。
 
-因此，MVP 对外不应轻率承诺“完全端到端加密”，除非技术方案能够证明服务端和第三方模型在任何时候都无法读取明文。
+因此，External MVP 对外不应轻率承诺“完全端到端加密”，除非技术方案能够证明服务端和第三方模型在任何时候都无法读取明文。
 
-更准确的 MVP 承诺应是：
+更准确的 External MVP 承诺应是：
 
 > 用户内容在传输和存储过程中受到加密保护，不用于模型训练，并按照最小化原则处理。
 
@@ -849,7 +1070,7 @@ iOS 的作用：
 
 ## 20.1 付费方式
 
-MVP 不采用 Freemium。
+External MVP 不采用 Freemium。
 
 通过：
 
@@ -968,9 +1189,9 @@ MVP 不采用 Freemium。
 
 ---
 
-# 22. MVP 成功标准
+# 22. External MVP 成功标准
 
-产品进入下一阶段前，建议至少验证：
+External MVP 进入下一阶段前，建议至少验证：
 
 ## 22.1 需求成立
 
@@ -1123,13 +1344,14 @@ AI 可能无条件认同用户，导致回应不真实。
 
 长期错误会严重破坏信任。
 
-MVP 虽不提供纠错功能，但需要：
+Internal Core 与 External MVP 都必须：
 
 - 对记忆标置信心；
 - 区分事实和推断；
 - 定期 Profile Validation；
 - 避免低置信度信息进入长期 Profile；
-- 尽快把纠错能力列为下一阶段优先事项。
+- 从第一条可召回 Memory Claim 开始支持对话内 Memory Correction 与
+  Memory Forget Request。
 
 ## 25.5 隐私与安全
 
@@ -1149,7 +1371,7 @@ MVP 虽不提供纠错功能，但需要：
 
 Voice Live 可能带来较高模型和语音成本。
 
-需要在 MVP 测试：
+需要在 Internal Core 建立成本基线，并在 External MVP 测试：
 
 - 每用户平均日使用分钟；
 - 峰值并发；
@@ -1161,13 +1383,19 @@ Voice Live 可能带来较高模型和语音成本。
 
 即使产品不定位为 Companion，用户仍可能形成强情感依赖。
 
-需要：
+从 Core Flow 1A.1 开始必须成立的最小行为边界：
 
 - 清晰非人类身份；
 - 不鼓励排他关系；
-- 高风险内容处置；
-- 危机时引导现实支持；
+- 识别到明确自伤、伤人或迫在眉睫的危险信号时，暂停普通倾听、
+  非安全必要的追问和建议；
+- 直接鼓励用户寻求现实中的即时支持；
+- 不诊断、不冒充心理治疗师，也不承诺绝对保密；
 - 避免使用操纵性留存话术。
+
+这属于 Agent 行为不变量和回放评估要求，不意味着 Internal Core 要建设完整
+Safety 平台。国家或地区化危机资源、正式处置流程、安全事件运营和评审属于
+External MVP 面向真实用户前的上线门槛。
 
 ---
 
@@ -1183,37 +1411,58 @@ Voice Live 可能带来较高模型和语音成本。
 - 验证第三人称 Journal；
 - 建立真实日常使用样本。
 
-## Phase 1：MVP
+## Phase 1：Internal Core
+
+定位：
+
+> 仅供内部自用的 Agent Core 与运行架构阶段，由 Core Flow 1A 和 1B 构成。
 
 范围：
 
-- Web + iOS；
-- Voice Live + Text；
-- Daily Session；
-- Journal；
-- 长期记忆；
-- User Profile；
-- 订阅；
-- 云端同步。
+- 内部 Web 实验工具；
+- 一个可写入真实私人内容的 Internal Owner Account；
+- Text 与 Realtime Voice；
+- Daily Session、Journal、Reflection、Memory 与 Future Recall；
+- Evidence、Entity、Episode 与版本血缘；
+- Replay、内部诊断、隐私和删除基础；
+- Core Flow 1A.1 起成立的 Minimum High-Risk Response。
+
+核心验证：
+
+- 内部跨日闭环是否稳定、可重复；
+- Agent 是否达到第一版中英文行为与质量基线；
+- Journal、Memory、删除和召回是否满足领域不变量；
+- Text 与 Realtime 是否复用同一 Agent Core。
+
+Internal Core 不验证外部用户需求、留存、付费意愿或消费者 UI。
+消费者注册、邀请、账号恢复、多用户生命周期和后台用户管理不在本阶段建设。
+
+## Phase 2：External MVP
+
+定位：
+
+> 第一次面向真实外部用户验证产品价值与商业假设的最小产品。
+
+范围与门槛：
+
+- Web 消费者产品是确定范围；
+- 正式 iOS 是否进入本阶段仍待确认，当前倾向仅 Web；
+- 消费者账号、Onboarding、订阅与限时体验；
+- 正式多用户身份、数据隔离和账号生命周期；
+- Voice Live、Text、Daily Session、Journal、Memory 与 Profile；
+- Journal Correction；
+- 对话内 Memory Correction 与 Memory Forget Request；
+- Account Deletion；
+- 低调、异步的 Account Data Export；
+- 正式数据透明、安全与高风险内容处理，包括地区化危机资源、处置流程和安全运营。
 
 核心验证：
 
 - 用户是否愿意持续讲；
 - 是否真的感到被理解；
 - Journal 是否形成长期价值；
-- 用户是否愿意支付 US$9.99/月。
-
-## Phase 2：Trust & Control
-
-优先加入：
-
-- Profile 纠错；
-- 单条记忆删除；
-- Journal 重新生成；
-- 更完整的数据导出；
-- 记忆来源解释；
-- 隐私控制；
-- 更成熟的安全体系。
+- Memory 是否准确、自然且不制造被监控感；
+- 用户是否愿意支付接近 US$9.99/月。
 
 ## Phase 3：Life Context
 
@@ -1256,28 +1505,34 @@ Voice Live 可能带来较高模型和语音成本。
 1. 新产品与 Mandy、OffPal 均为独立项目。
 2. Mandy 是实验原型，不是产品品牌。
 3. 第一批用户是有倾诉需求、但没有日记习惯的人。
-4. 全球市场首发，平台为 Web + iOS。
-5. 晚间总结是主循环，情绪发生时可以随时进入。
-6. Voice Live 是理想核心体验，文字同时存在。
-7. AI 是可命名、可选人格和声音的 Non-human Being。
-8. 不构建虚拟五官、角色世界或复杂形象。
-9. AI 默认只倾听和理解，不主动指导成长。
-10. 每天一个 Session，同一天可继续，跨天新建。
-11. Conversation 长期保留，但在 UI 中弱化。
-12. Journal 是主要回看内容。
-13. Journal 使用第三人称 AI 观察视角。
-14. MVP 不支持编辑或重新生成，支持复制和导出。
-15. Profile 包含客观事实和 AI 主观观察。
-16. Profile 对用户可见，但 MVP 不支持修改、删除和纠错。
-17. MVP 不接 Calendar、Photos、Location 等外部数据。
-18. 云端同步，不坚持 Local-first。
-19. 接受第三方 LLM API。
-20. 用户可以注销账号并删除全部数据。
-21. 不做 Freemium，以限时体验转订阅。
-22. 定价暂定为 US$9.99/月、US$24.99/季度、US$79/年。
-23. 产品出售的是整体体验，而不是单独能力。
-24. 即时价值是被接住，长期价值是人生记忆。
-25. 产品最大的长期壁垒是稳定人格、长期记忆和持续人生叙事，而不是单次共情能力。
+4. Phase 1 是默认只支持一个 Internal Owner Account 的 Internal Core；Phase 2 才建设正式多用户能力并面向真实用户。
+5. External MVP 必须包含 Web；正式 iOS 是否进入 Phase 2 待确认，当前倾向仅 Web。
+6. 晚间总结是主循环，情绪发生时可以随时进入。
+7. Voice Live 是理想核心体验，文字同时存在。
+8. AI 是可命名、可选人格和声音的 Non-human Being。
+9. 不构建虚拟五官、角色世界或复杂形象。
+10. AI 默认只倾听和理解，不主动指导成长。
+11. 每天一个 Session，同一天可继续；跨午夜的连续交流归属开始日期，结束后在新日期发起的下一次交流才新建 Session。
+12. Conversation 长期保留，但在 UI 中弱化。
+13. Journal 是主要回看内容。
+14. Journal 使用第三人称 AI 观察视角。
+15. Journal 不支持自由编辑或随意重新生成；Journal Correction 创建取代旧版本的新版本。
+16. Profile 包含客观事实和 AI 主观观察。
+17. 不提供完整 Profile 编辑界面，但可通过对话纠正或要求忘记 Memory Claim。
+18. External MVP 不接 Calendar、Photos、Location 等外部数据。
+19. 云端同步，不坚持 Local-first。
+20. 接受第三方 LLM API。
+21. Account Deletion 与异步 Account Data Export 是 External MVP 面向真实用户前的门槛。
+22. External MVP 不做 Freemium，以限时体验转订阅。
+23. 定价暂定为 US$9.99/月、US$24.99/季度、US$79/年。
+24. 产品出售的是整体体验，而不是单独能力。
+25. 即时价值是被接住，长期价值是人生记忆。
+26. 产品最大的长期壁垒是稳定人格、长期记忆和持续人生叙事，而不是单次共情能力。
+27. Journal Eligibility 只判断表达能否支撑真实记录，不判断内容是否重要；无对话时静默跳过，有对话但证据不足时显示 No Journal Notice。
+28. Entity 身份澄清由其对理解、回应、Journal 和未来 Memory 的实质影响触发；用户不回答时停止追问并保留未解析 EntityMention。
+29. Entity merge、split 或纠正只通过反向血缘复核受影响的 JournalStatement；只有用户明确纠正或 User Evidence 能确定原归属错误时才生成 Journal Correction。
+30. `needs_review` 只冻结受影响 Statement 的 Entity 与 Recall 使用；原 Journal 保持可见，并仅在新 Evidence、用户纠正或用户查看时重新检查。
+31. Entity 身份变化会立即暂停受影响 Memory Claim 的 Recall 与 Profile 使用；只有新的 ClaimVersion 通过身份和 Evidence 复核后才能恢复。
 
 ---
 

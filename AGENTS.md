@@ -1,52 +1,41 @@
-# SayHear 项目指引
+# SayHear Agent 入口
 
-> **开始任何产品、设计或技术工作前，先阅读完整的
-> [AI Life Journal 产品文档 v0.1](AI_Life_Journal_Product_Document_v0.1.md)。**
->
-> 产品文档是需求与背景的主要事实来源；本文只定义最高层指引，不重复 PRD。
+本文件只提供全局规则和文档导航。开始任务时只读本文件，不要预加载下列文档；
+根据任务实际涉及的范围按需读取。
 
-## 项目核心
+## 全局规则
 
-**SayHear** 是当前暂定的产品名称和项目代号。
+- 修改前检查 `git status`，保留用户已有改动；优先小而可逆的变更，避免无关重构、新依赖和范围扩张。
+- 修复问题前先确认根因，完成后运行与风险相称的验证。
+- 未经明确要求，不提交、推送、重写历史、删除分支或工作树。
+- 不因实现便利改变产品定义。若任务会改变产品定位、Internal Core / External MVP
+  边界、用户信任或关键体验，先阅读产品文档并向 Luke 确认。
 
-它是一个语音优先的 AI Life Journal：接住用户未经整理的生活和情绪，让用户感到被听见、被理解、被记住，并将交流沉淀为第三人称 Journal 和持续生长的人生记录。
+## 按需读取
 
-产品价值按时间递进：
+- **产品、设计、功能行为或范围决策**：阅读
+  [`docs/product/AI_Life_Journal_Product_Document_v0.1.md`](docs/product/AI_Life_Journal_Product_Document_v0.1.md)。
+  这是产品需求与背景的事实来源；不要在其他文件中重复 PRD。
+- **领域术语、领域模型或架构决策**：阅读 [`CONTEXT.md`](CONTEXT.md)、
+  相关 `docs/adr/`，以及 [`docs/agents/domain.md`](docs/agents/domain.md)。
+- **GitHub Issue 或 PRD 操作**：阅读
+  [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)。
+- **Issue 分诊或标签操作**：同时阅读
+  [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)。
 
-> **被接住 → 被记住 → 形成连续的人生叙事**
+对于已有 Issue 驱动的开发，先读取 Issue、评论和验收条件，再只补充与改动直接相关的
+上述文档。纯机械且需求明确的日常开发任务不需要读取完整产品文档。
 
-首批用户是有倾诉和被理解需求、但没有稳定日记习惯的人。核心任务不是帮助他们写日记，而是让他们自然地把生活说出来，并被认真理解和保存。
+## Agent skills
 
-## 不可偏离的产品原则
+### Issue tracker
 
-1. **先接住，再记录；先理解，再追问。**
-2. **Voice 是核心输入，Journal 是核心交付与回看内容。**
-3. AI 是有稳定人格和长期记忆的非人类存在，但不假装成人，也不经营恋爱、排他或依赖关系。
-4. AI 默认倾听和理解；除非用户明确请求，否则不提供建议、计划、目标、Coach 或行为改变。
-5. 共情用户的感受，但不盲目认同事实判断，不夸张安慰，不自动把用户写成受害者。
-6. Journal 是 AI 的第三人称观察，不是事实裁决；不得编造、诊断、说教，或把推断写成事实。
-7. 记忆必须自然、相关且克制，并明确区分事实、主观观察和不确定推断。
-8. 长期信任高于短期留存：不使用 Streak、打卡压力、关系惩罚或操纵性话术。
-9. 隐私、透明、纠错与退出权是核心体验，不是附属合规项；不得作出技术无法证明的加密承诺。
-10. 不因技术便利或行业惯例，把产品推向传统日记、通用聊天、AI Companion、心理治疗或成长工具。
+Issues and PRDs are tracked in GitHub Issues for `lukemyself-hub/SayHear`. See `docs/agents/issue-tracker.md`.
 
-## 产品决策检查
+### Triage labels
 
-提出功能、体验或技术方案时，优先回答：
+Use the five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
 
-- 是否降低了用户表达生活的门槛？
-- 是否让用户更准确地感到被理解，而不只是显得 AI 很聪明？
-- 是否增强了 Journal、长期记忆或人生叙事？
-- 是否尊重用户的情感边界、隐私和数据控制权？
-- 是否增加了不必要的输入、管理、反思或打卡负担？
-- 是否把长期路线中的能力未经验证地塞入 MVP？
+### Domain docs
 
-如果答案会改变产品定位、MVP 边界、用户信任或关键体验，应先向 Luke 确认，不要自行补全重大产品决策。
-
-## 工作约定
-
-- 具体目标用户、使用场景、MVP 范围、Journal、记忆、隐私、商业模式、指标、风险与路线，以产品文档为准。
-- 明确区分长期原则、MVP 阶段性取舍和仍待验证的建议；不要把 v0.1 的价格、人格数量或指标阈值视为永久结论。
-- Mandy 是个人实验室，不是产品品牌；OffPal 是独立项目。
-- 未经明确要求，不提前建立技术架构、代码目录或扩大功能范围。
-- 当实现与产品原则冲突时，先暴露冲突并确认取舍，不以实现成本悄悄改变产品定义。
+This is a single-context repository. See `docs/agents/domain.md`.
