@@ -94,13 +94,16 @@ entity.resolve
 episode.build
 memory.extract
 memory.consolidate
+profile.project
 embedding
 stt
 tts
 safety
 ```
 
-模型名称存在配置和数据库中，不硬编码进领域逻辑。
+模型名称存在配置和数据库中，不硬编码进领域逻辑。Capability Registry 的
+`enabled_roles` 只声明能力匹配候选；是否允许 fallback 由人工发布的 Model Routing
+Policy 按 role 显式决定，默认 `disabled`。
 
 ### 15.4 首轮评估矩阵
 
@@ -126,9 +129,19 @@ fallback。Provider timeout 或结果未知只允许对同一冻结 model config
 重试；失败时显式失败，不能静默换模型生成另一种人格表现。
 
 1A.2 和 1A.3 可以为当期 role 配置各自 Champion，但仍不把未评估模型当作 fallback。
-1A.4 的 Replay 达到质量与安全门槛后，才允许增加 Challenger、额外 Provider
-adapter 和版本化 fallback policy。
+1A.4 的开发评测认为 Challenger 适合相应 role 后，才增加对应 Provider adapter，并
+由开发者发布版本化 Model Routing Policy。
 
+- Replay 输出与 promotion recommendation 都是 non-authoritative，不能直接修改
+  真实流量；
+- Challenger 成为 Champion 或 eligible fallback，必须由授权人工显式发布新的
+  Model Routing Policy version；
+- 每个 Policy version 至少记录 role、Champion config、eligible fallback config、
+  支撑决定的评测引用、发布者、发布时间、原因与 predecessor；
+- 自动评分、阈值、线上故障率或成本变化可以触发告警和 promotion recommendation，
+  不能自动发布、回滚或修改 Model Routing Policy；
+- runtime 可以确定性执行已经发布的 Policy，但不能把一次临时路由结果反向写成新
+  Policy；
 - Champion 按 role 选，不是全系统共用一个模型；
 - A/B 以 Session 或 Replay run 为单位；
 - 同一真实 Session 不逐 turn 随机换模型；
@@ -136,6 +149,48 @@ adapter 和版本化 fallback policy。
 - 不因 Provider 故障静默更换人格表现；
 - Fallback 必须预先通过 SayHear eval；
 - 所有运行记录 model、Prompt、参数、延迟、成本和结果状态。
+
+开发期 Model Promotion Evaluation 按 role 选择合适证据，但不建设独立审批系统：
+
+- `conversation.text`、`journal.draft`、`profile.project` 等用户可感知 role，必须
+  在 `zh-CN`、`en-US` 与 code-switching 样本上比较被理解感、人格一致性、非说教、
+  事实与推断边界及 Memory 召回语言；
+- `evidence.extract`、`entity.resolve`、`episode.build`、`memory.extract`、
+  `memory.consolidate` 等结构化 role 以标注集准确率、typed lineage 与领域不变量
+  测试为主，并按需要抽查歧义和失败样本；
+- 具体样本、指标和阈值由开发者随阶段调整；Phase 1 不要求持久化独立 Gate 对象或
+  完成额外审批流程，开发者在评测后判断模型更好即可发布新的 Model Routing Policy；
+- 仅为了替换模型不强制运行 Private Replay。开发者实际选择真实私人 source 做
+  Replay 时，才适用既有 Private Replay 隔离、授权、TTL 与删除边界。
+
+从 1A.4 开始，`conversation.text` 可以执行一次受控的 Conversation Fallback
+Handover，但不是任意自动路由：
+
+- 仅在 Champion 失败且没有任何输出 token 可能对用户可见、没有 Complete
+  Assistant Response 提交时发生；
+- 只选择当前人工发布 Model Routing Policy 中预先通过 eval 的一个 eligible
+  fallback，并由 Provider Egress Port 重新检查该 Provider 的 policy 与 consent；
+- primary 与 fallback 串行执行，不做私人对话 Shadow，不级联更多 fallback；
+- fallback 一旦接管，就固定到当前 Continuous Exchange 的后续 Turn，不逐 Turn
+  切换或自动切回 Champion；
+- 已有 token 可能展示、可见性无法证明，或 fallback 再次失败时，明确失败并由用户
+  显式 Retry。
+
+后台生成 role 使用不同的 Role-Scoped Generation Fallback：
+
+- Model Routing Policy 必须为每个 role 显式设置
+  `fallback_mode=disabled / single_attempt`，不能从 Capability Registry 全局继承；
+- Journal、Reflection、Entity、Episode、Memory、Profile 等具有冻结输入、
+  版本化输出与 role-specific validator 的生成任务，可以单独批准
+  `single_attempt`；
+- fallback 在 Champion 的同配置技术重试失败后串行执行，复用相同 source revision、
+  Prompt、Schema、业务 policy 与 validator contract；
+- 每个 GenerationCommand 最多一个 role fallback attempt；不合并、投票或自动选择
+  多个模型输出，只有通过 validator 与 commit fence 的结果可以成为 authoritative；
+- fallback 只影响当前 command，后续任务仍从其冻结 Policy 的 Champion 开始；
+- `embedding`、`stt`、`tts`、`safety` 默认禁止 fallback，因为向量空间、声音、
+  delivery 与安全语义不能仅凭通用 capability 判断兼容；开放前必须完成独立验证并
+  由人工发布新的 Policy。
 
 ### 15.6 Prompt 版本
 
@@ -170,6 +225,9 @@ Text 和 Realtime 路径可以在交付前运行与其延迟预算匹配的行�
 - 是否在未被请求时给建议；
 - 是否在同一回应中堆叠多个问题；
 - 是否在用户简短回应、回避、拒绝或转换话题后继续原方向追问；
+- 是否在同一 Continuous Exchange 使用超过一个 Proactive Memory Follow-up；
+- 是否在直接任务、紧急 / 高风险状态中插入无关旧事，或未先回应当前表达；
+- 是否使用 contested、dormant、expired、Forgotten 或 suppressed target 主动追问；
 - 是否诊断或说教；
 - 是否鼓励排他或依赖；
 - 是否把用户描述成受害者；

@@ -18,7 +18,7 @@ Proposed
 | 级别 | 示例 | 处理 |
 | --- | --- | --- |
 | Highly Sensitive Content | 对话、Journal、Profile、Memory、音频、Replay 输出 | 严格权限、加密、禁止普通日志 |
-| Sensitive Derived Data | Embedding、Summary、Episode、分类结果 | 与源数据同等删除和访问控制 |
+| Sensitive Derived Data | Embedding、Summary、Episode、Memory Candidate 语义、分类结果 | 与源数据同等删除和访问控制 |
 | Operational Metadata | ID、状态、延迟、token、错误类别 | 可进入脱敏观测 |
 | Public / Static | 产品策略版本、无用户内容 Schema | 正常版本管理 |
 
@@ -45,8 +45,13 @@ auth_sessions(id, user_id, expires_at, revoked_at)
 - API 不接受客户端提交的 owner ID；
 - 单一 Internal Owner 可以使用诊断、Replay 和授权音频检查能力，但这些敏感操作
   仍需独立 capability check，不能因只有一个用户而绕过；
-- 查看完整对话、下载音频、创建真实 Replay 需要 10 分钟内完成的 step-up
-  reauthentication，并写 access audit；
+- 查看完整对话、Candidate review 中的完整 Evidence、下载音频、创建真实 Replay
+  需要 10 分钟内完成的 step-up reauthentication，并写 access audit；
+- Candidate review audit 至少记录 reviewer、Candidate、Evidence revision、
+  disposition、reason、policy version、Proposal ID、predecessor Candidate、
+  successor trigger 与时间，但不复制私人正文；
+- terminal Candidate 的 7 天派生内容只允许 step-up 后的 Internal Owner 排错读取；
+  不能因仍在 grace period 就进入普通开发者列表、Recall、Profile 或模型 Context；
 - session 支持服务端撤销，删除账号时在同一 command 中先撤销全部 session。
 
 #### LiveKit Client Token
@@ -275,7 +280,7 @@ S3 Lifecycle 的 eligibility 和执行都不是精确时钟，因此不能把 96
 | --- | --- | --- |
 | Foundation / 1A.1 | stable `user_id`、`data_epoch`、owner / active / epoch 读取与 Egress fence、deletion-compatible lineage、日志脱敏、传输与静态加密、已核验 `backup_policy_version` | 删除 API、通用 deletion workflow、完整 ledger、恢复演练、消费者 UI |
 | 1A.2 | operator-only Internal Owner Full Purge；撤销 session / Egress、增加 epoch、清理 Conversation、Evidence、Summary、DialogueState 与 Journal，生成 active-system receipts；在业务 DB 备份之外保存单 owner 最小 purge marker | 单条 Conversation / Journal 删除、消费者账号生命周期、对所有未来数据类型预建 handler |
-| 1A.3 | Full Purge 扩展到 Entity、Episode、Reflection、Memory、Profile、Embedding 与相关索引 | 提前建设 Replay 或 Voice 删除 |
+| 1A.3 | Full Purge 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、Reflection、Memory、Profile、Embedding 与相关索引 | 提前建设 Replay 或 Voice 删除 |
 | 1A.4 | Full Purge 扩展到 Replay input / output 与相关 eval artifact | 提前建设 Voice 删除 |
 | 1B.1 | Full Purge 扩展到 AudioAsset、Transcript revision / segment、Voice runtime metadata 与临时对象 | 提前建设 delivered-prefix buffer |
 | 1B.2 | Full Purge 扩展到 delivery metadata、confirmed prefix 与短期 buffer | 改变 1B.1 的 turn-only 语义 |
@@ -352,6 +357,20 @@ fully_expired_at
 用户可见说明必须区分“活跃系统已删除”和“所有允许保留窗口已到期”，
 不能在只清理在线数据库后声称所有位置都已物理删除。
 
+Memory Forget Request 不进入 content deletion 状态机。它保留原 Conversation、
+Journal 与 EvidenceItem，但创建 Memory-scoped admission / retrieval fence；
+Qualifier-level Forget 还会阻止同一旧 Evidence 继续支撑具体角色，或在它是唯一
+底层 Evidence 时降级保留中性关系。该 fence 必须覆盖 Extraction、Consolidation、
+Profile、Embedding、Context 与 repair，不能因派生物重建而失效；Replay 对历史
+source 的只读授权仍遵循其既有隔离规则，不能写回正式 Memory。
+Forget fence 提交时，任何 narrative-support link 命中该内容的 current
+ProfileVersion 必须立即停止展示，并自动触发不受普通刷新间隔限制的安全重建；
+重建失败时保持 Profile 不可用，不能等每周 Cron 或恢复旧 Bio。
+Memory Forget Reversal 使用同一个 final / corrected User Event 作为新 Evidence
+并创建新 ClaimVersion；旧 Evidence exclusion 继续有效，不能通过备份恢复、Replay、
+repair 或重新索引把旧 ClaimVersion、Embedding、Profile 或 Context projection
+重新标为 current。
+
 ### 20.4 删除范围
 
 Internal Owner Full Purge 以整个 Internal Owner 为 scope，直接清除该 owner 当期存在的
@@ -371,6 +390,8 @@ content deletion 的设计目标，不属于 Internal Core 或当前 External MV
 - Journal；
 - Reflection；
 - Memory Candidate / Claim / Claim localized projection / Relationship Resolver Hint；
+- Predicate Change Proposal 与 Candidate 的 link；不含任何用户内容的 Proposal
+  identity、通用定义和治理版本不属于 owner-scoped purge；
 - Profile Projection；
 - Embedding；
 - Context snapshot；
@@ -388,6 +409,30 @@ content deletion 的设计目标，不属于 Internal Core 或当前 External MV
 - Provider 端显式创建的 file、batch、conversation 或 vector-store；
 - 外部错误处理和观测 Processor 中的内容。
 
+#### 20.4.1 Terminal Candidate 内容过期
+
+`rejected` 与 `stale` Memory Candidate 的派生语义在
+`terminal_effective_at + 7 days` 后必须从活跃系统读取面立即失效，并由清理任务
+置空或删除。自动 stale 的 effective time 使用原 policy deadline，不能使用延迟
+sweeper 的执行时间延长保留期。
+
+清理后只保留字段白名单内的 Terminal Candidate Audit Envelope：ID、terminal
+status、reason、policy / model / Registry version、时间、无正文 Evidence lineage、
+`content_purged_at` 与 keyed dedupe fingerprint。Fingerprint 只用于阻止相同
+Evidence 与语义目标重建同一 terminal proposal，不得用于检索、聚类、分析标签、
+Embedding、模型输入或 Proposal 内容。相关 Evidence 全部删除或执行 Full Purge /
+Account Deletion 时，Evidence link 与 fingerprint 一并清除。
+
+Predicate Change Proposal 只有在不包含 subject `user_id`、Evidence、具体 value、
+用户原话、Entity 或其他可识别私人信息时，才能作为产品治理记录跨 Candidate
+purge 保留；reviewer principal 只作治理审计，不得被解释为概念来源。
+Proposal–Candidate link 始终属于 owner-scoped lineage，必须随 Full Purge 或
+Account Deletion 清除。
+
+7 天是活跃系统的内容可读期限，不等于宣称数据库备份已物理过期。恢复旧备份时必须
+先重新应用当前 deadline 与 purge state；已过期正文保持不可读并再次清理，完成前
+不能开放流量。
+
 单条 Event / Revision 删除时使用确定性传播规则：
 
 1. 先使该 source revision、EvidenceItem、EntityMention 和所有 typed evidence link
@@ -399,6 +444,9 @@ content deletion 的设计目标，不属于 Internal Core 或当前 External MV
    Relationship Claim 的旧 Resolver Hint 同步失效并在读取时 fail closed；
 4. Claim 仍有其他 Evidence 时，先新建 `review_due` Version，再从剩余证据重新计算正文、
    epistemic status 和 confidence；Relationship Claim 在复核通过前不生成或使用 Hint；
+   如果被删 source 只使某个 Relationship Qualifier 失去支持，新版本 retract
+   或 contest 该 Assertion，并在底层关系仍有有效 Evidence 时只重建中性 projection；
+   如果同一 source 也是底层关系的唯一 Evidence，则必须 retract 整条 Claim；
 5. 即使存在另一条证据，只要原 Claim 文本包含被删来源独有的细节，
    旧 Version 也不能继续展示或召回；
 6. 任何 JournalStatement 引用失效 Evidence 时，整个 JournalVersion 立即停止展示，
@@ -421,7 +469,8 @@ Append-only 与 privacy erasure 的边界：
 - Source / Account 删除会物理清除所有受影响 Version 的正文或 ciphertext；
 - 覆盖 Event Revision、Transcript Segment、Evidence locator、EntityMention / label、
   Journal Version / Statement、Reflection Version / Statement、Memory Claim Version /
-  localized projection、Relationship Resolver Hint、
+  Relationship Qualifier Assertion / evidence link、localized projection、
+  Relationship Resolver Hint、
   Summary、Episode、Profile Projection、Compiled Context snapshot、Replay、Draft、
   Validation artifact、可选 Voice delivery buffer 和 model artifact；
 - 可以保留无正文的 identity envelope、revision number、状态、purged lineage 和

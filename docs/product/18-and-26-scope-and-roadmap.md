@@ -3,9 +3,9 @@
 ## TL;DR
 
 - Phase 1 是单 Internal Owner Account 的 Internal Core，先验证 Agent Core。
-- Phase 2 是首次面向真实外部用户的 External MVP，Web 必须。
+- Phase 2 是首次面向真实外部用户的 Web-only External MVP。
 - Internal Core 依次交付 Text、Journal、Entity/Memory、Replay，再进入 Realtime Voice。
-- External MVP 的正式 iOS 范围仍未确认。
+- 正式 iOS 在 Web 初步验证核心产品价值后再引入。
 
 ## Status
 
@@ -28,8 +28,11 @@ Internal Core 仅供内部自用，由 Core Flow 1A 和 1B 构成。Phase 1 默�
 - 第三人称 Journal；
 - Evidence、Entity 与 Episode；
 - Reflection 与长期 Memory；
+- Web 开发者工具中的只读 Reflection Inspector，不建设独立的用户式 Reflection 页面；
 - 后续对话中的 Memory Recall；
 - 内部 Replay、诊断和评估；
+- Web 开发者工具中的 Predicate Candidate review、Registry Change Proposal 与
+  terminal Candidate 7 天内容清理；
 - Core Flow 1A.1 起成立的 Minimum High-Risk Response 与回放测试；
 - 1A.1 中只有完整成功的 Assistant Response 进入后续 Context；流式中断时
   明确显示失败并允许重试；
@@ -93,13 +96,8 @@ Internal Core 不等于 External MVP，也不验证外部需求、留存、付�
 - 虚拟角色形象；
 - 虚拟世界；
 - AI 恋爱关系；
-- Day One 自动同步。
-
-### 18.4 External MVP 待确认
-
-- 正式 iOS 客户端是否进入 Phase 2。Web 已确定必须包含；当前倾向仅 Web。
-
----
+- Day One 自动同步；
+- 正式 iOS 客户端。
 
 ---
 
@@ -127,8 +125,10 @@ Internal Core 不等于 External MVP，也不验证外部需求、留存、付�
 - 一个可写入真实私人内容的 Internal Owner Account；
 - Text 与 Realtime Voice；
 - Daily Session、Journal、Reflection、Memory 与 Future Recall；
+- 只读 Reflection Inspector；Conversation、Journal 与 Profile 保持为体验面；
 - Evidence、Entity、Episode 与版本血缘；
-- Replay、内部诊断、隐私和删除基础；
+- Replay、Candidate review、Registry Change Proposal、terminal Candidate 内容
+  清理、内部诊断、隐私和删除基础；
 - Core Flow 1A.1 起成立的 Minimum High-Risk Response。
 
 核心验证：
@@ -150,7 +150,7 @@ Internal Core 不验证外部用户需求、留存、付费意愿或消费者 UI
 范围与门槛：
 
 - Web 消费者产品是确定范围；
-- 正式 iOS 是否进入本阶段仍待确认，当前倾向仅 Web；
+- External MVP 首发仅提供 Web，正式 iOS 待 Web 初步验证核心产品价值后再引入；
 - 消费者账号、Onboarding、订阅与限时体验；
 - 正式多用户身份、数据隔离和账号生命周期；
 - Voice Live、Text、Daily Session、Journal、Memory 与 Profile；
@@ -201,12 +201,6 @@ Internal Core 不验证外部用户需求、留存、付费意愿或消费者 UI
 - 不做 Coach；
 - 不做任务系统；
 - 不用成长焦虑驱动用户。
-
----
-
-## Open questions
-
-- 正式 iOS 客户端是否进入 External MVP。
 
 ## References
 

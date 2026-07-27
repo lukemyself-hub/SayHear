@@ -57,7 +57,7 @@ Entity、Reflection 和 Memory 等消费者。
 | --- | --- |
 | 重复 `client_event_id` | 返回已有 Event，不重复写入 |
 | 用户 Event 已提交、模型调用前失败 | Event 保留；attempt 标为 failed；可以技术重试 |
-| 尚未展示 token 时模型超时 | Event 保留；同一 command 可以创建新 attempt |
+| 尚未展示 token 时模型超时 | Event 保留；同一 command 可以创建新 attempt；1A.4 可在 Policy 允许时执行一次 fallback handover |
 | 已有 token 可能展示后流式中断 | Turn / attempt 标为 `interrupted`；不创建 Assistant Event；UI 提供显式 Retry |
 | 模型成功但 Assistant Event 提交前进程崩溃 | attempt 标为 `result_unknown`，Turn 由 reconciler 收敛为 `interrupted`；不猜测或补写正文 |
 | Provider 429 / 5xx | 受控退避与 jitter；不产生部分领域状态 |
@@ -69,6 +69,31 @@ Entity、Reflection 和 Memory 等消费者。
 
 系统在没有任何 token 可能展示时的技术重试，继续使用同一 GenerationCommand，
 只增加 ModelRunAttempt。
+
+从 1A.4 开始，`conversation.text` 的 Champion 在允许的同配置技术重试后仍失败时，
+runtime 可以执行一次 Conversation Fallback Handover：
+
+1. 重新确认没有任何 token 可能展示、Turn 尚无 Assistant Event，且没有其他
+   authoritative attempt；
+2. 确认当前 `daily_session_id + continuous_exchange_no + conversation.text`
+   尚无持久 binding；读取 GenerationCommand 冻结的 Model Routing Policy
+   version，只选择其中唯一 eligible fallback，不运行动态 capability search；
+3. Provider Egress Port 在发送同一冻结 Context 前重新检查 fallback Provider 的
+   policy、consent、source revision 与 `data_epoch`；
+4. 在同一数据库事务中串行创建新的 ModelRunAttempt，并以
+   `daily_session_id + continuous_exchange_no + conversation.text` 唯一键写入
+   `continuous_exchange_model_bindings`；只有取得唯一键并记录 source attempt、
+   fallback config 与 handover attempt 的事务可以 dispatch；
+5. 当前连续交流的后续 Turn 和进程重启都从持久 binding 冻结相同 fallback config，
+   不从最新 attempt 猜测状态，也不逐 Turn 切回 Champion；
+6. fallback 完整成功时仍按普通 Complete Assistant Response 原子提交；fallback
+   再次失败时显式结束为 failed，交给用户 Retry。
+
+一旦任何 token 可能已经展示，或原 attempt 的结果是否可见无法证明，就不能执行
+handover；必须按 Interrupted Response 处理。Handover 只改变执行 attempt 与当前
+Continuous Exchange binding，不创建新的 User Event、InteractionTurn 或
+GenerationCommand。binding 唯一键冲突、缺失或引用失效时必须 fail closed，不能
+发起第二次 handover。
 
 用户可以显式要求“重新回答”；API 先用客户端幂等 key 创建稳定
 `retry_request_id`，再创建：
@@ -135,6 +160,12 @@ Context Compiler 是正式应用服务，不是散落在 API handler 中的字�
 10. 实时客户端信号（1B）；
 11. 输出格式和工具定义。
 
+Open Loop 只读取 current Version 为 open 且尚未超过 `expires_at` 的少量
+projection。当前 Turn 已有新提交的 User Event 时，selector 可以选出一个合适的
+Open Loop，让 Assistant 在本轮主动询问进展，不要求 utterance 已先提到相同话题。
+没有新 User Event 时，Open Loop 不得单独创建 GenerationCommand、消息或通知；
+它也不能触发任务型输出。过期或关闭的 Loop fail closed。
+
 1A.1 只使用 DailySession / InteractionTurn 上的确定性领域状态，例如
 `activity_state`、revision 和 closure policy；它不持久化或消费模型生成的
 DialogueState projection。
@@ -145,14 +176,30 @@ DialogueState projection。
 current_topic
 emotional_intensity
 advice_explicitly_requested
+current_request_requires_focus
 close_intent
 follow_up_relevance
 user_willing_to_elaborate
+proactive_followup_used_in_exchange
 safety_state
 ```
 
 它必须带来源与置信度，不能直接晋升为长期 Profile。
 尤其是 `advice_explicitly_requested`，用于落实“默认倾听，只有用户主动询问才给建议”。
+
+Proactive Memory Follow-up selector 在 1A.3+ 必须 fail closed：
+
+1. 当前 Turn 必须有新 User Event，且同一
+   `daily_session_id + continuous_exchange_no` 尚未提交 Proactive Follow-up；
+2. `current_request_requires_focus=true`、明确直接任务、紧急或高风险状态时不选；
+3. target 必须是 active / open、未过期、非 contested、非 dormant、未被 Forget，
+   且 current ProactiveFollowupStateVersion 为 eligible；
+4. 问候、开放式开场或自然空档可以选出零或一个 target；没有合适 target 时不为
+   满足配额强行生成；
+5. Generator 必须先回应当前 User Event，再以最多一个温和问题使用 target；
+6. 用户简短带过、回避、拒绝或转换话题后，提交 suppressed state。只有用户主动
+   重提 target，或新的相关 User Evidence 推进 target version 时才解除；
+7. 敏感 target 必须有 direct User Evidence，并生成允许不回答的 framing。
 
 ### 9.2 输出
 
@@ -173,6 +220,9 @@ referenced_entity_version_ids
 token_budget_by_section
 total_tokens
 degraded_reason
+proactive_followup_target_ref
+proactive_followup_state_version_id
+proactive_followup_selection_policy_version
 content_hmac
 created_at
 ```
@@ -210,6 +260,9 @@ Interrupted Response 和未播放 Voice 内容一律排除。
 - 人物卡片由 Entity、选中的 Relationship ClaimVersion 与 localized projection
   在 Context Compiler 中合并渲染；Relationship Resolver Hint 只用于候选解析，
   不能作为事实注入 Context；
+- 人物卡片只使用有有效 User Evidence 的 active Relationship Qualifier；Qualifier
+  contested / retracted 时停止具体角色称呼。底层关系仍有效且 Registry 提供中性
+  fallback 时降级为“家长 / 孩子”“手足”“伴侣”等中性投影；
 - 注入 Claim 时保留 `claim_version_id + evidence_id`，不能只发送无来源的自然语言 Memory；
 - 检索结果按相关性、置信度、时效和重复度裁剪；
 - 不把完整历史持续发送给模型。
@@ -313,7 +366,8 @@ created_at
 - 最近数轮中的 EntityMention 和 Episode；
 - Dialogue State；
 - 当前日期和历史时间表达；
-- Open Loop。
+- current Version 为 open、尚未过期，且适合在当前用户发起的对话中使用的
+  Open Loop。
 
 多路结果进行去重和 rerank。
 

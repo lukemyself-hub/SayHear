@@ -3,13 +3,17 @@
 ## TL;DR
 
 - Onboarding 只建立核心心智模型、隐私预期和首次表达入口。
-- Web 是 External MVP 的确定平台。
-- 正式 iOS 是否进入 External MVP 仍未确认。
+- External MVP 首发仅提供 Web。
+- 正式 iOS 在 Web 初步验证核心产品价值后再引入。
 - 跨端时 Conversation、Journal、Memory 与 Profile 使用同一账号和云端真源。
 
 ## Status
 
 Proposed
+
+平台范围以 [ADR-0062](../adr/0062-external-mvp-launches-on-web-before-ios.md)
+的 Accepted 决策为准。本文件保留 Proposed 状态，是因为 Onboarding 流程与未来
+引入 iOS 后的跨端细节仍需后续确认。
 
 ## 16. Onboarding
 
@@ -70,8 +74,10 @@ iOS 是长期产品平台，其作用：
 - 支持未来系统权限接入；
 - 成为长期使用的主要平台。
 
-正式 iOS 是否进入 Phase 2 External MVP 仍待确认。当前工作假设倾向于
-External MVP 仅提供 Web，但这不是已确认决定。
+正式 iOS 不进入 Phase 2 External MVP。External MVP 先通过 Web 验证用户是否愿意
+持续表达、是否感到被理解，以及 Journal 与 Memory 是否形成长期价值，再引入正式
+iOS。这个范围选择不代表 iOS 的长期优先级降低；Web 验证也不能替代对移动日常使用、
+通知召回和移动 Voice Live 的后续验证。
 
 ### 17.3 引入 iOS 后的跨端原则
 
@@ -80,12 +86,6 @@ External MVP 仅提供 Web，但这不是已确认决定。
 - Web 和 iOS 使用一致的人格与记忆；
 - 用户在不同设备上继续当天 Session；
 - 保持相同的 Daily Session 规则。
-
----
-
-## Open questions
-
-- 正式 iOS 客户端是否进入 External MVP。
 
 ## References
 

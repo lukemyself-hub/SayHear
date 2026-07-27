@@ -107,7 +107,7 @@ Proposed
 | --- | --- |
 | 开发团队 | 相当长时间内以独立开发为主 |
 | Phase 1 | Internal Core，默认只有一个 Internal Owner Account 可写真实私人内容 |
-| Phase 2 | External MVP，建设正式多用户身份与隔离并首次面向真实外部用户；Web 必须，正式 iOS 待确认 |
+| Phase 2 | External MVP，建设正式多用户身份与隔离并首次面向真实外部用户；首发仅提供 Web |
 | 第一版界面 | 简单 Web UI，重点是 Agent 运行系统 |
 | 核心输入 | Voice 优先，同时支持 Text |
 | 核心输出 | 第三人称 Journal |
@@ -127,8 +127,8 @@ Phase 1 统一命名为 **Internal Core**，包含 Core Flow 1A 与 1B 两个连
 外部用户需求、留存、付费意愿或消费者体验。
 
 Phase 2 统一命名为 **External MVP**，是第一次面向真实外部用户的阶段。
-Web 是确定平台；正式 iOS 是否进入 External MVP 仍待产品确认，当前架构不得
-把 iOS 当作 Phase 2 已接受范围。
+External MVP 首发仅提供 Web；正式 iOS 待 Web 初步验证持续表达、被理解感以及
+Journal 与 Memory 的长期价值后再引入。
 
 #### Core Flow 1A：Text Agent Core
 
@@ -185,7 +185,7 @@ Push-to-Talk 作为过渡产品。
 - 多人格、多 Voice；
 - iOS 正式客户端；
 - 中国大陆部署；
-- 主动 Follow-up 产品体验；
+- 对话外 / outbound 主动 Follow-up、站外消息与通知；
 - 完整 Profile 管理与纠错 UI；
 - 外部生活数据接入；
 - 自托管大模型；
@@ -193,7 +193,7 @@ Push-to-Talk 作为过渡产品。
 - 微服务。
 
 这些范围不属于 Internal Core。消费者 Web、订阅与正式账号体系属于
-External MVP；正式 iOS 是否进入 External MVP 仍待确认。
+External MVP；正式 iOS 待 Web 初步验证核心产品价值后再引入。
 
 ## 3. 架构原则与系统不变量
 
@@ -229,6 +229,8 @@ External MVP；正式 iOS 是否进入 External MVP 仍待确认。
 - Reflection 可以提出 Memory Candidate，但 Reflection 自己不能成为证明该 Candidate
   或 Claim 的事实证据。
 - Entity 是稳定语义身份，Claim 引用 Entity；不得把 Entity 当作 Claim 的下游文本投影。
+- Episode 必须有现实事件锚点和 User Evidence；Conversation、Daily Session、
+  话题或情绪不能自动成为 Episode，Episode 缺失也不能阻止 Journal 或 Memory。
 - Profile、Embedding 和 cache 是可重建投影；JournalVersion、ReflectionVersion、
   ClaimVersion 和 EpisodeVersion 是必须保存历史的派生产物，不能当作普通缓存删除重算。
 - 模型本轮没有输出某条旧记忆，不代表删除该记忆。

@@ -17,7 +17,7 @@ Accepted
 > 长期产品形态：Web + iOS  
 > 首发市场：全球  
 > Phase 1：**Internal Core**（Core Flow 1A / 1B，仅内部自用）  
-> Phase 2：**External MVP**（Web 必须；正式 iOS 待确认）  
+> Phase 2：**External MVP**（首发仅提供 Web；正式 iOS 在核心价值验证后再引入）\
 > External MVP 核心：Voice Live + Text Chat + AI-written Journal + Long-term Memory
 
 ---

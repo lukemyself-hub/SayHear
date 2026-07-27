@@ -43,6 +43,8 @@ Accepted
 - 第三方模型不用于训练；
 - 缩短第三方数据保留时间；
 - 原始语音尽快删除；
+- rejected / stale Memory Candidate 的 AI 派生语义在活跃系统中只保留 7 天，
+  到期后仅保留不能用于 Recall 或还原提案的最小审计外壳；
 - Journal 与 Conversation 分开存储；
 - 账号注销后执行可验证删除流程。
 

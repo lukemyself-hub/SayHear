@@ -127,6 +127,34 @@ Review UI 隐藏 Provider 名称，独立评分：
 - 延迟；
 - 成本。
 
+上述体验项主要用于用户可感知 role。结构化 role 可以另以标注 expected output、
+typed Evidence lineage、Entity / Claim identity、Schema 与领域不变量计算准确率，
+并按开发需要抽查歧义和失败样本。
+
+### 17.6 模型晋升治理
+
+Replay rating、comparison 与自动指标全部是 non-authoritative eval output，可以
+展示 Challenger 的相对质量、安全、延迟、成本与失败样本，但不能直接写入或修改
+真实 Model Routing Policy。
+
+Challenger 成为 Champion 或 eligible fallback 时，授权人工必须显式审核并发布新的
+Model Routing Policy version，引用所依据的 Replay run、dataset、rubric 与安全评估。
+自动阈值、线上故障率和成本变化只能触发告警或新的 recommendation，不能自动晋升、
+降级、回滚或改变真实流量。Replay Review UI 与 Replay Runner 均不持有路由发布权限。
+
+### 17.7 开发期模型评测
+
+Phase 1 不建设独立 Model Promotion Gate、自动审批工作流或必须持久化的统一阈值。
+开发者根据 role 选择有代表性的评测方式：用户可感知 role 关注中英文与
+code-switching 的体验和信任边界，结构化 role 关注标注准确率、typed lineage 与
+领域不变量。评测足以让开发者判断 Challenger 更好时，即可人工发布新的 Model
+Routing Policy。
+
+Initial Replay 的 synthetic、匿名化或另行授权数据可以直接支持上述开发判断，不要求
+为了晋升再运行 Private Replay。只有开发者主动选择正式领域中的真实私人 source
+进行 Replay 时，才必须进入 Private Replay Runtime，并遵守显式 source / Provider
+选择、job-scoped snapshot、TTL 与删除传播。
+
 ## References
 
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)

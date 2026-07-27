@@ -36,6 +36,30 @@ Accepted
 - [`0012`](adr/0012-daily-session-ownership-does-not-change-at-midnight.md)：Daily Session 不在午夜切分
 - [`0013`](adr/0013-continuous-exchange-end-is-deterministic.md)：连续交流结束由确定性规则控制
 - [`0014`](adr/0014-phase-one-has-one-internal-owner-account.md)：Phase 1 只有一个 Internal Owner Account
+- [`0054`](adr/0054-reflection-is-inspected-not-productized-in-phase-one.md)：Phase 1 只检查 Reflection，不建设独立用户页面
+- [`0055`](adr/0055-profile-is-an-llm-written-semantic-projection.md)：Profile 是忠实映射 active Memory、由 LLM 写作的语义投影
+- [`0056`](adr/0056-profile-refresh-is-manual-weekly-and-trust-reactive.md)：Bio 手动或每周重写，信任边界变化立即失效并重建
+- [`0057`](adr/0057-validated-bio-refreshes-do-not-require-approval.md)：验证通过的新 Bio 直接生效，不增加预览、批准或编辑流程
+- [`0062`](adr/0062-external-mvp-launches-on-web-before-ios.md)：External MVP 首发仅提供 Web，正式 iOS 在核心价值验证后再引入
+
+### Memory 准入与认识状态
+
+- [`0038`](adr/0038-explicit-user-statements-create-confirmed-objective-memory.md)：用户一次明确陈述即可形成 confirmed Objective Memory
+- [`0039`](adr/0039-ai-impressions-require-cross-session-evidence.md)：AI Impression 需要跨 Session 独立 Evidence
+- [`0040`](adr/0040-memory-conflict-is-a-last-resort-state.md)：先解释时间与 scope，无法消解时才 contested
+- [`0041`](adr/0041-only-ai-impressions-use-time-based-dormancy.md)：只有 AI Impression 使用按时间复核的 dormancy
+- [`0042`](adr/0042-open-loops-are-expiring-context-projections.md)：Open Loop 是有期限的短期 Context projection
+- [`0043`](adr/0043-proactive-follow-up-starts-inside-user-initiated-conversations.md)：主动关心先限定在用户已发起的对话内
+- [`0044`](adr/0044-proactive-follow-up-stops-on-user-signals.md)：主动关心让位于当前诉求并尊重停止信号
+- [`0045`](adr/0045-sensitive-memory-allows-stated-facts-not-inferred-labels.md)：敏感事实可记，敏感标签不可由 AI 推断
+- [`0046`](adr/0046-rejected-memory-candidates-do-not-auto-revive.md)：Rejected Memory Candidate 不自动复活
+- [`0047`](adr/0047-humans-govern-predicate-registry-expansion.md)：LLM 提议概念，人工治理 Predicate Registry 扩张
+- [`0048`](adr/0048-predicate-review-candidates-expire-after-thirty-days.md)：Predicate review Candidate 30 天未处理则 stale
+- [`0049`](adr/0049-internal-tool-reviews-candidates-without-publishing-registry.md)：内部工具审批 Candidate，但不直接发布 Registry
+- [`0050`](adr/0050-registry-proposals-persist-while-awaiting-candidates-expire.md)：Registry Proposal 持续存在，等待发布的 Candidate 90 天后 stale
+- [`0051`](adr/0051-terminal-candidate-content-expires-after-seven-days.md)：Terminal Candidate 派生语义 7 天后清除
+- [`0052`](adr/0052-only-materially-new-evidence-creates-successor-candidates.md)：只有 Materially New Evidence 可以创建 successor Candidate
+- [`0053`](adr/0053-product-value-rejection-is-a-proposal-version.md)：概念级产品拒绝保存为无用户内容的 Proposal version
 
 ### Core Flow 实现边界
 
@@ -47,6 +71,10 @@ Accepted
 - [`0020`](adr/0020-replay-isolation-is-gated-by-private-data.md)：Replay 隔离由私人数据门槛触发
 - [`0021`](adr/0021-core-flow-1b-splits-transport-from-delivery-precision.md)：1B 拆分传输与 delivery precision
 - [`0023`](adr/0023-agent-core-precedes-realtime-and-ptt-is-removed.md)：Agent Core 先行并移除 PTT 产品切片
+- [`0058`](adr/0058-replay-recommends-and-humans-publish-model-routing.md)：Replay 只提出模型晋升建议，真实路由由授权人工发布
+- [`0059`](adr/0059-text-fallback-handover-precedes-visible-output.md)：Text 只在零可见输出前串行 fallback，并固定到当前连续交流
+- [`0060`](adr/0060-background-fallback-is-explicit-per-role.md)：后台 fallback 按 role 显式开放，每个 command 最多一次
+- [`0061`](adr/0061-model-promotion-is-developer-judged.md)：模型替换由开发者根据适合该 role 的评测判断，不增加早期正式门禁
 
 ### Entity 与身份变化
 
@@ -61,6 +89,15 @@ Accepted
 - [`0029`](adr/0029-one-independently-valid-relationship-per-logical-claim.md)：每个独立关系一个 logical Claim
 - [`0030`](adr/0030-relationship-state-does-not-require-exact-dates.md)：关系状态不要求精确日期
 - [`0031`](adr/0031-third-party-relationships-require-direct-user-evidence.md)：第三方关系需要直接 User Evidence
+- [`0032`](adr/0032-one-relationship-fact-has-one-canonical-claim.md)：同一关系事实只有一个 canonical Claim
+- [`0033`](adr/0033-relationship-roles-are-evidence-backed-qualifiers.md)：具体关系角色是有 Evidence 的 Qualifier
+- [`0034`](adr/0034-relationship-qualifiers-can-be-forgotten-independently.md)：关系 Qualifier 可以独立 Forget
+- [`0035`](adr/0035-forgotten-memory-requires-explicit-reversal.md)：被 Forget 的 Memory 只能显式恢复
+- [`0036`](adr/0036-restarted-relationships-reuse-the-logical-claim.md)：关系重启复用原 logical Claim
+
+### Episode
+
+- [`0037`](adr/0037-episodes-require-real-world-event-anchors.md)：Episode 必须有现实事件锚点并保守续接
 
 ## Open questions
 

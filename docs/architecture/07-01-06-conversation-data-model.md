@@ -22,6 +22,7 @@ Proposed
 | User | 认证/账号服务 | 账号记录；通过唯一绑定拥有一个 Self Entity | 否 | 删除主体 |
 | DailySession | Session Service | 正式会话边界 | 否 | 删除或失效其全部派生物 |
 | InteractionTurn | Turn Service | 正式交互分组，不是 evidence | 否 | 随 Event / Session 删除 |
+| ContinuousExchangeModelBinding | Model Runtime | Continuous Exchange 内 fallback 接管后的冻结执行配置；不是用户事实 | 否 | 随 User / DailySession 删除 |
 | VoiceSession / VoiceTurn | Voice Session Service | 临时运行映射 | 否 | 随 User / DailySession 删除 |
 | ConversationEvent / Revision | Turn Service | 原始记录；只有有效 User Revision 可作生活事实 evidence | 否 | 触发全部证据和派生物失效 |
 | TranscriptSegment | STT / Voice adapter | Source Revision 的时间片细节 | 仅音频存在时可重建 | 随 Event 与 Audio 删除 |
@@ -34,6 +35,8 @@ Proposed
 | MemoryCandidate | Extraction Workflow | 非权威候选 | 是 | 随 source revision 删除 |
 | MemoryClaim / ClaimVersion | Memory Service | 正式语义判断，不是 primary evidence | 否 | 撤回、supersede 或删除 |
 | RelationshipResolverHint | Entity Resolver Projection | Claim 派生的非权威称呼索引 | 是 | 随 ClaimVersion 失效并重建 |
+| OpenLoop / OpenLoopVersion | Context Projection Worker | 有期限的待发生事项 / 待结果 Context projection，不是事实源 | 否；历史按引用保留 | 随 Evidence / Claim / Episode 失效 |
+| ProactiveFollowupStateVersion | Conversation Behavior Projection | 主动关心资格与停止信号，不是用户事实 | 可从版本化行为结果重建 | 随 target 与 Event 删除 |
 | ProfileProjectionVersion | Projection Worker | 可重建投影 | 是 | 从有效 ClaimVersion 重建 |
 | VectorIndex | Embedding Worker | 可重建索引 | 是 | 立即停止检索并删除向量 |
 | WorkflowRun | Workflow Service | 运行元数据 | 否 | 正文不应存在于其中 |
@@ -75,6 +78,7 @@ last_activity_at
 activity_state
 quiescent_at
 closure_policy_version
+current_continuous_exchange_no
 dialogue_revision
 source_revision
 journal_id
@@ -93,6 +97,9 @@ deleted_at
 - 连续交流自然结束后，下一条发生在新本地日期的 User Event 创建新 Daily Session；
 - 没有进行中交流时，新一天重新打开产品创建新 Daily Session；
 - 同日继续表达时复用原 Session；
+- Session 首次交流的 `current_continuous_exchange_no = 1`；同日 Session 从
+  `quiescent` 重新进入 `active` 时，在提交新 User Event 的同一事务中加一；
+  跨午夜仍连续的 active 交流不增加该编号；
 - 每个 final / corrected User Event 或完整提交的 Assistant Event 增加
   `dialogue_revision`，供在线 Context 使用；
 - 只有 final / corrected User Event 以及其修正、撤回、删除增加
@@ -133,6 +140,7 @@ user_id
 daily_session_id
 client_turn_id
 turn_sequence_no
+continuous_exchange_no
 status                    # open / responding / settled / interrupted / failed
 retry_of_interaction_turn_id
 started_at
@@ -143,6 +151,8 @@ deleted_at
 规则：
 
 - `user_id + client_turn_id` 和 `daily_session_id + turn_sequence_no` 唯一；
+- `continuous_exchange_no` 在 Turn 创建时冻结为 DailySession 当前值，为
+  “每段连续交流最多一次”之类的行为门禁提供可审计边界；
 - 一个 InteractionTurn 包含一个 primary User Event，以及零个或多个
   Assistant / System Event；
 - `conversation_events.interaction_turn_id` 是正式关联，
@@ -153,6 +163,46 @@ deleted_at
 - Turn 的 settled 状态只表示交互处理完成，不表示其中内容可以成为事实证据；
 - Evidence 必须引用具体 ConversationEventRevision，不能引用 InteractionTurn；
 - InteractionTurn 随其 User Event 删除；允许保留的诊断 envelope 必须无正文并去关联化。
+
+### 7.3.1 Continuous Exchange Model Binding
+
+`continuous_exchange_model_bindings` 只在 1A.4 的 Conversation Fallback
+Handover 成功取得接管权时创建，用来让进程重启和后续 Turn 都能证明当前
+Continuous Exchange 已经切换到哪个配置：
+
+```text
+id
+user_id
+daily_session_id
+continuous_exchange_no
+model_role                       # 1A.4 仅 conversation.text
+model_routing_policy_version
+fallback_model_config_version
+source_generation_command_id
+source_attempt_id
+handover_attempt_id
+expected_data_epoch
+created_at
+deleted_at
+```
+
+约束：
+
+- `daily_session_id + continuous_exchange_no + model_role` 是数据库唯一键；
+- 创建 binding 与保留 `handover_attempt_id` 必须在同一事务中取得唯一键，
+  并再次验证 source command 尚无可见输出、无 Assistant Event、无
+  authoritative result，且 `expected_data_epoch` 仍有效；
+- 只有成功提交 binding 的事务可以向 fallback Provider dispatch；唯一键冲突方
+  必须回滚自己的新 attempt、读取已有 binding，不能执行第二次 handover；
+- binding 创建后执行配置不可原地改回 Champion 或改成第二个 fallback；
+- 后续 Turn 创建 GenerationCommand 时先读取该 tuple。存在 binding 时必须冻结其
+  `fallback_model_config_version` 与 `model_routing_policy_version`，并记录
+  `continuous_exchange_model_binding_id`；不存在时才按当前已发布 Policy 选择
+  Champion；
+- 进程重启、技术重试或午夜跨越不能从最新 ModelRunAttempt 推断绑定；只能读取这条
+  持久记录。记录缺失、重复或引用失效时 fail closed；
+- binding 只保存 ID、配置版本和 fencing metadata，不保存 Conversation 正文；
+  它随 User / DailySession 删除，允许保留的诊断 envelope 必须去关联化。
 
 ### 7.4 Voice Session 与 Voice Turn
 
@@ -273,8 +323,10 @@ content_purged_at
 - Assistant / System Event 只能作为交互上下文或行为审计，不能证明用户生活事实；
 - 如果 AI 先做出推断，后续不能再引用自己的回答把推断“证实”；
 - 用户对 AI 回答的反应必须引用后续 User Event；
-- `confirmed` 只表示用户明确确认或在多次表达中稳定出现，
-  不表示 SayHear 已对外部世界完成事实核验。
+- `confirmed` 只表示 Claim 来自一次或多次直接、明确的用户陈述，
+  不表示 SayHear 已对外部世界完成事实核验；
+- 反复出现但从未被用户直接陈述的模式，只能支撑 `inferred`
+  AI Impression，不能成为 Objective Memory。
 
 Core Flow 1A.1 的 Assistant 响应使用最小提交语义：
 
@@ -288,7 +340,15 @@ Core Flow 1A.1 的 Assistant 响应使用最小提交语义：
   或由 reconciler 收敛为该状态，不创建 Assistant Event；
 - Interrupted Response 即使可能被用户看到，也不进入后续 Context；UI 必须显示
   中断并提供显式 Retry；
-- 一旦已有 token 可能展示，系统不得在同一 Turn 中静默生成不同回答。
+- 一旦已有 token 可能展示，系统不得在同一 Turn 中静默生成不同回答；
+- 从 1A.4 开始，只有在零 token 可能展示、Complete Assistant Response 尚未提交，
+  且当前人工发布的 Model Routing Policy 已授权时，同一 GenerationCommand 才能
+  新增一个指向唯一 eligible fallback 的 ModelRunAttempt；
+- fallback handover 必须记录 source attempt、Model Routing Policy version、
+  fallback model config 与 Provider Egress disposition，并通过
+  `continuous_exchange_model_bindings` 的唯一键把该 fallback 固定到
+  `daily_session_id + continuous_exchange_no + role`；同一 Continuous Exchange
+  不能再次 handover 或切回 Champion。
 
 逐 chunk 持久化、客户端 ACK、断点恢复或 delivered-prefix reconstruction
 不属于 1A.1。Realtime 或未来明确批准的交付渠道只有在评估证明需要时，才通过后续

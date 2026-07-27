@@ -238,16 +238,35 @@ Daily：
 - 创建新的 Daily ReflectionVersion；
 - Objective / Impression candidate；
 - 冲突和重复检查；
-- 候选晋升或暂存。
+- Objective Candidate 按 Registry policy 晋升或暂存；
+- Impression Candidate 只有在聚合既有 Evidence 后满足跨两个 Daily Session
+  的默认门槛时才可晋升，否则继续暂存。
 
 Weekly：
 
 - 多日证据聚合；
+- 重新验证 Impression 的独立 Evidence、Daily Session 数与冲突状态；
 - 创建新的 Weekly ReflectionVersion；
 - Claim merge / supersede；
 - 趋势和变化识别；
-- Impression 过期或降级；
+- 按 Registry review policy 将缺少 fresh Evidence 的 Impression 推进为 dormant；
 - Profile Projection 重建。
+
+Episode Builder 遵循保守 Candidate 流程：
+
+1. 模型只能从具体 EvidenceItem 提出 Episode Candidate、现实事件 kind、时间 /
+   Entity anchor 和可选 existing Episode；
+2. 代码拒绝把 Conversation、Daily Session、一般话题、地点词、情绪或关系事实
+   直接提升为 Episode；
+3. 新建 Episode 至少需要 Evidence 明确表达一次现实事件或持续过程；
+4. 续接 existing Episode 需要用户直接连续性表达，或足以唯一指向同一事件的
+   时间、地点与 Entity anchor；仅语义相似不能 merge；
+5. 明确为不同 occurrence 时创建新 Episode；仍不确定时 Candidate 保持
+   `unresolved`，不创建错误连续性；
+6. accepted Candidate 创建 Episode / EpisodeVersion 并冻结 Evidence link；
+   后续补充只创建新 EpisodeVersion，不改写旧版本；
+7. Episode 缺失或 unresolved 不阻止 Journal、Reflection Candidate 或基础
+   Memory Claim，也不触发面向用户的数据补全追问。
 
 ### 12.2 Reflection 的提交边界
 
@@ -265,6 +284,11 @@ Weekly：
 同一 `reflection_id + source_revision + policy_version` 最多一个 current
 ReflectionVersion。Daily 与 Weekly Reflection 使用不同 logical Reflection ID，
 不得互相覆盖。
+
+Reflection Inspector 只读取已保留的 ReflectionVersion、Evidence lineage、
+Candidate disposition，以及 Candidate 经有效 ClaimVersion 对 Profile Projection
+产生或未产生的影响。它可以展示 draft / stale / superseded 状态供诊断，但不能推进
+current pointer、触发 Memory promotion 或绕过 Candidate Review Module 写入处置。
 
 ### 12.3 更新规则
 
@@ -289,22 +313,193 @@ no_change
 - Entity reference 属于当前 user scope，merge / split version 仍有效；
 - confidence 达到策略阈值；
 - kind 和 epistemic status 合法；
+- Objective Candidate 的 predicate、value 与 scope 来自直接、明确的 User
+  Evidence；Registry evidence policy 允许时，一条 EvidenceItem 即可晋升为
+  `confirmed`，不设置重复次数门槛；
+- 用户没有直接陈述、而是模型从表达模式形成的 Candidate 只能是
+  `kind=impression + epistemic_status=inferred`；
+- Impression Candidate 至少有两条独立 User Evidence，来自两个不同
+  Daily Session，且共同支持同一 Predicate、typed value 与 scope；
+- 单 Session 重复、同一 Event 的多个派生项或模型 confidence 不得绕过
+  Impression 准入门槛；Registry 只能设置更严格的 Evidence policy；
+- 用户直接、明确、自我指向的敏感事实只有在 Registry 对应 Predicate 允许
+  `objective` 时才能创建 `confirmed` Claim；诊断、身份或风险归类不得由
+  `impression` 路径创建；
+- 敏感领域的 Impression Candidate 只能映射到意义、影响、支持或压力来源、
+  交流偏好等解释性 Predicate；症状、伴侣关系、宗教活动、政治观点或相似经历
+  不能被用来推断诊断、性取向、宗教或政治身份、创伤或受虐标签、财务或法律风险；
+- Candidate 已有 recorded `rejected` disposition 时，Registry 更新、重复抽取、
+  时间经过、模型 confidence、Consolidation 或 repair 都不能把原 Candidate
+  改为 accepted，也不能用相同 Evidence 与语义目标创建新 Candidate 绕过 rejection；
+- `ambiguous / unmapped` 只由模型提出概念、Evidence 和 mapping alternatives；
+  版本化确定性 policy 检查 Evidence、稳定跨日问题、现有 Predicate 可表达性、
+  长期 Memory 边界与 schema 可定义性，只有通过时才写入
+  `needs_predicate_review`；
+- LLM 的 product-value 评分、排序或建议不能批准 review eligibility、Predicate
+  Change Proposal 或 Registry Entry；只有授权人工 reviewer 可以映射已有
+  Predicate、批准形成 Proposal 或拒绝，新 Predicate 发布后 Candidate 仍需按该
+  Registry version 重新通过正常 admission；
+- 写入 `needs_predicate_review` 时确定性设置 30 天 `review_due_at`；到期仍没有
+  人工 disposition 时幂等转为 `stale`，并停止 mapping、admission、promotion
+  与 Registry release 后的自动重试；
+- Internal Candidate Review Tool 只调用 Candidate Review Module 的一个 review
+  interface，提交 `map_existing`、`reject` 或 `approve_for_registry_change`
+  command；该 Module 统一执行 capability、step-up、Evidence revision、
+  deadline、并发状态和 access audit 检查，Web 不直接写 Candidate、Proposal、
+  Registry 或 Claim 表；
+- `map_existing` 只提交 Predicate mapping 并重新走正常 admission；`reject`
+  写入终局 disposition；product-value rejection 还通过 Registry Governance
+  Module 创建或关联不含用户内容的 `rejected` ProposalVersion，其他
+  candidate-specific rejection 不创建 Proposal；`approve_for_registry_change`
+  原子创建或关联 Predicate Change Proposal，并把 Candidate 转为
+  `awaiting_registry_release`，同时设置独立的 90 天 Registry release wait deadline；
+- Predicate Registry Governance Module 独立拥有 Proposal version、代码库 Registry
+  release、mapping tests 与 migration；发布完成后只触发关联 Candidate 在新
+  Registry version 下重新 mapping / admission，不接受 Web 直接发布；
+- `awaiting_release` Predicate Change Proposal 不自动过期，直到发布或授权人工
+  明确取消；`rejected` Proposal 保持到显式版本化重新评估；等待发布的 Candidate
+  到达 90 天 deadline 时转为 `stale`，Proposal 保持不变，之后的 Registry 发布
+  不能自动复活该 Candidate；发布资格按
+  `published_at <= registry_release_due_at` 判断，不能依赖发布任务与到期扫描的
+  执行顺序；
+- Candidate 转为 `rejected` 或 `stale` 时，以人工 disposition commit time 或原
+  policy deadline 设置 `terminal_effective_at`，生成只供 exact-match 防绕过的
+  keyed dedupe fingerprint，并设置 7 天内容期限；到期后所有读取立即 fail closed，
+  sweeper 清除 LLM 派生语义，只保留无正文审计外壳；
+- Terminal Candidate 内容在 7 天 grace 内也不能进入 Recall、Profile、Context、
+  Embedding、自动 admission 或 Registry Proposal；完整内容只允许 step-up 后的
+  Internal Owner 排错读取并写 access audit；
+- 新 User Evidence 命中 terminal semantic target 时，Candidate Review Module
+  必须先执行版本化 material-change policy；只有直接陈述状态、独立 Session
+  Evidence 门槛、Entity / scope / time resolution 或语义目标出现实质变化时，
+  才插入带 predecessor lineage 的 Successor Memory Candidate，并重新走完整
+  eligibility、mapping、admission 和 deadline；
+- 重复表达、相同 Session 派生项、confidence、时间或 Registry 更新不能创建
+  successor；`explicit_reconsideration_only` 的人工产品价值 rejection 也不能
+  被普通新 Evidence 覆盖；无法安全确认 predecessor identity 时 fail closed；
+- 后续 unmapped 概念可以映射到不含用户内容的 Proposal identity；命中 current
+  `status=rejected` 时立即停止 review / admission。显式重新考虑只创建新的
+  ProposalVersion，不修改旧 rejection；
+- Relationship Qualifier 符合 Registry 的 canonical side、typed value、
+  cardinality 与 compatibility policy，并有可展开到底层 User Event Revision
+  的 qualifier-specific Evidence；
+- 同一 Evidence 可以同时支撑底层关系与具体 Qualifier，但两类 typed link
+  必须分别存在；不能因为模型提出了“母亲”就隐式补出无 Evidence 的全局 Entity 属性；
 - 不把一次性状态晋升为长期特征；
 - 不因 omission 删除；
 - 删除与 tombstone 检查通过。
 
-`confirmed` 的含义是“用户明确确认或在多次表达中稳定出现”，
-不是对外部世界事实完成独立核验。该语义必须进入 Schema 注释、Prompt 和 Review UI。
+`confirmed` 的含义是“用户曾直接、明确这样陈述”，不是对外部世界事实完成独立
+核验，也不表示每条明确陈述都适合长期记忆。长期准入仍独立检查 Registry policy、
+时间与 scope、Entity 绑定、Evidence 有效性、一次性状态和 Forget fence。
+`observed` 不是 Claim epistemic status；尚未通过这些检查的内容停留在 Evidence /
+MemoryCandidate。该语义必须进入 Schema 注释、Prompt 和 Review UI。
+
+Claim conflict routing 必须按以下顺序执行：
+
+1. 使用 Registry 的 `scope_schema`、`temporal_semantics` 和 `value_cardinality`
+   判断新旧值是否可以同时成立；
+2. 用户明确表达新的有效时间或状态变化时，在同一 logical Claim 上创建新的
+   `confirmed` ClaimVersion，旧版本只作为历史保留；
+3. 用户明确纠正前一表达时，创建新版本并 supersede / retract 错误版本；
+4. 不同 scope 或 Registry 允许并存的值分别保留，不进入冲突状态；
+5. 只有同一 Predicate、normalized scope 与有效时间内仍互斥，且 Evidence 无法
+   判断是变化还是纠正时，才创建
+   `epistemic_status=contested + status=review_due` 的新 ClaimVersion；
+6. contested Claim 立即退出 Recall、Profile、Embedding 与 cross-day narrative。
+   冲突实质影响当前理解或回应时只自然澄清一次；否则等待新 User Evidence；
+7. 新的可判定 User Evidence 通过另一条 ClaimVersion 解决冲突。模型 confidence、
+   Evidence 新旧顺序或定时任务都不能直接选择胜者。
+
+Claim lifecycle review 遵循：
+
+1. Objective Memory 不按未提及时长降低 confidence；只依据 Registry temporal
+   semantics 和 User Evidence 创建表达变化、结束或纠正的新 ClaimVersion；
+2. AI Impression 的 current ClaimVersion 到达 Registry review deadline 时，
+   检查 policy window 内是否有新的合格 User Evidence；
+3. 没有 fresh Evidence 时创建
+   `epistemic_status=inferred + status=dormant` 的新 ClaimVersion，CAS 更新
+   current pointer，并失效 Profile、Recall、Embedding 与 cross-day projection；
+4. dormant 不 retract 或删除历史，也不作为反向 Evidence；
+5. 后续 fresh Evidence 必须重新满足至少两条独立 Evidence、两个 Daily Session
+   及 Predicate-specific policy，才能创建新的 active ClaimVersion；不能把旧
+   ClaimVersion 原地改回 active；
+6. 出现反向 Evidence 时进入 contested routing，不以 dormancy 代替冲突处理。
+
+Relationship Qualifier 的增加、细化、纠正或 conflict resolution 使用同一
+logical Claim 的新 ClaimVersion。冲突只影响具体角色时，代码将对应 Assertion
+标记为 `contested`，使具体角色 projection fail closed；底层关系仍由有效 Evidence
+支撑时可以重建 Registry 定义的中性 projection。冲突改变 Predicate、Entity
+或底层关系时，不能降级掩盖，必须进入整条 Claim 的 correction、`review_due`
+或 retraction。
+
+同一 canonical Entity pair + Relationship Predicate 从 `ended` 再次变为
+`current` 时，更新规则必须命中原 logical Claim 并创建新 ClaimVersion，不创建
+relationship occurrence ID 或第二条 Claim。新版本保存新的时间边界与 Evidence，
+旧 current / ended interval 继续由历史 ClaimVersion 精确读取；Resolver Hint
+只从新的 current version 重建。
+
+Memory Forget Request 使用确定性 target 与 Evidence eligibility fence：
+
+1. 明确指向 whole Claim 时，立即提交新的不可召回 ClaimVersion，并失效该
+   canonical Claim 的全部 projection；
+2. 明确指向 Relationship Qualifier 时，在同一事务创建 applied request、
+   Evidence exclusion 和新 ClaimVersion，retract 目标 Qualifier，并失效该角色
+   的所有方向、locale projection；
+3. 只从 active exclusion 之外的 User Evidence 重新验证底层关系；仍有独立支持时
+   可以生成 Registry neutral fallback，没有剩余支持时 retract 整条 Claim；
+4. Forget Request Event 是用户控制命令，不创建 `counter` Evidence，也不表示
+   原 Claim 为假；
+5. scope 会实质改变结果但仍不明确时，只澄清一次，请求保持 `pending_scope`，
+   在用户确认前不改变 Claim；
+6. 后续 Extraction、Consolidation 与 repair job 都必须检查 active
+   exclusion；旧 Evidence 不能把被 Forget 的 Claim 或 Qualifier 自动恢复。
+
+Forget 后的重新开放遵循显式 Memory Forget Reversal：
+
+1. applied Forget 关闭 target-level admission；后续自然重复仍可参与当前回应与
+   Journal，但相应 MemoryCandidate 保持 rejected / ineligible，不能 promote；
+2. 重复次数、时间经过、模型置信度、Consolidation 和 repair 都不能自动创建
+   Reversal，也不主动向用户追问是否恢复；
+3. 只有明确且 target 唯一可确定的 final / corrected User Event 可以创建
+   Reversal；同一事务创建或复用该 Event 的 EvidenceItem、Reversal 与新
+   ClaimVersion；
+4. Reversal Event 始终同时作为该 target 的新 User Evidence，不保留
+   permission-only 或“等待下一条 Evidence”的中间状态；
+5. 旧 Evidence exclusion 继续有效，旧 ClaimVersion 不改回 active；后续新
+   User Evidence 可以按正常规则 reinforce 新版本；
+6. 用户再次 Forget 时创建新的 Forget Request，并 supersede 当前 admission
+   authorization，不改写前序控制记录。
 
 ### 12.4 Open Loop
 
-Open Loop 与长期 Profile 分开：
+Open Loop 与长期 Memory / Profile 分开：
 
-- 有明确来源；
-- 有过期时间；
-- 可完成、取消或自然消失；
-- 不形成目标管理；
-- 不用于监督用户完成情况。
+1. 只从 direct User Evidence 提取具体 `upcoming_event` 或 `awaited_outcome`
+   Candidate；普通未聊完话题、情绪或模型想以后追问的内容不合格；
+2. 代码验证现实 pending anchor，并要求 `expires_at` 来自用户时间表达或版本化
+   policy；没有有限期限的 Candidate 不创建；
+3. 同一事项已有 time-bound Objective Claim 或 Episode 时，OpenLoopVersion
+   引用其 current Version，不复制第二条事实；
+4. 用户明确表达完成、取消或结果已出时，创建新的 completed / canceled Version；
+   到期任务创建 expired Version，`open_loop_id + source_revision + target_status`
+   保证幂等；
+5. 只有 current Version 为 open、尚未过期，且当前 Turn 已有新 User Event 时，
+   Context Compiler 才能选入；它可以支持 Assistant 在本轮主动询问进展，不要求
+   utterance 已先提到相同话题。closed / expired Loop 不进入当前 Context；
+6. Open Loop 不进入 Profile；用户没有发起当前对话时不创建消息或通知，也不形成
+   目标、任务列表、完成率或催促式输出；
+7. 关闭不删除底层 Evidence、Objective Claim、Episode 或历史 Journal。
+
+Proactive Follow-up 的停止信号通过 Conversation Behavior projection 提交：
+
+- 用户对主动问题简短带过、回避、拒绝或转换话题时，为该 Open Loop / Memory
+  target 创建 suppressed ProactiveFollowupStateVersion；
+- 后续 selector 必须同时检查 target current Version 与 Follow-up State Version；
+- 用户主动重提同一事项，或新的相关 User Evidence 推进 target Version 时，
+  创建 eligible State Version；后台时间经过和模型 confidence 不能解除抑制；
+- 同一 `daily_session_id + continuous_exchange_no` 已有 committed Assistant
+  Event 使用 Proactive Follow-up 时，本段交流不再选择第二个 target。
 
 ### 12.5 Entity 身份变化的 Claim 影响检查
 
@@ -320,14 +515,18 @@ Memory Claim 会主动进入未来回应，因此 Entity merge、split 或身份
    `current_version_id`；旧 ClaimVersion 保持不可变，不能原地替换 Entity、
    Statement、confidence 或 epistemic status；
 4. Validator 从每条 ClaimVersion 的原始 User Evidence 重新判断 Entity 归属、
-   predicate、typed value、scope、认识状态和 confidence；
+   predicate、typed value、scope、认识状态和 confidence；Relationship Claim
+   必须按当前 Registry 重新 canonicalize directed subject / object 或 symmetric
+   Entity pair，并逐个复核 Relationship Qualifier Assertion 及其 Evidence，
+   不能沿用 Evidence 的 Mention 顺序或无来源角色投影；
 5. 如果 Entity ID 未改变且 Claim 仍成立，创建引用 current EntityVersion 的新
    active ClaimVersion；
 6. 如果 merge / split 改变 subject / object Entity，导致 `canonical_key`
    改变，创建新的 logical MemoryClaim 与 ClaimVersion，并通过 lineage
    supersede 或 retract 旧 Claim；不得改写旧 Claim identity；
-7. 多个旧 Claim 因 Entity merge 发生 canonical-key collision 时，必须逐 Evidence
-   去重和重新验证；不能把 Evidence count 或 confidence 机械相加；
+7. 多个旧 Claim 因 Entity merge、inverse direction 或 symmetric pair normalization
+   发生 canonical-key collision 时，必须逐 Evidence 去重和重新验证；不能把
+   Evidence count 或 confidence 机械相加，只能提交一个 canonical result；
 8. 仍无法确定身份时，current ClaimVersion 保持 `review_due`，继续排除 Recall、
    Profile、Embedding 和 cross-day narrative；
 9. 通过验证的新 ClaimVersion 提交后，重建 localized projection、Embedding 和
@@ -343,6 +542,50 @@ claim-identity-impact/<claim-id>/<entity-version-id>/<evidence-revision>/<policy
 
 影响检查只读取底层 User Evidence。Reflection、Journal、Profile 和模型自己的旧回答
 不能用于证明 Claim 在新 Entity 身份下仍然成立。
+
+### 12.6 Profile Projection Workflow
+
+Profile Refresh Policy 区分三种 trigger：
+
+1. `manual`：由用户在前端发起；服务端按版本化最短间隔接受或返回
+   `next_manual_refresh_at`；
+2. `weekly_scheduled`：全局 Cron / scheduler 每周扫描到期 Profile，幂等创建重写
+   command，并推进用户可见的 `next_scheduled_refresh_at`；
+3. `trust_boundary`：Correction、Forget、`contested`、`dormant`、Entity 失效或
+   删除立即使 current ProfileVersion 不可展示，并创建绕过普通限流的安全重建
+   command。
+
+普通 Claim 变化不单独触发日内自动重写；manual 与 weekly trigger 会读取触发时最新
+eligible Claim set。`trust_boundary` trigger 的失效必须在读取路径同步成立，不能
+等待 Workflow 或 Cron 才停止展示旧内容。
+
+`manual` 只表达用户请求重新生成，不创建发布审批。三种 trigger 都使用同一验证与
+fenced commit 契约：生成结果只有在验证通过且提交成功后才原子成为 current
+ProfileProjectionVersion；Workflow 不等待用户预览、批准、正文编辑或候选版本选择。
+
+Profile Projection 重建遵循：
+
+1. 冻结全部当前有效 ClaimVersion 组成的 eligible input 与 selection policy version；
+2. 排除 Candidate、`contested`、`review_due`、`dormant`、被 Forget 的内容、
+   Open Loop 和 Reflection 原文；敏感 active Claim 不使用第二层 Profile 授权；
+3. 使用版本化 Profile Prompt 与冻结的 model config 生成自然语言 Bio Draft，
+   输入完整 eligible set，同时返回正文 statement 与 ClaimVersion 的 support link；
+4. 校验每项 support Claim 都属于 eligible set，事实判断由 active Objective
+   Memory 支撑，心理、情感与价值观判断由 active AI Impression 支撑，正文可展开
+   到底层 User Evidence，且没有改变 confirmed / inferred 认识状态；
+5. 记录 Prompt、model attempt、selection policy 与
+   `profile_projection_claim_links` 的 eligible-input / narrative-support role，
+   再以 `source_claim_set_revision + data_epoch` fence 提交新的
+   ProfileProjectionVersion，并在同一提交中推进 current pointer；
+6. 模型可以语义压缩而不逐条复述，但不能与 active Memory 实质矛盾或遗漏到形成
+   失真人物画像；普通 refresh 失败时保留上一有效 Profile，不用条目列表降级替代；
+   trust-boundary rebuild 失败时保持 Profile 不可用，不能恢复旧版本。
+
+Profile 写作可以组织和深入表达 Claim 已支撑的用户经历、关系、情感与价值观，但
+不能从叙事连贯性反向创造只存在于 Bio 的推断，也不能把 Profile 正文作为下一轮
+Memory Evidence。用户认为内容不准确时，写操作进入底层 Memory Correction 或
+Memory Forget Request，再由 trust-boundary workflow 重建 Profile；不存在直接修改
+Profile 正文的写路径。
 
 ## References
 

@@ -36,10 +36,12 @@ Workflow run ID 不能作为业务幂等键。
 ```text
 interaction_turns(user_id, client_turn_id)
 conversation_events(user_id, client_event_id)
+continuous_exchange_model_bindings(daily_session_id, continuous_exchange_no, model_role)
 journal_versions(journal_id, source_revision, generation_policy_version)
 reflection_versions(reflection_id, source_revision, policy_version)
 evidence_items(source_type, source_version_id, locator_key, extraction_policy_version)
 entity_mentions(event_revision_id, start_offset, end_offset, resolver_policy_version)
+memory_claims(user_id, canonical_key)
 generation_commands(operation_type, intent_key)
 model_run_attempts(generation_command_id, attempt_no)
 workflow_commands(command_type, subject_type, subject_id, source_revision, policy_version)
@@ -48,9 +50,18 @@ outbox_events(aggregate_type, aggregate_id, aggregate_revision, event_type)
 
 `interaction_turns.client_turn_id` 和 `conversation_events.client_event_id` 应实现为
 只覆盖非空值的 partial unique index。
+`memory_claims(user_id, canonical_key)` 在 canonical subject / object、
+Predicate 与 scope 归一化后收敛 logical Claim；Claim current-version CAS
+不能替代该唯一约束。`continuous_exchange_model_bindings` 的唯一键在一次事务中
+授予 fallback 接管权；只有获胜事务可以向 Provider dispatch，后续 Turn 只读取该
+持久 binding。
 `generation_commands` 的稳定 intent key 控制一个逻辑生成任务，不能因 model config、
-部署滚动或 fallback policy 改变而产生第二个 command；`model_run_attempts` 不按业务
-字段去重，因为同一个 command 可以合法发生多次真实 Provider 调用。
+部署滚动或 Model Routing Policy 改变而产生第二个 command；`model_run_attempts`
+不按业务字段去重，因为同一个 command 可以合法发生多次真实 Provider 调用。
+从 1A.4 开始，后台 role 的一次 fallback 仍属于原 GenerationCommand，只增加一个
+`role_fallback` attempt；它不能创建第二个业务 command，也不能把多个 attempt 的
+结果合并或投票。只有 validator、freshness / deletion fence 与
+`authoritative_result_id` CAS 全部通过的一个结果可以提交。
 
 ### 13.3 Transactional Outbox
 

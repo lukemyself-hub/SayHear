@@ -111,7 +111,6 @@ SPEC，见 [`specs/README.md`](specs/README.md)。在正式 SPEC 出现前，产
 
 ## Open questions
 
-- 正式 iOS 客户端是否进入 External MVP。
 - 核心架构拆分文档当前继承原 v0.1 的 `Draft for implementation` 状态，实施时仍需按
   相关 ADR 与任务验收逐项验证。
 
