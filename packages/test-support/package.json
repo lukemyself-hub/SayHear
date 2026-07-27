@@ -1,0 +1,21 @@
+{
+  "name": "@sayhear/test-support",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sayhear/application": "workspace:*",
+    "@sayhear/data": "workspace:*",
+    "@sayhear/domain": "workspace:*",
+    "pg": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.20.0",
+    "typescript": "7.0.2"
+  }
+}

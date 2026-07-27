@@ -1,0 +1,33 @@
+{
+  "name": "sayhear",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "pnpm": "11.9.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @sayhear/web build",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "db:migrate": "tsx packages/data/src/cli/migrate.ts",
+    "db:provision-owner": "tsx packages/data/src/cli/provision-internal-owner.ts",
+    "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
+    "test": "vitest run",
+    "test:system": "vitest run tests/system",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck",
+    "validate": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@sayhear/application": "workspace:*",
+    "@sayhear/data": "workspace:*",
+    "@sayhear/domain": "workspace:*",
+    "@sayhear/test-support": "workspace:*",
+    "@types/node": "26.1.2",
+    "@types/pg": "8.20.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

@@ -1,0 +1,53 @@
+import {
+  evaluatePrivateWriteGate,
+  type BackupPolicyEvidence,
+  type PrivateWriteGateStatus,
+  type UserId,
+} from "@sayhear/domain";
+
+export type InternalOwnerAccessRepository = Readonly<{
+  findActiveOwner(userId: UserId): Promise<{ userId: UserId } | null>;
+  findLatestBackupPolicyEvidence(): Promise<BackupPolicyEvidence | null>;
+}>;
+
+export type InternalOwnerAccessService = Readonly<{
+  getAccess(userId: UserId): Promise<{
+    privateWrites: PrivateWriteGateStatus;
+  }>;
+}>;
+
+export class InternalOwnerAccessDeniedError extends Error {
+  public constructor() {
+    super("The authenticated principal is not the active Internal Owner.");
+    this.name = "InternalOwnerAccessDeniedError";
+  }
+}
+
+export function createInternalOwnerAccessService(dependencies: {
+  clock: () => Date;
+  expectedBackupPolicyVersion: string;
+  expectedConfigurationFingerprint: string;
+  repository: InternalOwnerAccessRepository;
+}): InternalOwnerAccessService {
+  return {
+    async getAccess(userId) {
+      const owner = await dependencies.repository.findActiveOwner(userId);
+      if (owner === null) {
+        throw new InternalOwnerAccessDeniedError();
+      }
+
+      const evidence =
+        await dependencies.repository.findLatestBackupPolicyEvidence();
+
+      return {
+        privateWrites: evaluatePrivateWriteGate({
+          evidence,
+          expectedConfigurationFingerprint:
+            dependencies.expectedConfigurationFingerprint,
+          expectedPolicyVersion: dependencies.expectedBackupPolicyVersion,
+          now: dependencies.clock(),
+        }),
+      };
+    },
+  };
+}

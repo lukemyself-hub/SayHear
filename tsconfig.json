@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false
+  },
+  "include": [
+    "apps/web/types/**/*.d.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ]
+}
