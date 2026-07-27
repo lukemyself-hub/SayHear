@@ -74,3 +74,97 @@ h1 {
 .gate code {
   font-size: 0.78rem;
 }
+
+.conversation {
+  border-top: 1px solid #d7d0c4;
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 2rem;
+  padding-top: 2rem;
+}
+
+.messageList {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.emptyConversation {
+  color: #625d54;
+  margin: 0;
+}
+
+.userMessage {
+  background: #ece7dc;
+  border-radius: 1rem 1rem 0.25rem 1rem;
+  justify-self: end;
+  max-width: min(36rem, 90%);
+  padding: 0.85rem 1rem;
+}
+
+.userMessage span {
+  color: #625d54;
+  display: block;
+  font-size: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.userMessage p {
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.composer {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.composer label {
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.composer textarea {
+  background: #fffdf9;
+  border: 1px solid #cfc7b9;
+  border-radius: 0.8rem;
+  color: #22211f;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.8rem;
+  resize: vertical;
+}
+
+.composer textarea:focus {
+  border-color: #83745e;
+  outline: 2px solid rgba(131, 116, 94, 0.2);
+}
+
+.composerActions {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.composer button {
+  background: #22211f;
+  border: 0;
+  border-radius: 999px;
+  color: #fffdf9;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 0.65rem 1rem;
+}
+
+.composer button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.submissionError {
+  color: #8f2d20;
+  font-size: 0.85rem;
+  margin: 0;
+}

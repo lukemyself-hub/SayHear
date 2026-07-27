@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { asUserId } from "@sayhear/application";
 
 import { createServerComposition } from "../../src/server-composition";
+import { TextConversation } from "./text-conversation";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,11 @@ export default async function InternalPage() {
     redirect("/api/auth/signin?callbackUrl=/internal");
   }
 
-  const access = await composition.accessService.getAccess(
-    asUserId(session.user.id),
-  );
+  const userId = asUserId(session.user.id);
+  const [access, messages] = await Promise.all([
+    composition.accessService.getAccess(userId),
+    composition.conversationService.listMessages(userId),
+  ]);
   const state = access.privateWrites.allowed ? "Open" : "Blocked";
 
   return (
@@ -39,6 +42,7 @@ export default async function InternalPage() {
         The gate opens only when the configured backup policy has current,
         verified retention evidence.
       </p>
+      <TextConversation initialMessages={messages} />
     </main>
   );
 }

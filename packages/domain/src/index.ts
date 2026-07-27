@@ -1,4 +1,15 @@
-export { asUserId, type UserId } from "./ids";
+export {
+  asConversationEventId,
+  asConversationEventRevisionId,
+  asDailySessionId,
+  asInteractionTurnId,
+  asUserId,
+  type ConversationEventId,
+  type ConversationEventRevisionId,
+  type DailySessionId,
+  type InteractionTurnId,
+  type UserId,
+} from "./ids";
 export {
   evaluatePrivateWriteGate,
   type BackupPolicyEvidence,

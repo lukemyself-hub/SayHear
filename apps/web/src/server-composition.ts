@@ -1,5 +1,12 @@
-import { createInternalOwnerAccessService } from "@sayhear/application";
-import { createPostgresPool, PostgresInternalOwnerAccessRepository } from "@sayhear/data";
+import {
+  createInternalOwnerAccessService,
+  createUserTextConversationService,
+} from "@sayhear/application";
+import {
+  createPostgresPool,
+  PostgresInternalOwnerAccessRepository,
+  PostgresUserTextConversationRepository,
+} from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
 import { loadRuntimeConfiguration } from "./runtime-config";
@@ -19,15 +26,24 @@ export function createServerComposition() {
 
   globalPool.sayHearPool = pool;
 
-  const repository = new PostgresInternalOwnerAccessRepository(pool);
+  const accessRepository = new PostgresInternalOwnerAccessRepository(pool);
+  const conversationRepository =
+    new PostgresUserTextConversationRepository(pool);
   return {
     accessService: createInternalOwnerAccessService({
       clock: configuration.clock,
       expectedBackupPolicyVersion: configuration.backupPolicyVersion,
       expectedConfigurationFingerprint:
         configuration.backupConfigurationFingerprint,
-      repository,
+      repository: accessRepository,
     }),
     authOptions: createAuthOptions({ configuration, pool }),
+    conversationService: createUserTextConversationService({
+      clock: configuration.clock,
+      expectedBackupPolicyVersion: configuration.backupPolicyVersion,
+      expectedConfigurationFingerprint:
+        configuration.backupConfigurationFingerprint,
+      repository: conversationRepository,
+    }),
   };
 }
