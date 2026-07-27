@@ -20,8 +20,9 @@ Archived
 | [`research/openclaw-tolan-architecture-research.md`](research/openclaw-tolan-architecture-research.md) | OpenClaw / Tolan 研究、建议与早期确认记录 | 当前产品与架构文档 |
 | [`terminology/CONTEXT.md`](terminology/CONTEXT.md) | 重组前的根目录领域术语表快照 | [`../../CONTEXT.md`](../../CONTEXT.md) |
 
-原产品文档第 27–28 节和原架构第 30 节只保留在快照中：它们分别重复当前产品结论，
-以及使用了与正式 ADR 文件冲突的旧决策摘要编号。
+原产品文档第 27–28 节只保留在快照中，并重复当前产品结论。原架构第 30 节仍以旧
+`ADR-001`–`ADR-058` 编号保留作历史证据；其每条结论到当前正式 ADR 的迁移结果见
+[`docs/decisions.md`](../decisions.md#归档架构-v01-迁移映射)，当前实现不得引用旧编号。
 
 ## Open questions
 

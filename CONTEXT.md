@@ -42,6 +42,32 @@ _Avoid_: Midnight split, Event-date reassignment
 用户明确表达结束，或达到版本化的无活动时间窗口；AI 可以自然收尾，但其主观判断不能单独改变 Session 状态。具体超时时长是可调策略，不是永久产品常量。
 _Avoid_: Model-decided closure, Hard-coded timeout
 
+## 对话数据与执行身份
+
+**InteractionTurn**:
+Text 与 Realtime 共用的一次用户交互分组，关联一个 primary User Event 以及零个或多个 Assistant / System Event；它负责 Retry、barge-in 和交互状态，但本身不是 Evidence。
+_Avoid_: ConversationEventRevision, VoiceTurn, Trace span
+
+**VoiceSession / VoiceTurn**:
+Realtime Room、Provider item、重连与 delivery 的持久运行映射；每个 VoiceTurn 映射一个 InteractionTurn，但两者都不是产品长期记录或生活事实 Evidence。
+_Avoid_: Daily Session, InteractionTurn, ConversationEventRevision
+
+**ConversationEventRevision**:
+Conversation 中一条 User、Assistant 或 System Event 的不可变内容版本；只有有效的 final / corrected User Revision 可以成为用户生活事实的 primary evidence root。
+_Avoid_: InteractionTurn, Model Session, Provisional transcript
+
+**EvidenceItem**:
+指向具体 source revision 及其 whole revision、segment、text span 或 time range 的一等类型化引用；它不复制、创造或解释底层事实，派生产物的认识论依据必须通过它回到有效 User Event Revision。
+_Avoid_: Quote copy, Lineage edge, AI inference
+
+**GenerationCommand**:
+一次逻辑生成意图的持久元数据，冻结 subject、source revision、Prompt、Schema、policy、routing 与 freshness；它可以有多个串行 ModelRunAttempt，但最多只有一个 authoritative result。
+_Avoid_: ModelRunAttempt, Workflow run, User Event
+
+**ModelRunAttempt**:
+某个 GenerationCommand 的一次具体 Provider 调用及其模型、运行、成本和结果元数据；技术重试或已批准 fallback 创建新 Attempt，不创建第二个逻辑意图，也不能改变 Command 已冻结的业务语义。
+_Avoid_: GenerationCommand, Multi-model vote, Authoritative result
+
 ## 对话行为
 
 **Understanding Response**:

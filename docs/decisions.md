@@ -8,13 +8,26 @@
 - `docs/adr/` 路径由 matt skills 依赖，不得移动或改名。
 - 只读取当前任务相关的 ADR，不要默认加载整个目录。
 - 归档架构 v0.1 第 30 节曾使用另一套 `ADR-001`–`ADR-058` 摘要编号；那不是本目录的
-  正式文件编号，也不再作为当前决策索引。
+  正式文件编号。其迁移结果记录在本文末尾，当前实现只引用正式文件编号。
 
 ## Status
 
 Accepted
 
 ## 按主题读取
+
+### 技术底座、部署与运行时
+
+- [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md)：TypeScript 模块化单体承载领域内核
+- [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
+- [`0065`](adr/0065-vercel-hosts-web-bff-and-durable-workflows.md)：Vercel 承载 Web、BFF 与 Durable Workflow
+- [`0066`](adr/0066-vercel-workflows-v4-runs-durable-asynchronous-work.md)：1A.2 起由 Vercel Workflows v4 承载持久异步任务
+- [`0068`](adr/0068-agent-frameworks-do-not-own-long-term-product-state.md)：Agent Framework 不保存产品长期状态
+- [`0069`](adr/0069-internal-core-does-not-add-python-redis-or-temporal.md)：Internal Core 不增加 Python Worker、Redis 或 Temporal
+- [`0072`](adr/0072-internal-core-validates-bilingual-and-code-switched-use.md)：Internal Core 验收英文、中文与 code-switching，不建设中国大陆部署
+- [`0078`](adr/0078-internal-web-uses-authjs-github-oauth-and-database-sessions.md)：内部 Web 使用 Auth.js、GitHub OAuth 与 database session
+- [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md)：真实私人数据写入前核验最长备份窗口
+- [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
 
 ### 用户控制、删除与导出
 
@@ -23,6 +36,7 @@ Accepted
 - [`0003`](adr/0003-journal-correction-creates-a-new-version.md)：Journal 纠错创建新版本
 - [`0004`](adr/0004-account-data-export-is-a-public-release-gate.md)：Account Data Export 是外部发布门槛
 - [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md)：删除能力随数据面扩展
+- [`0070`](adr/0070-user-audio-is-not-retained-long-term.md)：正式用户音频不长期保留，内部 opt-in 以 72 小时为访问边界
 
 ### 产品阶段、Journal 与对话边界
 
@@ -75,6 +89,25 @@ Accepted
 - [`0059`](adr/0059-text-fallback-handover-precedes-visible-output.md)：Text 只在零可见输出前串行 fallback，并固定到当前连续交流
 - [`0060`](adr/0060-background-fallback-is-explicit-per-role.md)：后台 fallback 按 role 显式开放，每个 command 最多一次
 - [`0061`](adr/0061-model-promotion-is-developer-judged.md)：模型替换由开发者根据适合该 role 的评测判断，不增加早期正式门禁
+- [`0067`](adr/0067-livekit-agents-is-the-realtime-media-and-voice-session-layer.md)：LiveKit Agents 是正式实时媒体与 Voice Session 层
+- [`0071`](adr/0071-model-comparison-uses-explicit-replay-not-shadowing.md)：模型比较使用显式 Replay，不自动 Shadow 私人对话
+- [`0073`](adr/0073-replay-is-non-authoritative-and-cannot-write-product-state.md)：Replay 永不写回正式产品状态
+- [`0075`](adr/0075-private-replay-output-expires-after-thirty-days.md)：真实私人 Replay output 默认 30 天过期并服从删除传播
+- [`0076`](adr/0076-realtime-separates-provisional-response-from-canonical-transcript.md)：Realtime 低延迟 provisional 路径与 canonical transcript 分离
+- [`0079`](adr/0079-livekit-cloud-agents-hosts-the-core-flow-1b-worker.md)：Core Flow 1B 默认使用 LiveKit Cloud Agents 托管 Voice Worker
+- [`0082`](adr/0082-one-turn-detector-owns-each-voice-session.md)：每个 Voice Session 只有一个 turn detector owner
+- [`0084`](adr/0084-voice-session-and-turn-are-runtime-mappings.md)：VoiceSession / VoiceTurn 是持久运行映射，不是产品长期记录
+
+### 数据身份、证据与派生状态
+
+- [`0074`](adr/0074-versioned-domain-artifacts-require-lineage.md)：版本化领域产物必须保留 revision 与 lineage
+- [`0077`](adr/0077-generation-command-is-separate-from-model-run-attempt.md)：逻辑 GenerationCommand 与每次 ModelRunAttempt 分离
+- [`0083`](adr/0083-generation-commands-use-versioned-freshness-policies.md)：Command 使用版本化 exact-head、source-valid 或 monotonic freshness policy
+- [`0085`](adr/0085-persistent-ids-are-opaque-and-semantic-ids-are-versioned.md)：持久实例使用 opaque UUIDv7，语义 ID 使用版本化 `sh.*` namespace
+- [`0086`](adr/0086-interaction-voice-and-event-identities-are-distinct.md)：InteractionTurn、VoiceTurn 与 Event Revision 使用独立身份和职责
+- [`0087`](adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md)：EvidenceItem 是指向 final / corrected User Event Revision 的一等类型化引用
+- [`0088`](adr/0088-entities-are-user-scoped-and-labels-do-not-define-identity.md)：Entity 默认 user-scoped，label 与 external mapping 不决定身份
+- [`0089`](adr/0089-derived-artifacts-are-versioned-and-projections-are-rebuildable.md)：Journal、Reflection、Claim、Episode 版本化，Profile 与索引可重建
 
 ### Entity 与身份变化
 
@@ -98,6 +131,72 @@ Accepted
 ### Episode
 
 - [`0037`](adr/0037-episodes-require-real-world-event-anchors.md)：Episode 必须有现实事件锚点并保守续接
+
+## 归档架构 v0.1 迁移映射
+
+下表只用于证明归档第 30 节的每条结论已被当前正式 ADR 承接。`归档 ADR` 不是当前
+标识；存在冲突、延期或细化时，右栏所列正式 ADR 的完整正文优先。
+
+| 归档 ADR | 当前正式 ADR | 迁移结果 |
+| --- | --- | --- |
+| ADR-001 | [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md) | 同步 |
+| ADR-002 | [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md) | 同步 |
+| ADR-003 | [`0065`](adr/0065-vercel-hosts-web-bff-and-durable-workflows.md) | 同步 |
+| ADR-004 | [`0066`](adr/0066-vercel-workflows-v4-runs-durable-asynchronous-work.md) | 同步；适用阶段由 0017 明确为 1A.2 起 |
+| ADR-005 | [`0067`](adr/0067-livekit-agents-is-the-realtime-media-and-voice-session-layer.md) | 同步 |
+| ADR-006 | [`0068`](adr/0068-agent-frameworks-do-not-own-long-term-product-state.md) | 同步 |
+| ADR-007 | [`0069`](adr/0069-internal-core-does-not-add-python-redis-or-temporal.md) | 同步 |
+| ADR-008 | [`0070`](adr/0070-user-audio-is-not-retained-long-term.md) | 同步并补充当前删除语义 |
+| ADR-009 | [`0071`](adr/0071-model-comparison-uses-explicit-replay-not-shadowing.md) | 同步 |
+| ADR-010 | [`0072`](adr/0072-internal-core-validates-bilingual-and-code-switched-use.md) | 同步 |
+| ADR-011 | [`0073`](adr/0073-replay-is-non-authoritative-and-cannot-write-product-state.md) | 同步；私人数据隔离门槛另见 0020 |
+| ADR-012 | [`0074`](adr/0074-versioned-domain-artifacts-require-lineage.md) | 同步 |
+| ADR-013 | [`0075`](adr/0075-private-replay-output-expires-after-thirty-days.md) | 同步 |
+| ADR-014 | [`0015`](adr/0015-core-flow-1a1-does-not-persist-streaming-chunks.md) | 已延期；1A.1 不持久化 chunk |
+| ADR-015 | [`0076`](adr/0076-realtime-separates-provisional-response-from-canonical-transcript.md) | 同步 |
+| ADR-016 | [`0077`](adr/0077-generation-command-is-separate-from-model-run-attempt.md) | 同步 |
+| ADR-017 | [`0006`](adr/0006-journal-delivery-is-automatic.md) | 已存在 |
+| ADR-018 | [`0078`](adr/0078-internal-web-uses-authjs-github-oauth-and-database-sessions.md) | 同步 |
+| ADR-019 | [`0079`](adr/0079-livekit-cloud-agents-hosts-the-core-flow-1b-worker.md) | 同步 |
+| ADR-020 | [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md) | 同步 |
+| ADR-021 | [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md) | 同步 |
+| ADR-022 | [`0023`](adr/0023-agent-core-precedes-realtime-and-ptt-is-removed.md) | 已取代；不建设 PTT 产品路径 |
+| ADR-023 | [`0082`](adr/0082-one-turn-detector-owns-each-voice-session.md) | 同步 |
+| ADR-024 | [`0020`](adr/0020-replay-isolation-is-gated-by-private-data.md) | 已细化；只对 Private Replay 要求独立部署 |
+| ADR-025 | [`0015`](adr/0015-core-flow-1a1-does-not-persist-streaming-chunks.md) | 已延期；1A.1 不存在持久 delivery chunk |
+| ADR-026 | [`0016`](adr/0016-provider-egress-is-an-in-process-port-in-1a1.md) | 已延期；独立 Gateway 按私人数据运行边界抽离 |
+| ADR-027 | [`0083`](adr/0083-generation-commands-use-versioned-freshness-policies.md) | 同步 |
+| ADR-028 | [`0084`](adr/0084-voice-session-and-turn-are-runtime-mappings.md) | 同步 |
+| ADR-029 | [`0085`](adr/0085-persistent-ids-are-opaque-and-semantic-ids-are-versioned.md) | 同步 |
+| ADR-030 | [`0086`](adr/0086-interaction-voice-and-event-identities-are-distinct.md) | 同步 |
+| ADR-031 | [`0087`](adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md) | 同步 |
+| ADR-032 | [`0088`](adr/0088-entities-are-user-scoped-and-labels-do-not-define-identity.md) | 同步 |
+| ADR-033 | [`0089`](adr/0089-derived-artifacts-are-versioned-and-projections-are-rebuildable.md) | 同步 |
+| ADR-034 | [`0005`](adr/0005-internal-core-precedes-external-mvp.md)、[`0062`](adr/0062-external-mvp-launches-on-web-before-ios.md) | 已存在并细化 iOS 阶段 |
+| ADR-035 | [`0008`](adr/0008-memory-source-explanations-are-conversational-and-evidence-backed.md) | 已存在 |
+| ADR-036 | [`0009`](adr/0009-objective-memory-and-ai-impression-use-distinct-recall-language.md) | 已存在 |
+| ADR-037 | [`0010`](adr/0010-minimum-high-risk-response-starts-in-core-flow-1a1.md) | 已存在 |
+| ADR-038 | [`0011`](adr/0011-journal-eligibility-does-not-judge-importance.md) | 已存在 |
+| ADR-039 | [`0012`](adr/0012-daily-session-ownership-does-not-change-at-midnight.md) | 已存在 |
+| ADR-040 | [`0013`](adr/0013-continuous-exchange-end-is-deterministic.md) | 已存在 |
+| ADR-041 | [`0014`](adr/0014-phase-one-has-one-internal-owner-account.md) | 已存在 |
+| ADR-042 | [`0015`](adr/0015-core-flow-1a1-does-not-persist-streaming-chunks.md) | 已存在 |
+| ADR-043 | [`0016`](adr/0016-provider-egress-is-an-in-process-port-in-1a1.md) | 已存在 |
+| ADR-044 | [`0017`](adr/0017-durable-workflow-and-outbox-start-in-1a2.md) | 已存在 |
+| ADR-045 | [`0018`](adr/0018-persisted-context-projections-start-in-1a2.md) | 已存在 |
+| ADR-046 | [`0019`](adr/0019-model-routing-expands-after-1a1.md) | 已存在 |
+| ADR-047 | [`0020`](adr/0020-replay-isolation-is-gated-by-private-data.md) | 已存在 |
+| ADR-048 | [`0021`](adr/0021-core-flow-1b-splits-transport-from-delivery-precision.md) | 已存在 |
+| ADR-049 | [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md) | 已存在 |
+| ADR-050 | [`0023`](adr/0023-agent-core-precedes-realtime-and-ptt-is-removed.md) | 已存在 |
+| ADR-051 | [`0024`](adr/0024-entity-clarification-follows-semantic-impact.md) | 已存在 |
+| ADR-052 | [`0025`](adr/0025-entity-changes-trigger-targeted-journal-impact-review.md) | 已存在 |
+| ADR-053 | [`0026`](adr/0026-entity-changes-suspend-affected-memory-claims.md) | 已存在 |
+| ADR-054 | [`0027`](adr/0027-person-relationships-are-versioned-memory-claims.md) | 已存在 |
+| ADR-055 | [`0028`](adr/0028-each-account-has-one-self-entity.md) | 已存在 |
+| ADR-056 | [`0029`](adr/0029-one-independently-valid-relationship-per-logical-claim.md) | 已存在 |
+| ADR-057 | [`0030`](adr/0030-relationship-state-does-not-require-exact-dates.md) | 已存在 |
+| ADR-058 | [`0031`](adr/0031-third-party-relationships-require-direct-user-evidence.md) | 已存在 |
 
 ## Open questions
 
