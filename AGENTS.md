@@ -12,12 +12,15 @@
 
 ## 文档启动规则
 
-- 每个任务先读取 [`docs/README.md`](docs/README.md)，再按其路由只读取任务相关的
+- 每个任务先读取 [`docs/README.md`](docs/README.md)，再按其路由读取任务相关的
   产品、SPEC、架构或术语文档。
 - 不默认读取 `docs/archive/`、完整历史决策、整套产品文档或整套架构。
 - 有 GitHub Issue 或 `docs/tasks/` working spec 时先读取任务本身，再读取它明确链接的
-  当前文档。
-- 只有需要理解决策原因或检查既有约束时，才读取 `docs/adr/` 中相关 ADR。
+  当前文档；这些链接是最低起点，不是相关决策的完整清单。
+- 设计或开发具体功能，以及修改架构、数据模型、工作流、接口、用户行为或隐私安全
+  边界前，必须先通过 [`docs/decisions.md`](docs/decisions.md) 按主题和关键词检索，
+  并读取所有命中的相关 ADR，在既有结论共识上完善和实施。
+- 不无目标地通读全部 ADR，但不能以节省上下文为由跳过对任务相关 ADR 的检索和读取。
 - 发现文档与代码、SPEC 与 ADR 冲突时，明确指出冲突，不要自行猜测。
 - 一次任务中不要重复读取没有变化的长文档。
 
@@ -25,6 +28,6 @@
 
 ## Agent 操作导航
 
-- GitHub Issue 或 PRD 操作：[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)
+- GitHub Issue / SPEC 操作：[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)
 - Issue 分诊与标签：[`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)
 - 领域命名与 ADR 冲突检查：[`docs/agents/domain.md`](docs/agents/domain.md)

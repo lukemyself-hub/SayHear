@@ -2,27 +2,36 @@
 
 ## TL;DR
 
-- 日常任务默认只读取根目录 `AGENTS.md` 和本文件。
-- 再根据任务类型读取下表中最小的相关文档，不要预加载整个 `docs/`。
+- 每个任务先读取根目录 `AGENTS.md` 和本文件。
+- 再根据任务涉及的领域定位并读取相关当前文档与 ADR；在任务范围内优先保证结论
+  对齐完整，不无目标地预加载整个 `docs/`。
 - `product/` 定义产品背景、承诺与当前产品规则；`architecture/` 只定义技术契约
   与系统不变量，不属于 SPEC。
 - 根目录 `CONTEXT.md` 是术语唯一真源；`docs/adr/` 解释重要决定的原因。
-- `specs/` 保留给后续由 matt skills 形成的专门 SPEC；当前没有正式 SPEC。
+- 完整 SPEC 由 matt skills 发布为 GitHub Issue；`specs/` 只维护轻量索引和规则，
+  当前没有已发布的正式 SPEC。
 - `tasks/` 是短期 working spec；`archive/` 只用于追溯，默认不读取。
+- 设计、开发或修改具体功能前，先检索并读取任务相关 ADR；Issue、SPEC 或文档中的
+  显式链接只是最低起点，不是完整决策范围。
 - 如果当前文档、ADR 与代码互相冲突，明确指出冲突，不要自行猜测或静默改产品定义。
 
 ## Status
 
 Accepted
 
-## 最小读取规则
+## 任务上下文规则
 
 1. 每个任务先读取根目录 `AGENTS.md` 和本文件。
-2. 纯机械且需求明确的修改，到此即可；不要为了“了解背景”继续加载长文档。
-3. 有 Issue 或 working spec 时，先读取任务本身，再读取它明确链接的当前文档。
-4. 没有任务链接时，根据下方“按任务读取”选择最小相关集合。
-5. 只有需要理解决策原因、判断是否推翻既有方向时，才读取相关 ADR。
-6. 不默认读取 `archive/`、整套产品背景、整套架构或全部 ADR。
+2. 只有不会改变功能语义、架构、数据模型、工作流、接口、用户行为或信任边界的纯机械
+   修改，才可以到此开始。
+3. 有 Issue 或 working spec 时，先读取任务本身及其明确链接的当前文档；这些链接只
+   定义最低上下文，不保证已经列全相关决定。
+4. 没有任务链接时，根据下方“按任务读取”定位相关当前文档。
+5. 涉及具体功能的设计、开发或非机械修改时，先通过
+   [`decisions.md`](decisions.md) 的主题索引和关键词检索相关 ADR，并在行动前读取
+   所有命中项，确保方案与实施对齐已经接受的结论。
+6. 不无目标地加载 `archive/`、整套产品背景、整套架构或全部 ADR；ADR 的读取范围由
+   任务涉及的领域和检索结果决定，不能只以显式链接是否存在来判断。
 7. 同一任务中没有变化的长文档不要重复读取。
 
 ## 权威来源边界
@@ -30,7 +39,7 @@ Accepted
 | 内容 | 当前权威来源 | 不应作为当前真源 |
 | --- | --- | --- |
 | 产品愿景、用户、价值、定位、范围、承诺和当前产品规则 | `product/` 对应主题文件 | 架构摘要、研究建议、归档 PRD |
-| 专门功能 SPEC | `specs/` 中由 matt skills 生成并明确标记的文件 | 架构文档、产品总结、ADR 摘要 |
+| 专门功能 SPEC | 对应 GitHub Issue 的完整正文、评论和标签；`specs/README.md` 只作索引 | 本地重复 SPEC 正文、架构文档、产品总结、ADR 摘要 |
 | 术语、名称和禁用近义词 | 根目录 `CONTEXT.md` | 代码里的临时命名、历史文档 |
 | 技术边界、数据模型、工作流和系统不变量 | `architecture/` 对应主题文件 | 研究文档、归档架构总稿 |
 | 重要决定及其原因 | `adr/` 中对应 ADR | 归档架构中的旧决策摘要 |
@@ -64,9 +73,10 @@ Accepted
 
 ### 专门 SPEC
 
-当前架构文档不属于 SPEC。`specs/` 只保留给后续通过 matt skills 形成的专门功能
-SPEC，见 [`specs/README.md`](specs/README.md)。在正式 SPEC 出现前，产品行为读取
-`product/`，实现约束读取 `architecture/`。
+当前架构文档不属于 SPEC。通过 matt skills 形成的完整 SPEC 发布到 GitHub Issue，
+Issue 是唯一执行真源；[`specs/README.md`](specs/README.md) 只维护发现索引和发布
+规则，不复制正文。在正式 SPEC 出现前，产品行为读取 `product/`，实现约束读取
+`architecture/`。
 
 ### 技术架构
 
@@ -97,7 +107,7 @@ SPEC，见 [`specs/README.md`](specs/README.md)。在正式 SPEC 出现前，产
 - ADR 索引与主题路由：[`decisions.md`](decisions.md)
 - working spec 示例：[`tasks/example-working-spec.md`](tasks/example-working-spec.md)
 - 领域文档使用规则：[`agents/domain.md`](agents/domain.md)
-- GitHub Issue / PRD 操作：[`agents/issue-tracker.md`](agents/issue-tracker.md)
+- GitHub Issue / SPEC 操作：[`agents/issue-tracker.md`](agents/issue-tracker.md)
 - Issue 分诊标签：[`agents/triage-labels.md`](agents/triage-labels.md)
 - 历史快照说明：[`archive/README.md`](archive/README.md)
 

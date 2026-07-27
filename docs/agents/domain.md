@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-- 先读取 `docs/README.md`，再只读取当前任务涉及的术语章节和 ADR。
+- 先读取 `docs/README.md`；设计或修改领域能力前，检索并读取所有与任务相关的 ADR。
 - 根目录 `CONTEXT.md` 是领域词汇唯一真源，路径由 matt skills 依赖。
 - 发现输出或实现与 ADR 冲突时明确报告，不要静默覆盖。
 
@@ -13,13 +13,16 @@ Accepted
 ## Before exploring
 
 1. Read [`../README.md`](../README.md) for task routing.
-2. If the task names or changes a domain concept, read only the relevant section of
+2. If the task names or changes a domain concept, read the relevant section of
    [`../../CONTEXT.md`](../../CONTEXT.md).
-3. Read only the ADRs linked by the relevant SPEC, architecture document, or
-   [`../decisions.md`](../decisions.md).
+3. Read ADRs linked by the relevant SPEC or architecture document, then search
+   [`../decisions.md`](../decisions.md) by every affected domain concept and read
+   all matching ADRs before design or implementation. Direct links are a minimum
+   starting point, not an exhaustive decision scope.
 
-Do not read the whole product background, architecture set, ADR directory, or
-`archive/` merely to explore the codebase.
+Do not load the whole product background, architecture set, ADR directory, or
+`archive/` without a task-relevant search result. A missing direct link is not
+evidence that an ADR is irrelevant.
 
 ## Use the glossary's vocabulary
 

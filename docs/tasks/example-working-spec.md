@@ -4,7 +4,9 @@
 
 - 这是 working spec 格式示例，不代表已批准或已排期的开发任务。
 - 示例目标是把 Journal Eligibility 的确定性输入、输出和验收边界落实到一个小任务。
-- 执行者只需读取本文件链接的两份当前文档和相关 ADR，不需要加载完整产品或架构背景。
+- 执行者先读取本文件链接的当前文档和 ADR，再按 Journal Eligibility、Session、
+  Evidence 与 Workflow 等受影响概念检索决策索引并读取所有命中的 ADR；无需无目标地
+  加载完整产品或架构背景。
 
 ## Status
 
@@ -44,6 +46,9 @@ Journal Workflow 使用。
 - [Session 与 Journal 产品规则](../product/12-13-session-and-journal.md)
 - [Journal、Reflection 与 Memory 工作流](../architecture/11-12-journal-memory-workflows.md)
 - [ADR 0011](../adr/0011-journal-eligibility-does-not-judge-importance.md)
+
+以上链接是最低起点。实施前仍须检索[决策索引](../decisions.md)，确认没有遗漏与任务
+涉及领域相关的 ADR。
 
 不要读取 `archive/` 或完整产品、架构快照，除非上述当前文档出现无法解释的冲突。
 

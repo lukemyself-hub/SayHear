@@ -2,15 +2,22 @@
 
 ## TL;DR
 
-- Issues and PRDs for this repository live in GitHub Issues.
+- Issues and complete SPECs for this repository live in GitHub Issues.
+- A SPEC Issue body, comments, and labels are its sole execution source;
+  `docs/specs/README.md` is discovery-only and must not duplicate the body.
 - Read the target Issue, comments, labels, and acceptance criteria before issue-driven development.
-- Use this file only for Issue or PRD operations; ordinary local development does not need it.
+- Before designing or implementing an Issue, search the decision index by every affected
+  domain and read all matching ADRs; Issue links are a starting point, not a complete list.
+- Use this file only for Issue or SPEC operations; ordinary local development does not need it.
 
 ## Status
 
 Accepted
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Issues and complete SPECs for this repo live as GitHub issues. Use the `gh` CLI for all
+operations. GitHub is the sole execution source for a published SPEC; the local
+[`../specs/README.md`](../specs/README.md) contains only a lightweight index and
+publishing rules.
 
 ## Conventions
 
@@ -37,7 +44,14 @@ GitHub shares one number space across issues and PRs, so resolve an ambiguous `#
 
 ## When a skill says "publish to the issue tracker"
 
-Create a GitHub issue.
+Create a GitHub issue containing the complete SPEC or ticket body. For `/to-spec`:
+
+1. create the complete SPEC as a GitHub Issue;
+2. apply the `ready-for-agent` label without routing it through `/triage`;
+3. add a lightweight Issue link, Core Flow, and status entry to
+   [`../specs/README.md`](../specs/README.md);
+4. keep subsequent scope, acceptance-criteria, discussion, and status changes in the
+   GitHub Issue rather than copying them into a local SPEC file.
 
 ## When a skill says "fetch the relevant ticket"
 
