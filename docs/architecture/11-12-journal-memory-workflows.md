@@ -3,8 +3,10 @@
 ## TL;DR
 
 - Journal 生成、验证和发布是版本化、幂等且可追溯的工作流。
+- 用户请求 Journal Regeneration 复用同一生成与发布 pipeline，不产生自由编辑或审批分支。
 - Reflection 是近期派生层，Memory promotion 只能回到原始 User Evidence。
 - Entity 变化只复核受影响的 JournalStatement 和 Memory Claim。
+- Relationship Correction 只复核明确表达或依赖受影响关系的 JournalStatement。
 
 ## Status
 
@@ -90,6 +92,12 @@ published
   needs_review
 ```
 
+用户请求 Journal regeneration 不改变 publication policy，也不进入
+`awaiting_review`。它通过 Conversation Action Gateway 创建幂等 Journal command，
+冻结 target current JournalVersion、当前有效 source snapshot、generation /
+validation contract、rate policy 与 request Event revision。新版本校验并 fenced
+commit 成功后原子替换 current；失败时仍安全的旧版本继续显示。
+
 ### 11.3 执行步骤
 
 1. 锁定 `daily_session_id + source_revision + eligibility_policy_version`；
@@ -108,6 +116,20 @@ published
 12. 通过 fencing guard 原子发布 JournalVersion；
 13. supersede 旧版本；
 14. 发送完成事件。
+
+同一 Journal generation Module 接受不同的版本化 trigger：
+
+```text
+automatic_delivery
+source_advanced
+understanding_correction
+user_regeneration
+```
+
+trigger 只决定 source snapshot、policy 与幂等 scope，不复制 Journal generation
+pipeline。`user_regeneration` 必须来自已验证的 Derived Artifact Regeneration Action，
+以 Journal Action Reference Handle 定位 target，并服从 Catalog 中声明的 rate policy；
+模型不能直接启动 draft、validation、publish 或 Version mutation step。
 
 Manual 模式的 reviewer 只能 approve / reject。若需要编辑正文，必须创建新的
 human-edited JournalVersion，保留原 Draft 和编辑者审计，避免把人工修改算成模型质量。
@@ -212,6 +234,32 @@ journal_identity_impact_reviews
   `still_ambiguous` 保持 retrieval fence，等待新的触发 Evidence；
 - Internal Core 诊断界面可以列出 pending / ambiguous Statement、EntityVersion
   和 Evidence，供受控复核；它不是消费者 Review Inbox。
+
+### 11.7 Relationship Correction 的 Journal 影响检查
+
+Relationship Memory Claim 或 Relationship Qualifier 被明确纠正时，不扫描或重新
+生成全部历史 Journal。主 Correction Action 提交后立即失效错误 ClaimVersion、
+Qualifier、Resolver Hint、Recall、Context 与 Profile，并通过
+`journal_statement_relationship_links`、Entity link、Evidence link 和 lineage
+反向定位受影响 JournalStatement：
+
+1. 只选择明确表达或以 `relationship_context` 依赖旧 canonical Entity pair、
+   Predicate 或 Qualifier 的 Statement；
+2. 纠正后的 User Evidence 证明原关系表达仍成立时返回 `no_change`；
+3. 能确定原 Statement 表达了错误关系时返回 `correction_required`，为每个受影响
+   Journal 创建独立、幂等的 Journal command 和 superseding JournalVersion；
+4. 关系目标或历史语义仍不明确时返回 `still_ambiguous`，只暂停该 Statement 的
+   relationship enrichment、跨日连接与 Recall，不静默重写正文；
+5. 未引用受影响关系的 Statement 和 Journal 不进入检查；
+6. 一个 Conversation Action 可以确定性地产生多个 Journal command，但模型不能
+   选择日期、逐篇调用工具或把 Workflow 启动当成修复完成；
+7. Profile 只按 correction 后新的 current Claim set 触发一次 trust-boundary rebuild，
+   不为每篇受影响 Journal 重建一次。
+
+例如用户纠正“Mike 不是我的哥哥，只是比我年长的朋友”时，错误的 sibling Claim 与
+`older_brother` Qualifier 立即停止使用；`friend_of` 与相对年龄分别按各自 Predicate
+准入。反向血缘只复核表达 Mike 为哥哥的 JournalStatement，不因两篇 Journal 和一个
+Profile 需要更新就把一次用户纠正拆成三个 Action。
 
 ## 12. Reflection 与 Memory Workflow
 

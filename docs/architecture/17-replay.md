@@ -3,6 +3,7 @@
 ## TL;DR
 
 - Replay 比较模型、Prompt 和工作流，但永不写回正式产品状态。
+- Action selection eval 只支持开发者发布判断，不能自动 enable Definition。
 - Initial Replay 仅使用 synthetic、匿名化或独立授权数据。
 - 读取真实私人 source 前必须启用隔离运行时、受限 snapshot 与出站审查。
 
@@ -22,6 +23,7 @@ Replay 用于比较：
 - Retrieval；
 - Journal policy；
 - Memory extraction；
+- Conversation Action selection、clarification 与 unsupported 判断；
 - 中文 / 英文与 code-switching 表现；
 - 延迟与成本。
 
@@ -154,6 +156,12 @@ Initial Replay 的 synthetic、匿名化或另行授权数据可以直接支持�
 为了晋升再运行 Private Replay。只有开发者主动选择正式领域中的真实私人 source
 进行 Replay 时，才必须进入 Private Replay Runtime，并遵守显式 source / Provider
 选择、job-scoped snapshot、TTL 与删除传播。
+
+ActionDefinition 发布评测复用同一原则：使用 synthetic、匿名化或独立授权的版本化
+selection dataset，冻结 Catalog、Definition、Prompt、Harness Policy 与 model config，
+检查正确 Action、普通回复、澄清和 `unsupported` 的 expected outcome。评测结果只供
+开发者审核，不能自动 enable Definition；只有实际使用真实私人 source 时才进入
+Private Replay。
 
 ## References
 

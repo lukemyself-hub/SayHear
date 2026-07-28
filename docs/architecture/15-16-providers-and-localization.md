@@ -17,6 +17,24 @@ Proposed
 
 不要建立一个最低公分母式的万能 `LLMProvider`。
 
+Conversation Agent Harness 是 application layer 的深 Module，不是 Provider
+抽象。它的 Interface 接收冻结的 Turn、GenerationCommand 与 CompiledContext
+reference，隐藏模型消息、tool-call 协议、Action proposal / receipt 往返和最终回复
+生成。API handler、客户端与领域 Module 不引用 OpenAI、Pi、Mastra 或其他 Framework
+类型。
+
+Harness 内部按真实消费者使用窄 Model Port。Provider Adapter 只实现模型能力，不
+决定 Action Catalog、权限、领域写入或 Harness loop budget。初始 Harness 直接组合
+现有 Conversation Model Port、Provider Egress Port 与 Action Gateway；不为尚未出现
+的 Framework 建立一组 pass-through wrapper。
+
+Conversation Decision 的 Provider-facing Interface 不是万能 Action Function。Harness
+将本轮 eligible Catalog entries 编译成多个聚焦 Conversation Functions，每个拥有
+独立 strict Schema。Provider Adapter 可以使用原生 function calling 或等价 strict
+structured output，但必须输出相同的 normalized `ConversationActionProposal` union。
+该 union 是 SayHear application Interface；Provider Function、call ID、message 和
+Framework 类型都停留在 Adapter 内部。
+
 端口随真实消费者出现，不提前 scaffold。1A.1 只实现
 `ConversationTextModel`；Minimum High-Risk Response 的检测路径仍必须成立，
 但不要求先建立一套通用模型平台。后续按职责拆分：
@@ -76,6 +94,24 @@ retention_mode
 zdr_capability
 enabled_roles
 ```
+
+Provider 声明 `tool_calling=true` 只表示模型适配器具备结构化 Action proposal
+能力，不授予任何产品 Action。实际可见工具只能来自当前版本化
+Conversation Action Catalog；Catalog、用户 capability 和领域验证共同决定授权，
+Provider 不能从自身 Session、历史 tool state 或模型能力推断可执行范围。
+Harness 必须关闭 parallel tool calling 或使用等价约束；多个 Function selection、
+Catalog 外 Function 或 Finalization 阶段 tool call 均 fail closed。
+
+未来 Framework-backed Harness Adapter 只有同时满足以下条件才能替换初始实现：
+
+- 通过与自有 Harness 相同的 Interface conformance 与合成 Replay；
+- Provider / Framework 类型、Session ID 与 tool state 不进入领域 Interface 或
+  PostgreSQL 产品真源；
+- 完整保留冻结 Catalog、Harness Policy、Action receipt、Evidence、幂等与删除
+  fencing；
+- Framework 进程或内部 Session 丢失后，能够只从 SayHear 权威记录安全重建；
+- 在多轮 Agent Task、跨 Provider tool protocol、Realtime resume、approval / MCP、
+  compaction 或观测成本上提供已经测量的收益，而不是只减少少量胶水代码。
 
 ### 15.3 Role-based Model Registry
 

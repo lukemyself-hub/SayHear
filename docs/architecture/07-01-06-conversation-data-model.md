@@ -4,6 +4,7 @@
 
 - 区分 DailySession、InteractionTurn、VoiceSession / VoiceTurn 与 ConversationEventRevision。
 - 只有 final / corrected User Event Revision 是用户事实的 primary evidence root。
+- Conversation Action Proposal、ActionExecution 与 Receipt 是不同的候选、执行和事实记录。
 - 流式片段、模型 Session 和运行时映射都不能替代正式领域记录。
 
 ## Status
@@ -42,6 +43,8 @@ Proposed
 | WorkflowRun | Workflow Service | 运行元数据 | 否 | 正文不应存在于其中 |
 | GenerationCommand | Application Service | 运行意图元数据 | 否 | 随主体失效，不保存正文 |
 | ModelRunAttempt | Model Runtime | Provider 调用元数据 | 否 | 随 command 审计，不保存正文 |
+| ConversationActionProposal | Conversation Agent Harness | 模型提出的候选 Action envelope，不是执行成功证明 | 否 | 随 User Event / owner 删除；临时加密 payload 在 Admission checkpoint 后清除 |
+| ActionExecution / ConversationActionReceipt | Action Gateway | Action 受理与执行审计；Receipt 是执行事实，不是用户内容真源 | 否 | 随 User Event / owner 删除；不保存重复正文 |
 | ReplayRun | Replay Service | 非权威评估记录 | 可重跑 | 随源失效或 TTL 删除 |
 | AudioAsset | Audio Service | 短期敏感源材料 | 否 | 72 小时或撤回授权后删除 |
 | DeletionMarker / DeletionLedger | Deletion Service | 无正文防复活记录；1A.2 先有单 owner 最小 marker，External MVP 扩展为完整 ledger | 否 | 按最长备份窗口保留最小信息 |
@@ -349,6 +352,18 @@ Core Flow 1A.1 的 Assistant 响应使用最小提交语义：
   `continuous_exchange_model_bindings` 的唯一键把该 fallback 固定到
   `daily_session_id + continuous_exchange_no + role`；同一 Continuous Exchange
   不能再次 handover 或切回 Champion。
+
+从 1A.2 的 Conversation Action 开始，同一个 InteractionTurn 可以按 Harness Policy
+包含两个不同的 GenerationCommand：
+
+- Conversation Decision Command 冻结原始 User Event、CompiledContext、Catalog 与
+  Harness Policy，输出普通 Final Response 或一个 Action Proposal；
+- Action Finalization Command 只在 Action Gateway 已提交 receipt 后创建，引用该
+  receipt 并冻结 `tools_disabled=true`，输出最终 Assistant Response。
+
+两个 Command 分别拥有 ModelRunAttempt。Finalization 不能作为 Decision 的 technical
+retry、schema repair 或 fallback Attempt；InteractionTurn 已经承担它们共同的父级，
+不再增加持久 `AgentRun` wrapper。
 
 逐 chunk 持久化、客户端 ACK、断点恢复或 delivered-prefix reconstruction
 不属于 1A.1。Realtime 或未来明确批准的交付渠道只有在评估证明需要时，才通过后续

@@ -87,16 +87,16 @@ Issue 是唯一执行真源；[`specs/README.md`](specs/README.md) 只维护发�
 | --- | --- |
 | 总体边界、技术栈、模块与依赖方向 | [`architecture/01-06-overview.md`](architecture/01-06-overview.md) |
 | Session、Turn、Event、Transcript | [`architecture/07-01-06-conversation-data-model.md`](architecture/07-01-06-conversation-data-model.md) |
-| Evidence、Entity、Journal、Reflection、Memory、Profile | [`architecture/07-07-12-knowledge-data-model.md`](architecture/07-07-12-knowledge-data-model.md) |
-| 在线 Turn、Context Compiler、检索 | [`architecture/08-10-conversation-runtime.md`](architecture/08-10-conversation-runtime.md) |
+| Evidence、Entity、Journal、Reflection、Memory、Profile、Action 运行记录 | [`architecture/07-07-12-knowledge-data-model.md`](architecture/07-07-12-knowledge-data-model.md) |
+| 在线 Turn、Agent Harness、Conversation Action、Context Compiler、检索 | [`architecture/08-10-conversation-runtime.md`](architecture/08-10-conversation-runtime.md) |
 | Journal、Reflection、Memory 派生流程 | [`architecture/11-12-journal-memory-workflows.md`](architecture/11-12-journal-memory-workflows.md) |
 | 幂等、outbox、并发、重试、reconciliation | [`architecture/13-durable-workflows.md`](architecture/13-durable-workflows.md) |
 | Realtime、LiveKit、STT、barge-in、delivery | [`architecture/14-voice.md`](architecture/14-voice.md) |
 | 模型角色、Provider Egress、Prompt、locale | [`architecture/15-16-providers-and-localization.md`](architecture/15-16-providers-and-localization.md) |
 | Replay、eval dataset、隔离边界 | [`architecture/17-replay.md`](architecture/17-replay.md) |
-| 权限、音频保留、删除、数据生命周期 | [`architecture/18-20-privacy-security-lifecycle.md`](architecture/18-20-privacy-security-lifecycle.md) |
+| 权限、Action payload、音频保留、删除、数据生命周期 | [`architecture/18-20-privacy-security-lifecycle.md`](architecture/18-20-privacy-security-lifecycle.md) |
 | 可观测性、部署、Schema / Workflow 演进 | [`architecture/21-23-operations-and-evolution.md`](architecture/21-23-operations-and-evolution.md) |
-| 测试、故障注入、交付顺序、DoD、升级门槛 | [`architecture/24-29-testing-and-delivery.md`](architecture/24-29-testing-and-delivery.md) |
+| Action 发布验收、测试、故障注入、交付顺序、DoD、升级门槛 | [`architecture/24-29-testing-and-delivery.md`](architecture/24-29-testing-and-delivery.md) |
 
 领域命名任务只读取
 [`../CONTEXT.md`](../CONTEXT.md) 的相关章节；不要把整套产品或架构

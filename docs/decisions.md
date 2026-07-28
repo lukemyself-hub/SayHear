@@ -31,6 +31,12 @@ Accepted
 - [`0078`](adr/0078-internal-web-uses-authjs-github-oauth-and-database-sessions.md)：内部 Web 使用 Auth.js、GitHub OAuth 与 database session
 - [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md)：真实私人数据写入前核验最长备份窗口
 - [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
+- [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework
+- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision 与 Action Finalization 使用独立 GenerationCommand
+- [`0098`](adr/0098-conversation-actions-use-descriptors-gateway-and-typed-handlers.md)：Conversation Action 通过 descriptor、统一 Gateway 与 typed deep handler 扩展
+- [`0099`](adr/0099-conversation-actions-separate-admission-from-execution-state.md)：Conversation Action 分离受理状态与执行状态，并以不可变 Receipt 驱动当前投影
+- [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：当前 Agent Catalog 只允许无需二次确认的安全 Action
+- [`0101`](adr/0101-conversation-action-audit-does-not-duplicate-user-content.md)：Action 审计只保留最小 envelope，执行 payload 加密短存并及时清除
 
 ### 用户控制、删除与导出
 
@@ -40,6 +46,15 @@ Accepted
 - [`0004`](adr/0004-account-data-export-is-a-public-release-gate.md)：Account Data Export 是外部发布门槛
 - [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md)：删除能力随数据面扩展
 - [`0070`](adr/0070-user-audio-is-not-retained-long-term.md)：正式用户音频不长期保留，内部 opt-in 以 72 小时为访问边界
+- [`0090`](adr/0090-one-conversation-action-represents-one-semantic-intent.md)：一次 Conversation Action 表达一个语义意图，可确定性传播到多个对象
+- [`0091`](adr/0091-conversation-actions-come-from-a-versioned-allowlist.md)：Conversation Action 只能来自版本化 allowlist，不支持时明确拒绝
+- [`0092`](adr/0092-trust-control-actions-take-priority-in-compound-requests.md)：复合请求优先执行唯一且已满足门槛的 Trust-Control Action，其他情况不静默部分执行
+- [`0095`](adr/0095-models-see-focused-functions-and-the-domain-sees-one-action-proposal-union.md)：模型看到多个聚焦 Function，领域只接收统一 ActionProposal union
+- [`0096`](adr/0096-models-reference-action-targets-through-command-scoped-handles.md)：模型通过 Command-scoped Handle 或当前 Event locator 引用 Action target
+- [`0097`](adr/0097-derived-artifact-regeneration-is-a-policy-governed-action.md)：派生产物重生成是版本化 policy 管理的独立 Action 语义
+- [`0099`](adr/0099-conversation-actions-separate-admission-from-execution-state.md)：Action 是否受理与执行是否完成使用独立生命周期
+- [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：需要二次确认或 step-up 的高风险能力不进入当前对话 Agent
+- [`0101`](adr/0101-conversation-action-audit-does-not-duplicate-user-content.md)：Action 记录不能成为第二份用户内容仓库
 
 ### 产品阶段、Journal 与对话边界
 

@@ -210,6 +210,7 @@ External MVP 使用三个一级页面。
 - 支持导出；
 - 不支持直接编辑；
 - 不支持为了改变风格而随意重新生成；
+- 支持用户因表达质量不满意而发起受 policy 限制的 Journal regeneration；
 - 支持在 Journal Correction 后生成取代旧版本的新 Journal；
 - Conversation 在 Journal 下方弱化入口进入。
 

@@ -61,8 +61,8 @@ Proposed
   临时 Push-to-Talk 产品路径；
 - 正式实时媒体层用 LiveKit Cloud Agents，Vercel 不承担常驻音频 Worker；
 - 1A.1 只使用一个配置化的 Conversation Text Champion 和一个 Provider adapter；
-  1A.2 随 Journal 引入 Role-based Model Registry，1A.3 增加 Entity / Memory
-  roles，1A.4 再通过显式 Replay
+  1A.2 随 Journal 引入 Role-based Model Registry 和首个受限 Conversation Action
+  （Journal Regeneration），1A.3 增加 Entity / Memory roles，1A.4 再通过显式 Replay
   开放多 Provider、Challenger 与已验证 fallback，不自动 Shadow 私人对话；
 - 1A.1 所有模型调用经过模块化单体内部唯一的 Provider Egress Port；
   独立 Replay / Voice 运行时出现前再按信任边界抽离 Provider Egress Gateway；
@@ -210,12 +210,25 @@ External MVP；正式 iOS 待 Web 初步验证核心产品价值后再引入。
 9. **工作流按 at-least-once 执行设计。**
 10. **隐私、删除和审计是领域能力，不是部署配置。**
 11. **稳定对象 ID 与不可变 Version ID 分离，且不编码名称、语言或模型。**
+12. **一次 Conversation Action 表达一个用户语义意图，而不是一个对象写入或工具步骤。**
+13. **模型只使用版本化 Conversation Action Catalog；不支持的请求不近似执行。**
+14. **Conversation Runtime 是可替换的受限 Agent Harness；Framework 不拥有领域状态。**
+15. **ActionDefinition 声明横切契约；Action Gateway 统一执行共同 gate；typed handler 封装领域语义。**
+16. **Action 是否受理与执行是否完成是独立状态；只有不可变 Receipt 能证明结果。**
+17. **当前模型可见 Catalog 只包含无需二次确认或 step-up 的安全 Action。**
+18. **Action 长期审计只保存最小 envelope；临时参数加密短存且不进入日志或 Workflow history。**
 
 ### 3.2 必须始终成立的系统不变量
 
 #### 数据与状态
 
 - 模型不能直接发布 Journal、覆盖 Profile 或写入长期 Memory。
+- 模型最多提出一个 typed Conversation Action；target、scope、权限、Evidence、
+  领域写入与跨对象传播都由确定性代码控制。
+- 正常新增 Action 只增加版本化 ActionDefinition、唯一 typed handler binding 与
+  conformance fixtures，不修改 Harness loop、Provider Adapter 或 Finalization。
+- 内部 Claim、Journal、Profile、Embedding 与 Workflow 操作不作为模型工具暴露；
+  当前 Catalog 无法准确实现的请求返回 `unsupported`。
 - 向量索引、缓存、模型 Session、LiveKit Room 和 Workflow history 都不是真源。
 - Conversation Event 接近 append-only；修正、重转写、撤回使用新 revision 或 tombstone。
 - InteractionTurn 只组织一次交互；VoiceTurn 只映射实时运行时，两者都不能代替
@@ -240,6 +253,8 @@ External MVP；正式 iOS 待 Web 初步验证核心产品价值后再引入。
 #### 隐私
 
 - 用户正文不得进入普通日志、错误日志、Trace、消息 payload 或 Workflow history。
+- Conversation Action 的完整参数只进入加密临时 payload，并在 Admission checkpoint
+  后清除；长期 envelope、Execution 与 Receipt 不复制用户正文。
 - Workflow 只传递 ID、revision 和 policy version；正文只由受控
   application / Egress API 在执行点按权限读取。
 - Embedding 是敏感派生数据，不视为匿名数据。
@@ -444,6 +459,7 @@ SayHear 必须明确区分三种“编排”。
 - InteractionTurn 与 ConversationEventRevision；
 - Evidence 与 Entity lifecycle；
 - Context Compiler；
+- Conversation Action resolution 与 receipt；
 - Journal 发布门禁；
 - ReflectionVersion 生命周期；
 - Memory Claim 生命周期；
@@ -455,15 +471,20 @@ SayHear 必须明确区分三种“编排”。
 
 负责调用模型和处理单次推理：
 
-- Vercel AI SDK；
-- 1A.1 的单一 Conversation Provider Adapter；
+- SayHear application layer 拥有的 Conversation Agent Harness；
+- 1A.1 的 response-only 自有实现与单一 Conversation Provider Adapter；
+- 1A.2 起受 Conversation Harness Policy 约束的一次 Action proposal / receipt 往返；
 - 1A.4+ 经 Replay 与政策准入的其他 Provider Adapter；
 - LiveKit AgentSession；
 - STT / TTS / Realtime Provider。
 
-这些运行时不得拥有产品长期状态。1A.1 调用统一经过 15.8 的 in-process
-Provider Egress Port；独立 Replay / Voice runtime 出现后，必须在允许真实数据前
-完成 Gateway 抽离评审。
+这些运行时不得拥有产品长期状态。Conversation Agent Harness 是应用层深 Module，
+不是 Framework Session 的别名；其调用方不接触 Provider tool-call 对象、内部 Action
+step 或领域 repository。初始实现不引入通用 Agent Framework。未来
+Framework-backed Adapter 必须服从相同 Interface、Harness Policy、receipt 与 Replay
+conformance，且内部状态可丢弃。1A.1 调用统一经过 15.8 的 in-process Provider
+Egress Port；独立 Replay / Voice runtime 出现后，必须在允许真实数据前完成 Gateway
+抽离评审。
 
 #### Durable Workflow
 

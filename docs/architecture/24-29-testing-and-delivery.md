@@ -22,6 +22,10 @@ Proposed
 - InteractionTurn / ConversationEvent / VoiceTurn 映射；
 - opaque ID、logical ID / Version ID 分离与 namespace 稳定性；
 - Context budget；
+- Conversation Agent Harness Policy budget 与单 Action invariant；
+- Conversation Function compilation 与 normalized ActionProposal union；
+- Action Reference Handle owner、Version、Command scope 与 Event locator；
+- ActionDefinition descriptor validation、Gateway gate order 与 handler binding；
 - Claim promotion；
 - evidence actor gate；
 - EvidenceItem source / locator gate；
@@ -40,6 +44,9 @@ Proposed
 - 1A.2+ outbox；
 - 1A.2+ Vercel Workflow step；
 - 1A.1 single Conversation Provider adapter；
+- Conversation Agent Harness Interface conformance：自有实现与 deterministic
+  test / Replay Adapter；
+- Action Gateway 与 typed handler registry conformance；
 - 1A.4+ multi-Provider adapters and Model Routing Policy；
 - typed Evidence link foreign key 与 deletion propagation；
 - Entity alias / external mapping；
@@ -54,6 +61,8 @@ Proposed
 
 - synthetic multi-day conversations；
 - model and Prompt comparison；
+- Conversation Action selection、clarification、compound request 与 unsupported
+  detection；
 - Journal evidence grader；
 - memory retrieval precision；
 - voice long-pause / interruption scenarios。
@@ -63,6 +72,7 @@ Proposed
 #### End-to-end
 
 - Text；
+- Conversation Action decision、execution、receipt 与 finalization；
 - Realtime；
 - same-day resume；
 - cross-midnight；
@@ -73,12 +83,77 @@ Proposed
 - deletion；
 - Replay。
 
-### 24.2 必须执行的故障注入
+### 24.2 Conversation Action 开发与发布验收
+
+新增或修改一个 Conversation Action 必须完成以下流程，才能把对应 Definition 发布为
+`enabled`：
+
+1. 发布不可变 ActionDefinition version，实现唯一 typed handler 与 binding；
+2. 通过 Schema、target、owner、权限、Version、freshness、`data_epoch`、deletion
+   fence、幂等、Receipt 生命周期和 handler transaction 的确定性测试；
+3. 建立版本化 Action selection dataset，至少包含：
+   - 该 Action 的正常表达与常见改写；
+   - 与它相近但语义不同或当前不支持的请求；
+   - target 不明确、同名对象、stale Handle 与需要澄清的表达；
+   - 单 Action、复合请求与 Trust-Control 优先场景；
+   - 中文、英文和 code-switching；
+4. 使用待发布的完整 Catalog、Definition、Prompt、Harness Policy 与 model config
+   运行 selection eval，验证 expected outcome 是正确 Action、普通回复、
+   `clarification_required` 或 `unsupported`；
+5. 开发者检查误调用、漏调用、错误 target、错误部分执行和虚构成功等失败样本，显式
+   决定发布、继续修正或保持 disabled；
+6. Definition description / Schema、Prompt、Harness Policy、模型或同轮 Catalog
+   组成发生可能影响选择的变化时，重新运行相关 dataset。
+
+Phase 1 不设置跨所有 Action 的统一准确率数字，也不让 Replay 分数自动 enable
+Definition。所有确定性安全与 must-pass conformance fixture 必须通过；更广泛的语言
+质量由开发者结合样本覆盖、错误严重性和失败模式判断。发布记录至少引用 Definition /
+Catalog version、dataset / rubric version、model config、测试结果、审核人和理由。
+
+### 24.3 必须执行的故障注入
 
 | 场景 | 必须结果 |
 | --- | --- |
 | 同一客户端 Event 提交 10 次 | 只有一个 Conversation Event |
 | 同一 `client_turn_id` 通过 Text / Voice 重试提交 | 只有一个 InteractionTurn；VoiceTurn 只作运行映射 |
+| 普通对话由 Harness 直接生成回复 | 一次逻辑模型调用、0 个 Action、0 次 receipt 后模型调用 |
+| Harness 收到一个合法 Action proposal | Action Gateway 最多创建一个 ActionExecution，并只追加一条合法 Receipt 序列；有 committed Receipt 后才允许一次 tools-disabled 最终回复调用 |
+| Decision 产生普通 Final Response | 同一 InteractionTurn 只有一个 Conversation Decision Command；不存在 Action Finalization Command |
+| Decision 产生 Action Proposal 并提交 receipt | 同一 InteractionTurn 恰有一个 Decision Command 和一个引用 receipt、`tools_disabled=true` 的 Finalization Command；两者分别拥有 ModelRunAttempt |
+| Finalization Provider 调用需要技术重试 | 只在 Finalization Command 下新增 ModelRunAttempt；不重新运行 Decision 或 Action |
+| 实现尝试把 Finalization 记为 Decision 的 retry / fallback Attempt | Schema 与 invariant 拒绝；不同 source、Prompt、Schema 和意图不能共享 GenerationCommand |
+| Catalog 为当前 Turn 过滤出三个 eligible Action | 模型侧恰好看到三个独立 strict Conversation Functions；领域侧仍只依赖一个 ActionProposal union |
+| 发布一个 enabled ActionDefinition | 恰好存在一个 Schema 与 contract version 兼容的 typed handler binding；缺失、重复或不兼容时拒绝发布 |
+| 当前 Catalog 尝试发布需要二次确认或 step-up 的 Definition | 发布检查拒绝，Harness 看不到 Function；0 个 pending confirmation 或跨 Turn challenge |
+| Action selection must-pass fixture 把近似但不支持的请求误选为合法 Action | Definition 保持 disabled；开发者修正描述、Schema、Prompt 或能力边界并重跑相关 dataset |
+| 新 Definition 加入后使已有 Action 的选择样本退化 | 新 Catalog version 不发布；相关新旧 Action 的 selection dataset 必须一起通过 |
+| Replay / eval 分数达到自动阈值但没有开发者审核 | 0 个 Definition 自动 enabled；发布记录必须引用人工审核和失败样本结论 |
+| 新增一个正常 Conversation Action | 只增加 Definition、typed handler、binding 与 conformance fixture；Harness loop、Provider Adapter、ActionProposal、Command stages 和 Finalization 0 处变化 |
+| Descriptor 尝试编码 Claim / Journal / Profile 具体状态机 | 架构与发布检查拒绝；领域算法必须留在 typed deep handler |
+| Gateway 执行任意 ActionProposal | 按固定顺序完成 frozen Definition、Schema、target、权限 / policy、幂等、handler 与 receipt；handler 不能绕过共同 gate |
+| Handler 返回同步 commit 或 Durable Workflow command | Gateway 根据 Definition execution / receipt contract 规范化结果；最终回复只读取 committed receipt |
+| Proposal 因需澄清、拒绝或不支持而未被接受 | 只提交一个 Admission Receipt；Execution 保持 `not_started`，0 次 handler 调用、0 个领域变化 |
+| 同步 Action 被接受并成功执行 | Admission、领域变化与 `succeeded` Completion Receipt 在同一事务提交；projection 可从 Receipt 重建 |
+| 异步 Action 被接受 | Admission、唯一 Workflow command / outbox 与 `pending` 状态在同一事务提交；最终回复只声称已接受和处理中 |
+| 同一个 Action 幂等请求被提交 10 次 | 仍只有一个 ActionExecution、一条执行链和一个外部副作用；返回已有 Receipt，不重复启动 Workflow |
+| Progress / Completion Receipt 重复、乱序或在 terminal 后晚到 | 唯一约束与状态机拒绝非法回退；current projection 保持 terminal 且可由 Receipt 序列重建 |
+| 异步 Action 最终失败或取消 | 追加 `failed` 或 `canceled` Completion Receipt；不得把 Admission `accepted` 改写为 rejected，也不得声称已完成 |
+| 同步 Action 完成 Admission / Completion | 同一事务清除加密 Proposal payload；长期 envelope、Execution 与 Receipt 不包含用户原话或完整 typed arguments |
+| 异步 Action 提交 Admission 与 Workflow command | 同一事务使临时 Proposal payload 不再可读；Workflow payload / history 只有 ID、revision、policy 与 allowlisted 状态 |
+| Proposal 在 Admission 前崩溃 | 有效恢复期限内 Gateway 可读取加密 payload 幂等恢复；到期后 fail closed 并清除 ciphertext，不近似重建参数 |
+| Action 已 settled 后尝试读取 payload | capability、状态与到期检查拒绝；日志、Trace、Receipt、Replay 和 Workflow history 中也不存在副本 |
+| OpenAI-style function call 与另一 Provider 的 strict structured output 表达同一 Action | Adapter 产生语义等价的 normalized ActionProposal；Action Gateway 与领域测试不区分 Provider |
+| Provider Function 参数、call ID 或 Framework message 试图写入领域对象 | Interface / schema 拒绝；normalized typed arguments 只进入加密临时 payload，长期 seam 只保留 Catalog / Schema version、Event 与 typed target reference |
+| 模型用当前 Context 提供的 Claim Handle 提出纠正 | Gateway 从 typed link 解析 owner-scoped ClaimVersion，再检查 current Version、Evidence、epoch 与 Action kind 后执行 |
+| 模型提交真实 UUID、另一 Turn 的 Handle 或自由文本数据库 selector | Schema / Gateway 拒绝；0 个对象查询近似匹配、0 个领域变化 |
+| Handle 在 Decision 后因纠正、Forget、删除或并发更新变成 stale | Gateway fail closed 或返回 `clarification_required`；不得改写 successor 或当前同名对象 |
+| 当前 User Event 首次提到新人物或新事实 | Proposal 使用 final / corrected Event revision 的 typed locator；正常进入 Entity / Evidence admission，不伪造已有 target ID |
+| 两个同名 Mike 都可能对应 Handle 的显示文本 | 每个 Handle 仍指向不同 typed Version；语义歧义实质影响修改时澄清，不能按名称或相似度任选 |
+| Provider 尝试使用另一个 user 的 Handle | owner / CompiledContext binding 拒绝；0 个跨用户读取或写入 |
+| Provider 返回多个 tool call、要求继续自主调用或使用 Catalog 外工具 | Harness fail closed；0 个领域变化，不把 Provider capability 当作授权 |
+| Finalization Command 返回任何 Function selection | 协议失败；0 个新 Action，原 receipt 与已提交领域状态保持不变 |
+| Harness 在 Action commit 后、最终回复前崩溃 | 已提交 Action 不重复；从 SayHear receipt 恢复用户可理解结果，不依赖 Framework Session |
+| 用 Framework-backed Adapter 替换自有 Harness | 同一 conformance / Replay fixture 保持 Action、receipt、可见输出、失败与删除语义；领域 Module 0 处引用 Framework 类型 |
 | 用户一次明确说“我住在洛杉矶”，且 Registry、Entity、scope 与 Evidence 校验通过 | 直接创建 `objective + confirmed` Claim；不等待第二次表达 |
 | 用户明确说“我今天很累” | 陈述本身明确，但一次性状态不晋升长期 Claim；仍可用于回应、Journal 与 Memory Evidence |
 | 模型从同一 Daily Session 的多次表达推测“用户重视关系的长期延续” | 只保留 `impression + inferred` Candidate；单 Session 重复和高 confidence 都不能晋升 |
@@ -189,6 +264,13 @@ Proposed
 | Reversal 后 repair / Consolidation 尝试重新挂载旧 Evidence | active old Evidence exclusion 拒绝；旧 ClaimVersion、projection、Embedding 与 Profile 不恢复 current |
 | Relationship Claim 被纠正、Forget 或进入 `review_due` | 对应 Resolver Hint 立即 fail closed 并失效；不得继续绑定 Mention |
 | 从 inverse person-card view 纠正或 Forget 关系 | 操作落到同一 canonical Claim；正向、反向与 symmetric Hint 一起失效，不留下另一方向的 Recall |
+| 用户说“前两天 Journal 和 Bio 把 Mike 写成哥哥；其实只是比我年长的朋友” | 一个 typed Conversation Action 撤回 sibling Claim / Qualifier，独立验证 friend 与相对年龄 assertion；反向血缘只为受影响日期创建 Journal Correction，并只触发一次 Profile rebuild |
+| 用户要求当前 Catalog 不支持的打印邮寄、任意 Bio 风格编辑或外部操作 | 返回明确 `unsupported`；0 个近似 Action、领域 Command、Workflow 或虚构成功回复 |
+| 用户在对话中要求注销账号并删除全部数据 | 不创建 Conversation ActionExecution；说明不能在对话中执行，并在正式入口存在时引导至独立设置流程 |
+| 用户说“别再记 Mike 是我哥哥，并把相关 Journal 导出成 PDF 发到邮箱”，Forget 目标唯一但邮件能力不支持 | 本轮唯一 Action 是 Memory Forget Request；立即停止错误 Memory 使用，明确邮件要求未执行且不支持，不声称整轮全部成功 |
+| 复合请求包含一个受支持和一个不支持的普通独立 Action | 本轮 0 个领域变化；说明能力边界并询问是否只执行受支持部分，用户明确选择后以新 User Event 执行 |
+| 复合请求包含两个彼此独立且受支持的普通 Action | 本轮 0 个 Action；不由模型任意挑选，询问用户先处理哪一个 |
+| 一个 Correction 确定性触发多个 ClaimVersion、Journal command 与 Profile rebuild | 仍计为一个 Conversation Action，不被误判为 Compound Conversation Request，也不要求用户逐项确认 |
 | Resolver Hint 投影任务晚到 | 读取时发现 source 不是 current ClaimVersion 并拒绝 Hint，不恢复旧称呼 |
 | Context 召回“妈妈” | 由 Entity 与有效关系 Claim 渲染一张人物卡片；Hint 不作为第二条记忆注入 |
 | 用户说“Tom 是我姐姐 Lily 的丈夫”，双方身份已绑定 | 创建 user-scoped `Lily —伴侣→ Tom` Relationship Claim |
@@ -220,6 +302,10 @@ Proposed
 | Source Revision 被 corrected | 旧 Evidence 失效，新 Evidence 指向新 Revision |
 | 同一 Journal Workflow 并发启动 | 只有一个正式 published 版本 |
 | Journal / Reflection 对同一 source 重新生成 | logical ID 不变；产生新的不可变 Version ID |
+| 用户因表达质量请求重新生成某一天 Journal | 一个 Derived Artifact Regeneration Action 冻结 current target、有效 source、generation / validation contract 与 rate policy；验证后的新 JournalVersion 原子取代 current |
+| 用户只说“这篇不满意”，无法区分理解错误或表达质量 | 0 个 Action；自然澄清一次是 Understanding Correction 还是 regeneration |
+| 用户要求第一人称、指定正文、多种候选或连续抽卡 | 当前 Catalog / policy 返回 `unsupported` 或 rate rejection；不绕过第三人称观察与自动发布边界 |
+| Journal regeneration 生成失败 | receipt 准确报告失败；仍安全的旧 current Journal 保持可见，不提交部分 Version |
 | 1A.1 已显示部分 text 后崩溃 | Turn 标记 `interrupted`；无 Assistant Event；显式 Retry |
 | 模型完成但 Assistant revision 提交前崩溃 | `result_unknown` 后收敛为 `interrupted`；不猜测正文 |
 | Provider timeout 后重试成功，旧结果晚到 | 两个 attempt 可审计，只有一个 authoritative result |
@@ -229,7 +315,7 @@ Proposed
 | Journal 生成时新增 turn | 旧 Draft 可审计但不能发布；新 revision 创建新 command |
 | Journal / Claim / Reflection 试图用 Assistant Event 支撑生活事实 | 程序化 validator 拒绝 |
 | Future granular deletion 清除多证据 Claim 的一条证据 | 旧正文立即不可用；retract 或从剩余证据重建 |
-| Internal Owner Full Purge 完成 | 保留无正文 User–Self Entity binding；清除 Self Entity label、关系 Claim 与全部内容派生物 |
+| Internal Owner Full Purge 完成 | 保留无正文 User–Self Entity binding；清除 Self Entity label、关系 Claim、Action Proposal / payload / Execution / Receipt 与全部内容派生物 |
 | Account Deletion 完成 | User、Self Entity 与 binding 一起删除，旧任务不能重新创建 |
 | Future granular deletion 清除 Entity 唯一 Mention / Evidence | label 与 mention 被清除，Entity 进入 unresolved / deleted Version |
 | Future granular deletion 清除 Entity 的一条非唯一 Evidence | 保留稳定 Entity ID，只从剩余 Evidence 重建投影 |
@@ -257,7 +343,7 @@ Proposed
 | Summary 覆盖前 20 个 Event、Context 继续 | 只加入 Summary + sequence 20 之后 raw Event |
 | Summary 生成失败 | 对话使用有限 recent raw turns 继续 |
 | 1A.1 committed raw Events 超出 Context budget | 只选择预算内最新 Events；manifest 记录 `raw_event_budget_exceeded`；不可覆盖边界和当前输入仍保留 |
-| Canary 私密字符串通过完整链路 | 普通日志、Trace、Workflow history 中搜不到 |
+| Canary 私密字符串进入 Action Function arguments | settled 后 Proposal payload 不可读；长期 Action envelope、Receipt、普通日志、Trace、Replay 与 Workflow history 中搜不到 |
 | 非 owner / Replay role 请求正式写入 | API 与数据库均拒绝 |
 | Voice / Replay token 换成另一个 job ID | API 因 resource grant 不匹配拒绝 |
 | Voice Worker 绕过 Egress Gateway 调 Provider | 无 credential / grant，调用失败 |
@@ -343,6 +429,13 @@ Proposed
 - SessionSummary / SessionSummaryVersion、DialogueStateVersion；
 - Rolling Summary 与 DialogueState Workflow；
 - Role-based Model Registry 的 Journal / Evidence role 与 Champion config；
+- Conversation Agent Harness 从 1A.1 response-only 扩展为受限 Decision /
+  Action Finalization 两阶段；
+- immutable Conversation Action Catalog / ActionDefinition、聚焦 Conversation
+  Functions、normalized ActionProposal、Action Gateway、ActionExecution 与 Receipt；
+- 加密短存的 Action Proposal payload、Admission / Execution 生命周期和 current
+  status projection；
+- Derived Artifact Regeneration Action 的 Journal typed handler 与 selection dataset；
 - Evidence / Journal Schema 与 migrations；
 - EvidenceItem / typed Evidence links；
 - Journal logical ID 与 immutable JournalVersion ID；
@@ -351,8 +444,8 @@ Proposed
 - JournalStatement evidence + lineage；
 - Journal Eligibility、No Journal Notice 与自动发布；
 - operator-only Internal Owner Full Purge；
-- Conversation、Evidence、Summary、DialogueState、Journal 与全部当期派生数据的
-  active-system deletion propagation；
+- Conversation、Action Proposal / payload / Execution / Receipt、Evidence、Summary、
+  DialogueState、Journal 与全部当期派生数据的 active-system deletion propagation；
 - 位于业务数据库备份之外的单 owner 最小 purge marker。
 
 退出条件：
@@ -362,6 +455,15 @@ Proposed
 - 所有 JournalStatement Evidence 都能展开到 final / corrected User Event Revision；
 - Journal logical ID 与 JournalVersion ID 不混用；
 - 用户生活事实 0% 由 Assistant / System Event 支撑；
+- 普通 Conversation Turn 仍只有一次 Decision 模型调用；Action Turn 最多增加一次
+  tools-disabled Finalization，且每轮最多一个 ActionExecution；
+- Catalog 只发布无需二次确认的 Action；Definition / handler binding、安全
+  conformance 与中英文 selection dataset 通过后才由开发者 enable；
+- Journal Regeneration 使用 current 有效 source 和同一 validation / publication
+  pipeline；成功创建新 JournalVersion，失败保留旧 current，任意风格与连续抽卡
+  返回 `unsupported`；
+- Action Admission checkpoint 后临时 payload 不可读，长期 envelope / Receipt、
+  日志、Trace 与 Workflow history 不复制用户正文；
 - 验证通过的 Journal 按 v0.1 policy 自动发布，失败结果不发布；
 - 日常琐事和事务性内容不会因“缺少重要性”被拒绝；
 - 无 Conversation 的日期无占位，有 Conversation 但不足以支撑一条真实记录的日期
@@ -371,13 +473,14 @@ Proposed
   current projection；生成失败时继续使用预算内 raw Events；
 - outbox 在重复 dispatch、receipt 前崩溃和 Workflow 暂时不可用后能恢复；
 - 晚到 turn 生成新 Journal revision；
-- Full Purge 演练覆盖 Conversation 与所有 1A.2 派生层，产生 active-system
-  receipts，旧任务不能复活内容；
+- Full Purge 演练覆盖 Conversation、Action 记录与所有 1A.2 派生层，产生
+  active-system receipts，旧任务不能复活内容；
 - Internal Core 不提供单条 Conversation / Journal 删除，也不声称 `fully_expired`。
 
-1A.2 验收的是 Evidence 完整、可自动交付的同日第三人称 Journal。Entity、Episode
-与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由临时文本推断伪造稳定实体；
-跨日人物连续性和“与过去记忆的联系”由 1A.3 验收。
+1A.2 的主闭环是 Evidence 完整、可自动交付的同日第三人称 Journal，并同时验证用户
+对 current Journal 发起的受限 Regeneration 仍复用相同事实、验证与发布边界。Entity、
+Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由临时文本推断伪造稳定
+实体；跨日人物连续性和“与过去记忆的联系”由 1A.3 验收。
 
 ### Core Flow 1A.3：Entity 与长期 Memory
 
@@ -400,7 +503,8 @@ Proposed
   manual / weekly / trust-boundary refresh；
 - Embedding 与 pgvector retrieval；
 - Memory retrieval 与后续对话召回；
-- Memory Correction、Memory Forget Request 与 Memory Source Explanation；
+- Memory Correction、Memory Forget Request 与 Memory Source Explanation，以及
+  对应的 Conversation ActionDefinition / typed handler；
 - Full Purge 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、
   Reflection、Memory、Profile、Embedding 与相关索引。
 
@@ -450,6 +554,12 @@ Proposed
   Journal 或未来 Memory 时才澄清一次，用户不回答时停止追问并保留未绑定状态；
 - Entity merge / split / correction 通过反向血缘只检查受影响 JournalStatement；
   只有用户明确纠正或确定性误归属才生成新的 JournalVersion；
+- Relationship Correction 通过 typed relationship reference 和 Evidence lineage
+  只检查受影响 JournalStatement；一次用户 Action 可以产生多个幂等 Journal command，
+  但 0 个日期或下游工具由模型自由选择；
+- Conversation Model 100% 只从冻结的 Action Catalog version 提出当前允许的高层
+  Action；Catalog 无精确能力时 100% 返回 `unsupported`，0 个内部传播机制暴露为
+  模型工具或被相近 Action 替代；
 - `needs_review` 不使整篇 Journal 下架；受影响 Statement 暂停 Entity / Recall
   使用，并只在版本化新 Evidence、用户纠正或用户查看时幂等重检；
 - Entity 身份变化立即使受影响 Claim 退出 Recall / Profile；只有新的
@@ -658,6 +768,8 @@ Proposed
 - PITR 和恢复演练；
 - Provider retention / data region 核验；
 - 用户可触发的 Account Deletion；
+- Account Deletion 通过独立设置入口与确定性流程触发，不作为 Conversation
+  Action 或自然语言 Agent Function；
 - 完整多用户 deletion ledger、Provider destination reconciliation 和回执；
 - 删除后备份恢复防复活演练；
 - 用户可理解的删除阶段、备份窗口与第三方 retention 说明；
@@ -736,6 +848,8 @@ Talk
 - Foundation / 1A.1 在真实私人内容写入前核验 backup window，并通过
   owner / active / `data_epoch` 读取与 Egress fence；
 - Canary 扫描确认正文不在普通日志和 Workflow history；
+- Action Proposal 的加密临时 payload 在 Admission checkpoint 后不可读，长期
+  envelope / Execution / Receipt 只含字段白名单内的 typed reference 与状态；
 - Replay 无正式写入权限；
 - 1A.2 Internal Owner Full Purge 有 active-system receipt，并传播到
   Conversation、Evidence、Summary、DialogueState、Journal 与全部当期派生层；

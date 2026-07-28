@@ -253,6 +253,13 @@ Bio 可以深入剖析和共情用户的内心、情感、深层价值观与世�
 ProfileVersion 立即停止展示，并绕过普通刷新间隔自动重建。重建失败时显示
 “Bio 正在更新”或暂时不可用，不能继续展示含有失效内容的旧 Bio。
 
+用户在同一句话中提出多个独立要求时，SayHear 不静默挑选其中一部分执行。唯一、
+目标明确并已满足自身 scope、授权与安全门槛的 Memory Correction、Memory Forget
+Request 或 Memory Forget Reversal 优先生效，回复同时说明其他要求未执行、需要澄清
+或当前不支持；其他“部分支持”的复合请求先说明能力边界并询问用户是否只执行受支持
+部分，用户的明确选择形成新的 User Event。纠正一项理解后自动保持 Journal、Memory
+与 Profile 一致，不属于多个独立要求。
+
 ### 14.2.2 冲突与时间变化
 
 新的 User Evidence 与现有 Claim 不一致时，SayHear 先按 Predicate Registry 的
@@ -441,6 +448,14 @@ SayHear 不应因为一个人物、地点或项目尚未完成结构化绑定，
   object 约定，以及本地化正向、反向称呼投影。关系级 Correction 与 Forget
   作用于 canonical Claim；Qualifier-level Forget 仍通过该 Claim 的新 ClaimVersion
   执行，并一起失效对应角色的所有方向、语言 Hint 与人物卡片投影；
+- 一次明确的关系纠正是一个用户语义意图，不因同时影响 Memory、Journal 与 Profile
+  而拆成多个用户操作。错误关系立即停止 Recall 与 Profile 使用；系统通过 typed
+  relationship reference 和 Evidence lineage 只复核明确表达或依赖该关系的
+  JournalStatement，并从纠正后的有效 Claim 重建 Profile；
+- 同一纠正中新增的独立事实分别执行正常 Memory 准入。例如“Mike 不是哥哥，只是比我
+  年长的朋友”会撤回 sibling 关系、独立建立 friend 关系，并把相对年龄作为另一项
+  assertion 评估；年龄不能继续编码成 sibling Qualifier，也不能因该 assertion
+  暂时无法准入而延迟停止错误关系；
 - 关系称呼可以作为 EntityMention resolver 的提示，但不能单独完成身份绑定。
   “我之前那个同事”仍可能指向多人，证据不足时必须保持 unresolved / ambiguous；
 - “妈妈 / Mom / 我妈”等关系称呼跨语言指向同一人物时，连续性来自有效的关系 Claim

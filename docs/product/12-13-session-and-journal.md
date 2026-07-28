@@ -111,6 +111,7 @@ Internal Core 与 External MVP：
 
 - 不支持直接编辑；
 - 不支持为了改变风格而随意重新生成；
+- 支持用户因表达质量不满意而发起受版本化 policy 限制的重生成；
 - 用户指出事实错误或被写成事实的不当推断后，纠正来源并生成取代旧版本的新 Journal；
 - Journal 自动交付，不要求用户手动触发或发布前批准；
 - 支持复制；
@@ -122,6 +123,12 @@ Internal Core 与 External MVP：
 
 Journal Correction 不把 Journal 变成用户亲自编辑的文本；它通过新的 Journal Version
 保留 AI 观察视角，同时让错误版本不再作为当前正式记录。
+
+Journal Regeneration 不表示原理解错误。用户可以针对某一天 current Journal 请求
+重新生成表达，但仍使用当前有效 Conversation / Evidence、第三人称观察视角和同一
+事实 / 推断边界。新 JournalVersion 只有通过既有 validator 后才替换 current；
+产品不提供任意文风、第一人称、指定正文、多候选批准或连续抽卡。用户仅表示“不满意”
+而无法判断是理解错误还是表达质量问题时，SayHear 自然澄清一次。
 
 ---
 

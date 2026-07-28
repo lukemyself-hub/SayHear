@@ -44,6 +44,9 @@ entity_mentions(event_revision_id, start_offset, end_offset, resolver_policy_ver
 memory_claims(user_id, canonical_key)
 generation_commands(operation_type, intent_key)
 model_run_attempts(generation_command_id, attempt_no)
+conversation_action_executions(user_id, action_kind, idempotency_key)
+conversation_action_receipts(action_execution_id, sequence_no)
+conversation_action_receipts(action_execution_id, receipt_key)
 workflow_commands(command_type, subject_type, subject_id, source_revision, policy_version)
 outbox_events(aggregate_type, aggregate_id, aggregate_revision, event_type)
 ```
@@ -58,6 +61,12 @@ Predicate 与 scope 归一化后收敛 logical Claim；Claim current-version CAS
 `generation_commands` 的稳定 intent key 控制一个逻辑生成任务，不能因 model config、
 部署滚动或 Model Routing Policy 改变而产生第二个 command；`model_run_attempts`
 不按业务字段去重，因为同一个 command 可以合法发生多次真实 Provider 调用。
+`conversation_action_executions` 吸收同一 Action 的客户端、Harness 或 Workflow
+重试；Receipt 只追加，并同时按 Execution 内 sequence 与执行源稳定 receipt key
+去重。Gateway 在锁定 Execution 后分配 sequence；Workflow 不能自行把一次重试解释为
+新的用户意图或自报可信顺序。Action Admission 提交后，Workflow 只能接收
+ActionExecution、领域 command、source revision 与 policy reference，不能读取、
+复制或延长临时 Action Proposal payload。
 从 1A.4 开始，后台 role 的一次 fallback 仍属于原 GenerationCommand，只增加一个
 `role_fallback` attempt；它不能创建第二个业务 command，也不能把多个 attempt 的
 结果合并或投票。只有 validator、freshness / deletion fence 与
@@ -218,7 +227,8 @@ Claim、Embedding、Summary、Transcript finalization 和 Replay。
 从 1A.2 开始建立通用异步 reconciliation，并只检查当期 Slice 已存在的数据面：
 
 - 1A.2：未发布或卡住的 outbox、超过时限的 Workflow、重复 published Journal、
-  引用已删除 Evidence 的 active Journal、未完成 deletion request；
+  引用已删除 Evidence 的 active Journal、未完成 deletion request、已接受但缺少
+  后续进展的 ActionExecution，以及 Receipt 与 current projection 不一致；
 - 1A.3：重复 current ReflectionVersion、无源 Embedding、引用已删除 Evidence
   的 active Claim / Reflection、无有效 Mention / Evidence 的 active Entity label；
 - 1A.4：已失效 source 的 Replay；

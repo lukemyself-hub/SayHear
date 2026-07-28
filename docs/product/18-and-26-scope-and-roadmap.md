@@ -65,13 +65,14 @@ Internal Core 不等于 External MVP，也不验证外部需求、留存、付�
 - Conversation 弱化回看入口；
 - Journal 复制和导出；
 - Journal Correction；
+- 受 policy 限制的 Journal Regeneration；
 - 客观事实记忆；
 - AI Impression；
 - 对话内 Memory Correction 与 Memory Forget Request；
 - 用户可查看 Profile；
 - 订阅付费；
 - 限时体验；
-- 账号注销和数据删除；
+- 通过独立设置入口触发的账号注销和数据删除；
 - 低调、异步的 Account Data Export；
 - 基础安全机制和内容风险处理。
 
@@ -86,6 +87,7 @@ Internal Core 不等于 External MVP，也不验证外部需求、留存、付�
 - 第三方生活数据；
 - Journal 自由编辑；
 - 为改变风格而随意重新生成 Journal；
+- Journal 多候选批准、指定正文或连续抽卡式重生成；
 - 完整 Profile 编辑界面；
 - Profile 单条删除；
 - 行为建议；
@@ -125,6 +127,8 @@ Internal Core 不等于 External MVP，也不验证外部需求、留存、付�
 - 一个可写入真实私人内容的 Internal Owner Account；
 - Text 与 Realtime Voice；
 - Daily Session、Journal、Reflection、Memory 与 Future Recall；
+- 有限 Conversation Action Catalog，以及 Journal Regeneration、Memory Correction
+  与 Memory Forget Request 等当前安全 Action；
 - 只读 Reflection Inspector；Conversation、Journal 与 Profile 保持为体验面；
 - Evidence、Entity、Episode 与版本血缘；
 - Replay、Candidate review、Registry Change Proposal、terminal Candidate 内容
@@ -155,8 +159,9 @@ Internal Core 不验证外部用户需求、留存、付费意愿或消费者 UI
 - 正式多用户身份、数据隔离和账号生命周期；
 - Voice Live、Text、Daily Session、Journal、Memory 与 Profile；
 - Journal Correction；
+- 受 policy 限制的 Journal Regeneration；
 - 对话内 Memory Correction 与 Memory Forget Request；
-- Account Deletion；
+- 通过独立设置入口触发的 Account Deletion，不作为自然语言 Conversation Action；
 - 低调、异步的 Account Data Export；
 - 正式数据透明、安全与高风险内容处理，包括地区化危机资源、处置流程和安全运营。
 

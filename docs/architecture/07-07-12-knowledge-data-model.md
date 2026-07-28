@@ -6,6 +6,7 @@
 - 派生对象保留不可变版本与反向血缘，当前指针不是历史真源。
 - Predicate Registry 提供跨模型、跨语言的稳定 Claim 语义。
 - Profile 与索引是可重建投影，不是权威事实层。
+- Action 长期记录只保存最小 envelope 与 Receipt；完整参数只加密短存到 Admission checkpoint。
 
 ## Status
 
@@ -200,6 +201,7 @@ entity_external_identifiers
 journals
 journal_versions
 journal_statements
+journal_statement_relationship_links
 journal_validation_results
 ```
 
@@ -239,7 +241,8 @@ content_purged_at
 ```
 
 `journal_statements` 只保存 Statement 本身；证据和 Entity 引用分别使用有类型的
-`journal_statement_evidence_links` 与 `journal_statement_entity_links`：
+`journal_statement_evidence_links` 与 `journal_statement_entity_links`。明确表达或
+依赖人物关系的 Statement 还必须保存 `journal_statement_relationship_links`：
 
 ```text
 journal_statements
@@ -265,6 +268,19 @@ journal_statement_entity_links
   entity_mention_id      # nullable; inferred observation may use multiple Evidence items
   evidence_id
   entity_role            # actor / target / relationship_context / reference
+
+journal_statement_relationship_links
+  id
+  journal_statement_id
+  canonical_subject_entity_id
+  canonical_object_entity_id
+  predicate_id
+  relationship_claim_id          # nullable；Journal 可能早于 Claim admission
+  relationship_claim_version_id  # nullable
+  qualifier_key                  # nullable
+  qualifier_typed_value          # nullable
+  evidence_id
+  link_role                      # asserted_relationship / relationship_context
 ```
 
 每条 JournalStatement 必须区分用户明确表达与 `inferred_observation`。
@@ -275,6 +291,12 @@ journal_statement_entity_links
 每条使用 Entity enrichment 的 JournalStatement 必须保存生成时采用的
 `entity_id + entity_version_id + entity_role`。Entity link 只用于身份引用、
 反向影响分析和精确 Replay，不能替代 Statement 的 typed Evidence。
+
+Relationship link 同样不是 Evidence 或第二条 Memory。它保存 Statement 当时明确
+表达或作为语义上下文使用的 canonical Entity pair、Predicate 与可选 Qualifier，
+使后续 Relationship Correction 可以定向定位真正受影响的 Statement。Claim 尚未
+admit 时 link 仍保留 typed relationship assertion；Claim 形成后可以补充稳定
+Claim / ClaimVersion 引用，但不能改变原 Statement 的 Evidence lineage。
 
 同一 `journal_id + source_revision + generation_policy_version`
 最多只能有一个正式 published 版本。
@@ -1360,6 +1382,11 @@ Prompt、policy、随机性和用户确认影响，必须保留原 Version ID �
 `CompiledContext.referenced_versions` 保存所有 Event、Evidence、Entity、Summary、
 Episode、Open Loop、Proactive Follow-up State、Journal、Reflection、Claim 和
 Profile 的具体 version / identity ID。
+需要向 Conversation Functions 暴露已有对象 target 时，CompiledContext 另外保存
+Command-scoped Action Reference manifest。每个 Handle 通过 typed link 指向同一
+owner 下的具体对象与 Version，并记录允许使用它的 Catalog action kinds；不得只保存
+无法用外键约束的任意 `target_type + target_id`。Entity、Claim 与 JournalStatement
+等 target 使用各自 typed link，Provider 只看到 opaque Handle。
 只要任一版本已过 TTL、删除或无法读取，
 历史 Replay 就 fail closed；不得用“当前最新版”近似重建过去的 Context。
 
@@ -1373,6 +1400,10 @@ prompt_versions
 model_configs
 generation_commands
 model_run_attempts
+conversation_action_proposals
+conversation_action_payloads
+conversation_action_executions
+conversation_action_receipts
 workflow_commands
 workflow_runs
 outbox_events
@@ -1382,13 +1413,62 @@ provider_egress_events
 access_audit_events
 ```
 
+Catalog 的 immutable published manifest 至少在逻辑上包含：
+
+```text
+conversation_action_catalog
+  catalog_version
+  published_at
+  definitions[]
+
+action_definition
+  action_kind
+  action_schema_version
+  input_schema_ref
+  target_contract_ref
+  effect_class
+  trust_class
+  confirmation_policy_ref     # current Conversation Catalog: none
+  execution_mode            # synchronous / durable_workflow / external_side_effect
+  idempotency_scope
+  consistency_policy_ref
+  rate_policy_ref
+  receipt_contract_ref
+  availability_policy_ref
+  handler_binding
+  handler_contract_version
+  status
+```
+
+Internal Core 可以先把 manifest 作为随应用发布、内容寻址的 versioned artifact，不为
+单一 writer 提前建设数据库管理 UI 或动态发布系统。无论 manifest 存在代码、配置
+artifact 还是未来治理表中，GenerationCommand、Proposal 与 Replay 都必须记录其稳定
+Catalog / Definition reference，且历史版本不可被原地改写。
+
+这些字段是横切执行契约，不是领域规则 DSL。Definition 不能描述如何更新 Claim、
+生成 Journal、删除数据或调用外部系统；具体语义由 `action_kind +
+handler_contract_version` 唯一绑定的 typed Action Handler 实现。Catalog 发布验证必须
+证明每个 enabled Definition 恰好存在一个兼容 binding，且没有未被 Definition 引用的
+模型可见 handler。
+
+当前 Conversation Catalog 的 enabled Definition 还必须满足
+`confirmation_policy_ref=none`。需要二次确认、step-up 或不可逆高风险授权的能力不
+进入模型可见 Catalog；当前数据模型不增加 pending confirmation 或跨 Turn challenge
+对象。
+
 逻辑任务和真实 Provider 调用必须分开：
 
 ```text
 generation_commands
   id
+  interaction_turn_id         # nullable for non-conversation roles
   operation_type
   intent_key
+  conversation_stage          # nullable / decision / action_finalization
+  predecessor_command_id      # nullable；finalization points to decision
+  action_receipt_id           # nullable；finalization only
+  conversation_harness_policy_version # nullable for non-conversation roles
+  tools_mode                  # nullable / catalog_enabled / disabled
   subject_type
   subject_id
   input_revision_kind
@@ -1428,7 +1508,8 @@ model_run_attempts
 `intent_key` 不包含模型或部署配置，例如：
 
 ```text
-conversation-response/<user-event-id>
+conversation-decision/<interaction-turn-id>
+conversation-action-finalization/<interaction-turn-id>/<action-receipt-id>
 conversation-retry/<retry-request-id>
 journal-eligibility/<daily-session-id>/<source-revision>/<policy-version>
 journal-draft/<journal-id>/<source-revision>/<policy-version>
@@ -1437,6 +1518,123 @@ evidence-extract/<event-revision-id>/<policy-version>
 entity-resolve/<event-revision-id>/<policy-version>
 memory-extract/<event-revision-id>/<policy-version>
 ```
+
+Conversation Decision 与 Action Finalization 是两个逻辑生成意图，因此必须创建两个
+GenerationCommand。Decision 直接生成普通回复时不会创建 Finalization。Decision
+生成 Action Proposal 时，只有 Action Gateway 已提交 immutable receipt，才能以
+`interaction_turn_id + action_receipt_id` 唯一创建 Finalization；该 Command 必须
+引用 Decision predecessor 并冻结 `tools_mode=disabled`。两者由 InteractionTurn
+组织，不新增 `AgentRun` 表。
+
+`conversation_action_proposals` 是无重复正文的长期 envelope：
+
+```text
+conversation_action_proposals
+  id
+  user_id
+  generation_command_id
+  request_event_revision_id
+  compiled_context_id
+  catalog_version
+  conversation_harness_policy_version
+  action_kind
+  action_schema_version
+  handler_contract_version
+  candidate_target_ref       # opaque Handle or typed Current Event Locator
+  created_at
+```
+
+Proposal 不是执行成功证明，也不保存 Provider-specific tool-call object、用户原话、
+模型解释、自由文本 target 或完整 candidate arguments。Provider request identity 仍由
+对应 ModelRunAttempt 记录。Gateway 为崩溃恢复必须冻结的其余 normalized typed
+arguments 使用独立内容行：
+
+```text
+conversation_action_payloads
+  id
+  proposal_id                # unique
+  payload_schema_version
+  ciphertext
+  encryption_key_version
+  retention_policy_version
+  expires_at
+  content_purged_at
+  created_at
+```
+
+Payload 只允许 Gateway recovery capability 在 Admission 尚未 settled 且未到期时读取。
+同步 Action 在 Admission / Completion 事务结束后清除；异步 Action 在 Admission 与
+幂等领域 / Workflow command 原子提交后清除。未完成 Admission 的 Proposal 到期后读取
+fail closed，由 sweeper 置空 ciphertext 并记录 `content_purged_at`；Full Purge 再删除
+整个 content row。Receipt、日志、Trace、Workflow history 或 Replay 不能复制
+payload；不得保存 payload fingerprint、Embedding 或摘要替代正文。
+
+Proposal 必须引用稳定的 `catalog_version + action_kind + action_schema_version +
+handler_contract_version`；Gateway 不能按当前最新 Catalog 重新解释历史 Proposal。
+已有 target 的 candidate target 只保存 Action Reference Handle；Action Gateway
+从 Proposal 绑定的 CompiledContext typed link 解析真实对象，并重新检查 owner、
+current Version、scope、Evidence、`data_epoch` 与 deletion fence。当前 User Event
+中的新信息只使用 typed Event locator；locator 不能被解释为已有对象身份。
+
+每个 Proposal 在 Definition 声明的幂等 scope 内最多解析为一个稳定的
+`conversation_action_executions`：
+
+```text
+conversation_action_executions
+  id
+  user_id
+  proposal_id
+  catalog_version
+  action_kind
+  action_schema_version
+  handler_contract_version
+  idempotency_key
+  resolved_target_refs       # allowlisted typed references
+  admission_status          # accepted / clarification_required / rejected /
+                            # unsupported
+  execution_status          # not_started / pending / running / succeeded /
+                            # failed / canceled
+  current_receipt_id
+  workflow_command_id       # nullable
+  expected_data_epoch
+  created_at
+  settled_at                # nullable
+```
+
+`admission_status + execution_status` 是由 Receipt 维护的 current projection，不是
+独立权威事实。非 `accepted` execution 必须保持 `not_started`；terminal execution
+不能回退。`idempotency_key` 在 action kind 定义的 scope 内唯一，重复请求返回同一个
+Execution，不能创建第二个 Workflow 或外部副作用。
+
+```text
+conversation_action_receipts
+  id
+  action_execution_id
+  sequence_no
+  receipt_key              # execution 内稳定幂等 key
+  receipt_kind              # admission / progress / completion
+  admission_status          # admission only
+  execution_status          # not_started / pending / running / succeeded /
+                            # failed / canceled
+  authoritative_change_refs # allowlisted typed references, nullable
+  workflow_command_id       # nullable
+  error_code                # allowlisted, nullable
+  created_at
+```
+
+Receipt 以 `(action_execution_id, sequence_no)` 和
+`(action_execution_id, receipt_key)` 分别唯一并只追加。`receipt_key` 由 Admission
+或权威执行源的稳定事件身份产生；Gateway 在锁定 Execution 后校验合法状态迁移并分配
+下一 sequence，不能信任 Workflow 自报 sequence。每个 Execution 恰好有一个
+Admission Receipt，Progress 可以有多个，Completion 最多一个；projection 必须能从
+序列完全重建。同步 Handler 在同一领域事务中提交 Admission、权威变化与 Completion；
+异步或外部副作用 Handler 在同一事务中提交 Admission、Workflow command / outbox
+与初始 `pending` 状态，后续提交 Progress / Completion。
+
+Action Finalization Command 的 `action_receipt_id` 冻结创建时最新的 committed
+Receipt。Finalization 不从模型原始 tool result、Framework Session 或可变 projection
+推断执行状态；只有 `succeeded` Completion Receipt 可以支持“全部完成”的用户可见
+表述。
 
 Command 创建时冻结 `model_role + model_config_version`。从 1A.4 开始，
 `conversation.text` 创建 Command 前先读取当前 Continuous Exchange 的持久

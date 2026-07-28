@@ -3,6 +3,7 @@
 ## TL;DR
 
 - 日志、诊断、紧急开关和成本观测不能泄漏私人正文。
+- Action Function arguments 与临时 Proposal payload 不进入普通日志、Trace 或 Workflow history。
 - 部署从模块化单体开始，只在明确触发条件下拆分运行边界。
 - Schema、Prompt、Workflow、ID namespace 和模型下线都需要版本化演进。
 
@@ -93,6 +94,8 @@ Vercel、Sentry、OpenTelemetry、AI SDK telemetry 和 LiveKit tracing 不得采
 - Evidence locator；
 - Memory statement；
 - Prompt rendered content；
+- Conversation Function arguments 与 Action Proposal payload；
+- Action Receipt 中任何非 allowlisted 的内容描述；
 - Provider 原始错误体中的用户内容；
 - 签名 URL；
 - Audio bytes。
@@ -121,12 +124,14 @@ Vercel、Sentry、OpenTelemetry、AI SDK telemetry 和 LiveKit tracing 不得采
 - 查看 Journal Statement Evidence 与运行 lineage；
 - 查看 ReflectionVersion、Statement Evidence 和 Candidate lineage；
 - 查看 Workflow 状态和重放；
+- 查看 Action Proposal 最小 envelope、Execution 与 Receipt；临时 payload 只在尚未
+  清除且具备独立敏感诊断 capability 时可查看；
 - 查看删除回执；
 - 查看 AudioAsset 到期状态；
 - 创建显式 Replay；
 - 盲评 Replay 输出。
 
-查看正文和音频属于敏感访问，必须记录 access audit。
+查看正文、音频和临时 Action payload 属于敏感访问，必须记录 access audit。
 
 ### 21.4 紧急开关
 

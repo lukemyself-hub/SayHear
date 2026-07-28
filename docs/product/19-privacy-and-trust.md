@@ -23,6 +23,8 @@ Accepted
   包含 Conversation、Journal、Profile 与 Memory；
 - External MVP 面向真实用户前提供账号注销；
 - 注销后删除所有内容；
+- Account Deletion 由独立设置入口和专用确认流程触发，不允许自然语言 Agent
+  直接执行；
 - 产品目标是实现端到端加密。
 
 ### 19.2 关键技术结论

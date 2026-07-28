@@ -5,6 +5,7 @@
 - 隐私、权限、删除和审计是领域能力，不是部署后的补充配置。
 - 内部音频 72 小时后不可访问，并由应用删除与独立 Lifecycle 兜底。
 - 删除能力随数据面扩展，所有读取、召回、Replay 与 Provider Egress 都必须 fence。
+- Conversation Action 长期审计只保存最小 envelope，临时参数加密短存且不进入日志或 Workflow history。
 - External MVP 的 Account Deletion 要求完整 ledger、Provider reconciliation 与备份防复活验证。
 
 ## Status
@@ -17,7 +18,7 @@ Proposed
 
 | 级别 | 示例 | 处理 |
 | --- | --- | --- |
-| Highly Sensitive Content | 对话、Journal、Profile、Memory、音频、Replay 输出 | 严格权限、加密、禁止普通日志 |
+| Highly Sensitive Content | 对话、Journal、Profile、Memory、音频、Replay 输出、临时 Action payload | 严格权限、加密、禁止普通日志 |
 | Sensitive Derived Data | Embedding、Summary、Episode、Memory Candidate 语义、分类结果 | 与源数据同等删除和访问控制 |
 | Operational Metadata | ID、状态、延迟、token、错误类别 | 可进入脱敏观测 |
 | Public / Static | 产品策略版本、无用户内容 Schema | 正常版本管理 |
@@ -157,6 +158,27 @@ Provider Registry 记录：
 
 SayHear 自身的 72 小时策略不能被描述为第三方同步删除承诺。
 
+### 18.5 Conversation Action 数据最小化
+
+Conversation Action 的 Proposal、Execution 与 Receipt 长期只保存 Action / Schema /
+Catalog version、原始 User Event revision、typed target reference、状态、时间、
+allowlisted authoritative change reference 与错误代码。它们不能复制用户原话、
+Provider tool-call object、模型解释、自由文本 target 或完整 typed arguments。
+
+Gateway 为 Admission 崩溃恢复必须冻结的 normalized typed arguments 使用独立加密
+content row，并记录 payload Schema、retention policy、`expires_at` 与
+`content_purged_at`。该 payload 只允许 Gateway recovery capability 在 Admission
+尚未 settled 且期限有效时读取：
+
+- 同步 Action 在 Admission / Completion 事务结束后清除；
+- 异步 Action 在 Admission 与幂等领域 / Workflow command 原子提交后清除；
+- 未完成 Admission 的 Proposal 到期后立即 fail closed，并由 sweeper 清除 ciphertext。
+
+后续 Workflow 只读取已经提交的 ID、revision、policy 与领域 command，不得延长或复制
+Proposal payload。Receipt、Finalization source、普通日志、Trace、Workflow history、
+Replay fixture 和 Provider 原始错误体都不能成为旁路副本，也不得保存 payload 的
+fingerprint、Embedding 或摘要来保留其含义。
+
 ## 19. 内部音频 72 小时保留
 
 ### 19.1 允许条件
@@ -279,7 +301,7 @@ S3 Lifecycle 的 eligibility 和执行都不是精确时钟，因此不能把 96
 | 阶段 | 必须具备 | 明确不做 |
 | --- | --- | --- |
 | Foundation / 1A.1 | stable `user_id`、`data_epoch`、owner / active / epoch 读取与 Egress fence、deletion-compatible lineage、日志脱敏、传输与静态加密、已核验 `backup_policy_version` | 删除 API、通用 deletion workflow、完整 ledger、恢复演练、消费者 UI |
-| 1A.2 | operator-only Internal Owner Full Purge；撤销 session / Egress、增加 epoch、清理 Conversation、Evidence、Summary、DialogueState 与 Journal，生成 active-system receipts；在业务 DB 备份之外保存单 owner 最小 purge marker | 单条 Conversation / Journal 删除、消费者账号生命周期、对所有未来数据类型预建 handler |
+| 1A.2 | operator-only Internal Owner Full Purge；撤销 session / Egress、增加 epoch、清理 Conversation、Evidence、Summary、DialogueState、Conversation Action envelope / payload / Execution / Receipt 与 Journal，生成 active-system receipts；在业务 DB 备份之外保存单 owner 最小 purge marker | 单条 Conversation / Journal 删除、消费者账号生命周期、对所有未来数据类型预建 handler |
 | 1A.3 | Full Purge 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、Reflection、Memory、Profile、Embedding 与相关索引 | 提前建设 Replay 或 Voice 删除 |
 | 1A.4 | Full Purge 扩展到 Replay input / output 与相关 eval artifact | 提前建设 Voice 删除 |
 | 1B.1 | Full Purge 扩展到 AudioAsset、Transcript revision / segment、Voice runtime metadata 与临时对象 | 提前建设 delivered-prefix buffer |
@@ -395,6 +417,8 @@ content deletion 的设计目标，不属于 Internal Core 或当前 External MV
 - Profile Projection；
 - Embedding；
 - Context snapshot；
+- Conversation Action Proposal envelope、临时 payload、Execution、Receipt 与 typed
+  target / authoritative change link；
 - cache；
 - Replay input / output；
 - Replay 生成的音频和授权评语；

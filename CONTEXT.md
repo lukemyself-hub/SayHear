@@ -68,6 +68,14 @@ _Avoid_: ModelRunAttempt, Workflow run, User Event
 某个 GenerationCommand 的一次具体 Provider 调用及其模型、运行、成本和结果元数据；技术重试或已批准 fallback 创建新 Attempt，不创建第二个逻辑意图，也不能改变 Command 已冻结的业务语义。
 _Avoid_: GenerationCommand, Multi-model vote, Authoritative result
 
+**Conversation Decision Command**:
+一个 InteractionTurn 的第一阶段 GenerationCommand；它冻结 User Event、CompiledContext、Conversation Action Catalog 与 Harness Policy，结果只能是普通 Final Response 或一个 Conversation Action Proposal。
+_Avoid_: ModelRunAttempt, Action Finalization Command, Agent plan
+
+**Action Finalization Command**:
+Action Gateway 已提交 Conversation Action Receipt 后才创建的第二阶段 GenerationCommand；它引用创建时最新的 committed Receipt、强制 tools disabled，并只负责生成用户可见的最终回复。
+_Avoid_: Technical retry, Action execution, Second tool round
+
 ## 对话行为
 
 **Understanding Response**:
@@ -266,8 +274,68 @@ _Avoid_: Notification, Progress tracking, Repeated probing
 针对一个 Open Loop 或 Memory Claim，记录 Proactive Memory Follow-up 当前是否 eligible 或因用户停止信号被 suppressed 的版本化行为投影；它不是用户事实、Memory 或任务，只有用户主动重提或新的相关 User Evidence 才能解除抑制。
 _Avoid_: Proactive Memory Follow-up, Memory Claim, Task state
 
+**Conversation Action**:
+用户在一个 User Event 中要求 SayHear 执行的一项明确支持的高层产品能力及其完整语义意图；一次 Action 可以一致地影响多个相关 Memory Claim、Journal 与 Profile，但这些影响不构成多个独立用户意图。
+_Avoid_: Tool call, Database mutation, Workflow step
+
+**Conversation Action Catalog**:
+SayHear 当前明确支持用户在对话中请求的有限、版本化 ActionDefinition 集合；每项声明模型与执行层共同需要的通用契约，并绑定一个 typed Action Handler。无法由其中某项能力准确实现的请求必须说明不支持，不能用相近 Action 代替。
+_Avoid_: Open-ended toolbox, Internal workflow list, Model-invented capability
+
+**ActionDefinition**:
+Conversation Action Catalog 中一个 action kind 的版本化 capability descriptor；它声明 input Schema、target contract、effect / trust class、confirmation、execution mode、idempotency、consistency、rate、receipt、availability 与 handler binding，但不编码具体领域算法。当前模型可见 Definition 必须声明无需二次确认，需要额外确认或 step-up 的能力不能发布到 Catalog。
+_Avoid_: Tool implementation, Business-rule DSL, Prompt
+
+**Action Gateway**:
+接收 normalized Conversation Action Proposal 的应用层深 Module；它冻结并验证 ActionDefinition、解析 target、执行共同权限与 policy gate、按 action kind 调用唯一 typed Action Handler，并持久提交 Conversation Action Receipt。
+_Avoid_: Agent loop, Domain handler, Provider tool router
+
+**Action Handler**:
+实现一个 ActionDefinition 领域语义的 typed deep Module；它接收 Gateway 已验证的 action context 与 typed input，原子提交领域变化或创建幂等 Durable Workflow command，并返回结构化 handler outcome。它不处理 Provider 协议或生成最终 Assistant Response。
+_Avoid_: Generic workflow DSL, Provider function, API handler
+
+**Conversation Function**:
+Conversation Agent Harness 根据当前 Catalog 为一次 Decision Command 生成并向模型暴露的单个聚焦 Function；每项对应一个高层 Conversation Action kind 及独立 strict Schema。它是 Provider-facing 表达，不是领域 Interface 或执行权限。
+_Avoid_: Internal tool, Conversation Action, Universal function
+
+**Conversation Action Proposal**:
+Provider Adapter 将模型选择的 Conversation Function 规范化后产生的 provider-independent typed union；它引用 Catalog action kind、Schema version、request Event 与候选参数，但仍需 Action Gateway 验证，不能证明已经执行。
+_Avoid_: Provider tool call, Conversation Action Receipt, Domain command
+
+**ActionExecution**:
+一个已验证 Conversation Action Proposal 在幂等边界内对应的稳定执行身份；它分别投影一次性 Admission 与后续 Execution 状态，但权威变化历史来自不可变 Conversation Action Receipt 序列。
+_Avoid_: Conversation Action Proposal, WorkflowRun, Model tool call
+
+**Action Reference Handle**:
+Context Compiler 为一个 Conversation Decision Command 生成的短期 opaque reference；它只在该 Command 冻结的 CompiledContext 中映射到同一 owner 下的具体对象与 Version，供模型选择已有 Action target。Handle 不是产品身份、授权或可跨 Turn 使用的 ID。
+_Avoid_: Database ID, Entity identity, Free-text selector
+
+**Conversation Action Receipt**:
+Action Gateway 为一次 Conversation Action 的受理、进展或完成状态追加的不可变结果引用；受理与执行是独立状态，当前状态可以从 Receipt 序列重建。Action Finalization 只能依据已提交 Receipt 区分未受理、已接受、处理中、完成、失败或取消，不能把模型声明当作执行事实。
+_Avoid_: Model tool result, Assistant claim, Workflow completion
+
+**Derived Artifact Regeneration Action**:
+用户要求 SayHear 使用当前有效 source、现行生成 policy 与同一 logical artifact identity，重新生成 Journal、Profile 等派生产物的高层 Conversation Action；它不声称底层理解错误，不接受任意正文编辑或无限候选抽取，并只通过验证后的新 Version 替换 current Version。
+_Avoid_: Understanding Correction, Free-form edit, Model retry
+
+**Conversation Agent Harness**:
+SayHear 应用层拥有的深 Module；它围绕一个冻结的 InteractionTurn 组织 Context、模型判断、高层 Function Calling、Conversation Action receipt 与最终回复，但不拥有长期产品状态或领域编排。当前为受限自有实现，未来可以由通过同一契约与 Replay 验证的 Framework-backed Adapter 替换。
+_Avoid_: Agent Framework, Domain workflow, Provider Session
+
+**Conversation Harness Policy**:
+每次 Conversation Agent Harness 运行冻结的版本化执行限制，包括允许的 Action Catalog、模型决策次数、可改变状态的 Action 数、工具往返、时间与 token budget，以及何时允许用户可见输出；Framework 或 Provider 不能自行扩大这些限制。
+_Avoid_: Model autonomy, Provider capability, Tool permission
+
+**Compound Conversation Request**:
+同一个 User Event 中包含两个或以上可以分别接受、拒绝或执行的 Conversation Action 请求；一个 Action 为维护 Memory、Journal 与 Profile 一致性而产生的确定性下游影响不属于复合请求。
+_Avoid_: Multi-tool Action, Downstream propagation
+
+**Trust-Control Action**:
+用户明确纠正、撤回或恢复 SayHear 对其个人信息的使用权限或产品理解的 Conversation Action；继续等待可能使错误理解或已撤回权限继续生效，因此在目标唯一且该 Action 自身的 scope、授权与安全门槛满足时优先处理。需要二次确认或 step-up 的高风险退出操作不属于当前模型可见 Catalog。
+_Avoid_: General priority Action, Internal repair workflow
+
 **Memory Correction**:
-用户明确指出某条 Memory Claim 不准确；该 Claim 必须立即停止召回，直到被纠正或重新确认。
+用户明确指出 SayHear 的一项长期理解不准确；一次纠正可以在同一语义目标下撤回错误 Claim 或 Qualifier，并提出彼此独立的新关系或事实，错误部分必须立即停止召回。
 _Avoid_: Profile edit
 
 **Memory Claim Identity Review**:
@@ -295,8 +363,8 @@ _Avoid_: Push-to-Talk, Product Voice Mode
 _Avoid_: Citation UI, Generated rationale
 
 **Account Deletion**:
-用户结束使用并要求删除账号及全部内容的基本退出权；External MVP 面向真实用户前必须包含用户触发入口、完整 deletion ledger、Provider destination reconciliation、备份恢复防复活验证和可理解的 retention 说明。
-_Avoid_: Internal Owner Full Purge, Log out, Subscription cancellation
+用户结束使用并要求删除账号及全部内容的基本退出权；External MVP 面向真实用户前必须包含独立设置入口、专用确认流程、完整 deletion ledger、Provider destination reconciliation、备份恢复防复活验证和可理解的 retention 说明。它不允许由自然语言 Conversation Agent 直接执行。
+_Avoid_: Conversation Action, Internal Owner Full Purge, Log out, Subscription cancellation
 
 **Account Data Export**:
 用户异步取得 Conversation、Journal、Profile 与 Memory 等账号数据副本的低频退出能力；External MVP 面向真实用户前必须可用，但不属于 Internal Core。
@@ -315,6 +383,10 @@ _Avoid_: Free-form edit, Regenerate
 **Journal Identity Impact Review**:
 Entity merge、split 或身份纠正后，通过反向血缘只复核引用受影响 Entity 的 JournalStatement；证据仍不充分时只冻结该 Statement 的 Entity 与 Recall 使用，原 Journal 保持可见，并等待新 User Evidence、用户纠正或查看时幂等重检。
 _Avoid_: Full Journal scan, Automatic historical rewrite
+
+**Journal Relationship Impact Review**:
+Relationship Memory Claim 或 Qualifier 被纠正后，通过反向血缘只复核明确表达或依赖该关系的 JournalStatement；确定错误时创建新的 Journal Version，仍不明确时只暂停该 Statement 的关系与 Recall 使用。
+_Avoid_: Full Journal scan, Model-selected Journal rewrite
 
 **Journal Observation**:
 AI 基于充分对话依据形成、但用户未直接陈述的主观理解；Journal 必须用自然的不确定性语言表达，不能把它写成确定事实。

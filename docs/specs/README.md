@@ -17,7 +17,8 @@ Accepted
 
 ## Current specs
 
-当前没有已发布的正式 SPEC。
+- [#1 — Internal Core / Core Flow 1A.1 — Text Foundation](https://github.com/lukemyself-hub/SayHear/issues/1)
+  — Core Flow 1A.1（Internal Core）— `ready-for-agent`
 
 创建 SPEC 后，在这里增加一条简短索引，包含：
 
