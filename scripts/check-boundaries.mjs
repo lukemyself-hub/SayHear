@@ -1,14 +1,17 @@
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 
-const repositoryRoot = new URL("../", import.meta.url);
+const repositoryRoot = process.env.SAYHEAR_BOUNDARY_ROOT
+  ? pathToFileURL(`${resolve(process.env.SAYHEAR_BOUNDARY_ROOT)}${sep}`)
+  : new URL("../", import.meta.url);
 const sourceRoots = {
-  ai: new URL("../packages/ai/src/", import.meta.url),
-  application: new URL("../packages/application/src/", import.meta.url),
-  data: new URL("../packages/data/src/", import.meta.url),
-  domain: new URL("../packages/domain/src/", import.meta.url),
-  "test-support": new URL("../packages/test-support/src/", import.meta.url),
-  web: new URL("../apps/web/", import.meta.url),
+  ai: new URL("packages/ai/src/", repositoryRoot),
+  application: new URL("packages/application/src/", repositoryRoot),
+  data: new URL("packages/data/src/", repositoryRoot),
+  domain: new URL("packages/domain/src/", repositoryRoot),
+  "test-support": new URL("packages/test-support/src/", repositoryRoot),
+  web: new URL("apps/web/", repositoryRoot),
 };
 const allowedInternalDependencies = {
   ai: new Set(["@sayhear/application"]),
@@ -45,8 +48,12 @@ async function sourceFiles(directory) {
 for (const [moduleName, sourceRoot] of Object.entries(sourceRoots)) {
   for (const filename of await sourceFiles(sourceRoot)) {
     const source = await readFile(filename, "utf8");
+    const relativeFilename = relative(repositoryRoot.pathname, filename);
+    const isBrowserModule =
+      moduleName === "web" &&
+      /^\s*["']use client["'];?/m.test(source);
     const imports = source.matchAll(
-      /(?:from\s+|import\s*\(\s*)["'](@sayhear\/[^"']+|next(?:\/[^"']*)?|next-auth(?:\/[^"']*)?|pg)["']/g,
+      /(?:from\s+|import\s*\(\s*)["']([^"']+)["']/g,
     );
     for (const match of imports) {
       const dependency = match[1];
@@ -55,7 +62,35 @@ for (const [moduleName, sourceRoot] of Object.entries(sourceRoots)) {
         !allowedInternalDependencies[moduleName].has(dependency)
       ) {
         failures.push(
-          `${relative(repositoryRoot.pathname, filename)} imports forbidden ${dependency}`,
+          `${relativeFilename} imports forbidden ${dependency}`,
+        );
+      }
+      if (
+        moduleName === "web" &&
+        dependency?.startsWith("@sayhear/ai") &&
+        relativeFilename !== "apps/web/src/server-composition.ts"
+      ) {
+        failures.push(
+          `${relativeFilename} imports Provider adapter outside Egress`,
+        );
+      }
+      if (
+        moduleName !== "ai" &&
+        dependency?.startsWith(".") &&
+        resolve(dirname(filename), dependency).startsWith(
+          sourceRoots.ai.pathname,
+        )
+      ) {
+        failures.push(
+          `${relativeFilename} imports Provider adapter outside Egress`,
+        );
+      }
+      if (
+        isBrowserModule &&
+        (dependency === "@sayhear/ai" || dependency === "@sayhear/data")
+      ) {
+        failures.push(
+          `${relativeFilename}: Browser module imports forbidden ${dependency}`,
         );
       }
       if (
@@ -65,15 +100,40 @@ for (const [moduleName, sourceRoot] of Object.entries(sourceRoots)) {
           dependency?.startsWith("next-auth"))
       ) {
         failures.push(
-          `${relative(repositoryRoot.pathname, filename)} couples domain to ${dependency}`,
+          `${relativeFilename} couples domain to ${dependency}`,
         );
+      }
+    }
+    if (
+      isBrowserModule &&
+      /(?:runtime-config|server-composition)/.test(source)
+    ) {
+      failures.push(
+        `${relativeFilename}: Browser module imports server composition or runtime configuration`,
+      );
+    }
+    if (
+      moduleName !== "ai" &&
+      relativeFilename !== "apps/web/src/runtime-config.ts"
+    ) {
+      for (const credentialName of [
+        "OPENAI_API_KEY",
+        "GITHUB_CLIENT_SECRET",
+        "NEXTAUTH_SECRET",
+        "SAYHEAR_CONTEXT_HMAC_SECRET",
+      ]) {
+        if (source.includes(credentialName)) {
+          failures.push(
+            `${relativeFilename} references server-only ${credentialName}`,
+          );
+        }
       }
     }
   }
 }
 
 for (const parent of ["apps", "packages"]) {
-  const directory = new URL(`../${parent}/`, import.meta.url);
+  const directory = new URL(`${parent}/`, repositoryRoot);
   for (const entry of await readdir(directory)) {
     const entryPath = new URL(`${entry}/`, directory);
     if (

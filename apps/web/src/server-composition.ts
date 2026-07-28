@@ -1,18 +1,18 @@
 import {
   createInternalOwnerAccessService,
+  createInternalInspectionService,
   createContextCompiler,
   createConversationResponseService,
   createUserTextConversationService,
 } from "@sayhear/application";
 import {
-  createDeterministicConversationTextModel,
-  createOpenAIConversationTextModel,
-  createProviderEgressPort,
+  createRuntimeProviderEgressPort,
 } from "@sayhear/ai";
 import {
   createPostgresPool,
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
+  PostgresInternalInspectionRepository,
   PostgresUserTextConversationRepository,
 } from "@sayhear/data";
 
@@ -35,6 +35,7 @@ export function createServerComposition() {
   globalPool.sayHearPool = pool;
 
   const accessRepository = new PostgresInternalOwnerAccessRepository(pool);
+  const inspectionRepository = new PostgresInternalInspectionRepository(pool);
   const conversationRepository =
     new PostgresUserTextConversationRepository(pool);
   const responseRepository = new PostgresConversationResponseRepository(pool);
@@ -44,6 +45,8 @@ export function createServerComposition() {
     expectedConfigurationFingerprint:
       configuration.backupConfigurationFingerprint,
     generationPolicy: {
+      consentPolicyVersion:
+        configuration.provider.champion.consentPolicyVersion,
       freshnessPolicy: "source_valid:v1",
       localePolicyVersion: "locale-pack:v1",
       model: configuration.provider.champion.model,
@@ -52,39 +55,43 @@ export function createServerComposition() {
       productPolicyVersion: "product-policy:v1",
       promptVersion: "conversation-text:v1",
       provider: configuration.provider.champion.provider,
+      providerPolicyVersion:
+        configuration.provider.champion.providerPolicyVersion,
       relationshipPolicyVersion: "relationship-boundary:v1",
       safetyPolicyVersion: "minimum-high-risk-response:v1",
     },
     repository: conversationRepository,
   });
-  const conversationTextModel =
-    configuration.provider.adapter === "deterministic"
-      ? createDeterministicConversationTextModel({
-          chunks: configuration.provider.deterministicChunks,
-          ...(configuration.provider.failAfterCompletion
-            ? { failAfterCompletion: true }
-            : {}),
-          ...(configuration.provider.failAfterChunks === undefined
-            ? {}
-            : {
-                failAfterChunks: configuration.provider.failAfterChunks,
-              }),
-        })
-      : createOpenAIConversationTextModel({
-          apiKey: configuration.provider.apiKey!,
-          timeoutMs: configuration.provider.timeoutMs,
-        });
+  const egressPort = createRuntimeProviderEgressPort({
+    adapter:
+      configuration.provider.adapter === "deterministic"
+        ? {
+            chunks: configuration.provider.deterministicChunks,
+            type: "deterministic",
+            ...(configuration.provider.failAfterCompletion
+              ? { failAfterCompletion: true }
+              : {}),
+            ...(configuration.provider.failAfterChunks === undefined
+              ? {}
+              : {
+                  failAfterChunks:
+                    configuration.provider.failAfterChunks,
+                }),
+          }
+        : {
+            apiKey: configuration.provider.apiKey!,
+            timeoutMs: configuration.provider.timeoutMs,
+            type: "openai",
+          },
+    champion: configuration.provider.champion,
+    clock: configuration.clock,
+    repository: responseRepository,
+  });
   const contextCompiler = createContextCompiler({
     clock: configuration.clock,
     compilerVersion: "context-compiler:v1",
     contentHmacSecret: configuration.contextHmacSecret,
     rawEventTokenBudget: 4_000,
-    repository: responseRepository,
-  });
-  const egressPort = createProviderEgressPort({
-    champion: configuration.provider.champion,
-    clock: configuration.clock,
-    model: conversationTextModel,
     repository: responseRepository,
   });
   return {
@@ -96,6 +103,12 @@ export function createServerComposition() {
       repository: accessRepository,
     }),
     authOptions: createAuthOptions({ configuration, pool }),
+    inspectionService: createInternalInspectionService({
+      clock: configuration.clock,
+      policyVersion: "sensitive-inspection:v1",
+      repository: inspectionRepository,
+      stepUpMaxAgeMs: 10 * 60 * 1_000,
+    }),
     conversationResponseService: createConversationResponseService({
       clock: configuration.clock,
       contextCompiler,

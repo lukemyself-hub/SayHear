@@ -40,8 +40,11 @@ type ContextEventRow = Readonly<{
 
 type DispatchRow = Readonly<{
   attempt_status: string;
+  consent_active: boolean;
+  consent_policy_version: string | null;
   data_epoch: string;
   expected_data_epoch: string;
+  freshness_policy: string;
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -51,6 +54,10 @@ type DispatchRow = Readonly<{
   product_policy_version: string;
   prompt_version: string;
   provider: string;
+  provider_policy_consent_version: string | null;
+  provider_policy_model_config_version: string;
+  provider_policy_status: string;
+  provider_policy_version: string;
   relationship_policy_version: string;
   safety_policy_version: string;
   source_active: boolean;
@@ -404,6 +411,16 @@ export class PostgresConversationResponseRepository
             command.model,
             command.model_snapshot,
             command.model_config_version,
+            command.provider_policy_version,
+            command.consent_policy_version,
+            command.freshness_policy,
+            policy.status AS provider_policy_status,
+            policy.model_config_version AS provider_policy_model_config_version,
+            policy.consent_policy_version AS provider_policy_consent_version,
+            (
+              policy.consent_policy_version IS NULL
+              OR consent.status = 'active'
+            ) AS consent_active,
             command.status,
             attempt.status AS attempt_status,
             (
@@ -417,6 +434,20 @@ export class PostgresConversationResponseRepository
             AND attempt.user_id = command.user_id
           INNER JOIN app_users owner
             ON owner.user_id = command.user_id
+          INNER JOIN provider_egress_policy_versions policy
+            ON policy.policy_version = command.provider_policy_version
+            AND policy.provider = command.provider
+            AND policy.role = command.operation_type
+          LEFT JOIN LATERAL (
+            SELECT provider_consent.status
+            FROM provider_egress_consents provider_consent
+            WHERE provider_consent.user_id = command.user_id
+              AND provider_consent.provider = command.provider
+              AND provider_consent.role = command.operation_type
+              AND provider_consent.consent_policy_version =
+                policy.consent_policy_version
+            FOR UPDATE
+          ) consent ON TRUE
           INNER JOIN conversation_events input_event
             ON input_event.conversation_event_id = command.subject_id
             AND input_event.user_id = command.user_id
@@ -427,7 +458,8 @@ export class PostgresConversationResponseRepository
           WHERE command.generation_command_id = $1
             AND attempt.model_run_attempt_id = $2
             AND command.compiled_context_id = $3
-          FOR UPDATE OF command, attempt, owner, input_event, input_revision
+          FOR UPDATE OF
+            command, attempt, owner, policy, input_event, input_revision
         `,
         [
           input.generationCommandId,
@@ -455,6 +487,16 @@ export class PostgresConversationResponseRepository
         row.data_epoch === row.expected_data_epoch &&
         row.source_active &&
         referencesAreCurrent &&
+        row.freshness_policy === "source_valid:v1" &&
+        row.provider_policy_status === "active" &&
+        row.provider_policy_version ===
+          input.champion.providerPolicyVersion &&
+        row.provider_policy_model_config_version ===
+          input.champion.configVersion &&
+        row.provider_policy_consent_version ===
+          input.champion.consentPolicyVersion &&
+        row.consent_policy_version === input.champion.consentPolicyVersion &&
+        row.consent_active &&
         row.provider === input.champion.provider &&
         row.model === input.champion.model &&
         row.model_snapshot === input.champion.snapshot &&
@@ -468,6 +510,7 @@ export class PostgresConversationResponseRepository
             expectedDataEpoch: row.expected_data_epoch,
             modelRunAttemptId: input.modelRunAttemptId,
             now: input.now,
+            providerPolicyVersion: row.provider_policy_version,
             status: "blocked",
           });
         }
@@ -481,6 +524,7 @@ export class PostgresConversationResponseRepository
         expectedDataEpoch: row.expected_data_epoch,
         modelRunAttemptId: input.modelRunAttemptId,
         now: input.now,
+        providerPolicyVersion: row.provider_policy_version,
         status: "dispatched",
       });
       await client.query(
@@ -564,13 +608,16 @@ export class PostgresConversationResponseRepository
     try {
       await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
       const locked = await client.query<{
+        consent_active: boolean;
         daily_session_id: string;
         data_epoch: string;
         expected_data_epoch: string;
+        freshness_policy: string;
         input_revision_id: string;
         interaction_turn_id: string;
         locale: string;
         next_event_sequence_no: string;
+        provider_policy_status: string;
         source_active: boolean;
         user_status: string;
       }>(
@@ -581,6 +628,16 @@ export class PostgresConversationResponseRepository
             command.expected_data_epoch,
             command.input_revision_id,
             command.locale,
+            command.freshness_policy,
+            policy.status AS provider_policy_status,
+            (
+              policy.consent_policy_version IS NULL
+              OR (
+                policy.consent_policy_version =
+                  command.consent_policy_version
+                AND consent.status = 'active'
+              )
+            ) AS consent_active,
             turn.interaction_turn_id,
             turn.daily_session_id,
             session.next_event_sequence_no,
@@ -596,6 +653,24 @@ export class PostgresConversationResponseRepository
           INNER JOIN provider_egress_dispositions egress
             ON egress.model_run_attempt_id = attempt.model_run_attempt_id
             AND egress.user_id = attempt.user_id
+            AND egress.provider_policy_version =
+              command.provider_policy_version
+          INNER JOIN provider_egress_policy_versions policy
+            ON policy.policy_version = command.provider_policy_version
+            AND policy.provider = command.provider
+            AND policy.role = command.operation_type
+            AND policy.model_config_version =
+              command.model_config_version
+          LEFT JOIN LATERAL (
+            SELECT provider_consent.status
+            FROM provider_egress_consents provider_consent
+            WHERE provider_consent.user_id = command.user_id
+              AND provider_consent.provider = command.provider
+              AND provider_consent.role = command.operation_type
+              AND provider_consent.consent_policy_version =
+                policy.consent_policy_version
+            FOR UPDATE
+          ) consent ON TRUE
           INNER JOIN interaction_turns turn
             ON turn.interaction_turn_id = command.interaction_turn_id
             AND turn.user_id = command.user_id
@@ -620,7 +695,7 @@ export class PostgresConversationResponseRepository
             AND egress.status = 'dispatched'
             AND turn.status = 'responding'
           FOR UPDATE OF
-            command, attempt, egress, turn, session, owner, input_event,
+            command, attempt, egress, policy, turn, session, owner, input_event,
             input_revision
         `,
         [
@@ -641,7 +716,10 @@ export class PostgresConversationResponseRepository
         row.user_status !== "active" ||
         row.data_epoch !== row.expected_data_epoch ||
         !row.source_active ||
-        !referencesAreCurrent
+        !referencesAreCurrent ||
+        row.freshness_policy !== "source_valid:v1" ||
+        row.provider_policy_status !== "active" ||
+        !row.consent_active
       ) {
         await client.query("ROLLBACK");
         return { outcome: "fence_rejected" };
@@ -976,6 +1054,7 @@ async function insertEgressDisposition(
     expectedDataEpoch: string;
     modelRunAttemptId: ModelRunAttemptId;
     now: Date;
+    providerPolicyVersion: string;
     status: "blocked" | "dispatched";
   },
 ): Promise<void> {
@@ -1018,7 +1097,7 @@ async function insertEgressDisposition(
       createUuidV7(input.now),
       input.champion.provider,
       input.champion.model,
-      input.champion.configVersion,
+      input.providerPolicyVersion,
       input.expectedDataEpoch,
       input.status,
       input.category,

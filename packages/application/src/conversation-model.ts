@@ -7,10 +7,12 @@ import type {
 
 export type ConversationTextChampion = Readonly<{
   configVersion: string;
+  consentPolicyVersion: string | null;
   contextLimit: number;
   dataRegion: string;
   model: string;
   provider: "openai";
+  providerPolicyVersion: string;
   retentionMode: string;
   snapshot: string;
   streaming: true;

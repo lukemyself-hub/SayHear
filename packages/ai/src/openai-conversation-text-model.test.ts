@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   asConversationEventRevisionId,
@@ -7,6 +7,10 @@ import {
 import { createOpenAIConversationTextModel } from "./openai-conversation-text-model";
 
 describe("OpenAI Conversation Text adapter", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("streams typed Responses events without storing Provider conversation state", async () => {
     let requestBody: Record<string, unknown> | undefined;
     const model = createOpenAIConversationTextModel({
@@ -97,5 +101,44 @@ describe("OpenAI Conversation Text adapter", () => {
     }).rejects.toMatchObject({
       category: "timeout",
     });
+  });
+
+  it("does not expose Provider credentials or raw error bodies", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const model = createOpenAIConversationTextModel({
+      apiKey: "PROVIDER_CREDENTIAL_CANARY",
+      fetchImplementation: async () =>
+        new Response("RAW_PROVIDER_ERROR_PRIVATE_CANARY", { status: 500 }),
+    });
+
+    let caught: unknown;
+    try {
+      for await (const _event of model.stream({
+        instructions: "Synthetic instructions",
+        messages: [
+          {
+            revisionId: asConversationEventRevisionId(
+              "01984477-59a9-7d20-9d97-e588769566a0",
+            ),
+            role: "user",
+            text: "PRIVATE_REQUEST_CANARY",
+          },
+        ],
+        model: "gpt-5.4",
+      })) {
+        // A failed Provider response must not yield.
+      }
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ category: "unavailable" });
+    expect(String(caught)).not.toMatch(
+      /PROVIDER_CREDENTIAL_CANARY|RAW_PROVIDER_ERROR_PRIVATE_CANARY|PRIVATE_REQUEST_CANARY/,
+    );
+    expect(JSON.stringify([errorLog.mock.calls, warnLog.mock.calls])).not.toMatch(
+      /PROVIDER_CREDENTIAL_CANARY|RAW_PROVIDER_ERROR_PRIVATE_CANARY|PRIVATE_REQUEST_CANARY/,
+    );
   });
 });

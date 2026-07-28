@@ -56,6 +56,16 @@ export {
   type ProviderEgressStreamEvent,
 } from "./conversation-model";
 export {
+  createInternalInspectionService,
+  InternalInspectionNotFoundError,
+  SensitiveInspectionDeniedError,
+  type ConversationContentInspection,
+  type GenerationInspectionMetadata,
+  type InternalInspectionRepository,
+  type InternalInspectionService,
+  type SensitiveInspectionDenialReason,
+} from "./internal-inspection";
+export {
   asCompiledContextId,
   asConversationEventId,
   asConversationEventRevisionId,
