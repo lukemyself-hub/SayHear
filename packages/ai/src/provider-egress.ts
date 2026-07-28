@@ -24,6 +24,13 @@ export function createProviderEgressPort(dependencies: {
       if (claim.outcome === "blocked") {
         throw new ProviderDispatchError(claim.category);
       }
+      if (claim.outcome === "already_claimed") {
+        throw new ProviderDispatchError(
+          "unavailable",
+          "Another request already owns this GenerationCommand.",
+          false,
+        );
+      }
 
       const instructions = renderInstructions(claim);
       let firstTokenRecorded = false;

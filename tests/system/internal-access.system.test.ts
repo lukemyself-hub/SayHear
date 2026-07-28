@@ -112,6 +112,23 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     await database.dispose();
   }, 10_000);
 
+  async function openPrivateWrites(): Promise<void> {
+    await new PostgresInternalOwnerAccessRepository(
+      database.pool,
+    ).recordBackupPolicyEvidence({
+      backupPolicyId: "01984477-31e1-7595-92c6-06889cb0fdde",
+      configurationFingerprint: "sha256:expected",
+      databaseRetentionDays: 30,
+      evidenceReference: "synthetic backup console evidence",
+      policyVersion: "neon-production-v1",
+      pitrRetentionDays: 7,
+      snapshotRetentionDays: 30,
+      status: "verified",
+      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
+    });
+  }
+
   it("keeps private writes blocked when backup evidence is absent", async () => {
     const repository = new PostgresInternalOwnerAccessRepository(database.pool);
     const service = createInternalOwnerAccessService({
@@ -509,6 +526,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       attempt_status: string;
       authoritative_result_id: string | null;
       command_status: string;
+      cost_micros: string | null;
       dialogue_revision: string;
       egress_status: string;
       expected_data_epoch: string;
@@ -547,6 +565,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         command.status AS command_status,
         command.authoritative_result_id::text,
         attempt.status AS attempt_status,
+        attempt.cost_micros::text,
         egress.status AS egress_status,
         turn.status AS turn_status,
         session.dialogue_revision::text
@@ -565,6 +584,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       assistant_revisions: "1",
       attempt_status: "succeeded",
       command_status: "succeeded",
+      cost_micros: "0",
       dialogue_revision: "2",
       egress_status: "completed",
       expected_data_epoch: "1",
@@ -627,6 +647,50 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       attempts: "1",
       egresses: "1",
     });
+
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const canceledReplay = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: createContextCompiler({
+        clock: fixedResponseClock,
+        compilerVersion: "context-compiler:v1",
+        contentHmacSecret: "test-context-integrity-secret",
+        rawEventTokenBudget: 4_000,
+        repository: responseRepository,
+      }),
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model: createDeterministicConversationTextModel({
+          chunks: ["must not run"],
+        }),
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    })
+      .respond(fixedInternalOwnerPrincipal.userId, {
+        clientEventId: "client-event-response-0001",
+        clientTurnId: "client-turn-response-0001",
+        locale: "en-US",
+        text: "Today felt heavier than I expected.",
+        timezone: "America/Los_Angeles",
+      })
+      [Symbol.asyncIterator]();
+    expect((await canceledReplay.next()).value?.type).toBe("user_committed");
+    await canceledReplay.return?.();
+    const completedAudit = await database.pool.query<{ status: string }>(
+      "SELECT status FROM provider_egress_dispositions",
+    );
+    expect(completedAudit.rows[0]?.status).toBe("completed");
   });
 
   it("rejects a stale source before provider dispatch", async () => {
@@ -661,6 +725,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         providerCalls += 1;
         yield { delta: "must not leave SayHear", type: "delta" as const };
         yield {
+          costMicros: 0,
           finishReason: "completed",
           inputTokens: 1,
           modelSnapshot: "gpt-5.4",
@@ -785,6 +850,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           [fixedInternalOwnerPrincipal.userId],
         );
         yield {
+          costMicros: 0,
           finishReason: "completed",
           inputTokens: 8,
           modelSnapshot: "gpt-5.4",
@@ -975,6 +1041,314 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         text: "The second committed expression.",
       },
     ]);
+  });
+
+  it("does not let concurrent idempotent responses settle shared work", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const compiler = createContextCompiler({
+      clock: fixedResponseClock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    let releaseProvider: (() => void) | undefined;
+    const providerRelease = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    let markProviderStarted: (() => void) | undefined;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    let providerCalls = 0;
+    const model = {
+      async *stream() {
+        providerCalls += 1;
+        markProviderStarted?.();
+        await providerRelease;
+        yield { delta: "One authoritative response.", type: "delta" as const };
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 4,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 6,
+          providerRequestId: "single-provider-request",
+          type: "completed" as const,
+        };
+      },
+    } satisfies ConversationTextModel;
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: compiler,
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const handler = createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    });
+    const createRequest = () =>
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "concurrent-response-event",
+          clientTurnId: "concurrent-response-turn",
+          locale: "en-US",
+          text: "Only one request may own this response.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+
+    const firstResponse = await handler(createRequest());
+    const secondResponse = await handler(createRequest());
+    const firstEventsPromise = readNdjson(firstResponse);
+    const secondEventsPromise = readNdjson(secondResponse);
+    await providerStarted;
+    const canceledShared = service
+      .respond(fixedInternalOwnerPrincipal.userId, {
+        clientEventId: "concurrent-response-event",
+        clientTurnId: "concurrent-response-turn",
+        locale: "en-US",
+        text: "Only one request may own this response.",
+        timezone: "America/Los_Angeles",
+      })
+      [Symbol.asyncIterator]();
+    expect((await canceledShared.next()).value?.type).toBe("user_committed");
+    await canceledShared.return?.();
+    const activeOwner = await database.pool.query<{
+      attempt_status: string;
+      command_status: string;
+    }>(`
+      SELECT
+        command.status AS command_status,
+        attempt.status AS attempt_status
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+    `);
+    expect(activeOwner.rows[0]).toEqual({
+      attempt_status: "running",
+      command_status: "running",
+    });
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const nonOwnerEvents = await Promise.race([
+        firstEventsPromise,
+        secondEventsPromise,
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("The non-owner response did not finish.")),
+            1_000,
+          );
+        }),
+      ]);
+      expect(nonOwnerEvents.at(-1)?.type).toBe("response_failed");
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      releaseProvider?.();
+    }
+    const [firstEvents, secondEvents] = await Promise.all([
+      firstEventsPromise,
+      secondEventsPromise,
+    ]);
+
+    expect(providerCalls).toBe(1);
+    expect(
+      [firstEvents, secondEvents].filter(
+        (events) => events.at(-1)?.type === "assistant_committed",
+      ),
+    ).toHaveLength(1);
+    const state = await database.pool.query<{
+      assistant_events: string;
+      attempt_status: string;
+      command_status: string;
+      contexts: string;
+      egresses: string;
+    }>(`
+      SELECT
+        command.status AS command_status,
+        attempt.status AS attempt_status,
+        (SELECT COUNT(*)::text FROM compiled_contexts) AS contexts,
+        (SELECT COUNT(*)::text FROM provider_egress_dispositions) AS egresses,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+    `);
+    expect(state.rows[0]).toEqual({
+      assistant_events: "1",
+      attempt_status: "succeeded",
+      command_status: "succeeded",
+      contexts: "1",
+      egresses: "1",
+    });
+  });
+
+  it("settles prepared work when a response stream consumer cancels", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: createContextCompiler({
+        clock: fixedResponseClock,
+        compilerVersion: "context-compiler:v1",
+        contentHmacSecret: "test-context-integrity-secret",
+        rawEventTokenBudget: 4_000,
+        repository: responseRepository,
+      }),
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model: createDeterministicConversationTextModel({
+          chunks: ["must not start"],
+        }),
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const stream = service.respond(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "cancel-before-dispatch-event",
+      clientTurnId: "cancel-before-dispatch-turn",
+      locale: "en-US",
+      text: "The consumer will cancel after my event commits.",
+      timezone: "America/Los_Angeles",
+    })[Symbol.asyncIterator]();
+
+    expect((await stream.next()).value?.type).toBe("user_committed");
+    await stream.return?.();
+
+    const state = await database.pool.query<{
+      attempt_error: string;
+      attempt_status: string;
+      command_status: string;
+      egresses: string;
+      turn_status: string;
+    }>(`
+      SELECT
+        command.status AS command_status,
+        attempt.status AS attempt_status,
+        attempt.error_category AS attempt_error,
+        turn.status AS turn_status,
+        (SELECT COUNT(*)::text FROM provider_egress_dispositions) AS egresses
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = command.interaction_turn_id
+    `);
+    expect(state.rows[0]).toEqual({
+      attempt_error: "aborted",
+      attempt_status: "failed",
+      command_status: "failed",
+      egresses: "0",
+      turn_status: "failed",
+    });
+  });
+
+  it("lazily adds generation identity when replaying a pre-0003 User Turn", async () => {
+    await openPrivateWrites();
+    const repository = new PostgresUserTextConversationRepository(database.pool);
+    const service = createUserTextConversationService({
+      clock: fixedResponseClock,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository,
+    });
+    const input = {
+      clientEventId: "legacy-event-key",
+      clientTurnId: "legacy-turn-key",
+      locale: "en-US",
+      text: "This turn existed before response generation.",
+      timezone: "America/Los_Angeles",
+    };
+    const original = await service.submit(
+      fixedInternalOwnerPrincipal.userId,
+      input,
+    );
+    await database.pool.query("DELETE FROM model_run_attempts");
+    await database.pool.query("DELETE FROM generation_commands");
+    await database.pool.query("DELETE FROM backup_policy_versions");
+
+    await expect(
+      service.submit(fixedInternalOwnerPrincipal.userId, input),
+    ).rejects.toMatchObject({
+      reason: "backup_evidence_missing",
+    });
+    const blockedBackfill = await database.pool.query<{
+      attempts: string;
+      commands: string;
+    }>(`
+      SELECT
+        (SELECT COUNT(*)::text FROM generation_commands) AS commands,
+        (SELECT COUNT(*)::text FROM model_run_attempts) AS attempts
+    `);
+    expect(blockedBackfill.rows[0]).toEqual({
+      attempts: "0",
+      commands: "0",
+    });
+    await openPrivateWrites();
+
+    const replayed = await service.submit(
+      fixedInternalOwnerPrincipal.userId,
+      input,
+    );
+
+    expect(replayed.replayed).toBe(true);
+    expect(replayed.turn.id).toBe(original.turn.id);
+    expect(replayed.message.id).toBe(original.message.id);
+    expect(replayed.generation.commandId).toBeTruthy();
+    expect(replayed.generation.attemptId).toBeTruthy();
+    const state = await database.pool.query<{
+      attempts: string;
+      commands: string;
+      events: string;
+      turns: string;
+    }>(`
+      SELECT
+        (SELECT COUNT(*)::text FROM interaction_turns) AS turns,
+        (SELECT COUNT(*)::text FROM conversation_events) AS events,
+        (SELECT COUNT(*)::text FROM generation_commands) AS commands,
+        (SELECT COUNT(*)::text FROM model_run_attempts) AS attempts
+    `);
+    expect(state.rows[0]).toEqual({
+      attempts: "1",
+      commands: "1",
+      events: "1",
+      turns: "1",
+    });
   });
 
   it("reuses the same-day Session and keeps Turn, Event, and Revision identities distinct", async () => {

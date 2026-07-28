@@ -30,6 +30,7 @@ export function createDeterministicConversationTextModel(input: {
         throw new ProviderDispatchError("unavailable");
       }
       yield {
+        costMicros: 0,
         finishReason: "completed",
         inputTokens: request.messages.reduce(
           (total, message) => total + Math.ceil(message.text.length / 4),

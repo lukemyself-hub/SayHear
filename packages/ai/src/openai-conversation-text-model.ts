@@ -12,15 +12,20 @@ export function createOpenAIConversationTextModel(input: {
   apiKey: string;
   baseUrl?: string;
   fetchImplementation?: typeof fetch;
+  timeoutMs?: number;
 }): ConversationTextModel {
   const fetchImplementation = input.fetchImplementation ?? fetch;
   const baseUrl = input.baseUrl ?? "https://api.openai.com/v1";
+  const timeoutMs = input.timeoutMs ?? 60_000;
 
   return {
     async *stream(request) {
-      let response: Response;
+      const deadlineSignal = AbortSignal.timeout(timeoutMs);
+      const dispatchSignal = request.signal
+        ? AbortSignal.any([request.signal, deadlineSignal])
+        : deadlineSignal;
       try {
-        response = await fetchImplementation(`${baseUrl}/responses`, {
+        const response = await fetchImplementation(`${baseUrl}/responses`, {
           body: JSON.stringify({
             input: request.messages.map((message) => ({
               content: message.text,
@@ -36,68 +41,75 @@ export function createOpenAIConversationTextModel(input: {
             "content-type": "application/json",
           },
           method: "POST",
-          ...(request.signal ? { signal: request.signal } : {}),
+          signal: dispatchSignal,
         });
+
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new ProviderDispatchError(categoryForStatus(response.status));
+        }
+        if (!response.body) {
+          throw new ProviderDispatchError("invalid_response");
+        }
+
+        let completed = false;
+        for await (const event of parseServerSentEvents(response.body)) {
+          if (event.type === "response.output_text.delta") {
+            const delta = event.delta;
+            if (typeof delta !== "string") {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            yield { delta, type: "delta" };
+          } else if (event.type === "response.completed") {
+            const completedResponse = event.response;
+            if (!isRecord(completedResponse)) {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            const usage = isRecord(completedResponse.usage)
+              ? completedResponse.usage
+              : null;
+            completed = true;
+            yield {
+              costMicros: null,
+              finishReason: "completed",
+              inputTokens: asOptionalNumber(usage?.input_tokens),
+              modelSnapshot:
+                typeof completedResponse.model === "string"
+                  ? completedResponse.model
+                  : request.model,
+              outputTokens: asOptionalNumber(usage?.output_tokens),
+              providerRequestId:
+                response.headers.get("x-request-id") ??
+                (typeof completedResponse.id === "string"
+                  ? completedResponse.id
+                  : null) ??
+                null,
+              type: "completed",
+            };
+          } else if (
+            event.type === "error" ||
+            event.type === "response.failed" ||
+            event.type === "response.incomplete"
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+        }
+        if (!completed) {
+          throw new ProviderDispatchError("invalid_response");
+        }
       } catch (error) {
+        if (error instanceof ProviderDispatchError) {
+          throw error;
+        }
         if (request.signal?.aborted) {
           throw new ProviderDispatchError("aborted");
+        }
+        if (deadlineSignal.aborted) {
+          throw new ProviderDispatchError("timeout");
         }
         throw new ProviderDispatchError(
           error instanceof TypeError ? "unavailable" : "unknown",
         );
-      }
-
-      if (!response.ok) {
-        await response.body?.cancel();
-        throw new ProviderDispatchError(categoryForStatus(response.status));
-      }
-      if (!response.body) {
-        throw new ProviderDispatchError("invalid_response");
-      }
-
-      let completed = false;
-      for await (const event of parseServerSentEvents(response.body)) {
-        if (event.type === "response.output_text.delta") {
-          const delta = event.delta;
-          if (typeof delta !== "string") {
-            throw new ProviderDispatchError("invalid_response");
-          }
-          yield { delta, type: "delta" };
-        } else if (event.type === "response.completed") {
-          const completedResponse = event.response;
-          if (!isRecord(completedResponse)) {
-            throw new ProviderDispatchError("invalid_response");
-          }
-          const usage = isRecord(completedResponse.usage)
-            ? completedResponse.usage
-            : null;
-          completed = true;
-          yield {
-            finishReason: "completed",
-            inputTokens: asOptionalNumber(usage?.input_tokens),
-            modelSnapshot:
-              typeof completedResponse.model === "string"
-                ? completedResponse.model
-                : request.model,
-            outputTokens: asOptionalNumber(usage?.output_tokens),
-            providerRequestId:
-              response.headers.get("x-request-id") ??
-              (typeof completedResponse.id === "string"
-                ? completedResponse.id
-                : null) ??
-              null,
-            type: "completed",
-          };
-        } else if (
-          event.type === "error" ||
-          event.type === "response.failed" ||
-          event.type === "response.incomplete"
-        ) {
-          throw new ProviderDispatchError("invalid_response");
-        }
-      }
-      if (!completed) {
-        throw new ProviderDispatchError("invalid_response");
       }
     },
   };

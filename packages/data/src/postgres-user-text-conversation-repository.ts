@@ -26,8 +26,8 @@ const retryableTransactionCodes = new Set(["40001", "40P01", "55P03"]);
 const maximumTransactionAttempts = 3;
 
 type ExistingTurnRow = Readonly<{
-  generation_command_id: string;
-  model_run_attempt_id: string;
+  generation_command_id: string | null;
+  model_run_attempt_id: string | null;
   client_event_id: string;
   client_turn_id: string;
   daily_session_id: string;
@@ -165,10 +165,39 @@ export class PostgresUserTextConversationRepository
       return { outcome: "idempotency_conflict" };
     }
     if (existing[0]) {
+      if (
+        !existing[0].generation_command_id ||
+        !existing[0].model_run_attempt_id
+      ) {
+        const gate = evaluatePrivateWriteGate({
+          evidence: await findLatestBackupPolicyEvidence(client),
+          expectedConfigurationFingerprint:
+            input.expectedConfigurationFingerprint,
+          expectedPolicyVersion: input.expectedBackupPolicyVersion,
+          now: input.now,
+        });
+        if (!gate.allowed) {
+          await client.query("ROLLBACK");
+          return {
+            outcome: "write_denied",
+            reason: asClosedGateReason(gate.reason),
+          };
+        }
+      }
+      const existingTurn =
+        existing[0].generation_command_id &&
+        existing[0].model_run_attempt_id
+          ? existing[0]
+          : await addGenerationToLegacyTurn(
+              client,
+              input,
+              ownerRow.data_epoch,
+              existing[0],
+            );
       await client.query("COMMIT");
       return {
         outcome: "recorded",
-        turn: mapTurn(existing[0], true),
+        turn: mapTurn(existingTurn, true),
       };
     }
 
@@ -551,10 +580,10 @@ async function findExistingTurns(
         ON event.interaction_turn_id = turn.interaction_turn_id
         AND event.user_id = turn.user_id
         AND event.actor = 'user'
-      INNER JOIN generation_commands command
+      LEFT JOIN generation_commands command
         ON command.interaction_turn_id = turn.interaction_turn_id
         AND command.user_id = turn.user_id
-      INNER JOIN model_run_attempts attempt
+      LEFT JOIN model_run_attempts attempt
         ON attempt.generation_command_id = command.generation_command_id
         AND attempt.user_id = command.user_id
         AND attempt.attempt_no = 1
@@ -575,6 +604,9 @@ async function findExistingTurns(
 }
 
 function mapTurn(row: ExistingTurnRow, replayed: boolean): UserTextTurn {
+  if (!row.generation_command_id || !row.model_run_attempt_id) {
+    throw new Error("The User Turn has no Generation identity.");
+  }
   return {
     dailySession: {
       id: asDailySessionId(row.daily_session_id),
@@ -598,6 +630,109 @@ function mapTurn(row: ExistingTurnRow, replayed: boolean): UserTextTurn {
       sequence: Number(row.turn_sequence_no),
       status: row.status,
     },
+  };
+}
+
+async function addGenerationToLegacyTurn(
+  client: PoolClient,
+  input: RecordUserTextTurnInput,
+  expectedDataEpoch: string,
+  row: ExistingTurnRow,
+): Promise<ExistingTurnRow> {
+  if (row.generation_command_id || row.model_run_attempt_id) {
+    throw new Error("The legacy User Turn has partial Generation identity.");
+  }
+  const generationCommandId = createUuidV7(input.now);
+  const modelRunAttemptId = createUuidV7(input.now);
+  await client.query(
+    `
+      INSERT INTO generation_commands (
+        generation_command_id,
+        user_id,
+        interaction_turn_id,
+        operation_type,
+        intent_key,
+        subject_type,
+        subject_id,
+        input_revision_kind,
+        input_revision_id,
+        prompt_version,
+        product_policy_version,
+        safety_policy_version,
+        relationship_policy_version,
+        locale_policy_version,
+        locale,
+        provider,
+        model,
+        model_snapshot,
+        model_config_version,
+        freshness_policy,
+        expected_data_epoch,
+        status,
+        created_at
+      )
+      VALUES (
+        $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
+        'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
+        $13, $14, $15, $16, $17, $18, 'prepared', $19
+      )
+    `,
+    [
+      generationCommandId,
+      input.userId,
+      row.interaction_turn_id,
+      `conversation-response/${row.conversation_event_id}`,
+      row.conversation_event_id,
+      row.revision_id,
+      input.generationPolicy.promptVersion,
+      input.generationPolicy.productPolicyVersion,
+      input.generationPolicy.safetyPolicyVersion,
+      input.generationPolicy.relationshipPolicyVersion,
+      input.generationPolicy.localePolicyVersion,
+      row.locale,
+      input.generationPolicy.provider,
+      input.generationPolicy.model,
+      input.generationPolicy.modelSnapshot,
+      input.generationPolicy.modelConfigVersion,
+      input.generationPolicy.freshnessPolicy,
+      expectedDataEpoch,
+      input.now,
+    ],
+  );
+  await client.query(
+    `
+      INSERT INTO model_run_attempts (
+        model_run_attempt_id,
+        user_id,
+        generation_command_id,
+        attempt_no,
+        operation_type,
+        provider,
+        model,
+        model_snapshot,
+        prompt_version,
+        status,
+        created_at
+      )
+      VALUES (
+        $1, $2, $3, 1, 'conversation.text', $4, $5, $6, $7, 'prepared', $8
+      )
+    `,
+    [
+      modelRunAttemptId,
+      input.userId,
+      generationCommandId,
+      input.generationPolicy.provider,
+      input.generationPolicy.model,
+      input.generationPolicy.modelSnapshot,
+      input.generationPolicy.promptVersion,
+      input.now,
+    ],
+  );
+  return {
+    ...row,
+    generation_command_id: generationCommandId,
+    model_run_attempt_id: modelRunAttemptId,
   };
 }
 

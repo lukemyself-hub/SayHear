@@ -39,6 +39,7 @@ export type ConversationResponseStreamEvent =
     }>;
 
 export type CompleteResponseMetadata = Readonly<{
+  costMicros: number | null;
   finishReason: string;
   inputTokens: number | null;
   modelSnapshot: string;
@@ -46,23 +47,28 @@ export type CompleteResponseMetadata = Readonly<{
   providerRequestId: string | null;
 }>;
 
+type ExistingConversationResponse =
+  | Readonly<{
+      eventId: ConversationEventId;
+      outcome: "committed";
+      revisionId: ConversationEventRevisionId;
+      text: string;
+    }>
+  | Readonly<{ outcome: "prepared" | "running" }>
+  | Readonly<{
+      category: ProviderDispatchErrorCategory;
+      outcome: "failed" | "interrupted";
+    }>;
+
 export type ConversationResponseRepository = Readonly<{
+  claimResponseExecution(input: {
+    generationCommandId: GenerationCommandId;
+    userId: UserId;
+  }): Promise<"owner" | "shared">;
   loadResponse(input: {
     generationCommandId: GenerationCommandId;
     userId: UserId;
-  }): Promise<
-    | Readonly<{
-        eventId: ConversationEventId;
-        outcome: "committed";
-        revisionId: ConversationEventRevisionId;
-        text: string;
-      }>
-    | Readonly<{ outcome: "prepared" | "running" }>
-    | Readonly<{
-        category: ProviderDispatchErrorCategory;
-        outcome: "failed" | "interrupted";
-      }>
-  >;
+  }): Promise<ExistingConversationResponse>;
   commitCompleteResponse(input: {
     completedAt: Date;
     generationCommandId: GenerationCommandId;
@@ -112,53 +118,34 @@ export function createConversationResponseService(dependencies: {
   return {
     async *respond(userId, input, signal) {
       const turn = await dependencies.conversationService.submit(userId, input);
-      yield {
+      const ownership = await dependencies.repository.claimResponseExecution({
         generationCommandId: turn.generation.commandId,
-        message: turn.message,
-        modelRunAttemptId: turn.generation.attemptId,
-        turnId: turn.turn.id,
-        type: "user_committed",
-        userEventRevisionId: turn.message.revisionId,
-      };
-
-      if (turn.replayed) {
-        const response = await dependencies.repository.loadResponse({
-          generationCommandId: turn.generation.commandId,
-          userId,
-        });
-        if (response.outcome === "committed") {
-          yield { delta: response.text, type: "assistant_delta" };
-          yield {
-            eventId: response.eventId,
-            revisionId: response.revisionId,
-            type: "assistant_committed",
-          };
-          return;
-        }
-        if (response.outcome === "running") {
-          yield { category: "unavailable", type: "response_failed" };
-          return;
-        }
-        if (
-          response.outcome === "failed" ||
-          response.outcome === "interrupted"
-        ) {
-          yield {
-            category: response.category,
-            type:
-              response.outcome === "interrupted"
-                ? "response_interrupted"
-                : "response_failed",
-          };
-          return;
-        }
-      }
-
+        userId,
+      });
       let possiblyVisible = false;
       let completeText = "";
       let completion: CompleteResponseMetadata | null = null;
+      let settled = ownership === "shared";
 
       try {
+        yield {
+          generationCommandId: turn.generation.commandId,
+          message: turn.message,
+          modelRunAttemptId: turn.generation.attemptId,
+          turnId: turn.turn.id,
+          type: "user_committed",
+          userEventRevisionId: turn.message.revisionId,
+        };
+
+        if (ownership === "shared") {
+          const response = await dependencies.repository.loadResponse({
+            generationCommandId: turn.generation.commandId,
+            userId,
+          });
+          yield* streamExistingResponse(response);
+          return;
+        }
+
         const context = await dependencies.contextCompiler.compile({
           generationCommandId: turn.generation.commandId,
           interactionTurnId: turn.turn.id,
@@ -193,12 +180,25 @@ export function createConversationResponseService(dependencies: {
         if (committed.outcome === "fence_rejected") {
           throw new ProviderDispatchError("policy_blocked");
         }
+        settled = true;
         yield {
           eventId: committed.eventId,
           revisionId: committed.revisionId,
           type: "assistant_committed",
         };
       } catch (error) {
+        if (
+          error instanceof ProviderDispatchError &&
+          !error.settlesAttempt
+        ) {
+          settled = true;
+          const response = await dependencies.repository.loadResponse({
+            generationCommandId: turn.generation.commandId,
+            userId,
+          });
+          yield* streamExistingResponse(response);
+          return;
+        }
         const category =
           error instanceof ProviderDispatchError ? error.category : "unknown";
         await dependencies.repository.settleResponseFailure({
@@ -209,11 +209,48 @@ export function createConversationResponseService(dependencies: {
           settledAt: dependencies.clock(),
           userId,
         });
+        settled = true;
         yield {
           category,
           type: possiblyVisible ? "response_interrupted" : "response_failed",
         };
+      } finally {
+        if (!settled) {
+          await dependencies.repository.settleResponseFailure({
+            category: "aborted",
+            generationCommandId: turn.generation.commandId,
+            interrupted: possiblyVisible,
+            modelRunAttemptId: turn.generation.attemptId,
+            settledAt: dependencies.clock(),
+            userId,
+          });
+        }
       }
     },
   };
+}
+
+async function* streamExistingResponse(
+  response: ExistingConversationResponse,
+): AsyncIterable<ConversationResponseStreamEvent> {
+  if (response.outcome === "committed") {
+    yield { delta: response.text, type: "assistant_delta" };
+    yield {
+      eventId: response.eventId,
+      revisionId: response.revisionId,
+      type: "assistant_committed",
+    };
+    return;
+  }
+  if (response.outcome === "failed" || response.outcome === "interrupted") {
+    yield {
+      category: response.category,
+      type:
+        response.outcome === "interrupted"
+          ? "response_interrupted"
+          : "response_failed",
+    };
+    return;
+  }
+  yield { category: "unavailable", type: "response_failed" };
 }

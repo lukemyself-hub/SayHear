@@ -56,14 +56,19 @@ export function createConversationResponseHandler(dependencies: {
               controller.enqueue(encoder.encode(serializeEvent(event)));
             }
           } catch {
-            controller.enqueue(
-              encoder.encode(
-                serializeEvent({
-                  category: "unknown",
-                  type: "response_failed",
-                }),
-              ),
-            );
+            abortController.abort();
+            try {
+              controller.enqueue(
+                encoder.encode(
+                  serializeEvent({
+                    category: "unknown",
+                    type: "response_failed",
+                  }),
+                ),
+              );
+            } catch {
+              // Cancellation may already have closed the response stream.
+            }
           } finally {
             try {
               controller.close();

@@ -34,6 +34,7 @@ export type ConversationTextModelRequest = Readonly<{
 export type ConversationTextModelStreamEvent =
   | Readonly<{ delta: string; type: "delta" }>
   | Readonly<{
+      costMicros: number | null;
       finishReason: string;
       inputTokens: number | null;
       modelSnapshot: string;
@@ -73,6 +74,7 @@ export class ProviderDispatchError extends Error {
   public constructor(
     public readonly category: ProviderDispatchErrorCategory,
     message = "The configured Conversation Text Provider failed.",
+    public readonly settlesAttempt = true,
   ) {
     super(message);
     this.name = "ProviderDispatchError";
@@ -94,6 +96,9 @@ export type ProviderEgressClaim =
   | Readonly<{
       category: ProviderDispatchErrorCategory;
       outcome: "blocked";
+    }>
+  | Readonly<{
+      outcome: "already_claimed";
     }>;
 
 export type ProviderEgressRepository = Readonly<{

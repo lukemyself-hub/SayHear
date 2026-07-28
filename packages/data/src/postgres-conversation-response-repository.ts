@@ -39,6 +39,7 @@ type ContextEventRow = Readonly<{
 }>;
 
 type DispatchRow = Readonly<{
+  attempt_status: string;
   data_epoch: string;
   expected_data_epoch: string;
   input_revision_id: string;
@@ -65,6 +66,38 @@ export class PostgresConversationResponseRepository
 {
   public constructor(private readonly pool: Pool) {}
 
+  public async claimResponseExecution(input: {
+    generationCommandId: GenerationCommandId;
+    userId: UserId;
+  }): Promise<"owner" | "shared"> {
+    const claimed = await this.pool.query(
+      `
+        UPDATE generation_commands
+        SET status = 'compiling'
+        WHERE generation_command_id = $1
+          AND user_id = $2
+          AND status = 'prepared'
+      `,
+      [input.generationCommandId, input.userId],
+    );
+    if (claimed.rowCount === 1) {
+      return "owner";
+    }
+    const existing = await this.pool.query(
+      `
+        SELECT 1
+        FROM generation_commands
+        WHERE generation_command_id = $1
+          AND user_id = $2
+      `,
+      [input.generationCommandId, input.userId],
+    );
+    if (existing.rowCount !== 1) {
+      throw new Error("The GenerationCommand execution was not found.");
+    }
+    return "shared";
+  }
+
   public async loadResponse(input: {
     generationCommandId: GenerationCommandId;
     userId: UserId;
@@ -73,7 +106,13 @@ export class PostgresConversationResponseRepository
       error_category: string | null;
       event_id: string | null;
       revision_id: string | null;
-      status: "failed" | "interrupted" | "prepared" | "running" | "succeeded";
+      status:
+        | "compiling"
+        | "failed"
+        | "interrupted"
+        | "prepared"
+        | "running"
+        | "succeeded";
       text: string | null;
     }>(
       `
@@ -125,7 +164,7 @@ export class PostgresConversationResponseRepository
         outcome: row.status,
       };
     }
-    return { outcome: row.status };
+    return { outcome: row.status === "compiling" ? "running" : row.status };
   }
 
   public async loadContextSource(input: {
@@ -212,6 +251,47 @@ export class PostgresConversationResponseRepository
     const compiledContextId = createUuidV7(input.now);
     try {
       await client.query("BEGIN");
+      const command = await client.query<{
+        compiled_context_id: string | null;
+        status: string;
+      }>(
+        `
+          SELECT compiled_context_id, status
+          FROM generation_commands
+          WHERE generation_command_id = $1
+            AND user_id = $2
+          FOR UPDATE
+        `,
+        [input.generationCommandId, input.userId],
+      );
+      const commandRow = command.rows[0];
+      if (!commandRow) {
+        throw new Error("The CompiledContext command was not found.");
+      }
+      if (commandRow.compiled_context_id) {
+        const references = await client.query<{ revision_id: string }>(
+          `
+            SELECT
+              conversation_event_revision_id AS revision_id
+            FROM compiled_context_revision_refs
+            WHERE compiled_context_id = $1
+            ORDER BY ordinal
+          `,
+          [commandRow.compiled_context_id],
+        );
+        await client.query("COMMIT");
+        return {
+          id: asCompiledContextId(commandRow.compiled_context_id),
+          referencedRevisionIds: references.rows.map((row) =>
+            asConversationEventRevisionId(row.revision_id),
+          ),
+        };
+      }
+      if (commandRow.status !== "compiling") {
+        throw new Error(
+          "Only an owned GenerationCommand can receive CompiledContext.",
+        );
+      }
       await client.query(
         `
           INSERT INTO compiled_contexts (
@@ -275,7 +355,7 @@ export class PostgresConversationResponseRepository
           WHERE generation_command_id = $2
             AND user_id = $3
             AND compiled_context_id IS NULL
-            AND status = 'prepared'
+            AND status = 'compiling'
         `,
         [compiledContextId, input.generationCommandId, input.userId],
       );
@@ -325,6 +405,7 @@ export class PostgresConversationResponseRepository
             command.model_snapshot,
             command.model_config_version,
             command.status,
+            attempt.status AS attempt_status,
             (
               input_event.lifecycle_status = 'active'
               AND input_event.current_revision_id = command.input_revision_id
@@ -362,12 +443,18 @@ export class PostgresConversationResponseRepository
             input.generationCommandId,
           )
         : false;
+      if (
+        row &&
+        (row.status !== "compiling" || row.attempt_status !== "prepared")
+      ) {
+        await client.query("COMMIT");
+        return { outcome: "already_claimed" };
+      }
       const permitted =
         row?.user_status === "active" &&
         row.data_epoch === row.expected_data_epoch &&
         row.source_active &&
         referencesAreCurrent &&
-        row.status === "prepared" &&
         row.provider === input.champion.provider &&
         row.model === input.champion.model &&
         row.model_snapshot === input.champion.snapshot &&
@@ -410,7 +497,7 @@ export class PostgresConversationResponseRepository
           UPDATE generation_commands
           SET status = 'running'
           WHERE generation_command_id = $1
-            AND status = 'prepared'
+            AND status = 'compiling'
         `,
         [input.generationCommandId],
       );
@@ -649,9 +736,10 @@ export class PostgresConversationResponseRepository
             completed_at = $3,
             input_tokens = $4,
             output_tokens = $5,
-            finish_reason = $6,
+            cost_micros = $6,
+            finish_reason = $7,
             error_category = NULL
-          WHERE model_run_attempt_id = $7
+          WHERE model_run_attempt_id = $8
         `,
         [
           input.metadata.providerRequestId,
@@ -659,6 +747,7 @@ export class PostgresConversationResponseRepository
           input.completedAt,
           input.metadata.inputTokens,
           input.metadata.outputTokens,
+          input.metadata.costMicros,
           input.metadata.finishReason,
           input.modelRunAttemptId,
         ],
@@ -727,7 +816,7 @@ export class PostgresConversationResponseRepository
           WHERE generation_command_id = $3
             AND user_id = $4
             AND authoritative_result_id IS NULL
-            AND status IN ('prepared', 'running')
+            AND status IN ('prepared', 'compiling', 'running')
         `,
         [status, input.settledAt, input.generationCommandId, input.userId],
       );
@@ -759,6 +848,7 @@ export class PostgresConversationResponseRepository
             error_category = $2
           WHERE model_run_attempt_id = $3
             AND user_id = $4
+            AND status IN ('blocked', 'dispatched')
         `,
         [
           input.settledAt,

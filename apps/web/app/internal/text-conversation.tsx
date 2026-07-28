@@ -50,6 +50,7 @@ export function TextConversation(props: {
     pending.current = submission;
     setSubmitting(true);
     setError(null);
+    let userCommitted = false;
 
     try {
       const response = await fetch("/api/internal/conversation/responses", {
@@ -63,6 +64,7 @@ export function TextConversation(props: {
       let streamedAssistantText = "";
       for await (const result of readNdjson(response)) {
         if (result.type === "user_committed") {
+          userCommitted = true;
           const committed = result as {
             message: VisibleUserMessage & { id: string };
           };
@@ -116,14 +118,22 @@ export function TextConversation(props: {
           setPendingAssistant((current) =>
             current ? { ...current, status: "interrupted" } : null,
           );
-          throw new Error("The response was interrupted. You can retry.");
+          throw new Error(
+            "The response was interrupted. Your message was saved; start a new message to continue.",
+          );
         } else if (result.type === "response_failed") {
-          throw new Error("SayHear could not complete the response.");
+          throw new Error(
+            "SayHear could not complete the response. Your message was saved; start a new message to continue.",
+          );
         }
       }
       pending.current = null;
       setText("");
     } catch (submissionError) {
+      if (userCommitted) {
+        pending.current = null;
+        setText("");
+      }
       setError(
         submissionError instanceof Error
           ? submissionError.message
@@ -178,7 +188,11 @@ export function TextConversation(props: {
         <div className="composerActions">
           {error ? <p className="submissionError">{error}</p> : <span />}
           <button disabled={submitting || text.trim().length === 0} type="submit">
-            {submitting ? "Recording…" : error ? "Retry" : "Record message"}
+            {submitting
+              ? "Recording…"
+              : error && pending.current
+                ? "Retry request"
+                : "Record message"}
           </button>
         </div>
       </form>

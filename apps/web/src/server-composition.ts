@@ -69,6 +69,7 @@ export function createServerComposition() {
         })
       : createOpenAIConversationTextModel({
           apiKey: configuration.provider.apiKey!,
+          timeoutMs: configuration.provider.timeoutMs,
         });
   const contextCompiler = createContextCompiler({
     clock: configuration.clock,

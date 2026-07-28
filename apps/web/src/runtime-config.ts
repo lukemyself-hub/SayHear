@@ -109,6 +109,10 @@ export function loadRuntimeConfiguration(environment: Environment) {
       "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS must be a non-negative integer.",
     );
   }
+  const timeoutMs = Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000");
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new Error("SAYHEAR_PROVIDER_TIMEOUT_MS must be a positive integer.");
+  }
 
   return Object.freeze({
     authSecret: required(environment, "NEXTAUTH_SECRET"),
@@ -130,6 +134,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
       adapter,
       apiKey:
         adapter === "openai" ? required(environment, "OPENAI_API_KEY") : null,
+      timeoutMs,
       champion: Object.freeze({
         configVersion: "conversation-text-champion:v1",
         contextLimit: 1_000_000,
