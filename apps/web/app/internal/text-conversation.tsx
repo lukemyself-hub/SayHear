@@ -6,6 +6,7 @@ type VisibleUserMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: string;
   locale: string;
+  logicalDate?: string;
   revisionId: string;
   sequence: number;
   text: string;
@@ -27,23 +28,43 @@ type TimelineItem =
   | Readonly<{
       kind: "interrupted";
       response: {
+        logicalDate?: string;
         retryStatus: "available" | "retried" | "retrying";
+        sequence: number;
         text: string;
         turnId: string;
       };
     }>;
 
 export function TextConversation(props: {
+  initialInterruptedResponses: readonly {
+    logicalDate: string;
+    retryStatus: "available" | "retried" | "retrying";
+    sequence: number;
+    turnId: string;
+  }[];
   initialMessages: readonly VisibleUserMessage[];
 }) {
   const [timeline, setTimeline] = useState<readonly TimelineItem[]>(() =>
-    props.initialMessages.map((message) => ({ kind: "message", message })),
+    [
+      ...props.initialMessages.map(
+        (message): TimelineItem => ({ kind: "message", message }),
+      ),
+      ...props.initialInterruptedResponses.map(
+        (response): TimelineItem => ({
+          kind: "interrupted",
+          response: {
+            ...response,
+            text: "Partial response text was not retained.",
+          },
+        }),
+      ),
+    ].sort(compareTimelineItems),
   );
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendingAssistant, setPendingAssistant] = useState<{
     text: string;
-    turnId: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pending = useRef<PendingSubmission | null>(null);
@@ -69,6 +90,8 @@ export function TextConversation(props: {
     setError(null);
     let userCommitted = false;
     let currentTurnId: string | null = null;
+    let responseCommitted = false;
+    let streamedAssistantText = "";
 
     try {
       const response = await fetch("/api/internal/conversation/responses", {
@@ -79,7 +102,6 @@ export function TextConversation(props: {
       if (!response.ok) {
         throw new Error(`The message could not be recorded (${response.status}).`);
       }
-      let streamedAssistantText = "";
       for await (const result of readNdjson(response)) {
         if (result.type === "user_committed") {
           userCommitted = true;
@@ -114,10 +136,10 @@ export function TextConversation(props: {
           if (currentTurnId) {
             setPendingAssistant({
               text: streamedAssistantText,
-              turnId: currentTurnId,
             });
           }
         } else if (result.type === "assistant_committed") {
+          responseCommitted = true;
           const committed = result as {
             eventId: string;
             revisionId: string;
@@ -163,15 +185,38 @@ export function TextConversation(props: {
           );
         }
       }
+      if (!responseCommitted) {
+        throw new Error(
+          streamedAssistantText.length > 0
+            ? "The response stream ended after visible output."
+            : "The response stream ended without a final result.",
+        );
+      }
       pending.current = null;
       setText("");
     } catch (submissionError) {
+      const disconnectedTurnId =
+        !responseCommitted &&
+        currentTurnId !== null &&
+        streamedAssistantText.length > 0
+          ? currentTurnId
+          : null;
+      if (disconnectedTurnId) {
+        appendInterruptedResponse(
+          disconnectedTurnId,
+          streamedAssistantText,
+          setTimeline,
+        );
+        setPendingAssistant(null);
+      }
       if (userCommitted) {
         pending.current = null;
         setText("");
       }
       setError(
-        submissionError instanceof Error
+        disconnectedTurnId
+          ? "The response was interrupted. Your message was saved; use Retry below to ask again explicitly."
+          : submissionError instanceof Error
           ? submissionError.message
           : "The message could not be recorded.",
       );
@@ -191,6 +236,7 @@ export function TextConversation(props: {
     setSubmitting(true);
     setError(null);
     let retryTurnId: string | null = null;
+    let responseCommitted = false;
     let streamedAssistantText = "";
 
     try {
@@ -217,10 +263,10 @@ export function TextConversation(props: {
           if (retryTurnId) {
             setPendingAssistant({
               text: streamedAssistantText,
-              turnId: retryTurnId,
             });
           }
         } else if (result.type === "assistant_committed") {
+          responseCommitted = true;
           const committed = result as {
             eventId: string;
             revisionId: string;
@@ -262,16 +308,37 @@ export function TextConversation(props: {
           );
         }
       }
+      if (!responseCommitted) {
+        throw new Error(
+          streamedAssistantText.length > 0
+            ? "The retried response stream ended after visible output."
+            : "The retried response stream ended without a final result.",
+        );
+      }
     } catch (retryError) {
+      const disconnectedTurnId =
+        !responseCommitted &&
+        retryTurnId !== null &&
+        streamedAssistantText.length > 0
+          ? retryTurnId
+          : null;
+      if (disconnectedTurnId) {
+        appendInterruptedResponse(
+          disconnectedTurnId,
+          streamedAssistantText,
+          setTimeline,
+        );
+        setPendingAssistant(null);
+      }
       updateRetryStatus(
         originalTurnId,
-        retryTurnId && streamedAssistantText.length > 0
-          ? "retried"
-          : "available",
+        disconnectedTurnId ? "retried" : "available",
         setTimeline,
       );
       setError(
-        retryError instanceof Error
+        disconnectedTurnId
+          ? "The retried response was interrupted. It remains separate and can be retried explicitly."
+          : retryError instanceof Error
           ? retryError.message
           : "The response could not be retried.",
       );
@@ -381,7 +448,12 @@ function appendInterruptedResponse(
           ...current,
           {
             kind: "interrupted",
-            response: { retryStatus: "available", text, turnId },
+            response: {
+              retryStatus: "available",
+              sequence: nextVisibleSequence(current),
+              text,
+              turnId,
+            },
           },
         ],
   );
@@ -412,10 +484,34 @@ function nextVisibleSequence(timeline: readonly TimelineItem[]): number {
       (maximum, item) =>
         item.kind === "message"
           ? Math.max(maximum, item.message.sequence)
-          : maximum,
+          : Math.max(maximum, item.response.sequence),
       0,
     ) + 1
   );
+}
+
+function compareTimelineItems(left: TimelineItem, right: TimelineItem): number {
+  const leftDate =
+    left.kind === "message"
+      ? left.message.logicalDate
+      : left.response.logicalDate;
+  const rightDate =
+    right.kind === "message"
+      ? right.message.logicalDate
+      : right.response.logicalDate;
+  const dateOrder = (leftDate ?? "").localeCompare(rightDate ?? "");
+  if (dateOrder !== 0) {
+    return dateOrder;
+  }
+  const leftSequence =
+    left.kind === "message"
+      ? left.message.sequence
+      : left.response.sequence + 0.5;
+  const rightSequence =
+    right.kind === "message"
+      ? right.message.sequence
+      : right.response.sequence + 0.5;
+  return leftSequence - rightSequence;
 }
 
 async function* readNdjson(

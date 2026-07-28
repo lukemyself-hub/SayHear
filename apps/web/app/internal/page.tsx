@@ -16,8 +16,9 @@ export default async function InternalPage() {
   }
 
   const userId = asUserId(session.user.id);
-  const [access, messages] = await Promise.all([
+  const [access, interruptedResponses, messages] = await Promise.all([
     composition.accessService.getAccess(userId),
+    composition.conversationService.listInterruptedResponses(userId),
     composition.conversationService.listMessages(userId),
   ]);
   const state = access.privateWrites.allowed ? "Open" : "Blocked";
@@ -42,7 +43,10 @@ export default async function InternalPage() {
         The gate opens only when the configured backup policy has current,
         verified retention evidence.
       </p>
-      <TextConversation initialMessages={messages} />
+      <TextConversation
+        initialInterruptedResponses={interruptedResponses}
+        initialMessages={messages}
+      />
     </main>
   );
 }

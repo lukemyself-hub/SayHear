@@ -1018,6 +1018,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(interruptedEvents[1]?.delta).toBe("Visible prefix.");
     const originalTurnId = interruptedEvents[0]?.turnId;
     expect(typeof originalTurnId).toBe("string");
+    expect(
+      await conversationService.listInterruptedResponses(
+        fixedInternalOwnerPrincipal.userId,
+      ),
+    ).toEqual([
+      {
+        logicalDate: "2026-07-27",
+        retryStatus: "available",
+        sequence: 1,
+        turnId: originalTurnId,
+      },
+    ]);
 
     let successfulProviderCalls = 0;
     const successfulModel = {
@@ -1124,6 +1136,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(retryEvents[0]?.turnId).not.toBe(originalTurnId);
     expect(retryEvents[1]?.delta).toBe("A new, complete answer.");
     expect(successfulProviderCalls).toBe(2);
+    expect(
+      await conversationService.listInterruptedResponses(
+        fixedInternalOwnerPrincipal.userId,
+      ),
+    ).toEqual([
+      {
+        logicalDate: "2026-07-27",
+        retryStatus: "retried",
+        sequence: 1,
+        turnId: originalTurnId,
+      },
+    ]);
 
     const idempotentReplay = await retryHandler(
       new Request("http://localhost/api/internal/conversation/retries", {

@@ -15,6 +15,7 @@ export {
   type ClientTurnId,
   type ConversationRetryTurn,
   type GenerationPolicy,
+  type InterruptedConversationResponse,
   type InteractionTurnStatus,
   type RecordConversationRetryInput,
   type RecordConversationRetryRepositoryResult,

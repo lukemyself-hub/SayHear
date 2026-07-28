@@ -1,5 +1,6 @@
 import type {
   ConversationRetryTurn,
+  InterruptedConversationResponse,
   InteractionTurnStatus,
   RecordConversationRetryInput,
   RecordConversationRetryRepositoryResult,
@@ -130,6 +131,71 @@ export class PostgresUserTextConversationRepository
     throw new Error("The bounded transaction retry loop exited unexpectedly.");
   }
 
+  public async listInterruptedResponses(
+    userId: UserId,
+  ): Promise<readonly InterruptedConversationResponse[]> {
+    const result = await this.pool.query<{
+      interaction_turn_id: string;
+      logical_date: string;
+      retry_status: "available" | "retried" | "retrying";
+      sequence_no: string;
+    }>(
+      `
+        SELECT
+          interrupted_turn.interaction_turn_id,
+          session.logical_date::text,
+          primary_event.sequence_no,
+          CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM interaction_turns retry_turn
+              WHERE retry_turn.user_id = interrupted_turn.user_id
+                AND retry_turn.retry_of_interaction_turn_id =
+                  interrupted_turn.interaction_turn_id
+                AND retry_turn.status IN ('settled', 'interrupted')
+            ) THEN 'retried'
+            WHEN EXISTS (
+              SELECT 1
+              FROM interaction_turns retry_turn
+              WHERE retry_turn.user_id = interrupted_turn.user_id
+                AND retry_turn.retry_of_interaction_turn_id =
+                  interrupted_turn.interaction_turn_id
+                AND retry_turn.status IN ('open', 'responding')
+            ) THEN 'retrying'
+            ELSE 'available'
+          END AS retry_status
+        FROM active_internal_owner owner
+        INNER JOIN interaction_turns interrupted_turn
+          ON interrupted_turn.user_id = owner.user_id
+        INNER JOIN generation_commands command
+          ON command.interaction_turn_id =
+            interrupted_turn.interaction_turn_id
+          AND command.user_id = interrupted_turn.user_id
+        INNER JOIN conversation_events primary_event
+          ON primary_event.interaction_turn_id =
+            interrupted_turn.interaction_turn_id
+          AND primary_event.user_id = interrupted_turn.user_id
+          AND primary_event.actor = 'user'
+        INNER JOIN daily_sessions session
+          ON session.daily_session_id = interrupted_turn.daily_session_id
+          AND session.user_id = interrupted_turn.user_id
+        WHERE owner.user_id = $1
+          AND interrupted_turn.status = 'interrupted'
+          AND command.status = 'interrupted'
+          AND command.authoritative_result_id IS NULL
+        ORDER BY session.logical_date, primary_event.sequence_no
+      `,
+      [userId],
+    );
+
+    return result.rows.map((row) => ({
+      logicalDate: row.logical_date,
+      retryStatus: row.retry_status,
+      sequence: Number(row.sequence_no),
+      turnId: asInteractionTurnId(row.interaction_turn_id),
+    }));
+  }
+
   public async listUserTextMessages(
     userId: UserId,
   ): Promise<readonly UserTextMessage[]> {
@@ -137,6 +203,7 @@ export class PostgresUserTextConversationRepository
       actor: "user" | "assistant";
       conversation_event_id: string;
       locale: string;
+      logical_date: string;
       revision_id: string;
       sequence_no: string;
       text: string;
@@ -146,6 +213,7 @@ export class PostgresUserTextConversationRepository
           event.actor,
           event.conversation_event_id,
           revision.locale,
+          session.logical_date::text,
           revision.conversation_event_revision_id AS revision_id,
           event.sequence_no,
           revision.canonical_text AS text
@@ -171,6 +239,7 @@ export class PostgresUserTextConversationRepository
       actor: row.actor,
       eventId: asConversationEventId(row.conversation_event_id),
       locale: row.locale,
+      logicalDate: row.logical_date,
       revisionId: asConversationEventRevisionId(row.revision_id),
       sequence: Number(row.sequence_no),
       text: row.text,

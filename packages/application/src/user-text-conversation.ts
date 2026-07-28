@@ -121,9 +121,17 @@ export type UserTextMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: ConversationEventId;
   locale: string;
+  logicalDate: string;
   revisionId: ConversationEventRevisionId;
   sequence: number;
   text: string;
+}>;
+
+export type InterruptedConversationResponse = Readonly<{
+  logicalDate: string;
+  retryStatus: "available" | "retried" | "retrying";
+  sequence: number;
+  turnId: InteractionTurnId;
 }>;
 
 export type RecordUserTextTurnRepositoryResult =
@@ -146,6 +154,9 @@ export type RecordConversationRetryRepositoryResult =
     }>;
 
 export type UserTextConversationRepository = Readonly<{
+  listInterruptedResponses(
+    userId: UserId,
+  ): Promise<readonly InterruptedConversationResponse[]>;
   listUserTextMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
   recordConversationRetry(
     input: RecordConversationRetryInput,
@@ -156,6 +167,9 @@ export type UserTextConversationRepository = Readonly<{
 }>;
 
 export type UserTextConversationService = Readonly<{
+  listInterruptedResponses(
+    userId: UserId,
+  ): Promise<readonly InterruptedConversationResponse[]>;
   listMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
   retry(
     userId: UserId,
@@ -224,6 +238,9 @@ export function createUserTextConversationService(dependencies: {
   repository: UserTextConversationRepository;
 }): UserTextConversationService {
   return {
+    async listInterruptedResponses(userId) {
+      return dependencies.repository.listInterruptedResponses(userId);
+    },
     async listMessages(userId) {
       return dependencies.repository.listUserTextMessages(userId);
     },
