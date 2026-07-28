@@ -72,6 +72,36 @@ CREATE TABLE continuous_exchange_inactivity_evaluations (
   )
 );
 
+CREATE FUNCTION enforce_inactivity_evaluation_snapshot_immutability()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF
+    TG_OP = 'DELETE'
+    OR NEW.inactivity_evaluation_id IS DISTINCT FROM OLD.inactivity_evaluation_id
+    OR NEW.user_id IS DISTINCT FROM OLD.user_id
+    OR NEW.daily_session_id IS DISTINCT FROM OLD.daily_session_id
+    OR NEW.continuous_exchange_no IS DISTINCT FROM OLD.continuous_exchange_no
+    OR NEW.policy_version IS DISTINCT FROM OLD.policy_version
+    OR NEW.expected_dialogue_revision IS DISTINCT
+      FROM OLD.expected_dialogue_revision
+    OR NEW.due_at IS DISTINCT FROM OLD.due_at
+    OR NEW.created_at IS DISTINCT FROM OLD.created_at
+  THEN
+    RAISE EXCEPTION 'Inactivity evaluation snapshots are immutable'
+      USING ERRCODE = '55000';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER continuous_exchange_inactivity_evaluation_snapshot_immutable
+BEFORE UPDATE OR DELETE ON continuous_exchange_inactivity_evaluations
+FOR EACH ROW
+EXECUTE FUNCTION enforce_inactivity_evaluation_snapshot_immutability();
+
 CREATE INDEX continuous_exchange_inactivity_evaluations_due_idx
   ON continuous_exchange_inactivity_evaluations(due_at)
   WHERE outcome IS NULL;

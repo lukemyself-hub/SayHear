@@ -684,6 +684,8 @@ export class PostgresUserTextConversationRepository
         SET
           next_turn_sequence_no = next_turn_sequence_no + 1,
           next_event_sequence_no = next_event_sequence_no + 1,
+          dialogue_revision = dialogue_revision + 1,
+          source_revision = source_revision + 1,
           last_activity_at = $1,
           updated_at = $1
         WHERE daily_session_id = $2
@@ -691,6 +693,11 @@ export class PostgresUserTextConversationRepository
       `,
       [input.now, source.daily_session_id, input.userId],
     );
+    await scheduleInactivityEvaluation(client, {
+      dailySessionId: source.daily_session_id,
+      now: input.now,
+      userId: input.userId,
+    });
     await client.query("COMMIT");
 
     return {

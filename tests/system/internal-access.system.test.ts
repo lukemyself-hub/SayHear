@@ -1207,7 +1207,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     `);
     expect(state.rows[0]).toMatchObject({
       assistant_events: "2",
-      dialogue_revision: "4",
+      dialogue_revision: "5",
       event_revisions: "4",
       retry_action_events: "1",
       retry_intent: "conversation-retry/stable-retry-request-0001",
@@ -2527,6 +2527,136 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         "continuous-exchange-inactivity:v1",
       ],
       quiescent_at: new Date("2026-07-27T16:41:00.000Z"),
+    });
+  });
+
+  it("makes an older inactivity evaluation stale when a Retry Event resumes activity", async () => {
+    await openPrivateWrites();
+    const inactivityPolicy = Object.freeze({
+      timeoutMs: 30 * 60 * 1_000,
+      version: "continuous-exchange-inactivity:v1",
+    });
+    const createConversationAt = (now: string) =>
+      createUserTextConversationService({
+        clock: () => new Date(now),
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        inactivityPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      });
+    const original = await createConversationAt(
+      "2026-07-27T16:00:00.000Z",
+    ).submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "retry-inactivity-event",
+      clientTurnId: "retry-inactivity-turn",
+      locale: "en-US",
+      text: "Please keep this open while I retry.",
+      timezone: "America/Los_Angeles",
+    });
+    await database.pool.query(
+      `
+        UPDATE interaction_turns
+        SET status = 'interrupted', updated_at = $1
+        WHERE interaction_turn_id = $2
+      `,
+      [new Date("2026-07-27T16:05:00.000Z"), original.turn.id],
+    );
+    await database.pool.query(
+      `
+        UPDATE generation_commands
+        SET status = 'interrupted'
+        WHERE interaction_turn_id = $1
+      `,
+      [original.turn.id],
+    );
+
+    await createConversationAt("2026-07-27T16:10:00.000Z").retry(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        originalTurnId: original.turn.id,
+        retryRequestId: "retry-inactivity-request",
+      },
+    );
+
+    const evaluations = await database.pool.query<{
+      expected_dialogue_revision: string;
+      inactivity_evaluation_id: string;
+    }>(`
+      SELECT
+        inactivity_evaluation_id,
+        expected_dialogue_revision::text
+      FROM continuous_exchange_inactivity_evaluations
+      ORDER BY due_at
+    `);
+    expect(
+      evaluations.rows.map((row) => row.expected_dialogue_revision),
+    ).toEqual(["1", "2"]);
+
+    const staleEvaluation = await createContinuousExchangeService({
+      clock: () => new Date("2026-07-27T16:31:00.000Z"),
+      repository: new PostgresContinuousExchangeRepository(database.pool),
+    }).evaluateInactivity(
+      evaluations.rows[0]?.inactivity_evaluation_id ?? "",
+    );
+    expect(staleEvaluation).toEqual({
+      outcome: "stale_revision",
+      replayed: false,
+    });
+    const state = await database.pool.query<{
+      activity_state: string;
+      dialogue_revision: string;
+    }>(
+      `
+        SELECT activity_state, dialogue_revision::text
+        FROM daily_sessions
+        WHERE daily_session_id = $1
+      `,
+      [original.dailySession.id],
+    );
+    expect(state.rows[0]).toEqual({
+      activity_state: "active",
+      dialogue_revision: "2",
+    });
+  });
+
+  it("keeps an inactivity evaluation's authoritative snapshot immutable", async () => {
+    await openPrivateWrites();
+    const conversation = createUserTextConversationService({
+      clock: () => new Date("2026-07-27T16:00:00.000Z"),
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    await conversation.submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "immutable-evaluation-event",
+      clientTurnId: "immutable-evaluation-turn",
+      locale: "en-US",
+      text: "Freeze this inactivity decision.",
+      timezone: "America/Los_Angeles",
+    });
+    const evaluation = await database.pool.query<{
+      inactivity_evaluation_id: string;
+    }>(`
+      SELECT inactivity_evaluation_id
+      FROM continuous_exchange_inactivity_evaluations
+    `);
+
+    await expect(
+      database.pool.query(
+        `
+          UPDATE continuous_exchange_inactivity_evaluations
+          SET
+            expected_dialogue_revision = expected_dialogue_revision + 1,
+            due_at = due_at + INTERVAL '1 minute'
+          WHERE inactivity_evaluation_id = $1
+        `,
+        [evaluation.rows[0]?.inactivity_evaluation_id],
+      ),
+    ).rejects.toMatchObject({
+      code: "55000",
+      message: "Inactivity evaluation snapshots are immutable",
     });
   });
 
