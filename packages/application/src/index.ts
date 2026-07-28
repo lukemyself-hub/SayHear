@@ -1,10 +1,17 @@
 export {
+  createContinuousExchangeService,
+  type ContinuousExchangeRepository,
+  type ContinuousExchangeService,
+  type InactivityEvaluationOutcome,
+} from "./continuous-exchange";
+export {
   createInternalOwnerAccessService,
   InternalOwnerAccessDeniedError,
   type InternalOwnerAccessRepository,
   type InternalOwnerAccessService,
 } from "./internal-owner-access";
 export {
+  ContinuousExchangeNotFoundError,
   ConversationRetryNotAllowedError,
   createUserTextConversationService,
   InvalidUserTextTurnError,
@@ -14,7 +21,9 @@ export {
   type ClientEventId,
   type ClientTurnId,
   type ConversationRetryTurn,
+  type ExplicitContinuousExchangeEnd,
   type GenerationPolicy,
+  type InactivityPolicy,
   type InterruptedConversationResponse,
   type InteractionTurnStatus,
   type RecordConversationRetryInput,

@@ -126,6 +126,25 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("SAYHEAR_PROVIDER_TIMEOUT_MS must be a positive integer.");
   }
+  const inactivityTimeoutMs = Number(
+    environment.SAYHEAR_INACTIVITY_TIMEOUT_MS ?? "1800000",
+  );
+  if (!Number.isSafeInteger(inactivityTimeoutMs) || inactivityTimeoutMs <= 0) {
+    throw new Error(
+      "SAYHEAR_INACTIVITY_TIMEOUT_MS must be a positive safe integer.",
+    );
+  }
+  const inactivityPolicyVersion =
+    environment.SAYHEAR_INACTIVITY_POLICY_VERSION ??
+    "continuous-exchange-inactivity:v1";
+  if (
+    inactivityPolicyVersion.length === 0 ||
+    inactivityPolicyVersion.length > 200
+  ) {
+    throw new Error(
+      "SAYHEAR_INACTIVITY_POLICY_VERSION must be a non-empty version identifier.",
+    );
+  }
 
   return Object.freeze({
     authSecret: required(environment, "NEXTAUTH_SECRET"),
@@ -143,6 +162,11 @@ export function loadRuntimeConfiguration(environment: Environment) {
     githubClientId: required(environment, "GITHUB_CLIENT_ID"),
     githubClientSecret: required(environment, "GITHUB_CLIENT_SECRET"),
     contextHmacSecret: required(environment, "SAYHEAR_CONTEXT_HMAC_SECRET"),
+    inactivityPolicy: Object.freeze({
+      timeoutMs: inactivityTimeoutMs,
+      version: inactivityPolicyVersion,
+    }),
+    recoveryScannerSecret: required(environment, "CRON_SECRET"),
     provider: Object.freeze({
       adapter,
       apiKey:

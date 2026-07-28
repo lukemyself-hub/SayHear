@@ -861,6 +861,52 @@ export class PostgresConversationResponseRepository
         `,
         [input.completedAt, row.daily_session_id, input.userId],
       );
+      const inactivityEvaluationId = createUuidV7(input.completedAt);
+      const inactivityScheduled = await client.query(
+        `
+          INSERT INTO continuous_exchange_inactivity_evaluations (
+            inactivity_evaluation_id,
+            user_id,
+            daily_session_id,
+            continuous_exchange_no,
+            policy_version,
+            expected_dialogue_revision,
+            due_at,
+            created_at
+          )
+          SELECT
+            $1,
+            session.user_id,
+            session.daily_session_id,
+            session.current_continuous_exchange_no,
+            session.closure_policy_version,
+            session.dialogue_revision,
+            $2::timestamptz + policy.timeout_ms * INTERVAL '1 millisecond',
+            $2
+          FROM daily_sessions session
+          INNER JOIN continuous_exchange_inactivity_policies policy
+            ON policy.policy_version = session.closure_policy_version
+          WHERE session.daily_session_id = $3
+            AND session.user_id = $4
+            AND session.activity_state = 'active'
+          ON CONFLICT (
+            daily_session_id,
+            continuous_exchange_no,
+            expected_dialogue_revision
+          ) DO NOTHING
+        `,
+        [
+          inactivityEvaluationId,
+          input.completedAt,
+          row.daily_session_id,
+          input.userId,
+        ],
+      );
+      if (inactivityScheduled.rowCount !== 1) {
+        throw new Error(
+          "The inactivity evaluation was not scheduled with the Assistant Event.",
+        );
+      }
       await client.query("COMMIT");
       return {
         eventId: asConversationEventId(eventId),
