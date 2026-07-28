@@ -63,4 +63,20 @@ describe("runtime safety configuration", () => {
       }),
     ).toBe("test");
   });
+
+  it("keeps deterministic completion faults test-only", () => {
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "production",
+        SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION: "true",
+      }),
+    ).toThrow("only in the test environment");
+
+    expect(
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "test",
+        SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION: "true",
+      }),
+    ).toBe("test");
+  });
 });

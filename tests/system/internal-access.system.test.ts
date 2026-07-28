@@ -30,6 +30,7 @@ import {
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
 import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
+import { createConversationRetryHandler } from "../../apps/web/src/conversation-retry-handler";
 import { createUserTextTurnHandler } from "../../apps/web/src/user-text-turn-handler";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -951,6 +952,414 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         AND table_name ILIKE ANY(ARRAY['%chunk%', '%stream%'])
     `);
     expect(persistedChunkRelations.rows).toEqual([]);
+  });
+
+  it("keeps an interrupted Turn immutable and retries it once through a linked Turn", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock: fixedResponseClock,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const createService = (model: ConversationTextModel) =>
+      createConversationResponseService({
+        clock: fixedResponseClock,
+        contextCompiler: createContextCompiler({
+          clock: fixedResponseClock,
+          compilerVersion: "context-compiler:v1",
+          contentHmacSecret: "test-context-integrity-secret",
+          rawEventTokenBudget: 4_000,
+          repository: responseRepository,
+        }),
+        conversationService,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          model,
+          repository: responseRepository,
+        }),
+        repository: responseRepository,
+      });
+
+    const interruptedService = createService(
+      createDeterministicConversationTextModel({
+        chunks: ["Visible prefix.", " Must not become authoritative."],
+        failAfterChunks: 1,
+      }),
+    );
+    const originalRequest = {
+      clientEventId: "interrupted-original-event",
+      clientTurnId: "interrupted-original-turn",
+      locale: "en-US",
+      text: "Please stay with what I just said.",
+      timezone: "America/Los_Angeles",
+    };
+    const interruptedResponse = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service: interruptedService,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify(originalRequest),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const interruptedEvents = await readNdjson(interruptedResponse);
+    expect(interruptedEvents.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "response_interrupted",
+    ]);
+    expect(interruptedEvents[1]?.delta).toBe("Visible prefix.");
+    const originalTurnId = interruptedEvents[0]?.turnId;
+    expect(typeof originalTurnId).toBe("string");
+
+    let successfulProviderCalls = 0;
+    const successfulModel = {
+      async *stream() {
+        successfulProviderCalls += 1;
+        yield { delta: "A new, complete answer.", type: "delta" as const };
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 8,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 6,
+          providerRequestId: "retry-provider-request",
+          type: "completed" as const,
+        };
+      },
+    } satisfies ConversationTextModel;
+    const retryService = createService(successfulModel);
+
+    const originalReplay = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service: retryService,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify(originalRequest),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    expect(
+      (await readNdjson(originalReplay)).map((event) => event.type),
+    ).toEqual(["user_committed", "response_interrupted"]);
+    expect(successfulProviderCalls).toBe(0);
+
+    const nextTextResponse = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service: retryService,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "after-interruption-event",
+          clientTurnId: "after-interruption-turn",
+          locale: "en-US",
+          text: "This is the next Text Turn.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    expect(
+      (await readNdjson(nextTextResponse)).at(-1)?.type,
+    ).toBe("assistant_committed");
+    expect(successfulProviderCalls).toBe(1);
+    const nextTextContext = await database.pool.query<{ text: string }>(
+      `
+        SELECT revision.canonical_text AS text
+        FROM interaction_turns turn
+        INNER JOIN generation_commands command
+          ON command.interaction_turn_id = turn.interaction_turn_id
+        INNER JOIN compiled_context_revision_refs ref
+          ON ref.compiled_context_id = command.compiled_context_id
+        INNER JOIN conversation_event_revisions revision
+          ON revision.conversation_event_revision_id =
+            ref.conversation_event_revision_id
+        WHERE turn.client_turn_id = $1
+        ORDER BY ref.ordinal
+      `,
+      ["after-interruption-turn"],
+    );
+    expect(nextTextContext.rows.map((row) => row.text)).toEqual([
+      "Please stay with what I just said.",
+      "This is the next Text Turn.",
+    ]);
+    expect(
+      nextTextContext.rows.some((row) => row.text.includes("Visible prefix.")),
+    ).toBe(false);
+
+    const retryRequest = {
+      originalTurnId,
+      retryRequestId: "stable-retry-request-0001",
+    };
+    const retryHandler = createConversationRetryHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service: retryService,
+    });
+    const retryResponse = await retryHandler(
+      new Request("http://localhost/api/internal/conversation/retries", {
+        body: JSON.stringify(retryRequest),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const retryEvents = await readNdjson(retryResponse);
+    expect(retryEvents.map((event) => event.type)).toEqual([
+      "retry_committed",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+    expect(retryEvents[0]).toMatchObject({
+      originalTurnId,
+      retryRequestId: "stable-retry-request-0001",
+    });
+    expect(retryEvents[0]?.turnId).not.toBe(originalTurnId);
+    expect(retryEvents[1]?.delta).toBe("A new, complete answer.");
+    expect(successfulProviderCalls).toBe(2);
+
+    const idempotentReplay = await retryHandler(
+      new Request("http://localhost/api/internal/conversation/retries", {
+        body: JSON.stringify(retryRequest),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const replayEvents = await readNdjson(idempotentReplay);
+    expect(replayEvents.map((event) => event.type)).toEqual([
+      "retry_committed",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+    expect(replayEvents[0]?.turnId).toBe(retryEvents[0]?.turnId);
+    expect(successfulProviderCalls).toBe(2);
+
+    const state = await database.pool.query<{
+      assistant_events: string;
+      dialogue_revision: string;
+      event_revisions: string;
+      retry_action_events: string;
+      retry_command_id: string;
+      retry_intent: string;
+      retry_of_turn_id: string;
+      retry_turn_id: string;
+    }>(`
+      SELECT
+        retry_turn.interaction_turn_id::text AS retry_turn_id,
+        retry_turn.retry_of_interaction_turn_id::text AS retry_of_turn_id,
+        retry_command.generation_command_id::text AS retry_command_id,
+        retry_command.intent_key AS retry_intent,
+        session.dialogue_revision::text,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE event_type = 'retry_action'
+        ) AS retry_action_events,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_event_revisions
+        ) AS event_revisions
+      FROM interaction_turns retry_turn
+      INNER JOIN generation_commands retry_command
+        ON retry_command.interaction_turn_id = retry_turn.interaction_turn_id
+      INNER JOIN daily_sessions session
+        ON session.daily_session_id = retry_turn.daily_session_id
+      WHERE retry_turn.retry_of_interaction_turn_id IS NOT NULL
+    `);
+    expect(state.rows[0]).toMatchObject({
+      assistant_events: "2",
+      dialogue_revision: "4",
+      event_revisions: "4",
+      retry_action_events: "1",
+      retry_intent: "conversation-retry/stable-retry-request-0001",
+      retry_of_turn_id: originalTurnId,
+      retry_turn_id: retryEvents[0]?.turnId,
+    });
+    expect(state.rows[0]?.retry_command_id).not.toBe(
+      interruptedEvents[0]?.generationCommandId,
+    );
+
+    const originalState = await database.pool.query<{
+      assistant_results: string;
+      command_status: string;
+      turn_status: string;
+    }>(
+      `
+        SELECT
+          original_turn.status AS turn_status,
+          original_command.status AS command_status,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events assistant
+            WHERE assistant.generation_command_id =
+              original_command.generation_command_id
+          ) AS assistant_results
+        FROM interaction_turns original_turn
+        INNER JOIN generation_commands original_command
+          ON original_command.interaction_turn_id =
+            original_turn.interaction_turn_id
+        WHERE original_turn.interaction_turn_id = $1
+      `,
+      [originalTurnId],
+    );
+    expect(originalState.rows[0]).toEqual({
+      assistant_results: "0",
+      command_status: "interrupted",
+      turn_status: "interrupted",
+    });
+
+    const retryContext = await database.pool.query<{ text: string }>(
+      `
+        SELECT revision.canonical_text AS text
+        FROM generation_commands command
+        INNER JOIN compiled_context_revision_refs ref
+          ON ref.compiled_context_id = command.compiled_context_id
+        INNER JOIN conversation_event_revisions revision
+          ON revision.conversation_event_revision_id =
+            ref.conversation_event_revision_id
+        WHERE command.intent_key = $1
+        ORDER BY ref.ordinal
+      `,
+      ["conversation-retry/stable-retry-request-0001"],
+    );
+    expect(retryContext.rows.map((row) => row.text)).toEqual([
+      "Please stay with what I just said.",
+    ]);
+    expect(
+      retryContext.rows.some((row) => row.text.includes("Visible prefix.")),
+    ).toBe(false);
+  });
+
+  it("classifies deterministic faults before visibility and after Provider completion", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const createHandler = (model: ConversationTextModel) =>
+      createConversationResponseHandler({
+        authenticate: async () => fixedInternalOwnerPrincipal,
+        service: createConversationResponseService({
+          clock: fixedResponseClock,
+          contextCompiler: createContextCompiler({
+            clock: fixedResponseClock,
+            compilerVersion: "context-compiler:v1",
+            contentHmacSecret: "test-context-integrity-secret",
+            rawEventTokenBudget: 4_000,
+            repository: responseRepository,
+          }),
+          conversationService: createUserTextConversationService({
+            clock: fixedResponseClock,
+            expectedBackupPolicyVersion: "neon-production-v1",
+            expectedConfigurationFingerprint: "sha256:expected",
+            generationPolicy: testGenerationPolicy,
+            repository: new PostgresUserTextConversationRepository(database.pool),
+          }),
+          egressPort: createProviderEgressPort({
+            champion: testChampion,
+            clock: fixedResponseClock,
+            model,
+            repository: responseRepository,
+          }),
+          repository: responseRepository,
+        }),
+      });
+    const submit = async (
+      handler: ReturnType<typeof createConversationResponseHandler>,
+      suffix: string,
+    ) =>
+      readNdjson(
+        await handler(
+          new Request("http://localhost/api/internal/conversation/responses", {
+            body: JSON.stringify({
+              clientEventId: `fault-event-${suffix}`,
+              clientTurnId: `fault-turn-${suffix}`,
+              locale: "en-US",
+              text: `Synthetic fault ${suffix}.`,
+              timezone: "America/Los_Angeles",
+            }),
+            headers: { "content-type": "application/json" },
+            method: "POST",
+          }),
+        ),
+      );
+
+    const beforeOutput = await submit(
+      createHandler(
+        createDeterministicConversationTextModel({
+          chunks: ["must not be visible"],
+          failAfterChunks: 0,
+        }),
+      ),
+      "before-output",
+    );
+    expect(beforeOutput.map((event) => event.type)).toEqual([
+      "user_committed",
+      "response_failed",
+    ]);
+
+    const afterCompletion = await submit(
+      createHandler(
+        createDeterministicConversationTextModel({
+          chunks: ["Visible completed prefix."],
+          failAfterCompletion: true,
+        }),
+      ),
+      "after-completion",
+    );
+    expect(afterCompletion.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "response_interrupted",
+    ]);
+
+    const states = await database.pool.query<{
+      assistant_events: string;
+      attempt_status: string;
+      command_status: string;
+      turn_status: string;
+    }>(`
+      SELECT
+        turn.status AS turn_status,
+        command.status AS command_status,
+        attempt.status AS attempt_status,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events
+      FROM interaction_turns turn
+      INNER JOIN generation_commands command
+        ON command.interaction_turn_id = turn.interaction_turn_id
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+      ORDER BY turn.turn_sequence_no
+    `);
+    expect(states.rows).toEqual([
+      {
+        assistant_events: "0",
+        attempt_status: "failed",
+        command_status: "failed",
+        turn_status: "failed",
+      },
+      {
+        assistant_events: "0",
+        attempt_status: "interrupted",
+        command_status: "interrupted",
+        turn_status: "interrupted",
+      },
+    ]);
   });
 
   it("compiles the next turn only from committed User and Assistant revisions", async () => {

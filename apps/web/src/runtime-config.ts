@@ -49,6 +49,7 @@ export function assertSafeRuntimeConfiguration(
     (environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic" ||
       environment.SAYHEAR_TEST_PROVIDER_CHUNKS ||
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS ||
+      environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION ||
       environment.SAYHEAR_TEST_NOW ||
       environment.SAYHEAR_TEST_PRINCIPAL_SUBJECT) &&
     deployment !== "test"
@@ -101,6 +102,18 @@ export function loadRuntimeConfiguration(environment: Environment) {
   const failAfterChunks = environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
     ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
     : undefined;
+  const failAfterCompletionValue =
+    environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION;
+  if (
+    failAfterCompletionValue !== undefined &&
+    failAfterCompletionValue !== "true" &&
+    failAfterCompletionValue !== "false"
+  ) {
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION must be true or false.",
+    );
+  }
+  const failAfterCompletion = failAfterCompletionValue === "true";
   if (
     failAfterChunks !== undefined &&
     (!Number.isInteger(failAfterChunks) || failAfterChunks < 0)
@@ -151,6 +164,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
         trainingPolicy: "api-data-controls",
       }),
       deterministicChunks: Object.freeze(deterministicChunks),
+      ...(failAfterCompletion ? { failAfterCompletion: true } : {}),
       ...(failAfterChunks === undefined ? {} : { failAfterChunks }),
     }),
   });

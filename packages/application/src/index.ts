@@ -5,6 +5,7 @@ export {
   type InternalOwnerAccessService,
 } from "./internal-owner-access";
 export {
+  ConversationRetryNotAllowedError,
   createUserTextConversationService,
   InvalidUserTextTurnError,
   UserTextIdempotencyConflictError,
@@ -12,10 +13,14 @@ export {
   UserTextPrivateWriteDeniedError,
   type ClientEventId,
   type ClientTurnId,
+  type ConversationRetryTurn,
   type GenerationPolicy,
   type InteractionTurnStatus,
+  type RecordConversationRetryInput,
+  type RecordConversationRetryRepositoryResult,
   type RecordUserTextTurnInput,
   type RecordUserTextTurnRepositoryResult,
+  type RetryRequestId,
   type UserTextConversationRepository,
   type UserTextConversationService,
   type UserTextMessage,

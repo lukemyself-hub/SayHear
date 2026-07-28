@@ -61,6 +61,9 @@ export function createServerComposition() {
     configuration.provider.adapter === "deterministic"
       ? createDeterministicConversationTextModel({
           chunks: configuration.provider.deterministicChunks,
+          ...(configuration.provider.failAfterCompletion
+            ? { failAfterCompletion: true }
+            : {}),
           ...(configuration.provider.failAfterChunks === undefined
             ? {}
             : {

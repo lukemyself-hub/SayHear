@@ -5,6 +5,7 @@ import {
 
 export function createDeterministicConversationTextModel(input: {
   chunks: readonly string[];
+  failAfterCompletion?: boolean;
   failAfterChunks?: number;
 }): ConversationTextModel {
   return {
@@ -41,6 +42,9 @@ export function createDeterministicConversationTextModel(input: {
         providerRequestId: "deterministic-request",
         type: "completed",
       };
+      if (input.failAfterCompletion) {
+        throw new ProviderDispatchError("unavailable");
+      }
     },
   };
 }

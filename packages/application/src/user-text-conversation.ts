@@ -1,22 +1,27 @@
-import type {
-  ConversationEventId,
-  ConversationEventRevisionId,
-  DailySessionId,
-  GenerationCommandId,
-  InteractionTurnId,
-  ModelRunAttemptId,
-  PrivateWriteGateReason,
-  UserId,
+import {
+  asInteractionTurnId,
+  type ConversationEventId,
+  type ConversationEventRevisionId,
+  type DailySessionId,
+  type GenerationCommandId,
+  type InteractionTurnId,
+  type ModelRunAttemptId,
+  type PrivateWriteGateReason,
+  type UserId,
 } from "@sayhear/domain";
 
 declare const clientEventIdBrand: unique symbol;
 declare const clientTurnIdBrand: unique symbol;
+declare const retryRequestIdBrand: unique symbol;
 
 export type ClientEventId = string & {
   readonly [clientEventIdBrand]: "ClientEventId";
 };
 export type ClientTurnId = string & {
   readonly [clientTurnIdBrand]: "ClientTurnId";
+};
+export type RetryRequestId = string & {
+  readonly [retryRequestIdBrand]: "RetryRequestId";
 };
 
 export type InteractionTurnStatus =
@@ -37,6 +42,16 @@ export type RecordUserTextTurnInput = Readonly<{
   now: Date;
   text: string;
   timezone: string;
+  userId: UserId;
+}>;
+
+export type RecordConversationRetryInput = Readonly<{
+  expectedBackupPolicyVersion: string;
+  expectedConfigurationFingerprint: string;
+  generationPolicy: GenerationPolicy;
+  now: Date;
+  originalTurnId: InteractionTurnId;
+  retryRequestId: RetryRequestId;
   userId: UserId;
 }>;
 
@@ -86,6 +101,22 @@ export type UserTextTurn = Readonly<{
   }>;
 }>;
 
+export type ConversationRetryTurn = Readonly<{
+  generation: Readonly<{
+    attemptId: ModelRunAttemptId;
+    commandId: GenerationCommandId;
+  }>;
+  originalTurnId: InteractionTurnId;
+  replayed: boolean;
+  retryActionEventId: ConversationEventId;
+  retryRequestId: RetryRequestId;
+  turn: Readonly<{
+    id: InteractionTurnId;
+    sequence: number;
+    status: InteractionTurnStatus;
+  }>;
+}>;
+
 export type UserTextMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: ConversationEventId;
@@ -104,8 +135,21 @@ export type RecordUserTextTurnRepositoryResult =
       reason: Exclude<PrivateWriteGateReason, "backup_evidence_current">;
     }>;
 
+export type RecordConversationRetryRepositoryResult =
+  | Readonly<{ outcome: "recorded"; retry: ConversationRetryTurn }>
+  | Readonly<{ outcome: "idempotency_conflict" }>
+  | Readonly<{ outcome: "owner_denied" }>
+  | Readonly<{ outcome: "retry_not_allowed" }>
+  | Readonly<{
+      outcome: "write_denied";
+      reason: Exclude<PrivateWriteGateReason, "backup_evidence_current">;
+    }>;
+
 export type UserTextConversationRepository = Readonly<{
   listUserTextMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
+  recordConversationRetry(
+    input: RecordConversationRetryInput,
+  ): Promise<RecordConversationRetryRepositoryResult>;
   recordUserTextTurn(
     input: RecordUserTextTurnInput,
   ): Promise<RecordUserTextTurnRepositoryResult>;
@@ -113,6 +157,13 @@ export type UserTextConversationRepository = Readonly<{
 
 export type UserTextConversationService = Readonly<{
   listMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
+  retry(
+    userId: UserId,
+    input: {
+      originalTurnId: string;
+      retryRequestId: string;
+    },
+  ): Promise<ConversationRetryTurn>;
   submit(
     userId: UserId,
     input: {
@@ -158,6 +209,13 @@ export class UserTextIdempotencyConflictError extends Error {
   }
 }
 
+export class ConversationRetryNotAllowedError extends Error {
+  public constructor() {
+    super("Only an interrupted InteractionTurn can be retried.");
+    this.name = "ConversationRetryNotAllowedError";
+  }
+}
+
 export function createUserTextConversationService(dependencies: {
   clock: () => Date;
   expectedBackupPolicyVersion: string;
@@ -168,6 +226,43 @@ export function createUserTextConversationService(dependencies: {
   return {
     async listMessages(userId) {
       return dependencies.repository.listUserTextMessages(userId);
+    },
+    async retry(userId, rawInput) {
+      let originalTurnId: InteractionTurnId;
+      try {
+        originalTurnId = asInteractionTurnId(rawInput.originalTurnId);
+      } catch {
+        throw new InvalidUserTextTurnError(
+          "originalTurnId must be an opaque InteractionTurn UUIDv7.",
+        );
+      }
+      const retryRequestId = validateKey<RetryRequestId>(
+        rawInput.retryRequestId,
+        "retryRequestId",
+      );
+      const result = await dependencies.repository.recordConversationRetry({
+        expectedBackupPolicyVersion: dependencies.expectedBackupPolicyVersion,
+        expectedConfigurationFingerprint:
+          dependencies.expectedConfigurationFingerprint,
+        generationPolicy: dependencies.generationPolicy,
+        now: dependencies.clock(),
+        originalTurnId,
+        retryRequestId,
+        userId,
+      });
+      if (result.outcome === "owner_denied") {
+        throw new UserTextOwnerDeniedError();
+      }
+      if (result.outcome === "idempotency_conflict") {
+        throw new UserTextIdempotencyConflictError();
+      }
+      if (result.outcome === "retry_not_allowed") {
+        throw new ConversationRetryNotAllowedError();
+      }
+      if (result.outcome === "write_denied") {
+        throw new UserTextPrivateWriteDeniedError(result.reason);
+      }
+      return result.retry;
     },
     async submit(userId, rawInput) {
       const input = validateUserTextInput(rawInput);

@@ -14,6 +14,7 @@ import {
   type ProviderEgressPort,
 } from "./conversation-model";
 import type {
+  ConversationRetryTurn,
   UserTextConversationService,
   UserTextTurn,
 } from "./user-text-conversation";
@@ -26,6 +27,15 @@ export type ConversationResponseStreamEvent =
       turnId: InteractionTurnId;
       type: "user_committed";
       userEventRevisionId: ConversationEventRevisionId;
+    }>
+  | Readonly<{
+      generationCommandId: GenerationCommandId;
+      modelRunAttemptId: ModelRunAttemptId;
+      originalTurnId: InteractionTurnId;
+      retryActionEventId: ConversationEventId;
+      retryRequestId: string;
+      turnId: InteractionTurnId;
+      type: "retry_committed";
     }>
   | Readonly<{ delta: string; type: "assistant_delta" }>
   | Readonly<{
@@ -106,6 +116,14 @@ export type ConversationResponseService = Readonly<{
     },
     signal?: AbortSignal,
   ): AsyncIterable<ConversationResponseStreamEvent>;
+  retry(
+    userId: UserId,
+    input: {
+      originalTurnId: string;
+      retryRequestId: string;
+    },
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationResponseStreamEvent>;
 }>;
 
 export function createConversationResponseService(dependencies: {
@@ -115,117 +133,152 @@ export function createConversationResponseService(dependencies: {
   egressPort: ProviderEgressPort;
   repository: ConversationResponseRepository;
 }): ConversationResponseService {
-  return {
-    async *respond(userId, input, signal) {
-      const turn = await dependencies.conversationService.submit(userId, input);
-      const ownership = await dependencies.repository.claimResponseExecution({
+  async function* streamResponse(
+    userId: UserId,
+    turn: Pick<UserTextTurn, "generation" | "turn">,
+    initialEvent: Extract<
+      ConversationResponseStreamEvent,
+      { type: "retry_committed" | "user_committed" }
+    >,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationResponseStreamEvent> {
+    const ownership = await dependencies.repository.claimResponseExecution({
+      generationCommandId: turn.generation.commandId,
+      userId,
+    });
+    let possiblyVisible = false;
+    let completeText = "";
+    let completion: CompleteResponseMetadata | null = null;
+    let settled = ownership === "shared";
+
+    try {
+      yield initialEvent;
+
+      if (ownership === "shared") {
+        const response = await dependencies.repository.loadResponse({
+          generationCommandId: turn.generation.commandId,
+          userId,
+        });
+        yield* streamExistingResponse(response);
+        return;
+      }
+
+      const context = await dependencies.contextCompiler.compile({
         generationCommandId: turn.generation.commandId,
+        interactionTurnId: turn.turn.id,
         userId,
       });
-      let possiblyVisible = false;
-      let completeText = "";
-      let completion: CompleteResponseMetadata | null = null;
-      let settled = ownership === "shared";
-
-      try {
-        yield {
-          generationCommandId: turn.generation.commandId,
-          message: turn.message,
-          modelRunAttemptId: turn.generation.attemptId,
-          turnId: turn.turn.id,
-          type: "user_committed",
-          userEventRevisionId: turn.message.revisionId,
-        };
-
-        if (ownership === "shared") {
-          const response = await dependencies.repository.loadResponse({
-            generationCommandId: turn.generation.commandId,
-            userId,
-          });
-          yield* streamExistingResponse(response);
-          return;
+      for await (const event of dependencies.egressPort.stream({
+        compiledContextId: context.id,
+        generationCommandId: turn.generation.commandId,
+        modelRunAttemptId: turn.generation.attemptId,
+        ...(signal ? { signal } : {}),
+      })) {
+        if (event.type === "delta") {
+          possiblyVisible = true;
+          completeText += event.delta;
+          yield { delta: event.delta, type: "assistant_delta" };
+        } else {
+          completion = event;
         }
+      }
+      if (completion === null || completeText.length === 0) {
+        throw new ProviderDispatchError("invalid_response");
+      }
 
-        const context = await dependencies.contextCompiler.compile({
-          generationCommandId: turn.generation.commandId,
-          interactionTurnId: turn.turn.id,
-          userId,
-        });
-        for await (const event of dependencies.egressPort.stream({
-          compiledContextId: context.id,
-          generationCommandId: turn.generation.commandId,
-          modelRunAttemptId: turn.generation.attemptId,
-          ...(signal ? { signal } : {}),
-        })) {
-          if (event.type === "delta") {
-            possiblyVisible = true;
-            completeText += event.delta;
-            yield { delta: event.delta, type: "assistant_delta" };
-          } else {
-            completion = event;
-          }
-        }
-        if (completion === null || completeText.length === 0) {
-          throw new ProviderDispatchError("invalid_response");
-        }
-
-        const committed = await dependencies.repository.commitCompleteResponse({
-          completedAt: dependencies.clock(),
-          generationCommandId: turn.generation.commandId,
-          metadata: completion,
-          modelRunAttemptId: turn.generation.attemptId,
-          text: completeText,
-          userId,
-        });
-        if (committed.outcome === "fence_rejected") {
-          throw new ProviderDispatchError("policy_blocked");
-        }
+      const committed = await dependencies.repository.commitCompleteResponse({
+        completedAt: dependencies.clock(),
+        generationCommandId: turn.generation.commandId,
+        metadata: completion,
+        modelRunAttemptId: turn.generation.attemptId,
+        text: completeText,
+        userId,
+      });
+      if (committed.outcome === "fence_rejected") {
+        throw new ProviderDispatchError("policy_blocked");
+      }
+      settled = true;
+      yield {
+        eventId: committed.eventId,
+        revisionId: committed.revisionId,
+        type: "assistant_committed",
+      };
+    } catch (error) {
+      if (
+        error instanceof ProviderDispatchError &&
+        !error.settlesAttempt
+      ) {
         settled = true;
-        yield {
-          eventId: committed.eventId,
-          revisionId: committed.revisionId,
-          type: "assistant_committed",
-        };
-      } catch (error) {
-        if (
-          error instanceof ProviderDispatchError &&
-          !error.settlesAttempt
-        ) {
-          settled = true;
-          const response = await dependencies.repository.loadResponse({
-            generationCommandId: turn.generation.commandId,
-            userId,
-          });
-          yield* streamExistingResponse(response);
-          return;
-        }
-        const category =
-          error instanceof ProviderDispatchError ? error.category : "unknown";
+        const response = await dependencies.repository.loadResponse({
+          generationCommandId: turn.generation.commandId,
+          userId,
+        });
+        yield* streamExistingResponse(response);
+        return;
+      }
+      const category =
+        error instanceof ProviderDispatchError ? error.category : "unknown";
+      await dependencies.repository.settleResponseFailure({
+        category,
+        generationCommandId: turn.generation.commandId,
+        interrupted: possiblyVisible,
+        modelRunAttemptId: turn.generation.attemptId,
+        settledAt: dependencies.clock(),
+        userId,
+      });
+      settled = true;
+      yield {
+        category,
+        type: possiblyVisible ? "response_interrupted" : "response_failed",
+      };
+    } finally {
+      if (!settled) {
         await dependencies.repository.settleResponseFailure({
-          category,
+          category: "aborted",
           generationCommandId: turn.generation.commandId,
           interrupted: possiblyVisible,
           modelRunAttemptId: turn.generation.attemptId,
           settledAt: dependencies.clock(),
           userId,
         });
-        settled = true;
-        yield {
-          category,
-          type: possiblyVisible ? "response_interrupted" : "response_failed",
-        };
-      } finally {
-        if (!settled) {
-          await dependencies.repository.settleResponseFailure({
-            category: "aborted",
-            generationCommandId: turn.generation.commandId,
-            interrupted: possiblyVisible,
-            modelRunAttemptId: turn.generation.attemptId,
-            settledAt: dependencies.clock(),
-            userId,
-          });
-        }
       }
+    }
+  }
+
+  return {
+    async *respond(userId, input, signal) {
+      const turn = await dependencies.conversationService.submit(userId, input);
+      yield* streamResponse(
+        userId,
+        turn,
+        {
+          generationCommandId: turn.generation.commandId,
+          message: turn.message,
+          modelRunAttemptId: turn.generation.attemptId,
+          turnId: turn.turn.id,
+          type: "user_committed",
+          userEventRevisionId: turn.message.revisionId,
+        },
+        signal,
+      );
+    },
+    async *retry(userId, input, signal) {
+      const retry: ConversationRetryTurn =
+        await dependencies.conversationService.retry(userId, input);
+      yield* streamResponse(
+        userId,
+        retry,
+        {
+          generationCommandId: retry.generation.commandId,
+          modelRunAttemptId: retry.generation.attemptId,
+          originalTurnId: retry.originalTurnId,
+          retryActionEventId: retry.retryActionEventId,
+          retryRequestId: retry.retryRequestId,
+          turnId: retry.turn.id,
+          type: "retry_committed",
+        },
+        signal,
+      );
     },
   };
 }
