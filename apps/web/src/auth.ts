@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { Adapter } from "next-auth/adapters";
 import type { NextAuthOptions } from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
@@ -19,6 +21,28 @@ type Pool = ReturnType<typeof createPostgresPool>;
 function logAuthCode(level: "error" | "warn", code: string): void {
   const write = level === "error" ? console.error : console.warn;
   write(`[sayhear.auth.${level}]`, { code });
+}
+
+export function authSessionIdFromRequest(
+  request: Request,
+  cookieName: string,
+): string | null {
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) {
+    return null;
+  }
+  for (const pair of cookieHeader.split(";")) {
+    const separator = pair.indexOf("=");
+    if (separator === -1 || pair.slice(0, separator).trim() !== cookieName) {
+      continue;
+    }
+    const sessionToken = pair.slice(separator + 1).trim();
+    if (!sessionToken) {
+      return null;
+    }
+    return createHash("sha256").update(sessionToken, "utf8").digest("hex");
+  }
+  return null;
 }
 
 export function createAuthOptions(input: {

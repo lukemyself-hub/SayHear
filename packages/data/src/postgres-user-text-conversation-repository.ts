@@ -615,6 +615,8 @@ export class PostgresUserTextConversationRepository
           model,
           model_snapshot,
           model_config_version,
+          provider_policy_version,
+          consent_policy_version,
           freshness_policy,
           expected_data_epoch,
           status,
@@ -623,7 +625,7 @@ export class PostgresUserTextConversationRepository
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, 'prepared', $19
+          $13, $14, $15, $16, $17, $18, $19, $20, 'prepared', $21
         )
       `,
       [
@@ -643,6 +645,8 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.model,
         input.generationPolicy.modelSnapshot,
         input.generationPolicy.modelConfigVersion,
+        input.generationPolicy.providerPolicyVersion,
+        input.generationPolicy.consentPolicyVersion,
         input.generationPolicy.freshnessPolicy,
         ownerRow.data_epoch,
         input.now,
@@ -1043,6 +1047,8 @@ export class PostgresUserTextConversationRepository
           model,
           model_snapshot,
           model_config_version,
+          provider_policy_version,
+          consent_policy_version,
           freshness_policy,
           expected_data_epoch,
           status,
@@ -1051,7 +1057,7 @@ export class PostgresUserTextConversationRepository
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, 'prepared', $19
+          $13, $14, $15, $16, $17, $18, $19, $20, 'prepared', $21
         )
       `,
       [
@@ -1071,6 +1077,8 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.model,
         input.generationPolicy.modelSnapshot,
         input.generationPolicy.modelConfigVersion,
+        input.generationPolicy.providerPolicyVersion,
+        input.generationPolicy.consentPolicyVersion,
         input.generationPolicy.freshnessPolicy,
         ownerRow.data_epoch,
         input.now,
@@ -1301,6 +1309,8 @@ async function addGenerationToLegacyTurn(
         model,
         model_snapshot,
         model_config_version,
+        provider_policy_version,
+        consent_policy_version,
         freshness_policy,
         expected_data_epoch,
         status,
@@ -1309,7 +1319,7 @@ async function addGenerationToLegacyTurn(
       VALUES (
         $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
         'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18, 'prepared', $19
+        $13, $14, $15, $16, $17, $18, $19, $20, 'prepared', $21
       )
     `,
     [
@@ -1329,6 +1339,8 @@ async function addGenerationToLegacyTurn(
       input.generationPolicy.model,
       input.generationPolicy.modelSnapshot,
       input.generationPolicy.modelConfigVersion,
+      input.generationPolicy.providerPolicyVersion,
+      input.generationPolicy.consentPolicyVersion,
       input.generationPolicy.freshnessPolicy,
       expectedDataEpoch,
       input.now,

@@ -174,10 +174,12 @@ export function loadRuntimeConfiguration(environment: Environment) {
       timeoutMs,
       champion: Object.freeze({
         configVersion: "conversation-text-champion:v1",
+        consentPolicyVersion: null,
         contextLimit: 1_000_000,
         dataRegion: "provider-configured",
         model: environment.SAYHEAR_CONVERSATION_TEXT_MODEL ?? "gpt-5.4",
         provider: "openai" as const,
+        providerPolicyVersion: "openai-conversation-text:v1",
         retentionMode: "store-disabled",
         snapshot:
           environment.SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT ??

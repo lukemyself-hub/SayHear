@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
@@ -17,7 +18,7 @@ import {
 import {
   createDeterministicConversationTextModel,
   createProviderEgressPort,
-} from "@sayhear/ai";
+} from "@sayhear/ai/testing";
 import {
   createPostgresAuthAdapter,
   PostgresContinuousExchangeRepository,
@@ -42,6 +43,7 @@ if (!testDatabaseUrl) {
   );
 }
 const testGenerationPolicy = Object.freeze({
+  consentPolicyVersion: null,
   freshnessPolicy: "source_valid:v1" as const,
   localePolicyVersion: "locale-pack:v1",
   model: "gpt-5.4",
@@ -50,15 +52,18 @@ const testGenerationPolicy = Object.freeze({
   productPolicyVersion: "product-policy:v1",
   promptVersion: "conversation-text:v1",
   provider: "openai" as const,
+  providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
   safetyPolicyVersion: "minimum-high-risk-response:v1",
 });
 const testChampion = Object.freeze({
   configVersion: "conversation-text-champion:v1",
+  consentPolicyVersion: null,
   contextLimit: 1_000_000,
   dataRegion: "test",
   model: "gpt-5.4",
   provider: "openai" as const,
+  providerPolicyVersion: "openai-conversation-text:v1",
   retentionMode: "store-disabled",
   snapshot: "gpt-5.4",
   streaming: true as const,
@@ -66,6 +71,10 @@ const testChampion = Object.freeze({
   trainingPolicy: "test",
 });
 const fixedResponseClock = () => new Date("2026-07-27T16:00:00.000Z");
+
+function authSessionTokenHash(sessionToken: string): Buffer {
+  return createHash("sha256").update(sessionToken, "utf8").digest();
+}
 
 describe("Authenticated Internal Text Conversation System Seam", () => {
   const sessionCookieName = "sayhear.session-token";
@@ -88,6 +97,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        sensitive_access_audits,
+        internal_diagnostic_access_grants,
+        provider_egress_consents,
         provider_egress_dispositions,
         compiled_context_revision_refs,
         compiled_contexts,
@@ -103,6 +115,15 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     await database.pool.query("DELETE FROM backup_policy_versions");
     await database.pool.query(
       "UPDATE app_users SET status = 'active', data_epoch = 1",
+    );
+    await database.pool.query(
+      "UPDATE provider_egress_policy_versions SET status = 'active'",
+    );
+    await database.pool.query(
+      `
+        DELETE FROM provider_egress_policy_versions
+        WHERE policy_version <> 'openai-conversation-text:v1'
+      `,
     );
     await createPostgresAuthAdapter(database.pool).createSession({
       expires: new Date("2099-01-01T00:00:00.000Z"),
@@ -697,7 +718,302 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(completedAudit.rows[0]?.status).toBe("completed");
   });
 
-  it("rejects a stale source before provider dispatch", async () => {
+  it("exposes content-free Provider egress metadata through ordinary inspection", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    await openPrivateWrites();
+    const privateMarker = "PRIVATE_CANARY_ISSUE_8";
+    const conversation = await fetch(
+      `${nextServer.origin}/api/internal/conversation/responses`,
+      {
+        body: JSON.stringify({
+          clientEventId: "inspection-event",
+          clientTurnId: "inspection-turn",
+          locale: "en-US",
+          text: privateMarker,
+          timezone: "America/Los_Angeles",
+        }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      },
+    );
+    const conversationEvents = await readNdjson(conversation);
+    const generationCommandId = conversationEvents[0]?.generationCommandId;
+    const modelRunAttemptId = conversationEvents[0]?.modelRunAttemptId;
+
+    const inspection = await fetch(
+      `${nextServer.origin}/api/internal/inspection/generation?generation_command_id=${generationCommandId}`,
+      {
+        headers: {
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+      },
+    );
+
+    expect(inspection.status).toBe(200);
+    const metadata = await inspection.json();
+    expect(metadata).toMatchObject({
+      attemptStatus: "succeeded",
+      commandStatus: "succeeded",
+      costMicros: 0,
+      disposition: "completed",
+      freshnessPolicy: "source_valid:v1",
+      generationCommandId,
+      inputTokens: expect.any(Number),
+      model: "gpt-5.4",
+      modelRunAttemptId,
+      outputTokens: expect.any(Number),
+      provider: "openai",
+      providerPolicyVersion: "openai-conversation-text:v1",
+      providerRequestId: "deterministic-request",
+      role: "conversation.text",
+    });
+    expect(metadata.sourceRevisionId).toBe(
+      conversationEvents[0]?.userEventRevisionId,
+    );
+    expect(metadata.dispatchLatencyMs).toBeGreaterThanOrEqual(0);
+    expect(metadata.providerLatencyMs).toBeGreaterThanOrEqual(0);
+    await expect(
+      database.pool.query(
+        `
+          UPDATE provider_egress_dispositions
+          SET provider_policy_version = 'conversation-text-champion:v1'
+          WHERE model_run_attempt_id = $1
+        `,
+        [modelRunAttemptId],
+      ),
+    ).rejects.toMatchObject({ code: "23503" });
+    expect(JSON.stringify(metadata)).not.toMatch(
+      /PRIVATE_CANARY_ISSUE_8|content_hmac|context-integrity/,
+    );
+    const operationalRecords = await database.pool.query<{ record: string }>(
+      `
+        SELECT row_to_json(command)::text AS record
+        FROM generation_commands command
+        UNION ALL
+        SELECT row_to_json(attempt)::text
+        FROM model_run_attempts attempt
+        UNION ALL
+        SELECT row_to_json(egress)::text
+        FROM provider_egress_dispositions egress
+        UNION ALL
+        SELECT row_to_json(audit)::text
+        FROM sensitive_access_audits audit
+      `,
+    );
+    expect(JSON.stringify(operationalRecords.rows)).not.toMatch(
+      /PRIVATE_CANARY_ISSUE_8|PROVIDER_CREDENTIAL_CANARY/,
+    );
+    const controlledContentRecords = await database.pool.query<{
+      record: string;
+    }>(
+      `
+        SELECT revision.canonical_text AS record
+        FROM conversation_event_revisions revision
+        UNION ALL
+        SELECT context.section_budgets::text
+        FROM compiled_contexts context
+      `,
+    );
+    expect(JSON.stringify(controlledContentRecords.rows)).not.toContain(
+      "PROVIDER_CREDENTIAL_CANARY",
+    );
+    expect(nextServer.output()).not.toMatch(
+      /PRIVATE_CANARY_ISSUE_8|PROVIDER_CREDENTIAL_CANARY/,
+    );
+  });
+
+  it("requires elevated capability and recent step-up for conversation content inspection", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    await openPrivateWrites();
+    const privateMarker = "SENSITIVE_INSPECTION_CANARY";
+    const conversation = await fetch(
+      `${nextServer.origin}/api/internal/conversation/responses`,
+      {
+        body: JSON.stringify({
+          clientEventId: "sensitive-inspection-event",
+          clientTurnId: "sensitive-inspection-turn",
+          locale: "en-US",
+          text: privateMarker,
+          timezone: "America/Los_Angeles",
+        }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      },
+    );
+    const conversationEvents = await readNdjson(conversation);
+    const generationCommandId = conversationEvents[0]?.generationCommandId;
+    const inspectionUrl =
+      `${nextServer.origin}/api/internal/inspection/conversation-content` +
+      `?generation_command_id=${generationCommandId}`;
+    const authenticatedRequest = {
+      headers: {
+        cookie: `${sessionCookieName}=${sessionToken}`,
+      },
+    };
+
+    const withoutCapability = await fetch(
+      inspectionUrl,
+      authenticatedRequest,
+    );
+    expect(withoutCapability.status).toBe(403);
+    expect(await withoutCapability.json()).toEqual({
+      error: "elevated_capability_required",
+    });
+
+    await database.pool.query(
+      `
+        INSERT INTO internal_diagnostic_access_grants (
+          session_token_hash,
+          capability,
+          status,
+          step_up_authenticated_at,
+          updated_at
+        )
+        VALUES (
+          $1,
+          'conversation_content:read',
+          'active',
+          '2026-07-27T15:49:59.000Z',
+          $2
+        )
+      `,
+      [authSessionTokenHash(sessionToken), fixedResponseClock()],
+    );
+    const otherSessionToken = "other-sensitive-inspection-session";
+    await createPostgresAuthAdapter(database.pool).createSession({
+      expires: new Date("2026-07-28T16:00:00.000Z"),
+      sessionToken: otherSessionToken,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    const otherSession = await fetch(inspectionUrl, {
+      headers: {
+        cookie: `${sessionCookieName}=${otherSessionToken}`,
+      },
+    });
+    expect(otherSession.status).toBe(403);
+    expect(await otherSession.json()).toEqual({
+      error: "elevated_capability_required",
+    });
+
+    const staleStepUp = await fetch(inspectionUrl, authenticatedRequest);
+    expect(staleStepUp.status).toBe(403);
+    expect(await staleStepUp.json()).toEqual({
+      error: "recent_step_up_required",
+    });
+
+    await database.pool.query(
+      `
+        UPDATE internal_diagnostic_access_grants
+        SET step_up_authenticated_at = '2026-07-27T15:55:00.000Z',
+            updated_at = $1
+        WHERE session_token_hash = $2
+          AND capability = 'conversation_content:read'
+      `,
+      [fixedResponseClock(), authSessionTokenHash(sessionToken)],
+    );
+    const allowed = await fetch(inspectionUrl, authenticatedRequest);
+    expect(allowed.status).toBe(200);
+    const content = await allowed.json();
+    expect(content.generationCommandId).toBe(generationCommandId);
+    expect(content.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actor: "user",
+          text: privateMarker,
+        }),
+      ]),
+    );
+    const unknownGenerationCommandId =
+      "019f9f1c-1d91-7000-8000-000000000008";
+    const unknownTarget = await fetch(
+      `${nextServer.origin}/api/internal/inspection/conversation-content` +
+        `?generation_command_id=${unknownGenerationCommandId}`,
+      authenticatedRequest,
+    );
+    expect(unknownTarget.status).toBe(404);
+    expect(await unknownTarget.json()).toEqual({ error: "not_found" });
+
+    const audits = await database.pool.query<{
+      capability: string;
+      disposition: string;
+      reason: string;
+      target_id: string;
+    }>(
+      `
+        SELECT capability, target_id::text, disposition, reason
+        FROM sensitive_access_audits
+        ORDER BY accessed_at, sensitive_access_audit_id
+      `,
+    );
+    expect(audits.rows).toHaveLength(5);
+    expect(audits.rows).toEqual(
+      expect.arrayContaining([
+        {
+          capability: "conversation_content:read",
+          disposition: "denied",
+          reason: "elevated_capability_required",
+          target_id: generationCommandId,
+        },
+        {
+          capability: "conversation_content:read",
+          disposition: "denied",
+          reason: "recent_step_up_required",
+          target_id: generationCommandId,
+        },
+        {
+          capability: "conversation_content:read",
+          disposition: "allowed",
+          reason: "authorized",
+          target_id: generationCommandId,
+        },
+        {
+          capability: "conversation_content:read",
+          disposition: "denied",
+          reason: "target_not_found",
+          target_id: unknownGenerationCommandId,
+        },
+      ]),
+    );
+    expect(JSON.stringify(audits.rows)).not.toContain(privateMarker);
+  });
+
+  it.each([
+    {
+      fence: "the Internal Owner is deleting",
+      sql: `
+        UPDATE app_users
+        SET status = 'deleting', updated_at = $2
+        WHERE user_id = $1
+      `,
+    },
+    {
+      fence: "the source Event is invalid",
+      sql: `
+        UPDATE conversation_events
+        SET lifecycle_status = 'deleted', deleted_at = $2
+        WHERE user_id = $1
+          AND actor = 'user'
+      `,
+    },
+    {
+      fence: "the owner data epoch advances",
+      sql: `
+        UPDATE app_users
+        SET data_epoch = data_epoch + 1, updated_at = $2
+        WHERE user_id = $1
+      `,
+    },
+  ])("blocks private payload before dispatch when $fence", async ({ sql }) => {
     const accessRepository = new PostgresInternalOwnerAccessRepository(
       database.pool,
     );
@@ -744,14 +1060,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       contextCompiler: {
         async compile(input) {
           const context = await compiler.compile(input);
-          await database.pool.query(
-            `
-              UPDATE app_users
-              SET data_epoch = data_epoch + 1
-              WHERE user_id = $1
-            `,
-            [fixedInternalOwnerPrincipal.userId],
-          );
+          await database.pool.query(sql, [
+            fixedInternalOwnerPrincipal.userId,
+            fixedResponseClock(),
+          ]);
           return context;
         },
       },
@@ -823,7 +1135,284 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     });
   });
 
-  it("keeps visible partial output transient when the commit fence closes", async () => {
+  it("blocks Provider dispatch when the frozen Provider policy is disabled", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const compiler = createContextCompiler({
+      clock: fixedResponseClock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    let providerCalls = 0;
+    const model = {
+      async *stream() {
+        providerCalls += 1;
+        yield { delta: "must not leave SayHear", type: "delta" as const };
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 1,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 1,
+          providerRequestId: "must-not-exist",
+          type: "completed" as const,
+        };
+      },
+    } satisfies ConversationTextModel;
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: {
+        async compile(input) {
+          const context = await compiler.compile(input);
+          await database.pool.query(
+            `
+              UPDATE provider_egress_policy_versions
+              SET status = 'disabled'
+              WHERE policy_version = 'openai-conversation-text:v1'
+            `,
+          );
+          return context;
+        },
+      },
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const response = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "provider-policy-event",
+          clientTurnId: "provider-policy-turn",
+          locale: "en-US",
+          text: "This payload is fenced by the Provider policy.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    const events = await readNdjson(response);
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "response_failed",
+    ]);
+    expect(events[1]?.category).toBe("policy_blocked");
+    expect(providerCalls).toBe(0);
+    const disposition = await database.pool.query<{
+      status: string;
+    }>("SELECT status FROM provider_egress_dispositions");
+    expect(disposition.rows).toEqual([{ status: "blocked" }]);
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    const metadataResponse = await fetch(
+      `${nextServer.origin}/api/internal/inspection/generation` +
+        `?generation_command_id=${events[0]?.generationCommandId}`,
+      {
+        headers: {
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+      },
+    );
+    expect(metadataResponse.status).toBe(200);
+    expect(await metadataResponse.json()).toMatchObject({
+      costMicros: null,
+      disposition: "blocked",
+      inputTokens: null,
+      outputTokens: null,
+      provider: "openai",
+      providerPolicyVersion: "openai-conversation-text:v1",
+      providerRequestId: null,
+      role: "conversation.text",
+      sourceRevisionId: events[0]?.userEventRevisionId,
+    });
+  });
+
+  it("rejects an authoritative commit when applicable Provider consent is revoked", async () => {
+    await openPrivateWrites();
+    const providerPolicyVersion = "openai-conversation-text-consent:v1";
+    const consentPolicyVersion = "internal-provider-consent:v1";
+    await database.pool.query(
+      `
+        INSERT INTO provider_egress_policy_versions (
+          policy_version,
+          provider,
+          role,
+          model_config_version,
+          consent_policy_version,
+          status
+        )
+        VALUES ($1, 'openai', 'conversation.text', $2, $3, 'active')
+      `,
+      [
+        providerPolicyVersion,
+        testChampion.configVersion,
+        consentPolicyVersion,
+      ],
+    );
+    await database.pool.query(
+      `
+        INSERT INTO provider_egress_consents (
+          user_id,
+          provider,
+          role,
+          consent_policy_version,
+          status,
+          granted_at
+        )
+        VALUES ($1, 'openai', 'conversation.text', $2, 'active', $3)
+      `,
+      [
+        fixedInternalOwnerPrincipal.userId,
+        consentPolicyVersion,
+        fixedResponseClock(),
+      ],
+    );
+
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const model = {
+      async *stream() {
+        yield { delta: "Visible but not authoritative.", type: "delta" as const };
+        await database.pool.query(
+          `
+            UPDATE provider_egress_consents
+            SET status = 'revoked', revoked_at = $1
+            WHERE user_id = $2
+              AND provider = 'openai'
+              AND role = 'conversation.text'
+              AND consent_policy_version = $3
+          `,
+          [
+            fixedResponseClock(),
+            fixedInternalOwnerPrincipal.userId,
+            consentPolicyVersion,
+          ],
+        );
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 8,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 8,
+          providerRequestId: "provider-request-consent-revoked",
+          type: "completed" as const,
+        };
+      },
+    } satisfies ConversationTextModel;
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: createContextCompiler({
+        clock: fixedResponseClock,
+        compilerVersion: "context-compiler:v1",
+        contentHmacSecret: "test-context-integrity-secret",
+        rawEventTokenBudget: 4_000,
+        repository: responseRepository,
+      }),
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: {
+          ...testGenerationPolicy,
+          consentPolicyVersion,
+          providerPolicyVersion,
+        },
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: {
+          ...testChampion,
+          consentPolicyVersion,
+          providerPolicyVersion,
+        },
+        clock: fixedResponseClock,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const response = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "consent-fence-event",
+          clientTurnId: "consent-fence-turn",
+          locale: "en-US",
+          text: "This response loses consent before commit.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    const events = await readNdjson(response);
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "response_interrupted",
+    ]);
+    expect(events[2]?.category).toBe("policy_blocked");
+    const assistantEvents = await database.pool.query<{ count: string }>(
+      `
+        SELECT COUNT(*)::text AS count
+        FROM conversation_events
+        WHERE actor = 'assistant'
+      `,
+    );
+    expect(assistantEvents.rows[0]?.count).toBe("0");
+  });
+
+  it.each([
+    {
+      fence: "the Internal Owner starts deleting",
+      sql: `
+        UPDATE app_users
+        SET status = 'deleting', updated_at = $2
+        WHERE user_id = $1
+      `,
+    },
+    {
+      fence: "the source Event becomes invalid",
+      sql: `
+        UPDATE conversation_events
+        SET lifecycle_status = 'deleted', deleted_at = $2
+        WHERE user_id = $1
+          AND actor = 'user'
+      `,
+    },
+    {
+      fence: "the owner data epoch advances",
+      sql: `
+        UPDATE app_users
+        SET data_epoch = data_epoch + 1, updated_at = $2
+        WHERE user_id = $1
+      `,
+    },
+  ])("keeps visible output transient when $fence before commit", async ({ sql }) => {
     const accessRepository = new PostgresInternalOwnerAccessRepository(
       database.pool,
     );
@@ -845,14 +1434,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     const model = {
       async *stream() {
         yield { delta: "Visible but not authoritative.", type: "delta" as const };
-        await database.pool.query(
-          `
-            UPDATE app_users
-            SET data_epoch = data_epoch + 1
-            WHERE user_id = $1
-          `,
-          [fixedInternalOwnerPrincipal.userId],
-        );
+        await database.pool.query(sql, [
+          fixedInternalOwnerPrincipal.userId,
+          fixedResponseClock(),
+        ]);
         yield {
           costMicros: 0,
           finishReason: "completed",
@@ -2871,6 +3456,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
 
 type RunningNextServer = Readonly<{
   origin: string;
+  output(): string;
   stop(): Promise<void>;
 }>;
 
@@ -2898,6 +3484,7 @@ async function startNextTestServer(
         NEXTAUTH_SECRET: "system-test-server-only-secret",
         NEXTAUTH_URL: origin,
         NODE_ENV: "development",
+        OPENAI_API_KEY: "PROVIDER_CREDENTIAL_CANARY",
         SAYHEAR_AUTH_SECRET_SOURCE: "managed",
         SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "sha256:expected",
         SAYHEAR_BACKUP_POLICY_VERSION: "neon-production-v1",
@@ -2925,6 +3512,7 @@ async function startNextTestServer(
       if (response.status === 401) {
         return {
           origin,
+          output: output.read,
           async stop() {
             await stopChild(child);
           },
