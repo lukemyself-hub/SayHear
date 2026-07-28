@@ -12,6 +12,7 @@ export {
   UserTextPrivateWriteDeniedError,
   type ClientEventId,
   type ClientTurnId,
+  type GenerationPolicy,
   type InteractionTurnStatus,
   type RecordUserTextTurnInput,
   type RecordUserTextTurnRepositoryResult,
@@ -21,14 +22,48 @@ export {
   type UserTextTurn,
 } from "./user-text-conversation";
 export {
+  createContextCompiler,
+  type CompiledContext,
+  type ContextCompiler,
+  type ContextCompilerRepository,
+  type ContextSourceEvent,
+  type ContextSourceSnapshot,
+} from "./context-compiler";
+export {
+  createConversationResponseService,
+  type CompleteResponseMetadata,
+  type ConversationResponseRepository,
+  type ConversationResponseService,
+  type ConversationResponseStreamEvent,
+} from "./conversation-response";
+export {
+  ProviderDispatchError,
+  type ConversationTextChampion,
+  type ConversationTextMessage,
+  type ConversationTextModel,
+  type ConversationTextModelRequest,
+  type ConversationTextModelStreamEvent,
+  type ProviderDispatchErrorCategory,
+  type ProviderEgressClaim,
+  type ProviderEgressPort,
+  type ProviderEgressRepository,
+  type ProviderEgressStreamEvent,
+} from "./conversation-model";
+export {
+  asCompiledContextId,
   asConversationEventId,
   asConversationEventRevisionId,
   asDailySessionId,
+  asGenerationCommandId,
   asInteractionTurnId,
+  asModelRunAttemptId,
   asUserId,
+  type CompiledContextId,
   type ConversationEventId,
   type ConversationEventRevisionId,
   type DailySessionId,
+  type GenerationCommandId,
   type InteractionTurnId,
+  type ModelRunAttemptId,
   type UserId,
 } from "@sayhear/domain";

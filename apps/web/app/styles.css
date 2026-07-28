@@ -101,17 +101,35 @@ h1 {
   padding: 0.85rem 1rem;
 }
 
-.userMessage span {
+.assistantMessage {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 1rem 1rem 1rem 0.25rem;
+  justify-self: start;
+  max-width: min(36rem, 90%);
+  padding: 0.85rem 1rem;
+}
+
+.userMessage span,
+.assistantMessage span,
+.assistantMessage em {
   color: #625d54;
   display: block;
   font-size: 0.75rem;
   margin-bottom: 0.35rem;
 }
 
-.userMessage p {
+.userMessage p,
+.assistantMessage p {
   line-height: 1.5;
   margin: 0;
   white-space: pre-wrap;
+}
+
+.assistantMessage em {
+  color: #8f2d20;
+  font-style: normal;
+  margin-top: 0.5rem;
 }
 
 .composer {

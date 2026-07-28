@@ -10,7 +10,9 @@ import {
   asConversationEventId,
   asConversationEventRevisionId,
   asDailySessionId,
+  asGenerationCommandId,
   asInteractionTurnId,
+  asModelRunAttemptId,
   evaluatePrivateWriteGate,
   type PrivateWriteGateReason,
   type UserId,
@@ -24,6 +26,8 @@ const retryableTransactionCodes = new Set(["40001", "40P01", "55P03"]);
 const maximumTransactionAttempts = 3;
 
 type ExistingTurnRow = Readonly<{
+  generation_command_id: string;
+  model_run_attempt_id: string;
   client_event_id: string;
   client_turn_id: string;
   daily_session_id: string;
@@ -82,6 +86,7 @@ export class PostgresUserTextConversationRepository
     userId: UserId,
   ): Promise<readonly UserTextMessage[]> {
     const result = await this.pool.query<{
+      actor: "user" | "assistant";
       conversation_event_id: string;
       locale: string;
       revision_id: string;
@@ -90,6 +95,7 @@ export class PostgresUserTextConversationRepository
     }>(
       `
         SELECT
+          event.actor,
           event.conversation_event_id,
           revision.locale,
           revision.conversation_event_revision_id AS revision_id,
@@ -105,7 +111,7 @@ export class PostgresUserTextConversationRepository
           ON session.daily_session_id = event.daily_session_id
           AND session.user_id = event.user_id
         WHERE owner.user_id = $1
-          AND event.actor = 'user'
+          AND event.actor IN ('user', 'assistant')
           AND event.lifecycle_status = 'active'
           AND revision.content_purged_at IS NULL
         ORDER BY session.logical_date, event.sequence_no
@@ -114,6 +120,7 @@ export class PostgresUserTextConversationRepository
     );
 
     return result.rows.map((row) => ({
+      actor: row.actor,
       eventId: asConversationEventId(row.conversation_event_id),
       locale: row.locale,
       revisionId: asConversationEventRevisionId(row.revision_id),
@@ -130,9 +137,13 @@ export class PostgresUserTextConversationRepository
     await client.query("SET LOCAL lock_timeout = '2s'");
     await client.query("SET LOCAL statement_timeout = '5s'");
 
-    const owner = await client.query<{ active: boolean; status: string }>(
+    const owner = await client.query<{
+      active: boolean;
+      data_epoch: string;
+      status: string;
+    }>(
       `
-        SELECT identity.active, owner.status
+        SELECT identity.active, owner.status, owner.data_epoch
         FROM app_users owner
         INNER JOIN internal_owner_identities identity
           ON identity.user_id = owner.user_id
@@ -142,10 +153,8 @@ export class PostgresUserTextConversationRepository
       `,
       [input.userId],
     );
-    if (
-      owner.rows[0]?.active !== true ||
-      owner.rows[0]?.status !== "active"
-    ) {
+    const ownerRow = owner.rows[0];
+    if (ownerRow?.active !== true || ownerRow.status !== "active") {
       await client.query("ROLLBACK");
       return { outcome: "owner_denied" };
     }
@@ -282,6 +291,8 @@ export class PostgresUserTextConversationRepository
     const interactionTurnId = createUuidV7(input.now);
     const conversationEventId = createUuidV7(input.now);
     const revisionId = createUuidV7(input.now);
+    const generationCommandId = createUuidV7(input.now);
+    const modelRunAttemptId = createUuidV7(input.now);
     const turnSequence = Number(currentSession.next_turn_sequence_no);
     const eventSequence = Number(currentSession.next_event_sequence_no);
 
@@ -377,6 +388,91 @@ export class PostgresUserTextConversationRepository
     }
     await client.query(
       `
+        INSERT INTO generation_commands (
+          generation_command_id,
+          user_id,
+          interaction_turn_id,
+          operation_type,
+          intent_key,
+          subject_type,
+          subject_id,
+          input_revision_kind,
+          input_revision_id,
+          prompt_version,
+          product_policy_version,
+          safety_policy_version,
+          relationship_policy_version,
+          locale_policy_version,
+          locale,
+          provider,
+          model,
+          model_snapshot,
+          model_config_version,
+          freshness_policy,
+          expected_data_epoch,
+          status,
+          created_at
+        )
+        VALUES (
+          $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
+          'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
+          $13, $14, $15, $16, $17, $18, 'prepared', $19
+        )
+      `,
+      [
+        generationCommandId,
+        input.userId,
+        interactionTurnId,
+        `conversation-response/${conversationEventId}`,
+        conversationEventId,
+        revisionId,
+        input.generationPolicy.promptVersion,
+        input.generationPolicy.productPolicyVersion,
+        input.generationPolicy.safetyPolicyVersion,
+        input.generationPolicy.relationshipPolicyVersion,
+        input.generationPolicy.localePolicyVersion,
+        input.locale,
+        input.generationPolicy.provider,
+        input.generationPolicy.model,
+        input.generationPolicy.modelSnapshot,
+        input.generationPolicy.modelConfigVersion,
+        input.generationPolicy.freshnessPolicy,
+        ownerRow.data_epoch,
+        input.now,
+      ],
+    );
+    await client.query(
+      `
+        INSERT INTO model_run_attempts (
+          model_run_attempt_id,
+          user_id,
+          generation_command_id,
+          attempt_no,
+          operation_type,
+          provider,
+          model,
+          model_snapshot,
+          prompt_version,
+          status,
+          created_at
+        )
+        VALUES (
+          $1, $2, $3, 1, 'conversation.text', $4, $5, $6, $7, 'prepared', $8
+        )
+      `,
+      [
+        modelRunAttemptId,
+        input.userId,
+        generationCommandId,
+        input.generationPolicy.provider,
+        input.generationPolicy.model,
+        input.generationPolicy.modelSnapshot,
+        input.generationPolicy.promptVersion,
+        input.now,
+      ],
+    );
+    await client.query(
+      `
         UPDATE daily_sessions
         SET
           next_turn_sequence_no = next_turn_sequence_no + 1,
@@ -407,6 +503,10 @@ export class PostgresUserTextConversationRepository
           sequence: eventSequence,
           text: input.text,
         },
+        generation: {
+          attemptId: asModelRunAttemptId(modelRunAttemptId),
+          commandId: asGenerationCommandId(generationCommandId),
+        },
         replayed: false,
         turn: {
           id: asInteractionTurnId(interactionTurnId),
@@ -435,6 +535,8 @@ async function findExistingTurns(
         turn.client_turn_id,
         turn.turn_sequence_no,
         turn.status,
+        command.generation_command_id,
+        attempt.model_run_attempt_id,
         event.conversation_event_id,
         event.client_event_id,
         event.sequence_no,
@@ -449,6 +551,13 @@ async function findExistingTurns(
         ON event.interaction_turn_id = turn.interaction_turn_id
         AND event.user_id = turn.user_id
         AND event.actor = 'user'
+      INNER JOIN generation_commands command
+        ON command.interaction_turn_id = turn.interaction_turn_id
+        AND command.user_id = turn.user_id
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+        AND attempt.user_id = command.user_id
+        AND attempt.attempt_no = 1
       INNER JOIN conversation_event_revisions revision
         ON revision.conversation_event_revision_id = event.current_revision_id
         AND revision.user_id = event.user_id
@@ -478,6 +587,10 @@ function mapTurn(row: ExistingTurnRow, replayed: boolean): UserTextTurn {
       revisionId: asConversationEventRevisionId(row.revision_id),
       sequence: Number(row.sequence_no),
       text: row.text,
+    },
+    generation: {
+      attemptId: asModelRunAttemptId(row.model_run_attempt_id),
+      commandId: asGenerationCommandId(row.generation_command_id),
     },
     replayed,
     turn: {

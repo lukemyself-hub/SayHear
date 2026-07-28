@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@sayhear/ai':
+        specifier: workspace:*
+        version: link:packages/ai
       '@sayhear/application':
         specifier: workspace:*
         version: link:packages/application
@@ -44,6 +47,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@sayhear/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@sayhear/application':
         specifier: workspace:*
         version: link:../../packages/application
@@ -76,12 +82,28 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/ai:
+    dependencies:
+      '@sayhear/application':
+        specifier: workspace:*
+        version: link:../application
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
   packages/application:
     dependencies:
       '@sayhear/domain':
         specifier: workspace:*
         version: link:../domain
     devDependencies:
+      '@types/node':
+        specifier: 26.1.2
+        version: 26.1.2
       typescript:
         specifier: 7.0.2
         version: 7.0.2

@@ -9,7 +9,11 @@ import {
 
 import type { loadRuntimeConfiguration } from "./runtime-config";
 
-type RuntimeConfiguration = ReturnType<typeof loadRuntimeConfiguration>;
+type RuntimeConfiguration = Pick<
+  ReturnType<typeof loadRuntimeConfiguration>,
+  "authSecret" | "clock" | "deployment" | "githubClientId" | "githubClientSecret"
+> &
+  Readonly<Record<string, unknown>>;
 type Pool = ReturnType<typeof createPostgresPool>;
 
 function logAuthCode(level: "error" | "warn", code: string): void {

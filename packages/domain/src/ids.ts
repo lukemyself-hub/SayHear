@@ -3,6 +3,9 @@ declare const dailySessionIdBrand: unique symbol;
 declare const interactionTurnIdBrand: unique symbol;
 declare const conversationEventIdBrand: unique symbol;
 declare const conversationEventRevisionIdBrand: unique symbol;
+declare const generationCommandIdBrand: unique symbol;
+declare const modelRunAttemptIdBrand: unique symbol;
+declare const compiledContextIdBrand: unique symbol;
 
 export type UserId = string & { readonly [userIdBrand]: "UserId" };
 export type DailySessionId = string & {
@@ -16,6 +19,15 @@ export type ConversationEventId = string & {
 };
 export type ConversationEventRevisionId = string & {
   readonly [conversationEventRevisionIdBrand]: "ConversationEventRevisionId";
+};
+export type GenerationCommandId = string & {
+  readonly [generationCommandIdBrand]: "GenerationCommandId";
+};
+export type ModelRunAttemptId = string & {
+  readonly [modelRunAttemptIdBrand]: "ModelRunAttemptId";
+};
+export type CompiledContextId = string & {
+  readonly [compiledContextIdBrand]: "CompiledContextId";
 };
 
 const uuidV7Pattern =
@@ -44,6 +56,18 @@ export function asConversationEventRevisionId(
     value,
     "ConversationEventRevisionId",
   ) as ConversationEventRevisionId;
+}
+
+export function asGenerationCommandId(value: string): GenerationCommandId {
+  return asOpaqueUuidV7(value, "GenerationCommandId") as GenerationCommandId;
+}
+
+export function asModelRunAttemptId(value: string): ModelRunAttemptId {
+  return asOpaqueUuidV7(value, "ModelRunAttemptId") as ModelRunAttemptId;
+}
+
+export function asCompiledContextId(value: string): CompiledContextId {
+  return asOpaqueUuidV7(value, "CompiledContextId") as CompiledContextId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {

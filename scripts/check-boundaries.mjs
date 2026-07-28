@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const sourceRoots = {
+  ai: new URL("../packages/ai/src/", import.meta.url),
   application: new URL("../packages/application/src/", import.meta.url),
   data: new URL("../packages/data/src/", import.meta.url),
   domain: new URL("../packages/domain/src/", import.meta.url),
@@ -10,6 +11,7 @@ const sourceRoots = {
   web: new URL("../apps/web/", import.meta.url),
 };
 const allowedInternalDependencies = {
+  ai: new Set(["@sayhear/application"]),
   application: new Set(["@sayhear/domain"]),
   data: new Set(["@sayhear/application", "@sayhear/domain"]),
   domain: new Set(),
@@ -18,7 +20,7 @@ const allowedInternalDependencies = {
     "@sayhear/data",
     "@sayhear/domain",
   ]),
-  web: new Set(["@sayhear/application", "@sayhear/data"]),
+  web: new Set(["@sayhear/ai", "@sayhear/application", "@sayhear/data"]),
 };
 const allowedMaterializedModules = new Set(Object.keys(sourceRoots));
 const failures = [];

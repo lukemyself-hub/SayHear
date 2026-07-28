@@ -46,12 +46,15 @@ export function assertSafeRuntimeConfiguration(
   const deployment = resolveDeployment(environment);
 
   if (
-    (environment.SAYHEAR_TEST_NOW ||
+    (environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic" ||
+      environment.SAYHEAR_TEST_PROVIDER_CHUNKS ||
+      environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS ||
+      environment.SAYHEAR_TEST_NOW ||
       environment.SAYHEAR_TEST_PRINCIPAL_SUBJECT) &&
     deployment !== "test"
   ) {
     throw new Error(
-      "A fixed test principal or time is allowed only in the test environment.",
+      "A deterministic test provider, test principal, or fixed test clock is allowed only in the test environment.",
     );
   }
 
@@ -85,6 +88,28 @@ export function loadRuntimeConfiguration(environment: Environment) {
     throw new Error("SAYHEAR_TEST_NOW must be a valid ISO timestamp.");
   }
 
+  const adapter =
+    environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic"
+      ? "deterministic"
+      : "openai";
+  const deterministicChunks =
+    adapter === "deterministic"
+      ? parseDeterministicChunks(
+          required(environment, "SAYHEAR_TEST_PROVIDER_CHUNKS"),
+        )
+      : [];
+  const failAfterChunks = environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS
+    ? Number(environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS)
+    : undefined;
+  if (
+    failAfterChunks !== undefined &&
+    (!Number.isInteger(failAfterChunks) || failAfterChunks < 0)
+  ) {
+    throw new Error(
+      "SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS must be a non-negative integer.",
+    );
+  }
+
   return Object.freeze({
     authSecret: required(environment, "NEXTAUTH_SECRET"),
     backupConfigurationFingerprint: required(
@@ -100,5 +125,45 @@ export function loadRuntimeConfiguration(environment: Environment) {
     deployment,
     githubClientId: required(environment, "GITHUB_CLIENT_ID"),
     githubClientSecret: required(environment, "GITHUB_CLIENT_SECRET"),
+    contextHmacSecret: required(environment, "SAYHEAR_CONTEXT_HMAC_SECRET"),
+    provider: Object.freeze({
+      adapter,
+      apiKey:
+        adapter === "openai" ? required(environment, "OPENAI_API_KEY") : null,
+      champion: Object.freeze({
+        configVersion: "conversation-text-champion:v1",
+        contextLimit: 1_000_000,
+        dataRegion: "provider-configured",
+        model: environment.SAYHEAR_CONVERSATION_TEXT_MODEL ?? "gpt-5.4",
+        provider: "openai" as const,
+        retentionMode: "store-disabled",
+        snapshot:
+          environment.SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT ??
+          environment.SAYHEAR_CONVERSATION_TEXT_MODEL ??
+          "gpt-5.4",
+        streaming: true as const,
+        supportedLocales: Object.freeze(["en", "zh"]),
+        trainingPolicy: "api-data-controls",
+      }),
+      deterministicChunks: Object.freeze(deterministicChunks),
+      ...(failAfterChunks === undefined ? {} : { failAfterChunks }),
+    }),
   });
+}
+
+function parseDeterministicChunks(value: string): readonly string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("SAYHEAR_TEST_PROVIDER_CHUNKS must be a JSON string array.");
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length === 0 ||
+    parsed.some((item) => typeof item !== "string" || item.length === 0)
+  ) {
+    throw new Error("SAYHEAR_TEST_PROVIDER_CHUNKS must be a JSON string array.");
+  }
+  return parsed;
 }

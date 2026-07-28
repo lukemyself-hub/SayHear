@@ -18,6 +18,7 @@
     "validate": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
+    "@sayhear/ai": "workspace:*",
     "@sayhear/application": "workspace:*",
     "@sayhear/data": "workspace:*",
     "@sayhear/domain": "workspace:*",

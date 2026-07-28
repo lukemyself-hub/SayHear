@@ -2,7 +2,9 @@ import type {
   ConversationEventId,
   ConversationEventRevisionId,
   DailySessionId,
+  GenerationCommandId,
   InteractionTurnId,
+  ModelRunAttemptId,
   PrivateWriteGateReason,
   UserId,
 } from "@sayhear/domain";
@@ -29,12 +31,26 @@ export type RecordUserTextTurnInput = Readonly<{
   clientTurnId: ClientTurnId;
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
+  generationPolicy: GenerationPolicy;
   locale: string;
   logicalDate: string;
   now: Date;
   text: string;
   timezone: string;
   userId: UserId;
+}>;
+
+export type GenerationPolicy = Readonly<{
+  freshnessPolicy: "source_valid:v1";
+  localePolicyVersion: string;
+  model: string;
+  modelConfigVersion: string;
+  modelSnapshot: string;
+  productPolicyVersion: string;
+  promptVersion: string;
+  provider: "openai";
+  relationshipPolicyVersion: string;
+  safetyPolicyVersion: string;
 }>;
 
 type ValidatedUserTextInput = Readonly<{
@@ -58,6 +74,10 @@ export type UserTextTurn = Readonly<{
     sequence: number;
     text: string;
   }>;
+  generation: Readonly<{
+    attemptId: ModelRunAttemptId;
+    commandId: GenerationCommandId;
+  }>;
   replayed: boolean;
   turn: Readonly<{
     id: InteractionTurnId;
@@ -67,6 +87,7 @@ export type UserTextTurn = Readonly<{
 }>;
 
 export type UserTextMessage = Readonly<{
+  actor: "user" | "assistant";
   eventId: ConversationEventId;
   locale: string;
   revisionId: ConversationEventRevisionId;
@@ -141,6 +162,7 @@ export function createUserTextConversationService(dependencies: {
   clock: () => Date;
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
+  generationPolicy: GenerationPolicy;
   repository: UserTextConversationRepository;
 }): UserTextConversationService {
   return {
@@ -155,6 +177,7 @@ export function createUserTextConversationService(dependencies: {
         expectedBackupPolicyVersion: dependencies.expectedBackupPolicyVersion,
         expectedConfigurationFingerprint:
           dependencies.expectedConfigurationFingerprint,
+        generationPolicy: dependencies.generationPolicy,
         logicalDate: localDateAt(now, input.timezone),
         now,
         userId,

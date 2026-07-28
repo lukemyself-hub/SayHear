@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     useTypeScriptCli: true,
   },
   transpilePackages: [
+    "@sayhear/ai",
     "@sayhear/application",
     "@sayhear/data",
     "@sayhear/domain",

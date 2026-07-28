@@ -7,11 +7,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createInternalAccessHandler } from "../../apps/web/src/internal-access-handler";
 import {
   asUserId,
+  createContextCompiler,
+  createConversationResponseService,
   createInternalOwnerAccessService,
   createUserTextConversationService,
+  type ConversationTextModel,
 } from "@sayhear/application";
 import {
+  createDeterministicConversationTextModel,
+  createProviderEgressPort,
+} from "@sayhear/ai";
+import {
   createPostgresAuthAdapter,
+  PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresUserTextConversationRepository,
   runMigrations,
@@ -21,6 +29,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
 import { createUserTextTurnHandler } from "../../apps/web/src/user-text-turn-handler";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -29,6 +38,31 @@ if (!testDatabaseUrl) {
     "TEST_DATABASE_URL is required; the system seam never falls back to a mock database.",
   );
 }
+const testGenerationPolicy = Object.freeze({
+  freshnessPolicy: "source_valid:v1" as const,
+  localePolicyVersion: "locale-pack:v1",
+  model: "gpt-5.4",
+  modelConfigVersion: "conversation-text-champion:v1",
+  modelSnapshot: "gpt-5.4",
+  productPolicyVersion: "product-policy:v1",
+  promptVersion: "conversation-text:v1",
+  provider: "openai" as const,
+  relationshipPolicyVersion: "relationship-boundary:v1",
+  safetyPolicyVersion: "minimum-high-risk-response:v1",
+});
+const testChampion = Object.freeze({
+  configVersion: "conversation-text-champion:v1",
+  contextLimit: 1_000_000,
+  dataRegion: "test",
+  model: "gpt-5.4",
+  provider: "openai" as const,
+  retentionMode: "store-disabled",
+  snapshot: "gpt-5.4",
+  streaming: true as const,
+  supportedLocales: Object.freeze(["en", "zh"]),
+  trainingPolicy: "test",
+});
+const fixedResponseClock = () => new Date("2026-07-27T16:00:00.000Z");
 
 describe("Authenticated Internal Text Conversation System Seam", () => {
   const sessionCookieName = "sayhear.session-token";
@@ -51,6 +85,11 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        provider_egress_dispositions,
+        compiled_context_revision_refs,
+        compiled_contexts,
+        model_run_attempts,
+        generation_commands,
         conversation_event_revisions,
         conversation_events,
         interaction_turns,
@@ -58,6 +97,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     `);
     await database.pool.query("DELETE FROM auth_sessions");
     await database.pool.query("DELETE FROM backup_policy_versions");
+    await database.pool.query(
+      "UPDATE app_users SET status = 'active', data_epoch = 1",
+    );
     await createPostgresAuthAdapter(database.pool).createSession({
       expires: new Date("2099-01-01T00:00:00.000Z"),
       sessionToken,
@@ -404,6 +446,537 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     ).rejects.toThrow("immutable");
   });
 
+  it("streams one Complete Assistant Response and commits it authoritatively", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    const repository = new PostgresInternalOwnerAccessRepository(database.pool);
+    await repository.recordBackupPolicyEvidence({
+      backupPolicyId: "01984477-31e1-7595-92c6-06889cb0fdde",
+      configurationFingerprint: "sha256:expected",
+      databaseRetentionDays: 30,
+      evidenceReference: "synthetic backup console evidence",
+      policyVersion: "neon-production-v1",
+      pitrRetentionDays: 7,
+      snapshotRetentionDays: 30,
+      status: "verified",
+      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
+    });
+
+    const response = await fetch(
+      `${nextServer.origin}/api/internal/conversation/responses`,
+      {
+        body: JSON.stringify({
+          clientEventId: "client-event-response-0001",
+          clientTurnId: "client-turn-response-0001",
+          locale: "en-US",
+          text: "Today felt heavier than I expected.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain(
+      "application/x-ndjson",
+    );
+    const streamEvents = await readNdjson(response);
+    expect(
+      streamEvents.map((event) => event.type),
+      JSON.stringify(streamEvents),
+    ).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+    expect(
+      streamEvents
+        .filter((event) => event.type === "assistant_delta")
+        .map((event) => event.delta)
+        .join(""),
+    ).toBe("That sounds like a lot to carry.");
+
+    const authoritative = await database.pool.query<{
+      assistant_events: string;
+      assistant_revisions: string;
+      attempt_status: string;
+      authoritative_result_id: string | null;
+      command_status: string;
+      dialogue_revision: string;
+      egress_status: string;
+      expected_data_epoch: string;
+      freshness_policy: string;
+      input_revision_id: string;
+      locale: string;
+      model_config_version: string;
+      prompt_version: string;
+      turn_status: string;
+      user_events: string;
+    }>(`
+      SELECT
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'user'
+        ) AS user_events,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_event_revisions revision
+          INNER JOIN conversation_events event
+            ON event.current_revision_id = revision.conversation_event_revision_id
+          WHERE event.actor = 'assistant'
+        ) AS assistant_revisions,
+        command.input_revision_id::text,
+        command.prompt_version,
+        command.model_config_version,
+        command.locale,
+        command.freshness_policy,
+        command.expected_data_epoch::text,
+        command.status AS command_status,
+        command.authoritative_result_id::text,
+        attempt.status AS attempt_status,
+        egress.status AS egress_status,
+        turn.status AS turn_status,
+        session.dialogue_revision::text
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+      INNER JOIN provider_egress_dispositions egress
+        ON egress.model_run_attempt_id = attempt.model_run_attempt_id
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = command.interaction_turn_id
+      INNER JOIN daily_sessions session
+        ON session.daily_session_id = turn.daily_session_id
+    `);
+    expect(authoritative.rows[0]).toMatchObject({
+      assistant_events: "1",
+      assistant_revisions: "1",
+      attempt_status: "succeeded",
+      command_status: "succeeded",
+      dialogue_revision: "2",
+      egress_status: "completed",
+      expected_data_epoch: "1",
+      freshness_policy: "source_valid:v1",
+      locale: "en-US",
+      model_config_version: "conversation-text-champion:v1",
+      prompt_version: "conversation-text:v1",
+      turn_status: "settled",
+      user_events: "1",
+    });
+    expect(authoritative.rows[0]?.authoritative_result_id).not.toBeNull();
+    expect(authoritative.rows[0]?.input_revision_id).toBe(
+      streamEvents[0]?.userEventRevisionId,
+    );
+
+    const replay = await fetch(
+      `${nextServer.origin}/api/internal/conversation/responses`,
+      {
+        body: JSON.stringify({
+          clientEventId: "client-event-response-0001",
+          clientTurnId: "client-turn-response-0001",
+          locale: "en-US",
+          text: "Today felt heavier than I expected.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      },
+    );
+    const replayEvents = await readNdjson(replay);
+    expect(replayEvents.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+    expect(replayEvents[1]?.delta).toBe("That sounds like a lot to carry.");
+    expect(replayEvents[2]).toMatchObject({
+      eventId: streamEvents[3]?.eventId,
+      revisionId: streamEvents[3]?.revisionId,
+    });
+    const replayCardinality = await database.pool.query<{
+      assistant_events: string;
+      attempts: string;
+      egresses: string;
+    }>(`
+      SELECT
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events,
+        (SELECT COUNT(*)::text FROM model_run_attempts) AS attempts,
+        (SELECT COUNT(*)::text FROM provider_egress_dispositions) AS egresses
+    `);
+    expect(replayCardinality.rows[0]).toEqual({
+      assistant_events: "1",
+      attempts: "1",
+      egresses: "1",
+    });
+  });
+
+  it("rejects a stale source before provider dispatch", async () => {
+    const accessRepository = new PostgresInternalOwnerAccessRepository(
+      database.pool,
+    );
+    await accessRepository.recordBackupPolicyEvidence({
+      backupPolicyId: "01984477-31e1-7595-92c6-06889cb0fdde",
+      configurationFingerprint: "sha256:expected",
+      databaseRetentionDays: 30,
+      evidenceReference: "synthetic backup console evidence",
+      policyVersion: "neon-production-v1",
+      pitrRetentionDays: 7,
+      snapshotRetentionDays: 30,
+      status: "verified",
+      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
+    });
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const compiler = createContextCompiler({
+      clock: fixedResponseClock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    let providerCalls = 0;
+    const model = {
+      async *stream() {
+        providerCalls += 1;
+        yield { delta: "must not leave SayHear", type: "delta" as const };
+        yield {
+          finishReason: "completed",
+          inputTokens: 1,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 1,
+          providerRequestId: "must-not-exist",
+          type: "completed" as const,
+        };
+      },
+    } satisfies ConversationTextModel;
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: {
+        async compile(input) {
+          const context = await compiler.compile(input);
+          await database.pool.query(
+            `
+              UPDATE app_users
+              SET data_epoch = data_epoch + 1
+              WHERE user_id = $1
+            `,
+            [fixedInternalOwnerPrincipal.userId],
+          );
+          return context;
+        },
+      },
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const response = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "pre-dispatch-fence-event",
+          clientTurnId: "pre-dispatch-fence-turn",
+          locale: "en-US",
+          text: "This source becomes stale before egress.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    const events = await readNdjson(response);
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "response_failed",
+    ]);
+    expect(events[1]?.category).toBe("policy_blocked");
+    expect(providerCalls).toBe(0);
+    const state = await database.pool.query<{
+      assistant_events: string;
+      attempt_status: string;
+      command_status: string;
+      egress_status: string;
+    }>(`
+      SELECT
+        command.status AS command_status,
+        attempt.status AS attempt_status,
+        egress.status AS egress_status,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+      INNER JOIN provider_egress_dispositions egress
+        ON egress.model_run_attempt_id = attempt.model_run_attempt_id
+    `);
+    expect(state.rows[0]).toEqual({
+      assistant_events: "0",
+      attempt_status: "failed",
+      command_status: "failed",
+      egress_status: "blocked",
+    });
+  });
+
+  it("keeps visible partial output transient when the commit fence closes", async () => {
+    const accessRepository = new PostgresInternalOwnerAccessRepository(
+      database.pool,
+    );
+    await accessRepository.recordBackupPolicyEvidence({
+      backupPolicyId: "01984477-31e1-7595-92c6-06889cb0fdde",
+      configurationFingerprint: "sha256:expected",
+      databaseRetentionDays: 30,
+      evidenceReference: "synthetic backup console evidence",
+      policyVersion: "neon-production-v1",
+      pitrRetentionDays: 7,
+      snapshotRetentionDays: 30,
+      status: "verified",
+      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
+    });
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const model = {
+      async *stream() {
+        yield { delta: "Visible but not authoritative.", type: "delta" as const };
+        await database.pool.query(
+          `
+            UPDATE app_users
+            SET data_epoch = data_epoch + 1
+            WHERE user_id = $1
+          `,
+          [fixedInternalOwnerPrincipal.userId],
+        );
+        yield {
+          finishReason: "completed",
+          inputTokens: 8,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 8,
+          providerRequestId: "provider-request-fenced",
+          type: "completed" as const,
+        };
+      },
+    } satisfies ConversationTextModel;
+    const contextCompiler = createContextCompiler({
+      clock: fixedResponseClock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler,
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const response = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "commit-fence-event",
+          clientTurnId: "commit-fence-turn",
+          locale: "en-US",
+          text: "This source becomes stale after dispatch.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+
+    const events = await readNdjson(response);
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "response_interrupted",
+    ]);
+    expect(events[1]?.delta).toBe("Visible but not authoritative.");
+    expect(events[2]?.category).toBe("policy_blocked");
+    const state = await database.pool.query<{
+      assistant_events: string;
+      attempt_status: string;
+      command_status: string;
+      dialogue_revision: string;
+      turn_status: string;
+    }>(`
+      SELECT
+        command.status AS command_status,
+        attempt.status AS attempt_status,
+        turn.status AS turn_status,
+        session.dialogue_revision::text,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = command.interaction_turn_id
+      INNER JOIN daily_sessions session
+        ON session.daily_session_id = turn.daily_session_id
+    `);
+    expect(state.rows[0]).toEqual({
+      assistant_events: "0",
+      attempt_status: "interrupted",
+      command_status: "interrupted",
+      dialogue_revision: "1",
+      turn_status: "interrupted",
+    });
+    const persistedChunkRelations = await database.pool.query<{
+      table_name: string;
+    }>(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name ILIKE ANY(ARRAY['%chunk%', '%stream%'])
+    `);
+    expect(persistedChunkRelations.rows).toEqual([]);
+  });
+
+  it("compiles the next turn only from committed User and Assistant revisions", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    const repository = new PostgresInternalOwnerAccessRepository(database.pool);
+    await repository.recordBackupPolicyEvidence({
+      backupPolicyId: "01984477-31e1-7595-92c6-06889cb0fdde",
+      configurationFingerprint: "sha256:expected",
+      databaseRetentionDays: 30,
+      evidenceReference: "synthetic backup console evidence",
+      policyVersion: "neon-production-v1",
+      pitrRetentionDays: 7,
+      snapshotRetentionDays: 30,
+      status: "verified",
+      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
+    });
+    const submit = async (
+      clientEventId: string,
+      clientTurnId: string,
+      text: string,
+    ) => {
+      const response = await fetch(
+        `${nextServer?.origin}/api/internal/conversation/responses`,
+        {
+          body: JSON.stringify({
+            clientEventId,
+            clientTurnId,
+            locale: "en-US",
+            text,
+            timezone: "America/Los_Angeles",
+          }),
+          headers: {
+            "content-type": "application/json",
+            cookie: `${sessionCookieName}=${sessionToken}`,
+          },
+          method: "POST",
+        },
+      );
+      expect((await readNdjson(response)).at(-1)?.type).toBe(
+        "assistant_committed",
+      );
+    };
+    await submit(
+      "context-first-event",
+      "context-first-turn",
+      "The first committed expression.",
+    );
+    await submit(
+      "context-second-event",
+      "context-second-turn",
+      "The second committed expression.",
+    );
+
+    const references = await database.pool.query<{
+      actor: string;
+      ordinal: number;
+      text: string;
+    }>(`
+      SELECT ref.actor, ref.ordinal, revision.canonical_text AS text
+      FROM generation_commands command
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = command.interaction_turn_id
+      INNER JOIN compiled_context_revision_refs ref
+        ON ref.compiled_context_id = command.compiled_context_id
+      INNER JOIN conversation_event_revisions revision
+        ON revision.conversation_event_revision_id =
+          ref.conversation_event_revision_id
+      WHERE turn.turn_sequence_no = 2
+      ORDER BY ref.ordinal
+    `);
+    expect(references.rows).toEqual([
+      {
+        actor: "user",
+        ordinal: 0,
+        text: "The first committed expression.",
+      },
+      {
+        actor: "assistant",
+        ordinal: 1,
+        text: "That sounds like a lot to carry.",
+      },
+      {
+        actor: "user",
+        ordinal: 2,
+        text: "The second committed expression.",
+      },
+    ]);
+  });
+
   it("reuses the same-day Session and keeps Turn, Event, and Revision identities distinct", async () => {
     if (!nextServer) {
       throw new Error("The Next test server is not running.");
@@ -632,6 +1205,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       clock: () => new Date("2026-07-28T08:30:00.000Z"),
       expectedBackupPolicyVersion: "neon-production-v1",
       expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
       repository: new PostgresUserTextConversationRepository(database.pool),
     });
     const afterMidnight = await createUserTextTurnHandler({
@@ -706,6 +1280,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       clock: () => new Date("2026-07-27T16:00:00.000Z"),
       expectedBackupPolicyVersion: "neon-production-v1",
       expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
       repository: new PostgresUserTextConversationRepository(database.pool),
     });
     const response = await createUserTextTurnHandler({
@@ -850,7 +1425,13 @@ async function startNextTestServer(
         SAYHEAR_AUTH_SECRET_SOURCE: "managed",
         SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "sha256:expected",
         SAYHEAR_BACKUP_POLICY_VERSION: "neon-production-v1",
+        SAYHEAR_CONTEXT_HMAC_SECRET: "system-test-context-integrity-secret",
         SAYHEAR_DEPLOYMENT: "test",
+        SAYHEAR_PROVIDER_ADAPTER: "deterministic",
+        SAYHEAR_TEST_PROVIDER_CHUNKS: JSON.stringify([
+          "That sounds like ",
+          "a lot to carry.",
+        ]),
         SAYHEAR_TEST_NOW: "2026-07-27T16:00:00.000Z",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -929,4 +1510,14 @@ async function reservePort(): Promise<number> {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   return address.port;
+}
+
+async function readNdjson(
+  response: Response,
+): Promise<readonly Record<string, unknown>[]> {
+  const text = await response.text();
+  return text
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
