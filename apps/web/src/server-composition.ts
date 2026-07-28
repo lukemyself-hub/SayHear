@@ -1,6 +1,7 @@
 import {
   createInternalOwnerAccessService,
   createContextCompiler,
+  createContinuousExchangeService,
   createConversationResponseService,
   createUserTextConversationService,
 } from "@sayhear/application";
@@ -11,6 +12,7 @@ import {
 } from "@sayhear/ai";
 import {
   createPostgresPool,
+  PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresUserTextConversationRepository,
@@ -38,6 +40,8 @@ export function createServerComposition() {
   const conversationRepository =
     new PostgresUserTextConversationRepository(pool);
   const responseRepository = new PostgresConversationResponseRepository(pool);
+  const continuousExchangeRepository =
+    new PostgresContinuousExchangeRepository(pool);
   const conversationService = createUserTextConversationService({
     clock: configuration.clock,
     expectedBackupPolicyVersion: configuration.backupPolicyVersion,
@@ -55,6 +59,7 @@ export function createServerComposition() {
       relationshipPolicyVersion: "relationship-boundary:v1",
       safetyPolicyVersion: "minimum-high-risk-response:v1",
     },
+    inactivityPolicy: configuration.inactivityPolicy,
     repository: conversationRepository,
   });
   const conversationTextModel =
@@ -103,6 +108,11 @@ export function createServerComposition() {
       egressPort,
       repository: responseRepository,
     }),
+    continuousExchangeService: createContinuousExchangeService({
+      clock: configuration.clock,
+      repository: continuousExchangeRepository,
+    }),
     conversationService,
+    recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

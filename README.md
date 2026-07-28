@@ -45,3 +45,8 @@ inspect or claim that an external backup exists on its own.
 The protected surface is `/internal`. Real private writes remain blocked until the
 latest verified policy version is current and its configuration fingerprint matches
 the deployed expectation.
+
+The single recovery scanner is scheduled by `vercel.json` and authenticates with
+Vercel's server-only `CRON_SECRET`. `SAYHEAR_INACTIVITY_TIMEOUT_MS` is tied to
+`SAYHEAR_INACTIVITY_POLICY_VERSION`; changing the timeout requires publishing a new
+policy version rather than mutating an existing version.

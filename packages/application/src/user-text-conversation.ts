@@ -1,4 +1,5 @@
 import {
+  asDailySessionId,
   asInteractionTurnId,
   type ConversationEventId,
   type ConversationEventRevisionId,
@@ -37,6 +38,7 @@ export type RecordUserTextTurnInput = Readonly<{
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
   generationPolicy: GenerationPolicy;
+  inactivityPolicy: InactivityPolicy;
   locale: string;
   logicalDate: string;
   now: Date;
@@ -49,6 +51,7 @@ export type RecordConversationRetryInput = Readonly<{
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
   generationPolicy: GenerationPolicy;
+  inactivityPolicy: InactivityPolicy;
   now: Date;
   originalTurnId: InteractionTurnId;
   retryRequestId: RetryRequestId;
@@ -66,6 +69,11 @@ export type GenerationPolicy = Readonly<{
   provider: "openai";
   relationshipPolicyVersion: string;
   safetyPolicyVersion: string;
+}>;
+
+export type InactivityPolicy = Readonly<{
+  timeoutMs: number;
+  version: string;
 }>;
 
 type ValidatedUserTextInput = Readonly<{
@@ -117,6 +125,13 @@ export type ConversationRetryTurn = Readonly<{
   }>;
 }>;
 
+export type ExplicitContinuousExchangeEnd = Readonly<{
+  dailySessionId: DailySessionId;
+  endedBy: "explicit_user_end";
+  replayed: boolean;
+  state: "quiescent";
+}>;
+
 export type UserTextMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: ConversationEventId;
@@ -154,6 +169,17 @@ export type RecordConversationRetryRepositoryResult =
     }>;
 
 export type UserTextConversationRepository = Readonly<{
+  endContinuousExchangeExplicitly(input: {
+    dailySessionId: DailySessionId;
+    endedAt: Date;
+    userId: UserId;
+  }): Promise<
+    | Readonly<{
+        end: ExplicitContinuousExchangeEnd;
+        outcome: "ended";
+      }>
+    | Readonly<{ outcome: "not_found" }>
+  >;
   listInterruptedResponses(
     userId: UserId,
   ): Promise<readonly InterruptedConversationResponse[]>;
@@ -167,6 +193,10 @@ export type UserTextConversationRepository = Readonly<{
 }>;
 
 export type UserTextConversationService = Readonly<{
+  endContinuousExchange(
+    userId: UserId,
+    input: { dailySessionId: string },
+  ): Promise<ExplicitContinuousExchangeEnd>;
   listInterruptedResponses(
     userId: UserId,
   ): Promise<readonly InterruptedConversationResponse[]>;
@@ -230,14 +260,48 @@ export class ConversationRetryNotAllowedError extends Error {
   }
 }
 
+export class ContinuousExchangeNotFoundError extends Error {
+  public constructor() {
+    super("The active Continuous Exchange was not found.");
+    this.name = "ContinuousExchangeNotFoundError";
+  }
+}
+
 export function createUserTextConversationService(dependencies: {
   clock: () => Date;
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
   generationPolicy: GenerationPolicy;
+  inactivityPolicy?: InactivityPolicy;
   repository: UserTextConversationRepository;
 }): UserTextConversationService {
+  const inactivityPolicy =
+    dependencies.inactivityPolicy ??
+    Object.freeze({
+      timeoutMs: 30 * 60 * 1_000,
+      version: "continuous-exchange-inactivity:v1",
+    });
   return {
+    async endContinuousExchange(userId, rawInput) {
+      let dailySessionId: DailySessionId;
+      try {
+        dailySessionId = asDailySessionId(rawInput.dailySessionId);
+      } catch {
+        throw new InvalidUserTextTurnError(
+          "dailySessionId must be an opaque Daily Session UUIDv7.",
+        );
+      }
+      const result =
+        await dependencies.repository.endContinuousExchangeExplicitly({
+          dailySessionId,
+          endedAt: dependencies.clock(),
+          userId,
+        });
+      if (result.outcome === "not_found") {
+        throw new ContinuousExchangeNotFoundError();
+      }
+      return result.end;
+    },
     async listInterruptedResponses(userId) {
       return dependencies.repository.listInterruptedResponses(userId);
     },
@@ -262,6 +326,7 @@ export function createUserTextConversationService(dependencies: {
         expectedConfigurationFingerprint:
           dependencies.expectedConfigurationFingerprint,
         generationPolicy: dependencies.generationPolicy,
+        inactivityPolicy,
         now: dependencies.clock(),
         originalTurnId,
         retryRequestId,
@@ -290,6 +355,7 @@ export function createUserTextConversationService(dependencies: {
         expectedConfigurationFingerprint:
           dependencies.expectedConfigurationFingerprint,
         generationPolicy: dependencies.generationPolicy,
+        inactivityPolicy,
         logicalDate: localDateAt(now, input.timezone),
         now,
         userId,

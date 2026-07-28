@@ -8,6 +8,7 @@ import { createInternalAccessHandler } from "../../apps/web/src/internal-access-
 import {
   asUserId,
   createContextCompiler,
+  createContinuousExchangeService,
   createConversationResponseService,
   createInternalOwnerAccessService,
   createUserTextConversationService,
@@ -19,6 +20,7 @@ import {
 } from "@sayhear/ai";
 import {
   createPostgresAuthAdapter,
+  PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresUserTextConversationRepository,
@@ -91,6 +93,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         compiled_contexts,
         model_run_attempts,
         generation_commands,
+        continuous_exchange_inactivity_evaluations,
         conversation_event_revisions,
         conversation_events,
         interaction_turns,
@@ -1884,9 +1887,12 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(new Set(persistentIds)).toHaveLength(persistentIds.length);
 
     const authoritative = await database.pool.query<{
+      current_continuous_exchange_no: number;
       daily_sessions: string;
       dialogue_revision: string;
       interaction_turns: string;
+      maximum_turn_exchange_no: number;
+      minimum_turn_exchange_no: number;
       source_revision: string;
       user_events: string;
     }>(`
@@ -1894,14 +1900,26 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         (SELECT COUNT(*)::text FROM daily_sessions) AS daily_sessions,
         (SELECT COUNT(*)::text FROM interaction_turns) AS interaction_turns,
         (SELECT COUNT(*)::text FROM conversation_events) AS user_events,
+        (
+          SELECT MIN(continuous_exchange_no)
+          FROM interaction_turns
+        ) AS minimum_turn_exchange_no,
+        (
+          SELECT MAX(continuous_exchange_no)
+          FROM interaction_turns
+        ) AS maximum_turn_exchange_no,
+        current_continuous_exchange_no,
         dialogue_revision::text,
         source_revision::text
       FROM daily_sessions
     `);
     expect(authoritative.rows[0]).toEqual({
+      current_continuous_exchange_no: 1,
       daily_sessions: "1",
       dialogue_revision: "2",
       interaction_turns: "2",
+      maximum_turn_exchange_no: 1,
+      minimum_turn_exchange_no: 1,
       source_revision: "2",
       user_events: "2",
     });
@@ -2035,6 +2053,527 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     const second = await afterMidnight.json();
     expect(second.dailySession.id).toBe(first.dailySession.id);
     expect(second.dailySession.logicalDate).toBe("2026-07-27");
+  });
+
+  it("keeps Daily Session logical date and starting timezone immutable", async () => {
+    await new PostgresInternalOwnerAccessRepository(
+      database.pool,
+    ).recordBackupPolicyEvidence({
+      backupPolicyId: "01984477-31e1-7595-92c6-06889cb0fdde",
+      configurationFingerprint: "sha256:expected",
+      databaseRetentionDays: 30,
+      evidenceReference: "synthetic backup console evidence",
+      policyVersion: "neon-production-v1",
+      pitrRetentionDays: 7,
+      snapshotRetentionDays: 30,
+      status: "verified",
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+      verifiedAt: new Date("2026-10-31T00:00:00.000Z"),
+    });
+    const service = createUserTextConversationService({
+      clock: () => new Date("2026-11-01T08:30:00.000Z"),
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const turn = await service.submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "dst-session-event",
+      clientTurnId: "dst-session-turn",
+      locale: "zh-CN",
+      text: "这段交流开始于夏令时重复出现的小时。",
+      timezone: "America/Los_Angeles",
+    });
+    expect(turn.dailySession.logicalDate).toBe("2026-11-01");
+    expect(turn.dailySession.timezoneAtStart).toBe("America/Los_Angeles");
+    const repeatedHour = await createUserTextConversationService({
+      clock: () => new Date("2026-11-01T09:30:00.000Z"),
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    }).submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "dst-repeated-hour-event",
+      clientTurnId: "dst-repeated-hour-turn",
+      locale: "en-US",
+      text: "The repeated local hour remains on the same date.",
+      timezone: "America/Los_Angeles",
+    });
+    expect(repeatedHour.dailySession.id).toBe(turn.dailySession.id);
+    expect(repeatedHour.dailySession.logicalDate).toBe("2026-11-01");
+
+    await expect(
+      database.pool.query(
+        `
+          UPDATE daily_sessions
+          SET logical_date = '2026-11-02'
+          WHERE daily_session_id = $1
+        `,
+        [turn.dailySession.id],
+      ),
+    ).rejects.toThrow("Daily Session ownership fields are immutable");
+    await expect(
+      database.pool.query(
+        `
+          UPDATE daily_sessions
+          SET timezone_at_start = 'America/New_York'
+          WHERE daily_session_id = $1
+        `,
+        [turn.dailySession.id],
+      ),
+    ).rejects.toThrow("Daily Session ownership fields are immutable");
+  });
+
+  it("keeps a published inactivity policy version immutable", async () => {
+    await expect(
+      database.pool.query(
+        `
+          UPDATE continuous_exchange_inactivity_policies
+          SET timeout_ms = 60000
+          WHERE policy_version = 'continuous-exchange-inactivity:v1'
+        `,
+      ),
+    ).rejects.toThrow("Inactivity policy versions are immutable");
+  });
+
+  it("ends the active exchange explicitly without creating an Assistant Event or model dispatch", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    await openPrivateWrites();
+    const turnResponse = await fetch(
+      `${nextServer.origin}/api/internal/conversation/turns`,
+      {
+        body: JSON.stringify({
+          clientEventId: "explicit-end-event",
+          clientTurnId: "explicit-end-turn",
+          locale: "en-US",
+          text: "That is everything I wanted to write.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      },
+    );
+    expect(turnResponse.status).toBe(200);
+    const turn = await turnResponse.json();
+
+    const end = async () =>
+      fetch(`${nextServer?.origin}/api/internal/conversation/exchanges/end`, {
+        body: JSON.stringify({ dailySessionId: turn.dailySession.id }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      });
+    const firstEnd = await end();
+    expect(firstEnd.status).toBe(200);
+    expect(await firstEnd.json()).toEqual({
+      dailySessionId: turn.dailySession.id,
+      endedBy: "explicit_user_end",
+      replayed: false,
+      state: "quiescent",
+    });
+    const repeatedEnd = await end();
+    expect(repeatedEnd.status).toBe(200);
+    expect(await repeatedEnd.json()).toEqual({
+      dailySessionId: turn.dailySession.id,
+      endedBy: "explicit_user_end",
+      replayed: true,
+      state: "quiescent",
+    });
+
+    const state = await database.pool.query<{
+      activity_state: string;
+      assistant_events: string;
+      egress_dispatches: string;
+      quiescent_at: Date | null;
+    }>(
+      `
+        SELECT
+          session.activity_state,
+          session.quiescent_at,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events
+            WHERE actor = 'assistant'
+          ) AS assistant_events,
+          (
+            SELECT COUNT(*)::text
+            FROM provider_egress_dispositions
+          ) AS egress_dispatches
+        FROM daily_sessions session
+        WHERE session.daily_session_id = $1
+      `,
+      [turn.dailySession.id],
+    );
+    expect(state.rows[0]).toEqual({
+      activity_state: "quiescent",
+      assistant_events: "0",
+      egress_dispatches: "0",
+      quiescent_at: new Date("2026-07-27T16:00:00.000Z"),
+    });
+  });
+
+  it("increments the exchange number only when same-day activity returns from quiescent", async () => {
+    await openPrivateWrites();
+    const repository = new PostgresUserTextConversationRepository(database.pool);
+    const createConversationAt = (now: string) =>
+      createUserTextConversationService({
+        clock: () => new Date(now),
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository,
+      });
+    const firstService = createConversationAt("2026-07-27T16:00:00.000Z");
+    const first = await firstService.submit(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "same-day-exchange-1-event",
+        clientTurnId: "same-day-exchange-1-turn",
+        locale: "en-US",
+        text: "The first exchange.",
+        timezone: "America/Los_Angeles",
+      },
+    );
+    await firstService.endContinuousExchange(
+      fixedInternalOwnerPrincipal.userId,
+      { dailySessionId: first.dailySession.id },
+    );
+    const second = await createConversationAt(
+      "2026-07-27T17:00:00.000Z",
+    ).submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "same-day-exchange-2-event",
+      clientTurnId: "same-day-exchange-2-turn",
+      locale: "en-US",
+      text: "The second exchange.",
+      timezone: "America/Los_Angeles",
+    });
+    expect(second.dailySession.id).toBe(first.dailySession.id);
+
+    const state = await database.pool.query<{
+      current_continuous_exchange_no: number;
+      turn_exchange_numbers: number[];
+    }>(
+      `
+        SELECT
+          session.current_continuous_exchange_no,
+          ARRAY_AGG(
+            turn.continuous_exchange_no
+            ORDER BY turn.turn_sequence_no
+          ) AS turn_exchange_numbers
+        FROM daily_sessions session
+        INNER JOIN interaction_turns turn
+          ON turn.daily_session_id = session.daily_session_id
+        WHERE session.daily_session_id = $1
+        GROUP BY session.daily_session_id
+      `,
+      [first.dailySession.id],
+    );
+    expect(state.rows[0]).toEqual({
+      current_continuous_exchange_no: 2,
+      turn_exchange_numbers: [1, 2],
+    });
+  });
+
+  it("creates a new-date Daily Session only after the crossed-midnight exchange ends", async () => {
+    await openPrivateWrites();
+    const repository = new PostgresUserTextConversationRepository(database.pool);
+    const createConversationAt = (now: string) =>
+      createUserTextConversationService({
+        clock: () => new Date(now),
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository,
+      });
+    const beforeMidnight = await createConversationAt(
+      "2026-07-28T06:55:00.000Z",
+    ).submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "new-date-before-midnight-event",
+      clientTurnId: "new-date-before-midnight-turn",
+      locale: "en-US",
+      text: "This starts before midnight.",
+      timezone: "America/Los_Angeles",
+    });
+    const afterMidnight = createConversationAt(
+      "2026-07-28T07:10:00.000Z",
+    );
+    await afterMidnight.endContinuousExchange(
+      fixedInternalOwnerPrincipal.userId,
+      { dailySessionId: beforeMidnight.dailySession.id },
+    );
+    const nextExchange = await afterMidnight.submit(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "new-date-after-midnight-event",
+        clientTurnId: "new-date-after-midnight-turn",
+        locale: "en-US",
+        text: "This starts after the earlier exchange ended.",
+        timezone: "America/Los_Angeles",
+      },
+    );
+
+    expect(beforeMidnight.dailySession.logicalDate).toBe("2026-07-27");
+    expect(nextExchange.dailySession.logicalDate).toBe("2026-07-28");
+    expect(nextExchange.dailySession.id).not.toBe(
+      beforeMidnight.dailySession.id,
+    );
+  });
+
+  it("does not let a model-generated closing statement end the exchange", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler: createContextCompiler({
+        clock: fixedResponseClock,
+        compilerVersion: "context-compiler:v1",
+        contentHmacSecret: "test-context-integrity-secret",
+        rawEventTokenBudget: 4_000,
+        repository: responseRepository,
+      }),
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        model: createDeterministicConversationTextModel({
+          chunks: ["It is okay to stop here. Goodbye for now."],
+        }),
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const streamEvents = [];
+    for await (const event of service.respond(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "model-closing-event",
+        clientTurnId: "model-closing-turn",
+        locale: "en-US",
+        text: "I think I am done for now.",
+        timezone: "America/Los_Angeles",
+      },
+    )) {
+      streamEvents.push(event);
+    }
+    expect(streamEvents.at(-1)?.type).toBe("assistant_committed");
+
+    const state = await database.pool.query<{
+      activity_state: string;
+      assistant_events: string;
+      egress_dispatches: string;
+    }>(`
+      SELECT
+        session.activity_state,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events,
+        (
+          SELECT COUNT(*)::text
+          FROM provider_egress_dispositions
+          WHERE status = 'completed'
+        ) AS egress_dispatches
+      FROM daily_sessions session
+    `);
+    expect(state.rows[0]).toEqual({
+      activity_state: "active",
+      assistant_events: "1",
+      egress_dispatches: "1",
+    });
+  });
+
+  it("revision-fences due inactivity and lets repeated scanners converge without side effects", async () => {
+    await openPrivateWrites();
+    const inactivityPolicy = Object.freeze({
+      timeoutMs: 30 * 60 * 1_000,
+      version: "continuous-exchange-inactivity:v1",
+    });
+    const createConversationAt = (now: string) =>
+      createUserTextConversationService({
+        clock: () => new Date(now),
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        inactivityPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      });
+    const first = await createConversationAt(
+      "2026-07-27T16:00:00.000Z",
+    ).submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "inactivity-event-1",
+      clientTurnId: "inactivity-turn-1",
+      locale: "en-US",
+      text: "I may come back to this.",
+      timezone: "America/Los_Angeles",
+    });
+    await createConversationAt("2026-07-27T16:10:00.000Z").submit(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "inactivity-event-2",
+        clientTurnId: "inactivity-turn-2",
+        locale: "en-US",
+        text: "One more detail before I go.",
+        timezone: "America/Los_Angeles",
+      },
+    );
+
+    const recoveryRepository = new PostgresContinuousExchangeRepository(
+      database.pool,
+    );
+    const evaluations = await database.pool.query<{
+      inactivity_evaluation_id: string;
+    }>(`
+      SELECT inactivity_evaluation_id
+      FROM continuous_exchange_inactivity_evaluations
+      ORDER BY due_at
+    `);
+    const staleEvaluation = await createContinuousExchangeService({
+      clock: () => new Date("2026-07-27T16:31:00.000Z"),
+      repository: recoveryRepository,
+    }).evaluateInactivity(
+      evaluations.rows[0]?.inactivity_evaluation_id ?? "",
+    );
+    expect(staleEvaluation).toEqual({
+      outcome: "stale_revision",
+      replayed: false,
+    });
+    const stillActive = await database.pool.query<{
+      activity_state: string;
+    }>(
+      `
+        SELECT activity_state
+        FROM daily_sessions
+        WHERE daily_session_id = $1
+      `,
+      [first.dailySession.id],
+    );
+    expect(stillActive.rows[0]?.activity_state).toBe("active");
+
+    const dueScan = await createContinuousExchangeService({
+      clock: () => new Date("2026-07-27T16:41:00.000Z"),
+      repository: recoveryRepository,
+    }).scanDueInactivity();
+    expect(dueScan).toEqual({
+      applied: 1,
+      processed: 1,
+      stale: 0,
+    });
+    const repeatedScan = await createContinuousExchangeService({
+      clock: () => new Date("2026-07-27T17:00:00.000Z"),
+      repository: recoveryRepository,
+    }).scanDueInactivity();
+    expect(repeatedScan).toEqual({
+      applied: 0,
+      processed: 0,
+      stale: 0,
+    });
+
+    const state = await database.pool.query<{
+      activity_state: string;
+      assistant_events: string;
+      egress_dispatches: string;
+      evaluation_outcomes: string[];
+      policy_versions: string[];
+      quiescent_at: Date | null;
+    }>(
+      `
+        SELECT
+          session.activity_state,
+          session.quiescent_at,
+          ARRAY_AGG(evaluation.outcome ORDER BY evaluation.due_at)
+            AS evaluation_outcomes,
+          ARRAY_AGG(evaluation.policy_version ORDER BY evaluation.due_at)
+            AS policy_versions,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events
+            WHERE actor = 'assistant'
+          ) AS assistant_events,
+          (
+            SELECT COUNT(*)::text
+            FROM provider_egress_dispositions
+          ) AS egress_dispatches
+        FROM daily_sessions session
+        INNER JOIN continuous_exchange_inactivity_evaluations evaluation
+          ON evaluation.daily_session_id = session.daily_session_id
+        WHERE session.daily_session_id = $1
+        GROUP BY session.daily_session_id
+      `,
+      [first.dailySession.id],
+    );
+    expect(state.rows[0]).toEqual({
+      activity_state: "quiescent",
+      assistant_events: "0",
+      egress_dispatches: "0",
+      evaluation_outcomes: ["stale_revision", "applied"],
+      policy_versions: [
+        "continuous-exchange-inactivity:v1",
+        "continuous-exchange-inactivity:v1",
+      ],
+      quiescent_at: new Date("2026-07-27T16:41:00.000Z"),
+    });
+  });
+
+  it("exposes one authenticated scheduled scanner over PostgreSQL authoritative state", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    await openPrivateWrites();
+    const conversation = createUserTextConversationService({
+      clock: () => new Date("2026-07-27T15:00:00.000Z"),
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      inactivityPolicy: {
+        timeoutMs: 30 * 60 * 1_000,
+        version: "continuous-exchange-inactivity:v1",
+      },
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    await conversation.submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "scheduled-scanner-event",
+      clientTurnId: "scheduled-scanner-turn",
+      locale: "en-US",
+      text: "This exchange can expire.",
+      timezone: "America/Los_Angeles",
+    });
+
+    const unauthorized = await fetch(
+      `${nextServer.origin}/api/internal/recovery/scan`,
+    );
+    expect(unauthorized.status).toBe(401);
+    const scanned = await fetch(
+      `${nextServer.origin}/api/internal/recovery/scan`,
+      {
+        headers: {
+          authorization: "Bearer system-test-recovery-scanner-secret",
+        },
+      },
+    );
+    expect(scanned.status).toBe(200);
+    expect(await scanned.json()).toEqual({
+      inactivity: {
+        applied: 1,
+        processed: 1,
+        stale: 0,
+      },
+    });
   });
 
   it("reactivates a same-day quiescent Session in the User Event transaction", async () => {
@@ -2235,6 +2774,7 @@ async function startNextTestServer(
         SAYHEAR_CONTEXT_HMAC_SECRET: "system-test-context-integrity-secret",
         SAYHEAR_DEPLOYMENT: "test",
         SAYHEAR_PROVIDER_ADAPTER: "deterministic",
+        CRON_SECRET: "system-test-recovery-scanner-secret",
         SAYHEAR_TEST_PROVIDER_CHUNKS: JSON.stringify([
           "That sounds like ",
           "a lot to carry.",

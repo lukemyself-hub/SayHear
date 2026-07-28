@@ -2,6 +2,7 @@ import type {
   ConversationRetryTurn,
   InterruptedConversationResponse,
   InteractionTurnStatus,
+  InactivityPolicy,
   RecordConversationRetryInput,
   RecordConversationRetryRepositoryResult,
   RecordUserTextTurnInput,
@@ -49,6 +50,7 @@ type ExistingTurnRow = Readonly<{
 
 type DailySessionRow = Readonly<{
   activity_state: "active" | "quiescent" | "finalized";
+  closure_policy_version: string;
   current_continuous_exchange_no: number;
   daily_session_id: string;
   logical_date: string;
@@ -81,6 +83,104 @@ export class PostgresUserTextConversationRepository
   implements UserTextConversationRepository
 {
   public constructor(private readonly pool: Pool) {}
+
+  public async endContinuousExchangeExplicitly(
+    input: Parameters<
+      UserTextConversationRepository["endContinuousExchangeExplicitly"]
+    >[0],
+  ): ReturnType<
+    UserTextConversationRepository["endContinuousExchangeExplicitly"]
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const ended = await client.query<{
+        current_continuous_exchange_no: number;
+        daily_session_id: string;
+      }>(
+        `
+          UPDATE daily_sessions
+          SET
+            activity_state = 'quiescent',
+            quiescent_at = $1,
+            quiescent_reason = 'explicit_user_end',
+            updated_at = $1
+          WHERE daily_session_id = $2
+            AND user_id = $3
+            AND activity_state = 'active'
+          RETURNING daily_session_id, current_continuous_exchange_no
+        `,
+        [input.endedAt, input.dailySessionId, input.userId],
+      );
+      const endedRow = ended.rows[0];
+      if (endedRow) {
+        await client.query(
+          `
+            UPDATE continuous_exchange_inactivity_evaluations
+            SET evaluated_at = $1, outcome = 'not_active'
+            WHERE daily_session_id = $2
+              AND user_id = $3
+              AND continuous_exchange_no = $4
+              AND outcome IS NULL
+          `,
+          [
+            input.endedAt,
+            endedRow.daily_session_id,
+            input.userId,
+            endedRow.current_continuous_exchange_no,
+          ],
+        );
+        await client.query("COMMIT");
+        return {
+          end: {
+            dailySessionId: asDailySessionId(endedRow.daily_session_id),
+            endedBy: "explicit_user_end",
+            replayed: false,
+            state: "quiescent",
+          },
+          outcome: "ended",
+        };
+      }
+
+      const existing = await client.query<{
+        activity_state: string;
+        daily_session_id: string;
+        quiescent_reason: string | null;
+      }>(
+        `
+          SELECT daily_session_id, activity_state, quiescent_reason
+          FROM daily_sessions
+          WHERE daily_session_id = $1
+            AND user_id = $2
+          FOR UPDATE
+        `,
+        [input.dailySessionId, input.userId],
+      );
+      const existingRow = existing.rows[0];
+      if (
+        existingRow?.activity_state !== "quiescent" ||
+        existingRow.quiescent_reason !== "explicit_user_end"
+      ) {
+        await client.query("ROLLBACK");
+        return { outcome: "not_found" };
+      }
+      await client.query("COMMIT");
+      return {
+        end: {
+          dailySessionId: asDailySessionId(existingRow.daily_session_id),
+          endedBy: "explicit_user_end",
+          replayed: true,
+          state: "quiescent",
+        },
+        outcome: "ended",
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   public async recordConversationRetry(
     input: RecordConversationRetryInput,
@@ -335,6 +435,8 @@ export class PostgresUserTextConversationRepository
       };
     }
 
+    await ensureInactivityPolicy(client, input.inactivityPolicy, input.now);
+
     let source = (
       await client.query<OriginalRetrySourceRow>(
         `
@@ -349,6 +451,7 @@ export class PostgresUserTextConversationRepository
             session.logical_date::text,
             session.timezone_at_start,
             session.activity_state,
+            session.closure_policy_version,
             session.current_continuous_exchange_no,
             session.next_turn_sequence_no,
             session.next_event_sequence_no
@@ -387,6 +490,9 @@ export class PostgresUserTextConversationRepository
               activity_state = 'active',
               current_continuous_exchange_no =
                 current_continuous_exchange_no + 1,
+              closure_policy_version = $8,
+              quiescent_at = NULL,
+              quiescent_reason = NULL,
               updated_at = $1
             WHERE daily_session_id = $2
               AND user_id = $3
@@ -402,6 +508,7 @@ export class PostgresUserTextConversationRepository
               logical_date::text,
               timezone_at_start,
               activity_state,
+              closure_policy_version,
               current_continuous_exchange_no,
               next_turn_sequence_no,
               next_event_sequence_no
@@ -414,6 +521,7 @@ export class PostgresUserTextConversationRepository
             source.subject_id,
             source.input_revision_id,
             source.locale,
+            input.inactivityPolicy.version,
           ],
         )
       ).rows[0];
@@ -691,6 +799,8 @@ export class PostgresUserTextConversationRepository
       };
     }
 
+    await ensureInactivityPolicy(client, input.inactivityPolicy, input.now);
+
     let currentSession = (
       await client.query<DailySessionRow>(
         `
@@ -699,6 +809,7 @@ export class PostgresUserTextConversationRepository
             logical_date::text,
             timezone_at_start,
             activity_state,
+            closure_policy_version,
             current_continuous_exchange_no,
             next_turn_sequence_no,
             next_event_sequence_no
@@ -723,10 +834,11 @@ export class PostgresUserTextConversationRepository
           timezone_at_start,
           started_at,
           last_activity_at,
+          closure_policy_version,
           created_at,
           updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $5, $5, $5)
+        VALUES ($1, $2, $3, $4, $5, $5, $6, $5, $5)
         ON CONFLICT (user_id, logical_date) DO NOTHING
       `,
         [
@@ -735,6 +847,7 @@ export class PostgresUserTextConversationRepository
           input.logicalDate,
           input.timezone,
           input.now,
+          input.inactivityPolicy.version,
         ],
       );
       currentSession = (
@@ -745,6 +858,7 @@ export class PostgresUserTextConversationRepository
               logical_date::text,
               timezone_at_start,
               activity_state,
+              closure_policy_version,
               current_continuous_exchange_no,
               next_turn_sequence_no,
               next_event_sequence_no
@@ -772,6 +886,9 @@ export class PostgresUserTextConversationRepository
               activity_state = 'active',
               current_continuous_exchange_no =
                 current_continuous_exchange_no + 1,
+              closure_policy_version = $4,
+              quiescent_at = NULL,
+              quiescent_reason = NULL,
               updated_at = $1
             WHERE daily_session_id = $2
               AND user_id = $3
@@ -781,11 +898,17 @@ export class PostgresUserTextConversationRepository
               logical_date::text,
               timezone_at_start,
               activity_state,
+              closure_policy_version,
               current_continuous_exchange_no,
               next_turn_sequence_no,
               next_event_sequence_no
           `,
-          [input.now, currentSession.daily_session_id, input.userId],
+          [
+            input.now,
+            currentSession.daily_session_id,
+            input.userId,
+            input.inactivityPolicy.version,
+          ],
         )
       ).rows[0];
       if (!currentSession) {
@@ -991,6 +1114,11 @@ export class PostgresUserTextConversationRepository
       `,
       [input.now, currentSession.daily_session_id, input.userId],
     );
+    await scheduleInactivityEvaluation(client, {
+      dailySessionId: currentSession.daily_session_id,
+      now: input.now,
+      userId: input.userId,
+    });
     await client.query("COMMIT");
 
     return {
@@ -1234,6 +1362,97 @@ async function addGenerationToLegacyTurn(
     generation_command_id: generationCommandId,
     model_run_attempt_id: modelRunAttemptId,
   };
+}
+
+async function ensureInactivityPolicy(
+  client: PoolClient,
+  policy: InactivityPolicy,
+  now: Date,
+): Promise<void> {
+  if (
+    typeof policy.version !== "string" ||
+    policy.version.length === 0 ||
+    policy.version.length > 200 ||
+    !Number.isSafeInteger(policy.timeoutMs) ||
+    policy.timeoutMs <= 0
+  ) {
+    throw new Error("The inactivity policy configuration is invalid.");
+  }
+  await client.query(
+    `
+      INSERT INTO continuous_exchange_inactivity_policies (
+        policy_version,
+        timeout_ms,
+        created_at
+      )
+      VALUES ($1, $2, $3)
+      ON CONFLICT (policy_version) DO NOTHING
+    `,
+    [policy.version, policy.timeoutMs, now],
+  );
+  const stored = await client.query<{ timeout_ms: string }>(
+    `
+      SELECT timeout_ms
+      FROM continuous_exchange_inactivity_policies
+      WHERE policy_version = $1
+    `,
+    [policy.version],
+  );
+  if (Number(stored.rows[0]?.timeout_ms) !== policy.timeoutMs) {
+    throw new Error(
+      "An inactivity policy version cannot be reused with a different timeout.",
+    );
+  }
+}
+
+async function scheduleInactivityEvaluation(
+  client: PoolClient,
+  input: {
+    dailySessionId: string;
+    now: Date;
+    userId: UserId;
+  },
+): Promise<void> {
+  const scheduled = await client.query(
+    `
+      INSERT INTO continuous_exchange_inactivity_evaluations (
+        inactivity_evaluation_id,
+        user_id,
+        daily_session_id,
+        continuous_exchange_no,
+        policy_version,
+        expected_dialogue_revision,
+        due_at,
+        created_at
+      )
+      SELECT
+        $1,
+        session.user_id,
+        session.daily_session_id,
+        session.current_continuous_exchange_no,
+        session.closure_policy_version,
+        session.dialogue_revision,
+        $2::timestamptz + policy.timeout_ms * INTERVAL '1 millisecond',
+        $2
+      FROM daily_sessions session
+      INNER JOIN continuous_exchange_inactivity_policies policy
+        ON policy.policy_version = session.closure_policy_version
+      WHERE session.daily_session_id = $3
+        AND session.user_id = $4
+        AND session.activity_state = 'active'
+      ON CONFLICT (
+        daily_session_id,
+        continuous_exchange_no,
+        expected_dialogue_revision
+      ) DO NOTHING
+    `,
+    [createUuidV7(input.now), input.now, input.dailySessionId, input.userId],
+  );
+  if (scheduled.rowCount !== 1) {
+    throw new Error(
+      "The inactivity evaluation was not scheduled with the User Event.",
+    );
+  }
 }
 
 function asClosedGateReason(
