@@ -7,6 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createInternalAccessHandler } from "../../apps/web/src/internal-access-handler";
 import {
+  asGenerationCommandId,
   asUserId,
   createContextCompiler,
   createContinuousExchangeService,
@@ -24,6 +25,7 @@ import {
   PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
+  PostgresInternalInspectionRepository,
   PostgresUserTextConversationRepository,
   runMigrations,
 } from "@sayhear/data";
@@ -49,6 +51,8 @@ const testGenerationPolicy = Object.freeze({
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
+  outputFormatVersion: "conversation-output:v1",
+  personaVersion: "sayhear-persona:v1",
   productPolicyVersion: "product-policy:v1",
   promptVersion: "conversation-text:v1",
   provider: "openai" as const,
@@ -71,6 +75,19 @@ const testChampion = Object.freeze({
   trainingPolicy: "test",
 });
 const fixedResponseClock = () => new Date("2026-07-27T16:00:00.000Z");
+
+function createTestContextCompiler(
+  repository: PostgresConversationResponseRepository,
+  rawEventTokenBudget = 4_000,
+) {
+  return createContextCompiler({
+    clock: fixedResponseClock,
+    compilerVersion: "context-compiler:v1",
+    contentHmacSecret: "test-context-integrity-secret",
+    rawEventTokenBudget,
+    repository,
+  });
+}
 
 function authSessionTokenHash(sessionToken: string): Buffer {
   return createHash("sha256").update(sessionToken, "utf8").digest();
@@ -559,6 +576,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       input_revision_id: string;
       locale: string;
       model_config_version: string;
+      output_format_version: string;
+      persona_version: string;
       prompt_version: string;
       turn_status: string;
       user_events: string;
@@ -583,6 +602,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         ) AS assistant_revisions,
         command.input_revision_id::text,
         command.prompt_version,
+        command.output_format_version,
+        command.persona_version,
         command.model_config_version,
         command.locale,
         command.freshness_policy,
@@ -616,6 +637,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       freshness_policy: "source_valid:v1",
       locale: "en-US",
       model_config_version: "conversation-text-champion:v1",
+      output_format_version: testGenerationPolicy.outputFormatVersion,
+      persona_version: testGenerationPolicy.personaVersion,
       prompt_version: "conversation-text:v1",
       turn_status: "settled",
       user_events: "1",
@@ -695,6 +718,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler: createTestContextCompiler(responseRepository),
         model: createDeterministicConversationTextModel({
           chunks: ["must not run"],
         }),
@@ -759,6 +783,81 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(metadata).toMatchObject({
       attemptStatus: "succeeded",
       commandStatus: "succeeded",
+      compiledContext: {
+        compilerVersion: "context-compiler:v1",
+        degradedReason: null,
+        dialogueRevision: 1,
+        id: expect.any(String),
+        integrity: {
+          algorithm: "hmac-sha256",
+          keyVersion: "context-integrity:v1",
+        },
+        locale: "en-US",
+        policyVersions: {
+          localePolicyVersion: testGenerationPolicy.localePolicyVersion,
+          outputFormatVersion: "conversation-output:v1",
+          personaVersion: "sayhear-persona:v1",
+          productPolicyVersion: testGenerationPolicy.productPolicyVersion,
+          relationshipPolicyVersion:
+            testGenerationPolicy.relationshipPolicyVersion,
+          safetyPolicyVersion: testGenerationPolicy.safetyPolicyVersion,
+          taskInstructionVersion: testGenerationPolicy.promptVersion,
+        },
+        referencedEvents: [
+          {
+            actor: "user",
+            estimatedTokens: expect.any(Number),
+            revisionId: conversationEvents[0]?.userEventRevisionId,
+            section: "current_user_input",
+            selectionOrder: null,
+            sequence: 1,
+          },
+        ],
+        sectionBudgets: {
+          committedRawEvents: 4_000,
+        },
+        sections: expect.arrayContaining([
+          expect.objectContaining({
+            key: "product_policy",
+            reference: "product-policy:v1",
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            key: "persona",
+            reference: "sayhear-persona:v1",
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            key: "task_instruction",
+            reference: "conversation-text:v1",
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            key: "output_format",
+            reference: "conversation-output:v1",
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            key: "daily_session",
+            reference: expect.stringContaining(
+              ":closure:continuous-exchange-inactivity:v1:",
+            ),
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            budgetTokens: 4_000,
+            key: "committed_raw_events",
+            truncatable: true,
+          }),
+          expect.objectContaining({
+            key: "current_user_input",
+            reference: conversationEvents[0]?.userEventRevisionId,
+            truncatable: false,
+          }),
+        ]),
+        sourceRevision: 1,
+        totalTokens: expect.any(Number),
+      },
       costMicros: 0,
       disposition: "completed",
       freshnessPolicy: "source_valid:v1",
@@ -788,7 +887,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       ),
     ).rejects.toMatchObject({ code: "23503" });
     expect(JSON.stringify(metadata)).not.toMatch(
-      /PRIVATE_CANARY_ISSUE_8|content_hmac|context-integrity/,
+      /PRIVATE_CANARY_ISSUE_8|content_hmac|contentHmac|test-context-integrity-secret/,
     );
     const operationalRecords = await database.pool.query<{ record: string }>(
       `
@@ -891,7 +990,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     );
     const otherSessionToken = "other-sensitive-inspection-session";
     await createPostgresAuthAdapter(database.pool).createSession({
-      expires: new Date("2026-07-28T16:00:00.000Z"),
+      expires: new Date("2099-01-01T00:00:00.000Z"),
       sessionToken: otherSessionToken,
       userId: fixedInternalOwnerPrincipal.userId,
     });
@@ -1066,6 +1165,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           ]);
           return context;
         },
+        renderPermittedPayload: compiler.renderPermittedPayload,
       },
       conversationService: createUserTextConversationService({
         clock: fixedResponseClock,
@@ -1077,6 +1177,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler: compiler,
         model,
         repository: responseRepository,
       }),
@@ -1177,6 +1278,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           );
           return context;
         },
+        renderPermittedPayload: compiler.renderPermittedPayload,
       },
       conversationService: createUserTextConversationService({
         clock: fixedResponseClock,
@@ -1188,6 +1290,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler: compiler,
         model,
         repository: responseRepository,
       }),
@@ -1347,6 +1450,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           providerPolicyVersion,
         },
         clock: fixedResponseClock,
+        contextCompiler: createTestContextCompiler(responseRepository),
         model,
         repository: responseRepository,
       }),
@@ -1469,6 +1573,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler,
         model,
         repository: responseRepository,
       }),
@@ -1568,6 +1673,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         egressPort: createProviderEgressPort({
           champion: testChampion,
           clock: fixedResponseClock,
+          contextCompiler: createTestContextCompiler(responseRepository),
           model,
           repository: responseRepository,
         }),
@@ -1881,6 +1987,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           egressPort: createProviderEgressPort({
             champion: testChampion,
             clock: fixedResponseClock,
+            contextCompiler: createTestContextCompiler(responseRepository),
             model,
             repository: responseRepository,
           }),
@@ -2013,20 +2120,58 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           method: "POST",
         },
       );
-      expect((await readNdjson(response)).at(-1)?.type).toBe(
-        "assistant_committed",
-      );
+      const events = await readNdjson(response);
+      expect(events.at(-1)?.type).toBe("assistant_committed");
+      return events;
     };
-    await submit(
+    const firstTurnEvents = await submit(
       "context-first-event",
       "context-first-turn",
       "The first committed expression.",
     );
-    await submit(
+    const secondTurnEvents = await submit(
       "context-second-event",
       "context-second-turn",
       "The second committed expression.",
     );
+    const secondCommandId = secondTurnEvents[0]?.generationCommandId;
+    const contextInspection = await fetch(
+      `${nextServer.origin}/api/internal/inspection/generation` +
+        `?generation_command_id=${secondCommandId}`,
+      {
+        headers: {
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+      },
+    );
+    expect(contextInspection.status).toBe(200);
+    const contextMetadata = await contextInspection.json();
+    expect(contextMetadata.compiledContext.referencedEvents).toEqual([
+      {
+        actor: "user",
+        estimatedTokens: expect.any(Number),
+        revisionId: firstTurnEvents[0]?.userEventRevisionId,
+        section: "committed_raw_events",
+        selectionOrder: 1,
+        sequence: 1,
+      },
+      {
+        actor: "assistant",
+        estimatedTokens: expect.any(Number),
+        revisionId: firstTurnEvents.at(-1)?.revisionId,
+        section: "committed_raw_events",
+        selectionOrder: 0,
+        sequence: 2,
+      },
+      {
+        actor: "user",
+        estimatedTokens: expect.any(Number),
+        revisionId: secondTurnEvents[0]?.userEventRevisionId,
+        section: "current_user_input",
+        selectionOrder: null,
+        sequence: 3,
+      },
+    ]);
 
     const references = await database.pool.query<{
       actor: string;
@@ -2062,6 +2207,119 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         text: "The second committed expression.",
       },
     ]);
+  });
+
+  it("records an inspectable degradation when only the newest history fits", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const contextCompiler = createTestContextCompiler(responseRepository, 1);
+    const service = createConversationResponseService({
+      clock: fixedResponseClock,
+      contextCompiler,
+      conversationService: createUserTextConversationService({
+        clock: fixedResponseClock,
+        expectedBackupPolicyVersion: "neon-production-v1",
+        expectedConfigurationFingerprint: "sha256:expected",
+        generationPolicy: testGenerationPolicy,
+        repository: new PostgresUserTextConversationRepository(database.pool),
+      }),
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: fixedResponseClock,
+        contextCompiler,
+        model: createDeterministicConversationTextModel({
+          chunks: ["OK"],
+        }),
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const handler = createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    });
+    const submit = async (
+      clientEventId: string,
+      clientTurnId: string,
+      text: string,
+    ) =>
+      readNdjson(
+        await handler(
+          new Request("http://localhost/api/internal/conversation/responses", {
+            body: JSON.stringify({
+              clientEventId,
+              clientTurnId,
+              locale: "en-US",
+              text,
+              timezone: "America/Los_Angeles",
+            }),
+            headers: { "content-type": "application/json" },
+            method: "POST",
+          }),
+        ),
+      );
+
+    const firstTurn = await submit(
+      "budget-first-event",
+      "budget-first-turn",
+      "This older User Event cannot fit in a one-token history budget.",
+    );
+    const secondTurn = await submit(
+      "budget-second-event",
+      "budget-second-turn",
+      "This current input is never truncated by the history budget.",
+    );
+    const secondGenerationCommandId =
+      secondTurn[0]?.generationCommandId;
+    if (typeof secondGenerationCommandId !== "string") {
+      throw new Error("The second GenerationCommand was not returned.");
+    }
+    const metadata =
+      await new PostgresInternalInspectionRepository(
+        database.pool,
+      ).findGenerationMetadata({
+        generationCommandId: asGenerationCommandId(
+          secondGenerationCommandId,
+        ),
+        userId: fixedInternalOwnerPrincipal.userId,
+      });
+
+    expect(metadata?.compiledContext).toMatchObject({
+      degradedReason: "raw_event_budget_exceeded",
+      referencedEvents: [
+        {
+          actor: "assistant",
+          revisionId: firstTurn.at(-1)?.revisionId,
+          section: "committed_raw_events",
+          selectionOrder: 0,
+          sequence: 2,
+        },
+        {
+          actor: "user",
+          revisionId: secondTurn[0]?.userEventRevisionId,
+          section: "current_user_input",
+          selectionOrder: null,
+          sequence: 3,
+        },
+      ],
+      sectionBudgets: {
+        committedRawEvents: 1,
+      },
+      sections: expect.arrayContaining([
+        expect.objectContaining({
+          budgetTokens: 1,
+          key: "committed_raw_events",
+          selectedTokens: 1,
+          truncatable: true,
+        }),
+        expect.objectContaining({
+          key: "current_user_input",
+          truncatable: false,
+        }),
+      ]),
+    });
   });
 
   it("does not let concurrent idempotent responses settle shared work", async () => {
@@ -2115,6 +2373,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler: compiler,
         model,
         repository: responseRepository,
       }),
@@ -2252,6 +2511,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler: createTestContextCompiler(responseRepository),
         model: createDeterministicConversationTextModel({
           chunks: ["must not start"],
         }),
@@ -2935,6 +3195,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       egressPort: createProviderEgressPort({
         champion: testChampion,
         clock: fixedResponseClock,
+        contextCompiler: createTestContextCompiler(responseRepository),
         model: createDeterministicConversationTextModel({
           chunks: ["It is okay to stop here. Goodbye for now."],
         }),

@@ -65,6 +65,8 @@ export type GenerationPolicy = Readonly<{
   model: string;
   modelConfigVersion: string;
   modelSnapshot: string;
+  outputFormatVersion: string;
+  personaVersion: string;
   providerPolicyVersion: string;
   productPolicyVersion: string;
   promptVersion: string;

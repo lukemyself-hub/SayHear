@@ -1,4 +1,5 @@
 import type {
+  ContextCompiler,
   ConversationTextChampion,
   ProviderEgressPort,
   ProviderEgressRepository,
@@ -25,6 +26,7 @@ export function createRuntimeProviderEgressPort(input: {
   adapter: ProviderAdapterConfiguration;
   champion: ConversationTextChampion;
   clock: () => Date;
+  contextCompiler: Pick<ContextCompiler, "renderPermittedPayload">;
   repository: ProviderEgressRepository;
 }): ProviderEgressPort {
   const model =
@@ -46,6 +48,7 @@ export function createRuntimeProviderEgressPort(input: {
   return createProviderEgressPort({
     champion: input.champion,
     clock: input.clock,
+    contextCompiler: input.contextCompiler,
     model,
     repository: input.repository,
   });

@@ -37,12 +37,20 @@ export {
   type UserTextTurn,
 } from "./user-text-conversation";
 export {
+  CompiledContextIntegrityError,
   createContextCompiler,
   type CompiledContext,
+  type CompiledContextDegradedReason,
+  type CompiledContextReferencedEvent,
+  type CompiledContextRenderSource,
+  type CompiledContextSection,
+  type CompiledContextSectionKey,
   type ContextCompiler,
   type ContextCompilerRepository,
+  type ContextPolicyVersions,
   type ContextSourceEvent,
   type ContextSourceSnapshot,
+  type RenderedCompiledContextPayload,
 } from "./context-compiler";
 export {
   createConversationResponseService,
@@ -68,6 +76,7 @@ export {
   createInternalInspectionService,
   InternalInspectionNotFoundError,
   SensitiveInspectionDeniedError,
+  type CompiledContextInspection,
   type ConversationContentInspection,
   type GenerationInspectionMetadata,
   type InternalInspectionRepository,

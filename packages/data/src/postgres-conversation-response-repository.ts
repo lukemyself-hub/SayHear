@@ -1,10 +1,12 @@
 import type {
   CompleteResponseMetadata,
+  CompiledContextReferencedEvent,
+  CompiledContextSection,
   ContextCompilerRepository,
+  ContextPolicyVersions,
   ContextSourceSnapshot,
   ConversationResponseRepository,
   ConversationTextChampion,
-  ConversationTextMessage,
   ProviderDispatchErrorCategory,
   ProviderEgressClaim,
   ProviderEgressRepository,
@@ -13,6 +15,7 @@ import {
   asCompiledContextId,
   asConversationEventId,
   asConversationEventRevisionId,
+  asDailySessionId,
   type CompiledContextId,
   type GenerationCommandId,
   type InteractionTurnId,
@@ -24,9 +27,20 @@ import type { Pool, PoolClient } from "pg";
 import { createUuidV7 } from "./uuid-v7";
 
 type ContextHeadRow = Readonly<{
+  activity_state: "active" | "finalized" | "quiescent";
+  closure_policy_version: string;
+  continuous_exchange_no: string;
+  daily_session_id: string;
   dialogue_revision: string;
   input_revision_id: string;
   locale: string;
+  locale_policy_version: string;
+  output_format_version: string;
+  persona_version: string;
+  product_policy_version: string;
+  prompt_version: string;
+  relationship_policy_version: string;
+  safety_policy_version: string;
   source_revision: string;
 }>;
 
@@ -42,6 +56,15 @@ type DispatchRow = Readonly<{
   attempt_status: string;
   consent_active: boolean;
   consent_policy_version: string | null;
+  context_compiler_version: string;
+  context_content_hmac: string;
+  context_dialogue_revision: string;
+  context_integrity_algorithm: "hmac-sha256";
+  context_integrity_key_version: string;
+  context_policy_versions: ContextPolicyVersions;
+  context_sections: CompiledContextSection[];
+  context_source_revision: string;
+  context_total_tokens: string;
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
@@ -51,6 +74,8 @@ type DispatchRow = Readonly<{
   model: string;
   model_config_version: string;
   model_snapshot: string;
+  output_format_version: string;
+  persona_version: string;
   product_policy_version: string;
   prompt_version: string;
   provider: string;
@@ -60,6 +85,8 @@ type DispatchRow = Readonly<{
   provider_policy_version: string;
   relationship_policy_version: string;
   safety_policy_version: string;
+  session_dialogue_revision: string;
+  session_source_revision: string;
   source_active: boolean;
   status: string;
   user_status: string;
@@ -179,81 +206,130 @@ export class PostgresConversationResponseRepository
     interactionTurnId: InteractionTurnId;
     userId: UserId;
   }): Promise<ContextSourceSnapshot> {
-    const head = await this.pool.query<ContextHeadRow>(
-      `
-        SELECT
-          command.input_revision_id,
-          command.locale,
-          session.dialogue_revision,
-          session.source_revision
-        FROM generation_commands command
-        INNER JOIN interaction_turns turn
-          ON turn.interaction_turn_id = command.interaction_turn_id
-          AND turn.user_id = command.user_id
-        INNER JOIN daily_sessions session
-          ON session.daily_session_id = turn.daily_session_id
-          AND session.user_id = turn.user_id
-        WHERE command.generation_command_id = $1
-          AND command.interaction_turn_id = $2
-          AND command.user_id = $3
-      `,
-      [input.generationCommandId, input.interactionTurnId, input.userId],
-    );
-    const row = head.rows[0];
-    if (!row) {
-      throw new Error("The GenerationCommand Context source was not found.");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const head = await client.query<ContextHeadRow>(
+        `
+          SELECT
+            command.input_revision_id,
+            command.locale,
+            command.locale_policy_version,
+            command.output_format_version,
+            command.persona_version,
+            command.product_policy_version,
+            command.prompt_version,
+            command.relationship_policy_version,
+            command.safety_policy_version,
+            session.daily_session_id,
+            session.activity_state,
+            session.closure_policy_version,
+            session.current_continuous_exchange_no AS continuous_exchange_no,
+            session.dialogue_revision,
+            session.source_revision
+          FROM generation_commands command
+          INNER JOIN interaction_turns turn
+            ON turn.interaction_turn_id = command.interaction_turn_id
+            AND turn.user_id = command.user_id
+          INNER JOIN daily_sessions session
+            ON session.daily_session_id = turn.daily_session_id
+            AND session.user_id = turn.user_id
+          WHERE command.generation_command_id = $1
+            AND command.interaction_turn_id = $2
+            AND command.user_id = $3
+        `,
+        [input.generationCommandId, input.interactionTurnId, input.userId],
+      );
+      const row = head.rows[0];
+      if (!row) {
+        throw new Error("The GenerationCommand Context source was not found.");
+      }
+
+      const events = await client.query<ContextEventRow>(
+        `
+          SELECT
+            event.actor,
+            event.sequence_no,
+            revision.conversation_event_revision_id AS revision_id,
+            revision.locale,
+            revision.canonical_text AS text
+          FROM generation_commands command
+          INNER JOIN interaction_turns turn
+            ON turn.interaction_turn_id = command.interaction_turn_id
+            AND turn.user_id = command.user_id
+          INNER JOIN conversation_events input_event
+            ON input_event.conversation_event_id = command.subject_id
+            AND input_event.user_id = command.user_id
+          INNER JOIN conversation_events event
+            ON event.daily_session_id = turn.daily_session_id
+            AND event.user_id = turn.user_id
+          INNER JOIN conversation_event_revisions revision
+            ON revision.conversation_event_revision_id = event.current_revision_id
+            AND revision.user_id = event.user_id
+          WHERE command.generation_command_id = $1
+            AND command.user_id = $2
+            AND event.sequence_no <= input_event.sequence_no
+            AND event.actor IN ('user', 'assistant')
+            AND event.lifecycle_status = 'active'
+            AND revision.content_purged_at IS NULL
+            AND (
+              event.actor = 'user'
+              OR EXISTS (
+                SELECT 1
+                FROM generation_commands assistant_command
+                WHERE assistant_command.generation_command_id =
+                    event.generation_command_id
+                  AND assistant_command.user_id = event.user_id
+                  AND assistant_command.status = 'succeeded'
+                  AND assistant_command.authoritative_result_id =
+                    revision.conversation_event_revision_id
+              )
+            )
+          ORDER BY event.sequence_no
+        `,
+        [input.generationCommandId, input.userId],
+      );
+
+      await client.query("COMMIT");
+      return {
+        dailySession: {
+          activityState: row.activity_state,
+          closurePolicyVersion: row.closure_policy_version,
+          continuousExchangeNo: Number(row.continuous_exchange_no),
+          id: asDailySessionId(row.daily_session_id),
+        },
+        dialogueRevision: Number(row.dialogue_revision),
+        events: events.rows.map((event) => ({
+          actor: event.actor,
+          locale: event.locale,
+          revisionId: asConversationEventRevisionId(event.revision_id),
+          sequence: Number(event.sequence_no),
+          text: event.text,
+        })),
+        inputRevisionId: asConversationEventRevisionId(row.input_revision_id),
+        locale: row.locale,
+        policyVersions: {
+          localePolicyVersion: row.locale_policy_version,
+          outputFormatVersion: row.output_format_version,
+          personaVersion: row.persona_version,
+          productPolicyVersion: row.product_policy_version,
+          relationshipPolicyVersion: row.relationship_policy_version,
+          safetyPolicyVersion: row.safety_policy_version,
+          taskInstructionVersion: row.prompt_version,
+        },
+        sourceRevision: Number(row.source_revision),
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const events = await this.pool.query<ContextEventRow>(
-      `
-        SELECT
-          event.actor,
-          event.sequence_no,
-          revision.conversation_event_revision_id AS revision_id,
-          revision.locale,
-          revision.canonical_text AS text
-        FROM generation_commands command
-        INNER JOIN interaction_turns turn
-          ON turn.interaction_turn_id = command.interaction_turn_id
-          AND turn.user_id = command.user_id
-        INNER JOIN conversation_events input_event
-          ON input_event.conversation_event_id = command.subject_id
-          AND input_event.user_id = command.user_id
-        INNER JOIN conversation_events event
-          ON event.daily_session_id = turn.daily_session_id
-          AND event.user_id = turn.user_id
-        INNER JOIN conversation_event_revisions revision
-          ON revision.conversation_event_revision_id = event.current_revision_id
-          AND revision.user_id = event.user_id
-        WHERE command.generation_command_id = $1
-          AND command.user_id = $2
-          AND event.sequence_no <= input_event.sequence_no
-          AND event.actor IN ('user', 'assistant')
-          AND event.lifecycle_status = 'active'
-          AND revision.content_purged_at IS NULL
-        ORDER BY event.sequence_no
-      `,
-      [input.generationCommandId, input.userId],
-    );
-
-    return {
-      dialogueRevision: Number(row.dialogue_revision),
-      events: events.rows.map((event) => ({
-        actor: event.actor,
-        locale: event.locale,
-        revisionId: asConversationEventRevisionId(event.revision_id),
-        sequence: Number(event.sequence_no),
-        text: event.text,
-      })),
-      inputRevisionId: asConversationEventRevisionId(row.input_revision_id),
-      locale: row.locale,
-      sourceRevision: Number(row.source_revision),
-    };
   }
 
   public async saveCompiledContext(
     input: Parameters<ContextCompilerRepository["saveCompiledContext"]>[0],
-  ) {
+  ): ReturnType<ContextCompilerRepository["saveCompiledContext"]> {
     const client = await this.pool.connect();
     const compiledContextId = createUuidV7(input.now);
     try {
@@ -276,23 +352,12 @@ export class PostgresConversationResponseRepository
         throw new Error("The CompiledContext command was not found.");
       }
       if (commandRow.compiled_context_id) {
-        const references = await client.query<{ revision_id: string }>(
-          `
-            SELECT
-              conversation_event_revision_id AS revision_id
-            FROM compiled_context_revision_refs
-            WHERE compiled_context_id = $1
-            ORDER BY ordinal
-          `,
-          [commandRow.compiled_context_id],
+        const compiled = await loadCompiledContext(
+          client,
+          asCompiledContextId(commandRow.compiled_context_id),
         );
         await client.query("COMMIT");
-        return {
-          id: asCompiledContextId(commandRow.compiled_context_id),
-          referencedRevisionIds: references.rows.map((row) =>
-            asConversationEventRevisionId(row.revision_id),
-          ),
-        };
+        return compiled;
       }
       if (commandRow.status !== "compiling") {
         throw new Error(
@@ -310,12 +375,19 @@ export class PostgresConversationResponseRepository
             source_revision,
             locale,
             section_budgets,
+            policy_versions,
+            sections,
             total_tokens,
             degraded_reason,
             content_hmac,
+            integrity_algorithm,
+            integrity_key_version,
             created_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
+          VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
+            $10::jsonb, $11, $12, $13, $14, $15, $16
+          )
         `,
         [
           compiledContextId,
@@ -326,9 +398,13 @@ export class PostgresConversationResponseRepository
           input.sourceRevision,
           input.locale,
           JSON.stringify(input.sectionBudgets),
+          JSON.stringify(input.policyVersions),
+          JSON.stringify(input.sections),
           input.totalTokens,
           input.degradedReason,
-          input.contentHmac,
+          input.integrity.contentHmac,
+          input.integrity.algorithm,
+          input.integrity.keyVersion,
           input.now,
         ],
       );
@@ -341,9 +417,12 @@ export class PostgresConversationResponseRepository
               conversation_event_revision_id,
               ordinal,
               actor,
-              estimated_tokens
+              estimated_tokens,
+              sequence_no,
+              section,
+              selection_order
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           `,
           [
             compiledContextId,
@@ -352,6 +431,9 @@ export class PostgresConversationResponseRepository
             ordinal,
             event.actor,
             event.estimatedTokens,
+            event.sequence,
+            event.section,
+            event.selectionOrder,
           ],
         );
       }
@@ -371,10 +453,20 @@ export class PostgresConversationResponseRepository
       }
       await client.query("COMMIT");
       return {
+        degradedReason: input.degradedReason,
+        dialogueRevision: input.dialogueRevision,
         id: asCompiledContextId(compiledContextId),
+        locale: input.locale,
         referencedRevisionIds: input.referencedEvents.map(
           (event) => event.revisionId,
         ),
+        sourceRevision: input.sourceRevision,
+        statistics: {
+          rawEventBudgetTokens:
+            input.sectionBudgets.committedRawEvents,
+          selectedEventCount: input.referencedEvents.length,
+          totalTokens: input.totalTokens,
+        },
       };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -406,6 +498,8 @@ export class PostgresConversationResponseRepository
             command.safety_policy_version,
             command.relationship_policy_version,
             command.locale_policy_version,
+            command.output_format_version,
+            command.persona_version,
             command.locale,
             command.provider,
             command.model,
@@ -414,6 +508,15 @@ export class PostgresConversationResponseRepository
             command.provider_policy_version,
             command.consent_policy_version,
             command.freshness_policy,
+            context.compiler_version AS context_compiler_version,
+            context.dialogue_revision AS context_dialogue_revision,
+            context.policy_versions AS context_policy_versions,
+            context.sections AS context_sections,
+            context.source_revision AS context_source_revision,
+            context.total_tokens AS context_total_tokens,
+            context.content_hmac AS context_content_hmac,
+            context.integrity_algorithm AS context_integrity_algorithm,
+            context.integrity_key_version AS context_integrity_key_version,
             policy.status AS provider_policy_status,
             policy.model_config_version AS provider_policy_model_config_version,
             policy.consent_policy_version AS provider_policy_consent_version,
@@ -423,6 +526,8 @@ export class PostgresConversationResponseRepository
             ) AS consent_active,
             command.status,
             attempt.status AS attempt_status,
+            session.dialogue_revision AS session_dialogue_revision,
+            session.source_revision AS session_source_revision,
             (
               input_event.lifecycle_status = 'active'
               AND input_event.current_revision_id = command.input_revision_id
@@ -434,6 +539,17 @@ export class PostgresConversationResponseRepository
             AND attempt.user_id = command.user_id
           INNER JOIN app_users owner
             ON owner.user_id = command.user_id
+          INNER JOIN interaction_turns turn
+            ON turn.interaction_turn_id = command.interaction_turn_id
+            AND turn.user_id = command.user_id
+          INNER JOIN daily_sessions session
+            ON session.daily_session_id = turn.daily_session_id
+            AND session.user_id = turn.user_id
+          INNER JOIN compiled_contexts context
+            ON context.compiled_context_id = command.compiled_context_id
+            AND context.generation_command_id =
+              command.generation_command_id
+            AND context.user_id = command.user_id
           INNER JOIN provider_egress_policy_versions policy
             ON policy.policy_version = command.provider_policy_version
             AND policy.provider = command.provider
@@ -500,7 +616,23 @@ export class PostgresConversationResponseRepository
         row.provider === input.champion.provider &&
         row.model === input.champion.model &&
         row.model_snapshot === input.champion.snapshot &&
-        row.model_config_version === input.champion.configVersion;
+        row.model_config_version === input.champion.configVersion &&
+        row.context_policy_versions.localePolicyVersion ===
+          row.locale_policy_version &&
+        row.context_policy_versions.outputFormatVersion ===
+          row.output_format_version &&
+        row.context_policy_versions.personaVersion ===
+          row.persona_version &&
+        row.context_policy_versions.productPolicyVersion ===
+          row.product_policy_version &&
+        row.context_policy_versions.relationshipPolicyVersion ===
+          row.relationship_policy_version &&
+        row.context_policy_versions.safetyPolicyVersion ===
+          row.safety_policy_version &&
+        row.context_policy_versions.taskInstructionVersion ===
+          row.prompt_version &&
+        row.context_dialogue_revision === row.session_dialogue_revision &&
+        row.context_source_revision === row.session_source_revision;
 
       if (!row || !permitted) {
         if (row) {
@@ -557,21 +689,27 @@ export class PostgresConversationResponseRepository
         `,
         [input.now, input.generationCommandId],
       );
-      const messages = await loadContextMessages(
+      const referencedEvents = await loadContextReferencedEvents(
         client,
         input.compiledContextId,
       );
       await client.query("COMMIT");
       return {
-        locale: row.locale,
-        localePolicyVersion: row.locale_policy_version,
-        messages,
+        context: {
+          compilerVersion: row.context_compiler_version,
+          integrity: {
+            algorithm: row.context_integrity_algorithm,
+            contentHmac: row.context_content_hmac,
+            keyVersion: row.context_integrity_key_version,
+          },
+          locale: row.locale,
+          policyVersions: row.context_policy_versions,
+          referencedEvents,
+          sections: row.context_sections,
+          totalTokens: Number(row.context_total_tokens),
+        },
         model: row.model,
         outcome: "permitted",
-        productPolicyVersion: row.product_policy_version,
-        promptVersion: row.prompt_version,
-        relationshipPolicyVersion: row.relationship_policy_version,
-        safetyPolicyVersion: row.safety_policy_version,
       };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -1061,19 +1199,29 @@ async function contextReferencesAreCurrentForCommand(
     : false;
 }
 
-async function loadContextMessages(
+async function loadContextReferencedEvents(
   client: PoolClient,
   compiledContextId: CompiledContextId,
-): Promise<readonly ConversationTextMessage[]> {
+): Promise<readonly CompiledContextReferencedEvent[]> {
   const result = await client.query<{
     actor: "user" | "assistant";
+    estimated_tokens: string;
+    locale: string;
     revision_id: string;
+    section: "committed_raw_events" | "current_user_input";
+    selection_order: string | null;
+    sequence_no: string;
     text: string;
   }>(
     `
       SELECT
         ref.actor,
+        ref.estimated_tokens,
+        ref.sequence_no,
+        ref.section,
+        ref.selection_order,
         revision.conversation_event_revision_id AS revision_id,
+        revision.locale,
         revision.canonical_text AS text
       FROM compiled_context_revision_refs ref
       INNER JOIN conversation_event_revisions revision
@@ -1086,10 +1234,72 @@ async function loadContextMessages(
     [compiledContextId],
   );
   return result.rows.map((row) => ({
+    actor: row.actor,
+    estimatedTokens: Number(row.estimated_tokens),
+    locale: row.locale,
     revisionId: asConversationEventRevisionId(row.revision_id),
-    role: row.actor,
+    section: row.section,
+    selectionOrder:
+      row.selection_order === null ? null : Number(row.selection_order),
+    sequence: Number(row.sequence_no),
     text: row.text,
   }));
+}
+
+async function loadCompiledContext(
+  client: PoolClient,
+  compiledContextId: CompiledContextId,
+): ReturnType<ContextCompilerRepository["saveCompiledContext"]> {
+  const context = await client.query<{
+    degraded_reason: "raw_event_budget_exceeded" | null;
+    dialogue_revision: string;
+    locale: string;
+    raw_event_budget_tokens: string;
+    source_revision: string;
+    total_tokens: string;
+  }>(
+    `
+      SELECT
+        degraded_reason,
+        dialogue_revision,
+        locale,
+        source_revision,
+        total_tokens,
+        section_budgets ->> 'committedRawEvents' AS
+          raw_event_budget_tokens
+      FROM compiled_contexts
+      WHERE compiled_context_id = $1
+    `,
+    [compiledContextId],
+  );
+  const row = context.rows[0];
+  if (!row) {
+    throw new Error("The persisted CompiledContext was not found.");
+  }
+  const references = await client.query<{ revision_id: string }>(
+    `
+      SELECT conversation_event_revision_id AS revision_id
+      FROM compiled_context_revision_refs
+      WHERE compiled_context_id = $1
+      ORDER BY ordinal
+    `,
+    [compiledContextId],
+  );
+  return {
+    degradedReason: row.degraded_reason,
+    dialogueRevision: Number(row.dialogue_revision),
+    id: compiledContextId,
+    locale: row.locale,
+    referencedRevisionIds: references.rows.map((reference) =>
+      asConversationEventRevisionId(reference.revision_id),
+    ),
+    sourceRevision: Number(row.source_revision),
+    statistics: {
+      rawEventBudgetTokens: Number(row.raw_event_budget_tokens),
+      selectedEventCount: references.rows.length,
+      totalTokens: Number(row.total_tokens),
+    },
+  };
 }
 
 async function insertEgressDisposition(

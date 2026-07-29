@@ -5,6 +5,8 @@ import type {
   ModelRunAttemptId,
 } from "@sayhear/domain";
 
+import type { CompiledContextRenderSource } from "./context-compiler";
+
 export type ConversationTextChampion = Readonly<{
   configVersion: string;
   consentPolicyVersion: string | null;
@@ -85,15 +87,9 @@ export class ProviderDispatchError extends Error {
 
 export type ProviderEgressClaim =
   | Readonly<{
-      locale: string;
-      localePolicyVersion: string;
-      messages: readonly ConversationTextMessage[];
+      context: CompiledContextRenderSource;
       model: string;
       outcome: "permitted";
-      productPolicyVersion: string;
-      promptVersion: string;
-      relationshipPolicyVersion: string;
-      safetyPolicyVersion: string;
     }>
   | Readonly<{
       category: ProviderDispatchErrorCategory;

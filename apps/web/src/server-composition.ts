@@ -56,6 +56,8 @@ export function createServerComposition() {
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
+      outputFormatVersion: "conversation-output:v1",
+      personaVersion: "sayhear-persona:v1",
       productPolicyVersion: "product-policy:v1",
       promptVersion: "conversation-text:v1",
       provider: configuration.provider.champion.provider,
@@ -66,6 +68,13 @@ export function createServerComposition() {
     },
     inactivityPolicy: configuration.inactivityPolicy,
     repository: conversationRepository,
+  });
+  const contextCompiler = createContextCompiler({
+    clock: configuration.clock,
+    compilerVersion: "context-compiler:v1",
+    contentHmacSecret: configuration.contextHmacSecret,
+    rawEventTokenBudget: 4_000,
+    repository: responseRepository,
   });
   const egressPort = createRuntimeProviderEgressPort({
     adapter:
@@ -90,13 +99,7 @@ export function createServerComposition() {
           },
     champion: configuration.provider.champion,
     clock: configuration.clock,
-    repository: responseRepository,
-  });
-  const contextCompiler = createContextCompiler({
-    clock: configuration.clock,
-    compilerVersion: "context-compiler:v1",
-    contentHmacSecret: configuration.contextHmacSecret,
-    rawEventTokenBudget: 4_000,
+    contextCompiler,
     repository: responseRepository,
   });
   return {

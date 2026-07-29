@@ -1,5 +1,7 @@
 import {
+  CompiledContextIntegrityError,
   ProviderDispatchError,
+  type ContextCompiler,
   type ConversationTextChampion,
   type ConversationTextModel,
   type ProviderEgressPort,
@@ -9,6 +11,7 @@ import {
 export function createProviderEgressPort(dependencies: {
   champion: ConversationTextChampion;
   clock: () => Date;
+  contextCompiler: Pick<ContextCompiler, "renderPermittedPayload">;
   model: ConversationTextModel;
   repository: ProviderEgressRepository;
 }): ProviderEgressPort {
@@ -32,11 +35,21 @@ export function createProviderEgressPort(dependencies: {
         );
       }
 
-      const instructions = renderInstructions(claim);
+      let payload;
+      try {
+        payload = dependencies.contextCompiler.renderPermittedPayload(
+          claim.context,
+        );
+      } catch (error) {
+        if (error instanceof CompiledContextIntegrityError) {
+          throw new ProviderDispatchError("policy_blocked");
+        }
+        throw error;
+      }
       let firstTokenRecorded = false;
       for await (const event of dependencies.model.stream({
-        instructions,
-        messages: claim.messages,
+        instructions: payload.instructions,
+        messages: payload.messages,
         model: claim.model,
         ...(input.signal ? { signal: input.signal } : {}),
       })) {
@@ -51,35 +64,4 @@ export function createProviderEgressPort(dependencies: {
       }
     },
   };
-}
-
-function renderInstructions(input: {
-  locale: string;
-  localePolicyVersion: string;
-  productPolicyVersion: string;
-  promptVersion: string;
-  relationshipPolicyVersion: string;
-  safetyPolicyVersion: string;
-}): string {
-  const supportedVersions = {
-    localePolicyVersion: "locale-pack:v1",
-    productPolicyVersion: "product-policy:v1",
-    promptVersion: "conversation-text:v1",
-    relationshipPolicyVersion: "relationship-boundary:v1",
-    safetyPolicyVersion: "minimum-high-risk-response:v1",
-  } as const;
-  for (const [field, expected] of Object.entries(supportedVersions)) {
-    if (input[field as keyof typeof supportedVersions] !== expected) {
-      throw new ProviderDispatchError("policy_blocked");
-    }
-  }
-
-  return [
-    "You are SayHear, a private AI life-journal conversation companion.",
-    "Listen and understand by default. Do not give advice unless the user asks.",
-    "Ask at most one question, anchored in the user's current expression.",
-    "Distinguish user facts and judgments from your own inference.",
-    "For explicit self-harm, harm-to-others, or imminent danger, pause ordinary listening and encourage immediate real-world support without diagnosing, impersonating a therapist, or promising absolute confidentiality.",
-    `Respond naturally in the user's locale (${input.locale}), preserving natural English/Chinese code-switching.`,
-  ].join("\n");
 }

@@ -1,14 +1,54 @@
 import type {
+  CompiledContextId,
   ConversationEventRevisionId,
   GenerationCommandId,
   ModelRunAttemptId,
   UserId,
 } from "@sayhear/domain";
 
+import type {
+  CompiledContextDegradedReason,
+  CompiledContextSectionKey,
+  ContextPolicyVersions,
+} from "./context-compiler";
+
+export type CompiledContextInspection = Readonly<{
+  compilerVersion: string;
+  degradedReason: CompiledContextDegradedReason;
+  dialogueRevision: number;
+  id: CompiledContextId;
+  integrity: Readonly<{
+    algorithm: "hmac-sha256";
+    keyVersion: string;
+  }>;
+  locale: string;
+  policyVersions: ContextPolicyVersions;
+  referencedEvents: readonly Readonly<{
+    actor: "user" | "assistant";
+    estimatedTokens: number;
+    revisionId: ConversationEventRevisionId;
+    section: "committed_raw_events" | "current_user_input";
+    selectionOrder: number | null;
+    sequence: number;
+  }>[];
+  sectionBudgets: Readonly<{ committedRawEvents: number }>;
+  sections: readonly Readonly<{
+    budgetTokens: number | null;
+    key: CompiledContextSectionKey;
+    ordinal: number;
+    reference: string;
+    selectedTokens: number;
+    truncatable: boolean;
+  }>[];
+  sourceRevision: number;
+  totalTokens: number;
+}>;
+
 export type GenerationInspectionMetadata = Readonly<{
   attemptStatus: string;
   checkedAt: Date;
   commandStatus: string;
+  compiledContext: CompiledContextInspection;
   completedAt: Date | null;
   consentPolicyVersion: string | null;
   costMicros: number | null;

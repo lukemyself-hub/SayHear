@@ -1,9 +1,12 @@
 import type {
+  CompiledContextSection,
+  ContextPolicyVersions,
   GenerationInspectionMetadata,
   InternalInspectionRepository,
 } from "@sayhear/application";
 import {
   asConversationEventRevisionId,
+  asCompiledContextId,
   asGenerationCommandId,
   asModelRunAttemptId,
 } from "@sayhear/application";
@@ -16,6 +19,26 @@ type GenerationMetadataRow = Readonly<{
   checked_at: Date;
   command_status: string;
   completed_at: Date | null;
+  context_compiler_version: string;
+  context_degraded_reason: "raw_event_budget_exceeded" | null;
+  context_dialogue_revision: string;
+  context_id: string;
+  context_integrity_algorithm: "hmac-sha256";
+  context_integrity_key_version: string;
+  context_locale: string;
+  context_policy_versions: ContextPolicyVersions;
+  context_referenced_events: Array<{
+    actor: "user" | "assistant";
+    estimatedTokens: number;
+    revisionId: string;
+    section: "committed_raw_events" | "current_user_input";
+    selectionOrder: number | null;
+    sequence: number;
+  }>;
+  context_section_budgets: { committedRawEvents: number };
+  context_sections: CompiledContextSection[];
+  context_source_revision: string;
+  context_total_tokens: string;
   consent_policy_version: string | null;
   cost_micros: string | null;
   dispatch_latency_ms: string;
@@ -62,6 +85,38 @@ export class PostgresInternalInspectionRepository
           command.freshness_policy,
           command.consent_policy_version,
           command.status AS command_status,
+          context.compiled_context_id AS context_id,
+          context.compiler_version AS context_compiler_version,
+          context.dialogue_revision AS context_dialogue_revision,
+          context.source_revision AS context_source_revision,
+          context.locale AS context_locale,
+          context.policy_versions AS context_policy_versions,
+          context.section_budgets AS context_section_budgets,
+          context.sections AS context_sections,
+          context.total_tokens AS context_total_tokens,
+          context.degraded_reason AS context_degraded_reason,
+          context.integrity_algorithm AS context_integrity_algorithm,
+          context.integrity_key_version AS context_integrity_key_version,
+          COALESCE(
+            (
+              SELECT jsonb_agg(
+                jsonb_build_object(
+                  'actor', ref.actor,
+                  'estimatedTokens', ref.estimated_tokens,
+                  'revisionId', ref.conversation_event_revision_id,
+                  'section', ref.section,
+                  'selectionOrder', ref.selection_order,
+                  'sequence', ref.sequence_no
+                )
+                ORDER BY ref.ordinal
+              )
+              FROM compiled_context_revision_refs ref
+              WHERE ref.compiled_context_id =
+                context.compiled_context_id
+                AND ref.user_id = context.user_id
+            ),
+            '[]'::jsonb
+          ) AS context_referenced_events,
           attempt.model_run_attempt_id,
           attempt.provider,
           attempt.model,
@@ -92,6 +147,11 @@ export class PostgresInternalInspectionRepository
         FROM active_internal_owner owner
         INNER JOIN generation_commands command
           ON command.user_id = owner.user_id
+        INNER JOIN compiled_contexts context
+          ON context.compiled_context_id = command.compiled_context_id
+          AND context.generation_command_id =
+            command.generation_command_id
+          AND context.user_id = command.user_id
         INNER JOIN model_run_attempts attempt
           ON attempt.generation_command_id = command.generation_command_id
           AND attempt.user_id = command.user_id
@@ -113,6 +173,28 @@ export class PostgresInternalInspectionRepository
       attemptStatus: row.attempt_status,
       checkedAt: row.checked_at,
       commandStatus: row.command_status,
+      compiledContext: {
+        compilerVersion: row.context_compiler_version,
+        degradedReason: row.context_degraded_reason,
+        dialogueRevision: Number(row.context_dialogue_revision),
+        id: asCompiledContextId(row.context_id),
+        integrity: {
+          algorithm: row.context_integrity_algorithm,
+          keyVersion: row.context_integrity_key_version,
+        },
+        locale: row.context_locale,
+        policyVersions: row.context_policy_versions,
+        referencedEvents: row.context_referenced_events.map((event) => ({
+          ...event,
+          revisionId: asConversationEventRevisionId(event.revisionId),
+        })),
+        sectionBudgets: row.context_section_budgets,
+        sections: row.context_sections.map(
+          ({ contentHmac: _contentHmac, ...section }) => section,
+        ),
+        sourceRevision: Number(row.context_source_revision),
+        totalTokens: Number(row.context_total_tokens),
+      },
       completedAt: row.completed_at,
       consentPolicyVersion: row.consent_policy_version,
       costMicros: optionalNumber(row.cost_micros),
