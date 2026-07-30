@@ -55,10 +55,32 @@ export function createProviderEgressPort(dependencies: {
       })) {
         if (event.type === "delta" && !firstTokenRecorded) {
           firstTokenRecorded = true;
-          await dependencies.repository.recordFirstToken({
-            modelRunAttemptId: input.modelRunAttemptId,
-            now: dependencies.clock(),
-          });
+          const accepted =
+            await dependencies.repository.recordFirstToken({
+              modelRunAttemptId: input.modelRunAttemptId,
+              now: dependencies.clock(),
+            });
+          if (!accepted) {
+            throw new ProviderDispatchError(
+              "unavailable",
+              "The Provider result arrived after its execution fence expired.",
+              false,
+            );
+          }
+        } else if (event.type === "completed") {
+          const accepted =
+            await dependencies.repository.recordProviderCompletion({
+              completion: event,
+              modelRunAttemptId: input.modelRunAttemptId,
+              now: dependencies.clock(),
+            });
+          if (!accepted) {
+            throw new ProviderDispatchError(
+              "unavailable",
+              "The Provider result arrived after its execution fence expired.",
+              false,
+            );
+          }
         }
         yield event;
       }

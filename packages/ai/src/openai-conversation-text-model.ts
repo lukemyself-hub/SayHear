@@ -170,6 +170,9 @@ function categoryForStatus(status: number): ProviderDispatchErrorCategory {
   if (status === 401 || status === 403) {
     return "authentication";
   }
+  if (status === 400 || status === 404 || status === 422) {
+    return "configuration";
+  }
   if (status === 429) {
     return "rate_limited";
   }

@@ -103,6 +103,28 @@ describe("OpenAI Conversation Text adapter", () => {
     });
   });
 
+  it("classifies Provider authentication and configuration failures as terminal", async () => {
+    for (const [status, category] of [
+      [401, "authentication"],
+      [400, "configuration"],
+    ] as const) {
+      const model = createOpenAIConversationTextModel({
+        apiKey: "synthetic-server-key",
+        fetchImplementation: async () => new Response(null, { status }),
+      });
+
+      await expect(async () => {
+        for await (const _event of model.stream({
+          instructions: "Synthetic instructions",
+          messages: [],
+          model: "gpt-5.4",
+        })) {
+          // Terminal Provider failures must not yield.
+        }
+      }).rejects.toMatchObject({ category });
+    }
+  });
+
   it("does not expose Provider credentials or raw error bodies", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});

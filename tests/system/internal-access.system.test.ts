@@ -12,8 +12,11 @@ import {
   createContextCompiler,
   createContinuousExchangeService,
   createConversationResponseService,
+  createInternalInspectionService,
   createInternalOwnerAccessService,
   createUserTextConversationService,
+  ProviderDispatchError,
+  type ConversationResponseRepository,
   type ConversationTextModel,
 } from "@sayhear/application";
 import {
@@ -2042,9 +2045,23 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       "assistant_delta",
       "response_interrupted",
     ]);
+    const afterCompletionWithoutDelta = await submit(
+      createHandler(
+        createDeterministicConversationTextModel({
+          chunks: [],
+          failAfterCompletion: true,
+        }),
+      ),
+      "after-completion-without-delta",
+    );
+    expect(afterCompletionWithoutDelta.map((event) => event.type)).toEqual([
+      "user_committed",
+      "response_interrupted",
+    ]);
 
     const states = await database.pool.query<{
       assistant_events: string;
+      attempt_count: string;
       attempt_status: string;
       command_status: string;
       turn_status: string;
@@ -2055,30 +2072,209 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         attempt.status AS attempt_status,
         (
           SELECT COUNT(*)::text
+          FROM model_run_attempts command_attempt
+          WHERE command_attempt.generation_command_id =
+            command.generation_command_id
+        ) AS attempt_count,
+        (
+          SELECT COUNT(*)::text
           FROM conversation_events
           WHERE actor = 'assistant'
         ) AS assistant_events
       FROM interaction_turns turn
       INNER JOIN generation_commands command
         ON command.interaction_turn_id = turn.interaction_turn_id
-      INNER JOIN model_run_attempts attempt
-        ON attempt.generation_command_id = command.generation_command_id
+      INNER JOIN LATERAL (
+        SELECT latest_attempt.*
+        FROM model_run_attempts latest_attempt
+        WHERE latest_attempt.generation_command_id =
+          command.generation_command_id
+        ORDER BY latest_attempt.attempt_no DESC
+        LIMIT 1
+      ) attempt ON TRUE
       ORDER BY turn.turn_sequence_no
     `);
     expect(states.rows).toEqual([
       {
         assistant_events: "0",
+        attempt_count: "3",
         attempt_status: "failed",
         command_status: "failed",
         turn_status: "failed",
       },
       {
         assistant_events: "0",
-        attempt_status: "interrupted",
+        attempt_count: "1",
+        attempt_status: "result_unknown",
+        command_status: "interrupted",
+        turn_status: "interrupted",
+      },
+      {
+        assistant_events: "0",
+        attempt_count: "1",
+        attempt_status: "result_unknown",
         command_status: "interrupted",
         turn_status: "interrupted",
       },
     ]);
+  });
+
+  it("uses the same bounded jittered recovery command for a retryable request-path failure", async () => {
+    await openPrivateWrites();
+    let currentTime = new Date("2026-07-27T16:00:00.000Z");
+    let dispatchCount = 0;
+    const model: ConversationTextModel = {
+      async *stream() {
+        dispatchCount += 1;
+        if (dispatchCount === 1) {
+          throw new ProviderDispatchError("rate_limited");
+        }
+        yield { delta: "Recovered on the request path.", type: "delta" };
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 1,
+          modelSnapshot: testChampion.snapshot,
+          outputTokens: 1,
+          providerRequestId: "request-path-retry-2",
+          type: "completed",
+        };
+      },
+    };
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock: () => currentTime,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const contextCompiler = createContextCompiler({
+      clock: () => currentTime,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const service = createConversationResponseService({
+      clock: () => currentTime,
+      contextCompiler,
+      conversationService,
+      delay: async (delayMs) => {
+        currentTime = new Date(currentTime.getTime() + delayMs);
+      },
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: () => currentTime,
+        contextCompiler,
+        model,
+        repository: responseRepository,
+      }),
+      jitter: () => 0.5,
+      repository: responseRepository,
+    });
+
+    const events: Record<string, unknown>[] = [];
+    for await (const event of service.respond(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "request-path-recovery-event",
+        clientTurnId: "request-path-recovery-turn",
+        locale: "en-US",
+        text: "Retry the same frozen request.",
+        timezone: "America/Los_Angeles",
+      },
+    )) {
+      events.push(event);
+    }
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+
+    const attempts = await database.pool.query<{
+      attempt_no: number;
+      error_category: string | null;
+      recovery_policy_version: string;
+      retry_not_before: Date | null;
+      retry_of_model_run_attempt_id: string | null;
+      status: string;
+    }>(
+      `
+        SELECT
+          attempt.attempt_no,
+          attempt.status,
+          attempt.error_category,
+          attempt.retry_not_before,
+          attempt.retry_of_model_run_attempt_id::text,
+          command.recovery_policy_version
+        FROM generation_commands command
+        INNER JOIN model_run_attempts attempt
+          ON attempt.generation_command_id =
+            command.generation_command_id
+        WHERE command.generation_command_id = $1
+        ORDER BY attempt.attempt_no
+      `,
+      [events[0]?.generationCommandId],
+    );
+    expect(attempts.rows).toMatchObject([
+      {
+        attempt_no: 1,
+        error_category: "rate_limited",
+        recovery_policy_version: "conversation-response-recovery:v1",
+        retry_not_before: new Date("2026-07-27T16:00:00.250Z"),
+        retry_of_model_run_attempt_id: null,
+        status: "failed",
+      },
+      {
+        attempt_no: 2,
+        error_category: null,
+        recovery_policy_version: "conversation-response-recovery:v1",
+        retry_not_before: null,
+        retry_of_model_run_attempt_id: events[0]?.modelRunAttemptId,
+        status: "succeeded",
+      },
+    ]);
+    const inspection = await createInternalInspectionService({
+      clock: () => currentTime,
+      policyVersion: "sensitive-inspection:v1",
+      repository: new PostgresInternalInspectionRepository(database.pool),
+      stepUpMaxAgeMs: 10 * 60 * 1_000,
+    }).getGenerationMetadata(
+      fixedInternalOwnerPrincipal.userId,
+      asGenerationCommandId(String(events[0]?.generationCommandId)),
+    );
+    expect(inspection.recovery).toMatchObject({
+      attempts: [
+        {
+          attemptNo: 1,
+          errorCategory: "rate_limited",
+          recoveryStatus: "retried",
+          retryNotBefore: new Date("2026-07-27T16:00:00.250Z"),
+          retryOfModelRunAttemptId: null,
+          status: "failed",
+        },
+        {
+          attemptNo: 2,
+          errorCategory: null,
+          recoveryStatus: "recovered",
+          retryNotBefore: null,
+          retryOfModelRunAttemptId: events[0]?.modelRunAttemptId,
+          status: "succeeded",
+        },
+      ],
+      checkedAt: new Date("2026-07-27T16:00:00.250Z"),
+      nextRecoveryAt: null,
+      policyVersion: "conversation-response-recovery:v1",
+      status: "recovered",
+    });
+    expect(JSON.stringify(inspection.recovery)).not.toContain(
+      "Retry the same frozen request.",
+    );
+    expect(dispatchCount).toBe(2);
   });
 
   it("compiles the next turn only from committed User and Assistant revisions", async () => {
@@ -2969,7 +3165,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     ).rejects.toThrow("Daily Session ownership fields are immutable");
   });
 
-  it("keeps a published inactivity policy version immutable", async () => {
+  it("keeps published inactivity and response-recovery policy versions immutable", async () => {
     await expect(
       database.pool.query(
         `
@@ -2979,6 +3175,17 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         `,
       ),
     ).rejects.toThrow("Inactivity policy versions are immutable");
+    await expect(
+      database.pool.query(
+        `
+          UPDATE conversation_response_recovery_policies
+          SET recovery_window_ms = 60000
+          WHERE policy_version = 'conversation-response-recovery:v1'
+        `,
+      ),
+    ).rejects.toThrow(
+      "Conversation response recovery policy versions are immutable",
+    );
   });
 
   it("ends the active exchange explicitly without creating an Assistant Event or model dispatch", async () => {
@@ -3545,10 +3752,691 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(scanned.status).toBe(200);
     expect(await scanned.json()).toEqual({
       inactivity: {
-        applied: 1,
+        applied: 0,
         processed: 1,
-        stale: 0,
+        stale: 1,
       },
+      responses: {
+        committed: 1,
+        interrupted: 0,
+        processed: 1,
+        retried: 0,
+        terminal: 0,
+      },
+    });
+  });
+
+  it("recovers a stale Text Turn whose process stopped before Provider dispatch", async () => {
+    await openPrivateWrites();
+    const conversationRepository =
+      new PostgresUserTextConversationRepository(database.pool);
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock: () => new Date("2026-07-27T16:00:00.000Z"),
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: conversationRepository,
+    });
+    const abandoned = await conversationService.submit(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "recovery-before-dispatch-event",
+        clientTurnId: "recovery-before-dispatch-turn",
+        locale: "en-US",
+        text: "Please recover this prepared response.",
+        timezone: "America/Los_Angeles",
+      },
+    );
+    await database.pool.query(
+      `
+        UPDATE model_run_attempts
+        SET attempt_no = 3
+        WHERE generation_command_id = $1
+      `,
+      [abandoned.generation.commandId],
+    );
+    const recoveryClock = () => new Date("2026-07-27T16:10:00.000Z");
+    const contextCompiler = createContextCompiler({
+      clock: recoveryClock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const recovery = createConversationResponseService({
+      clock: recoveryClock,
+      contextCompiler,
+      conversationService,
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: recoveryClock,
+        contextCompiler,
+        model: createDeterministicConversationTextModel({
+          chunks: ["Recovered once."],
+        }),
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+
+    const overlappingScans = await Promise.all([
+      recovery.scanStaleResponses(),
+      recovery.scanStaleResponses(),
+    ]);
+    expect(
+      overlappingScans.reduce(
+        (total, scan) => ({
+          committed: total.committed + scan.committed,
+          interrupted: total.interrupted + scan.interrupted,
+          processed: total.processed + scan.processed,
+          retried: total.retried + scan.retried,
+          terminal: total.terminal + scan.terminal,
+        }),
+        {
+          committed: 0,
+          interrupted: 0,
+          processed: 0,
+          retried: 0,
+          terminal: 0,
+        },
+      ),
+    ).toEqual({
+      committed: 1,
+      interrupted: 0,
+      processed: 1,
+      retried: 0,
+      terminal: 0,
+    });
+    expect(await recovery.scanStaleResponses()).toEqual({
+      committed: 0,
+      interrupted: 0,
+      processed: 0,
+      retried: 0,
+      terminal: 0,
+    });
+
+    const recovered = await database.pool.query<{
+      assistant_events: string;
+      attempt_count: string;
+      command_status: string;
+      turn_status: string;
+    }>(
+      `
+        SELECT
+          turn.status AS turn_status,
+          command.status AS command_status,
+          (
+            SELECT COUNT(*)::text
+            FROM model_run_attempts attempt
+            WHERE attempt.generation_command_id =
+              command.generation_command_id
+          ) AS attempt_count,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events event
+            WHERE event.generation_command_id =
+              command.generation_command_id
+              AND event.actor = 'assistant'
+          ) AS assistant_events
+        FROM interaction_turns turn
+        INNER JOIN generation_commands command
+          ON command.interaction_turn_id = turn.interaction_turn_id
+        WHERE turn.interaction_turn_id = $1
+      `,
+      [abandoned.turn.id],
+    );
+    expect(recovered.rows[0]).toEqual({
+      assistant_events: "1",
+      attempt_count: "1",
+      command_status: "succeeded",
+      turn_status: "settled",
+    });
+  });
+
+  it("prevents a stale caller from claiming a scanner-created retry attempt", async () => {
+    await openPrivateWrites();
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock: () => new Date("2026-07-27T16:00:00.000Z"),
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const stale = await conversationService.submit(
+      fixedInternalOwnerPrincipal.userId,
+      {
+        clientEventId: "stale-execution-claim-event",
+        clientTurnId: "stale-execution-claim-turn",
+        locale: "en-US",
+        text: "Only the latest attempt may claim this command.",
+        timezone: "America/Los_Angeles",
+      },
+    );
+    await database.pool.query(
+      `
+        UPDATE generation_commands
+        SET status = 'running'
+        WHERE generation_command_id = $1
+      `,
+      [stale.generation.commandId],
+    );
+    await database.pool.query(
+      `
+        UPDATE model_run_attempts
+        SET
+          status = 'running',
+          started_at = '2026-07-27T16:00:00.000Z'
+        WHERE model_run_attempt_id = $1
+      `,
+      [stale.generation.attemptId],
+    );
+
+    const recovery =
+      await responseRepository.claimStaleResponseExecution({
+        expectedModelRunAttemptId: stale.generation.attemptId,
+        generationCommandId: stale.generation.commandId,
+        now: new Date("2026-07-27T16:10:00.000Z"),
+        userId: fixedInternalOwnerPrincipal.userId,
+      });
+    expect(recovery).toMatchObject({
+      outcome: "execute",
+      retried: true,
+    });
+    if (recovery.outcome !== "execute") {
+      throw new Error("The stale response was not claimed for recovery.");
+    }
+
+    expect(
+      await responseRepository.claimResponseExecution({
+        generationCommandId: stale.generation.commandId,
+        modelRunAttemptId: stale.generation.attemptId,
+        userId: fixedInternalOwnerPrincipal.userId,
+      }),
+    ).toBe("shared");
+    expect(
+      await database.pool.query<{ status: string }>(
+        `
+          SELECT status
+          FROM generation_commands
+          WHERE generation_command_id = $1
+        `,
+        [stale.generation.commandId],
+      ),
+    ).toMatchObject({ rows: [{ status: "prepared" }] });
+    expect(
+      await responseRepository.claimResponseExecution({
+        generationCommandId: recovery.generationCommandId,
+        modelRunAttemptId: recovery.modelRunAttemptId,
+        userId: recovery.userId,
+      }),
+    ).toBe("owner");
+  });
+
+  it("retries one stale pre-output Provider dispatch under the frozen GenerationCommand", async () => {
+    await openPrivateWrites();
+    let currentTime = new Date("2026-07-27T16:00:00.000Z");
+    let releaseAbandonedAttempt: (() => void) | undefined;
+    let reportAbandonedDispatch: (() => void) | undefined;
+    let releaseRecoveryAttempt: (() => void) | undefined;
+    let reportRecoveryDispatch: (() => void) | undefined;
+    const abandonedDispatchStarted = new Promise<void>((resolve) => {
+      reportAbandonedDispatch = resolve;
+    });
+    const abandonedAttemptReleased = new Promise<void>((resolve) => {
+      releaseAbandonedAttempt = resolve;
+    });
+    const recoveryDispatchStarted = new Promise<void>((resolve) => {
+      reportRecoveryDispatch = resolve;
+    });
+    const recoveryAttemptReleased = new Promise<void>((resolve) => {
+      releaseRecoveryAttempt = resolve;
+    });
+    let dispatchCount = 0;
+    const model: ConversationTextModel = {
+      async *stream() {
+        dispatchCount += 1;
+        if (dispatchCount === 1) {
+          reportAbandonedDispatch?.();
+          await abandonedAttemptReleased;
+          yield {
+            delta: "This superseded token must never become visible.",
+            type: "delta",
+          };
+          yield {
+            costMicros: 0,
+            finishReason: "completed",
+            inputTokens: 1,
+            modelSnapshot: testChampion.snapshot,
+            outputTokens: 1,
+            providerRequestId: "superseded-recovery-attempt-1",
+            type: "completed",
+          };
+          return;
+        }
+        reportRecoveryDispatch?.();
+        await recoveryAttemptReleased;
+        yield { delta: "Recovered from the timed-out dispatch.", type: "delta" };
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 1,
+          modelSnapshot: testChampion.snapshot,
+          outputTokens: 1,
+          providerRequestId: "recovery-attempt-2",
+          type: "completed",
+        };
+      },
+    };
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock: () => currentTime,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const contextCompiler = createContextCompiler({
+      clock: () => currentTime,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const service = createConversationResponseService({
+      clock: () => currentTime,
+      contextCompiler,
+      conversationService,
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: () => currentTime,
+        contextCompiler,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const requestPath = service
+      .respond(fixedInternalOwnerPrincipal.userId, {
+        clientEventId: "recovery-before-token-event",
+        clientTurnId: "recovery-before-token-turn",
+        locale: "en-US",
+        text: "Recover without changing the frozen request.",
+        timezone: "America/Los_Angeles",
+      })
+      [Symbol.asyncIterator]();
+    const committed = await requestPath.next();
+    const abandonedResult = requestPath.next();
+    await abandonedDispatchStarted;
+
+    currentTime = new Date("2026-07-27T16:10:00.000Z");
+    const recoveryScan = service.scanStaleResponses();
+    await recoveryDispatchStarted;
+    releaseAbandonedAttempt?.();
+    expect(await abandonedResult).toMatchObject({
+      value: {
+        type: "response_failed",
+      },
+    });
+
+    const inFlightRetry = await database.pool.query<{
+      attempt_statuses: string[];
+      command_status: string;
+      turn_status: string;
+    }>(
+      `
+        SELECT
+          turn.status AS turn_status,
+          command.status AS command_status,
+          ARRAY_AGG(attempt.status ORDER BY attempt.attempt_no)
+            AS attempt_statuses
+        FROM interaction_turns turn
+        INNER JOIN generation_commands command
+          ON command.interaction_turn_id = turn.interaction_turn_id
+        INNER JOIN model_run_attempts attempt
+          ON attempt.generation_command_id =
+            command.generation_command_id
+        WHERE command.generation_command_id = $1
+        GROUP BY turn.status, command.status
+      `,
+      [committed.value?.generationCommandId],
+    );
+    expect(inFlightRetry.rows[0]).toEqual({
+      attempt_statuses: ["result_unknown", "running"],
+      command_status: "running",
+      turn_status: "responding",
+    });
+
+    releaseRecoveryAttempt?.();
+    expect(await recoveryScan).toEqual({
+      committed: 1,
+      interrupted: 0,
+      processed: 1,
+      retried: 1,
+      terminal: 0,
+    });
+
+    const recovered = await database.pool.query<{
+      assistant_events: string;
+      attempt_nos: number[];
+      attempt_statuses: string[];
+      command_id: string;
+      frozen_models: string[];
+      frozen_prompts: string[];
+      retry_sources: Array<string | null>;
+    }>(
+      `
+        SELECT
+          command.generation_command_id AS command_id,
+          ARRAY_AGG(attempt.attempt_no ORDER BY attempt.attempt_no)
+            AS attempt_nos,
+          ARRAY_AGG(attempt.status ORDER BY attempt.attempt_no)
+            AS attempt_statuses,
+          ARRAY_AGG(attempt.model ORDER BY attempt.attempt_no)
+            AS frozen_models,
+          ARRAY_AGG(attempt.prompt_version ORDER BY attempt.attempt_no)
+            AS frozen_prompts,
+          ARRAY_AGG(
+            attempt.retry_of_model_run_attempt_id::text
+            ORDER BY attempt.attempt_no
+          ) AS retry_sources,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events event
+            WHERE event.generation_command_id =
+              command.generation_command_id
+              AND event.actor = 'assistant'
+          ) AS assistant_events
+        FROM generation_commands command
+        INNER JOIN model_run_attempts attempt
+          ON attempt.generation_command_id =
+            command.generation_command_id
+        WHERE command.generation_command_id = $1
+        GROUP BY command.generation_command_id
+      `,
+      [committed.value?.generationCommandId],
+    );
+    expect(recovered.rows[0]).toMatchObject({
+      assistant_events: "1",
+      attempt_nos: [1, 2],
+      attempt_statuses: ["result_unknown", "succeeded"],
+      command_id: committed.value?.generationCommandId,
+      frozen_models: [testGenerationPolicy.model, testGenerationPolicy.model],
+      frozen_prompts: [
+        testGenerationPolicy.promptVersion,
+        testGenerationPolicy.promptVersion,
+      ],
+    });
+    expect(recovered.rows[0]?.retry_sources[0]).toBeNull();
+    expect(recovered.rows[0]?.retry_sources[1]).toBe(
+      committed.value?.modelRunAttemptId,
+    );
+    expect(dispatchCount).toBe(2);
+  });
+
+  it("interrupts a stale response after visible output without retrying or regenerating", async () => {
+    await openPrivateWrites();
+    let currentTime = new Date("2026-07-27T16:00:00.000Z");
+    let releaseVisibleAttempt: (() => void) | undefined;
+    let reportVisibleDispatch: (() => void) | undefined;
+    const visibleDispatchStarted = new Promise<void>((resolve) => {
+      reportVisibleDispatch = resolve;
+    });
+    const visibleAttemptReleased = new Promise<void>((resolve) => {
+      releaseVisibleAttempt = resolve;
+    });
+    let dispatchCount = 0;
+    const model: ConversationTextModel = {
+      async *stream() {
+        dispatchCount += 1;
+        yield { delta: "Visible before the process stopped.", type: "delta" };
+        reportVisibleDispatch?.();
+        await visibleAttemptReleased;
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 1,
+          modelSnapshot: testChampion.snapshot,
+          outputTokens: 1,
+          providerRequestId: "late-visible-attempt",
+          type: "completed",
+        };
+      },
+    };
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock: () => currentTime,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const contextCompiler = createContextCompiler({
+      clock: () => currentTime,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const service = createConversationResponseService({
+      clock: () => currentTime,
+      contextCompiler,
+      conversationService,
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: () => currentTime,
+        contextCompiler,
+        model,
+        repository: responseRepository,
+      }),
+      repository: responseRepository,
+    });
+    const requestPath = service
+      .respond(fixedInternalOwnerPrincipal.userId, {
+        clientEventId: "recovery-after-visible-event",
+        clientTurnId: "recovery-after-visible-turn",
+        locale: "en-US",
+        text: "Do not regenerate output I may already have seen.",
+        timezone: "America/Los_Angeles",
+      })
+      [Symbol.asyncIterator]();
+    const committed = await requestPath.next();
+    expect((await requestPath.next()).value).toMatchObject({
+      delta: "Visible before the process stopped.",
+      type: "assistant_delta",
+    });
+    const lateCompletion = requestPath.next();
+    await visibleDispatchStarted;
+
+    currentTime = new Date("2026-07-27T16:10:00.000Z");
+    expect(await service.scanStaleResponses()).toEqual({
+      committed: 0,
+      interrupted: 1,
+      processed: 1,
+      retried: 0,
+      terminal: 0,
+    });
+    releaseVisibleAttempt?.();
+    expect(await lateCompletion).toMatchObject({
+      value: {
+        type: "response_interrupted",
+      },
+    });
+
+    const interrupted = await database.pool.query<{
+      assistant_events: string;
+      attempt_count: string;
+      attempt_status: string;
+      command_status: string;
+      turn_status: string;
+    }>(
+      `
+        SELECT
+          turn.status AS turn_status,
+          command.status AS command_status,
+          attempt.status AS attempt_status,
+          (
+            SELECT COUNT(*)::text
+            FROM model_run_attempts command_attempt
+            WHERE command_attempt.generation_command_id =
+              command.generation_command_id
+          ) AS attempt_count,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events event
+            WHERE event.generation_command_id =
+              command.generation_command_id
+              AND event.actor = 'assistant'
+          ) AS assistant_events
+        FROM interaction_turns turn
+        INNER JOIN generation_commands command
+          ON command.interaction_turn_id = turn.interaction_turn_id
+        INNER JOIN model_run_attempts attempt
+          ON attempt.generation_command_id =
+            command.generation_command_id
+        WHERE command.generation_command_id = $1
+      `,
+      [committed.value?.generationCommandId],
+    );
+    expect(interrupted.rows[0]).toEqual({
+      assistant_events: "0",
+      attempt_count: "1",
+      attempt_status: "interrupted",
+      command_status: "interrupted",
+      turn_status: "interrupted",
+    });
+    expect(dispatchCount).toBe(1);
+  });
+
+  it("converges Provider-completed work lost before authoritative commit without reconstructing text", async () => {
+    await openPrivateWrites();
+    let currentTime = new Date("2026-07-27T16:00:00.000Z");
+    let releaseCommit: (() => void) | undefined;
+    let reportCommitStarted: (() => void) | undefined;
+    const commitStarted = new Promise<void>((resolve) => {
+      reportCommitStarted = resolve;
+    });
+    const commitReleased = new Promise<void>((resolve) => {
+      releaseCommit = resolve;
+    });
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const blockingCommitRepository: ConversationResponseRepository = {
+      claimResponseExecution:
+        responseRepository.claimResponseExecution.bind(responseRepository),
+      claimStaleResponseExecution:
+        responseRepository.claimStaleResponseExecution.bind(responseRepository),
+      commitCompleteResponse: async (input) => {
+        reportCommitStarted?.();
+        await commitReleased;
+        return responseRepository.commitCompleteResponse(input);
+      },
+      listStaleResponseExecutions:
+        responseRepository.listStaleResponseExecutions.bind(responseRepository),
+      loadResponse: responseRepository.loadResponse.bind(responseRepository),
+      settleResponseFailure:
+        responseRepository.settleResponseFailure.bind(responseRepository),
+    };
+    const conversationService = createUserTextConversationService({
+      clock: () => currentTime,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const contextCompiler = createContextCompiler({
+      clock: () => currentTime,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const service = createConversationResponseService({
+      clock: () => currentTime,
+      contextCompiler,
+      conversationService,
+      egressPort: createProviderEgressPort({
+        champion: testChampion,
+        clock: () => currentTime,
+        contextCompiler,
+        model: createDeterministicConversationTextModel({
+          chunks: ["Never reconstruct this body."],
+        }),
+        repository: responseRepository,
+      }),
+      repository: blockingCommitRepository,
+    });
+    const requestPath = service
+      .respond(fixedInternalOwnerPrincipal.userId, {
+        clientEventId: "recovery-before-commit-event",
+        clientTurnId: "recovery-before-commit-turn",
+        locale: "en-US",
+        text: "Treat the lost completion conservatively.",
+        timezone: "America/Los_Angeles",
+      })
+      [Symbol.asyncIterator]();
+    const committed = await requestPath.next();
+    expect((await requestPath.next()).value?.type).toBe("assistant_delta");
+    const blockedCommit = requestPath.next();
+    await commitStarted;
+
+    currentTime = new Date("2026-07-27T16:10:00.000Z");
+    expect(await service.scanStaleResponses()).toEqual({
+      committed: 0,
+      interrupted: 1,
+      processed: 1,
+      retried: 0,
+      terminal: 0,
+    });
+    releaseCommit?.();
+    await blockedCommit;
+
+    const recovered = await database.pool.query<{
+      assistant_events: string;
+      attempt_status: string;
+      command_status: string;
+      provider_completed_at: Date | null;
+      turn_status: string;
+    }>(
+      `
+        SELECT
+          turn.status AS turn_status,
+          command.status AS command_status,
+          attempt.status AS attempt_status,
+          attempt.provider_completed_at,
+          (
+            SELECT COUNT(*)::text
+            FROM conversation_events event
+            WHERE event.generation_command_id =
+              command.generation_command_id
+              AND event.actor = 'assistant'
+          ) AS assistant_events
+        FROM interaction_turns turn
+        INNER JOIN generation_commands command
+          ON command.interaction_turn_id = turn.interaction_turn_id
+        INNER JOIN model_run_attempts attempt
+          ON attempt.generation_command_id =
+            command.generation_command_id
+        WHERE command.generation_command_id = $1
+      `,
+      [committed.value?.generationCommandId],
+    );
+    expect(recovered.rows[0]).toMatchObject({
+      assistant_events: "0",
+      attempt_status: "result_unknown",
+      command_status: "interrupted",
+      provider_completed_at: new Date("2026-07-27T16:00:00.000Z"),
+      turn_status: "interrupted",
     });
   });
 

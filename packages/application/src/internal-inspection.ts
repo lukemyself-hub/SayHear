@@ -65,6 +65,27 @@ export type GenerationInspectionMetadata = Readonly<{
   providerLatencyMs: number | null;
   providerPolicyVersion: string;
   providerRequestId: string | null;
+  recovery: Readonly<{
+    attempts: readonly Readonly<{
+      attemptNo: number;
+      completedAt: Date | null;
+      createdAt: Date;
+      errorCategory: string | null;
+      firstTokenAt: Date | null;
+      id: ModelRunAttemptId;
+      providerCompletedAt: Date | null;
+      recoveryClaimedAt: Date | null;
+      recoveryStatus: string;
+      retryNotBefore: Date | null;
+      retryOfModelRunAttemptId: ModelRunAttemptId | null;
+      startedAt: Date | null;
+      status: string;
+    }>[];
+    checkedAt: Date | null;
+    nextRecoveryAt: Date | null;
+    policyVersion: string;
+    status: string;
+  }>;
   role: string;
   sourceRevisionId: ConversationEventRevisionId;
 }>;

@@ -7,7 +7,8 @@ export const runtime = "nodejs";
 export async function GET(request: Request): Promise<Response> {
   const composition = createServerComposition();
   return createRecoveryScannerHandler({
+    continuousExchangeService: composition.continuousExchangeService,
+    conversationResponseService: composition.conversationResponseService,
     scannerSecret: composition.recoveryScannerSecret,
-    service: composition.continuousExchangeService,
   })(request);
 }

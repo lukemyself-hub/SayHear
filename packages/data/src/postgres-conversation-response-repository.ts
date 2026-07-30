@@ -16,6 +16,10 @@ import {
   asConversationEventId,
   asConversationEventRevisionId,
   asDailySessionId,
+  asGenerationCommandId,
+  asInteractionTurnId,
+  asModelRunAttemptId,
+  asUserId,
   type CompiledContextId,
   type GenerationCommandId,
   type InteractionTurnId,
@@ -102,17 +106,35 @@ export class PostgresConversationResponseRepository
 
   public async claimResponseExecution(input: {
     generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
     userId: UserId;
   }): Promise<"owner" | "shared"> {
     const claimed = await this.pool.query(
       `
-        UPDATE generation_commands
+        UPDATE generation_commands command
         SET status = 'compiling'
-        WHERE generation_command_id = $1
-          AND user_id = $2
-          AND status = 'prepared'
+        FROM model_run_attempts attempt
+        WHERE command.generation_command_id = $1
+          AND command.user_id = $2
+          AND command.status = 'prepared'
+          AND attempt.model_run_attempt_id = $3
+          AND attempt.generation_command_id =
+            command.generation_command_id
+          AND attempt.user_id = command.user_id
+          AND attempt.status = 'prepared'
+          AND attempt.attempt_no = (
+            SELECT MAX(latest.attempt_no)
+            FROM model_run_attempts latest
+            WHERE latest.generation_command_id =
+              command.generation_command_id
+              AND latest.user_id = command.user_id
+          )
       `,
-      [input.generationCommandId, input.userId],
+      [
+        input.generationCommandId,
+        input.userId,
+        input.modelRunAttemptId,
+      ],
     );
     if (claimed.rowCount === 1) {
       return "owner";
@@ -145,6 +167,7 @@ export class PostgresConversationResponseRepository
         | "failed"
         | "interrupted"
         | "prepared"
+        | "retry_pending"
         | "running"
         | "succeeded";
       text: string | null;
@@ -157,10 +180,15 @@ export class PostgresConversationResponseRepository
           revision.conversation_event_revision_id AS revision_id,
           revision.canonical_text AS text
         FROM generation_commands command
-        INNER JOIN model_run_attempts attempt
-          ON attempt.generation_command_id = command.generation_command_id
-          AND attempt.user_id = command.user_id
-          AND attempt.attempt_no = 1
+        INNER JOIN LATERAL (
+          SELECT latest_attempt.*
+          FROM model_run_attempts latest_attempt
+          WHERE latest_attempt.generation_command_id =
+            command.generation_command_id
+            AND latest_attempt.user_id = command.user_id
+          ORDER BY latest_attempt.attempt_no DESC
+          LIMIT 1
+        ) attempt ON TRUE
         LEFT JOIN conversation_events event
           ON event.generation_command_id = command.generation_command_id
           AND event.user_id = command.user_id
@@ -198,7 +226,348 @@ export class PostgresConversationResponseRepository
         outcome: row.status,
       };
     }
-    return { outcome: row.status === "compiling" ? "running" : row.status };
+    return {
+      outcome:
+        row.status === "compiling" || row.status === "retry_pending"
+          ? "running"
+          : row.status,
+    };
+  }
+
+  public async claimStaleResponseExecution(input: {
+    expectedModelRunAttemptId: ModelRunAttemptId;
+    generationCommandId: GenerationCommandId;
+    now: Date;
+    userId: UserId;
+  }): ReturnType<
+    ConversationResponseRepository["claimStaleResponseExecution"]
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+      const result = await client.query<{
+        attempt_no: number;
+        attempt_status: string;
+        command_status: string;
+        first_token_at: Date | null;
+        interaction_turn_id: string;
+        max_attempts: number;
+        model: string;
+        model_run_attempt_id: string;
+        model_snapshot: string;
+        operation_type: "conversation.text";
+        prompt_version: string;
+        provider: string;
+        provider_completed_at: Date | null;
+        recovery_claimed_at: Date | null;
+        recovery_window_ms: string;
+        retry_not_before: Date | null;
+        started_at: Date | null;
+        turn_status: string;
+      }>(
+        `
+          SELECT
+            command.status AS command_status,
+            command.interaction_turn_id,
+            turn.status AS turn_status,
+            attempt.model_run_attempt_id,
+            attempt.attempt_no,
+            attempt.operation_type,
+            attempt.provider,
+            attempt.model,
+            attempt.model_snapshot,
+            attempt.prompt_version,
+            attempt.status AS attempt_status,
+            attempt.started_at,
+            attempt.first_token_at,
+            attempt.provider_completed_at,
+            attempt.retry_not_before,
+            attempt.recovery_claimed_at,
+            policy.recovery_window_ms,
+            policy.max_attempts
+          FROM generation_commands command
+          INNER JOIN interaction_turns turn
+            ON turn.interaction_turn_id = command.interaction_turn_id
+            AND turn.user_id = command.user_id
+          INNER JOIN model_run_attempts attempt
+            ON attempt.generation_command_id =
+              command.generation_command_id
+            AND attempt.user_id = command.user_id
+          INNER JOIN conversation_response_recovery_policies policy
+            ON policy.policy_version = command.recovery_policy_version
+          WHERE command.generation_command_id = $1
+            AND command.user_id = $2
+            AND attempt.model_run_attempt_id = $3
+            AND attempt.attempt_no = (
+              SELECT MAX(latest.attempt_no)
+              FROM model_run_attempts latest
+              WHERE latest.generation_command_id =
+                command.generation_command_id
+                AND latest.user_id = command.user_id
+            )
+          FOR UPDATE OF command, turn, attempt
+        `,
+        [
+          input.generationCommandId,
+          input.userId,
+          input.expectedModelRunAttemptId,
+        ],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        await client.query("COMMIT");
+        return { outcome: "replayed" };
+      }
+      const recoveryWindowMs = Number(row.recovery_window_ms);
+      const recoveryClaimExpired =
+        row.recovery_claimed_at === null ||
+        row.recovery_claimed_at.getTime() + recoveryWindowMs <=
+          input.now.getTime();
+      const preparedDue =
+        (row.command_status === "prepared" ||
+          row.command_status === "compiling") &&
+        row.attempt_status === "prepared" &&
+        recoveryClaimExpired;
+      const runningDue =
+        row.command_status === "running" &&
+        row.attempt_status === "running" &&
+        row.started_at !== null &&
+        row.started_at.getTime() + recoveryWindowMs <=
+          input.now.getTime();
+      const retryDue =
+        row.command_status === "retry_pending" &&
+        row.retry_not_before !== null &&
+        row.retry_not_before <= input.now &&
+        recoveryClaimExpired;
+      if (!preparedDue && !runningDue && !retryDue) {
+        await client.query("COMMIT");
+        return { outcome: "not_due" };
+      }
+
+      if (row.first_token_at || row.provider_completed_at) {
+        await settleRecoveredInterruption(client, {
+          attemptStatus: row.provider_completed_at
+            ? "result_unknown"
+            : "interrupted",
+          category: row.provider_completed_at ? "unknown" : "aborted",
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: input.expectedModelRunAttemptId,
+          now: input.now,
+          userId: input.userId,
+        });
+        await client.query("COMMIT");
+        return { outcome: "interrupted" };
+      }
+
+      if (!preparedDue && row.attempt_no >= row.max_attempts) {
+        await settleRecoveredTerminal(client, {
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: input.expectedModelRunAttemptId,
+          now: input.now,
+          userId: input.userId,
+        });
+        await client.query("COMMIT");
+        return { outcome: "terminal" };
+      }
+
+      let modelRunAttemptId = input.expectedModelRunAttemptId;
+      let retried = false;
+      if (runningDue || retryDue) {
+        modelRunAttemptId = asModelRunAttemptId(createUuidV7(input.now));
+        retried = true;
+        await client.query(
+          `
+            UPDATE model_run_attempts
+            SET
+              status = CASE
+                WHEN $4 THEN 'result_unknown'
+                ELSE status
+              END,
+              completed_at = COALESCE(completed_at, $1),
+              error_category = COALESCE(error_category, 'timeout'),
+              recovery_status = 'retried',
+              recovery_claimed_at = NULL
+            WHERE model_run_attempt_id = $2
+              AND user_id = $3
+          `,
+          [
+            input.now,
+            input.expectedModelRunAttemptId,
+            input.userId,
+            runningDue,
+          ],
+        );
+        await client.query(
+          `
+            UPDATE provider_egress_dispositions
+            SET
+              status = CASE
+                WHEN status = 'blocked' THEN 'blocked'
+                ELSE 'failed'
+              END,
+              completed_at = COALESCE(completed_at, $1),
+              error_category = COALESCE(error_category, 'timeout')
+            WHERE model_run_attempt_id = $2
+              AND user_id = $3
+              AND status IN ('blocked', 'dispatched')
+          `,
+          [input.now, input.expectedModelRunAttemptId, input.userId],
+        );
+        await client.query(
+          `
+            INSERT INTO model_run_attempts (
+              model_run_attempt_id,
+              user_id,
+              generation_command_id,
+              attempt_no,
+              operation_type,
+              provider,
+              model,
+              model_snapshot,
+              prompt_version,
+              status,
+              retry_of_model_run_attempt_id,
+              recovery_status,
+              recovery_claimed_at,
+              created_at
+            )
+            VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, 'prepared',
+              $10, 'recovering', $11, $11
+            )
+          `,
+          [
+            modelRunAttemptId,
+            input.userId,
+            input.generationCommandId,
+            row.attempt_no + 1,
+            row.operation_type,
+            row.provider,
+            row.model,
+            row.model_snapshot,
+            row.prompt_version,
+            input.expectedModelRunAttemptId,
+            input.now,
+          ],
+        );
+      } else {
+        await client.query(
+          `
+            UPDATE model_run_attempts
+            SET
+              recovery_status = 'recovering',
+              recovery_claimed_at = $1
+            WHERE model_run_attempt_id = $2
+              AND user_id = $3
+          `,
+          [input.now, modelRunAttemptId, input.userId],
+        );
+      }
+      await client.query(
+        `
+          UPDATE generation_commands
+          SET
+            status = 'prepared',
+            recovery_status = 'recovering',
+            recovery_checked_at = $1,
+            next_recovery_at = NULL,
+            settled_at = NULL
+          WHERE generation_command_id = $2
+            AND user_id = $3
+            AND authoritative_result_id IS NULL
+        `,
+        [input.now, input.generationCommandId, input.userId],
+      );
+      await client.query("COMMIT");
+      return {
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId,
+        outcome: "execute",
+        retried,
+        turnId: asInteractionTurnId(row.interaction_turn_id),
+        userId: input.userId,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async listStaleResponseExecutions(input: {
+    dueAt: Date;
+    limit: number;
+  }): ReturnType<
+    ConversationResponseRepository["listStaleResponseExecutions"]
+  > {
+    const result = await this.pool.query<{
+      generation_command_id: string;
+      interaction_turn_id: string;
+      model_run_attempt_id: string;
+      user_id: string;
+    }>(
+      `
+        SELECT
+          command.generation_command_id,
+          command.interaction_turn_id,
+          attempt.model_run_attempt_id,
+          command.user_id
+        FROM generation_commands command
+        INNER JOIN LATERAL (
+          SELECT latest.*
+          FROM model_run_attempts latest
+          WHERE latest.generation_command_id =
+            command.generation_command_id
+            AND latest.user_id = command.user_id
+          ORDER BY latest.attempt_no DESC
+          LIMIT 1
+        ) attempt ON TRUE
+        INNER JOIN interaction_turns turn
+          ON turn.interaction_turn_id = command.interaction_turn_id
+          AND turn.user_id = command.user_id
+        INNER JOIN conversation_response_recovery_policies policy
+          ON policy.policy_version = command.recovery_policy_version
+        WHERE command.authoritative_result_id IS NULL
+          AND turn.status IN ('open', 'responding')
+          AND (
+            (
+              command.status IN ('prepared', 'compiling')
+              AND attempt.status = 'prepared'
+              AND attempt.created_at +
+                policy.recovery_window_ms * INTERVAL '1 millisecond' <= $1
+            )
+            OR (
+              command.status = 'running'
+              AND attempt.status = 'running'
+              AND attempt.started_at IS NOT NULL
+              AND attempt.started_at +
+                policy.recovery_window_ms * INTERVAL '1 millisecond' <= $1
+            )
+            OR (
+              command.status = 'retry_pending'
+              AND attempt.retry_not_before IS NOT NULL
+              AND attempt.retry_not_before <= $1
+            )
+          )
+          AND (
+            attempt.recovery_claimed_at IS NULL
+            OR attempt.recovery_claimed_at +
+              policy.recovery_window_ms * INTERVAL '1 millisecond' <= $1
+          )
+        ORDER BY attempt.created_at, attempt.model_run_attempt_id
+        LIMIT $2
+      `,
+      [input.dueAt, input.limit],
+    );
+    return result.rows.map((row) => ({
+      generationCommandId: asGenerationCommandId(
+        row.generation_command_id,
+      ),
+      modelRunAttemptId: asModelRunAttemptId(row.model_run_attempt_id),
+      turnId: asInteractionTurnId(row.interaction_turn_id),
+      userId: asUserId(row.user_id),
+    }));
   }
 
   public async loadContextSource(input: {
@@ -722,16 +1091,109 @@ export class PostgresConversationResponseRepository
   public async recordFirstToken(input: {
     modelRunAttemptId: ModelRunAttemptId;
     now: Date;
-  }): Promise<void> {
-    await this.pool.query(
+  }): Promise<boolean> {
+    const recorded = await this.pool.query(
       `
-        UPDATE model_run_attempts
+        UPDATE model_run_attempts attempt
         SET first_token_at = COALESCE(first_token_at, $1)
-        WHERE model_run_attempt_id = $2
-          AND status = 'running'
+        FROM generation_commands command
+        WHERE attempt.model_run_attempt_id = $2
+          AND attempt.status = 'running'
+          AND command.generation_command_id =
+            attempt.generation_command_id
+          AND command.user_id = attempt.user_id
+          AND command.status = 'running'
+          AND command.authoritative_result_id IS NULL
+          AND attempt.attempt_no = (
+            SELECT MAX(latest.attempt_no)
+            FROM model_run_attempts latest
+            WHERE latest.generation_command_id =
+              command.generation_command_id
+              AND latest.user_id = command.user_id
+          )
       `,
       [input.now, input.modelRunAttemptId],
     );
+    return recorded.rowCount === 1;
+  }
+
+  public async recordProviderCompletion(input: {
+    completion: {
+      costMicros: number | null;
+      finishReason: string;
+      inputTokens: number | null;
+      modelSnapshot: string;
+      outputTokens: number | null;
+      providerRequestId: string | null;
+      type: "completed";
+    };
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+  }): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const recorded = await client.query(
+        `
+          UPDATE model_run_attempts attempt
+          SET
+            provider_completed_at =
+              COALESCE(provider_completed_at, $1),
+            provider_request_id =
+              COALESCE(provider_request_id, $2),
+            model_snapshot = $3,
+            input_tokens = $4,
+            output_tokens = $5,
+            cost_micros = $6,
+            finish_reason = $7
+          FROM generation_commands command
+          WHERE attempt.model_run_attempt_id = $8
+            AND attempt.status = 'running'
+            AND command.generation_command_id =
+              attempt.generation_command_id
+            AND command.user_id = attempt.user_id
+            AND command.status = 'running'
+            AND command.authoritative_result_id IS NULL
+            AND attempt.attempt_no = (
+              SELECT MAX(latest.attempt_no)
+              FROM model_run_attempts latest
+              WHERE latest.generation_command_id =
+                command.generation_command_id
+                AND latest.user_id = command.user_id
+            )
+        `,
+        [
+          input.now,
+          input.completion.providerRequestId,
+          input.completion.modelSnapshot,
+          input.completion.inputTokens,
+          input.completion.outputTokens,
+          input.completion.costMicros,
+          input.completion.finishReason,
+          input.modelRunAttemptId,
+        ],
+      );
+      if (recorded.rowCount !== 1) {
+        await client.query("COMMIT");
+        return false;
+      }
+      await client.query(
+        `
+          UPDATE provider_egress_dispositions
+          SET status = 'completed', completed_at = COALESCE(completed_at, $1)
+          WHERE model_run_attempt_id = $2
+            AND status = 'dispatched'
+        `,
+        [input.now, input.modelRunAttemptId],
+      );
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   public async commitCompleteResponse(input: {
@@ -830,7 +1292,7 @@ export class PostgresConversationResponseRepository
             AND command.authoritative_result_id IS NULL
             AND attempt.model_run_attempt_id = $3
             AND attempt.status = 'running'
-            AND egress.status = 'dispatched'
+            AND egress.status IN ('dispatched', 'completed')
             AND turn.status = 'responding'
           FOR UPDATE OF
             command, attempt, egress, policy, turn, session, owner, input_event,
@@ -937,6 +1399,15 @@ export class PostgresConversationResponseRepository
           SET
             status = 'succeeded',
             authoritative_result_id = $1,
+            recovery_status = CASE
+              WHEN recovery_status = 'recovering' THEN 'recovered'
+              ELSE 'not_needed'
+            END,
+            recovery_checked_at = CASE
+              WHEN recovery_status = 'recovering' THEN $2
+              ELSE recovery_checked_at
+            END,
+            next_recovery_at = NULL,
             settled_at = $2
           WHERE generation_command_id = $3
         `,
@@ -954,7 +1425,14 @@ export class PostgresConversationResponseRepository
             output_tokens = $5,
             cost_micros = $6,
             finish_reason = $7,
-            error_category = NULL
+            error_category = NULL,
+            recovery_status = CASE
+              WHEN retry_of_model_run_attempt_id IS NOT NULL
+                OR recovery_status = 'recovering'
+              THEN 'recovered'
+              ELSE 'not_needed'
+            END,
+            recovery_claimed_at = NULL
           WHERE model_run_attempt_id = $8
         `,
         [
@@ -1063,40 +1541,255 @@ export class PostgresConversationResponseRepository
     category: ProviderDispatchErrorCategory;
     generationCommandId: GenerationCommandId;
     interrupted: boolean;
+    jitter: number;
     modelRunAttemptId: ModelRunAttemptId;
     settledAt: Date;
     userId: UserId;
-  }): Promise<void> {
-    const status = input.interrupted ? "interrupted" : "failed";
+  }): ReturnType<ConversationResponseRepository["settleResponseFailure"]> {
     const client = await this.pool.connect();
     try {
-      await client.query("BEGIN");
+      await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
+      const recovery = await client.query<{
+        attempt_no: number;
+        authoritative_result_id: string | null;
+        base_retry_delay_ms: string;
+        command_status: string;
+        is_latest_attempt: boolean;
+        jitter_ratio: number;
+        max_attempts: number;
+        max_retry_delay_ms: string;
+        provider_completed_at: Date | null;
+      }>(
+        `
+          SELECT
+            command.status AS command_status,
+            command.authoritative_result_id,
+            attempt.attempt_no,
+            attempt.provider_completed_at,
+            attempt.attempt_no = (
+              SELECT MAX(latest.attempt_no)
+              FROM model_run_attempts latest
+              WHERE latest.generation_command_id =
+                command.generation_command_id
+                AND latest.user_id = command.user_id
+            ) AS is_latest_attempt,
+            policy.max_attempts,
+            policy.base_retry_delay_ms,
+            policy.max_retry_delay_ms,
+            policy.jitter_ratio
+          FROM generation_commands command
+          INNER JOIN model_run_attempts attempt
+            ON attempt.generation_command_id =
+              command.generation_command_id
+            AND attempt.user_id = command.user_id
+          INNER JOIN conversation_response_recovery_policies policy
+            ON policy.policy_version = command.recovery_policy_version
+          WHERE command.generation_command_id = $1
+            AND command.user_id = $2
+            AND attempt.model_run_attempt_id = $3
+          FOR UPDATE OF command, attempt
+        `,
+        [
+          input.generationCommandId,
+          input.userId,
+          input.modelRunAttemptId,
+        ],
+      );
+      const recoveryRow = recovery.rows[0];
+      if (
+        !recoveryRow ||
+        !recoveryRow.is_latest_attempt ||
+        recoveryRow.authoritative_result_id ||
+        recoveryRow.command_status === "succeeded" ||
+        recoveryRow.command_status === "failed" ||
+        recoveryRow.command_status === "interrupted"
+      ) {
+        await client.query("COMMIT");
+        return {
+          category: input.category,
+          outcome: "settled",
+          status:
+            recoveryRow?.command_status === "interrupted" ||
+            input.interrupted
+              ? "interrupted"
+              : "failed",
+        };
+      }
+      const providerCompleted = recoveryRow.provider_completed_at !== null;
+      const interrupted = input.interrupted || providerCompleted;
+      const retryable =
+        !interrupted &&
+        (input.category === "rate_limited" ||
+          input.category === "timeout" ||
+          input.category === "unavailable") &&
+        recoveryRow.attempt_no < recoveryRow.max_attempts;
+      if (retryable) {
+        const exponentialDelay = Math.min(
+          Number(recoveryRow.max_retry_delay_ms),
+          Number(recoveryRow.base_retry_delay_ms) *
+            2 ** (recoveryRow.attempt_no - 1),
+        );
+        const jitterMultiplier =
+          1 -
+          recoveryRow.jitter_ratio +
+          2 * recoveryRow.jitter_ratio * input.jitter;
+        const retryAt = new Date(
+          input.settledAt.getTime() +
+            Math.round(exponentialDelay * jitterMultiplier),
+        );
+        await client.query(
+          `
+            UPDATE generation_commands
+            SET
+              status = 'retry_pending',
+              recovery_status = 'pending',
+              recovery_checked_at = $1,
+              next_recovery_at = $2,
+              settled_at = NULL
+            WHERE generation_command_id = $3
+              AND user_id = $4
+              AND authoritative_result_id IS NULL
+              AND status IN ('prepared', 'compiling', 'running')
+          `,
+          [
+            input.settledAt,
+            retryAt,
+            input.generationCommandId,
+            input.userId,
+          ],
+        );
+        await client.query(
+          `
+            UPDATE model_run_attempts
+            SET
+              status = 'failed',
+              completed_at = $1,
+              error_category = $2,
+              recovery_status = 'pending',
+              retry_not_before = $3,
+              recovery_claimed_at = NULL
+            WHERE model_run_attempt_id = $4
+              AND user_id = $5
+              AND status IN ('prepared', 'running', 'result_unknown')
+          `,
+          [
+            input.settledAt,
+            input.category,
+            retryAt,
+            input.modelRunAttemptId,
+            input.userId,
+          ],
+        );
+        await client.query(
+          `
+            UPDATE provider_egress_dispositions
+            SET
+              status = CASE
+                WHEN status = 'blocked' THEN 'blocked'
+                ELSE 'failed'
+              END,
+              completed_at = $1,
+              error_category = $2
+            WHERE model_run_attempt_id = $3
+              AND user_id = $4
+              AND status IN ('blocked', 'dispatched')
+          `,
+          [
+            input.settledAt,
+            input.category,
+            input.modelRunAttemptId,
+            input.userId,
+          ],
+        );
+        await client.query(
+          `
+            UPDATE interaction_turns turn
+            SET updated_at = $1
+            FROM generation_commands command
+            WHERE command.generation_command_id = $2
+              AND command.user_id = $3
+              AND turn.interaction_turn_id =
+                command.interaction_turn_id
+              AND turn.user_id = command.user_id
+              AND turn.status IN ('open', 'responding')
+          `,
+          [input.settledAt, input.generationCommandId, input.userId],
+        );
+        await client.query("COMMIT");
+        return { outcome: "retry_scheduled", retryAt };
+      }
+
+      const commandStatus = interrupted ? "interrupted" : "failed";
+      const completionResultUnknown =
+        providerCompleted &&
+        (input.category === "rate_limited" ||
+          input.category === "timeout" ||
+          input.category === "unavailable" ||
+          input.category === "unknown");
+      const attemptStatus = completionResultUnknown
+        ? "result_unknown"
+        : commandStatus;
+      const errorCategory = completionResultUnknown
+        ? "unknown"
+        : input.category;
       await client.query(
         `
           UPDATE generation_commands
-          SET status = $1, settled_at = $2
+          SET
+            status = $1,
+            settled_at = $2,
+            recovery_status = CASE
+              WHEN $1 = 'interrupted' THEN 'interrupted'
+              ELSE 'terminal'
+            END,
+            recovery_checked_at = $2,
+            next_recovery_at = NULL
           WHERE generation_command_id = $3
             AND user_id = $4
             AND authoritative_result_id IS NULL
             AND status IN ('prepared', 'compiling', 'running')
         `,
-        [status, input.settledAt, input.generationCommandId, input.userId],
+        [
+          commandStatus,
+          input.settledAt,
+          input.generationCommandId,
+          input.userId,
+        ],
       );
       await client.query(
         `
-          UPDATE model_run_attempts
+          UPDATE model_run_attempts attempt
           SET
             status = $1,
             completed_at = $2,
-            error_category = $3
-          WHERE model_run_attempt_id = $4
-            AND user_id = $5
-            AND status IN ('prepared', 'running', 'result_unknown')
+            error_category = $3,
+            recovery_status = CASE
+              WHEN $1 IN ('interrupted', 'result_unknown')
+                THEN 'interrupted'
+              ELSE 'terminal'
+            END,
+            recovery_claimed_at = NULL
+          FROM generation_commands command
+          WHERE attempt.model_run_attempt_id = $4
+            AND attempt.user_id = $5
+            AND command.generation_command_id =
+              attempt.generation_command_id
+            AND command.user_id = attempt.user_id
+            AND command.authoritative_result_id IS NULL
+            AND command.status IN (
+              'prepared',
+              'compiling',
+              'running',
+              'retry_pending',
+              'failed',
+              'interrupted'
+            )
+            AND attempt.status IN ('prepared', 'running', 'result_unknown')
         `,
         [
-          status,
+          attemptStatus,
           input.settledAt,
-          input.category,
+          errorCategory,
           input.modelRunAttemptId,
           input.userId,
         ],
@@ -1114,7 +1807,7 @@ export class PostgresConversationResponseRepository
         `,
         [
           input.settledAt,
-          input.category,
+          errorCategory,
           input.modelRunAttemptId,
           input.userId,
         ],
@@ -1130,9 +1823,19 @@ export class PostgresConversationResponseRepository
             AND turn.user_id = command.user_id
             AND turn.status IN ('open', 'responding')
         `,
-        [status, input.settledAt, input.generationCommandId, input.userId],
+        [
+          commandStatus,
+          input.settledAt,
+          input.generationCommandId,
+          input.userId,
+        ],
       );
       await client.query("COMMIT");
+      return {
+        category: errorCategory,
+        outcome: "settled",
+        status: commandStatus,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -1140,6 +1843,146 @@ export class PostgresConversationResponseRepository
       client.release();
     }
   }
+}
+
+async function settleRecoveredInterruption(
+  client: PoolClient,
+  input: {
+    attemptStatus: "interrupted" | "result_unknown";
+    category: ProviderDispatchErrorCategory;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+    userId: UserId;
+  },
+): Promise<void> {
+  await client.query(
+    `
+      UPDATE generation_commands
+      SET
+        status = 'interrupted',
+        recovery_status = 'interrupted',
+        recovery_checked_at = $1,
+        next_recovery_at = NULL,
+        settled_at = $1
+      WHERE generation_command_id = $2
+        AND user_id = $3
+        AND authoritative_result_id IS NULL
+    `,
+    [input.now, input.generationCommandId, input.userId],
+  );
+  await client.query(
+    `
+      UPDATE model_run_attempts
+      SET
+        status = $1,
+        recovery_status = 'interrupted',
+        recovery_claimed_at = NULL,
+        completed_at = COALESCE(completed_at, $2),
+        error_category = COALESCE(error_category, $3)
+      WHERE model_run_attempt_id = $4
+        AND user_id = $5
+    `,
+    [
+      input.attemptStatus,
+      input.now,
+      input.category,
+      input.modelRunAttemptId,
+      input.userId,
+    ],
+  );
+  await client.query(
+    `
+      UPDATE provider_egress_dispositions
+      SET
+        status = CASE WHEN status = 'blocked' THEN 'blocked' ELSE 'failed' END,
+        completed_at = COALESCE(completed_at, $1),
+        error_category = COALESCE(error_category, $2)
+      WHERE model_run_attempt_id = $3
+        AND user_id = $4
+        AND status IN ('blocked', 'dispatched', 'completed')
+    `,
+    [input.now, input.category, input.modelRunAttemptId, input.userId],
+  );
+  await client.query(
+    `
+      UPDATE interaction_turns turn
+      SET status = 'interrupted', settled_at = $1, updated_at = $1
+      FROM generation_commands command
+      WHERE command.generation_command_id = $2
+        AND command.user_id = $3
+        AND turn.interaction_turn_id = command.interaction_turn_id
+        AND turn.user_id = command.user_id
+        AND turn.status IN ('open', 'responding')
+    `,
+    [input.now, input.generationCommandId, input.userId],
+  );
+}
+
+async function settleRecoveredTerminal(
+  client: PoolClient,
+  input: {
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+    userId: UserId;
+  },
+): Promise<void> {
+  await client.query(
+    `
+      UPDATE generation_commands
+      SET
+        status = 'failed',
+        recovery_status = 'terminal',
+        recovery_checked_at = $1,
+        next_recovery_at = NULL,
+        settled_at = $1
+      WHERE generation_command_id = $2
+        AND user_id = $3
+        AND authoritative_result_id IS NULL
+    `,
+    [input.now, input.generationCommandId, input.userId],
+  );
+  await client.query(
+    `
+      UPDATE model_run_attempts
+      SET
+        status = 'failed',
+        recovery_status = 'terminal',
+        recovery_claimed_at = NULL,
+        completed_at = COALESCE(completed_at, $1),
+        error_category = COALESCE(error_category, 'timeout')
+      WHERE model_run_attempt_id = $2
+        AND user_id = $3
+    `,
+    [input.now, input.modelRunAttemptId, input.userId],
+  );
+  await client.query(
+    `
+      UPDATE provider_egress_dispositions
+      SET
+        status = CASE WHEN status = 'blocked' THEN 'blocked' ELSE 'failed' END,
+        completed_at = COALESCE(completed_at, $1),
+        error_category = COALESCE(error_category, 'timeout')
+      WHERE model_run_attempt_id = $2
+        AND user_id = $3
+        AND status IN ('blocked', 'dispatched')
+    `,
+    [input.now, input.modelRunAttemptId, input.userId],
+  );
+  await client.query(
+    `
+      UPDATE interaction_turns turn
+      SET status = 'failed', settled_at = $1, updated_at = $1
+      FROM generation_commands command
+      WHERE command.generation_command_id = $2
+        AND command.user_id = $3
+        AND turn.interaction_turn_id = command.interaction_turn_id
+        AND turn.user_id = command.user_id
+        AND turn.status IN ('open', 'responding')
+    `,
+    [input.now, input.generationCommandId, input.userId],
+  );
 }
 
 async function contextReferencesAreCurrent(
@@ -1369,6 +2212,7 @@ function asProviderErrorCategory(
   switch (value) {
     case "aborted":
     case "authentication":
+    case "configuration":
     case "invalid_response":
     case "policy_blocked":
     case "rate_limited":
