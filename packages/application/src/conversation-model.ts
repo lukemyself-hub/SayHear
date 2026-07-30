@@ -67,6 +67,7 @@ export type ProviderEgressPort = Readonly<{
 export type ProviderDispatchErrorCategory =
   | "aborted"
   | "authentication"
+  | "configuration"
   | "invalid_response"
   | "policy_blocked"
   | "rate_limited"
@@ -110,5 +111,13 @@ export type ProviderEgressRepository = Readonly<{
   recordFirstToken(input: {
     modelRunAttemptId: ModelRunAttemptId;
     now: Date;
-  }): Promise<void>;
+  }): Promise<boolean>;
+  recordProviderCompletion(input: {
+    completion: Extract<
+      ConversationTextModelStreamEvent,
+      { type: "completed" }
+    >;
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+  }): Promise<boolean>;
 }>;

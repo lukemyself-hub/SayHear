@@ -77,7 +77,12 @@ describe("Provider Egress", () => {
           outcome: "permitted" as const,
         };
       },
-      async recordFirstToken() {},
+      async recordFirstToken() {
+        return true;
+      },
+      async recordProviderCompletion() {
+        return true;
+      },
     } satisfies ProviderEgressRepository;
     const port = createProviderEgressPort({
       champion: {

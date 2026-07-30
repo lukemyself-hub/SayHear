@@ -55,6 +55,25 @@ type GenerationMetadataRow = Readonly<{
   provider_latency_ms: string | null;
   provider_policy_version: string;
   provider_request_id: string | null;
+  recovery_attempts: Array<{
+    attemptNo: number;
+    completedAt: string | null;
+    createdAt: string;
+    errorCategory: string | null;
+    firstTokenAt: string | null;
+    id: string;
+    providerCompletedAt: string | null;
+    recoveryClaimedAt: string | null;
+    recoveryStatus: string;
+    retryNotBefore: string | null;
+    retryOfModelRunAttemptId: string | null;
+    startedAt: string | null;
+    status: string;
+  }>;
+  recovery_checked_at: Date | null;
+  recovery_policy_version: string;
+  recovery_status: string;
+  next_recovery_at: Date | null;
   role: string;
 }>;
 
@@ -85,6 +104,10 @@ export class PostgresInternalInspectionRepository
           command.freshness_policy,
           command.consent_policy_version,
           command.status AS command_status,
+          command.recovery_policy_version,
+          command.recovery_status,
+          command.recovery_checked_at,
+          command.next_recovery_at,
           context.compiled_context_id AS context_id,
           context.compiler_version AS context_compiler_version,
           context.dialogue_revision AS context_dialogue_revision,
@@ -117,6 +140,34 @@ export class PostgresInternalInspectionRepository
             ),
             '[]'::jsonb
           ) AS context_referenced_events,
+          COALESCE(
+            (
+              SELECT jsonb_agg(
+                jsonb_build_object(
+                  'id', lineage.model_run_attempt_id,
+                  'attemptNo', lineage.attempt_no,
+                  'status', lineage.status,
+                  'recoveryStatus', lineage.recovery_status,
+                  'retryOfModelRunAttemptId',
+                    lineage.retry_of_model_run_attempt_id,
+                  'createdAt', lineage.created_at,
+                  'startedAt', lineage.started_at,
+                  'firstTokenAt', lineage.first_token_at,
+                  'providerCompletedAt', lineage.provider_completed_at,
+                  'completedAt', lineage.completed_at,
+                  'retryNotBefore', lineage.retry_not_before,
+                  'recoveryClaimedAt', lineage.recovery_claimed_at,
+                  'errorCategory', lineage.error_category
+                )
+                ORDER BY lineage.attempt_no
+              )
+              FROM model_run_attempts lineage
+              WHERE lineage.generation_command_id =
+                command.generation_command_id
+                AND lineage.user_id = command.user_id
+            ),
+            '[]'::jsonb
+          ) AS recovery_attempts,
           attempt.model_run_attempt_id,
           attempt.provider,
           attempt.model,
@@ -215,6 +266,29 @@ export class PostgresInternalInspectionRepository
       providerLatencyMs: optionalNumber(row.provider_latency_ms),
       providerPolicyVersion: row.provider_policy_version,
       providerRequestId: row.provider_request_id,
+      recovery: {
+        attempts: row.recovery_attempts.map((attempt) => ({
+          attemptNo: attempt.attemptNo,
+          completedAt: optionalDate(attempt.completedAt),
+          createdAt: new Date(attempt.createdAt),
+          errorCategory: attempt.errorCategory,
+          firstTokenAt: optionalDate(attempt.firstTokenAt),
+          id: asModelRunAttemptId(attempt.id),
+          providerCompletedAt: optionalDate(attempt.providerCompletedAt),
+          recoveryClaimedAt: optionalDate(attempt.recoveryClaimedAt),
+          recoveryStatus: attempt.recoveryStatus,
+          retryNotBefore: optionalDate(attempt.retryNotBefore),
+          retryOfModelRunAttemptId: attempt.retryOfModelRunAttemptId
+            ? asModelRunAttemptId(attempt.retryOfModelRunAttemptId)
+            : null,
+          startedAt: optionalDate(attempt.startedAt),
+          status: attempt.status,
+        })),
+        checkedAt: row.recovery_checked_at,
+        nextRecoveryAt: row.next_recovery_at,
+        policyVersion: row.recovery_policy_version,
+        status: row.recovery_status,
+      },
       role: row.role,
       sourceRevisionId: asConversationEventRevisionId(
         row.input_revision_id,
@@ -343,6 +417,10 @@ export class PostgresInternalInspectionRepository
 
 function optionalNumber(value: string | null): number | null {
   return value === null ? null : Number(value);
+}
+
+function optionalDate(value: string | null): Date | null {
+  return value === null ? null : new Date(value);
 }
 
 function sensitiveAccessDenialReason(input: {

@@ -1,8 +1,12 @@
-import type { ContinuousExchangeService } from "@sayhear/application";
+import type {
+  ContinuousExchangeService,
+  ConversationResponseService,
+} from "@sayhear/application";
 
 export function createRecoveryScannerHandler(dependencies: {
+  conversationResponseService: ConversationResponseService;
   scannerSecret: string;
-  service: ContinuousExchangeService;
+  continuousExchangeService: ContinuousExchangeService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -14,7 +18,10 @@ export function createRecoveryScannerHandler(dependencies: {
     }
 
     return Response.json({
-      inactivity: await dependencies.service.scanDueInactivity(),
+      responses:
+        await dependencies.conversationResponseService.scanStaleResponses(),
+      inactivity:
+        await dependencies.continuousExchangeService.scanDueInactivity(),
     });
   };
 }
