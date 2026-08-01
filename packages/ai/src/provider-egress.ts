@@ -49,6 +49,7 @@ export function createProviderEgressPort(dependencies: {
       let firstTokenRecorded = false;
       for await (const event of dependencies.model.stream({
         instructions: payload.instructions,
+        locale: claim.context.locale,
         messages: payload.messages,
         model: claim.model,
         ...(input.signal ? { signal: input.signal } : {}),

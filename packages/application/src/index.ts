@@ -84,6 +84,27 @@ export {
   type SensitiveInspectionDenialReason,
 } from "./internal-inspection";
 export {
+  classifyConversationTurnSignal,
+  containsAbsoluteConfidentiality,
+  containsDiagnosis,
+  containsTherapistImpersonation,
+  containsUnconditionalAgreement,
+  containsUnsolicitedAdvice,
+  countFollowUpQuestions,
+  detectMinimumHighRiskSignal,
+  MINIMUM_HIGH_RISK_RESPONSE_POLICY_VERSION,
+  renderMinimumHighRiskResponse,
+  resolveConversationLocale,
+  validateMinimumHighRiskResponse,
+  validateUnderstandingResponse,
+  type ConversationTurnSignal,
+  type HighRiskClassification,
+  type HighRiskKind,
+  type MinimumHighRiskResponseViolation,
+  type SupportedConversationLocale,
+  type UnderstandingResponseViolation,
+} from "./conversation-behavior";
+export {
   asCompiledContextId,
   asConversationEventId,
   asConversationEventRevisionId,

@@ -5,7 +5,7 @@ import type {
   ProviderEgressRepository,
 } from "@sayhear/application";
 
-import { createDeterministicConversationTextModel } from "./deterministic-conversation-text-model";
+import { createBehaviorAwareConversationTextModel } from "./behavior-aware-conversation-text-model";
 import { createOpenAIConversationTextModel } from "./openai-conversation-text-model";
 import { createProviderEgressPort } from "./provider-egress";
 
@@ -31,15 +31,7 @@ export function createRuntimeProviderEgressPort(input: {
 }): ProviderEgressPort {
   const model =
     input.adapter.type === "deterministic"
-      ? createDeterministicConversationTextModel({
-          chunks: input.adapter.chunks,
-          ...(input.adapter.failAfterCompletion
-            ? { failAfterCompletion: true }
-            : {}),
-          ...(input.adapter.failAfterChunks === undefined
-            ? {}
-            : { failAfterChunks: input.adapter.failAfterChunks }),
-        })
+      ? createDeterministicBehaviorModel(input.adapter)
       : createOpenAIConversationTextModel({
           apiKey: input.adapter.apiKey,
           timeoutMs: input.adapter.timeoutMs,
@@ -51,5 +43,24 @@ export function createRuntimeProviderEgressPort(input: {
     contextCompiler: input.contextCompiler,
     model,
     repository: input.repository,
+  });
+}
+
+/**
+ * The configured deterministic Conversation Text Champion applies the versioned
+ * 1A.1 behavior policy: an explicit high-risk signal activates the Minimum
+ * High-Risk Response, and every ordinary Understanding Response echoes the
+ * configured deterministic chunks.
+ */
+function createDeterministicBehaviorModel(adapter: {
+  chunks: readonly string[];
+  failAfterCompletion?: boolean;
+  failAfterChunks?: number;
+}) {
+  const { chunks, failAfterCompletion, failAfterChunks } = adapter;
+  return createBehaviorAwareConversationTextModel({
+    responder: () => chunks,
+    ...(failAfterCompletion ? { failAfterCompletion: true } : {}),
+    ...(failAfterChunks === undefined ? {} : { failAfterChunks }),
   });
 }
