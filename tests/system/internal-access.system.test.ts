@@ -52,7 +52,8 @@ if (!testDatabaseUrl) {
 const testGenerationPolicy = Object.freeze({
   consentPolicyVersion: null,
   freshnessPolicy: "source_valid:v1" as const,
-  localePolicyVersion: "locale-pack:v1",
+  chineseLocalePackVersion: "locale-pack-zh:v1",
+  englishLocalePackVersion: "locale-pack-en:v1",
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
@@ -873,7 +874,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         },
         locale: "en-US",
         policyVersions: {
-          localePolicyVersion: testGenerationPolicy.localePolicyVersion,
+          localePolicyVersion: testGenerationPolicy.englishLocalePackVersion,
           outputFormatVersion: "conversation-output:v1",
           personaVersion: "sayhear-persona:v1",
           productPolicyVersion: testGenerationPolicy.productPolicyVersion,

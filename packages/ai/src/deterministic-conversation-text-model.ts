@@ -3,6 +3,8 @@ import {
   type ConversationTextModel,
 } from "@sayhear/application";
 
+import { streamDeterministicDeltas } from "./deterministic-stream";
+
 export function createDeterministicConversationTextModel(input: {
   chunks: readonly string[];
   failAfterCompletion?: boolean;
@@ -10,26 +12,11 @@ export function createDeterministicConversationTextModel(input: {
 }): ConversationTextModel {
   return {
     async *stream(request) {
-      let emitted = 0;
-      for (const chunk of input.chunks) {
-        if (request.signal?.aborted) {
-          throw new ProviderDispatchError("aborted");
-        }
-        if (
-          input.failAfterChunks !== undefined &&
-          emitted >= input.failAfterChunks
-        ) {
-          throw new ProviderDispatchError("unavailable");
-        }
-        emitted += 1;
-        yield { delta: chunk, type: "delta" };
-      }
-      if (
-        input.failAfterChunks !== undefined &&
-        emitted >= input.failAfterChunks
-      ) {
-        throw new ProviderDispatchError("unavailable");
-      }
+      yield* streamDeterministicDeltas(
+        request,
+        input.chunks,
+        input.failAfterChunks,
+      );
       yield {
         costMicros: 0,
         finishReason: "completed",

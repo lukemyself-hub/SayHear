@@ -59,9 +59,25 @@ describe("behavior-aware Conversation Text model", () => {
       {
         history: [],
         locale: "en-US",
+        signal: "engaged",
         text: "Nobody backed me up in the meeting.",
       },
     ]);
+  });
+
+  it("propagates the classified turn signal so the responder can stop pressing", async () => {
+    const seen: ConversationUnderstandingTurn[] = [];
+    const model = createBehaviorAwareConversationTextModel({
+      responder: (turn) => {
+        seen.push(turn);
+        return ["听到了，现在不着急。"];
+      },
+    });
+    await collect(model, [
+      { revisionId, role: "user", text: "I'd rather not get into it." },
+    ]);
+
+    expect(seen[0]?.signal).toBe("avoidance");
   });
 
   it("passes prior committed turns as history and preserves the current locale", async () => {

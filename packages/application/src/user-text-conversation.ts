@@ -61,7 +61,8 @@ export type RecordConversationRetryInput = Readonly<{
 export type GenerationPolicy = Readonly<{
   consentPolicyVersion: string | null;
   freshnessPolicy: "source_valid:v1";
-  localePolicyVersion: string;
+  chineseLocalePackVersion: string;
+  englishLocalePackVersion: string;
   model: string;
   modelConfigVersion: string;
   modelSnapshot: string;

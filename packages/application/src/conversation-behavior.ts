@@ -11,6 +11,15 @@
 export const MINIMUM_HIGH_RISK_RESPONSE_POLICY_VERSION =
   "minimum-high-risk-response:v1";
 
+/**
+ * The independent version identities of the English and Chinese locale packs
+ * (ADR-0072). They are versioned separately rather than collapsed into one
+ * shared locale-policy identity, and the pack applicable to a turn is recorded
+ * on its generation metadata.
+ */
+export const ENGLISH_LOCALE_PACK_VERSION = "locale-pack-en:v1";
+export const CHINESE_LOCALE_PACK_VERSION = "locale-pack-zh:v1";
+
 export type HighRiskKind =
   | "self_harm"
   | "harm_to_others"
@@ -92,13 +101,14 @@ const HARM_TO_OTHERS_SIGNALS: readonly string[] = [
 const IMMINENT_DANGER_SIGNALS: readonly string[] = [
   "keep myself safe",
   "keep yourself safe",
-  "in front of me",
-  "right now",
-  "any minute",
-  "about to",
   "going to do it",
   "cannot hold on",
   "can't hold on",
+  // Precise method-access phrases only — the bare substrings they replaced
+  // ("right now", "about to", "any minute", "in front of me") matched ordinary
+  // emotional expression ("I'm anxious right now") and over-triggered the
+  // Minimum High-Risk Response.
+  "pills in front of me",
   "控制不住",
   "站在窗边",
   "在窗边",
@@ -315,6 +325,21 @@ export function resolveConversationLocale(
 ): SupportedConversationLocale {
   const language = locale.trim().split("-")[0]?.toLowerCase() ?? "";
   return language === "zh" ? "zh" : "en";
+}
+
+/**
+ * Resolve the locale-pack version identity that governs a turn from its BCP-47
+ * locale. English and Chinese locale packs carry independent version identities;
+ * the applicable one is what gets recorded on the turn's generation metadata.
+ */
+export function resolveLocalePackVersion(input: {
+  locale: string;
+  englishLocalePackVersion: string;
+  chineseLocalePackVersion: string;
+}): string {
+  return resolveConversationLocale(input.locale) === "zh"
+    ? input.chineseLocalePackVersion
+    : input.englishLocalePackVersion;
 }
 
 /**

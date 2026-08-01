@@ -11,6 +11,7 @@ import {
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
   type ConversationTextChampion,
+  type ConversationTurnSignal,
 } from "@sayhear/application";
 import { createBehaviorAwareConversationTextModel, createProviderEgressPort } from "@sayhear/ai/testing";
 import {
@@ -55,7 +56,8 @@ const testChampion: ConversationTextChampion = Object.freeze({
 const testGenerationPolicy = Object.freeze({
   consentPolicyVersion: null,
   freshnessPolicy: "source_valid:v1" as const,
-  localePolicyVersion: "locale-pack:v1",
+  chineseLocalePackVersion: "locale-pack-zh:v1",
+  englishLocalePackVersion: "locale-pack-en:v1",
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
@@ -131,6 +133,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
   function createService(responder: (turn: {
     history: readonly Readonly<{ role: "user" | "assistant"; text: string }>[];
     locale: string;
+    signal: ConversationTurnSignal;
     text: string;
   }) => readonly string[]) {
     const responseRepository = new PostgresConversationResponseRepository(
@@ -268,7 +271,11 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       ],
       ["算了，没什么。", "没关系，你现在不用想清楚。"],
     ]);
-    const { service } = createService((turn) => [responses.get(turn.text) ?? "听到了。"]);
+    const seenSignals: ConversationTurnSignal[] = [];
+    const { service } = createService((turn) => {
+      seenSignals.push(turn.signal);
+      return [responses.get(turn.text) ?? "听到了。"];
+    });
 
     const engaged = await submit(service, {
       clientEventId: "zh-event-1",
@@ -298,6 +305,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       text: "算了，没什么。",
     });
     const stoppedResponse = joinDeltas(stopped);
+    expect(seenSignals.at(-1)).not.toBe("engaged");
     expect(countFollowUpQuestions(stoppedResponse)).toBe(0);
     expect(stoppedResponse).not.toContain("被注意到");
     expect(validateUnderstandingResponse(stoppedResponse).violations).toEqual([]);
@@ -440,7 +448,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       userId: fixedInternalOwnerPrincipal.userId,
     });
     expect(metadata?.compiledContext.policyVersions).toMatchObject({
-      localePolicyVersion: "locale-pack:v1",
+      localePolicyVersion: "locale-pack-zh:v1",
       outputFormatVersion: "conversation-output:v1",
       personaVersion: "sayhear-persona:v1",
       productPolicyVersion: "product-policy:v1",

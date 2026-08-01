@@ -1,5 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import {
+  CHINESE_LOCALE_PACK_VERSION,
+  ENGLISH_LOCALE_PACK_VERSION,
+} from "./conversation-behavior";
 import type {
   CompiledContextId,
   ConversationEventRevisionId,
@@ -503,8 +507,13 @@ function createManifestContentHmac(
 function assertSupportedPolicyVersions(
   versions: ContextPolicyVersions,
 ): void {
-  const supported: ContextPolicyVersions = {
-    localePolicyVersion: "locale-pack:v1",
+  // The English and Chinese locale packs carry independent version identities;
+  // the applicable one is resolved per turn, so either is supported here.
+  const supportedLocalePackVersions = new Set([
+    ENGLISH_LOCALE_PACK_VERSION,
+    CHINESE_LOCALE_PACK_VERSION,
+  ]);
+  const supported = {
     outputFormatVersion: "conversation-output:v1",
     personaVersion: "sayhear-persona:v1",
     productPolicyVersion: "product-policy:v1",
@@ -512,9 +521,10 @@ function assertSupportedPolicyVersions(
     safetyPolicyVersion: "minimum-high-risk-response:v1",
     taskInstructionVersion: "conversation-text:v1",
   };
-  for (const key of Object.keys(supported) as Array<
-    keyof ContextPolicyVersions
-  >) {
+  if (!supportedLocalePackVersions.has(versions.localePolicyVersion)) {
+    throw new CompiledContextIntegrityError();
+  }
+  for (const key of Object.keys(supported) as Array<keyof typeof supported>) {
     if (versions[key] !== supported[key]) {
       throw new CompiledContextIntegrityError();
     }

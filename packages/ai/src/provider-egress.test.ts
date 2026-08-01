@@ -62,7 +62,7 @@ describe("Provider Egress", () => {
             },
             locale: "en-US",
             policyVersions: {
-              localePolicyVersion: "locale-pack:v1",
+              localePolicyVersion: "locale-pack-en:v1",
               outputFormatVersion: "conversation-output:v1",
               personaVersion: "sayhear-persona:v1",
               productPolicyVersion: "product-policy:v1",

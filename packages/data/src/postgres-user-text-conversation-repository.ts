@@ -11,6 +11,7 @@ import type {
   UserTextMessage,
   UserTextTurn,
 } from "@sayhear/application";
+import { resolveLocalePackVersion } from "@sayhear/application";
 import {
   asConversationEventId,
   asConversationEventRevisionId,
@@ -643,7 +644,13 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.productPolicyVersion,
         input.generationPolicy.safetyPolicyVersion,
         input.generationPolicy.relationshipPolicyVersion,
-        input.generationPolicy.localePolicyVersion,
+        resolveLocalePackVersion({
+          chineseLocalePackVersion:
+            input.generationPolicy.chineseLocalePackVersion,
+          englishLocalePackVersion:
+            input.generationPolicy.englishLocalePackVersion,
+          locale: source.locale,
+        }),
         source.locale,
         input.generationPolicy.provider,
         input.generationPolicy.model,
@@ -1079,7 +1086,13 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.productPolicyVersion,
         input.generationPolicy.safetyPolicyVersion,
         input.generationPolicy.relationshipPolicyVersion,
-        input.generationPolicy.localePolicyVersion,
+        resolveLocalePackVersion({
+          chineseLocalePackVersion:
+            input.generationPolicy.chineseLocalePackVersion,
+          englishLocalePackVersion:
+            input.generationPolicy.englishLocalePackVersion,
+          locale: input.locale,
+        }),
         input.locale,
         input.generationPolicy.provider,
         input.generationPolicy.model,
@@ -1345,7 +1358,13 @@ async function addGenerationToLegacyTurn(
       input.generationPolicy.productPolicyVersion,
       input.generationPolicy.safetyPolicyVersion,
       input.generationPolicy.relationshipPolicyVersion,
-      input.generationPolicy.localePolicyVersion,
+      resolveLocalePackVersion({
+        chineseLocalePackVersion:
+          input.generationPolicy.chineseLocalePackVersion,
+        englishLocalePackVersion:
+          input.generationPolicy.englishLocalePackVersion,
+        locale: row.locale,
+      }),
       row.locale,
       input.generationPolicy.provider,
       input.generationPolicy.model,

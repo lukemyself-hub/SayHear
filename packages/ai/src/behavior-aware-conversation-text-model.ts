@@ -1,37 +1,48 @@
 import {
   ProviderDispatchError,
+  classifyConversationTurnSignal,
   detectMinimumHighRiskSignal,
   renderMinimumHighRiskResponse,
-  type ConversationTextModel,
   type ConversationTextMessage,
+  type ConversationTextModel,
+  type ConversationTurnSignal,
 } from "@sayhear/application";
+
+import { streamDeterministicDeltas } from "./deterministic-stream";
 
 /**
  * The behavior the deterministic Champion selects for a turn.
  *
- * - `understanding`: an ordinary 1A.1 Understanding Response from the responder.
+ * - `understanding`: an ordinary 1A.1 Understanding Response from the responder,
+ *   paired with the classified turn signal so the responder can stop the prior
+ *   line of questioning after a short response, avoidance, refusal, or topic
+ *   change.
  * - `minimum_high_risk`: the versioned Minimum High-Risk Response that pauses
  *   ordinary listening, follow-up, and advice.
  */
 type ConversationBehaviorSelection =
-  | Readonly<{ kind: "understanding" }>
+  | Readonly<{ kind: "understanding"; signal: ConversationTurnSignal }>
   | Readonly<{ kind: "minimum_high_risk"; text: string }>;
 
 /**
  * The ordinary Understanding Response input the behavior-aware Champion passes to
  * its responder for a turn that did not activate the Minimum High-Risk Response.
+ * `signal` carries the follow-up rule so the responder stops pressing after a
+ * short response, avoidance, refusal, or topic change.
  */
 export type ConversationUnderstandingTurn = Readonly<{
   history: readonly Readonly<{ role: "user" | "assistant"; text: string }>[];
   locale: string;
+  signal: ConversationTurnSignal;
   text: string;
 }>;
 
 /**
  * Select the deterministic Champion behavior for a turn. A real high-risk signal
  * always activates the versioned Minimum High-Risk Response; otherwise the turn
- * receives an Understanding Response. The selection is shared by the
- * behavior-aware Champion and the minimum synthetic evaluation set.
+ * receives an Understanding Response and the classified turn signal steers the
+ * follow-up rule. The selection is shared by the behavior-aware Champion and the
+ * minimum synthetic evaluation set.
  */
 function selectConversationBehavior(input: {
   locale: string;
@@ -45,7 +56,10 @@ function selectConversationBehavior(input: {
       text: renderMinimumHighRiskResponse({ kind: signal.kind, locale: input.locale }),
     };
   }
-  return { kind: "understanding" };
+  return {
+    kind: "understanding",
+    signal: classifyConversationTurnSignal({ locale: input.locale, text }),
+  };
 }
 
 /**
@@ -62,13 +76,6 @@ export function createBehaviorAwareConversationTextModel(input: {
 }): ConversationTextModel {
   return {
     async *stream(request) {
-      let emitted = 0;
-      const failBeforeEmit =
-        input.failAfterChunks !== undefined && emitted >= input.failAfterChunks;
-      if (failBeforeEmit) {
-        throw new ProviderDispatchError("unavailable");
-      }
-
       const currentMessage = [...request.messages]
         .reverse()
         .find((message) => message.role === "user");
@@ -88,28 +95,15 @@ export function createBehaviorAwareConversationTextModel(input: {
                 text: message.text,
               })),
               locale: request.locale,
+              signal: selection.signal,
               text: currentMessage?.text ?? "",
             });
 
-      for (const chunk of chunks) {
-        if (request.signal?.aborted) {
-          throw new ProviderDispatchError("aborted");
-        }
-        if (
-          input.failAfterChunks !== undefined &&
-          emitted >= input.failAfterChunks
-        ) {
-          throw new ProviderDispatchError("unavailable");
-        }
-        emitted += 1;
-        yield { delta: chunk, type: "delta" };
-      }
-      if (
-        input.failAfterChunks !== undefined &&
-        emitted >= input.failAfterChunks
-      ) {
-        throw new ProviderDispatchError("unavailable");
-      }
+      yield* streamDeterministicDeltas(
+        request,
+        chunks,
+        input.failAfterChunks,
+      );
       yield {
         costMicros: 0,
         finishReason: "completed",

@@ -97,6 +97,10 @@ describe("minimum high-risk signal detection", () => {
     ],
     ["sadness without a safety signal", "en", "I have been feeling really down lately."],
     ["frustration without a safety signal", "zh-CN", "我快被这些 deadline 逼疯了。"],
+    ["an anxious right-now statement", "en", "I'm feeling really anxious right now."],
+    ["a scheduling about-to statement", "en", "I'm about to head into a meeting."],
+    ["a decision in front of me", "en", "There's a big decision in front of me."],
+    ["an any-minute idiom", "en", "The announcement could come any minute now."],
   ])("does not flag %s as high-risk", (_label, locale, text) => {
     expect(detectMinimumHighRiskSignal({ locale, text }).kind).toBeNull();
   });
