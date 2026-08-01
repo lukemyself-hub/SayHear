@@ -50,3 +50,23 @@ The single recovery scanner is scheduled by `vercel.json` and authenticates with
 Vercel's server-only `CRON_SECRET`. `SAYHEAR_INACTIVITY_TIMEOUT_MS` is tied to
 `SAYHEAR_INACTIVITY_POLICY_VERSION`; changing the timeout requires publishing a new
 policy version rather than mutating an existing version.
+
+## Local configuration loading
+
+The `db:*` scripts run through `tsx`, which does not load `.env` automatically.
+Either export the server configuration in your shell, or run each CLI with the
+file explicitly loaded:
+
+```sh
+node --env-file=.env --import tsx packages/data/src/cli/migrate.ts
+node --env-file=.env --import tsx packages/data/src/cli/provision-internal-owner.ts
+node --env-file=.env --import tsx packages/data/src/cli/record-backup-policy.ts
+```
+
+The Web dev server (`pnpm --filter @sayhear/web dev`) runs in `apps/web/`. Next.js
+loads `.env` from its working directory, so it does not see the repository-root
+`.env`. Link the root file so the Web server reads the same configuration:
+
+```sh
+ln -sf ../../.env apps/web/.env
+```

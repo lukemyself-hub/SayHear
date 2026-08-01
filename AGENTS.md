@@ -26,8 +26,16 @@
 
 纯机械且需求明确的日常任务，读取本文件和文档地图后即可开始。
 
-## Agent 操作导航
+## Agent skills
 
-- GitHub Issue / SPEC 操作：[`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md)
-- Issue 分诊与标签：[`docs/agents/triage-labels.md`](docs/agents/triage-labels.md)
-- 领域命名与 ADR 冲突检查：[`docs/agents/domain.md`](docs/agents/domain.md)
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `lukemyself-hub/SayHear`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository. See `docs/agents/domain.md`.
