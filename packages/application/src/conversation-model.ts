@@ -30,6 +30,7 @@ export type ConversationTextMessage = Readonly<{
 
 export type ConversationTextModelRequest = Readonly<{
   instructions: string;
+  locale: string;
   messages: readonly ConversationTextMessage[];
   model: string;
   signal?: AbortSignal;

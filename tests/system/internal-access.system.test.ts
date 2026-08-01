@@ -16,6 +16,8 @@ import {
   createInternalOwnerAccessService,
   createUserTextConversationService,
   ProviderDispatchError,
+  renderMinimumHighRiskResponse,
+  validateMinimumHighRiskResponse,
   type ConversationResponseRepository,
   type ConversationTextModel,
 } from "@sayhear/application";
@@ -50,7 +52,8 @@ if (!testDatabaseUrl) {
 const testGenerationPolicy = Object.freeze({
   consentPolicyVersion: null,
   freshnessPolicy: "source_valid:v1" as const,
-  localePolicyVersion: "locale-pack:v1",
+  chineseLocalePackVersion: "locale-pack-zh:v1",
+  englishLocalePackVersion: "locale-pack-en:v1",
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
@@ -745,6 +748,80 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(completedAudit.rows[0]?.status).toBe("completed");
   });
 
+  it("activates the versioned Minimum High-Risk Response through the real Web/BFF path", async () => {
+    if (!nextServer) {
+      throw new Error("The Next test server is not running.");
+    }
+    await openPrivateWrites();
+    const response = await fetch(
+      `${nextServer.origin}/api/internal/conversation/responses`,
+      {
+        body: JSON.stringify({
+          clientEventId: "high-risk-bff-event",
+          clientTurnId: "high-risk-bff-turn",
+          locale: "en-US",
+          text: "I want to kill myself tonight.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${sessionCookieName}=${sessionToken}`,
+        },
+        method: "POST",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const events = await readNdjson(response);
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+    const safetyResponse = events
+      .filter((event) => event.type === "assistant_delta")
+      .map((event) => String(event.delta ?? ""))
+      .join("");
+    expect(safetyResponse).toBe(
+      renderMinimumHighRiskResponse({ kind: "self_harm", locale: "en-US" }),
+    );
+    expect(
+      validateMinimumHighRiskResponse(safetyResponse).violations,
+    ).toEqual([]);
+    expect(safetyResponse).not.toContain("That sounds like");
+
+    const authoritative = await database.pool.query<{
+      assistant_events: string;
+      attempt_status: string;
+      command_status: string;
+      safety_policy_version: string;
+      turn_status: string;
+    }>(`
+      SELECT
+        command.status AS command_status,
+        command.safety_policy_version,
+        attempt.status AS attempt_status,
+        turn.status AS turn_status,
+        (
+          SELECT COUNT(*)::text
+          FROM conversation_events
+          WHERE actor = 'assistant'
+        ) AS assistant_events
+      FROM generation_commands command
+      INNER JOIN model_run_attempts attempt
+        ON attempt.generation_command_id = command.generation_command_id
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = command.interaction_turn_id
+    `);
+    expect(authoritative.rows[0]).toEqual({
+      assistant_events: "1",
+      attempt_status: "succeeded",
+      command_status: "succeeded",
+      safety_policy_version: "minimum-high-risk-response:v1",
+      turn_status: "settled",
+    });
+  });
+
   it("exposes content-free Provider egress metadata through ordinary inspection", async () => {
     if (!nextServer) {
       throw new Error("The Next test server is not running.");
@@ -797,7 +874,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         },
         locale: "en-US",
         policyVersions: {
-          localePolicyVersion: testGenerationPolicy.localePolicyVersion,
+          localePolicyVersion: testGenerationPolicy.englishLocalePackVersion,
           outputFormatVersion: "conversation-output:v1",
           personaVersion: "sayhear-persona:v1",
           productPolicyVersion: testGenerationPolicy.productPolicyVersion,

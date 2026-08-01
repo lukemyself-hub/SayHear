@@ -72,7 +72,7 @@ describe("Context Compiler", () => {
           inputRevisionId,
           locale: "en-US",
           policyVersions: {
-            localePolicyVersion: "locale-pack:v1",
+            localePolicyVersion: "locale-pack-en:v1",
             outputFormatVersion: "conversation-output:v1",
             personaVersion: "sayhear-persona:v1",
             productPolicyVersion: "product-policy:v1",
@@ -128,7 +128,7 @@ describe("Context Compiler", () => {
         keyVersion: "context-integrity:v1",
       },
       policyVersions: {
-        localePolicyVersion: "locale-pack:v1",
+        localePolicyVersion: "locale-pack-en:v1",
         outputFormatVersion: "conversation-output:v1",
         personaVersion: "sayhear-persona:v1",
         productPolicyVersion: "product-policy:v1",
@@ -242,7 +242,7 @@ describe("Context Compiler", () => {
           inputRevisionId,
           locale: "zh-CN",
           policyVersions: {
-            localePolicyVersion: "locale-pack:v1",
+            localePolicyVersion: "locale-pack-zh:v1",
             outputFormatVersion: "conversation-output:v1",
             personaVersion: "sayhear-persona:v1",
             productPolicyVersion: "product-policy:v1",

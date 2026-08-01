@@ -34,6 +34,7 @@ describe("OpenAI Conversation Text adapter", () => {
     const events = [];
     for await (const event of model.stream({
       instructions: "Synthetic instructions",
+      locale: "en-US",
       messages: [
         {
           revisionId: asConversationEventRevisionId(
@@ -85,6 +86,7 @@ describe("OpenAI Conversation Text adapter", () => {
     await expect(async () => {
       for await (const _event of model.stream({
         instructions: "Synthetic instructions",
+        locale: "en-US",
         messages: [
           {
             revisionId: asConversationEventRevisionId(
@@ -116,6 +118,7 @@ describe("OpenAI Conversation Text adapter", () => {
       await expect(async () => {
         for await (const _event of model.stream({
           instructions: "Synthetic instructions",
+          locale: "en-US",
           messages: [],
           model: "gpt-5.4",
         })) {
@@ -138,6 +141,7 @@ describe("OpenAI Conversation Text adapter", () => {
     try {
       for await (const _event of model.stream({
         instructions: "Synthetic instructions",
+        locale: "en-US",
         messages: [
           {
             revisionId: asConversationEventRevisionId(

@@ -9,6 +9,7 @@ import { createDeterministicConversationTextModel } from "./deterministic-conver
 
 const request = Object.freeze({
   instructions: "Synthetic system-seam instructions.",
+  locale: "en-US",
   messages: Object.freeze([]),
   model: "deterministic-test-model",
 }) satisfies ConversationTextModelRequest;

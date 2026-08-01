@@ -52,7 +52,8 @@ export function createServerComposition() {
       consentPolicyVersion:
         configuration.provider.champion.consentPolicyVersion,
       freshnessPolicy: "source_valid:v1",
-      localePolicyVersion: "locale-pack:v1",
+      chineseLocalePackVersion: "locale-pack-zh:v1",
+      englishLocalePackVersion: "locale-pack-en:v1",
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,

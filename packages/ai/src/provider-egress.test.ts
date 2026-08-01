@@ -23,6 +23,7 @@ describe("Provider Egress", () => {
       renderPermittedPayload() {
         return {
           instructions: "Instructions rendered by Context Compiler.",
+          locale: "en-US",
           messages: [
             {
               revisionId: inputRevisionId,
@@ -61,7 +62,7 @@ describe("Provider Egress", () => {
             },
             locale: "en-US",
             policyVersions: {
-              localePolicyVersion: "locale-pack:v1",
+              localePolicyVersion: "locale-pack-en:v1",
               outputFormatVersion: "conversation-output:v1",
               personaVersion: "sayhear-persona:v1",
               productPolicyVersion: "product-policy:v1",
@@ -121,6 +122,7 @@ describe("Provider Egress", () => {
 
     expect(modelRequest).toEqual({
       instructions: "Instructions rendered by Context Compiler.",
+      locale: "en-US",
       messages: [
         {
           revisionId: inputRevisionId,
