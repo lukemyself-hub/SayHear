@@ -118,6 +118,7 @@ for (const [moduleName, sourceRoot] of Object.entries(sourceRoots)) {
     ) {
       for (const credentialName of [
         "OPENAI_API_KEY",
+        "DEEPSEEK_API_KEY",
         "GITHUB_CLIENT_SECRET",
         "NEXTAUTH_SECRET",
         "SAYHEAR_CONTEXT_HMAC_SECRET",

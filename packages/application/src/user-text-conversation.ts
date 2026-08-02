@@ -11,6 +11,8 @@ import {
   type UserId,
 } from "@sayhear/domain";
 
+import type { ConversationTextProvider } from "./conversation-model";
+
 declare const clientEventIdBrand: unique symbol;
 declare const clientTurnIdBrand: unique symbol;
 declare const retryRequestIdBrand: unique symbol;
@@ -71,7 +73,7 @@ export type GenerationPolicy = Readonly<{
   providerPolicyVersion: string;
   productPolicyVersion: string;
   promptVersion: string;
-  provider: "openai";
+  provider: ConversationTextProvider;
   relationshipPolicyVersion: string;
   safetyPolicyVersion: string;
 }>;

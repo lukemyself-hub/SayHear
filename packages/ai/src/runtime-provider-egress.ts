@@ -6,14 +6,15 @@ import type {
 } from "@sayhear/application";
 
 import { createBehaviorAwareConversationTextModel } from "./behavior-aware-conversation-text-model";
-import { createOpenAIConversationTextModel } from "./openai-conversation-text-model";
+import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 import { createProviderEgressPort } from "./provider-egress";
 
 type ProviderAdapterConfiguration =
   | Readonly<{
       apiKey: string;
+      baseUrl: string;
       timeoutMs: number;
-      type: "openai";
+      type: "responses-api";
     }>
   | Readonly<{
       chunks: readonly string[];
@@ -32,8 +33,9 @@ export function createRuntimeProviderEgressPort(input: {
   const model =
     input.adapter.type === "deterministic"
       ? createDeterministicBehaviorModel(input.adapter)
-      : createOpenAIConversationTextModel({
+      : createResponsesApiConversationTextModel({
           apiKey: input.adapter.apiKey,
+          baseUrl: input.adapter.baseUrl,
           timeoutMs: input.adapter.timeoutMs,
         });
 

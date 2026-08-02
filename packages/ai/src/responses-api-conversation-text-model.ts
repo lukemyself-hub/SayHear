@@ -4,18 +4,25 @@ import {
   type ProviderDispatchErrorCategory,
 } from "@sayhear/application";
 
-type OpenAIStreamEvent = Readonly<
+type ResponsesApiStreamEvent = Readonly<
   { type: string } & Record<string, unknown>
 >;
 
-export function createOpenAIConversationTextModel(input: {
+/**
+ * A provider-agnostic Conversation Text adapter for any Provider that exposes an
+ * OpenAI-compatible Responses API (`POST {baseUrl}/responses`, SSE streaming with
+ * `response.output_text.delta` / `response.completed`). OpenAI and DeepSeek are
+ * two configurations of this client; the Provider identity is carried by the
+ * caller's baseUrl/apiKey/model and recorded as a lineage label upstream.
+ */
+export function createResponsesApiConversationTextModel(input: {
   apiKey: string;
-  baseUrl?: string;
+  baseUrl: string;
   fetchImplementation?: typeof fetch;
   timeoutMs?: number;
 }): ConversationTextModel {
   const fetchImplementation = input.fetchImplementation ?? fetch;
-  const baseUrl = input.baseUrl ?? "https://api.openai.com/v1";
+  const { baseUrl } = input;
   const timeoutMs = input.timeoutMs ?? 60_000;
 
   return {
@@ -117,7 +124,7 @@ export function createOpenAIConversationTextModel(input: {
 
 async function* parseServerSentEvents(
   stream: ReadableStream<Uint8Array>,
-): AsyncIterable<OpenAIStreamEvent> {
+): AsyncIterable<ResponsesApiStreamEvent> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -153,7 +160,7 @@ async function* parseServerSentEvents(
           ) {
             throw new ProviderDispatchError("invalid_response");
           }
-          yield parsed as OpenAIStreamEvent;
+          yield parsed as ResponsesApiStreamEvent;
         }
         boundary = /\r?\n\r?\n/.exec(buffer);
       }

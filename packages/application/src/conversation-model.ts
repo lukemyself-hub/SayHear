@@ -7,13 +7,22 @@ import type {
 
 import type { CompiledContextRenderSource } from "./context-compiler";
 
+/**
+ * The Provider identity recorded on a Conversation Text Champion and frozen on
+ * each GenerationCommand. It is a lineage / audit label (whose account, policy
+ * version, and bloodline this generation belongs to), not a transport selector —
+ * Providers that share a wire-compatible Responses API are configurations of one
+ * protocol client. ADR-0102 widened this from the single 1A.1 Provider ("openai").
+ */
+export type ConversationTextProvider = "openai" | "deepseek";
+
 export type ConversationTextChampion = Readonly<{
   configVersion: string;
   consentPolicyVersion: string | null;
   contextLimit: number;
   dataRegion: string;
   model: string;
-  provider: "openai";
+  provider: ConversationTextProvider;
   providerPolicyVersion: string;
   retentionMode: string;
   snapshot: string;

@@ -95,8 +95,9 @@ export function createServerComposition() {
           }
         : {
             apiKey: configuration.provider.apiKey!,
+            baseUrl: configuration.provider.baseUrl!,
             timeoutMs: configuration.provider.timeoutMs,
-            type: "openai",
+            type: "responses-api",
           },
     champion: configuration.provider.champion,
     clock: configuration.clock,
