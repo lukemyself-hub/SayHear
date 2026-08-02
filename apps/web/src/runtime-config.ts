@@ -92,7 +92,9 @@ export function loadRuntimeConfiguration(environment: Environment) {
   const adapter =
     environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic"
       ? "deterministic"
-      : "openai";
+      : environment.SAYHEAR_PROVIDER_ADAPTER === "deepseek"
+        ? "deepseek"
+        : "openai";
   const deterministicChunks =
     adapter === "deterministic"
       ? parseDeterministicChunks(
@@ -126,6 +128,37 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("SAYHEAR_PROVIDER_TIMEOUT_MS must be a positive integer.");
   }
+  const deepseekBaseUrl =
+    environment.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
+  if (deepseekBaseUrl.length === 0) {
+    throw new Error("SAYHEAR_DEEPSEEK_BASE_URL must be a non-empty URL.");
+  }
+  // The deterministic test adapter keeps the OpenAI Champion metadata (it never
+  // calls a Provider), so only a real deepseek adapter switches the lineage label.
+  const providerProfile =
+    adapter === "deepseek"
+      ? ({
+          defaultModel: "deepseek-v4-flash",
+          provider: "deepseek",
+          providerPolicyVersion: "deepseek-conversation-text:v1",
+        } as const)
+      : ({
+          defaultModel: "gpt-5.4",
+          provider: "openai",
+          providerPolicyVersion: "openai-conversation-text:v1",
+        } as const);
+  // Live Provider credentials + transport base URL. The deterministic adapter
+  // owns no credentials; both real Providers carry their baseUrl here so the
+  // transport layer never hardcodes a Provider endpoint.
+  const liveProviderCredentials =
+    adapter === "openai"
+      ? {
+          apiKey: required(environment, "OPENAI_API_KEY"),
+          baseUrl: "https://api.openai.com/v1",
+        }
+      : adapter === "deepseek"
+        ? { apiKey: required(environment, "DEEPSEEK_API_KEY"), baseUrl: deepseekBaseUrl }
+        : null;
   const inactivityTimeoutMs = Number(
     environment.SAYHEAR_INACTIVITY_TIMEOUT_MS ?? "1800000",
   );
@@ -169,22 +202,26 @@ export function loadRuntimeConfiguration(environment: Environment) {
     recoveryScannerSecret: required(environment, "CRON_SECRET"),
     provider: Object.freeze({
       adapter,
-      apiKey:
-        adapter === "openai" ? required(environment, "OPENAI_API_KEY") : null,
+      apiKey: liveProviderCredentials?.apiKey ?? null,
       timeoutMs,
+      ...(liveProviderCredentials
+        ? { baseUrl: liveProviderCredentials.baseUrl }
+        : {}),
       champion: Object.freeze({
         configVersion: "conversation-text-champion:v1",
         consentPolicyVersion: null,
         contextLimit: 1_000_000,
         dataRegion: "provider-configured",
-        model: environment.SAYHEAR_CONVERSATION_TEXT_MODEL ?? "gpt-5.4",
-        provider: "openai" as const,
-        providerPolicyVersion: "openai-conversation-text:v1",
+        model:
+          environment.SAYHEAR_CONVERSATION_TEXT_MODEL ??
+          providerProfile.defaultModel,
+        provider: providerProfile.provider,
+        providerPolicyVersion: providerProfile.providerPolicyVersion,
         retentionMode: "store-disabled",
         snapshot:
           environment.SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT ??
           environment.SAYHEAR_CONVERSATION_TEXT_MODEL ??
-          "gpt-5.4",
+          providerProfile.defaultModel,
         streaming: true as const,
         supportedLocales: Object.freeze(["en", "zh"]),
         trainingPolicy: "api-data-controls",

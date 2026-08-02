@@ -7,6 +7,7 @@ const buildRoot = process.env.SAYHEAR_WEB_BUILD_ROOT
   : fileURLToPath(new URL("../apps/web/.next/static/", import.meta.url));
 const credentialNames = [
   "OPENAI_API_KEY",
+  "DEEPSEEK_API_KEY",
   "GITHUB_CLIENT_SECRET",
   "NEXTAUTH_SECRET",
   "SAYHEAR_CONTEXT_HMAC_SECRET",

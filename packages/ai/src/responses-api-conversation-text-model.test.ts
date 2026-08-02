@@ -4,17 +4,21 @@ import {
   asConversationEventRevisionId,
 } from "@sayhear/application";
 
-import { createOpenAIConversationTextModel } from "./openai-conversation-text-model";
+import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
-describe("OpenAI Conversation Text adapter", () => {
+const OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+
+describe("Responses API Conversation Text adapter", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("streams typed Responses events without storing Provider conversation state", async () => {
     let requestBody: Record<string, unknown> | undefined;
-    const model = createOpenAIConversationTextModel({
+    const model = createResponsesApiConversationTextModel({
       apiKey: "synthetic-server-key",
+      baseUrl: OPENAI_BASE_URL,
       fetchImplementation: async (_url, init) => {
         requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
         const body = [
@@ -69,9 +73,64 @@ describe("OpenAI Conversation Text adapter", () => {
     expect(requestBody).not.toHaveProperty("previous_response_id");
   });
 
+  it("routes a DeepSeek configuration to the DeepSeek Responses API endpoint", async () => {
+    let requestUrl: string | undefined;
+    const model = createResponsesApiConversationTextModel({
+      apiKey: "synthetic-deepseek-key",
+      baseUrl: DEEPSEEK_BASE_URL,
+      fetchImplementation: async (url) => {
+        requestUrl = String(url);
+        const body = [
+          'event: response.output_text.delta\r\ndata: {"type":"response.output_text.delta","delta":"我听到你了。"}\r\n\r\n',
+          'event: response.completed\r\ndata: {"type":"response.completed","response":{"id":"resp_deepseek","model":"deepseek-v4-flash","usage":{"input_tokens":9,"output_tokens":5}}}\r\n\r\n',
+        ].join("");
+        return new Response(body, {
+          headers: {
+            "content-type": "text/event-stream",
+            "x-request-id": "request_deepseek",
+          },
+          status: 200,
+        });
+      },
+    });
+
+    const events = [];
+    for await (const event of model.stream({
+      instructions: "Synthetic instructions",
+      locale: "zh-CN",
+      messages: [
+        {
+          revisionId: asConversationEventRevisionId(
+            "01984477-59a9-7d20-9d97-e588769566a0",
+          ),
+          role: "user",
+          text: "今天好累",
+        },
+      ],
+      model: "deepseek-v4-flash",
+    })) {
+      events.push(event);
+    }
+
+    expect(requestUrl).toBe(`${DEEPSEEK_BASE_URL}/responses`);
+    expect(events).toEqual([
+      { delta: "我听到你了。", type: "delta" },
+      {
+        costMicros: null,
+        finishReason: "completed",
+        inputTokens: 9,
+        modelSnapshot: "deepseek-v4-flash",
+        outputTokens: 5,
+        providerRequestId: "request_deepseek",
+        type: "completed",
+      },
+    ]);
+  });
+
   it("ends a stalled provider request at the server-owned deadline", async () => {
-    const model = createOpenAIConversationTextModel({
+    const model = createResponsesApiConversationTextModel({
       apiKey: "synthetic-server-key",
+      baseUrl: OPENAI_BASE_URL,
       fetchImplementation: async (_url, init) =>
         new Promise<Response>((_resolve, reject) => {
           init?.signal?.addEventListener(
@@ -110,8 +169,9 @@ describe("OpenAI Conversation Text adapter", () => {
       [401, "authentication"],
       [400, "configuration"],
     ] as const) {
-      const model = createOpenAIConversationTextModel({
+      const model = createResponsesApiConversationTextModel({
         apiKey: "synthetic-server-key",
+        baseUrl: OPENAI_BASE_URL,
         fetchImplementation: async () => new Response(null, { status }),
       });
 
@@ -131,8 +191,9 @@ describe("OpenAI Conversation Text adapter", () => {
   it("does not expose Provider credentials or raw error bodies", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const model = createOpenAIConversationTextModel({
+    const model = createResponsesApiConversationTextModel({
       apiKey: "PROVIDER_CREDENTIAL_CANARY",
+      baseUrl: OPENAI_BASE_URL,
       fetchImplementation: async () =>
         new Response("RAW_PROVIDER_ERROR_PRIVATE_CANARY", { status: 500 }),
     });

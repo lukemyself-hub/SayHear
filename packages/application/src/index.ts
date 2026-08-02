@@ -63,6 +63,7 @@ export {
   ProviderDispatchError,
   type ConversationTextChampion,
   type ConversationTextMessage,
+  type ConversationTextProvider,
   type ConversationTextModel,
   type ConversationTextModelRequest,
   type ConversationTextModelStreamEvent,

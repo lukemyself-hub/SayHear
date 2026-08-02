@@ -36,7 +36,7 @@ describe("Provider module and credential boundaries", () => {
       join(root, "apps/web/app/provider-client.tsx"),
       [
         '"use client";',
-        'import { createOpenAIConversationTextModel } from "@sayhear/ai";',
+        'import { createResponsesApiConversationTextModel } from "@sayhear/ai";',
         "export const leakedCredential = process.env.OPENAI_API_KEY;",
       ].join("\n"),
       "utf8",
