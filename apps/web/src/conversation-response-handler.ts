@@ -1,7 +1,8 @@
-import type {
-  ConversationResponseService,
-  ConversationResponseStreamEvent,
-  UserId,
+import {
+  ProviderDispatchError,
+  type ConversationResponseService,
+  type ConversationResponseStreamEvent,
+  type UserId,
 } from "@sayhear/application";
 
 type AuthenticatedPrincipal = Readonly<{ userId: UserId }>;
@@ -55,7 +56,25 @@ export function createConversationResponseHandler(dependencies: {
             )) {
               controller.enqueue(encoder.encode(serializeEvent(event)));
             }
-          } catch {
+          } catch (error) {
+            // Surface the egress failure server-side. Without this, the only
+            // signal is the graceful `response_failed` event the client sees,
+            // leaving the root cause (e.g. a blocked provider policy) invisible.
+            console.error(
+              "conversation_response_failed",
+              error instanceof ProviderDispatchError
+                ? {
+                    name: error.name,
+                    category: error.category,
+                    message: error.message,
+                  }
+                : {
+                    name:
+                      error instanceof Error ? error.name : typeof error,
+                    message:
+                      error instanceof Error ? error.message : String(error),
+                  },
+            );
             abortController.abort();
             try {
               controller.enqueue(
