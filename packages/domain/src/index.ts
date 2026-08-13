@@ -8,6 +8,7 @@ export {
   asInteractionTurnId,
   asModelRunAttemptId,
   asOutboxEventId,
+  asEvidenceItemId,
   asUserId,
   asWorkflowCommandId,
   type CompiledContextId,
@@ -19,6 +20,7 @@ export {
   type InteractionTurnId,
   type ModelRunAttemptId,
   type OutboxEventId,
+  type EvidenceItemId,
   type UserId,
   type WorkflowCommandId,
 } from "./ids";

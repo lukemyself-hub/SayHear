@@ -4,6 +4,7 @@ import {
   asDailySessionId,
   asUserId,
   createConversationAgentHarness,
+  createEvidenceService,
   createJournalEligibilityService,
   createOutboxDispatcherService,
   createConversationResponseService,
@@ -22,6 +23,7 @@ import {
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresJournalEligibilityRepository,
+  PostgresEvidenceRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
   runMigrations,
@@ -167,6 +169,27 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const journalEligibilityRepository = new PostgresJournalEligibilityRepository(
       database.pool,
     );
+    const evidenceRepository = new PostgresEvidenceRepository(database.pool, {
+      role: "evidence.extract",
+      extract: async ({ sourceText }) => [{
+        locatorType: "text_span",
+        locatorKey: `0:${sourceText.length}`,
+        role: "factual_support",
+      }],
+    });
+    const evidenceService = createEvidenceService({
+      clock: fixedResponseClock,
+      expectedDataEpoch: 1,
+      extractionPolicyVersion: "evidence-extraction:v1",
+      champion: {
+        configVersion: "evidence-champion:v1",
+        model: testChampion.model,
+        provider: testChampion.provider,
+        providerPolicyVersion: "evidence-provider-egress:v1",
+        snapshot: testChampion.snapshot,
+      },
+      repository: evidenceRepository,
+    });
     const outboxRepository = new PostgresOutboxDispatcherRepository(
       database.pool,
     );
@@ -217,6 +240,8 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       conversationService,
       journalEligibilityRepository,
       journalEligibilityService,
+      evidenceRepository,
+      evidenceService,
       outboxRepository,
     };
   }
@@ -327,6 +352,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
       repository: composition.journalEligibilityRepository,
       workflowReceiptId: "test-receipt",
+      evidenceService: composition.evidenceService,
     });
     expect(result.outcome).toBe("eligible_queued");
 
@@ -341,6 +367,19 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       outcome: "eligible_queued",
       workflow_receipt_id: "test-receipt",
     });
+    const evidence = await database.pool.query<{
+      source_actor: string;
+      source_status: string;
+      locator_type: string;
+    }>(`SELECT source_actor, source_status, locator_type FROM evidence_items`);
+    expect(evidence.rows).toEqual([{
+      source_actor: "user",
+      source_status: "final",
+      locator_type: "text_span",
+    }]);
+    expect((await database.pool.query(
+      `SELECT COUNT(*)::int AS count FROM evidence_items WHERE source_actor IN ('assistant', 'system')`,
+    )).rows[0]!.count).toBe(0);
   });
 
   it("converges when an explicit end and a due scan both try to create the same command (AC #1, #7)", async () => {

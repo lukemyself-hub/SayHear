@@ -107,7 +107,7 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
       await client.query(
         `UPDATE evidence_model_run_attempts
          SET status = 'completed', provider_completed_at = $2,
-             result_metadata = jsonb_build_object('evidence_item_count', $3)
+             result_metadata = jsonb_build_object('evidence_item_count', $3::int)
          WHERE evidence_model_run_attempt_id = $1 AND status = 'started'`,
         [input.attemptId, input.now, items.rows.length],
       );
@@ -121,7 +121,7 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
            config_version, extraction_policy_version, prompt_fingerprint, status,
            result_metadata, provider_completed_at, created_at
          ) VALUES ($1, NULL, 'evidence.extract', $2, $3, $4, $5, $6, 'failed',
-           jsonb_build_object('failure_code', $7), $8, $8)
+           jsonb_build_object('failure_code', $7::text), $8, $8)
          ON CONFLICT (evidence_model_run_attempt_id) DO NOTHING`,
         [input.attemptId, input.champion.provider, input.champion.model,
           input.champion.configVersion, input.extractionPolicyVersion, input.champion.snapshot,

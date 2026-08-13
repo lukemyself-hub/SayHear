@@ -6,6 +6,7 @@ import {
   type UserId,
   type WorkflowCommandId,
 } from "@sayhear/domain";
+import type { EvidenceService } from "./evidence";
 
 // ---- Date outcome -----------------------------------------------------------
 
@@ -460,6 +461,7 @@ export async function runJournalEligibility(input: {
   minimumSubstantiveExpressionLength: number;
   workflowReceiptId: string;
   command: JournalEligibilityEntrypointInput;
+  evidenceService?: EvidenceService;
 }): Promise<JournalEligibilityEntrypointResult> {
   // Validate the command's opaque IDs before trusting them.
   asWorkflowCommandId(input.command.workflowCommandId);
@@ -496,6 +498,17 @@ export async function runJournalEligibility(input: {
           longestUserExpressionLength: snapshot.longestUserExpressionLength,
         });
 
+  if (snapshot !== null && outcome === "eligible_queued" && input.evidenceService) {
+    const evidence = await input.evidenceService.freeze({
+        dailySessionId: snapshot.dailySessionId,
+        sourceRevision: snapshot.sourceRevision,
+        commandId: input.command.workflowCommandId,
+        attemptId: input.workflowReceiptId,
+    });
+    if (evidence.outcome !== "frozen") {
+      throw new Error(`Evidence freeze failed closed with outcome: ${evidence.outcome}`);
+    }
+  }
   if (snapshot !== null) {
     await input.repository.recordDateOutcome({
       dailySessionId: snapshot.dailySessionId,
