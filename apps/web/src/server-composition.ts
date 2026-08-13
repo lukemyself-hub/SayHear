@@ -6,6 +6,7 @@ import {
   createContinuousExchangeService,
   createConversationResponseService,
   createJournalEligibilityService,
+  createEvidenceService,
   createOutboxDispatcherService,
   createUserTextConversationService,
   type JournalEligibilityRepository,
@@ -22,6 +23,7 @@ import {
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
+  PostgresEvidenceRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
 } from "@sayhear/data";
@@ -54,6 +56,20 @@ export function createServerComposition() {
     new PostgresContinuousExchangeRepository(pool);
   const journalEligibilityRepository =
     new PostgresJournalEligibilityRepository(pool);
+  const evidenceRepository = new PostgresEvidenceRepository(pool);
+  const evidenceService = createEvidenceService({
+    clock: configuration.clock,
+    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
+    extractionPolicyVersion: "evidence-extraction:v1",
+    champion: {
+      configVersion: "evidence-champion:v1",
+      model: configuration.provider.champion.model,
+      provider: configuration.provider.champion.provider,
+      providerPolicyVersion: "evidence-provider-egress:v1",
+      snapshot: configuration.provider.champion.snapshot,
+    },
+    repository: evidenceRepository,
+  });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);
   const journalEligibilityService = createJournalEligibilityService({
@@ -151,6 +167,7 @@ export function createServerComposition() {
     clock: configuration.clock,
     journalEligibilityRepository,
     journalEligibilityService,
+    evidenceService,
     outboxDispatcherService,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
