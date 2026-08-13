@@ -121,6 +121,34 @@ export {
   type SensitiveInspectionDenialReason,
 } from "./internal-inspection";
 export {
+  createJournalService,
+  runAutomaticJournal,
+  validateJournalDraft,
+  type JournalDraft,
+  type JournalEpistemicStatus,
+  type JournalEvidenceReference,
+  type JournalModel,
+  type JournalProviderEgress,
+  type JournalValidationProvider,
+  type JournalRepository,
+  type JournalService,
+  type JournalSourceSnapshot,
+  type JournalSourceText,
+  type JournalStatementDraft,
+  type AutomaticJournalCommand,
+} from "./journal";
+export {
+  createEvidenceService,
+  type EvidenceChampion,
+  type EvidenceItem,
+  type EvidenceLocatorType,
+  type EvidenceRepository,
+  type EvidenceRole,
+  type EvidenceExtractionProvider,
+  type EvidenceService,
+  type EvidenceSourceSnapshot,
+} from "./evidence";
+export {
   classifyConversationTurnSignal,
   containsAbsoluteConfidentiality,
   containsDiagnosis,

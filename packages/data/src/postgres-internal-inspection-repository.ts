@@ -91,6 +91,27 @@ type SensitiveAccessGrantRow = Readonly<{
 export class PostgresInternalInspectionRepository
   implements InternalInspectionRepository
 {
+  public async authorizeSensitiveInspection(
+    input: Parameters<InternalInspectionRepository["authorizeSensitiveInspection"]>[0],
+  ): ReturnType<InternalInspectionRepository["authorizeSensitiveInspection"]> {
+    const result = await this.pool.query<SensitiveAccessGrantRow>(
+      `SELECT diagnostic_grant.status AS capability_status, diagnostic_grant.step_up_authenticated_at
+       FROM auth_sessions session
+       INNER JOIN internal_diagnostic_access_grants diagnostic_grant
+         ON diagnostic_grant.session_token_hash = session.session_token_hash
+        AND diagnostic_grant.capability = $3
+       WHERE session.user_id = $1 AND session.session_token_hash = decode($2, 'hex')
+         AND session.expires_at > $4`,
+      [input.userId, input.authSessionId, input.capability, input.now],
+    );
+    const reason = sensitiveAccessDenialReason({
+      capabilityStatus: result.rows[0]?.capability_status ?? null,
+      now: input.now,
+      stepUpAuthenticatedAt: result.rows[0]?.step_up_authenticated_at ?? null,
+      stepUpMaxAgeMs: input.stepUpMaxAgeMs,
+    });
+    return reason ? { outcome: "denied", reason } : { outcome: "allowed" };
+  }
   public constructor(private readonly pool: Pool) {}
 
   public async findGenerationMetadata(

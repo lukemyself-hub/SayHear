@@ -12,7 +12,8 @@ import {
 export type JournalEligibilityDateOutcome =
   | "no_activity"
   | "insufficient_expression"
-  | "eligible_queued";
+  | "eligible_queued"
+  | "journal_available";
 
 /**
  * The deterministic v1 expression gate. ADR-0011 forbids any importance or
@@ -277,6 +278,7 @@ export type WorkflowStarter = (input: {
   subjectId: DailySessionId;
   sourceRevision: number;
   policyVersion: string;
+  expectedDataEpoch: number;
 }) => Promise<{ workflowReceiptId: string }>;
 
 export type OutboxDispatcherService = Readonly<{
@@ -338,6 +340,7 @@ export function createOutboxDispatcherService(dependencies: {
             subjectId: event.aggregateId,
             sourceRevision: event.aggregateRevision,
             policyVersion: String(event.payload.policyVersion ?? ""),
+            expectedDataEpoch: Number(event.payload.expectedDataEpoch ?? 0),
           });
           await dependencies.repository.markDispatched({
             outboxEventId: event.outboxEventId,
@@ -398,10 +401,13 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "subjectId",
   "sourceRevision",
   "policyVersion",
+  "expectedDataEpoch",
   "eventType",
   "status",
   "errorCode",
   "workflowReceiptId",
+  "dailySessionId",
+  "outcome",
 ]);
 
 /**
@@ -432,6 +438,7 @@ export type JournalEligibilityEntrypointInput = Readonly<{
   subjectId: string;
   sourceRevision: number;
   policyVersion: string;
+  expectedDataEpoch?: number;
 }>;
 
 export type JournalEligibilityEntrypointResult = Readonly<{
@@ -464,6 +471,7 @@ export async function runJournalEligibility(input: {
       subjectId: input.command.subjectId,
       sourceRevision: input.command.sourceRevision,
       policyVersion: input.command.policyVersion,
+      expectedDataEpoch: input.command.expectedDataEpoch,
     },
     "command",
   );
@@ -472,6 +480,9 @@ export async function runJournalEligibility(input: {
     dailySessionId: subjectId,
     policyVersion: input.eligibilityPolicyVersion,
   });
+  if (snapshot !== null && snapshot.sourceRevision !== input.command.sourceRevision) {
+    throw new Error("Journal eligibility command is stale at the current source head.");
+  }
   // A Daily Session with zero user Conversation Events has no activity to
   // evaluate (AC #2). A snapshot that cannot be read is also treated as
   // no_activity rather than failing open.
@@ -498,11 +509,13 @@ export async function runJournalEligibility(input: {
     });
   }
 
-  return {
+  const result = {
     dailySessionId: subjectId,
     outcome,
     workflowReceiptId: input.workflowReceiptId,
   };
+  assertWorkflowSafe(result, "result");
+  return result;
 }
 
 // Re-export the branded-id constructors consumers need alongside this module.

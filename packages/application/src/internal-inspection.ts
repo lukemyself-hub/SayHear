@@ -106,6 +106,14 @@ export type ConversationContentInspection = Readonly<{
 }>;
 
 export type InternalInspectionRepository = Readonly<{
+  authorizeSensitiveInspection(input: {
+    authSessionId: string;
+    capability: "conversation_content:read";
+    now: Date;
+    policyVersion: string;
+    stepUpMaxAgeMs: number;
+    userId: UserId;
+  }): Promise<Readonly<{ outcome: "allowed" }> | Readonly<{ outcome: "denied"; reason: SensitiveInspectionDenialReason }>>;
   findGenerationMetadata(input: {
     generationCommandId: GenerationCommandId;
     userId: UserId;
@@ -132,6 +140,7 @@ export type InternalInspectionRepository = Readonly<{
 }>;
 
 export type InternalInspectionService = Readonly<{
+  authorizeSensitiveInspection(userId: UserId, authSessionId: string): Promise<void>;
   getGenerationMetadata(
     userId: UserId,
     generationCommandId: GenerationCommandId,
@@ -166,6 +175,17 @@ export function createInternalInspectionService(dependencies: {
   stepUpMaxAgeMs: number;
 }): InternalInspectionService {
   return {
+    async authorizeSensitiveInspection(userId, authSessionId) {
+      const result = await dependencies.repository.authorizeSensitiveInspection({
+        authSessionId,
+        capability: "conversation_content:read",
+        now: dependencies.clock(),
+        policyVersion: dependencies.policyVersion,
+        stepUpMaxAgeMs: dependencies.stepUpMaxAgeMs,
+        userId,
+      });
+      if (result.outcome === "denied") throw new SensitiveInspectionDeniedError(result.reason);
+    },
     async getGenerationMetadata(userId, generationCommandId) {
       const metadata = await dependencies.repository.findGenerationMetadata({
         generationCommandId,

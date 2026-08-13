@@ -94,6 +94,18 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        journal_statement_evidence_links,
+        journal_statements,
+        journal_validation_results,
+        journal_versions,
+        journals,
+        journal_model_run_attempts,
+        journal_generation_commands,
+        journal_workflow_outcomes,
+        evidence_lineage,
+        evidence_model_run_attempts,
+        evidence_items,
+        evidence_source_snapshots,
         daily_session_date_outcomes,
         outbox_events,
         workflow_commands,
@@ -485,8 +497,8 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
     });
 
     // Journal, Memory, Replay, Voice and other future verticals still do not
-    // exist as tables. The 1A.2 durability foundation (workflow_commands,
-    // outbox_events, daily_session_date_outcomes) DOES exist now, but an
+    // exist as tables. The 1A.2 Journal/Evidence and durability foundations
+    // DO exist now, but an
     // in-flight active conversation must not create any eligibility rows —
     // eligibility fires only after a deterministic Continuous Exchange End.
     const outOfScopeTables = await database.pool.query<{ table_name: string }>(
@@ -495,7 +507,6 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
         FROM information_schema.tables
         WHERE table_schema = current_schema()
           AND table_name ILIKE ANY(ARRAY[
-            'evidence%',
             'entit%',
             'episode%',
             'reflection%',
@@ -508,9 +519,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
             'transcript%',
             'delivery%',
             'summary%',
-            'dialogue_state%',
-            'journal_versions%',
-            'journal_statements%'
+            'dialogue_state%'
           ])
         ORDER BY table_name
       `,
@@ -521,15 +530,21 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       commands: string;
       date_outcomes: string;
       outbox: string;
+      evidence_snapshots: string;
+      journals: string;
     }>(`
       SELECT
         (SELECT COUNT(*)::text FROM workflow_commands) AS commands,
         (SELECT COUNT(*)::text FROM outbox_events) AS outbox,
-        (SELECT COUNT(*)::text FROM daily_session_date_outcomes) AS date_outcomes
+        (SELECT COUNT(*)::text FROM daily_session_date_outcomes) AS date_outcomes,
+        (SELECT COUNT(*)::text FROM evidence_source_snapshots) AS evidence_snapshots,
+        (SELECT COUNT(*)::text FROM journals) AS journals
     `);
     expect(eligibilityFoundationTotals.rows[0]).toEqual({
       commands: "0",
       date_outcomes: "0",
+      evidence_snapshots: "0",
+      journals: "0",
       outbox: "0",
     });
 

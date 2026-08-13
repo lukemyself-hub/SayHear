@@ -6,6 +6,8 @@ import {
   createContinuousExchangeService,
   createConversationResponseService,
   createJournalEligibilityService,
+  createEvidenceService,
+  createJournalService,
   createOutboxDispatcherService,
   createUserTextConversationService,
   type JournalEligibilityRepository,
@@ -14,6 +16,7 @@ import {
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
+  createRuntimeJournalRoleProviderRegistry,
 } from "@sayhear/ai";
 import {
   createPostgresPool,
@@ -22,6 +25,8 @@ import {
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
+  PostgresEvidenceRepository,
+  PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
 } from "@sayhear/data";
@@ -54,6 +59,58 @@ export function createServerComposition() {
     new PostgresContinuousExchangeRepository(pool);
   const journalEligibilityRepository =
     new PostgresJournalEligibilityRepository(pool);
+  const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
+    adapter: configuration.provider.adapter === "deterministic"
+      ? { type: "deterministic" }
+      : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
+    roles: [
+      { role: "evidence.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:evidence`, policyVersion: "evidence-extraction:v2", promptFingerprint: "evidence-extract:spans:v2" },
+      { role: "journal.draft", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-draft`, policyVersion: "journal-generation:v2", promptFingerprint: "journal-draft:evidence-only:v2" },
+      { role: "journal.validate", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-validate`, policyVersion: "journal-validator:v2", promptFingerprint: "journal-validate:semantic:v2" },
+    ],
+  });
+  const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
+  const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor);
+  const evidenceService = createEvidenceService({
+    clock: configuration.clock,
+    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
+    extractionPolicyVersion: evidenceConfiguration.policyVersion,
+    champion: {
+      configVersion: evidenceConfiguration.configVersion,
+      model: evidenceConfiguration.model,
+      provider: evidenceConfiguration.provider === "deterministic" ? configuration.provider.champion.provider : evidenceConfiguration.provider,
+      providerPolicyVersion: configuration.provider.champion.providerPolicyVersion,
+      snapshot: evidenceConfiguration.promptFingerprint,
+    },
+    repository: evidenceRepository,
+  });
+  const journalRepository = new PostgresJournalRepository(pool);
+  const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
+  const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
+  const journalService = createJournalService({
+    journalPolicyVersion: draftConfiguration.policyVersion,
+    validatorVersion: validationConfiguration.policyVersion,
+    evidenceExtractionPolicyVersion: evidenceConfiguration.policyVersion,
+    generationMetadata: {
+      role: "journal.draft",
+      provider: draftConfiguration.provider,
+      model: draftConfiguration.model,
+      configVersion: draftConfiguration.configVersion,
+      rolePolicyVersion: draftConfiguration.policyVersion,
+      promptFingerprint: draftConfiguration.promptFingerprint,
+    },
+    validationMetadata: {
+      role: "journal.validate",
+      provider: validationConfiguration.provider,
+      model: validationConfiguration.model,
+      configVersion: validationConfiguration.configVersion,
+      rolePolicyVersion: validationConfiguration.policyVersion,
+      promptFingerprint: validationConfiguration.promptFingerprint,
+    },
+    validationProvider: journalRoleRegistry.validator,
+    model: journalRoleRegistry.draft,
+    repository: journalRepository,
+  });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);
   const journalEligibilityService = createJournalEligibilityService({
@@ -151,6 +208,11 @@ export function createServerComposition() {
     clock: configuration.clock,
     journalEligibilityRepository,
     journalEligibilityService,
+    evidenceService,
+    journalService,
+    journalRepository,
+    journalGenerationPolicyVersion: draftConfiguration.policyVersion,
+    configurationExpectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     outboxDispatcherService,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
