@@ -112,7 +112,7 @@ export class PostgresJournalEligibilityRepository
         daily_session_id: lockedRow.daily_session_id,
         user_id: lockedRow.user_id,
         logical_date: lockedRow.logical_date,
-        source_revision: lockedRow.source_revision,
+        source_revision: Number(lockedRow.source_revision),
         longest_user_expression_length:
           expression.rows[0]?.longest_user_expression_length ?? 0,
         user_conversation_event_count:
@@ -187,6 +187,7 @@ export class PostgresJournalEligibilityRepository
               subjectId: input.dailySessionId,
               sourceRevision: sessionRow.source_revision,
               policyVersion: input.policyVersion,
+              expectedDataEpoch: input.expectedDataEpoch,
               eventType: "journal_eligibility_requested",
               status: "pending",
             }),
@@ -275,7 +276,7 @@ export class PostgresJournalEligibilityRepository
       dailySessionId: asDailySessionId(snapshot.daily_session_id),
       userId: asUserId(snapshot.user_id),
       logicalDate: snapshot.logical_date.toISOString().slice(0, 10),
-      sourceRevision: snapshot.source_revision,
+      sourceRevision: Number(snapshot.source_revision),
       longestUserExpressionLength: snapshot.longest_user_expression_length,
       userConversationEventCount: snapshot.user_conversation_event_count,
     };

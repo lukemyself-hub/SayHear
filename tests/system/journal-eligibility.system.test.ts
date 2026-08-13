@@ -103,10 +103,19 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
-        daily_session_date_outcomes,
+        journal_statement_evidence_links,
+        journal_statements,
+        journal_validation_results,
+        journal_versions,
+        journals,
+        journal_model_run_attempts,
+        journal_generation_commands,
+        journal_workflow_outcomes,
         evidence_lineage,
+        evidence_model_run_attempts,
         evidence_items,
         evidence_source_snapshots,
+        daily_session_date_outcomes,
         outbox_events,
         workflow_commands,
         sensitive_access_audits,
@@ -160,7 +169,14 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const journalEligibilityRepository = new PostgresJournalEligibilityRepository(
       database.pool,
     );
-    const evidenceRepository = new PostgresEvidenceRepository(database.pool);
+    const evidenceRepository = new PostgresEvidenceRepository(database.pool, {
+      role: "evidence.extract",
+      extract: async ({ sourceText }) => [{
+        locatorType: "text_span",
+        locatorKey: `0:${sourceText.length}`,
+        role: "factual_support",
+      }],
+    });
     const evidenceService = createEvidenceService({
       clock: fixedResponseClock,
       expectedDataEpoch: 1,
@@ -329,7 +345,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       command: {
         workflowCommandId: command.rows[0]!.workflow_command_id,
         policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
-        sourceRevision: command.rows[0]!.source_revision,
+        sourceRevision: Number(command.rows[0]!.source_revision),
         subjectId: dailySessionId,
       },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
@@ -359,7 +375,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     expect(evidence.rows).toEqual([{
       source_actor: "user",
       source_status: "final",
-      locator_type: "whole_revision",
+      locator_type: "text_span",
     }]);
     expect((await database.pool.query(
       `SELECT COUNT(*)::int AS count FROM evidence_items WHERE source_actor IN ('assistant', 'system')`,
@@ -401,12 +417,15 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
 
     const composition = buildComposition();
     await composition.journalEligibilityService.evaluate(dailySessionId);
+    const command = await database.pool.query<{ source_revision: number; workflow_command_id: string }>(
+      `SELECT source_revision, workflow_command_id FROM workflow_commands`,
+    );
     const result = await runJournalEligibility({
       clock: fixedResponseClock,
       command: {
-        workflowCommandId: dailySessionId,
+        workflowCommandId: command.rows[0]!.workflow_command_id,
         policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
-        sourceRevision: 1,
+        sourceRevision: Number(command.rows[0]!.source_revision),
         subjectId: dailySessionId,
       },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
@@ -467,7 +486,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         command: {
           workflowCommandId: command.rows[0]!.workflow_command_id,
           policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
-          sourceRevision: command.rows[0]!.source_revision,
+          sourceRevision: Number(command.rows[0]!.source_revision),
           subjectId: dailySessionId,
         },
         eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,

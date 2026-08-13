@@ -15,7 +15,8 @@ CREATE TABLE evidence_source_snapshots (
   created_at TIMESTAMPTZ NOT NULL,
   UNIQUE (daily_session_id, source_revision, extraction_policy_version),
   UNIQUE (evidence_source_snapshot_id, user_id),
-  FOREIGN KEY (daily_session_id, user_id) REFERENCES daily_sessions(daily_session_id, user_id)
+  FOREIGN KEY (daily_session_id, user_id)
+    REFERENCES daily_sessions(daily_session_id, user_id)
 );
 CREATE TABLE evidence_items (
   evidence_item_id UUID PRIMARY KEY,
@@ -32,8 +33,11 @@ CREATE TABLE evidence_items (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status = 'active'),
   created_at TIMESTAMPTZ NOT NULL,
   UNIQUE (user_id, source_revision_id, locator_key, extraction_policy_version),
-  FOREIGN KEY (source_revision_id, source_event_id, user_id) REFERENCES conversation_event_revisions(conversation_event_revision_id, conversation_event_id, user_id),
-  FOREIGN KEY (evidence_source_snapshot_id, user_id) REFERENCES evidence_source_snapshots(evidence_source_snapshot_id, user_id)
+  UNIQUE (evidence_item_id, user_id, evidence_source_snapshot_id),
+  FOREIGN KEY (source_revision_id, source_event_id, user_id)
+    REFERENCES conversation_event_revisions(conversation_event_revision_id, conversation_event_id, user_id),
+  FOREIGN KEY (evidence_source_snapshot_id, user_id)
+    REFERENCES evidence_source_snapshots(evidence_source_snapshot_id, user_id)
 );
 CREATE TABLE evidence_lineage (
   evidence_item_id UUID PRIMARY KEY REFERENCES evidence_items(evidence_item_id),
@@ -42,16 +46,11 @@ CREATE TABLE evidence_lineage (
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX evidence_items_snapshot_idx ON evidence_items(evidence_source_snapshot_id);
-
 CREATE FUNCTION reject_evidence_item_mutation()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-  RAISE EXCEPTION 'EvidenceItem is immutable' USING ERRCODE = '55000';
-END;
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN RAISE EXCEPTION 'EvidenceItem is immutable' USING ERRCODE = '55000'; END;
 $$;
-
-CREATE TRIGGER evidence_items_immutable
-BEFORE UPDATE OR DELETE ON evidence_items
+CREATE TRIGGER evidence_items_immutable BEFORE UPDATE OR DELETE ON evidence_items
+FOR EACH ROW EXECUTE FUNCTION reject_evidence_item_mutation();
+CREATE TRIGGER evidence_source_snapshots_immutable BEFORE UPDATE OR DELETE ON evidence_source_snapshots
 FOR EACH ROW EXECUTE FUNCTION reject_evidence_item_mutation();

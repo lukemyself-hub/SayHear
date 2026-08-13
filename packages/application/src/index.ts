@@ -25,16 +25,6 @@ export {
   type WorkflowStarter,
 } from "./journal-eligibility";
 export {
-  createEvidenceService,
-  type EvidenceChampion,
-  type EvidenceItem,
-  type EvidenceLocatorType,
-  type EvidenceRepository,
-  type EvidenceRole,
-  type EvidenceService,
-  type EvidenceSourceSnapshot,
-} from "./evidence";
-export {
   createInternalOwnerAccessService,
   InternalOwnerAccessDeniedError,
   type InternalOwnerAccessRepository,
@@ -130,6 +120,34 @@ export {
   type InternalInspectionService,
   type SensitiveInspectionDenialReason,
 } from "./internal-inspection";
+export {
+  createJournalService,
+  runAutomaticJournal,
+  validateJournalDraft,
+  type JournalDraft,
+  type JournalEpistemicStatus,
+  type JournalEvidenceReference,
+  type JournalModel,
+  type JournalProviderEgress,
+  type JournalValidationProvider,
+  type JournalRepository,
+  type JournalService,
+  type JournalSourceSnapshot,
+  type JournalSourceText,
+  type JournalStatementDraft,
+  type AutomaticJournalCommand,
+} from "./journal";
+export {
+  createEvidenceService,
+  type EvidenceChampion,
+  type EvidenceItem,
+  type EvidenceLocatorType,
+  type EvidenceRepository,
+  type EvidenceRole,
+  type EvidenceExtractionProvider,
+  type EvidenceService,
+  type EvidenceSourceSnapshot,
+} from "./evidence";
 export {
   classifyConversationTurnSignal,
   containsAbsoluteConfidentiality,

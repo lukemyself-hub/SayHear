@@ -2,6 +2,14 @@ import { asDailySessionId, type DailySessionId } from "@sayhear/domain";
 
 export type EvidenceLocatorType = "whole_revision" | "segment" | "text_span" | "time_range";
 export type EvidenceRole = "factual_support" | "subjective_report";
+export type EvidenceExtractionProvider = Readonly<{
+  role: "evidence.extract";
+  extract(input: { locale: string; sourceText: string }): Promise<ReadonlyArray<Readonly<{
+    locatorType: EvidenceLocatorType;
+    locatorKey: string;
+    role: EvidenceRole;
+  }>>>;
+}>;
 export type EvidenceChampion = Readonly<{
   configVersion: string;
   model: string;
