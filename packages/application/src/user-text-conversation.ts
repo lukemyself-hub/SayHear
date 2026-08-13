@@ -1,4 +1,5 @@
 import {
+  asConversationEventId,
   asDailySessionId,
   asInteractionTurnId,
   type ConversationEventId,
@@ -178,6 +179,7 @@ export type RecordConversationRetryRepositoryResult =
     }>;
 
 export type UserTextConversationRepository = Readonly<{
+  correctUserEvent?(input: { eventId: ConversationEventId; locale: string; now: Date; text: string; userId: UserId }): Promise<{ dailySessionId: DailySessionId } | null>;
   endContinuousExchangeExplicitly(input: {
     dailySessionId: DailySessionId;
     endedAt: Date;
@@ -202,6 +204,7 @@ export type UserTextConversationRepository = Readonly<{
 }>;
 
 export type UserTextConversationService = Readonly<{
+  correct(userId: UserId, input: { eventId: string; locale: string; text: string }): Promise<{ dailySessionId: DailySessionId }>;
   endContinuousExchange(
     userId: UserId,
     input: { dailySessionId: string },
@@ -291,6 +294,18 @@ export function createUserTextConversationService(dependencies: {
       version: "continuous-exchange-inactivity:v1",
     });
   return {
+    async correct(userId, rawInput) {
+      let eventId: ConversationEventId;
+      try { eventId = asConversationEventId(rawInput.eventId); } catch { throw new InvalidUserTextTurnError("eventId must be an opaque Conversation Event UUIDv7."); }
+      const text = rawInput.text?.trim();
+      if (!text) throw new InvalidUserTextTurnError("text must contain a corrected User expression.");
+      let locale: string;
+      try { locale = new Intl.Locale(rawInput.locale).toString(); } catch { throw new InvalidUserTextTurnError("locale must be a valid BCP-47 tag."); }
+      if (!dependencies.repository.correctUserEvent) throw new InvalidUserTextTurnError("User Evidence correction is unavailable.");
+      const corrected = await dependencies.repository.correctUserEvent({ eventId, locale, now: dependencies.clock(), text, userId });
+      if (!corrected) throw new InvalidUserTextTurnError("The User Event cannot be corrected.");
+      return corrected;
+    },
     async endContinuousExchange(userId, rawInput) {
       let dailySessionId: DailySessionId;
       try {

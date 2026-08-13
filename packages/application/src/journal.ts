@@ -58,6 +58,7 @@ export type CurrentJournalVersion = Readonly<{
 export type CurrentJournal = Readonly<{
   dailySessionId: string;
   logicalDate: string;
+  state: "current" | "outdated" | "updating";
   version: CurrentJournalVersion;
 }>;
 

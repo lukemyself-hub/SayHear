@@ -85,6 +85,43 @@ export class PostgresUserTextConversationRepository
 {
   public constructor(private readonly pool: Pool) {}
 
+  public async correctUserEvent(input: { eventId: import("@sayhear/domain").ConversationEventId; locale: string; now: Date; text: string; userId: UserId }): Promise<{ dailySessionId: import("@sayhear/domain").DailySessionId } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const event = await client.query<{ conversation_event_id: string; daily_session_id: string; revision: number }>(
+        `SELECT event.conversation_event_id, event.daily_session_id,
+            revision.revision
+         FROM conversation_events event
+         INNER JOIN conversation_event_revisions revision
+           ON revision.conversation_event_revision_id = event.current_revision_id
+         INNER JOIN app_users owner ON owner.user_id = event.user_id
+         WHERE event.conversation_event_id = $1 AND event.user_id = $2
+           AND event.actor = 'user' AND event.lifecycle_status = 'active'
+           AND revision.content_purged_at IS NULL AND owner.status = 'active'
+         FOR UPDATE OF event, revision, owner`, [input.eventId, input.userId],
+      );
+      const row = event.rows[0];
+      if (!row) { await client.query("ROLLBACK"); return null; }
+      const revisionId = createUuidV7(input.now);
+      await client.query(
+        `INSERT INTO conversation_event_revisions (
+           conversation_event_revision_id, user_id, conversation_event_id, revision,
+           locale, canonical_text, transcript_status, created_by, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, 'corrected', 'user_correction', $7)`,
+        [revisionId, input.userId, row.conversation_event_id, row.revision + 1, input.locale, input.text, input.now],
+      );
+      const updated = await client.query(
+        `UPDATE conversation_events SET current_revision_id = $1
+         WHERE conversation_event_id = $2 AND user_id = $3`,
+        [revisionId, row.conversation_event_id, input.userId],
+      );
+      if (updated.rowCount !== 1) throw new Error("The User Event correction compare-and-set failed.");
+      await client.query("COMMIT");
+      return { dailySessionId: asDailySessionId(row.daily_session_id) };
+    } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+  }
+
   public async endContinuousExchangeExplicitly(
     input: Parameters<
       UserTextConversationRepository["endContinuousExchangeExplicitly"]

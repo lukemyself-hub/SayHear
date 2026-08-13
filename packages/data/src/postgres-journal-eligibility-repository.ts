@@ -220,7 +220,10 @@ export class PostgresJournalEligibilityRepository
         LEFT JOIN daily_session_date_outcomes outcome
           ON outcome.daily_session_id = session.daily_session_id
         WHERE session.activity_state = 'quiescent'
-          AND outcome.daily_session_id IS NULL
+          AND (
+            outcome.daily_session_id IS NULL
+            OR outcome.source_revision < session.source_revision
+          )
         ORDER BY session.quiescent_at NULLS LAST, session.daily_session_id
         LIMIT $1
       `,
