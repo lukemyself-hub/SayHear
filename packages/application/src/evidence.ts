@@ -57,6 +57,7 @@ export type EvidenceRepository = Readonly<{
     | Readonly<{ outcome: "not_found" }>
     | Readonly<{ outcome: "stale" }>
     | Readonly<{ outcome: "not_eligible" }>
+    | Readonly<{ outcome: "writes_disabled" }>
   >;
   findEvidenceSnapshot(input: { dailySessionId: DailySessionId; sourceRevision: number }): Promise<EvidenceSourceSnapshot | null>;
 }>;
@@ -71,12 +72,16 @@ export function createEvidenceService(dependencies: {
   extractionPolicyVersion: string;
   champion: EvidenceChampion;
   repository: EvidenceRepository;
+  writesEnabled?: boolean;
 }): EvidenceService {
   if (!dependencies.extractionPolicyVersion) throw new Error("extractionPolicyVersion must be non-empty.");
   if (!Number.isInteger(dependencies.expectedDataEpoch) || dependencies.expectedDataEpoch <= 0) throw new Error("expectedDataEpoch must be a positive integer.");
   if (!dependencies.champion.configVersion || !dependencies.champion.providerPolicyVersion) throw new Error("Evidence Champion versions must be non-empty.");
   return {
     async freeze(input) {
+      if (dependencies.writesEnabled === false) {
+        return { outcome: "writes_disabled" } as const;
+      }
       let dailySessionId: DailySessionId;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return { outcome: "not_found" }; }
       return dependencies.repository.freezeUserEvidence({

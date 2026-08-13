@@ -425,6 +425,39 @@ export class PostgresJournalRepository implements JournalRepository {
       })),
     };
   }
+
+  public async readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<import("@sayhear/application").CurrentJournal | null> {
+    const session = await this.pool.query<{ daily_session_id: string; logical_date: string }>(
+      `SELECT journal.daily_session_id, daily_session.logical_date::text
+       FROM journals journal
+       INNER JOIN daily_sessions daily_session
+         ON daily_session.daily_session_id = journal.daily_session_id
+         AND daily_session.user_id = journal.user_id
+       INNER JOIN app_users owner ON owner.user_id = journal.user_id
+       WHERE journal.user_id = $1
+         AND journal.current_version_id IS NOT NULL
+         AND journal.deleted_at IS NULL
+         AND owner.status = 'active'
+         AND owner.data_epoch = $2
+       ORDER BY daily_session.logical_date DESC, journal.created_at DESC
+       LIMIT 1`,
+      [input.userId, input.expectedDataEpoch],
+    );
+    const row = session.rows[0];
+    if (!row) return null;
+    const journal = await this.readCurrent({
+      dailySessionId: row.daily_session_id,
+      userId: input.userId,
+      expectedDataEpoch: input.expectedDataEpoch,
+    });
+    return journal
+      ? {
+          dailySessionId: row.daily_session_id,
+          logicalDate: row.logical_date,
+          version: { locale: journal.locale, statements: journal.statements },
+        }
+      : null;
+  }
 }
 
 function textAtLocator(sourceText: string, locatorType: JournalEvidenceReference["locatorType"], locatorKey: string): string | null {

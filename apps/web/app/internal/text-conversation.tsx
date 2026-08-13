@@ -353,7 +353,7 @@ export function TextConversation(props: {
         {timeline.length === 0 && pendingAssistant === null ? (
           <p className="emptyConversation">No Text messages recorded yet.</p>
         ) : (
-          timeline.map((item) =>
+          timeline.map((item, index) =>
             item.kind === "message" ? (
               <article
                 className={
@@ -361,6 +361,7 @@ export function TextConversation(props: {
                     ? "userMessage"
                     : "assistantMessage"
                 }
+                id={isFirstItemForDate(timeline, index, item.message.logicalDate) ? `conversation-${item.message.logicalDate}` : undefined}
                 key={item.message.eventId}
               >
                 <span>
@@ -476,6 +477,19 @@ function updateRetryStatus(
         : item,
     ),
   );
+}
+
+function isFirstItemForDate(
+  timeline: readonly TimelineItem[],
+  index: number,
+  logicalDate: string | undefined,
+): boolean {
+  if (!logicalDate) return false;
+  const previous = timeline[index - 1];
+  const previousDate = previous?.kind === "message"
+    ? previous.message.logicalDate
+    : previous?.response.logicalDate;
+  return previousDate !== logicalDate;
 }
 
 function nextVisibleSequence(timeline: readonly TimelineItem[]): number {

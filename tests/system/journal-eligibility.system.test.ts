@@ -5,6 +5,7 @@ import {
   asUserId,
   createConversationAgentHarness,
   createEvidenceService,
+  createJournalService,
   createJournalEligibilityService,
   createOutboxDispatcherService,
   createConversationResponseService,
@@ -13,16 +14,19 @@ import {
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
   runJournalEligibility,
+  runAutomaticJournal,
   type ConversationTextChampion,
 } from "@sayhear/application";
 import {
   createBehaviorAwareConversationTextModel,
   createProviderEgressPort,
 } from "@sayhear/ai/testing";
+import { createRuntimeJournalRoleProviderRegistry } from "@sayhear/ai";
 import {
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresJournalEligibilityRepository,
+  PostgresJournalRepository,
   PostgresEvidenceRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
@@ -177,6 +181,35 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         role: "factual_support",
       }],
     });
+    const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
+      adapter: { type: "deterministic" },
+      roles: [
+        { role: "evidence.extract", provider: "deterministic", model: "test", configVersion: "test:evidence", policyVersion: "evidence-extraction:v1", promptFingerprint: "test:evidence" },
+        { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:draft", policyVersion: "journal-generation:v2", promptFingerprint: "test:draft" },
+        { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:validate", policyVersion: "journal-validator:v2", promptFingerprint: "test:validate" },
+      ],
+    });
+    const journalRepository = new PostgresJournalRepository(database.pool);
+    const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
+    const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
+    const journalService = createJournalService({
+      evidenceExtractionPolicyVersion: "evidence-extraction:v1",
+      generationMetadata: {
+        ...draftConfiguration,
+        role: "journal.draft",
+        rolePolicyVersion: draftConfiguration.policyVersion,
+      },
+      journalPolicyVersion: "journal-generation:v2",
+      model: journalRoleRegistry.draft,
+      repository: journalRepository,
+      validationMetadata: {
+        ...validationConfiguration,
+        role: "journal.validate",
+        rolePolicyVersion: validationConfiguration.policyVersion,
+      },
+      validationProvider: journalRoleRegistry.validator,
+      validatorVersion: "journal-validator:v2",
+    });
     const evidenceService = createEvidenceService({
       clock: fixedResponseClock,
       expectedDataEpoch: 1,
@@ -240,6 +273,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       conversationService,
       journalEligibilityRepository,
       journalEligibilityService,
+      journalService,
       evidenceRepository,
       evidenceService,
       outboxRepository,
@@ -249,6 +283,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   async function submitConversation(input: {
     clientEventId: string;
     clientTurnId: string;
+    locale?: string;
     text: string;
   }): Promise<string> {
     const composition = buildComposition();
@@ -261,7 +296,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         body: JSON.stringify({
           clientEventId: input.clientEventId,
           clientTurnId: input.clientTurnId,
-          locale: "en-US",
+          locale: input.locale ?? "en-US",
           text: input.text,
           timezone: "America/Los_Angeles",
         }),
@@ -380,6 +415,70 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     expect((await database.pool.query(
       `SELECT COUNT(*)::int AS count FROM evidence_items WHERE source_actor IN ('assistant', 'system')`,
     )).rows[0]!.count).toBe(0);
+  });
+
+  it.each([
+    ["English", "en-US", "I finished a difficult task today."],
+    ["Chinese", "zh-CN", "我今天完成了一项很难的任务，但心里仍然有些担心明天的安排。"],
+    ["natural code-switching", "en-US", "I finished the task, 但是我还是有点担心明天。"],
+  ])("publishes an evidence-backed third-person Journal for %s", async (_name, locale, text) => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "language-event",
+      clientTurnId: "language-turn",
+      locale,
+      text,
+    });
+    await endExchange(dailySessionId);
+    const composition = buildComposition();
+    const command = await database.pool.query<{ source_revision: string; workflow_command_id: string }>(
+      "SELECT source_revision, workflow_command_id FROM workflow_commands",
+    );
+    const sourceRevision = Number(command.rows[0]!.source_revision);
+    await expect(runJournalEligibility({
+      clock: fixedResponseClock,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision, subjectId: dailySessionId },
+      eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
+      repository: composition.journalEligibilityRepository,
+      workflowReceiptId: "language-receipt",
+      evidenceService: composition.evidenceService,
+    })).resolves.toMatchObject({ outcome: "eligible_queued" });
+    await expect(runAutomaticJournal({
+      service: composition.journalService,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      generationCommandId: "journal-language",
+      modelRunAttemptId: "attempt-language",
+    })).resolves.toEqual({ outcome: "published" });
+    await expect(composition.journalService.inspect({
+      dailySessionId,
+      userId: fixedInternalOwnerPrincipal.userId,
+      expectedDataEpoch: 1,
+    })).resolves.toMatchObject({
+      locale,
+      statements: [expect.objectContaining({ epistemicStatus: "supported_expression" })],
+    });
+    const lineage = await database.pool.query<{
+      daily_session_id: string;
+      evidence_source_session_id: string;
+      statement_source_session_id: string;
+    }>(
+      `SELECT version.daily_session_id,
+         evidence_session.daily_session_id AS evidence_source_session_id,
+         statement_source.daily_session_id AS statement_source_session_id
+       FROM journal_versions version
+       INNER JOIN journal_statements statement ON statement.journal_version_id = version.journal_version_id
+       INNER JOIN journal_statement_evidence_links link ON link.journal_statement_id = statement.journal_statement_id
+       INNER JOIN evidence_items evidence ON evidence.evidence_item_id = link.evidence_item_id
+       INNER JOIN evidence_source_snapshots evidence_session ON evidence_session.evidence_source_snapshot_id = evidence.evidence_source_snapshot_id
+       INNER JOIN daily_sessions statement_source ON statement_source.daily_session_id = version.daily_session_id
+       WHERE version.daily_session_id = $1`,
+      [dailySessionId],
+    );
+    expect(lineage.rows).toEqual([{
+      daily_session_id: dailySessionId,
+      evidence_source_session_id: dailySessionId,
+      statement_source_session_id: dailySessionId,
+    }]);
   });
 
   it("converges when an explicit end and a due scan both try to create the same command (AC #1, #7)", async () => {

@@ -117,14 +117,23 @@ const deterministicJournalDraft: JournalProviderEgress = {
       statements: input.evidenceItems.map((item: JournalEvidenceReference) => ({
         id: `statement-${item.id}`,
         text: input.locale.startsWith("zh")
-          ? `记录显示，用户分享了：${(input.sourceTextByEvidenceId[item.id] ?? "一段生活经历").replace(/我(的|们)?/g, "")}`
-          : `The owner described: ${(input.sourceTextByEvidenceId[item.id] ?? "an experience from the day").replace(/\b(I|me|my|we|our)\b/gi, "the owner")}`,
+          ? `记录显示，用户分享了：${toThirdPersonSource(input.sourceTextByEvidenceId[item.id] ?? "一段生活经历")}`
+          : `The owner described: ${toThirdPersonSource(input.sourceTextByEvidenceId[item.id] ?? "an experience from the day")}`,
         epistemicStatus: "supported_expression" as const,
         evidenceItemIds: [item.id],
       })),
     };
   },
 };
+
+function toThirdPersonSource(sourceText: string): string {
+  return sourceText
+    .replace(/\bI\b/gi, "they")
+    .replace(/\b(me|my)\b/gi, "the owner")
+    .replace(/\bwe\b/gi, "they")
+    .replace(/\bour\b/gi, "the owner's")
+    .replace(/我们|我的|我/g, "");
+}
 
 const deterministicJournalValidator: JournalValidationProvider = {
   role: "journal.validate",
