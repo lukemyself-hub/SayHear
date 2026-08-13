@@ -82,6 +82,12 @@ export function createProviderEgressPort(dependencies: {
               false,
             );
           }
+        } else if (event.type === "tool_call") {
+          // Provider-native function calls are forwarded to the Harness
+          // untouched. The Provider Egress Port intentionally does not consult
+          // the Conversation Action Catalog or decide whether the call is
+          // admissible: that is the Harness's bounded responsibility, and a
+          // tool_call against an empty Catalog must fail closed upstream.
         }
         yield event;
       }

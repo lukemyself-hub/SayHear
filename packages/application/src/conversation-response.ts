@@ -8,11 +8,12 @@ import type {
 } from "@sayhear/domain";
 
 import type { ContextCompiler } from "./context-compiler";
-import {
-  ProviderDispatchError,
-  type ProviderDispatchErrorCategory,
-  type ProviderEgressPort,
-} from "./conversation-model";
+import type {
+  ConversationActionCatalog,
+  ConversationHarnessPolicy,
+} from "./conversation-action-catalog";
+import type { ConversationAgentHarness } from "./conversation-agent-harness";
+import { type ProviderDispatchErrorCategory } from "./conversation-model";
 import type {
   ConversationRetryTurn,
   UserTextConversationService,
@@ -175,21 +176,18 @@ export type ConversationResponseService = Readonly<{
 }>;
 
 export function createConversationResponseService(dependencies: {
+  catalog: ConversationActionCatalog;
   clock: () => Date;
   contextCompiler: ContextCompiler;
   conversationService: UserTextConversationService;
-  delay?: (delayMs: number) => Promise<void>;
-  egressPort: ProviderEgressPort;
+  harness: ConversationAgentHarness;
+  harnessPolicy: ConversationHarnessPolicy;
   jitter?: () => number;
   recoveryScanLimit?: number;
   repository: ConversationResponseRepository;
 }): ConversationResponseService {
-  const delay =
-    dependencies.delay ??
-    ((delayMs: number) =>
-      new Promise<void>((resolve) => setTimeout(resolve, delayMs)));
-  const jitter = dependencies.jitter ?? Math.random;
   const recoveryScanLimit = dependencies.recoveryScanLimit ?? 100;
+  const jitter = dependencies.jitter ?? Math.random;
   if (
     !Number.isInteger(recoveryScanLimit) ||
     recoveryScanLimit <= 0 ||
@@ -210,21 +208,36 @@ export function createConversationResponseService(dependencies: {
       | null,
     signal?: AbortSignal,
   ): AsyncIterable<ConversationResponseStreamEvent> {
+    // Claim request-lifecycle ownership of the Decision Command before emitting
+    // any stream event, so a consumer that cancels immediately after the
+    // user_committed/retry_committed event still triggers the abort-settle
+    // below (the 'prepared' -> 'compiling' transition has already run).
     const ownership = await dependencies.repository.claimResponseExecution({
       generationCommandId: turn.generation.commandId,
       modelRunAttemptId: turn.generation.attemptId,
       userId,
     });
-    let possiblyVisible = false;
-    let completeText = "";
-    let completion: CompleteResponseMetadata | null = null;
-    let settled = ownership === "shared";
 
+    // The aborted-settle defense belongs to the request lifecycle. If the
+    // consumer cancels the stream at any point the Harness did not already
+    // finalize (commit, fail, or shared replay), the owned attempt is settled
+    // as aborted. `possiblyVisible` mirrors whether any decision delta reached
+    // the user, so an abort after a partial stream is recorded as interrupted.
+    // The Harness owns only the bounded single-Command Decision execution
+    // (egress streaming, atomic commit, same-Command technical retry, empty
+    // Catalog fail-closed); Provider messages, raw tool-call objects, and
+    // Framework sessions never cross back through this seam (issue #24 AC6).
+    let possiblyVisible = false;
+    let settled = ownership === "shared";
     try {
       if (initialEvent) {
         yield initialEvent;
       }
 
+      // Shared ownership: another concurrent request already finalized this
+      // GenerationCommand. Replay whatever it committed without re-executing the
+      // Decision. This arbitration belongs to the request lifecycle, not to the
+      // single-Command Harness execution.
       if (ownership === "shared") {
         const response = await dependencies.repository.loadResponse({
           generationCommandId: turn.generation.commandId,
@@ -234,115 +247,45 @@ export function createConversationResponseService(dependencies: {
         return;
       }
 
+      // The Service compiles request-lifecycle Context and hands the
+      // already-compiled CompiledContext reference to the Harness (ADR-0093,
+      // architecture 08-10 §8.1).
       const context = await dependencies.contextCompiler.compile({
         generationCommandId: turn.generation.commandId,
         interactionTurnId: turn.turn.id,
         userId,
       });
-      for await (const event of dependencies.egressPort.stream({
-        compiledContextId: context.id,
-        generationCommandId: turn.generation.commandId,
-        modelRunAttemptId: turn.generation.attemptId,
-        ...(signal ? { signal } : {}),
-      })) {
-        if (event.type === "delta") {
-          possiblyVisible = true;
-          completeText += event.delta;
-          yield { delta: event.delta, type: "assistant_delta" };
-        } else {
-          completion = event;
-        }
-      }
-      if (completion === null || completeText.length === 0) {
-        throw new ProviderDispatchError("invalid_response");
-      }
-
-      const committed = await dependencies.repository.commitCompleteResponse({
-        completedAt: dependencies.clock(),
-        generationCommandId: turn.generation.commandId,
-        metadata: completion,
-        modelRunAttemptId: turn.generation.attemptId,
-        text: completeText,
-        userId,
-      });
-      if (committed.outcome === "fence_rejected") {
-        throw new ProviderDispatchError("policy_blocked");
-      }
-      settled = true;
-      yield {
-        eventId: committed.eventId,
-        revisionId: committed.revisionId,
-        type: "assistant_committed",
-      };
-    } catch (error) {
-      if (
-        error instanceof ProviderDispatchError &&
-        !error.settlesAttempt
-      ) {
-        settled = true;
-        const response = await dependencies.repository.loadResponse({
+      for await (const event of dependencies.harness.runDecision(
+        {
+          catalog: dependencies.catalog,
+          catalogVersion: dependencies.catalog.version,
+          compiledContextId: context.id,
           generationCommandId: turn.generation.commandId,
+          harnessPolicy: dependencies.harnessPolicy,
+          interactionTurnId: turn.turn.id,
+          modelRunAttemptId: turn.generation.attemptId,
           userId,
-        });
-        yield* streamExistingResponse(response);
-        return;
-      }
-      const category =
-        error instanceof ProviderDispatchError ? error.category : "unknown";
-      const interrupted = possiblyVisible || category === "unknown";
-      const failure = await dependencies.repository.settleResponseFailure({
-        category,
-        generationCommandId: turn.generation.commandId,
-        interrupted,
-        jitter: normalizedJitter(jitter()),
-        modelRunAttemptId: turn.generation.attemptId,
-        settledAt: dependencies.clock(),
-        userId,
-      });
-      settled = true;
-      if (failure.outcome === "retry_scheduled") {
-        await delay(
-          Math.max(0, failure.retryAt.getTime() - dependencies.clock().getTime()),
-        );
-        const recovery =
-          await dependencies.repository.claimStaleResponseExecution({
-            expectedModelRunAttemptId: turn.generation.attemptId,
-            generationCommandId: turn.generation.commandId,
-            now: failure.retryAt,
-            userId,
-          });
-        if (recovery.outcome === "execute") {
-          yield* streamResponse(
-            userId,
-            {
-              generation: {
-                attemptId: recovery.modelRunAttemptId,
-                commandId: recovery.generationCommandId,
-              },
-              turn: {
-                id: recovery.turnId,
-                sequence: 0,
-                status: "responding",
-              },
-            },
-            null,
-            signal,
-          );
-          return;
+        },
+        signal,
+      )) {
+        if (event.type === "decision_delta") {
+          possiblyVisible = true;
+          yield { delta: event.delta, type: "assistant_delta" };
+        } else if (event.type === "decision_committed") {
+          settled = true;
+          yield {
+            eventId: event.assistantEventId,
+            revisionId: event.assistantEventRevisionId,
+            type: "assistant_committed",
+          };
+        } else {
+          settled = true;
+          yield {
+            category: event.category,
+            type: event.interrupted ? "response_interrupted" : "response_failed",
+          };
         }
       }
-      const failureCategory =
-        failure.outcome === "settled" ? failure.category : category;
-      const failureInterrupted =
-        failure.outcome === "settled"
-          ? failure.status === "interrupted"
-          : interrupted;
-      yield {
-        category: failureCategory,
-        type: failureInterrupted
-          ? "response_interrupted"
-          : "response_failed",
-      };
     } finally {
       if (!settled) {
         await dependencies.repository.settleResponseFailure({

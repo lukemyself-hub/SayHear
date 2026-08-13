@@ -40,12 +40,14 @@ type GenerationMetadataRow = Readonly<{
   context_source_revision: string;
   context_total_tokens: string;
   consent_policy_version: string | null;
+  conversation_action_catalog_version: string;
   cost_micros: string | null;
   dispatch_latency_ms: string;
   dispatched_at: Date | null;
   disposition: string;
   freshness_policy: string;
   generation_command_id: string;
+  harness_policy_version: string;
   input_revision_id: string;
   input_tokens: string | null;
   model: string;
@@ -103,6 +105,8 @@ export class PostgresInternalInspectionRepository
           command.input_revision_id,
           command.freshness_policy,
           command.consent_policy_version,
+          command.harness_policy_version,
+          command.conversation_action_catalog_version,
           command.status AS command_status,
           command.recovery_policy_version,
           command.recovery_status,
@@ -248,6 +252,8 @@ export class PostgresInternalInspectionRepository
       },
       completedAt: row.completed_at,
       consentPolicyVersion: row.consent_policy_version,
+      conversationActionCatalogVersion:
+        row.conversation_action_catalog_version,
       costMicros: optionalNumber(row.cost_micros),
       dispatchLatencyMs: Number(row.dispatch_latency_ms),
       dispatchedAt: row.dispatched_at,
@@ -256,6 +262,7 @@ export class PostgresInternalInspectionRepository
       generationCommandId: asGenerationCommandId(
         row.generation_command_id,
       ),
+      harnessPolicyVersion: row.harness_policy_version,
       inputTokens: optionalNumber(row.input_tokens),
       model: row.model,
       modelRunAttemptId: asModelRunAttemptId(

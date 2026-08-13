@@ -18,6 +18,7 @@ type ProviderAdapterConfiguration =
     }>
   | Readonly<{
       chunks: readonly string[];
+      emitToolCall?: Readonly<{ rawArguments: string; rawFunctionName: string }>;
       failAfterCompletion?: boolean;
       failAfterChunks?: number;
       type: "deterministic";
@@ -56,12 +57,14 @@ export function createRuntimeProviderEgressPort(input: {
  */
 function createDeterministicBehaviorModel(adapter: {
   chunks: readonly string[];
+  emitToolCall?: Readonly<{ rawArguments: string; rawFunctionName: string }>;
   failAfterCompletion?: boolean;
   failAfterChunks?: number;
 }) {
-  const { chunks, failAfterCompletion, failAfterChunks } = adapter;
+  const { chunks, emitToolCall, failAfterCompletion, failAfterChunks } = adapter;
   return createBehaviorAwareConversationTextModel({
     responder: () => chunks,
+    ...(emitToolCall ? { emitToolCall } : {}),
     ...(failAfterCompletion ? { failAfterCompletion: true } : {}),
     ...(failAfterChunks === undefined ? {} : { failAfterChunks }),
   });

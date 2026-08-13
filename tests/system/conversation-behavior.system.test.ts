@@ -5,8 +5,11 @@ import {
   classifyConversationTurnSignal,
   countFollowUpQuestions,
   createContextCompiler,
+  createConversationAgentHarness,
   createConversationResponseService,
   createUserTextConversationService,
+  EMPTY_CONVERSATION_ACTION_CATALOG,
+  INITIAL_CONVERSATION_HARNESS_POLICY,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
@@ -58,6 +61,8 @@ const testGenerationPolicy = Object.freeze({
   freshnessPolicy: "source_valid:v1" as const,
   chineseLocalePackVersion: "locale-pack-zh:v1",
   englishLocalePackVersion: "locale-pack-en:v1",
+  harnessPolicyVersion: "conversation-harness:v1",
+  conversationActionCatalogVersion: "conversation-action-catalog:empty:v1",
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
@@ -154,16 +159,22 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       repository: new PostgresUserTextConversationRepository(database.pool),
     });
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler,
       conversationService,
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createConversationAgentHarness({
         clock: fixedResponseClock,
-        contextCompiler,
-        model: createBehaviorAwareConversationTextModel({ responder }),
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler,
+          model: createBehaviorAwareConversationTextModel({ responder }),
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     return { conversationService, contextCompiler, service };

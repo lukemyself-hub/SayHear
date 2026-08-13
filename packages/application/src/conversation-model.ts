@@ -55,6 +55,11 @@ export type ConversationTextModelStreamEvent =
       outputTokens: number | null;
       providerRequestId: string | null;
       type: "completed";
+    }>
+  | Readonly<{
+      rawArguments: string;
+      rawFunctionName: string;
+      type: "tool_call";
     }>;
 
 export type ConversationTextModel = Readonly<{

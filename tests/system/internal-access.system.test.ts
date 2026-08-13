@@ -11,10 +11,13 @@ import {
   asUserId,
   createContextCompiler,
   createContinuousExchangeService,
+  createConversationAgentHarness,
   createConversationResponseService,
   createInternalInspectionService,
   createInternalOwnerAccessService,
   createUserTextConversationService,
+  EMPTY_CONVERSATION_ACTION_CATALOG,
+  INITIAL_CONVERSATION_HARNESS_POLICY,
   ProviderDispatchError,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
@@ -54,6 +57,8 @@ const testGenerationPolicy = Object.freeze({
   freshnessPolicy: "source_valid:v1" as const,
   chineseLocalePackVersion: "locale-pack-zh:v1",
   englishLocalePackVersion: "locale-pack-en:v1",
+  harnessPolicyVersion: "conversation-harness:v1",
+  conversationActionCatalogVersion: "conversation-action-catalog:empty:v1",
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
@@ -97,6 +102,29 @@ function createTestContextCompiler(
 
 function authSessionTokenHash(sessionToken: string): Buffer {
   return createHash("sha256").update(sessionToken, "utf8").digest();
+}
+
+/**
+ * Builds the Conversation Agent Harness for system-seam tests. The Service now
+ * compiles Context and delegates Decision execution to the Harness
+ * (issue #24), so tests construct the Harness the same way the production
+ * server composition does: a Provider Egress Port wrapped in the bounded
+ * Harness, the empty Catalog, and the initial Harness Policy.
+ */
+function createTestHarness(options: {
+  clock: () => Date;
+  delay?: (delayMs: number) => Promise<void>;
+  egressPort: ReturnType<typeof createProviderEgressPort>;
+  jitter?: () => number;
+  repository: ConversationResponseRepository;
+}) {
+  return createConversationAgentHarness({
+    clock: options.clock,
+    ...(options.delay ? { delay: options.delay } : {}),
+    egressPort: options.egressPort,
+    ...(options.jitter ? { jitter: options.jitter } : {}),
+    repository: options.repository,
+  });
 }
 
 describe("Authenticated Internal Text Conversation System Seam", () => {
@@ -706,6 +734,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       database.pool,
     );
     const canceledReplay = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: createContextCompiler({
         clock: fixedResponseClock,
@@ -721,15 +750,20 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: createTestContextCompiler(responseRepository),
-        model: createDeterministicConversationTextModel({
-          chunks: ["must not run"],
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler: createTestContextCompiler(responseRepository),
+          model: createDeterministicConversationTextModel({
+            chunks: ["must not run"],
+          }),
+          repository: responseRepository,
         }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     })
       .respond(fixedInternalOwnerPrincipal.userId, {
@@ -939,9 +973,11 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         totalTokens: expect.any(Number),
       },
       costMicros: 0,
+      conversationActionCatalogVersion: "conversation-action-catalog:empty:v1",
       disposition: "completed",
       freshnessPolicy: "source_valid:v1",
       generationCommandId,
+      harnessPolicyVersion: "conversation-harness:v1",
       inputTokens: expect.any(Number),
       model: "gpt-5.4",
       modelRunAttemptId,
@@ -1235,6 +1271,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       },
     } satisfies ConversationTextModel;
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: {
         async compile(input) {
@@ -1254,13 +1291,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: compiler,
-        model,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler: compiler,
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const response = await createConversationResponseHandler({
@@ -1345,6 +1387,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       },
     } satisfies ConversationTextModel;
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: {
         async compile(input) {
@@ -1367,13 +1410,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: compiler,
-        model,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler: compiler,
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const response = await createConversationResponseHandler({
@@ -1504,6 +1552,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       },
     } satisfies ConversationTextModel;
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: createContextCompiler({
         clock: fixedResponseClock,
@@ -1523,17 +1572,22 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         },
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: {
-          ...testChampion,
-          consentPolicyVersion,
-          providerPolicyVersion,
-        },
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: createTestContextCompiler(responseRepository),
-        model,
+        egressPort: createProviderEgressPort({
+          champion: {
+            ...testChampion,
+            consentPolicyVersion,
+            providerPolicyVersion,
+          },
+          clock: fixedResponseClock,
+          contextCompiler: createTestContextCompiler(responseRepository),
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const response = await createConversationResponseHandler({
@@ -1641,6 +1695,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       repository: responseRepository,
     });
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler,
       conversationService: createUserTextConversationService({
@@ -1650,13 +1705,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler,
-        model,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler,
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const response = await createConversationResponseHandler({
@@ -1741,6 +1801,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     });
     const createService = (model: ConversationTextModel) =>
       createConversationResponseService({
+        catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
         clock: fixedResponseClock,
         contextCompiler: createContextCompiler({
           clock: fixedResponseClock,
@@ -1750,13 +1811,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           repository: responseRepository,
         }),
         conversationService,
-        egressPort: createProviderEgressPort({
-          champion: testChampion,
+        harness: createTestHarness({
           clock: fixedResponseClock,
-          contextCompiler: createTestContextCompiler(responseRepository),
-          model,
+          egressPort: createProviderEgressPort({
+            champion: testChampion,
+            clock: fixedResponseClock,
+            contextCompiler: createTestContextCompiler(responseRepository),
+            model,
+            repository: responseRepository,
+          }),
           repository: responseRepository,
         }),
+        harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
         repository: responseRepository,
       });
 
@@ -2049,6 +2115,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       createConversationResponseHandler({
         authenticate: async () => fixedInternalOwnerPrincipal,
         service: createConversationResponseService({
+          catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
           clock: fixedResponseClock,
           contextCompiler: createContextCompiler({
             clock: fixedResponseClock,
@@ -2064,13 +2131,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
             generationPolicy: testGenerationPolicy,
             repository: new PostgresUserTextConversationRepository(database.pool),
           }),
-          egressPort: createProviderEgressPort({
-            champion: testChampion,
+          harness: createTestHarness({
             clock: fixedResponseClock,
-            contextCompiler: createTestContextCompiler(responseRepository),
-            model,
+            egressPort: createProviderEgressPort({
+              champion: testChampion,
+              clock: fixedResponseClock,
+              contextCompiler: createTestContextCompiler(responseRepository),
+              model,
+              repository: responseRepository,
+            }),
             repository: responseRepository,
           }),
+          harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
           repository: responseRepository,
         }),
       });
@@ -2236,20 +2308,26 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       repository: responseRepository,
     });
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: () => currentTime,
       contextCompiler,
       conversationService,
-      delay: async (delayMs) => {
-        currentTime = new Date(currentTime.getTime() + delayMs);
-      },
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: () => currentTime,
-        contextCompiler,
-        model,
+        delay: async (delayMs) => {
+          currentTime = new Date(currentTime.getTime() + delayMs);
+        },
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: () => currentTime,
+          contextCompiler,
+          model,
+          repository: responseRepository,
+        }),
+        jitter: () => 0.5,
         repository: responseRepository,
       }),
-      jitter: () => 0.5,
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
 
@@ -2489,6 +2567,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     );
     const contextCompiler = createTestContextCompiler(responseRepository, 1);
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler,
       conversationService: createUserTextConversationService({
@@ -2498,15 +2577,20 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler,
-        model: createDeterministicConversationTextModel({
-          chunks: ["OK"],
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler,
+          model: createDeterministicConversationTextModel({
+            chunks: ["OK"],
+          }),
+          repository: responseRepository,
         }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const handler = createConversationResponseHandler({
@@ -2634,6 +2718,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       },
     } satisfies ConversationTextModel;
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: compiler,
       conversationService: createUserTextConversationService({
@@ -2643,13 +2728,18 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: compiler,
-        model,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler: compiler,
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const handler = createConversationResponseHandler({
@@ -2766,6 +2856,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       database.pool,
     );
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: createContextCompiler({
         clock: fixedResponseClock,
@@ -2781,15 +2872,20 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: createTestContextCompiler(responseRepository),
-        model: createDeterministicConversationTextModel({
-          chunks: ["must not start"],
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler: createTestContextCompiler(responseRepository),
+          model: createDeterministicConversationTextModel({
+            chunks: ["must not start"],
+          }),
+          repository: responseRepository,
         }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const stream = service.respond(fixedInternalOwnerPrincipal.userId, {
@@ -3461,6 +3557,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       database.pool,
     );
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: fixedResponseClock,
       contextCompiler: createContextCompiler({
         clock: fixedResponseClock,
@@ -3476,15 +3573,20 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         generationPolicy: testGenerationPolicy,
         repository: new PostgresUserTextConversationRepository(database.pool),
       }),
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: fixedResponseClock,
-        contextCompiler: createTestContextCompiler(responseRepository),
-        model: createDeterministicConversationTextModel({
-          chunks: ["It is okay to stop here. Goodbye for now."],
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: fixedResponseClock,
+          contextCompiler: createTestContextCompiler(responseRepository),
+          model: createDeterministicConversationTextModel({
+            chunks: ["It is okay to stop here. Goodbye for now."],
+          }),
+          repository: responseRepository,
         }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const streamEvents = [];
@@ -3884,18 +3986,24 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       repository: responseRepository,
     });
     const recovery = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: recoveryClock,
       contextCompiler,
       conversationService,
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: recoveryClock,
-        contextCompiler,
-        model: createDeterministicConversationTextModel({
-          chunks: ["Recovered once."],
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: recoveryClock,
+          contextCompiler,
+          model: createDeterministicConversationTextModel({
+            chunks: ["Recovered once."],
+          }),
+          repository: responseRepository,
         }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
 
@@ -4128,16 +4236,22 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       repository: responseRepository,
     });
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: () => currentTime,
       contextCompiler,
       conversationService,
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: () => currentTime,
-        contextCompiler,
-        model,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: () => currentTime,
+          contextCompiler,
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const requestPath = service
@@ -4305,16 +4419,22 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       repository: responseRepository,
     });
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: () => currentTime,
       contextCompiler,
       conversationService,
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: () => currentTime,
-        contextCompiler,
-        model,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: () => currentTime,
+          contextCompiler,
+          model,
+          repository: responseRepository,
+        }),
         repository: responseRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const requestPath = service
@@ -4439,18 +4559,24 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       repository: responseRepository,
     });
     const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: () => currentTime,
       contextCompiler,
       conversationService,
-      egressPort: createProviderEgressPort({
-        champion: testChampion,
+      harness: createTestHarness({
         clock: () => currentTime,
-        contextCompiler,
-        model: createDeterministicConversationTextModel({
-          chunks: ["Never reconstruct this body."],
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock: () => currentTime,
+          contextCompiler,
+          model: createDeterministicConversationTextModel({
+            chunks: ["Never reconstruct this body."],
+          }),
+          repository: responseRepository,
         }),
-        repository: responseRepository,
+        repository: blockingCommitRepository,
       }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: blockingCommitRepository,
     });
     const requestPath = service

@@ -51,12 +51,14 @@ export type GenerationInspectionMetadata = Readonly<{
   compiledContext: CompiledContextInspection;
   completedAt: Date | null;
   consentPolicyVersion: string | null;
+  conversationActionCatalogVersion: string;
   costMicros: number | null;
   dispatchLatencyMs: number;
   dispatchedAt: Date | null;
   disposition: string;
   freshnessPolicy: string;
   generationCommandId: GenerationCommandId;
+  harnessPolicyVersion: string;
   inputTokens: number | null;
   model: string;
   modelRunAttemptId: ModelRunAttemptId;

@@ -9,9 +9,23 @@ export function createDeterministicConversationTextModel(input: {
   chunks: readonly string[];
   failAfterCompletion?: boolean;
   failAfterChunks?: number;
+  /**
+   * When set, the model emits one provider-native `tool_call` event before any
+   * delta. It is a fault-injection seam for the Harness fail-closed contract
+   * (issue #24 AC8): a tool_call against an empty Conversation Action Catalog
+   * must fail closed and never produce a fabricated success response.
+   */
+  emitToolCall?: Readonly<{ rawArguments: string; rawFunctionName: string }>;
 }): ConversationTextModel {
   return {
     async *stream(request) {
+      if (input.emitToolCall) {
+        yield {
+          rawArguments: input.emitToolCall.rawArguments,
+          rawFunctionName: input.emitToolCall.rawFunctionName,
+          type: "tool_call",
+        };
+      }
       yield* streamDeterministicDeltas(
         request,
         input.chunks,

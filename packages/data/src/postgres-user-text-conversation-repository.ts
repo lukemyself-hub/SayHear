@@ -621,6 +621,8 @@ export class PostgresUserTextConversationRepository
           provider_policy_version,
           consent_policy_version,
           freshness_policy,
+          harness_policy_version,
+          conversation_action_catalog_version,
           expected_data_epoch,
           status,
           created_at
@@ -628,7 +630,8 @@ export class PostgresUserTextConversationRepository
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, 'prepared', $23
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+          'prepared', $25
         )
       `,
       [
@@ -659,6 +662,8 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.providerPolicyVersion,
         input.generationPolicy.consentPolicyVersion,
         input.generationPolicy.freshnessPolicy,
+        input.generationPolicy.harnessPolicyVersion,
+        input.generationPolicy.conversationActionCatalogVersion,
         ownerRow.data_epoch,
         input.now,
       ],
@@ -1063,6 +1068,8 @@ export class PostgresUserTextConversationRepository
           provider_policy_version,
           consent_policy_version,
           freshness_policy,
+          harness_policy_version,
+          conversation_action_catalog_version,
           expected_data_epoch,
           status,
           created_at
@@ -1070,7 +1077,8 @@ export class PostgresUserTextConversationRepository
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, 'prepared', $23
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+          'prepared', $25
         )
       `,
       [
@@ -1101,6 +1109,8 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.providerPolicyVersion,
         input.generationPolicy.consentPolicyVersion,
         input.generationPolicy.freshnessPolicy,
+        input.generationPolicy.harnessPolicyVersion,
+        input.generationPolicy.conversationActionCatalogVersion,
         ownerRow.data_epoch,
         input.now,
       ],
@@ -1335,6 +1345,8 @@ async function addGenerationToLegacyTurn(
         provider_policy_version,
         consent_policy_version,
         freshness_policy,
+        harness_policy_version,
+        conversation_action_catalog_version,
         expected_data_epoch,
         status,
         created_at
@@ -1342,7 +1354,8 @@ async function addGenerationToLegacyTurn(
       VALUES (
         $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
         'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, 'prepared', $23
+        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
+        'prepared', $25
       )
     `,
     [
@@ -1373,6 +1386,8 @@ async function addGenerationToLegacyTurn(
       input.generationPolicy.providerPolicyVersion,
       input.generationPolicy.consentPolicyVersion,
       input.generationPolicy.freshnessPolicy,
+      input.generationPolicy.harnessPolicyVersion,
+      input.generationPolicy.conversationActionCatalogVersion,
       expectedDataEpoch,
       input.now,
     ],

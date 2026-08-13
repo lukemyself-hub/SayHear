@@ -74,6 +74,22 @@ export {
   type ProviderEgressStreamEvent,
 } from "./conversation-model";
 export {
+  EMPTY_CONVERSATION_ACTION_CATALOG,
+  INITIAL_CONVERSATION_HARNESS_POLICY,
+  type ConversationActionCatalog,
+  type ConversationActionDefinition,
+  type ConversationActionKind,
+  type ConversationActionProposal,
+  type ConversationHarnessPolicy,
+} from "./conversation-action-catalog";
+export {
+  createConversationAgentHarness,
+  type ConversationAgentHarness,
+  type ConversationAgentHarnessRepository,
+  type ConversationDecisionCommand,
+  type ConversationHarnessEvent,
+} from "./conversation-agent-harness";
+export {
   createInternalInspectionService,
   InternalInspectionNotFoundError,
   SensitiveInspectionDeniedError,

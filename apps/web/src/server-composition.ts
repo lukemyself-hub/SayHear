@@ -1,10 +1,13 @@
 import {
   createInternalOwnerAccessService,
   createInternalInspectionService,
+  createConversationAgentHarness,
   createContextCompiler,
   createContinuousExchangeService,
   createConversationResponseService,
   createUserTextConversationService,
+  EMPTY_CONVERSATION_ACTION_CATALOG,
+  INITIAL_CONVERSATION_HARNESS_POLICY,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -54,6 +57,8 @@ export function createServerComposition() {
       freshnessPolicy: "source_valid:v1",
       chineseLocalePackVersion: "locale-pack-zh:v1",
       englishLocalePackVersion: "locale-pack-en:v1",
+      harnessPolicyVersion: "conversation-harness:v1",
+      conversationActionCatalogVersion: "conversation-action-catalog:empty:v1",
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
@@ -104,6 +109,11 @@ export function createServerComposition() {
     contextCompiler,
     repository: responseRepository,
   });
+  const conversationAgentHarness = createConversationAgentHarness({
+    clock: configuration.clock,
+    egressPort,
+    repository: responseRepository,
+  });
   return {
     accessService: createInternalOwnerAccessService({
       clock: configuration.clock,
@@ -120,10 +130,12 @@ export function createServerComposition() {
       stepUpMaxAgeMs: 10 * 60 * 1_000,
     }),
     conversationResponseService: createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
       clock: configuration.clock,
       contextCompiler,
       conversationService,
-      egressPort,
+      harness: conversationAgentHarness,
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     }),
     continuousExchangeService: createContinuousExchangeService({

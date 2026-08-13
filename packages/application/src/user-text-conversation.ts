@@ -65,6 +65,8 @@ export type GenerationPolicy = Readonly<{
   freshnessPolicy: "source_valid:v1";
   chineseLocalePackVersion: string;
   englishLocalePackVersion: string;
+  harnessPolicyVersion: string;
+  conversationActionCatalogVersion: string;
   model: string;
   modelConfigVersion: string;
   modelSnapshot: string;
