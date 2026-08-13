@@ -25,6 +25,16 @@ export {
   type WorkflowStarter,
 } from "./journal-eligibility";
 export {
+  createEvidenceService,
+  type EvidenceChampion,
+  type EvidenceItem,
+  type EvidenceLocatorType,
+  type EvidenceRepository,
+  type EvidenceRole,
+  type EvidenceService,
+  type EvidenceSourceSnapshot,
+} from "./evidence";
+export {
   createInternalOwnerAccessService,
   InternalOwnerAccessDeniedError,
   type InternalOwnerAccessRepository,

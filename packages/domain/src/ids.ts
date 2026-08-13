@@ -9,6 +9,7 @@ declare const compiledContextIdBrand: unique symbol;
 declare const inactivityEvaluationIdBrand: unique symbol;
 declare const workflowCommandIdBrand: unique symbol;
 declare const outboxEventIdBrand: unique symbol;
+declare const evidenceItemIdBrand: unique symbol;
 
 export type UserId = string & { readonly [userIdBrand]: "UserId" };
 export type DailySessionId = string & {
@@ -40,6 +41,9 @@ export type WorkflowCommandId = string & {
 };
 export type OutboxEventId = string & {
   readonly [outboxEventIdBrand]: "OutboxEventId";
+};
+export type EvidenceItemId = string & {
+  readonly [evidenceItemIdBrand]: "EvidenceItemId";
 };
 
 const uuidV7Pattern =
@@ -97,6 +101,10 @@ export function asWorkflowCommandId(value: string): WorkflowCommandId {
 
 export function asOutboxEventId(value: string): OutboxEventId {
   return asOpaqueUuidV7(value, "OutboxEventId") as OutboxEventId;
+}
+
+export function asEvidenceItemId(value: string): EvidenceItemId {
+  return asOpaqueUuidV7(value, "EvidenceItemId") as EvidenceItemId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {

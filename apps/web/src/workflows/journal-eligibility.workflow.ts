@@ -49,6 +49,7 @@ async function runEligibilityStep(input: {
     eligibilityPolicyVersion: policy.policyVersion,
     minimumSubstantiveExpressionLength:
       policy.minimumSubstantiveExpressionLength,
+    evidenceService: composition.evidenceService,
     workflowReceiptId: `wf-${randomUUID()}`,
     command: input,
   });
