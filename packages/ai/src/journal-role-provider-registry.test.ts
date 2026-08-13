@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createRuntimeJournalRoleProviderRegistry } from "./journal-role-provider-registry";
+import { validateJournalDraft } from "@sayhear/application";
 
 const evidence = [
   { id: "one", sourceEventId: "event-one", sourceRevisionId: "revision-one", sourceActor: "user" as const, sourceStatus: "final" as const, locatorType: "text_span" as const, locatorKey: "0:3", role: "factual_support" as const },
@@ -30,5 +31,33 @@ describe("Journal role safeguards", () => {
       sourceTextByEvidenceId: { one: "Walked home.", two: "Called a friend." },
     });
     expect(result).toEqual({ valid: false, reason: "material_evidence_omitted" });
+  });
+
+  it.each([
+    ["en-US", "I finished a difficult task today."],
+    ["zh-CN", "我今天完成了一项很难的任务。"],
+    ["en-US", "I finished the task, 但是我还是有点担心明天。"],
+  ])("produces an acceptable third-person Journal for %s source text", async (locale, sourceText) => {
+    const fixtureEvidence = [{
+      id: "one",
+      sourceEventId: "event-one",
+      sourceRevisionId: "revision-one",
+      sourceActor: "user" as const,
+      sourceStatus: "final" as const,
+      locatorType: "text_span" as const,
+      locatorKey: `0:${sourceText.length}`,
+      role: "factual_support" as const,
+    }];
+    const draft = await registry.draft.generate({
+      locale,
+      evidenceItems: fixtureEvidence,
+      sourceTextByEvidenceId: { one: sourceText },
+    });
+    expect(validateJournalDraft(draft, fixtureEvidence, locale)).toEqual({ valid: true });
+    if (sourceText.includes("但是")) {
+      expect(draft.statements[0]?.text).toBe(
+        "The owner described: they finished the task, 但是还是有点担心明天。",
+      );
+    }
   });
 });

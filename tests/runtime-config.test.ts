@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertSafeRuntimeConfiguration } from "../apps/web/src/runtime-config";
+import { assertSafeRuntimeConfiguration, loadRuntimeConfiguration } from "../apps/web/src/runtime-config";
 
 describe("runtime safety configuration", () => {
   it("allows a fixed principal only in the test environment", () => {
@@ -78,5 +78,19 @@ describe("runtime safety configuration", () => {
         SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION: "true",
       }),
     ).toBe("test");
+  });
+
+  it("defaults Journal and Evidence write switches to enabled and parses each independently", () => {
+    const base = {
+      CRON_SECRET: "cron", DATABASE_URL: "postgres://test", GITHUB_CLIENT_ID: "id", GITHUB_CLIENT_SECRET: "secret",
+      NEXTAUTH_SECRET: "auth", SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint", SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+      SAYHEAR_CONTEXT_HMAC_SECRET: "context", SAYHEAR_DEPLOYMENT: "test", SAYHEAR_PROVIDER_ADAPTER: "deterministic",
+      SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
+    };
+    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ evidenceExtractionEnabled: true, journalPublishEnabled: true });
+    expect(loadRuntimeConfiguration({ ...base, SAYHEAR_EVIDENCE_EXTRACTION_ENABLED: "false" }).writeSwitches)
+      .toEqual({ evidenceExtractionEnabled: false, journalPublishEnabled: true });
+    expect(loadRuntimeConfiguration({ ...base, SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false" }).writeSwitches)
+      .toEqual({ evidenceExtractionEnabled: true, journalPublishEnabled: false });
   });
 });

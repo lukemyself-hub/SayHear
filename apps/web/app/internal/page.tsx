@@ -5,6 +5,7 @@ import { asUserId } from "@sayhear/application";
 
 import { createServerComposition } from "../../src/server-composition";
 import { TextConversation } from "./text-conversation";
+import { JournalCard } from "./journal-card";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,11 @@ export default async function InternalPage() {
   }
 
   const userId = asUserId(session.user.id);
-  const [access, interruptedResponses, messages] = await Promise.all([
+  const [access, interruptedResponses, messages, currentJournal] = await Promise.all([
     composition.accessService.getAccess(userId),
     composition.conversationService.listInterruptedResponses(userId),
     composition.conversationService.listMessages(userId),
+    composition.journalService.readLatest({ userId, expectedDataEpoch: composition.configurationExpectedDataEpoch }),
   ]);
   const state = access.privateWrites.allowed ? "Open" : "Blocked";
 
@@ -43,6 +45,7 @@ export default async function InternalPage() {
         The gate opens only when the configured backup policy has current,
         verified retention evidence.
       </p>
+      <JournalCard currentJournal={currentJournal} />
       <TextConversation
         initialInterruptedResponses={interruptedResponses}
         initialMessages={messages}

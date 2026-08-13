@@ -83,6 +83,7 @@ export function createServerComposition() {
       snapshot: evidenceConfiguration.promptFingerprint,
     },
     repository: evidenceRepository,
+    writesEnabled: configuration.writeSwitches.evidenceExtractionEnabled,
   });
   const journalRepository = new PostgresJournalRepository(pool);
   const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
@@ -110,6 +111,7 @@ export function createServerComposition() {
     validationProvider: journalRoleRegistry.validator,
     model: journalRoleRegistry.draft,
     repository: journalRepository,
+    publishingEnabled: configuration.writeSwitches.journalPublishEnabled,
   });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);

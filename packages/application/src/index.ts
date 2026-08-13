@@ -125,6 +125,8 @@ export {
   runAutomaticJournal,
   validateJournalDraft,
   type JournalDraft,
+  type CurrentJournal,
+  type CurrentJournalVersion,
   type JournalEpistemicStatus,
   type JournalEvidenceReference,
   type JournalModel,

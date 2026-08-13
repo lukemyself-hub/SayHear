@@ -47,6 +47,7 @@ describe("automatic evidence-backed Journal", () => {
         startGeneration: vi.fn().mockResolvedValue({ accepted: true, generationCommandId: "command-1" }),
         publish,
         recordValidationFailure: vi.fn(),
+        readLatestCurrent: vi.fn().mockResolvedValue(null),
       },
     });
 
@@ -84,6 +85,7 @@ describe("automatic evidence-backed Journal", () => {
         startGeneration: vi.fn().mockResolvedValue({ accepted: true, generationCommandId: "c" }),
         publish,
         recordValidationFailure: vi.fn(),
+        readLatestCurrent: vi.fn().mockResolvedValue(null),
       },
     });
 
@@ -113,11 +115,51 @@ describe("automatic evidence-backed Journal", () => {
       model: { generate: async () => ({ locale: "en-US", statements: [{ id: "s", text: "The owner described a walk.", epistemicStatus: "supported_expression", evidenceItemIds: [evidence.id] }] }) },
       repository: {
         readSource: async () => ({ sourceSnapshotId: "snapshot-1", dailySessionId: sessionId, userId: "user-1", sourceRevision: 4, evidenceItems: [evidence] }),
-        startGeneration: async () => ({ accepted: true, generationCommandId: "command-1" }), publish: vi.fn(), recordValidationFailure,
+        startGeneration: async () => ({ accepted: true, generationCommandId: "command-1" }), publish: vi.fn(), recordValidationFailure, readLatestCurrent: vi.fn().mockResolvedValue(null),
       },
     });
     await expect(service.generate({ dailySessionId: sessionId, sourceRevision: 4, generationCommandId: "command-1", modelRunAttemptId: "attempt-1", expectedDataEpoch: 1, policyVersion: "journal-generation:v1" }))
       .resolves.toEqual({ outcome: "validation_failed", reason: "validator_model_failed" });
     expect(recordValidationFailure).toHaveBeenCalledWith(expect.objectContaining({ validationAttemptId: "attempt-1:validate", failureCode: "validator_model_failed" }));
+  });
+
+  it("does not dispatch a Journal model or publish when the independent Journal write switch is disabled", async () => {
+    const generate = vi.fn();
+    const publish = vi.fn();
+    const service = createJournalService({
+      journalPolicyVersion: "journal-generation:v1", validatorVersion: "journal-validator:v1", evidenceExtractionPolicyVersion: "evidence-extraction:v1",
+      generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
+      validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
+      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      model: { generate },
+      repository: {
+        readSource: vi.fn(), startGeneration: vi.fn(), publish, recordValidationFailure: vi.fn(), readLatestCurrent: vi.fn().mockResolvedValue(null),
+      },
+      publishingEnabled: false,
+    });
+
+    await expect(service.generate({ dailySessionId: sessionId, sourceRevision: 4, generationCommandId: "command-1", modelRunAttemptId: "attempt-1", expectedDataEpoch: 1, policyVersion: "journal-generation:v1" }))
+      .resolves.toEqual({ outcome: "writes_disabled" });
+    expect(generate).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("reads only the owner-scoped latest current Journal for the Internal Web", async () => {
+    const readLatestCurrent = vi.fn().mockResolvedValue({
+      dailySessionId: sessionId,
+      logicalDate: "2026-08-12",
+      version: { locale: "en-US", statements: [] },
+    });
+    const service = createJournalService({
+      journalPolicyVersion: "journal-generation:v1", validatorVersion: "journal-validator:v1", evidenceExtractionPolicyVersion: "evidence-extraction:v1",
+      generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
+      validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
+      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      model: { generate: async () => ({ locale: "en-US", statements: [] }) },
+      repository: { readSource: vi.fn(), startGeneration: vi.fn(), publish: vi.fn(), recordValidationFailure: vi.fn(), readLatestCurrent },
+    });
+
+    await expect(service.readLatest({ userId: "user-1", expectedDataEpoch: 3 })).resolves.toMatchObject({ logicalDate: "2026-08-12" });
+    expect(readLatestCurrent).toHaveBeenCalledWith({ userId: "user-1", expectedDataEpoch: 3 });
   });
 });

@@ -51,6 +51,15 @@ export type JournalSourceSnapshot = Readonly<{
   dataEpoch?: number;
   extractionPolicyVersion?: string;
 }>;
+export type CurrentJournalVersion = Readonly<{
+  locale: string;
+  statements: readonly JournalStatementDraft[];
+}>;
+export type CurrentJournal = Readonly<{
+  dailySessionId: string;
+  logicalDate: string;
+  version: CurrentJournalVersion;
+}>;
 
 export type JournalRepository = Readonly<{
   readSource(input: { dailySessionId: string; sourceRevision: number; expectedDataEpoch: number; extractionPolicyVersion: string }): Promise<JournalSourceSnapshot | null>;
@@ -117,6 +126,7 @@ export type JournalRepository = Readonly<{
     validatorPromptFingerprint?: string;
   }): Promise<void>;
   readCurrent?(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
+  readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
 }>;
 
 export type JournalModel = Readonly<{
@@ -141,10 +151,11 @@ export type JournalService = Readonly<{
     expectedDataEpoch: number;
     policyVersion: string;
   }): Promise<{
-    outcome: "published" | "stale" | "fenced" | "not_found" | "validation_failed";
+    outcome: "published" | "stale" | "fenced" | "not_found" | "validation_failed" | "writes_disabled";
     reason?: string;
   }>;
   inspect(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
+  readLatest(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
 }>;
 
 export type AutomaticJournalCommand = Readonly<{
@@ -164,6 +175,7 @@ export function createJournalService(dependencies: {
   validationMetadata: Readonly<{ role: "journal.validate"; provider: string; model: string; configVersion: string; rolePolicyVersion: string; promptFingerprint: string }>;
   model: JournalModel;
   repository: JournalRepository;
+  publishingEnabled?: boolean;
 }): JournalService {
   if (!dependencies.journalPolicyVersion || !dependencies.validatorVersion) {
     throw new Error("Journal policy and validator versions must be non-empty.");
@@ -171,6 +183,9 @@ export function createJournalService(dependencies: {
 
   return {
     async generate(input) {
+      if (dependencies.publishingEnabled === false) {
+        return { outcome: "writes_disabled" };
+      }
       let dailySessionId: string;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return { outcome: "not_found" }; }
       if (input.policyVersion !== dependencies.journalPolicyVersion) return { outcome: "fenced" };
@@ -285,6 +300,9 @@ export function createJournalService(dependencies: {
       let dailySessionId: string;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return null; }
       return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId, expectedDataEpoch: input.expectedDataEpoch }) ?? null;
+    },
+    async readLatest(input) {
+      return dependencies.repository.readLatestCurrent(input);
     },
   };
 }

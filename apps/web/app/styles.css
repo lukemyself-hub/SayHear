@@ -83,6 +83,29 @@ h1 {
   padding-top: 2rem;
 }
 
+.journalCard {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 20px;
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: 1.5rem;
+}
+
+.journalHeading {
+  align-items: end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.journalHeading h2 { margin: 0; }
+.journalHeading a { color: #625d54; font-size: .9rem; }
+.journalStatement { line-height: 1.6; margin: 0; white-space: pre-wrap; }
+.journalActions { display: flex; flex-wrap: wrap; gap: .7rem; }
+.journalActions button { background: transparent; border: 1px solid #83745e; border-radius: 999px; color: #22211f; cursor: pointer; font: inherit; padding: .5rem .8rem; }
+
 .messageList {
   display: grid;
   gap: 0.9rem;

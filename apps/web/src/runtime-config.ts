@@ -80,6 +80,13 @@ function required(environment: Environment, name: string): string {
   return value;
 }
 
+function enabledSwitch(environment: Environment, name: string): boolean {
+  const value = environment[name];
+  if (value === undefined || value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${name} must be true or false.`);
+}
+
 export function loadRuntimeConfiguration(environment: Environment) {
   const deployment = assertSafeRuntimeConfiguration(environment);
   const testNow = environment.SAYHEAR_TEST_NOW
@@ -214,6 +221,16 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (!Number.isSafeInteger(expectedDataEpoch) || expectedDataEpoch <= 0) {
     throw new Error("SAYHEAR_EXPECTED_DATA_EPOCH must be a positive safe integer.");
   }
+  const writeSwitches = Object.freeze({
+    evidenceExtractionEnabled: enabledSwitch(
+      environment,
+      "SAYHEAR_EVIDENCE_EXTRACTION_ENABLED",
+    ),
+    journalPublishEnabled: enabledSwitch(
+      environment,
+      "SAYHEAR_JOURNAL_PUBLISH_ENABLED",
+    ),
+  });
 
   return Object.freeze({
     authSecret: required(environment, "NEXTAUTH_SECRET"),
@@ -275,6 +292,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
       ...(failAfterCompletion ? { failAfterCompletion: true } : {}),
       ...(failAfterChunks === undefined ? {} : { failAfterChunks }),
     }),
+    writeSwitches,
   });
 }
 
