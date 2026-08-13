@@ -94,6 +94,9 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        daily_session_date_outcomes,
+        outbox_events,
+        workflow_commands,
         sensitive_access_audits,
         internal_diagnostic_access_grants,
         provider_egress_consents,
@@ -470,7 +473,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
     expect(metadata?.compiledContext.locale).toBe("zh-CN");
   });
 
-  it("creates no out-of-scope product state when a 1A.1 conversation completes", async () => {
+  it("creates no Journal product state and leaves the 1A.2 durability foundation empty while a conversation is active", async () => {
     const { service } = createService((turn) => [
       turn.locale.startsWith("zh") ? "听到了。" : "I hear you.",
     ]);
@@ -481,13 +484,17 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       text: "A completing 1A.1 conversation.",
     });
 
+    // Journal, Memory, Replay, Voice and other future verticals still do not
+    // exist as tables. The 1A.2 durability foundation (workflow_commands,
+    // outbox_events, daily_session_date_outcomes) DOES exist now, but an
+    // in-flight active conversation must not create any eligibility rows —
+    // eligibility fires only after a deterministic Continuous Exchange End.
     const outOfScopeTables = await database.pool.query<{ table_name: string }>(
       `
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = current_schema()
           AND table_name ILIKE ANY(ARRAY[
-            'journal%',
             'evidence%',
             'entit%',
             'episode%',
@@ -502,13 +509,29 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
             'delivery%',
             'summary%',
             'dialogue_state%',
-            'outbox%',
-            'workflow%'
+            'journal_versions%',
+            'journal_statements%'
           ])
         ORDER BY table_name
       `,
     );
     expect(outOfScopeTables.rows).toEqual([]);
+
+    const eligibilityFoundationTotals = await database.pool.query<{
+      commands: string;
+      date_outcomes: string;
+      outbox: string;
+    }>(`
+      SELECT
+        (SELECT COUNT(*)::text FROM workflow_commands) AS commands,
+        (SELECT COUNT(*)::text FROM outbox_events) AS outbox,
+        (SELECT COUNT(*)::text FROM daily_session_date_outcomes) AS date_outcomes
+    `);
+    expect(eligibilityFoundationTotals.rows[0]).toEqual({
+      commands: "0",
+      date_outcomes: "0",
+      outbox: "0",
+    });
 
     const scopedTotals = await database.pool.query<{
       assistant_events: string;

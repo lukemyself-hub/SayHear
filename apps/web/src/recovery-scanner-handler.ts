@@ -1,12 +1,16 @@
 import type {
   ContinuousExchangeService,
   ConversationResponseService,
+  JournalEligibilityService,
+  OutboxDispatcherService,
 } from "@sayhear/application";
 
 export function createRecoveryScannerHandler(dependencies: {
   conversationResponseService: ConversationResponseService;
   scannerSecret: string;
   continuousExchangeService: ContinuousExchangeService;
+  journalEligibilityService: JournalEligibilityService;
+  outboxDispatcherService: OutboxDispatcherService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -17,11 +21,21 @@ export function createRecoveryScannerHandler(dependencies: {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
 
+    // The Cron route runs the existing recovery surface first, then the same
+    // outbox dispatcher — no second scheduler service is introduced (AC #8).
+    const responses =
+      await dependencies.conversationResponseService.scanStaleResponses();
+    const inactivity =
+      await dependencies.continuousExchangeService.scanDueInactivity();
+    const eligibility =
+      await dependencies.journalEligibilityService.scanPendingEligibility();
+    const outbox = await dependencies.outboxDispatcherService.dispatchPending();
+
     return Response.json({
-      responses:
-        await dependencies.conversationResponseService.scanStaleResponses(),
-      inactivity:
-        await dependencies.continuousExchangeService.scanDueInactivity(),
+      inactivity,
+      responses,
+      eligibility,
+      outbox,
     });
   };
 }

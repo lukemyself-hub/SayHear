@@ -178,6 +178,42 @@ export function loadRuntimeConfiguration(environment: Environment) {
       "SAYHEAR_INACTIVITY_POLICY_VERSION must be a non-empty version identifier.",
     );
   }
+  const journalEligibilityPolicyVersion =
+    environment.SAYHEAR_JOURNAL_ELIGIBILITY_POLICY_VERSION ??
+    "journal-eligibility:v1";
+  if (
+    journalEligibilityPolicyVersion.length === 0 ||
+    journalEligibilityPolicyVersion.length > 200
+  ) {
+    throw new Error(
+      "SAYHEAR_JOURNAL_ELIGIBILITY_POLICY_VERSION must be a non-empty version identifier.",
+    );
+  }
+  const minimumSubstantiveExpressionLength = Number(
+    environment.SAYHEAR_MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH ?? "20",
+  );
+  if (
+    !Number.isInteger(minimumSubstantiveExpressionLength) ||
+    minimumSubstantiveExpressionLength <= 0
+  ) {
+    throw new Error(
+      "SAYHEAR_MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH must be a positive integer.",
+    );
+  }
+  const outboxLeaseDurationMs = Number(
+    environment.SAYHEAR_OUTBOX_LEASE_DURATION_MS ?? "60000",
+  );
+  if (!Number.isSafeInteger(outboxLeaseDurationMs) || outboxLeaseDurationMs <= 0) {
+    throw new Error(
+      "SAYHEAR_OUTBOX_LEASE_DURATION_MS must be a positive safe integer.",
+    );
+  }
+  const expectedDataEpoch = Number(
+    environment.SAYHEAR_EXPECTED_DATA_EPOCH ?? "1",
+  );
+  if (!Number.isSafeInteger(expectedDataEpoch) || expectedDataEpoch <= 0) {
+    throw new Error("SAYHEAR_EXPECTED_DATA_EPOCH must be a positive safe integer.");
+  }
 
   return Object.freeze({
     authSecret: required(environment, "NEXTAUTH_SECRET"),
@@ -198,6 +234,15 @@ export function loadRuntimeConfiguration(environment: Environment) {
     inactivityPolicy: Object.freeze({
       timeoutMs: inactivityTimeoutMs,
       version: inactivityPolicyVersion,
+    }),
+    journalEligibilityPolicy: Object.freeze({
+      minimumSubstantiveExpressionLength,
+      version: journalEligibilityPolicyVersion,
+    }),
+    outboxDispatcher: Object.freeze({
+      expectedDataEpoch,
+      leaseDurationMs: outboxLeaseDurationMs,
+      leaseOwner: "sayhear-cron",
     }),
     recoveryScannerSecret: required(environment, "CRON_SECRET"),
     provider: Object.freeze({

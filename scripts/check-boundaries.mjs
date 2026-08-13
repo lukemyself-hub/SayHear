@@ -150,5 +150,5 @@ if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exitCode = 1;
 } else {
-  console.log("Module boundaries match the 1A.1 ticket graph.");
+  console.log("Module boundaries match the 1A.2 ticket graph.");
 }

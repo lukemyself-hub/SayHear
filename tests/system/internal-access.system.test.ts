@@ -148,6 +148,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        daily_session_date_outcomes,
+        outbox_events,
+        workflow_commands,
         sensitive_access_audits,
         internal_diagnostic_access_grants,
         provider_egress_consents,
@@ -501,29 +504,54 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       interaction_turns: "1",
       user_events: "1",
     });
+    // Journal, Memory, Replay, Voice and other future verticals still do not
+    // exist as tables. The 1A.2 durability foundation (workflow_commands,
+    // outbox_events, daily_session_date_outcomes) DOES exist now, so the scope
+    // guard matches the future-vertical prefixes only — not outbox/workflow.
     const outOfScopeRelations = await database.pool.query<{ table_name: string }>(
       `
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = current_schema()
-          AND table_name = ANY($1::text[])
+          AND table_name ILIKE ANY(ARRAY[
+            'evidence%',
+            'entit%',
+            'episode%',
+            'reflection%',
+            'memory%',
+            'profile%',
+            'open_loop%',
+            'replay%',
+            'voice%',
+            'audio%',
+            'transcript%',
+            'delivery%',
+            'summary%',
+            'dialogue_state%',
+            'journal_versions%',
+            'journal_statements%'
+          ])
         ORDER BY table_name
       `,
-      [
-        [
-          "journal_versions",
-          "entities",
-          "memory_claims",
-          "replay_runs",
-          "voice_sessions",
-          "outbox_events",
-          "workflow_commands",
-          "session_summary_versions",
-          "dialogue_state_versions",
-        ],
-      ],
     );
     expect(outOfScopeRelations.rows).toEqual([]);
+    // An in-flight active conversation must not produce any eligibility rows —
+    // eligibility fires only after a deterministic Continuous Exchange End.
+    const eligibilityFoundationTotals = await database.pool.query<{
+      commands: string;
+      date_outcomes: string;
+      outbox: string;
+    }>(`
+      SELECT
+        (SELECT COUNT(*)::text FROM workflow_commands) AS commands,
+        (SELECT COUNT(*)::text FROM outbox_events) AS outbox,
+        (SELECT COUNT(*)::text FROM daily_session_date_outcomes) AS date_outcomes
+    `);
+    expect(eligibilityFoundationTotals.rows[0]).toEqual({
+      commands: "0",
+      date_outcomes: "0",
+      outbox: "0",
+    });
     const openTransactions = await database.pool.query<{ count: string }>(`
       SELECT COUNT(*)::text AS count
       FROM pg_stat_activity
@@ -3930,10 +3958,19 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     );
     expect(scanned.status).toBe(200);
     expect(await scanned.json()).toEqual({
+      eligibility: {
+        commandsCreated: 0,
+        evaluated: 0,
+      },
       inactivity: {
         applied: 0,
         processed: 1,
         stale: 1,
+      },
+      outbox: {
+        dispatched: 0,
+        failed: 0,
+        reclaimed: 0,
       },
       responses: {
         committed: 1,

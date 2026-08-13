@@ -7,6 +7,8 @@ declare const generationCommandIdBrand: unique symbol;
 declare const modelRunAttemptIdBrand: unique symbol;
 declare const compiledContextIdBrand: unique symbol;
 declare const inactivityEvaluationIdBrand: unique symbol;
+declare const workflowCommandIdBrand: unique symbol;
+declare const outboxEventIdBrand: unique symbol;
 
 export type UserId = string & { readonly [userIdBrand]: "UserId" };
 export type DailySessionId = string & {
@@ -32,6 +34,12 @@ export type CompiledContextId = string & {
 };
 export type InactivityEvaluationId = string & {
   readonly [inactivityEvaluationIdBrand]: "InactivityEvaluationId";
+};
+export type WorkflowCommandId = string & {
+  readonly [workflowCommandIdBrand]: "WorkflowCommandId";
+};
+export type OutboxEventId = string & {
+  readonly [outboxEventIdBrand]: "OutboxEventId";
 };
 
 const uuidV7Pattern =
@@ -81,6 +89,14 @@ export function asInactivityEvaluationId(
     value,
     "InactivityEvaluationId",
   ) as InactivityEvaluationId;
+}
+
+export function asWorkflowCommandId(value: string): WorkflowCommandId {
+  return asOpaqueUuidV7(value, "WorkflowCommandId") as WorkflowCommandId;
+}
+
+export function asOutboxEventId(value: string): OutboxEventId {
+  return asOpaqueUuidV7(value, "OutboxEventId") as OutboxEventId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {
