@@ -164,15 +164,15 @@ export class PostgresJournalRepository implements JournalRepository {
          WHERE model_run_attempt_id = $1 AND generation_command_id = $2 AND status = 'started'`,
         [input.modelRunAttemptId, generationCommandId, now],
       );
-      let journal = await client.query<{ journal_id: string }>(
+      let journal = await client.query<{ journal_id: string; current_version_id: string | null }>(
         `INSERT INTO journals (journal_id, user_id, daily_session_id, created_at)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (daily_session_id) DO NOTHING
-         RETURNING journal_id`, [createUuidV7(now), input.userId, input.dailySessionId, now],
+         RETURNING journal_id, current_version_id`, [createUuidV7(now), input.userId, input.dailySessionId, now],
       );
       if (!journal.rows[0]) {
-        journal = await client.query<{ journal_id: string }>(
-          "SELECT journal_id FROM journals WHERE daily_session_id = $1 FOR UPDATE",
+        journal = await client.query<{ journal_id: string; current_version_id: string | null }>(
+          "SELECT journal_id, current_version_id FROM journals WHERE daily_session_id = $1 FOR UPDATE",
           [input.dailySessionId],
         );
       }
@@ -183,14 +183,14 @@ export class PostgresJournalRepository implements JournalRepository {
       let version = await client.query<{ journal_version_id: string; inserted: boolean }>(
         `INSERT INTO journal_versions (journal_version_id, journal_id, user_id, daily_session_id,
           source_revision, generation_policy_version, validator_version, locale, evidence_source_snapshot_id, status,
-          generation_command_id, model_run_attempt_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', $10, $11, $12)
+          generation_command_id, model_run_attempt_id, supersedes_version_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', $10, $11, $12, $13)
          ON CONFLICT (journal_id, source_revision, generation_policy_version)
          DO NOTHING
          RETURNING journal_version_id, (xmax = 0) AS inserted`,
         [createUuidV7(now), journal.rows[0]!.journal_id, input.userId, input.dailySessionId, input.sourceRevision,
           input.generationPolicyVersion, input.validatorVersion, input.locale, input.sourceSnapshotId,
-          generationCommandId, input.modelRunAttemptId, now],
+          generationCommandId, input.modelRunAttemptId, journal.rows[0]!.current_version_id, now],
       );
       if (!version.rows[0]) {
         version = await client.query<{ journal_version_id: string; inserted: boolean }>(
@@ -427,12 +427,15 @@ export class PostgresJournalRepository implements JournalRepository {
   }
 
   public async readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<import("@sayhear/application").CurrentJournal | null> {
-    const session = await this.pool.query<{ daily_session_id: string; logical_date: string }>(
-      `SELECT journal.daily_session_id, daily_session.logical_date::text
+    const session = await this.pool.query<{ daily_session_id: string; logical_date: string; activity_state: "active" | "quiescent" | "finalized"; source_revision: string; journal_source_revision: string }>(
+      `SELECT journal.daily_session_id, daily_session.logical_date::text,
+          daily_session.activity_state, daily_session.source_revision::text,
+          version.source_revision::text AS journal_source_revision
        FROM journals journal
        INNER JOIN daily_sessions daily_session
          ON daily_session.daily_session_id = journal.daily_session_id
          AND daily_session.user_id = journal.user_id
+       INNER JOIN journal_versions version ON version.journal_version_id = journal.current_version_id
        INNER JOIN app_users owner ON owner.user_id = journal.user_id
        WHERE journal.user_id = $1
          AND journal.current_version_id IS NOT NULL
@@ -454,6 +457,9 @@ export class PostgresJournalRepository implements JournalRepository {
       ? {
           dailySessionId: row.daily_session_id,
           logicalDate: row.logical_date,
+          state: Number(row.source_revision) === Number(row.journal_source_revision)
+            ? "current"
+            : row.activity_state === "quiescent" ? "updating" : "outdated",
           version: { locale: journal.locale, statements: journal.statements },
         }
       : null;

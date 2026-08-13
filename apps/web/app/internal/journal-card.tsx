@@ -35,6 +35,8 @@ export function JournalCard({ currentJournal }: { currentJournal: CurrentJournal
   }
   return <section className="journalCard" aria-label="Current Journal">
     <div className="journalHeading"><div><p className="eyebrow">Current Journal</p><h2>{journal.logicalDate}</h2></div><a href={`#conversation-${journal.logicalDate}`}>View that day’s Conversation</a></div>
+    {journal.state === "outdated" ? <p className="note">This Journal is out of date. It will refresh after the current exchange closes.</p> : null}
+    {journal.state === "updating" ? <p className="note">Updating this Journal from the latest conversation.</p> : null}
     {journal.version.statements.map((statement) => <p className="journalStatement" key={statement.id}>{statement.text}</p>)}
     <div className="journalActions"><button onClick={() => void copy()} type="button">{copied ? "Copied" : "Copy"}</button><button disabled={!boundedExport} onClick={exportJournal} type="button">Export this Journal</button></div>
     {!boundedExport ? <p className="submissionError">This Journal is too large to export safely.</p> : null}

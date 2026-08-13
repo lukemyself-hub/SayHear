@@ -481,6 +481,91 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     }]);
   });
 
+  it("supersedes the current Journal once after a same-day source advance", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "supersede-first-event",
+      clientTurnId: "supersede-first-turn",
+      text: "I had a difficult meeting and felt overlooked.",
+    });
+    await endExchange(dailySessionId);
+    const composition = buildComposition();
+    const firstCommand = await database.pool.query<{ source_revision: string; workflow_command_id: string }>(
+      "SELECT source_revision, workflow_command_id FROM workflow_commands ORDER BY created_at",
+    );
+    const firstSourceRevision = Number(firstCommand.rows[0]!.source_revision);
+    await runJournalEligibility({
+      clock: fixedResponseClock,
+      command: { workflowCommandId: firstCommand.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision: firstSourceRevision, subjectId: dailySessionId },
+      eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
+      repository: composition.journalEligibilityRepository,
+      workflowReceiptId: "supersede-first-receipt",
+      evidenceService: composition.evidenceService,
+    });
+    await expect(runAutomaticJournal({
+      service: composition.journalService,
+      command: { workflowCommandId: firstCommand.rows[0]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision: firstSourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      generationCommandId: "supersede-first-journal",
+      modelRunAttemptId: "supersede-first-attempt",
+    })).resolves.toEqual({ outcome: "published" });
+
+    const originalEvent = await database.pool.query<{ conversation_event_id: string }>(
+      "SELECT conversation_event_id FROM conversation_events WHERE daily_session_id = $1 AND actor = 'user'",
+      [dailySessionId],
+    );
+    await expect(composition.conversationService.correct(fixedInternalOwnerPrincipal.userId, {
+      eventId: originalEvent.rows[0]!.conversation_event_id,
+      locale: "en-US",
+      text: "One colleague supported the owner during a difficult meeting.",
+    })).resolves.toMatchObject({ dailySessionId });
+    await expect(composition.journalService.readLatest({
+      userId: fixedInternalOwnerPrincipal.userId,
+      expectedDataEpoch: 1,
+    })).resolves.toMatchObject({ state: "updating" });
+    await expect(composition.journalEligibilityService.evaluate(dailySessionId))
+      .resolves.toMatchObject({ outcome: "evaluated", commandCreated: true });
+    const commands = await database.pool.query<{ source_revision: string; workflow_command_id: string }>(
+      "SELECT source_revision, workflow_command_id FROM workflow_commands ORDER BY created_at",
+    );
+    expect(commands.rows).toHaveLength(2);
+    const successorSourceRevision = Number(commands.rows[1]!.source_revision);
+    expect(successorSourceRevision).toBeGreaterThan(firstSourceRevision);
+    await runJournalEligibility({
+      clock: fixedResponseClock,
+      command: { workflowCommandId: commands.rows[1]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision: successorSourceRevision, subjectId: dailySessionId },
+      eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
+      repository: composition.journalEligibilityRepository,
+      workflowReceiptId: "supersede-second-receipt",
+      evidenceService: composition.evidenceService,
+    });
+    await expect(runAutomaticJournal({
+      service: composition.journalService,
+      command: { workflowCommandId: commands.rows[1]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision: successorSourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      generationCommandId: "supersede-second-journal",
+      modelRunAttemptId: "supersede-second-attempt",
+    })).resolves.toEqual({ outcome: "published" });
+
+    const versions = await database.pool.query<{
+      journal_version_id: string;
+      source_revision: string;
+      supersedes_version_id: string | null;
+    }>(`SELECT journal_version_id, source_revision, supersedes_version_id
+        FROM journal_versions
+        WHERE daily_session_id = $1
+        ORDER BY source_revision`, [dailySessionId]);
+    expect(versions.rows).toHaveLength(2);
+    expect(versions.rows[0]!.supersedes_version_id).toBeNull();
+    expect(versions.rows[1]).toMatchObject({
+      source_revision: String(successorSourceRevision),
+      supersedes_version_id: versions.rows[0]!.journal_version_id,
+    });
+    await expect(composition.journalService.readLatest({
+      userId: fixedInternalOwnerPrincipal.userId,
+      expectedDataEpoch: 1,
+    })).resolves.toMatchObject({ state: "current" });
+  });
+
   it("converges when an explicit end and a due scan both try to create the same command (AC #1, #7)", async () => {
     const dailySessionId = await submitConversation({
       clientEventId: "converge-event",

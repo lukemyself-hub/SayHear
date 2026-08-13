@@ -6,6 +6,7 @@ describe("bounded Journal export", () => {
   const journal = (text: string) => ({
     dailySessionId: "01984477-31e1-7595-92c6-06889cb0fdde",
     logicalDate: "2026-08-12",
+    state: "current" as const,
     version: { locale: "en-US", statements: [{ id: "s", text, epistemicStatus: "supported_expression" as const, evidenceItemIds: ["e"] }] },
   });
 
