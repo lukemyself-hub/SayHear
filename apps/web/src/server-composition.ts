@@ -4,7 +4,10 @@ import {
   createContextCompiler,
   createContinuousExchangeService,
   createConversationResponseService,
+  createJournalEligibilityService,
+  createOutboxDispatcherService,
   createUserTextConversationService,
+  type JournalEligibilityRepository,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -15,11 +18,14 @@ import {
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
+  PostgresJournalEligibilityRepository,
+  PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
 import { loadRuntimeConfiguration } from "./runtime-config";
+import { createJournalEligibilityWorkflowStarter } from "./workflows/journal-eligibility.workflow";
 
 const globalPool = globalThis as typeof globalThis & {
   sayHearPool?: ReturnType<typeof createPostgresPool>;
@@ -43,6 +49,25 @@ export function createServerComposition() {
   const responseRepository = new PostgresConversationResponseRepository(pool);
   const continuousExchangeRepository =
     new PostgresContinuousExchangeRepository(pool);
+  const journalEligibilityRepository =
+    new PostgresJournalEligibilityRepository(pool);
+  const outboxDispatcherRepository =
+    new PostgresOutboxDispatcherRepository(pool);
+  const journalEligibilityService = createJournalEligibilityService({
+    clock: configuration.clock,
+    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
+    minimumSubstantiveExpressionLength:
+      configuration.journalEligibilityPolicy.minimumSubstantiveExpressionLength,
+    policyVersion: configuration.journalEligibilityPolicy.version,
+    repository: journalEligibilityRepository,
+  });
+  const outboxDispatcherService = createOutboxDispatcherService({
+    clock: configuration.clock,
+    leaseDurationMs: configuration.outboxDispatcher.leaseDurationMs,
+    leaseOwner: configuration.outboxDispatcher.leaseOwner,
+    repository: outboxDispatcherRepository,
+    startWorkflow: createJournalEligibilityWorkflowStarter(),
+  });
   const conversationService = createUserTextConversationService({
     clock: configuration.clock,
     expectedBackupPolicyVersion: configuration.backupPolicyVersion,
@@ -113,6 +138,10 @@ export function createServerComposition() {
       repository: accessRepository,
     }),
     authOptions: createAuthOptions({ configuration, pool }),
+    clock: configuration.clock,
+    journalEligibilityRepository,
+    journalEligibilityService,
+    outboxDispatcherService,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
       policyVersion: "sensitive-inspection:v1",
