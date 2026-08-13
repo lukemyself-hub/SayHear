@@ -17,6 +17,8 @@ export async function POST(request: Request): Promise<Response> {
         ? { userId: asUserId(session.user.id) }
         : null;
     },
+    journalEligibilityService: composition.journalEligibilityService,
+    outboxDispatcherService: composition.outboxDispatcherService,
     service: composition.conversationService,
   })(request);
 }

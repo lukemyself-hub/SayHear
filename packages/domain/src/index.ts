@@ -7,7 +7,9 @@ export {
   asGenerationCommandId,
   asInteractionTurnId,
   asModelRunAttemptId,
+  asOutboxEventId,
   asUserId,
+  asWorkflowCommandId,
   type CompiledContextId,
   type ConversationEventId,
   type ConversationEventRevisionId,
@@ -16,7 +18,9 @@ export {
   type GenerationCommandId,
   type InteractionTurnId,
   type ModelRunAttemptId,
+  type OutboxEventId,
   type UserId,
+  type WorkflowCommandId,
 } from "./ids";
 export {
   evaluatePrivateWriteGate,
