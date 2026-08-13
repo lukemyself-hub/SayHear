@@ -72,6 +72,8 @@ export {
   type ContextSourceSnapshot,
   type RenderedCompiledContextPayload,
 } from "./context-compiler";
+export { hasContiguousCoverage, validateRollingSummaryContent, type CurrentRollingSummary, type RollingSummaryCommand, type RollingSummaryContent, type RollingSummarySource } from "./rolling-summary";
+export { createRollingSummaryService, type RollingSummaryModel, type RollingSummaryRepository, type RollingSummaryService } from "./rolling-summary-service";
 export {
   createConversationResponseService,
   type CompleteResponseMetadata,

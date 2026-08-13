@@ -96,10 +96,13 @@ export class PostgresUserTextConversationRepository
          INNER JOIN conversation_event_revisions revision
            ON revision.conversation_event_revision_id = event.current_revision_id
          INNER JOIN app_users owner ON owner.user_id = event.user_id
+         INNER JOIN daily_sessions session
+           ON session.daily_session_id = event.daily_session_id
+           AND session.user_id = event.user_id
          WHERE event.conversation_event_id = $1 AND event.user_id = $2
            AND event.actor = 'user' AND event.lifecycle_status = 'active'
            AND revision.content_purged_at IS NULL AND owner.status = 'active'
-         FOR UPDATE OF event, revision, owner`, [input.eventId, input.userId],
+         FOR UPDATE OF session, owner, event, revision`, [input.eventId, input.userId],
       );
       const row = event.rows[0];
       if (!row) { await client.query("ROLLBACK"); return null; }

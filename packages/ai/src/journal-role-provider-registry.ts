@@ -5,11 +5,12 @@ import type {
   JournalEvidenceReference,
   JournalProviderEgress,
   JournalValidationProvider,
+  RollingSummaryModel,
 } from "@sayhear/application";
 import { asConversationEventRevisionId } from "@sayhear/application";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
-export type JournalModelRole = "evidence.extract" | "journal.draft" | "journal.validate";
+export type JournalModelRole = "evidence.extract" | "journal.draft" | "journal.validate" | "summary.compress";
 export type JournalRoleConfiguration = Readonly<{
   role: JournalModelRole;
   provider: "openai" | "deepseek" | "deterministic";
@@ -26,6 +27,7 @@ export type JournalRoleProviderRegistry = Readonly<{
   evidenceExtractor: EvidenceExtractionProvider;
   draft: JournalProviderEgress;
   validator: JournalValidationProvider;
+  summaryCompressor: RollingSummaryModel;
   configuration(role: JournalModelRole): JournalRoleConfiguration;
 }>;
 
@@ -36,7 +38,7 @@ export type JournalRoleProviderRegistry = Readonly<{
  */
 export function createRuntimeJournalRoleProviderRegistry(input: {
   adapter: Adapter;
-  roles: readonly [JournalRoleConfiguration, JournalRoleConfiguration, JournalRoleConfiguration];
+  roles: readonly JournalRoleConfiguration[];
 }): JournalRoleProviderRegistry {
   const configurations = new Map(input.roles.map((role) => [role.role, role]));
   for (const role of ["evidence.extract", "journal.draft", "journal.validate"] as const) {
@@ -51,6 +53,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       evidenceExtractor: deterministicEvidenceExtractor,
       draft: deterministicJournalDraft,
       validator: deterministicJournalValidator,
+      summaryCompressor: deterministicSummaryCompressor,
       configuration,
     };
   }
@@ -91,6 +94,17 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       async validate(request) {
         const parsed = await askJson("journal.validate", "You are SayHear journal.validate. Return only JSON {valid:boolean,reason?:string}. Reject unsupported facts, insufficient evidence, omitted material evidence, certainty inflation, diagnosis, preaching, blind agreement, or unmarked inference. Accept only evidence-grounded third-person Journal prose.", request);
         if (!isValidationResult(parsed)) throw new Error("journal.validate returned invalid JSON.");
+        return parsed;
+      },
+    },
+    summaryCompressor: {
+      async compress({ sources, modelConfigVersion, policyVersion, promptVersion }) {
+        const frozen = configuration("summary.compress");
+        if (frozen.configVersion !== modelConfigVersion || frozen.policyVersion !== policyVersion || frozen.promptFingerprint !== promptVersion) {
+          throw new Error("summary.compress frozen configuration is no longer available.");
+        }
+        const parsed = await askJson("summary.compress", "You are SayHear summary.compress. Return only JSON {statedFacts:string[],judgmentsAndFeelings:string[],openTopics:string[]}. Preserve uncertainty. Do not invent facts, Journal prose, or Memory.", sources);
+        if (!isRollingSummary(parsed)) throw new Error("summary.compress returned invalid JSON.");
         return parsed;
       },
     },
@@ -155,6 +169,17 @@ const deterministicJournalValidator: JournalValidationProvider = {
     return { valid: true };
   },
 };
+
+const deterministicSummaryCompressor: RollingSummaryModel = {
+  async compress({ sources }) {
+    const user = sources.filter((source) => source.actor === "user").map((source) => source.text);
+    return { statedFacts: user, judgmentsAndFeelings: [], openTopics: [] };
+  },
+};
+
+function isRollingSummary(value: unknown): value is { statedFacts: string[]; judgmentsAndFeelings: string[]; openTopics: string[] } {
+  return typeof value === "object" && value !== null && ["statedFacts", "judgmentsAndFeelings", "openTopics"].every((key) => Array.isArray((value as Record<string, unknown>)[key]) && ((value as Record<string, unknown>)[key] as unknown[]).every((item) => typeof item === "string"));
+}
 
 function validateLocator(value: unknown, sourceText: string): { locatorType: "text_span"; locatorKey: string; role: EvidenceRole } {
   if (typeof value !== "object" || value === null) throw new Error("evidence.extract returned an invalid locator.");
