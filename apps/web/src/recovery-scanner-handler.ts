@@ -3,6 +3,7 @@ import type {
   ConversationResponseService,
   JournalEligibilityService,
   OutboxDispatcherService,
+  RollingSummaryService,
 } from "@sayhear/application";
 
 export function createRecoveryScannerHandler(dependencies: {
@@ -11,6 +12,7 @@ export function createRecoveryScannerHandler(dependencies: {
   continuousExchangeService: ContinuousExchangeService;
   journalEligibilityService: JournalEligibilityService;
   outboxDispatcherService: OutboxDispatcherService;
+  rollingSummaryService?: RollingSummaryService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -29,12 +31,16 @@ export function createRecoveryScannerHandler(dependencies: {
       await dependencies.continuousExchangeService.scanDueInactivity();
     const eligibility =
       await dependencies.journalEligibilityService.scanPendingEligibility();
+    const rollingSummary = dependencies.rollingSummaryService
+      ? await dependencies.rollingSummaryService.scanPending()
+      : { queued: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
       inactivity,
       responses,
       eligibility,
+      rollingSummary,
       outbox,
     });
   };

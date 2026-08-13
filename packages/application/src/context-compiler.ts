@@ -12,6 +12,7 @@ import type {
   InteractionTurnId,
   UserId,
 } from "@sayhear/domain";
+import type { CurrentRollingSummary } from "./rolling-summary";
 
 export type ContextPolicyVersions = Readonly<{
   localePolicyVersion: string;
@@ -43,11 +44,14 @@ export type ContextSourceSnapshot = Readonly<{
   inputRevisionId: ConversationEventRevisionId;
   locale: string;
   policyVersions: ContextPolicyVersions;
+  rollingSummary?: CurrentRollingSummary | null;
+  rollingSummaryFailure?: boolean;
   sourceRevision: number;
 }>;
 
 export type CompiledContextDegradedReason =
   | "raw_event_budget_exceeded"
+  | "rolling_summary_failed"
   | null;
 
 export type CompiledContextSectionKey =
@@ -59,6 +63,7 @@ export type CompiledContextSectionKey =
   | "output_format"
   | "locale_pack"
   | "daily_session"
+  | "rolling_summary"
   | "committed_raw_events"
   | "current_user_input";
 
@@ -102,6 +107,7 @@ export type CompiledContextRenderSource = Readonly<{
   }>;
   locale: string;
   policyVersions: ContextPolicyVersions;
+  rollingSummary?: CurrentRollingSummary | null;
   referencedEvents: readonly CompiledContextReferencedEvent[];
   sections: readonly CompiledContextSection[];
   totalTokens: number;
@@ -135,6 +141,7 @@ export type ContextCompilerRepository = Readonly<{
     locale: string;
     now: Date;
     policyVersions: ContextPolicyVersions;
+    rollingSummary: CurrentRollingSummary | null;
     referencedEvents: readonly CompiledContextReferencedEvent[];
     sectionBudgets: Readonly<{ committedRawEvents: number }>;
     sections: readonly CompiledContextSection[];
@@ -187,7 +194,8 @@ export function createContextCompiler(dependencies: {
       }
 
       const historyNewestFirst = source.events
-        .filter((event) => event.revisionId !== source.inputRevisionId)
+        .filter((event) => event.revisionId !== source.inputRevisionId &&
+          (source.rollingSummary === null || source.rollingSummary === undefined || event.sequence > source.rollingSummary.coveredThrough))
         .toSorted((left, right) => right.sequence - left.sequence);
       const selectedNewestFirst: CompiledContextReferencedEvent[] = [];
       let remaining = dependencies.rawEventTokenBudget;
@@ -230,6 +238,7 @@ export function createContextCompiler(dependencies: {
         locale: source.locale,
         policyVersions: source.policyVersions,
         rawEventTokenBudget: dependencies.rawEventTokenBudget,
+        rollingSummary: source.rollingSummary ?? null,
       });
       const sections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -238,8 +247,9 @@ export function createContextCompiler(dependencies: {
         (total, section) => total + section.selectedTokens,
         0,
       );
-      const degradedReason =
-        selectedHistory.length < historyNewestFirst.length
+      const degradedReason = source.rollingSummaryFailure
+        ? "rolling_summary_failed"
+        : selectedHistory.length < historyNewestFirst.length
           ? "raw_event_budget_exceeded"
           : null;
       const contentHmac = createManifestContentHmac(
@@ -260,6 +270,7 @@ export function createContextCompiler(dependencies: {
         locale: source.locale,
         now: dependencies.clock(),
         policyVersions: source.policyVersions,
+        rollingSummary: source.rollingSummary ?? null,
         referencedEvents,
         sectionBudgets: {
           committedRawEvents: dependencies.rawEventTokenBudget,
@@ -310,6 +321,7 @@ export function createContextCompiler(dependencies: {
         locale: source.locale,
         policyVersions: source.policyVersions,
         rawEventTokenBudget: rawEventBudget,
+        rollingSummary: source.rollingSummary ?? null,
       });
       const expectedSections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -363,6 +375,7 @@ function createSections(input: {
   locale: string;
   policyVersions: ContextPolicyVersions;
   rawEventTokenBudget: number;
+  rollingSummary: CurrentRollingSummary | null;
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
@@ -380,6 +393,13 @@ function createSections(input: {
       reference: input.policyVersions.productPolicyVersion,
       truncatable: false,
     },
+    ...(input.rollingSummary === null ? [] : [{
+      budgetTokens: null,
+      content: renderRollingSummary(input.rollingSummary),
+      key: "rolling_summary" as const,
+      reference: `${input.rollingSummary.id}:version:${input.rollingSummary.version}:covered-through:${input.rollingSummary.coveredThrough}:sources:${input.rollingSummary.sourceRevisionIds.join(",")}:policy:${input.rollingSummary.policyVersion}:prompt:${input.rollingSummary.promptVersion}:model:${input.rollingSummary.modelConfigVersion}`,
+      truncatable: false,
+    }]),
     {
       budgetTokens: null,
       content:
@@ -475,6 +495,15 @@ function createSections(input: {
       section.selectedTokens ?? estimateTokens(section.content),
     truncatable: section.truncatable,
   }));
+}
+
+function renderRollingSummary(summary: CurrentRollingSummary): string {
+  return [
+    "Rolling Summary (non-authoritative Context projection):",
+    `Stated facts: ${summary.content.statedFacts.join("; ") || "none"}`,
+    `Judgments and feelings: ${summary.content.judgmentsAndFeelings.join("; ") || "none"}`,
+    `Open topics: ${summary.content.openTopics.join("; ") || "none"}`,
+  ].join("\n");
 }
 
 function createContentHmac(secret: string, content: string): string {

@@ -131,6 +131,7 @@ export type LeasedOutboxEvent = Readonly<{
   workflowCommandId: WorkflowCommandId;
   aggregateId: DailySessionId;
   aggregateRevision: number;
+  eventType: string;
   payload: Readonly<Record<string, unknown>>;
 }>;
 
@@ -280,6 +281,7 @@ export type WorkflowStarter = (input: {
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
+  eventType: string;
 }) => Promise<{ workflowReceiptId: string }>;
 
 export type OutboxDispatcherService = Readonly<{
@@ -341,7 +343,8 @@ export function createOutboxDispatcherService(dependencies: {
             subjectId: event.aggregateId,
             sourceRevision: event.aggregateRevision,
             policyVersion: String(event.payload.policyVersion ?? ""),
-            expectedDataEpoch: Number(event.payload.expectedDataEpoch ?? 0),
+          expectedDataEpoch: Number(event.payload.expectedDataEpoch ?? 0),
+            eventType: event.eventType,
           });
           await dependencies.repository.markDispatched({
             outboxEventId: event.outboxEventId,

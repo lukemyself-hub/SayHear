@@ -94,6 +94,10 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        current_rolling_summaries,
+        rolling_summary_versions,
+        rolling_summary_command_source_refs,
+        rolling_summary_commands,
         journal_statement_evidence_links,
         journal_statements,
         journal_validation_results,
