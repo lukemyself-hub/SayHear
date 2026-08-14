@@ -14,6 +14,7 @@ describe("Journal role safeguards", () => {
     { role: "journal.draft" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "journal.validate" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "dialogue.state" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
+    { role: "summary.compress" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
   ] as const;
   const registry = createRuntimeJournalRoleProviderRegistry({ adapter: { type: "deterministic" }, roles });
 

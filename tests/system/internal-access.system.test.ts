@@ -148,6 +148,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        current_rolling_summaries,
+        rolling_summary_versions,
+        rolling_summary_command_source_refs,
+        rolling_summary_commands,
         journal_statement_evidence_links,
         journal_statements,
         journal_validation_results,
@@ -3991,6 +3995,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         dispatched: 1,
         failed: 0,
         reclaimed: 0,
+      },
+      rollingSummary: {
+        queued: 0,
       },
       responses: {
         committed: 1,

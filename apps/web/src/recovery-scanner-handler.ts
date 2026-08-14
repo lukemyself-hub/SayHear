@@ -4,6 +4,7 @@ import type {
   DialogueStateService,
   JournalEligibilityService,
   OutboxDispatcherService,
+  RollingSummaryService,
 } from "@sayhear/application";
 
 export function createRecoveryScannerHandler(dependencies: {
@@ -13,6 +14,7 @@ export function createRecoveryScannerHandler(dependencies: {
   journalEligibilityService: JournalEligibilityService;
   outboxDispatcherService: OutboxDispatcherService;
   dialogueStateService?: DialogueStateService;
+  rollingSummaryService?: RollingSummaryService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -34,6 +36,9 @@ export function createRecoveryScannerHandler(dependencies: {
     const dialogueState = dependencies.dialogueStateService
       ? await dependencies.dialogueStateService.scanPending()
       : { queued: 0 };
+    const rollingSummary = dependencies.rollingSummaryService
+      ? await dependencies.rollingSummaryService.scanPending()
+      : { queued: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
@@ -41,6 +46,7 @@ export function createRecoveryScannerHandler(dependencies: {
       responses,
       eligibility,
       dialogueState,
+      rollingSummary,
       outbox,
     });
   };

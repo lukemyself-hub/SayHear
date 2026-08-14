@@ -131,6 +131,7 @@ export type LeasedOutboxEvent = Readonly<{
   workflowCommandId: WorkflowCommandId;
   aggregateId: DailySessionId;
   aggregateRevision: number;
+  eventType: string;
   payload: Readonly<Record<string, unknown>>;
 }>;
 
@@ -338,9 +339,7 @@ export function createOutboxDispatcherService(dependencies: {
         try {
           // The Workflow is started OUTSIDE the claiming transaction (AC #6).
           const receipt = await dependencies.startWorkflow({
-            eventType: String(
-              event.payload.eventType ?? "",
-            ) as "dialogue_state_requested" | "journal_eligibility_requested" | "rolling_summary_requested",
+            eventType: event.eventType as "dialogue_state_requested" | "journal_eligibility_requested" | "rolling_summary_requested",
             workflowCommandId: event.workflowCommandId,
             subjectId: event.aggregateId,
             sourceRevision: event.aggregateRevision,

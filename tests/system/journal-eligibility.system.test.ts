@@ -8,6 +8,7 @@ import {
   createJournalService,
   createJournalEligibilityService,
   createDialogueStateService,
+  createRollingSummaryService,
   createOutboxDispatcherService,
   createConversationResponseService,
   createContextCompiler,
@@ -34,6 +35,7 @@ import {
   PostgresUserTextConversationRepository,
   PostgresDialogueStateRepository,
   loadDialogueStateForContext,
+  PostgresRollingSummaryRepository,
   runMigrations,
 } from "@sayhear/data";
 import {
@@ -111,6 +113,10 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        current_rolling_summaries,
+        rolling_summary_versions,
+        rolling_summary_command_source_refs,
+        rolling_summary_commands,
         journal_statement_evidence_links,
         journal_statements,
         journal_validation_results,
@@ -199,6 +205,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:draft", policyVersion: "journal-generation:v2", promptFingerprint: "test:draft" },
         { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:validate", policyVersion: "journal-validator:v2", promptFingerprint: "test:validate" },
         { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
+        { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
       ],
     });
     const journalRepository = new PostgresJournalRepository(database.pool);
@@ -292,6 +299,16 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       repository: journalEligibilityRepository,
     });
+    const summaryConfiguration = journalRoleRegistry.configuration("summary.compress");
+    const rollingSummaryService = createRollingSummaryService({
+      clock: fixedResponseClock,
+      expectedDataEpoch: 1,
+      model: journalRoleRegistry.summaryCompressor,
+      modelConfigVersion: summaryConfiguration.configVersion,
+      policyVersion: summaryConfiguration.policyVersion,
+      promptVersion: summaryConfiguration.promptFingerprint,
+      repository: new PostgresRollingSummaryRepository(database.pool),
+    });
     return {
       conversationResponseService,
       conversationService,
@@ -303,6 +320,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       evidenceRepository,
       evidenceService,
       outboxRepository,
+      rollingSummaryService,
     };
   }
 
@@ -1334,6 +1352,113 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     `);
     expect(command.rows[0]!.count).toBe(1);
     void dailySessionId;
+  });
+
+  it("queues a frozen contiguous Summary, advances Context once, and rejects a late older publish (Issue #22 AC #1-6, #9-10)", async () => {
+    let dailySessionId = "";
+    for (let index = 0; index < 7; index += 1) {
+      dailySessionId = await submitConversation({
+        clientEventId: `summary-event-${index}`,
+        clientTurnId: `summary-turn-${index}`,
+        text: `I am sharing event ${index}, and this is enough detail to form a faithful context projection.`,
+      });
+    }
+    const composition = buildComposition();
+    expect(await composition.rollingSummaryService.scanPending()).toEqual({ queued: 1 });
+    const queued = await database.pool.query<{ rolling_summary_command_id: string; coverage_start_sequence_no: string; covered_through_sequence_no: string }>(
+      `SELECT rolling_summary_command_id, coverage_start_sequence_no, covered_through_sequence_no FROM rolling_summary_commands`,
+    );
+    expect(queued.rows).toHaveLength(1);
+    for (let index = 7; index < 14; index += 1) {
+      await submitConversation({
+        clientEventId: `summary-newer-event-${index}`,
+        clientTurnId: `summary-newer-turn-${index}`,
+        text: `I am sharing newer event ${index}, so a later frozen projection advances the first command.`,
+      });
+    }
+    expect(await composition.rollingSummaryService.scanPending()).toEqual({ queued: 1 });
+    const commands = await database.pool.query<{ rolling_summary_command_id: string; covered_through_sequence_no: string }>(
+      `SELECT rolling_summary_command_id, covered_through_sequence_no FROM rolling_summary_commands ORDER BY covered_through_sequence_no`,
+    );
+    expect(commands.rows).toHaveLength(2);
+    expect((await composition.rollingSummaryService.run(commands.rows[1]!.rolling_summary_command_id)).outcome).toBe("published");
+    expect(await composition.rollingSummaryService.run(commands.rows[0]!.rolling_summary_command_id)).toEqual({ outcome: "stale" });
+
+    await submitConversation({
+      clientEventId: "summary-after-event",
+      clientTurnId: "summary-after-turn",
+      text: "This committed expression must remain raw after the Summary coverage boundary.",
+    });
+    const context = await database.pool.query<{ sections: Array<{ key: string; reference: string }>; refs: string[] }>(
+      `SELECT context.sections, ARRAY(SELECT ref.sequence_no::text FROM compiled_context_revision_refs ref WHERE ref.compiled_context_id = context.compiled_context_id AND ref.section = 'committed_raw_events' ORDER BY ref.sequence_no) AS refs FROM compiled_contexts context WHERE context.sections @> '[{"key":"rolling_summary"}]'::jsonb ORDER BY context.created_at DESC, context.compiled_context_id DESC LIMIT 1`,
+    );
+    const coverage = Number(commands.rows[1]!.covered_through_sequence_no);
+    expect(context.rows[0]!.sections).toContainEqual(expect.objectContaining({ key: "rolling_summary", reference: expect.stringContaining(`covered-through:${coverage}`) }));
+    expect(context.rows[0]!.refs.every((sequence) => Number(sequence) > coverage)).toBe(true);
+    const outboxLeak = await database.pool.query(`SELECT payload::text FROM outbox_events WHERE event_type = 'rolling_summary_requested'`);
+    expect(outboxLeak.rows[0]!.payload).not.toContain("I am sharing event");
+  });
+
+  it("records Summary generation failure and keeps the authenticated conversation on bounded raw Context (Issue #22 AC #7)", async () => {
+    for (let index = 0; index < 7; index += 1) {
+      await submitConversation({ clientEventId: `failed-summary-event-${index}`, clientTurnId: `failed-summary-turn-${index}`, text: `A substantial expression ${index} that makes the Summary threshold cross without blocking conversation.` });
+    }
+    const composition = buildComposition();
+    await composition.rollingSummaryService.scanPending();
+    const command = await database.pool.query<{ rolling_summary_command_id: string }>(`SELECT rolling_summary_command_id FROM rolling_summary_commands`);
+    const failing = createRollingSummaryService({
+      clock: fixedResponseClock, expectedDataEpoch: 1, model: { async compress() { throw new Error("synthetic provider outage"); } },
+      modelConfigVersion: "test:summary", policyVersion: "rolling-summary:v1", promptVersion: "test:summary", repository: new PostgresRollingSummaryRepository(database.pool),
+    });
+    await expect(failing.run(command.rows[0]!.rolling_summary_command_id)).resolves.toEqual({ outcome: "failed" });
+    await submitConversation({ clientEventId: "failed-summary-after", clientTurnId: "failed-summary-after", text: "The response path still proceeds while compaction is unavailable." });
+    const manifest = await database.pool.query<{ degraded_reason: string | null }>(`SELECT degraded_reason FROM compiled_contexts WHERE degraded_reason = 'rolling_summary_failed' LIMIT 1`);
+    expect(manifest.rows[0]?.degraded_reason).toBe("rolling_summary_failed");
+  });
+
+  it("invalidates stale Summary coverage before rebuilding it from valid committed Events (Issue #22 AC #3-4)", async () => {
+    for (let index = 0; index < 7; index += 1) {
+      await submitConversation({ clientEventId: `stale-summary-event-${index}`, clientTurnId: `stale-summary-turn-${index}`, text: `A committed expression ${index} for stale Summary invalidation coverage.` });
+    }
+    const composition = buildComposition();
+    await composition.rollingSummaryService.scanPending();
+    const command = await database.pool.query<{ rolling_summary_command_id: string }>(`SELECT rolling_summary_command_id FROM rolling_summary_commands`);
+    await composition.rollingSummaryService.run(command.rows[0]!.rolling_summary_command_id);
+    const source = await database.pool.query<{ conversation_event_id: string }>(
+      `SELECT revision.conversation_event_id
+        FROM rolling_summary_command_source_refs ref
+        INNER JOIN conversation_event_revisions revision
+          ON revision.conversation_event_revision_id = ref.conversation_event_revision_id
+        WHERE ref.rolling_summary_command_id = $1
+        ORDER BY ref.sequence_no
+        LIMIT 1`,
+      [command.rows[0]!.rolling_summary_command_id],
+    );
+    await composition.conversationService.correct(fixedInternalOwnerPrincipal.userId, {
+      eventId: source.rows[0]!.conversation_event_id,
+      locale: "en-US",
+      text: "This corrected committed expression makes the old frozen source stale.",
+    });
+    expect(await composition.rollingSummaryService.scanPending()).toEqual({ queued: 1 });
+    expect((await database.pool.query(`SELECT COUNT(*)::int AS count FROM current_rolling_summaries`)).rows[0]!.count).toBe(0);
+    const rebuilt = await database.pool.query<{ rolling_summary_command_id: string }>(
+      `SELECT rolling_summary_command_id FROM rolling_summary_commands WHERE status = 'created'`,
+    );
+    await expect(composition.rollingSummaryService.run(rebuilt.rows[0]!.rolling_summary_command_id)).resolves.toEqual({ outcome: "published" });
+    expect((await database.pool.query(`SELECT COUNT(*)::int AS count FROM current_rolling_summaries`)).rows[0]!.count).toBe(1);
+  });
+
+  it("reconciles a stranded Summary claim as result_unknown without retrying private provider egress (Issue #22 AC #8)", async () => {
+    for (let index = 0; index < 7; index += 1) {
+      await submitConversation({ clientEventId: `stuck-summary-event-${index}`, clientTurnId: `stuck-summary-turn-${index}`, text: `Committed expression ${index} to exercise a Summary workflow crash recovery.` });
+    }
+    const composition = buildComposition();
+    await composition.rollingSummaryService.scanPending();
+    const command = await database.pool.query<{ rolling_summary_command_id: string }>(`SELECT rolling_summary_command_id FROM rolling_summary_commands`);
+    await database.pool.query(`UPDATE rolling_summary_commands SET status = 'running', claimed_at = $1 WHERE rolling_summary_command_id = $2`, [new Date(fixedResponseClock().getTime() - 6 * 60 * 1_000), command.rows[0]!.rolling_summary_command_id]);
+    await composition.rollingSummaryService.scanPending();
+    const recovered = await database.pool.query<{ status: string; last_error_code: string | null }>(`SELECT status, last_error_code FROM rolling_summary_commands`);
+    expect(recovered.rows[0]).toEqual({ status: "failed", last_error_code: "summary_result_unknown" });
   });
 
   it("never carries conversation text into outbox payload, workflow command, or date outcome (AC #9, canary)", async () => {

@@ -7,6 +7,7 @@ import type {
   JournalValidationProvider,
   DialogueStateContent,
   DialogueStateModel,
+  RollingSummaryModel,
 } from "@sayhear/application";
 import { asConversationEventRevisionId } from "@sayhear/application";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
@@ -15,7 +16,8 @@ export type JournalModelRole =
   | "evidence.extract"
   | "journal.draft"
   | "journal.validate"
-  | "dialogue.state";
+  | "dialogue.state"
+  | "summary.compress";
 export type JournalRoleConfiguration = Readonly<{
   role: JournalModelRole;
   provider: "openai" | "deepseek" | "deterministic";
@@ -33,6 +35,7 @@ export type JournalRoleProviderRegistry = Readonly<{
   draft: JournalProviderEgress;
   validator: JournalValidationProvider;
   dialogueStateProjector: DialogueStateModel;
+  summaryCompressor: RollingSummaryModel;
   configuration(role: JournalModelRole): JournalRoleConfiguration;
 }>;
 
@@ -46,7 +49,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
   roles: readonly JournalRoleConfiguration[];
 }): JournalRoleProviderRegistry {
   const configurations = new Map(input.roles.map((role) => [role.role, role]));
-  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state"] as const) {
+  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state", "summary.compress"] as const) {
     const configuration = configurations.get(role);
     if (!configuration || !configuration.model || !configuration.configVersion || !configuration.policyVersion || !configuration.promptFingerprint) {
       throw new Error(`Journal role ${role} requires complete versioned configuration.`);
@@ -59,6 +62,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       draft: deterministicJournalDraft,
       validator: deterministicJournalValidator,
       dialogueStateProjector: deterministicDialogueStateProjector,
+      summaryCompressor: deterministicSummaryCompressor,
       configuration,
     };
   }
@@ -112,6 +116,17 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
         if (!isDialogueStateContent(parsed)) {
           throw new Error("dialogue.state returned invalid JSON.");
         }
+        return parsed;
+      },
+    },
+    summaryCompressor: {
+      async compress({ sources, modelConfigVersion, policyVersion, promptVersion }) {
+        const frozen = configuration("summary.compress");
+        if (frozen.configVersion !== modelConfigVersion || frozen.policyVersion !== policyVersion || frozen.promptFingerprint !== promptVersion) {
+          throw new Error("summary.compress frozen configuration is no longer available.");
+        }
+        const parsed = await askJson("summary.compress", "You are SayHear summary.compress. Return only JSON {statedFacts:string[],judgmentsAndFeelings:string[],openTopics:string[]}. Preserve uncertainty. Do not invent facts, Journal prose, or Memory.", sources);
+        if (!isRollingSummary(parsed)) throw new Error("summary.compress returned invalid JSON.");
         return parsed;
       },
     },
@@ -208,6 +223,16 @@ const deterministicDialogueStateProjector: DialogueStateModel = {
   },
 };
 
+const deterministicSummaryCompressor: RollingSummaryModel = {
+  async compress({ sources }) {
+    const user = sources.filter((source) => source.actor === "user").map((source) => source.text);
+    return { statedFacts: user, judgmentsAndFeelings: [], openTopics: [] };
+  },
+};
+
+function isRollingSummary(value: unknown): value is { statedFacts: string[]; judgmentsAndFeelings: string[]; openTopics: string[] } {
+  return typeof value === "object" && value !== null && ["statedFacts", "judgmentsAndFeelings", "openTopics"].every((key) => Array.isArray((value as Record<string, unknown>)[key]) && ((value as Record<string, unknown>)[key] as unknown[]).every((item) => typeof item === "string"));
+}
 function validateLocator(value: unknown, sourceText: string): { locatorType: "text_span"; locatorKey: string; role: EvidenceRole } {
   if (typeof value !== "object" || value === null) throw new Error("evidence.extract returned an invalid locator.");
   const candidate = value as { locatorType?: unknown; locatorKey?: unknown; role?: unknown };

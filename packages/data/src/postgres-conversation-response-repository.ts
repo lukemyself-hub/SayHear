@@ -5,6 +5,7 @@ import type {
   ContextCompilerRepository,
   ContextPolicyVersions,
   ContextSourceSnapshot,
+  CurrentRollingSummary,
   ConversationResponseRepository,
   ConversationTextChampion,
   ProviderDispatchErrorCategory,
@@ -48,6 +49,15 @@ type ContextHeadRow = Readonly<{
   safety_policy_version: string;
   source_revision: string;
   expected_data_epoch: string;
+  rolling_summary_id: string | null;
+  rolling_summary_version: string | null;
+  rolling_summary_covered_through: string | null;
+  rolling_summary_content: CurrentRollingSummary["content"] | null;
+  rolling_summary_policy_version: string | null;
+  rolling_summary_prompt_version: string | null;
+  rolling_summary_model_config_version: string | null;
+  rolling_summary_sources: string[] | null;
+  rolling_summary_failed: boolean;
 }>;
 
 type ContextEventRow = Readonly<{
@@ -68,6 +78,7 @@ type DispatchRow = Readonly<{
   context_integrity_algorithm: "hmac-sha256";
   context_integrity_key_version: string;
   context_policy_versions: ContextPolicyVersions;
+  context_rolling_summary: CurrentRollingSummary | null;
   context_sections: CompiledContextSection[];
   context_source_revision: string;
   context_total_tokens: string;
@@ -597,8 +608,17 @@ export class PostgresConversationResponseRepository
             session.closure_policy_version,
             session.current_continuous_exchange_no AS continuous_exchange_no,
             session.dialogue_revision,
-            session.source_revision
-            , command.expected_data_epoch
+            session.source_revision,
+            command.expected_data_epoch,
+            summary.rolling_summary_version_id AS rolling_summary_id,
+            summary.version_no AS rolling_summary_version,
+            summary.covered_through_sequence_no AS rolling_summary_covered_through,
+            summary.content AS rolling_summary_content,
+            summary_command.policy_version AS rolling_summary_policy_version,
+            summary_command.prompt_version AS rolling_summary_prompt_version,
+            summary_command.model_config_version AS rolling_summary_model_config_version,
+            ARRAY(SELECT ref.conversation_event_revision_id::text FROM rolling_summary_command_source_refs ref WHERE ref.rolling_summary_command_id = summary_command.rolling_summary_command_id ORDER BY ref.sequence_no) AS rolling_summary_sources,
+            EXISTS (SELECT 1 FROM rolling_summary_commands failed WHERE failed.daily_session_id = session.daily_session_id AND failed.status = 'failed' AND NOT EXISTS (SELECT 1 FROM current_rolling_summaries current WHERE current.daily_session_id = session.daily_session_id AND current.covered_through_sequence_no >= failed.covered_through_sequence_no)) AS rolling_summary_failed
           FROM generation_commands command
           INNER JOIN interaction_turns turn
             ON turn.interaction_turn_id = command.interaction_turn_id
@@ -606,6 +626,23 @@ export class PostgresConversationResponseRepository
           INNER JOIN daily_sessions session
             ON session.daily_session_id = turn.daily_session_id
             AND session.user_id = turn.user_id
+          LEFT JOIN current_rolling_summaries current_summary
+            ON current_summary.daily_session_id = session.daily_session_id
+          LEFT JOIN rolling_summary_versions summary
+            ON summary.rolling_summary_version_id = current_summary.rolling_summary_version_id
+            AND summary.user_id = command.user_id
+            AND summary.daily_session_id = session.daily_session_id
+            AND summary.covered_through_sequence_no = current_summary.covered_through_sequence_no
+          LEFT JOIN rolling_summary_commands summary_command
+            ON summary_command.rolling_summary_command_id = summary.rolling_summary_command_id
+            AND summary_command.status = 'published'
+            AND NOT EXISTS (
+              SELECT 1 FROM rolling_summary_command_source_refs ref
+              LEFT JOIN conversation_event_revisions summary_revision ON summary_revision.conversation_event_revision_id = ref.conversation_event_revision_id
+              LEFT JOIN conversation_events summary_event ON summary_event.conversation_event_id = summary_revision.conversation_event_id
+              WHERE ref.rolling_summary_command_id = summary_command.rolling_summary_command_id
+                AND (summary_revision.content_purged_at IS NOT NULL OR summary_event.lifecycle_status <> 'active' OR summary_event.current_revision_id <> ref.conversation_event_revision_id OR summary_event.daily_session_id <> session.daily_session_id OR summary_event.user_id <> summary_command.user_id)
+            )
           WHERE command.generation_command_id = $1
             AND command.interaction_turn_id = $2
             AND command.user_id = $3
@@ -699,6 +736,23 @@ export class PostgresConversationResponseRepository
           safetyPolicyVersion: row.safety_policy_version,
           taskInstructionVersion: row.prompt_version,
         },
+        rollingSummary:
+          row.rolling_summary_id === null || row.rolling_summary_version === null ||
+          row.rolling_summary_covered_through === null || row.rolling_summary_content === null ||
+          row.rolling_summary_policy_version === null || row.rolling_summary_prompt_version === null ||
+          row.rolling_summary_model_config_version === null
+            ? null
+            : {
+                id: row.rolling_summary_id,
+                version: Number(row.rolling_summary_version),
+                coveredThrough: Number(row.rolling_summary_covered_through),
+                content: row.rolling_summary_content,
+                sourceRevisionIds: (row.rolling_summary_sources ?? []).map(asConversationEventRevisionId),
+                policyVersion: row.rolling_summary_policy_version,
+                promptVersion: row.rolling_summary_prompt_version,
+                modelConfigVersion: row.rolling_summary_model_config_version,
+              },
+        rollingSummaryFailure: row.rolling_summary_failed,
         sourceRevision: Number(row.source_revision),
       };
     } catch (error) {
@@ -758,6 +812,7 @@ export class PostgresConversationResponseRepository
             locale,
             section_budgets,
             policy_versions,
+            rolling_summary,
             sections,
             total_tokens,
             degraded_reason,
@@ -768,7 +823,7 @@ export class PostgresConversationResponseRepository
           )
           VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
-            $10::jsonb, $11, $12, $13, $14, $15, $16
+            $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17
           )
         `,
         [
@@ -781,6 +836,7 @@ export class PostgresConversationResponseRepository
           input.locale,
           JSON.stringify(input.sectionBudgets),
           JSON.stringify(input.policyVersions),
+          input.rollingSummary === null ? null : JSON.stringify(input.rollingSummary),
           JSON.stringify(input.sections),
           input.totalTokens,
           input.degradedReason,
@@ -893,6 +949,7 @@ export class PostgresConversationResponseRepository
             context.compiler_version AS context_compiler_version,
             context.dialogue_revision AS context_dialogue_revision,
             context.policy_versions AS context_policy_versions,
+            context.rolling_summary AS context_rolling_summary,
             context.sections AS context_sections,
             context.source_revision AS context_source_revision,
             context.total_tokens AS context_total_tokens,
@@ -1086,6 +1143,7 @@ export class PostgresConversationResponseRepository
           },
           locale: row.locale,
           policyVersions: row.context_policy_versions,
+          rollingSummary: row.context_rolling_summary,
           referencedEvents,
           sections: row.context_sections,
           totalTokens: Number(row.context_total_tokens),

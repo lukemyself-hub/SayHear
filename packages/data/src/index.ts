@@ -17,3 +17,4 @@ export {
   loadDialogueStateForContext,
   PostgresDialogueStateRepository,
 } from "./postgres-dialogue-state-repository";
+export { PostgresRollingSummaryRepository } from "./postgres-rolling-summary-repository";

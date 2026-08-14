@@ -16,6 +16,7 @@ type OutboxRow = Readonly<{
   workflow_command_id: string;
   aggregate_id: string;
   aggregate_revision: number;
+  event_type: string;
   payload: unknown;
 }>;
 
@@ -35,6 +36,7 @@ function mapLeased(row: OutboxRow): LeasedOutboxEvent {
     workflowCommandId: asWorkflowCommandId(row.workflow_command_id),
     aggregateId: asDailySessionId(row.aggregate_id) as DailySessionId,
     aggregateRevision: row.aggregate_revision,
+    eventType: row.event_type,
     payload,
   };
 }
@@ -56,7 +58,7 @@ export class PostgresOutboxDispatcherRepository
       const leased = await client.query<OutboxRow>(
         `
           SELECT outbox_event_id, workflow_command_id,
-            aggregate_id, aggregate_revision, payload
+            aggregate_id, aggregate_revision, event_type, payload
           FROM outbox_events
           WHERE status = 'pending'
             AND next_attempt_at <= $1
@@ -103,7 +105,7 @@ export class PostgresOutboxDispatcherRepository
       const expired = await client.query<OutboxRow>(
         `
           SELECT outbox_event_id, workflow_command_id,
-            aggregate_id, aggregate_revision, payload
+            aggregate_id, aggregate_revision, event_type, payload
           FROM outbox_events
           WHERE status = 'leased'
             AND lease_expires_at < $1
