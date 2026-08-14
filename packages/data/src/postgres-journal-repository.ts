@@ -69,11 +69,12 @@ export class PostgresJournalRepository implements JournalRepository {
          WHERE session.daily_session_id = $1 FOR UPDATE`, [input.dailySessionId],
       );
       const row = owner.rows[0];
+      const generationKind = input.generationKind ?? "automatic";
       if (!row || row.user_id !== input.userId || row.status !== "active" || Number(row.data_epoch) !== input.expectedDataEpoch ||
-        Number(row.source_revision) !== input.sourceRevision || row.activity_state === "active") {
+        Number(row.source_revision) !== input.sourceRevision ||
+        (generationKind !== "regeneration" && row.activity_state === "active")) {
         await client.query("ROLLBACK"); return { accepted: false, generationCommandId: input.generationCommandId };
       }
-      const generationKind = input.generationKind ?? "automatic";
       let existing: { generation_command_id: string } | undefined;
       if (generationKind === "regeneration") {
         if (!input.actionExecutionId) {
@@ -136,7 +137,9 @@ export class PostgresJournalRepository implements JournalRepository {
         [input.dailySessionId],
       );
       const row = session.rows[0];
-      if (!row || row.user_id !== input.userId || Number(row.source_revision) !== input.sourceRevision || row.activity_state === "active") {
+      const generationKind = input.generationKind ?? "automatic";
+      if (!row || row.user_id !== input.userId || Number(row.source_revision) !== input.sourceRevision ||
+        (generationKind !== "regeneration" && row.activity_state === "active")) {
         await client.query("ROLLBACK"); return { outcome: "stale" };
       }
       const owner = await client.query<{ status: string; data_epoch: string }>("SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE", [row.user_id]);
@@ -154,7 +157,6 @@ export class PostgresJournalRepository implements JournalRepository {
       if (attemptRow.status === "completed") { await client.query("ROLLBACK"); return { outcome: "published" }; }
       if (attemptRow.status !== "started") { await client.query("ROLLBACK"); return { outcome: "fenced" }; }
       let generationCommandId = input.generationCommandId;
-      const generationKind = input.generationKind ?? "automatic";
       if (generationKind === "regeneration") {
         const regenerationCommand = await client.query<{ generation_command_id: string }>(
           `SELECT generation_command_id FROM journal_generation_commands
@@ -217,6 +219,30 @@ export class PostgresJournalRepository implements JournalRepository {
       if (!journal.rows[0]) {
         await client.query("ROLLBACK");
         return { outcome: "fenced" };
+      }
+      if (generationKind === "regeneration") {
+        const target = await client.query<{
+          target_id: string;
+          target_version_id: string;
+          user_id: string;
+        }>(
+          `SELECT target_id, target_version_id, user_id
+           FROM conversation_action_executions
+           WHERE action_execution_id = $1
+           FOR SHARE`,
+          [input.actionExecutionId ?? null],
+        );
+        const frozenTarget = target.rows[0];
+        if (
+          !frozenTarget ||
+          frozenTarget.user_id !== input.userId ||
+          frozenTarget.target_id !== journal.rows[0].journal_id ||
+          frozenTarget.target_version_id !== input.targetVersionId ||
+          journal.rows[0].current_version_id !== frozenTarget.target_version_id
+        ) {
+          await client.query("ROLLBACK");
+          return { outcome: "stale" };
+        }
       }
       const versionValues = [createUuidV7(now), journal.rows[0]!.journal_id, input.userId, input.dailySessionId, input.sourceRevision,
         input.generationPolicyVersion, input.validatorVersion, input.locale, input.sourceSnapshotId,

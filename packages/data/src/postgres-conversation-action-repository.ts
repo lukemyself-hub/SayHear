@@ -4,7 +4,6 @@ import type {
   ConversationActionReceipt,
   PreparedConversationAction,
 } from "@sayhear/application";
-import { JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG } from "@sayhear/application";
 import type { ConversationActionDefinition, ConversationActionProposal } from "@sayhear/application";
 import {
   asCompiledContextId,
@@ -48,7 +47,12 @@ type HandleRow = Readonly<{
   target_version_id: string;
 }>;
 
-export class PostgresConversationActionRepository
+/**
+ * The typed persistence adapter for the Journal regeneration handler. The
+ * Gateway remains action-generic; this adapter owns only the Journal durable
+ * command and receipt transaction required by its registered binding.
+ */
+export class PostgresJournalRegenerationActionRepository
   implements ConversationActionGatewayRepository
 {
   private readonly payloadKey: Buffer;
@@ -210,6 +214,7 @@ export class PostgresConversationActionRepository
 
   public async commitNonAccepted(input: {
     admission: Exclude<ConversationActionReceipt["admission"], "accepted">;
+    catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition | null;
     disposition: string | null;
@@ -246,9 +251,7 @@ export class PostgresConversationActionRepository
           input.context.requestEventRevisionId,
           input.definition?.actionKind ?? input.proposal?.actionKind ?? "unknown",
           input.schemaVersion,
-          input.definition
-            ? JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version
-            : "unknown",
+          input.catalogVersion,
           idempotencyKey,
           input.admission,
           input.disposition,
@@ -258,9 +261,7 @@ export class PostgresConversationActionRepository
         actionExecutionId,
         actionKind: input.definition?.actionKind ?? input.proposal?.actionKind ?? "unknown",
         admission: input.admission,
-        catalogVersion: input.definition
-          ? JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version
-          : "unknown",
+        catalogVersion: input.catalogVersion,
         disposition: input.disposition,
         execution: "not_started",
         schemaVersion: input.schemaVersion,
@@ -276,6 +277,7 @@ export class PostgresConversationActionRepository
   }
 
   public async commitAccepted(input: {
+    catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition;
     prepare: () => PreparedConversationAction;
@@ -309,6 +311,7 @@ export class PostgresConversationActionRepository
         const receipt = await insertNonAcceptedInTransaction(client, {
           actionExecutionId: createUuidV7(new Date()),
           context: input.context,
+          catalogVersion: input.catalogVersion,
           definition: input.definition,
           disposition: "exact_head_advanced",
           idempotencyKey,
@@ -331,6 +334,7 @@ export class PostgresConversationActionRepository
         const receipt = await insertNonAcceptedInTransaction(client, {
           actionExecutionId: createUuidV7(new Date()),
           context: input.context,
+          catalogVersion: input.catalogVersion,
           definition: input.definition,
           disposition: "rate_limited_in_flight",
           idempotencyKey,
@@ -378,7 +382,7 @@ export class PostgresConversationActionRepository
           input.context.requestEventRevisionId,
           input.definition.actionKind,
           input.definition.schemaVersion,
-          JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
+          input.catalogVersion,
           input.proposal.arguments.journalHandle,
           handle.target_kind,
           handle.target_id,
@@ -390,11 +394,11 @@ export class PostgresConversationActionRepository
           now,
         ],
       );
-      await insertReceipt(client, {
+      const admissionReceipt = await insertReceipt(client, {
         actionExecutionId,
         actionKind: input.definition.actionKind,
         admission: "accepted",
-        catalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
+        catalogVersion: input.catalogVersion,
         disposition: null,
         execution: "pending",
         schemaVersion: input.definition.schemaVersion,
@@ -489,8 +493,9 @@ export class PostgresConversationActionRepository
         decisionCommandId: input.context.decisionCommandId,
         finalizationCommandId,
         finalizationAttemptId,
-        userId: input.context.userId,
         now,
+        receipt: admissionReceipt,
+        userId: input.context.userId,
       });
       const receipt = await findReceipt(client, input.context.userId, idempotencyKey);
       if (!receipt) throw new Error("The accepted Action Receipt was not committed.");
@@ -516,6 +521,7 @@ export class PostgresConversationActionRepository
       guidance_ciphertext: Buffer | null;
       model_run_attempt_id: string | null;
       source_revision: string;
+      target_version_id: string;
       user_id: string;
       workflow_command_id: string;
     }>(
@@ -523,11 +529,14 @@ export class PostgresConversationActionRepository
           command.user_id, command.daily_session_id, command.source_revision,
           command.generation_policy_version, command.expected_data_epoch,
           command.generation_command_id, command.guidance_ciphertext,
+          execution.target_version_id,
           attempt.model_run_attempt_id
        FROM workflow_commands workflow
        INNER JOIN journal_generation_commands command
          ON command.action_execution_id = workflow.action_execution_id
         AND command.generation_kind = 'regeneration'
+       INNER JOIN conversation_action_executions execution
+         ON execution.action_execution_id = workflow.action_execution_id
        LEFT JOIN LATERAL (
          SELECT model_run_attempt_id
          FROM journal_model_run_attempts
@@ -554,6 +563,7 @@ export class PostgresConversationActionRepository
         : null,
       modelRunAttemptId: row.model_run_attempt_id,
       sourceRevision: Number(row.source_revision),
+      targetVersionId: row.target_version_id,
       userId: asUserId(row.user_id),
       workflowCommandId: row.workflow_command_id,
     };
@@ -683,17 +693,28 @@ export class PostgresConversationActionRepository
       interaction_turn_id: string;
       model_run_attempt_id: string;
       request_event_revision_id: string;
+      receipt_admission_status: ConversationActionReceipt["admission"];
+      receipt_disposition: string | null;
+      receipt_execution_status: ConversationActionReceipt["execution"];
+      receipt_sequence: number;
       user_id: string;
     }>(
       `SELECT execution.action_execution_id, command.generation_command_id,
           command.interaction_turn_id, attempt.model_run_attempt_id,
           command.input_revision_id AS request_event_revision_id,
+          frozen_receipt.admission_status AS receipt_admission_status,
+          frozen_receipt.disposition AS receipt_disposition,
+          command.action_execution_status AS receipt_execution_status,
+          command.action_receipt_sequence AS receipt_sequence,
           command.user_id
        FROM conversation_action_executions execution
        INNER JOIN generation_commands command
          ON command.action_execution_id = execution.action_execution_id
         AND command.generation_stage = 'action_finalization'
         AND command.status IN ('prepared', 'compiling', 'running', 'retry_pending')
+       INNER JOIN conversation_action_receipts frozen_receipt
+         ON frozen_receipt.action_execution_id = execution.action_execution_id
+        AND frozen_receipt.receipt_sequence = command.action_receipt_sequence
        INNER JOIN model_run_attempts attempt
          ON attempt.generation_command_id = command.generation_command_id
         AND attempt.attempt_no = 1
@@ -710,10 +731,20 @@ export class PostgresConversationActionRepository
       interactionTurnId: asInteractionTurnId(row.interaction_turn_id),
       modelRunAttemptId: row.model_run_attempt_id,
       requestEventRevisionId: asConversationEventRevisionId(row.request_event_revision_id),
+      receipt: {
+        admission: row.receipt_admission_status,
+        disposition: row.receipt_disposition,
+        execution: row.receipt_execution_status,
+        sequence: row.receipt_sequence,
+      },
       userId: asUserId(row.user_id),
     }));
   }
 }
+
+/** @deprecated Use the typed Journal regeneration adapter name. */
+export const PostgresConversationActionRepository =
+  PostgresJournalRegenerationActionRepository;
 
 async function createActionFinalizationCommand(
   client: PoolClient,
@@ -723,6 +754,7 @@ async function createActionFinalizationCommand(
     finalizationAttemptId: string;
     finalizationCommandId: string;
     now: Date;
+    receipt: ConversationActionReceipt;
     userId: UserId;
   },
 ): Promise<void> {
@@ -735,7 +767,8 @@ async function createActionFinalizationCommand(
        locale_policy_version, locale, provider, model, model_snapshot,
        model_config_version, provider_policy_version, consent_policy_version,
        freshness_policy, harness_policy_version, conversation_action_catalog_version,
-       expected_data_epoch, generation_stage, action_execution_id, status, created_at
+       expected_data_epoch, generation_stage, action_execution_id,
+       action_receipt_sequence, action_execution_status, status, created_at
      )
      SELECT $1, command.user_id, command.interaction_turn_id, command.operation_type,
        $2, command.subject_type, command.subject_id, command.input_revision_kind,
@@ -745,15 +778,17 @@ async function createActionFinalizationCommand(
        command.provider, command.model, command.model_snapshot, command.model_config_version,
        command.provider_policy_version, command.consent_policy_version, command.freshness_policy,
        command.harness_policy_version, command.conversation_action_catalog_version,
-       command.expected_data_epoch, 'action_finalization', $3, 'prepared', $4
+       command.expected_data_epoch, 'action_finalization', $3, $4, $5, 'prepared', $6
      FROM generation_commands command
-     WHERE command.generation_command_id = $5
-       AND command.user_id = $6
+     WHERE command.generation_command_id = $7
+       AND command.user_id = $8
      ON CONFLICT (action_execution_id) WHERE generation_stage = 'action_finalization' DO NOTHING`,
     [
       input.finalizationCommandId,
       `action-finalization/${input.actionExecutionId}`,
       input.actionExecutionId,
+      input.receipt.receiptSequence,
+      input.receipt.execution,
       input.now,
       input.decisionCommandId,
       input.userId,
@@ -931,6 +966,7 @@ async function insertNonAcceptedInTransaction(
   input: {
     actionExecutionId: string;
     admission: Exclude<ConversationActionReceipt["admission"], "accepted">;
+    catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition;
     disposition: string;
@@ -958,7 +994,7 @@ async function insertNonAcceptedInTransaction(
       input.context.requestEventRevisionId,
       input.definition.actionKind,
       input.definition.schemaVersion,
-      JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
+      input.catalogVersion,
       input.idempotencyKey,
       input.admission,
       input.disposition,
@@ -968,7 +1004,7 @@ async function insertNonAcceptedInTransaction(
     actionExecutionId: input.actionExecutionId,
     actionKind: input.definition.actionKind,
     admission: input.admission,
-    catalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
+    catalogVersion: input.catalogVersion,
     disposition: input.disposition,
     execution: "not_started",
     schemaVersion: input.definition.schemaVersion,

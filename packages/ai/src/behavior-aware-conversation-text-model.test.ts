@@ -212,6 +212,11 @@ describe("behavior-aware Conversation Text model", () => {
 
   it.each([
     "I don't like this.",
+    "Rewrite the Journal.",
+    "Please regenerate the Journal again.",
+    "Make the Journal different.",
+    "The Journal wording is clear.",
+    "Make the wording clearer by adding that I was promoted.",
     "Rewrite the Journal in first person and delete the old version.",
     "这件事写错了，请纠正事实。",
     "Give me three candidate versions in a poetic style.",

@@ -60,6 +60,7 @@ export {
   CompiledContextIntegrityError,
   createContextCompiler,
   type CompiledContext,
+  type ActionFinalizationReceiptSnapshot,
   type CompiledContextDegradedReason,
   type CompiledContextReferencedEvent,
   type CompiledContextRenderSource,

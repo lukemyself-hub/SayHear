@@ -308,7 +308,7 @@ export function createConversationResponseService(dependencies: {
           if (
             event.receipt.admission === "accepted" &&
             finalization &&
-            dependencies.harness.runFinalization
+            dependencies.harness.runFinalizationCommand
           ) {
             const finalizationCommandId = asGenerationCommandId(
               finalization.generationCommandId,
@@ -316,50 +316,31 @@ export function createConversationResponseService(dependencies: {
             const finalizationAttemptId = asModelRunAttemptId(
               finalization.modelRunAttemptId,
             );
-            const finalizationOwnership =
-              await dependencies.repository.claimResponseExecution({
-                generationCommandId: finalizationCommandId,
-                modelRunAttemptId: finalizationAttemptId,
-                userId,
-              });
-            if (finalizationOwnership === "shared") {
-              settled = true;
-              yield* streamExistingResponse(
-                await dependencies.repository.loadResponse({
-                  generationCommandId: finalizationCommandId,
-                  userId,
-                }),
-              );
-              continue;
+            if (!dependencies.harness.runFinalizationCommand) {
+              throw new Error("Action Finalization orchestration is unavailable.");
             }
-            const finalizationContext = await dependencies.contextCompiler.compile({
-              generationCommandId: finalizationCommandId,
-              interactionTurnId: turn.turn.id,
-              userId,
-            });
-            for await (const finalizationEvent of dependencies.harness.runFinalization(
+            for await (const finalizationEvent of dependencies.harness.runFinalizationCommand(
               {
-                ...(finalizationContext.actionReferenceHandles === undefined
-                  ? {}
-                  : {
-                      actionReferenceHandles:
-                        finalizationContext.actionReferenceHandles,
-                    }),
-                catalog: dependencies.catalog,
-                catalogVersion: dependencies.catalog.version,
-                compiledContextId: finalizationContext.id,
+                actionExecutionId: event.receipt.actionExecutionId,
                 generationCommandId: finalizationCommandId,
+                interactionTurnId: turn.turn.id,
+                modelRunAttemptId: finalizationAttemptId,
+                requestEventRevisionId: requestEventRevisionId!,
+                receipt: {
+                  admission: event.receipt.admission,
+                  disposition: event.receipt.disposition,
+                  execution: event.receipt.execution,
+                  sequence: event.receipt.receiptSequence,
+                },
+                userId,
+              },
+              {
+                catalog: dependencies.catalog,
                 harnessPolicy: {
                   ...dependencies.harnessPolicy,
                   maxStateChangingActions: 0,
                   toolsDisabled: true,
                 },
-                interactionTurnId: turn.turn.id,
-                modelRunAttemptId: finalizationAttemptId,
-                ...(requestEventRevisionId
-                  ? { requestEventRevisionId }
-                  : {}),
-                userId,
               },
               signal,
             )) {
@@ -542,38 +523,21 @@ export function createConversationResponseService(dependencies: {
       const pending = await dependencies.actionGateway?.listPendingFinalizations?.({
         limit: recoveryScanLimit,
       });
-      if (!pending || !dependencies.harness.runFinalization) return 0;
+      if (!pending || !dependencies.harness.runFinalizationCommand) return 0;
       let processed = 0;
       for (const command of pending) {
-        const ownership = await dependencies.repository.claimResponseExecution({
-          generationCommandId: asGenerationCommandId(command.generationCommandId),
-          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
-          userId: command.userId,
-        });
-        if (ownership === "shared") continue;
-        const context = await dependencies.contextCompiler.compile({
-          generationCommandId: asGenerationCommandId(command.generationCommandId),
-          interactionTurnId: command.interactionTurnId,
-          userId: command.userId,
-        });
-        for await (const event of dependencies.harness.runFinalization({
-          ...(context.actionReferenceHandles === undefined
-            ? {}
-            : { actionReferenceHandles: context.actionReferenceHandles }),
-          catalog: dependencies.catalog,
-          catalogVersion: dependencies.catalog.version,
-          compiledContextId: context.id,
-          generationCommandId: asGenerationCommandId(command.generationCommandId),
-          harnessPolicy: {
-            ...dependencies.harnessPolicy,
-            maxStateChangingActions: 0,
-            toolsDisabled: true,
+        if (!dependencies.harness.runFinalizationCommand) continue;
+        for await (const event of dependencies.harness.runFinalizationCommand(
+          command,
+          {
+            catalog: dependencies.catalog,
+            harnessPolicy: {
+              ...dependencies.harnessPolicy,
+              maxStateChangingActions: 0,
+              toolsDisabled: true,
+            },
           },
-          interactionTurnId: command.interactionTurnId,
-          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
-          requestEventRevisionId: command.requestEventRevisionId,
-          userId: command.userId,
-        })) {
+        )) {
           if (
             event.type === "decision_committed" ||
             event.type === "decision_failed"

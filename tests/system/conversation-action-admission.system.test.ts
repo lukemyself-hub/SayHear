@@ -11,7 +11,7 @@ import {
   runJournalRegenerationWorkflow,
 } from "@sayhear/application";
 import {
-  PostgresConversationActionRepository,
+  PostgresJournalRegenerationActionRepository,
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresJournalRepository,
@@ -227,7 +227,7 @@ describe("Journal regeneration Action admission system seam", () => {
     const handle = context.actionReferenceHandles?.[0];
     expect(handle?.handle).toMatch(/^shh-handle-/);
 
-    const actionRepository = new PostgresConversationActionRepository(
+    const actionRepository = new PostgresJournalRegenerationActionRepository(
       database.pool,
       "action-payload-test-secret",
     );
@@ -285,25 +285,24 @@ describe("Journal regeneration Action admission system seam", () => {
     `);
     expect(counts.rows[0]).toEqual({ actions: "1", commands: "1", outbox: "1", payloads: "0", regeneration_commands: "1", finalization_commands: "1", decision_commands: "1" });
     const finalization = await database.pool.query<{
+      action_execution_status: string;
+      action_receipt_sequence: number;
       generation_stage: string;
       action_execution_id: string;
       status: string;
     }>(
-      `SELECT generation_stage, action_execution_id, status
+      `SELECT generation_stage, action_execution_id, action_receipt_sequence,
+          action_execution_status, status
        FROM generation_commands
        WHERE generation_stage = 'action_finalization'`,
     );
     expect(finalization.rows[0]).toMatchObject({
       generation_stage: "action_finalization",
       action_execution_id: first.actionExecutionId,
+      action_receipt_sequence: 1,
+      action_execution_status: "pending",
       status: "prepared",
     });
-    await database.pool.query(
-      `UPDATE daily_sessions
-       SET activity_state = 'quiescent', quiescent_reason = 'explicit_user_end'
-       WHERE daily_session_id = $1`,
-      [turn.dailySession.id],
-    );
     const journalService = createJournalService({
       journalPolicyVersion: "journal-generation:v2",
       validatorVersion: "journal-validator:v1",

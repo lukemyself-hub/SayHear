@@ -104,6 +104,7 @@ export type JournalRepository = Readonly<{
     modelValid: boolean;
     generationKind?: JournalGenerationKind;
     actionExecutionId?: string;
+    targetVersionId?: string;
   }): Promise<{ outcome: "published" | "stale" | "fenced" }>;
   recordWorkflowOutcome?(input: {
     dailySessionId: string;
@@ -161,6 +162,7 @@ export type JournalService = Readonly<{
     policyVersion: string;
     generationKind?: JournalGenerationKind;
     actionExecutionId?: string;
+    targetVersionId?: string;
     guidance?: string | null;
   }): Promise<{
     outcome: "published" | "stale" | "fenced" | "not_found" | "validation_failed" | "writes_disabled";
@@ -323,6 +325,9 @@ export function createJournalService(dependencies: {
         ...(input.actionExecutionId === undefined
           ? {}
           : { actionExecutionId: input.actionExecutionId }),
+        ...(input.targetVersionId === undefined
+          ? {}
+          : { targetVersionId: input.targetVersionId }),
       });
     },
     async inspect(input) {
@@ -367,6 +372,7 @@ export async function runJournalRegeneration(input: {
   command: AutomaticJournalCommand & Readonly<{
     actionExecutionId: string;
     guidance: string | null;
+    targetVersionId: string;
   }>;
   generationCommandId: string;
   modelRunAttemptId: string;
@@ -385,6 +391,7 @@ export async function runJournalRegeneration(input: {
     generationKind: "regeneration",
     actionExecutionId: input.command.actionExecutionId,
     guidance: input.command.guidance,
+    targetVersionId: input.command.targetVersionId,
   });
 }
 

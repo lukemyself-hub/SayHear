@@ -63,6 +63,7 @@ describe("automatic evidence-backed Journal", () => {
       policyVersion: "journal-generation:v1",
       generationKind: "regeneration",
       actionExecutionId: "action-1",
+      targetVersionId: "version-1",
       guidance: "Make the turning point clearer.",
     })).resolves.toEqual({ outcome: "published" });
 
@@ -76,6 +77,7 @@ describe("automatic evidence-backed Journal", () => {
     expect(publish).toHaveBeenCalledWith(expect.objectContaining({
       generationKind: "regeneration",
       actionExecutionId: "action-1",
+      targetVersionId: "version-1",
     }));
   });
 

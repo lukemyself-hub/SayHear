@@ -41,6 +41,12 @@ describe("Context Compiler", () => {
     const repository: ContextCompilerRepository = {
       async loadContextSource() {
         return {
+          actionFinalizationReceipt: {
+            admission: "accepted",
+            disposition: null,
+            execution: "pending",
+            sequence: 1,
+          },
           dailySession: {
             activityState: "active" as const,
             closurePolicyVersion: "daily-session-inactivity:v1",
@@ -169,6 +175,12 @@ describe("Context Compiler", () => {
       referencedEvents: saved!.referencedEvents,
       sections: saved!.sections,
       totalTokens: saved!.totalTokens,
+      actionFinalizationReceipt: {
+        admission: "accepted",
+        disposition: null,
+        execution: "pending",
+        sequence: 1,
+      },
     });
     expect(payload.messages.map((message) => message.revisionId)).toEqual([
       afterProjectionRevisionId,
@@ -176,6 +188,8 @@ describe("Context Compiler", () => {
     ]);
     expect(payload.instructions).toContain("status=lagging");
     expect(payload.instructions).toContain("Do not use DialogueState confidence");
+    expect(payload.instructions).toContain("execution: pending");
+    expect(payload.instructions).toContain("do not claim that a new Journal Version was generated");
   });
 
   it("keeps the current User input and the newest contiguous history within budget", async () => {

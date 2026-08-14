@@ -35,8 +35,6 @@ export async function runJournalRegenerationWorkflow(input: {
   if (!command) {
     throw new Error("Journal regeneration Workflow command was not found.");
   }
-  assertWorkflowSafe(commandForWorkflow(command), "command");
-
   const claim = await input.actionRepository.claimRegenerationExecution?.({
     actionExecutionId: command.actionExecutionId,
   });
@@ -58,6 +56,7 @@ export async function runJournalRegenerationWorkflow(input: {
   // generation stays outside the Workflow module graph.
   const modelRunAttemptId = command.modelRunAttemptId ?? command.generationCommandId;
   try {
+    assertWorkflowSafe(commandForWorkflow(command), "command");
     const result = await runJournalRegeneration({
       service: input.journalService,
       command: {
@@ -68,6 +67,7 @@ export async function runJournalRegenerationWorkflow(input: {
         expectedDataEpoch: command.expectedDataEpoch,
         actionExecutionId: command.actionExecutionId,
         guidance: command.guidance,
+        targetVersionId: command.targetVersionId,
       },
       generationCommandId: command.generationCommandId,
       modelRunAttemptId,
@@ -86,13 +86,26 @@ export async function runJournalRegenerationWorkflow(input: {
       workflowCommandId: command.workflowCommandId,
     };
   } catch (error) {
+    const fenced = isWorkflowFenceFailure(error);
     await input.actionRepository.recordRegenerationExecution?.({
       actionExecutionId: command.actionExecutionId,
-      disposition: error instanceof Error ? "provider_or_workflow_failed" : "unknown_failure",
-      outcome: "failed",
+      disposition: fenced ? "workflow_fence" : error instanceof Error ? "provider_or_workflow_failed" : "unknown_failure",
+      outcome: fenced ? "canceled" : "failed",
     });
+    if (fenced) {
+      return {
+        actionExecutionId: command.actionExecutionId,
+        dailySessionId: command.dailySessionId,
+        outcome: "canceled",
+        workflowCommandId: command.workflowCommandId,
+      };
+    }
     throw error;
   }
+}
+
+function isWorkflowFenceFailure(error: unknown): boolean {
+  return error instanceof Error && /fence|policy|epoch|workflow command/i.test(error.message);
 }
 
 function commandForWorkflow(command: JournalRegenerationWorkflowCommand) {

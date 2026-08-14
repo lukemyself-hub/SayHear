@@ -26,7 +26,7 @@ import {
   createPostgresPool,
   PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
-  PostgresConversationActionRepository,
+  PostgresJournalRegenerationActionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
@@ -62,7 +62,7 @@ export function createServerComposition() {
   const conversationRepository =
     new PostgresUserTextConversationRepository(pool);
   const responseRepository = new PostgresConversationResponseRepository(pool);
-  const actionRepository = new PostgresConversationActionRepository(
+  const actionRepository = new PostgresJournalRegenerationActionRepository(
     pool,
     configuration.contextHmacSecret,
   );
@@ -237,6 +237,7 @@ export function createServerComposition() {
     actionGateway,
     clock: configuration.clock,
     egressPort,
+    contextCompiler,
     repository: responseRepository,
   });
   return {
