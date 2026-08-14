@@ -62,6 +62,7 @@ export type ConversationAgentHarnessRepository = Pick<
   ConversationResponseRepository,
   | "claimResponseExecution"
   | "claimStaleResponseExecution"
+  | "commitActionDecision"
   | "commitCompleteResponse"
   | "loadResponse"
   | "settleResponseFailure"
@@ -137,6 +138,10 @@ export type ConversationAgentHarness = Readonly<{
    * (ADR-0094). A tool_call against the frozen Catalog fails closed.
    */
   runDecision(
+    command: ConversationDecisionCommand,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
+  runFinalization?(
     command: ConversationDecisionCommand,
     signal?: AbortSignal,
   ): AsyncIterable<ConversationHarnessEvent>;
@@ -237,6 +242,14 @@ export function createConversationAgentHarness(dependencies: {
           },
           proposal: pendingActionProposal,
         });
+        if (receipt.admission === "accepted") {
+          await dependencies.repository.commitActionDecision?.({
+            completedAt: dependencies.clock(),
+            generationCommandId: command.generationCommandId,
+            modelRunAttemptId: command.modelRunAttemptId,
+            userId: command.userId,
+          });
+        }
         yield { receipt, type: "action_admitted" };
         return;
       }
@@ -344,6 +357,12 @@ export function createConversationAgentHarness(dependencies: {
 
   return {
     runDecision(command, signal) {
+      return runDecisionAttempt(command, signal);
+    },
+    runFinalization(command, signal) {
+      if (command.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("Action Finalization must disable tools.");
+      }
       return runDecisionAttempt(command, signal);
     },
   };

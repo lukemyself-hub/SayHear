@@ -6,6 +6,10 @@ import type {
   ModelRunAttemptId,
   UserId,
 } from "@sayhear/domain";
+import {
+  asGenerationCommandId,
+  asModelRunAttemptId,
+} from "@sayhear/domain";
 
 import type { ContextCompiler } from "./context-compiler";
 import type {
@@ -14,6 +18,7 @@ import type {
   ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
 import type { ConversationActionReceipt } from "./conversation-action-gateway";
+import type { ConversationActionGateway } from "./conversation-action-gateway";
 import type { ConversationAgentHarness } from "./conversation-agent-harness";
 import { type ProviderDispatchErrorCategory } from "./conversation-model";
 import type {
@@ -78,6 +83,12 @@ type ExistingConversationResponse =
     }>;
 
 export type ConversationResponseRepository = Readonly<{
+  commitActionDecision?(input: {
+    completedAt: Date;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    userId: UserId;
+  }): Promise<void>;
   claimStaleResponseExecution(input: {
     expectedModelRunAttemptId: ModelRunAttemptId;
     generationCommandId: GenerationCommandId;
@@ -179,10 +190,12 @@ export type ConversationResponseService = Readonly<{
       terminal: number;
     }>
   >;
+  scanPendingActionFinalizations?(): Promise<number>;
 }>;
 
 export function createConversationResponseService(dependencies: {
   catalog: ConversationActionCatalog;
+  actionGateway?: ConversationActionGateway;
   clock: () => Date;
   contextCompiler: ContextCompiler;
   conversationService: UserTextConversationService;
@@ -290,8 +303,98 @@ export function createConversationResponseService(dependencies: {
             type: "assistant_committed",
           };
         } else if (event.type === "action_admitted") {
-          settled = true;
           yield event;
+          const finalization = event.receipt.finalization;
+          if (
+            event.receipt.admission === "accepted" &&
+            finalization &&
+            dependencies.harness.runFinalization
+          ) {
+            const finalizationCommandId = asGenerationCommandId(
+              finalization.generationCommandId,
+            );
+            const finalizationAttemptId = asModelRunAttemptId(
+              finalization.modelRunAttemptId,
+            );
+            const finalizationOwnership =
+              await dependencies.repository.claimResponseExecution({
+                generationCommandId: finalizationCommandId,
+                modelRunAttemptId: finalizationAttemptId,
+                userId,
+              });
+            if (finalizationOwnership === "shared") {
+              settled = true;
+              yield* streamExistingResponse(
+                await dependencies.repository.loadResponse({
+                  generationCommandId: finalizationCommandId,
+                  userId,
+                }),
+              );
+              continue;
+            }
+            const finalizationContext = await dependencies.contextCompiler.compile({
+              generationCommandId: finalizationCommandId,
+              interactionTurnId: turn.turn.id,
+              userId,
+            });
+            for await (const finalizationEvent of dependencies.harness.runFinalization(
+              {
+                ...(finalizationContext.actionReferenceHandles === undefined
+                  ? {}
+                  : {
+                      actionReferenceHandles:
+                        finalizationContext.actionReferenceHandles,
+                    }),
+                catalog: dependencies.catalog,
+                catalogVersion: dependencies.catalog.version,
+                compiledContextId: finalizationContext.id,
+                generationCommandId: finalizationCommandId,
+                harnessPolicy: {
+                  ...dependencies.harnessPolicy,
+                  maxStateChangingActions: 0,
+                  toolsDisabled: true,
+                },
+                interactionTurnId: turn.turn.id,
+                modelRunAttemptId: finalizationAttemptId,
+                ...(requestEventRevisionId
+                  ? { requestEventRevisionId }
+                  : {}),
+                userId,
+              },
+              signal,
+            )) {
+              if (finalizationEvent.type === "decision_delta") {
+                possiblyVisible = true;
+                yield {
+                  delta: finalizationEvent.delta,
+                  type: "assistant_delta",
+                };
+              } else if (finalizationEvent.type === "decision_committed") {
+                settled = true;
+                yield {
+                  eventId: finalizationEvent.assistantEventId,
+                  revisionId: finalizationEvent.assistantEventRevisionId,
+                  type: "assistant_committed",
+                };
+              } else if (finalizationEvent.type === "decision_failed") {
+                settled = true;
+                yield {
+                  category: finalizationEvent.category,
+                  type: finalizationEvent.interrupted
+                    ? "response_interrupted"
+                    : "response_failed",
+                };
+              } else {
+                settled = true;
+                yield {
+                  category: "invalid_response",
+                  type: "response_failed",
+                };
+              }
+            }
+          } else {
+            settled = true;
+          }
         } else {
           settled = true;
           yield {
@@ -434,6 +537,53 @@ export function createConversationResponseService(dependencies: {
         retried,
         terminal,
       };
+    },
+    async scanPendingActionFinalizations() {
+      const pending = await dependencies.actionGateway?.listPendingFinalizations?.({
+        limit: recoveryScanLimit,
+      });
+      if (!pending || !dependencies.harness.runFinalization) return 0;
+      let processed = 0;
+      for (const command of pending) {
+        const ownership = await dependencies.repository.claimResponseExecution({
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          userId: command.userId,
+        });
+        if (ownership === "shared") continue;
+        const context = await dependencies.contextCompiler.compile({
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          interactionTurnId: command.interactionTurnId,
+          userId: command.userId,
+        });
+        for await (const event of dependencies.harness.runFinalization({
+          ...(context.actionReferenceHandles === undefined
+            ? {}
+            : { actionReferenceHandles: context.actionReferenceHandles }),
+          catalog: dependencies.catalog,
+          catalogVersion: dependencies.catalog.version,
+          compiledContextId: context.id,
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          harnessPolicy: {
+            ...dependencies.harnessPolicy,
+            maxStateChangingActions: 0,
+            toolsDisabled: true,
+          },
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        })) {
+          if (
+            event.type === "decision_committed" ||
+            event.type === "decision_failed"
+          ) {
+            processed += 1;
+            break;
+          }
+        }
+      }
+      return processed;
     },
   };
 }

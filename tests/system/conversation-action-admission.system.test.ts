@@ -5,13 +5,16 @@ import {
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   createContextCompiler,
   createConversationActionGateway,
+  createJournalService,
   createJournalRegenerationActionHandler,
   createUserTextConversationService,
+  runJournalRegenerationWorkflow,
 } from "@sayhear/application";
 import {
   PostgresConversationActionRepository,
   PostgresConversationResponseRepository,
   PostgresInternalOwnerAccessRepository,
+  PostgresJournalRepository,
   PostgresUserTextConversationRepository,
   runMigrations,
 } from "@sayhear/data";
@@ -166,6 +169,17 @@ describe("Journal regeneration Action admission system seam", () => {
       ) VALUES ($1, $2, $3, 1, 'journal-generation:v2', 1, $4)`,
       [journalGenerationCommandId, fixedInternalOwnerPrincipal.userId, turn.dailySession.id, now],
     );
+    const evidenceItemId = "01984477-31e1-7595-92c6-06889cb0fe03";
+    await database.pool.query(
+      `INSERT INTO evidence_items (
+        evidence_item_id, user_id, evidence_source_snapshot_id,
+        source_event_id, source_revision_id, source_actor, source_status,
+        locator_type, locator_key, extraction_policy_version, evidence_role,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, 'user', 'final', 'whole_revision',
+        $6, 'evidence-extraction:v2', 'factual_support', $7)`,
+      [evidenceItemId, fixedInternalOwnerPrincipal.userId, snapshotId, turn.message.id, turn.message.revisionId, `revision:${turn.message.revisionId}`, now],
+    );
     await database.pool.query(
       `INSERT INTO journal_model_run_attempts (
         model_run_attempt_id, generation_command_id, status, created_at
@@ -257,15 +271,116 @@ describe("Journal regeneration Action admission system seam", () => {
       outbox: string;
       payloads: string;
       regeneration_commands: string;
+      finalization_commands: string;
+      decision_commands: string;
     }>(`
       SELECT
         (SELECT COUNT(*) FROM conversation_action_executions) AS actions,
         (SELECT COUNT(*) FROM conversation_action_payloads) AS payloads,
         (SELECT COUNT(*) FROM journal_generation_commands WHERE generation_kind = 'regeneration') AS regeneration_commands,
+        (SELECT COUNT(*) FROM generation_commands WHERE generation_stage = 'action_finalization') AS finalization_commands,
+        (SELECT COUNT(*) FROM generation_commands WHERE generation_stage = 'decision') AS decision_commands,
         (SELECT COUNT(*) FROM workflow_commands WHERE command_type = 'journal_regeneration') AS commands,
         (SELECT COUNT(*) FROM outbox_events WHERE event_type = 'journal_regeneration_requested') AS outbox
     `);
-    expect(counts.rows[0]).toEqual({ actions: "1", commands: "1", outbox: "1", payloads: "0", regeneration_commands: "1" });
+    expect(counts.rows[0]).toEqual({ actions: "1", commands: "1", outbox: "1", payloads: "0", regeneration_commands: "1", finalization_commands: "1", decision_commands: "1" });
+    const finalization = await database.pool.query<{
+      generation_stage: string;
+      action_execution_id: string;
+      status: string;
+    }>(
+      `SELECT generation_stage, action_execution_id, status
+       FROM generation_commands
+       WHERE generation_stage = 'action_finalization'`,
+    );
+    expect(finalization.rows[0]).toMatchObject({
+      generation_stage: "action_finalization",
+      action_execution_id: first.actionExecutionId,
+      status: "prepared",
+    });
+    await database.pool.query(
+      `UPDATE daily_sessions
+       SET activity_state = 'quiescent', quiescent_reason = 'explicit_user_end'
+       WHERE daily_session_id = $1`,
+      [turn.dailySession.id],
+    );
+    const journalService = createJournalService({
+      journalPolicyVersion: "journal-generation:v2",
+      validatorVersion: "journal-validator:v1",
+      evidenceExtractionPolicyVersion: "evidence-extraction:v2",
+      generationMetadata: {
+        role: "journal.draft",
+        provider: "deterministic",
+        model: "test",
+        configVersion: "test:v1",
+        rolePolicyVersion: "journal-generation:v2",
+        promptFingerprint: "test",
+      },
+      validationMetadata: {
+        role: "journal.validate",
+        provider: "deterministic",
+        model: "test",
+        configVersion: "test:v1",
+        rolePolicyVersion: "journal-validator:v1",
+        promptFingerprint: "test",
+      },
+      validationProvider: {
+        role: "journal.validate",
+        validate: async () => ({ valid: true }),
+      },
+      model: {
+        generate: async (input) => ({
+          locale: input.locale,
+          statements: [{
+            id: "regenerated-statement",
+            text: "The owner described the day with a clearer turning point.",
+            epistemicStatus: "supported_expression" as const,
+            evidenceItemIds: [evidenceItemId],
+          }],
+        }),
+      },
+      repository: new PostgresJournalRepository(database.pool),
+    });
+    await expect(runJournalRegenerationWorkflow({
+      actionRepository,
+      journalService,
+      workflowCommandId: (await database.pool.query<{ workflow_command_id: string }>(
+        "SELECT workflow_command_id FROM workflow_commands WHERE command_type = 'journal_regeneration'",
+      )).rows[0]!.workflow_command_id,
+    })).resolves.toMatchObject({ outcome: "published" });
+    const published = await database.pool.query<{
+      generation_kind: string;
+      supersedes_version_id: string | null;
+      journal_version_id: string;
+    }>(
+      `SELECT version.generation_kind, version.supersedes_version_id,
+          version.journal_version_id
+       FROM journal_versions version
+       WHERE version.generation_kind = 'regeneration'`,
+    );
+    expect(published.rows).toHaveLength(1);
+    expect(published.rows[0]).toMatchObject({
+      generation_kind: "regeneration",
+      supersedes_version_id: versionId,
+    });
+    const actionState = await database.pool.query<{
+      execution_status: string;
+      receipt_sequence: number[];
+    }>(
+      `SELECT execution.execution_status,
+          ARRAY_AGG(receipt.receipt_sequence ORDER BY receipt.receipt_sequence)
+            AS receipt_sequence
+       FROM conversation_action_executions execution
+       INNER JOIN conversation_action_receipts receipt
+         ON receipt.action_execution_id = execution.action_execution_id
+       WHERE execution.action_execution_id = $1
+       GROUP BY execution.execution_status`,
+      [first.actionExecutionId],
+    );
+    expect(actionState.rows[0]).toEqual({
+      execution_status: "succeeded",
+      receipt_sequence: [1, 2, 3],
+    });
     const outbox = await database.pool.query<{ payload: Record<string, unknown> }>(
       "SELECT payload FROM outbox_events WHERE event_type = 'journal_regeneration_requested'",
     );

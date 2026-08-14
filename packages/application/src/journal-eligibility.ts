@@ -276,7 +276,8 @@ export function createJournalEligibilityService(dependencies: {
 // ---- Dispatcher service -----------------------------------------------------
 
 export type WorkflowStarter = (input: {
-  eventType: "dialogue_state_requested" | "journal_eligibility_requested" | "rolling_summary_requested";
+  eventType: "dialogue_state_requested" | "journal_eligibility_requested" | "rolling_summary_requested" | "journal_regeneration_requested";
+  actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId: DailySessionId;
   sourceRevision: number;
@@ -339,7 +340,10 @@ export function createOutboxDispatcherService(dependencies: {
         try {
           // The Workflow is started OUTSIDE the claiming transaction (AC #6).
           const receipt = await dependencies.startWorkflow({
-            eventType: event.eventType as "dialogue_state_requested" | "journal_eligibility_requested" | "rolling_summary_requested",
+            eventType: event.eventType as "dialogue_state_requested" | "journal_eligibility_requested" | "rolling_summary_requested" | "journal_regeneration_requested",
+            ...(typeof event.payload.actionExecutionId === "string"
+              ? { actionExecutionId: event.payload.actionExecutionId }
+              : {}),
             workflowCommandId: event.workflowCommandId,
             subjectId: event.aggregateId,
             sourceRevision: event.aggregateRevision,
@@ -411,6 +415,7 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "errorCode",
   "workflowReceiptId",
   "dailySessionId",
+  "actionExecutionId",
   "outcome",
 ]);
 

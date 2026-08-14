@@ -6,6 +6,10 @@ import type {
 } from "./conversation-action-catalog";
 import { validateConversationActionCatalog } from "./conversation-action-catalog";
 import type { ActionReferenceBinding } from "./conversation-action-handles";
+import type {
+  ConversationEventRevisionId,
+  InteractionTurnId,
+} from "@sayhear/domain";
 
 export type ConversationActionAdmission =
   | "accepted"
@@ -30,6 +34,10 @@ export type ConversationActionReceipt = Readonly<{
   execution: ConversationActionExecution;
   receiptSequence: number;
   schemaVersion: string;
+  finalization?: Readonly<{
+    generationCommandId: string;
+    modelRunAttemptId: string;
+  }>;
 }>;
 
 export type PreparedConversationAction = Readonly<{
@@ -39,6 +47,33 @@ export type PreparedConversationAction = Readonly<{
   guidance: string | null;
   generationPolicyVersion: string;
   sourceRevision: number;
+}>;
+
+export type JournalRegenerationWorkflowCommand = Readonly<{
+  actionExecutionId: string;
+  dailySessionId: string;
+  expectedDataEpoch: number;
+  generationCommandId: string;
+  generationPolicyVersion: string;
+  guidance: string | null;
+  modelRunAttemptId: string | null;
+  sourceRevision: number;
+  userId: ConversationActionGatewayContext["userId"];
+  workflowCommandId: string;
+}>;
+
+export type JournalRegenerationExecutionOutcome =
+  | "canceled"
+  | "failed"
+  | "succeeded";
+
+export type ConversationActionFinalizationCommand = Readonly<{
+  actionExecutionId: string;
+  generationCommandId: string;
+  interactionTurnId: InteractionTurnId;
+  modelRunAttemptId: string;
+  requestEventRevisionId: ConversationEventRevisionId;
+  userId: ConversationActionGatewayContext["userId"];
 }>;
 
 export type ConversationActionHandler = Readonly<{
@@ -78,6 +113,20 @@ export type ConversationActionGatewayRepository = Readonly<{
     context: ConversationActionGatewayContext;
     handle: string;
   }): Promise<ActionReferenceBinding | null>;
+  readRegenerationWorkflowCommand?(input: {
+    workflowCommandId: string;
+  }): Promise<JournalRegenerationWorkflowCommand | null>;
+  claimRegenerationExecution?(input: {
+    actionExecutionId: string;
+  }): Promise<"execute" | "replayed">;
+  recordRegenerationExecution?(input: {
+    actionExecutionId: string;
+    disposition: string;
+    outcome: JournalRegenerationExecutionOutcome;
+  }): Promise<void>;
+  listPendingFinalizations?(input: {
+    limit: number;
+  }): Promise<readonly ConversationActionFinalizationCommand[]>;
 }>;
 
 export type ConversationActionGateway = Readonly<{
@@ -86,6 +135,9 @@ export type ConversationActionGateway = Readonly<{
     context: ConversationActionGatewayContext;
     proposal: ConversationActionProposal | null;
   }): Promise<ConversationActionReceipt>;
+  listPendingFinalizations?(input: {
+    limit: number;
+  }): Promise<readonly ConversationActionFinalizationCommand[]>;
 }>;
 
 export function createConversationActionGateway(input: {
@@ -228,6 +280,13 @@ export function createConversationActionGateway(input: {
         proposal,
       });
     },
+    ...(input.repository.listPendingFinalizations
+      ? {
+          listPendingFinalizations(inputRequest: { limit: number }) {
+            return input.repository.listPendingFinalizations!(inputRequest);
+          },
+        }
+      : {}),
   };
 }
 

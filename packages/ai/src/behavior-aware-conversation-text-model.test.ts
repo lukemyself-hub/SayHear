@@ -16,12 +16,28 @@ const revisionId = asConversationEventRevisionId(
   "01984477-59a9-7d20-9d97-e588769566a0",
 );
 
-function request(messages: readonly ConversationTextMessage[], locale = "en-US") {
+function request(
+  messages: readonly ConversationTextMessage[],
+  locale = "en-US",
+  withRegenerationFunction = false,
+) {
   return Object.freeze({
-    instructions: "Instructions rendered by Context Compiler.",
+    instructions: withRegenerationFunction
+      ? "Instructions rendered by Context Compiler.\nAvailable Action Reference Handles (opaque and command-scoped):\n- regenerate_journal: shh-handle-current"
+      : "Instructions rendered by Context Compiler.",
     locale,
     messages: Object.freeze(messages),
     model: "behavior-aware-test-model",
+    ...(withRegenerationFunction
+      ? {
+          functions: [{
+            description: "Regenerate the current Journal.",
+            name: "regenerate_journal",
+            parameters: { type: "object" },
+            strict: true as const,
+          }],
+        }
+      : {}),
   });
 }
 
@@ -29,9 +45,10 @@ async function collect(
   model: ReturnType<typeof createBehaviorAwareConversationTextModel>,
   messages: readonly ConversationTextMessage[],
   locale?: string,
+  withRegenerationFunction = false,
 ) {
   const events = [];
-  for await (const event of model.stream(request(messages, locale))) {
+  for await (const event of model.stream(request(messages, locale, withRegenerationFunction))) {
     events.push(event);
   }
   return events;
@@ -174,5 +191,37 @@ describe("behavior-aware Conversation Text model", () => {
     await expect(afterCompletion.next()).rejects.toMatchObject({
       category: "unavailable",
     } satisfies Partial<ProviderDispatchError>);
+  });
+
+  it.each([
+    ["English", "I don't like how this Journal is written; make the wording clearer.", "en-US"],
+    ["Chinese", "我不喜欢这篇 Journal 的表达，请把重点写得更清楚。", "zh-CN"],
+    ["code-switch", "这个 Journal 的 expression 不够清楚，please regenerate it.", "zh-CN"],
+  ])("selects only bounded expression regeneration for %s", async (_label, text, locale) => {
+    const events = await collect(
+      createBehaviorAwareConversationTextModel({ responder: () => ["not used"] }),
+      [{ revisionId, role: "user", text }],
+      locale,
+      true,
+    );
+    expect(events[0]).toMatchObject({
+      rawFunctionName: "regenerate_journal",
+      type: "tool_call",
+    });
+  });
+
+  it.each([
+    "I don't like this.",
+    "Rewrite the Journal in first person and delete the old version.",
+    "这件事写错了，请纠正事实。",
+    "Give me three candidate versions in a poetic style.",
+  ])("does not select regeneration for unsupported or ambiguous request: %s", async (text) => {
+    const events = await collect(
+      createBehaviorAwareConversationTextModel({ responder: () => ["clarify"] }),
+      [{ revisionId, role: "user", text }],
+      "en-US",
+      true,
+    );
+    expect(events.map((event) => event.type)).toEqual(["delta", "completed"]);
   });
 });

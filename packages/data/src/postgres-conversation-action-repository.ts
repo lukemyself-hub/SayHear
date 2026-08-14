@@ -8,11 +8,13 @@ import { JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG } from "@sayhear/appli
 import type { ConversationActionDefinition, ConversationActionProposal } from "@sayhear/application";
 import {
   asCompiledContextId,
+  asConversationEventRevisionId,
   asGenerationCommandId,
+  asInteractionTurnId,
   asUserId,
   type UserId,
 } from "@sayhear/domain";
-import { createCipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { createUuidV7 } from "./uuid-v7";
 
@@ -25,6 +27,8 @@ type ReceiptRow = Readonly<{
   execution_status: ConversationActionReceipt["execution"];
   receipt_sequence: number;
   schema_version: string;
+  finalization_generation_command_id: string | null;
+  finalization_model_run_attempt_id: string | null;
 }>;
 
 type HandleRow = Readonly<{
@@ -181,10 +185,18 @@ export class PostgresConversationActionRepository
           receipt.disposition,
           receipt.execution_status,
           receipt.receipt_sequence,
-          execution.schema_version
+          execution.schema_version,
+          finalization.generation_command_id AS finalization_generation_command_id,
+          finalization_attempt.model_run_attempt_id AS finalization_model_run_attempt_id
         FROM conversation_action_executions execution
         INNER JOIN conversation_action_receipts receipt
           ON receipt.action_execution_id = execution.action_execution_id
+        LEFT JOIN generation_commands finalization
+          ON finalization.action_execution_id = execution.action_execution_id
+         AND finalization.generation_stage = 'action_finalization'
+        LEFT JOIN model_run_attempts finalization_attempt
+          ON finalization_attempt.generation_command_id = finalization.generation_command_id
+         AND finalization_attempt.attempt_no = 1
         WHERE execution.user_id = $1
           AND execution.idempotency_key = $2
         ORDER BY receipt.receipt_sequence DESC
@@ -341,6 +353,8 @@ export class PostgresConversationActionRepository
       const actionExecutionId = createUuidV7(now);
       const workflowCommandId = createUuidV7(now);
       const generationCommandId = createUuidV7(now);
+      const finalizationCommandId = createUuidV7(now);
+      const finalizationAttemptId = createUuidV7(now);
       const guidanceCiphertext = prepared.guidance
         ? encrypt(prepared.guidance, this.payloadKey)
         : null;
@@ -389,9 +403,10 @@ export class PostgresConversationActionRepository
         `
           INSERT INTO workflow_commands (
             workflow_command_id, command_type, subject_type, subject_id,
-            source_revision, policy_version, expected_data_epoch, status, created_at
+            source_revision, policy_version, expected_data_epoch, action_execution_id,
+            status, created_at
           )
-          VALUES ($1, 'journal_regeneration', 'daily_session', $2, $3, $4, $5, 'created', $6)
+          VALUES ($1, 'journal_regeneration', 'daily_session', $2, $3, $4, $5, $6, 'created', $7)
         `,
         [
           workflowCommandId,
@@ -399,6 +414,7 @@ export class PostgresConversationActionRepository
           prepared.sourceRevision,
           prepared.generationPolicyVersion,
           prepared.expectedDataEpoch,
+          actionExecutionId,
           now,
         ],
       );
@@ -468,6 +484,14 @@ export class PostgresConversationActionRepository
           [actionExecutionId],
         );
       }
+      await createActionFinalizationCommand(client, {
+        actionExecutionId,
+        decisionCommandId: input.context.decisionCommandId,
+        finalizationCommandId,
+        finalizationAttemptId,
+        userId: input.context.userId,
+        now,
+      });
       const receipt = await findReceipt(client, input.context.userId, idempotencyKey);
       if (!receipt) throw new Error("The accepted Action Receipt was not committed.");
       await client.query("COMMIT");
@@ -479,6 +503,277 @@ export class PostgresConversationActionRepository
       client.release();
     }
   }
+
+  public async readRegenerationWorkflowCommand(input: {
+    workflowCommandId: string;
+  }): Promise<import("@sayhear/application").JournalRegenerationWorkflowCommand | null> {
+    const result = await this.pool.query<{
+      action_execution_id: string;
+      daily_session_id: string;
+      expected_data_epoch: string;
+      generation_command_id: string;
+      generation_policy_version: string;
+      guidance_ciphertext: Buffer | null;
+      model_run_attempt_id: string | null;
+      source_revision: string;
+      user_id: string;
+      workflow_command_id: string;
+    }>(
+      `SELECT workflow.workflow_command_id, workflow.action_execution_id,
+          command.user_id, command.daily_session_id, command.source_revision,
+          command.generation_policy_version, command.expected_data_epoch,
+          command.generation_command_id, command.guidance_ciphertext,
+          attempt.model_run_attempt_id
+       FROM workflow_commands workflow
+       INNER JOIN journal_generation_commands command
+         ON command.action_execution_id = workflow.action_execution_id
+        AND command.generation_kind = 'regeneration'
+       LEFT JOIN LATERAL (
+         SELECT model_run_attempt_id
+         FROM journal_model_run_attempts
+         WHERE generation_command_id = command.generation_command_id
+           AND role = 'journal.draft'
+           AND status = 'started'
+         ORDER BY created_at DESC, model_run_attempt_id DESC
+         LIMIT 1
+       ) attempt ON TRUE
+       WHERE workflow.workflow_command_id = $1
+         AND workflow.command_type = 'journal_regeneration'`,
+      [input.workflowCommandId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      actionExecutionId: row.action_execution_id,
+      dailySessionId: row.daily_session_id,
+      expectedDataEpoch: Number(row.expected_data_epoch),
+      generationCommandId: row.generation_command_id,
+      generationPolicyVersion: row.generation_policy_version,
+      guidance: row.guidance_ciphertext
+        ? decrypt(row.guidance_ciphertext, this.payloadKey)
+        : null,
+      modelRunAttemptId: row.model_run_attempt_id,
+      sourceRevision: Number(row.source_revision),
+      userId: asUserId(row.user_id),
+      workflowCommandId: row.workflow_command_id,
+    };
+  }
+
+  public async claimRegenerationExecution(input: {
+    actionExecutionId: string;
+  }): Promise<"execute" | "replayed"> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const execution = await client.query<{
+        execution_status: ConversationActionReceipt["execution"];
+      }>(
+        `SELECT execution_status
+         FROM conversation_action_executions
+         WHERE action_execution_id = $1
+         FOR UPDATE`,
+        [input.actionExecutionId],
+      );
+      const row = execution.rows[0];
+      if (!row || row.execution_status === "succeeded" || row.execution_status === "failed" || row.execution_status === "canceled") {
+        await client.query("COMMIT");
+        return "replayed";
+      }
+      const published = await client.query(
+        `SELECT 1
+         FROM journal_generation_commands command
+         INNER JOIN journal_versions version
+           ON version.generation_command_id = command.generation_command_id
+          AND version.status = 'published'
+         WHERE command.action_execution_id = $1
+         LIMIT 1`,
+        [input.actionExecutionId],
+      );
+      if (published.rowCount) {
+        await client.query(
+          `UPDATE conversation_action_executions
+           SET execution_status = 'succeeded', disposition = 'published_before_recovery'
+           WHERE action_execution_id = $1
+             AND execution_status IN ('pending', 'running')`,
+          [input.actionExecutionId],
+        );
+        await insertExecutionReceipt(client, {
+          actionExecutionId: input.actionExecutionId,
+          receiptKey: "execution:succeeded",
+          execution: "succeeded",
+          disposition: "published_before_recovery",
+        });
+        await client.query("COMMIT");
+        return "replayed";
+      }
+      await client.query(
+        `UPDATE conversation_action_executions
+         SET execution_status = 'running'
+         WHERE action_execution_id = $1
+           AND execution_status IN ('pending', 'running')`,
+        [input.actionExecutionId],
+      );
+      await insertExecutionReceipt(client, {
+        actionExecutionId: input.actionExecutionId,
+        receiptKey: "execution:running",
+        execution: "running",
+        disposition: "workflow_running",
+      });
+      await client.query("COMMIT");
+      return "execute";
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async recordRegenerationExecution(input: {
+    actionExecutionId: string;
+    disposition: string;
+    outcome: import("@sayhear/application").JournalRegenerationExecutionOutcome;
+  }): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const current = await client.query<{
+        admission_status: ConversationActionReceipt["admission"];
+        execution_status: ConversationActionReceipt["execution"];
+      }>(
+        `SELECT admission_status, execution_status
+         FROM conversation_action_executions
+         WHERE action_execution_id = $1
+         FOR UPDATE`,
+        [input.actionExecutionId],
+      );
+      const row = current.rows[0];
+      if (!row || row.execution_status === "succeeded" || row.execution_status === "failed" || row.execution_status === "canceled") {
+        await client.query("COMMIT");
+        return;
+      }
+      await client.query(
+        `UPDATE conversation_action_executions
+         SET execution_status = $2, disposition = $3
+         WHERE action_execution_id = $1
+           AND execution_status IN ('pending', 'running')`,
+        [input.actionExecutionId, input.outcome, input.disposition],
+      );
+      await insertExecutionReceipt(client, {
+        actionExecutionId: input.actionExecutionId,
+        receiptKey: `execution:${input.outcome}`,
+        execution: input.outcome,
+        disposition: input.disposition,
+      });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async listPendingFinalizations(input: {
+    limit: number;
+  }): Promise<readonly import("@sayhear/application").ConversationActionFinalizationCommand[]> {
+    const result = await this.pool.query<{
+      action_execution_id: string;
+      generation_command_id: string;
+      interaction_turn_id: string;
+      model_run_attempt_id: string;
+      request_event_revision_id: string;
+      user_id: string;
+    }>(
+      `SELECT execution.action_execution_id, command.generation_command_id,
+          command.interaction_turn_id, attempt.model_run_attempt_id,
+          command.input_revision_id AS request_event_revision_id,
+          command.user_id
+       FROM conversation_action_executions execution
+       INNER JOIN generation_commands command
+         ON command.action_execution_id = execution.action_execution_id
+        AND command.generation_stage = 'action_finalization'
+        AND command.status IN ('prepared', 'compiling', 'running', 'retry_pending')
+       INNER JOIN model_run_attempts attempt
+         ON attempt.generation_command_id = command.generation_command_id
+        AND attempt.attempt_no = 1
+        AND attempt.status IN ('prepared', 'running')
+       WHERE execution.admission_status = 'accepted'
+         AND execution.execution_status IN ('pending', 'running')
+       ORDER BY command.created_at, command.generation_command_id
+       LIMIT $1`,
+      [input.limit],
+    );
+    return result.rows.map((row) => ({
+      actionExecutionId: row.action_execution_id,
+      generationCommandId: asGenerationCommandId(row.generation_command_id),
+      interactionTurnId: asInteractionTurnId(row.interaction_turn_id),
+      modelRunAttemptId: row.model_run_attempt_id,
+      requestEventRevisionId: asConversationEventRevisionId(row.request_event_revision_id),
+      userId: asUserId(row.user_id),
+    }));
+  }
+}
+
+async function createActionFinalizationCommand(
+  client: PoolClient,
+  input: {
+    actionExecutionId: string;
+    decisionCommandId: string;
+    finalizationAttemptId: string;
+    finalizationCommandId: string;
+    now: Date;
+    userId: UserId;
+  },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO generation_commands (
+       generation_command_id, user_id, interaction_turn_id, operation_type,
+       intent_key, subject_type, subject_id, input_revision_kind,
+       input_revision_id, prompt_version, output_format_version, persona_version,
+       product_policy_version, safety_policy_version, relationship_policy_version,
+       locale_policy_version, locale, provider, model, model_snapshot,
+       model_config_version, provider_policy_version, consent_policy_version,
+       freshness_policy, harness_policy_version, conversation_action_catalog_version,
+       expected_data_epoch, generation_stage, action_execution_id, status, created_at
+     )
+     SELECT $1, command.user_id, command.interaction_turn_id, command.operation_type,
+       $2, command.subject_type, command.subject_id, command.input_revision_kind,
+       command.input_revision_id, command.prompt_version, command.output_format_version,
+       command.persona_version, command.product_policy_version, command.safety_policy_version,
+       command.relationship_policy_version, command.locale_policy_version, command.locale,
+       command.provider, command.model, command.model_snapshot, command.model_config_version,
+       command.provider_policy_version, command.consent_policy_version, command.freshness_policy,
+       command.harness_policy_version, command.conversation_action_catalog_version,
+       command.expected_data_epoch, 'action_finalization', $3, 'prepared', $4
+     FROM generation_commands command
+     WHERE command.generation_command_id = $5
+       AND command.user_id = $6
+     ON CONFLICT (action_execution_id) WHERE generation_stage = 'action_finalization' DO NOTHING`,
+    [
+      input.finalizationCommandId,
+      `action-finalization/${input.actionExecutionId}`,
+      input.actionExecutionId,
+      input.now,
+      input.decisionCommandId,
+      input.userId,
+    ],
+  );
+  await client.query(
+    `INSERT INTO model_run_attempts (
+       model_run_attempt_id, user_id, generation_command_id, attempt_no,
+       operation_type, provider, model, model_snapshot, prompt_version,
+       status, created_at
+     )
+     SELECT $1, command.user_id, command.generation_command_id, 1,
+       command.operation_type, command.provider, command.model,
+       command.model_snapshot, command.prompt_version, 'prepared', $2
+     FROM generation_commands command
+     WHERE command.generation_command_id = $3
+       AND command.user_id = $4
+     ON CONFLICT (model_run_attempt_id) DO NOTHING`,
+    [input.finalizationAttemptId, input.now, input.finalizationCommandId, input.userId],
+  );
 }
 
 function mapReceipt(row: ReceiptRow): ConversationActionReceipt {
@@ -491,6 +786,14 @@ function mapReceipt(row: ReceiptRow): ConversationActionReceipt {
     execution: row.execution_status,
     receiptSequence: row.receipt_sequence,
     schemaVersion: row.schema_version,
+    ...(row.finalization_generation_command_id && row.finalization_model_run_attempt_id
+      ? {
+          finalization: {
+            generationCommandId: row.finalization_generation_command_id,
+            modelRunAttemptId: row.finalization_model_run_attempt_id,
+          },
+        }
+      : {}),
   };
 }
 
@@ -504,10 +807,18 @@ async function findReceipt(
       SELECT execution.action_execution_id, execution.action_kind,
         receipt.admission_status, execution.catalog_version,
         receipt.disposition, receipt.execution_status,
-        receipt.receipt_sequence, execution.schema_version
+        receipt.receipt_sequence, execution.schema_version,
+        finalization.generation_command_id AS finalization_generation_command_id,
+        finalization_attempt.model_run_attempt_id AS finalization_model_run_attempt_id
       FROM conversation_action_executions execution
       INNER JOIN conversation_action_receipts receipt
         ON receipt.action_execution_id = execution.action_execution_id
+      LEFT JOIN generation_commands finalization
+        ON finalization.action_execution_id = execution.action_execution_id
+       AND finalization.generation_stage = 'action_finalization'
+      LEFT JOIN model_run_attempts finalization_attempt
+        ON finalization_attempt.generation_command_id = finalization.generation_command_id
+       AND finalization_attempt.attempt_no = 1
       WHERE execution.user_id = $1 AND execution.idempotency_key = $2
       ORDER BY receipt.receipt_sequence DESC LIMIT 1
     `,
@@ -580,12 +891,39 @@ async function insertReceipt(
     `
       INSERT INTO conversation_action_receipts (
         action_receipt_id, action_execution_id, receipt_sequence,
-        admission_status, execution_status, disposition, created_at
-      ) VALUES ($1, $2, 1, $3, $4, $5, CURRENT_TIMESTAMP)
+        receipt_key, admission_status, execution_status, disposition, created_at
+      ) VALUES ($1, $2, 1, 'admission', $3, $4, $5, CURRENT_TIMESTAMP)
     `,
     [receiptId, input.actionExecutionId, input.admission, input.execution, input.disposition],
   );
   return { ...input, receiptSequence: 1 };
+}
+
+async function insertExecutionReceipt(
+  client: PoolClient,
+  input: {
+    actionExecutionId: string;
+    receiptKey: string;
+    execution: ConversationActionReceipt["execution"];
+    disposition: string;
+  },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO conversation_action_receipts (
+       action_receipt_id, action_execution_id, receipt_sequence, receipt_key,
+       admission_status, execution_status, disposition, created_at
+     )
+     SELECT $1, execution.action_execution_id,
+       COALESCE(MAX(receipt.receipt_sequence), 0) + 1, $2,
+       execution.admission_status, $3, $4, CURRENT_TIMESTAMP
+     FROM conversation_action_executions execution
+     LEFT JOIN conversation_action_receipts receipt
+       ON receipt.action_execution_id = execution.action_execution_id
+     WHERE execution.action_execution_id = $5
+     GROUP BY execution.action_execution_id, execution.admission_status
+     ON CONFLICT (action_execution_id, receipt_key) DO NOTHING`,
+    [createUuidV7(new Date()), input.receiptKey, input.execution, input.disposition, input.actionExecutionId],
+  );
 }
 
 async function insertNonAcceptedInTransaction(
@@ -654,4 +992,13 @@ function encrypt(value: string, key: Buffer): Buffer {
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
   return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]);
+}
+
+function decrypt(value: Buffer, key: Buffer): string {
+  const iv = value.subarray(0, 12);
+  const authTag = value.subarray(12, 28);
+  const ciphertext = value.subarray(28);
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
 }

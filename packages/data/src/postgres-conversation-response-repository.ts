@@ -123,6 +123,49 @@ export class PostgresConversationResponseRepository
 {
   public constructor(private readonly pool: Pool) {}
 
+  public async commitActionDecision(input: {
+    completedAt: Date;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    userId: UserId;
+  }): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE generation_commands
+         SET status = 'succeeded', settled_at = $4,
+             recovery_status = 'not_needed', next_recovery_at = NULL
+         WHERE generation_command_id = $1 AND user_id = $2
+           AND status IN ('running', 'compiling')
+           AND authoritative_result_id IS NULL
+           AND generation_stage = 'decision'`,
+        [input.generationCommandId, input.userId, input.modelRunAttemptId, input.completedAt],
+      );
+      await client.query(
+        `UPDATE model_run_attempts
+         SET status = 'succeeded', completed_at = COALESCE(completed_at, $3),
+             recovery_status = 'not_needed', recovery_claimed_at = NULL
+         WHERE model_run_attempt_id = $1 AND generation_command_id = $2
+           AND user_id = $4 AND status = 'running'`,
+        [input.modelRunAttemptId, input.generationCommandId, input.completedAt, input.userId],
+      );
+      await client.query(
+        `UPDATE provider_egress_dispositions
+         SET status = 'completed', completed_at = COALESCE(completed_at, $3)
+         WHERE model_run_attempt_id = $1 AND user_id = $2
+           AND status IN ('dispatched', 'completed')`,
+        [input.modelRunAttemptId, input.userId, input.completedAt],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   public async claimResponseExecution(input: {
     generationCommandId: GenerationCommandId;
     modelRunAttemptId: ModelRunAttemptId;
