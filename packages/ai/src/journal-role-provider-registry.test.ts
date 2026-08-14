@@ -64,9 +64,11 @@ describe("Journal role safeguards", () => {
 
   it("projects transient DialogueState with source-bound fields", async () => {
     const result = await registry.dialogueStateProjector.project({
-      modelConfigVersion: "test",
-      policyVersion: "test",
-      promptVersion: "test",
+      policy: {
+        modelConfigVersion: "test",
+        policyVersion: "test",
+        promptVersion: "test",
+      },
       sources: [{
         actor: "user",
         revisionId: "01984477-59a9-7d20-9d97-e588769566a2" as never,

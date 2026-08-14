@@ -130,12 +130,14 @@ export class PostgresJournalEligibilityRepository
             source_revision,
             policy_version,
             expected_data_epoch,
+            coverage_through_sequence_no,
             status,
             created_at
           )
-          VALUES ($1, 'journal_eligibility', 'daily_session', $2, $3, $4, $5, 'created', $6)
+          VALUES ($1, 'journal_eligibility', 'daily_session', $2, $3, $4, $5, 0, 'created', $6)
           ON CONFLICT
-            (command_type, subject_type, subject_id, source_revision, policy_version)
+            (command_type, subject_type, subject_id, source_revision, policy_version,
+             expected_data_epoch, coverage_through_sequence_no)
           DO UPDATE SET workflow_command_id = workflow_commands.workflow_command_id
           RETURNING workflow_command_id,
             (xmax = 0) AS inserted
@@ -165,6 +167,7 @@ export class PostgresJournalEligibilityRepository
               aggregate_type,
               aggregate_id,
               aggregate_revision,
+              aggregate_data_epoch,
               event_type,
               status,
               next_attempt_at,
@@ -172,14 +175,15 @@ export class PostgresJournalEligibilityRepository
               payload,
               created_at
             )
-            VALUES ($1, $2, 'daily_session', $3, $4, 'journal_eligibility_requested',
-              'pending', $5, 0, $6::jsonb, $7)
+            VALUES ($1, $2, 'daily_session', $3, $4, $5,
+              'journal_eligibility_requested', 'pending', $6, 0, $7::jsonb, $8)
           `,
           [
             createUuidV7(input.evaluatedAt),
             commandId,
             input.dailySessionId,
             sessionRow.source_revision,
+            input.expectedDataEpoch,
             input.evaluatedAt,
             JSON.stringify({
               workflowCommandId: commandId,

@@ -81,6 +81,7 @@ export {
   type DialogueStateContent,
   type DialogueStateField,
   type DialogueStateModel,
+  type DialogueStatePolicy,
   type DialogueStateRepository,
   type DialogueStateService,
   type DialogueStateSource,

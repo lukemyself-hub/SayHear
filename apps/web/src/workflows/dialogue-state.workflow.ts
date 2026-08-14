@@ -6,13 +6,15 @@ import { start } from "workflow/api";
 import { createServerComposition } from "../server-composition";
 import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
 
-export async function dialogueStateWorkflow(input: {
+type DialogueStateWorkflowInput = {
   workflowCommandId: string;
   subjectId: string;
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
-}): Promise<{
+};
+
+export async function dialogueStateWorkflow(input: DialogueStateWorkflowInput): Promise<{
   dailySessionId: string;
   outcome: "failed" | "published" | "stale";
   workflowReceiptId: string;
@@ -21,13 +23,7 @@ export async function dialogueStateWorkflow(input: {
   return await runDialogueStateStep(input);
 }
 
-async function runDialogueStateStep(input: {
-  workflowCommandId: string;
-  subjectId: string;
-  sourceRevision: number;
-  policyVersion: string;
-  expectedDataEpoch: number;
-}) {
+async function runDialogueStateStep(input: DialogueStateWorkflowInput) {
   "use step";
   const composition = createServerComposition();
   const result = await composition.dialogueStateService.run(input.workflowCommandId);

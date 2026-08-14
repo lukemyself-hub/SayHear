@@ -123,9 +123,11 @@ export function createServerComposition() {
     clock: configuration.clock,
     expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     model: journalRoleRegistry.dialogueStateProjector,
-    modelConfigVersion: dialogueStateConfiguration.configVersion,
-    policyVersion: dialogueStateConfiguration.policyVersion,
-    promptVersion: dialogueStateConfiguration.promptFingerprint,
+    policy: {
+      modelConfigVersion: dialogueStateConfiguration.configVersion,
+      policyVersion: dialogueStateConfiguration.policyVersion,
+      promptVersion: dialogueStateConfiguration.promptFingerprint,
+    },
     repository: new PostgresDialogueStateRepository(pool),
   });
   const journalEligibilityService = createJournalEligibilityService({

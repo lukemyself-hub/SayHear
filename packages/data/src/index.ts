@@ -13,4 +13,7 @@ export { PostgresInternalOwnerAccessRepository } from "./postgres-internal-owner
 export { PostgresInternalInspectionRepository } from "./postgres-internal-inspection-repository";
 export { PostgresConversationResponseRepository } from "./postgres-conversation-response-repository";
 export { PostgresUserTextConversationRepository } from "./postgres-user-text-conversation-repository";
-export { PostgresDialogueStateRepository } from "./postgres-dialogue-state-repository";
+export {
+  loadDialogueStateForContext,
+  PostgresDialogueStateRepository,
+} from "./postgres-dialogue-state-repository";

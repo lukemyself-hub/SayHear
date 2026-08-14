@@ -28,15 +28,19 @@ export type DialogueStateSource = Readonly<{
   text: string;
 }>;
 
-export type DialogueStateCommand = Readonly<{
+export type DialogueStatePolicy = Readonly<{
+  modelConfigVersion: string;
+  policyVersion: string;
+  promptVersion: string;
+}>;
+
+export type DialogueStateCommand = DialogueStatePolicy & Readonly<{
   coverageThroughSequence: number;
   dailySessionId: DailySessionId;
   dialogueRevision: number;
   expectedDataEpoch: number;
   id: string;
-  modelConfigVersion: string;
-  policyVersion: string;
-  promptVersion: string;
+  claimId: string;
   sourceRevision: number;
   userId: UserId;
 }>;
@@ -58,15 +62,13 @@ export type CurrentDialogueState = Readonly<{
 
 export type DialogueStateModel = Readonly<{
   project(input: {
-    policyVersion: string;
-    promptVersion: string;
-    modelConfigVersion: string;
+    policy: DialogueStatePolicy;
     sources: readonly DialogueStateSource[];
   }): Promise<DialogueStateContent>;
 }>;
 
 export type DialogueStateRepository = Readonly<{
-  fail(input: { commandId: string; errorCode: string }): Promise<void>;
+  fail(input: { claimId: string; commandId: string; errorCode: string }): Promise<void>;
   loadCommand(input: {
     commandId: string;
     now: Date;
@@ -84,13 +86,11 @@ export type DialogueStateRepository = Readonly<{
   }): Promise<"published" | "stale">;
   queueEligible(input: {
     expectedDataEpoch: number;
-    modelConfigVersion: string;
     now: Date;
-    policyVersion: string;
-    promptVersion: string;
+    policy: DialogueStatePolicy;
   }): Promise<number>;
   reconcile(input: { maximumClaimAgeMs: number; now: Date }): Promise<void>;
-  stale(input: { commandId: string }): Promise<void>;
+  stale(input: { claimId: string; commandId: string }): Promise<void>;
 }>;
 
 export type DialogueStateService = Readonly<{
@@ -106,6 +106,9 @@ const fieldDefinitions = [
   "pendingQuestion",
   "userIntent",
 ] as const;
+
+const boundaryViolationPattern =
+  /(?:safety\s+(?:verdict|decision)|安全(?:判定|决定|结论)|(?:authorize|approve)\s+(?:an?\s+)?action|(?:safe\s+to\s+proceed)|(?:send|execute|delete|publish)\s+(?:the\s+|an?\s+)?(?:email|message|action|data|record|request)|(?:message|email|request).{0,20}(?:should|must|needs to|can be).{0,10}(?:sent|send|executed|approved|authorized)|(?:授权|批准|执行|删除|发布|发送).{0,8}(?:邮件|消息|操作|数据|记录|请求)|(?:邮件|消息|请求).{0,12}(?:应该|必须|可以).{0,8}(?:发送|执行|批准|授权)|(?:close|end|terminate)\s+(?:the\s+)?(?:continuous\s+)?exchange|(?:recommend|suggest|should|must|need to|needs to).{0,20}(?:end|close|terminate).{0,20}(?:exchange|conversation|dialogue)|(?:exchange|conversation|dialogue).{0,20}(?:should|must|needs to|ought to).{0,10}(?:end|close|terminate)|(?:关闭|结束|终止).{0,8}(?:连续)?(?:交流|对话)|(?:交流|对话).{0,12}(?:应该|必须|需要).{0,8}(?:结束|关闭|终止))/i;
 
 export function validateDialogueStateContent(
   content: DialogueStateContent,
@@ -128,8 +131,17 @@ export function validateDialogueStateContent(
       }
       continue;
     }
+    if (
+      (fieldName === "currentTopic" || fieldName === "pendingQuestion") &&
+      typeof field.value !== "string"
+    ) {
+      throw new Error(`DialogueState ${fieldName} value must be a string or null.`);
+    }
     if (typeof field.value === "string" && (!field.value.trim() || field.value.length > 240)) {
       throw new Error(`DialogueState ${fieldName} value is outside the bounded policy.`);
+    }
+    if (typeof field.value === "string" && boundaryViolationPattern.test(field.value)) {
+      throw new Error(`DialogueState ${fieldName} contains a forbidden boundary decision.`);
     }
     if (fieldName === "emotionalTone" && !["calm", "positive", "negative", "mixed", "uncertain"].includes(field.value)) {
       throw new Error("DialogueState emotionalTone is outside the bounded policy.");
@@ -162,9 +174,7 @@ export function createDialogueStateService(dependencies: {
   expectedDataEpoch: number;
   maximumClaimAgeMs?: number;
   model: DialogueStateModel;
-  modelConfigVersion: string;
-  policyVersion: string;
-  promptVersion: string;
+  policy: DialogueStatePolicy;
   repository: DialogueStateRepository;
 }): DialogueStateService {
   if (!Number.isInteger(dependencies.expectedDataEpoch) || dependencies.expectedDataEpoch <= 0) {
@@ -181,20 +191,25 @@ export function createDialogueStateService(dependencies: {
       if (!frozen) return { outcome: "stale" };
       if (
         frozen.command.expectedDataEpoch !== dependencies.expectedDataEpoch ||
-        frozen.command.policyVersion !== dependencies.policyVersion ||
-        frozen.command.promptVersion !== dependencies.promptVersion ||
-        frozen.command.modelConfigVersion !== dependencies.modelConfigVersion ||
+        frozen.command.policyVersion !== dependencies.policy.policyVersion ||
+        frozen.command.promptVersion !== dependencies.policy.promptVersion ||
+        frozen.command.modelConfigVersion !== dependencies.policy.modelConfigVersion ||
         !hasCompleteDialogueStateCoverage(frozen.command, frozen.sources)
       ) {
-        await dependencies.repository.stale({ commandId });
+        await dependencies.repository.stale({
+          claimId: frozen.command.claimId,
+          commandId,
+        });
         return { outcome: "stale" };
       }
 
       try {
         const content = await dependencies.model.project({
-          modelConfigVersion: frozen.command.modelConfigVersion,
-          policyVersion: frozen.command.policyVersion,
-          promptVersion: frozen.command.promptVersion,
+          policy: {
+            modelConfigVersion: frozen.command.modelConfigVersion,
+            policyVersion: frozen.command.policyVersion,
+            promptVersion: frozen.command.promptVersion,
+          },
           sources: frozen.sources,
         });
         validateDialogueStateContent(
@@ -210,6 +225,7 @@ export function createDialogueStateService(dependencies: {
         };
       } catch {
         await dependencies.repository.fail({
+          claimId: frozen.command.claimId,
           commandId,
           errorCode: "dialogue_state_generation_failed",
         });
@@ -225,10 +241,8 @@ export function createDialogueStateService(dependencies: {
       return {
         queued: await dependencies.repository.queueEligible({
           expectedDataEpoch: dependencies.expectedDataEpoch,
-          modelConfigVersion: dependencies.modelConfigVersion,
           now,
-          policyVersion: dependencies.policyVersion,
-          promptVersion: dependencies.promptVersion,
+          policy: dependencies.policy,
         }),
       };
     },

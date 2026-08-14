@@ -77,6 +77,7 @@ describe("DialogueState", () => {
       async loadCommand() {
         return {
           command: {
+            claimId: "01984477-59a9-7d20-9d97-e588769566a9",
             dialogueRevision: 2,
             expectedDataEpoch: 1,
             id: "01984477-59a9-7d20-9d97-e588769566a3",
@@ -112,9 +113,11 @@ describe("DialogueState", () => {
       clock: () => new Date("2026-08-13T12:00:00.000Z"),
       expectedDataEpoch: 1,
       model: { project: async () => content() },
-      modelConfigVersion: "dialogue-state-model:v1",
-      policyVersion: "dialogue-state:v1",
-      promptVersion: "dialogue-state-prompt:v1",
+      policy: {
+        modelConfigVersion: "dialogue-state-model:v1",
+        policyVersion: "dialogue-state:v1",
+        promptVersion: "dialogue-state-prompt:v1",
+      },
       repository,
     });
 
@@ -131,6 +134,7 @@ describe("DialogueState", () => {
       async loadCommand() {
         return {
           command: {
+            claimId: "01984477-59a9-7d20-9d97-e588769566a9",
             dialogueRevision: 1,
             expectedDataEpoch: 1,
             id: "01984477-59a9-7d20-9d97-e588769566a3",
@@ -175,9 +179,11 @@ describe("DialogueState", () => {
           },
         }),
       },
-      modelConfigVersion: "dialogue-state-model:v1",
-      policyVersion: "dialogue-state:v1",
-      promptVersion: "dialogue-state-prompt:v1",
+      policy: {
+        modelConfigVersion: "dialogue-state-model:v1",
+        policyVersion: "dialogue-state:v1",
+        promptVersion: "dialogue-state-prompt:v1",
+      },
       repository,
     });
 
@@ -185,5 +191,37 @@ describe("DialogueState", () => {
       service.run("01984477-59a9-7d20-9d97-e588769566a3"),
     ).resolves.toEqual({ outcome: "failed" });
     expect(published).toBe(false);
+  });
+
+  it("rejects safety, action, and exchange-closure decisions in transient state", () => {
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          ...content(),
+          currentTopic: {
+            confidence: 0.8,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "authorize an action now",
+          },
+        },
+        [sourceRevisionId],
+      ),
+    ).toThrow("forbidden boundary decision");
+  });
+
+  it("rejects non-string free-text fields from untrusted JSON", () => {
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          ...content(),
+          currentTopic: {
+            confidence: 0.8,
+            sourceRevisionIds: [sourceRevisionId],
+            value: { unsafe: true } as never,
+          },
+        },
+        [sourceRevisionId],
+      ),
+    ).toThrow("must be a string or null");
   });
 });

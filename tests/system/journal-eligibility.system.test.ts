@@ -17,6 +17,7 @@ import {
   runJournalEligibility,
   runAutomaticJournal,
   type ConversationTextChampion,
+  type DialogueStateContent,
 } from "@sayhear/application";
 import {
   createBehaviorAwareConversationTextModel,
@@ -32,6 +33,7 @@ import {
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
   PostgresDialogueStateRepository,
+  loadDialogueStateForContext,
   runMigrations,
 } from "@sayhear/data";
 import {
@@ -225,9 +227,11 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       clock: fixedResponseClock,
       expectedDataEpoch: 1,
       model: input.dialogueStateModel ?? journalRoleRegistry.dialogueStateProjector,
-      modelConfigVersion: dialogueStateConfiguration.configVersion,
-      policyVersion: dialogueStateConfiguration.policyVersion,
-      promptVersion: dialogueStateConfiguration.promptFingerprint,
+      policy: {
+        modelConfigVersion: dialogueStateConfiguration.configVersion,
+        policyVersion: dialogueStateConfiguration.policyVersion,
+        promptVersion: dialogueStateConfiguration.promptFingerprint,
+      },
       repository: dialogueStateRepository,
     });
     const evidenceService = createEvidenceService({
@@ -521,7 +525,9 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       text: "The original account of the meeting was incomplete.",
     });
     const composition = buildComposition();
-    await composition.dialogueStateService.scanPending();
+    await expect(composition.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
     const first = await database.pool.query<{ dialogue_state_command_id: string }>(
       `SELECT dialogue_state_command_id FROM dialogue_state_commands
        WHERE daily_session_id = $1 ORDER BY created_at`,
@@ -556,7 +562,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
        FROM dialogue_state_commands WHERE daily_session_id = $1 ORDER BY created_at`,
       [dailySessionId],
     );
-    expect(commands.rows[0]!.status).toBe("published");
+    expect(commands.rows[0]!.status).toBe("stale");
     expect(commands.rows[1]).toMatchObject({ source_revision: "3", status: "created" });
     const newResult = await composition.dialogueStateService.run(
       commands.rows[1]!.dialogue_state_command_id,
@@ -572,6 +578,316 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         [dailySessionId],
       ),
     ).resolves.toMatchObject({ rows: [{ source_revision: "3" }] });
+  });
+
+  it("reclaims a timed-out DialogueState attempt and fences its late result", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-recovery-event",
+      clientTurnId: "dialogue-state-recovery-turn",
+      text: "A timed out projection must be retried without accepting its late result.",
+    });
+    const composition = buildComposition();
+    await expect(composition.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
+    const commandRow = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    const claimed = await composition.dialogueStateRepository.loadCommand({
+      commandId: commandRow.rows[0]!.dialogue_state_command_id,
+      now: fixedResponseClock(),
+    });
+    expect(claimed).not.toBeNull();
+
+    await composition.dialogueStateRepository.reconcile({
+      maximumClaimAgeMs: 60_000,
+      now: new Date(fixedResponseClock().getTime() + 10 * 60_000),
+    });
+    await expect(
+      database.pool.query<{ status: string; last_error_code: string }>(
+        `SELECT status, last_error_code FROM dialogue_state_commands
+         WHERE dialogue_state_command_id = $1`,
+        [commandRow.rows[0]!.dialogue_state_command_id],
+      ),
+    ).resolves.toMatchObject({
+      rows: [{ status: "failed", last_error_code: "dialogue_state_result_unknown" }],
+    });
+    await database.pool.query(
+      `UPDATE outbox_events SET status = 'dead_lettered'
+       WHERE workflow_command_id = $1`,
+      [commandRow.rows[0]!.dialogue_state_command_id],
+    );
+
+    const source = claimed!.sources[0]!;
+    const lateContent: DialogueStateContent = {
+      currentTopic: {
+        confidence: 0.5,
+        sourceRevisionIds: [source.revisionId],
+        value: source.text.slice(0, 240),
+      },
+      emotionalTone: { confidence: 0, sourceRevisionIds: [], value: null },
+      pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
+      userIntent: {
+        confidence: 0.5,
+        sourceRevisionIds: [source.revisionId],
+        value: "sharing",
+      },
+    };
+    await expect(
+      composition.dialogueStateRepository.publish({
+        command: claimed!.command,
+        content: lateContent,
+        now: fixedResponseClock(),
+      }),
+    ).resolves.toBe("stale");
+    await expect(
+      database.pool.query(`SELECT 1 FROM dialogue_state_versions WHERE daily_session_id = $1`, [dailySessionId]),
+    ).resolves.toMatchObject({ rows: [] });
+
+    await expect(composition.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
+    await expect(
+      database.pool.query<{ status: string }>(
+        `SELECT status FROM outbox_events WHERE workflow_command_id = $1`,
+        [commandRow.rows[0]!.dialogue_state_command_id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ status: "pending" }] });
+    await expect(
+      composition.dialogueStateService.run(commandRow.rows[0]!.dialogue_state_command_id),
+    ).resolves.toEqual({ outcome: "published" });
+    const retryClaim = await database.pool.query<{ claim_id: string }>(
+      `SELECT claim_id FROM dialogue_state_commands WHERE dialogue_state_command_id = $1`,
+      [commandRow.rows[0]!.dialogue_state_command_id],
+    );
+    expect(retryClaim.rows[0]!.claim_id).not.toBe(claimed?.command.claimId);
+  });
+
+  it("rejects a claimed projection whose source is corrected before publish", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-source-fence-event",
+      clientTurnId: "dialogue-state-source-fence-turn",
+      text: "This source will be corrected before the projection publishes.",
+    });
+    const composition = buildComposition();
+    await composition.dialogueStateService.scanPending();
+    const commandRow = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    const claimed = await composition.dialogueStateRepository.loadCommand({
+      commandId: commandRow.rows[0]!.dialogue_state_command_id,
+      now: fixedResponseClock(),
+    });
+    const event = await database.pool.query<{ conversation_event_id: string }>(
+      `SELECT conversation_event_id FROM conversation_events
+       WHERE daily_session_id = $1 AND actor = 'user'`,
+      [dailySessionId],
+    );
+    await composition.conversationService.correct(fixedInternalOwnerPrincipal.userId, {
+      eventId: event.rows[0]!.conversation_event_id,
+      locale: "en-US",
+      text: "The corrected source must not be represented by the old projection.",
+    });
+
+    const source = claimed!.sources[0]!;
+    await expect(
+      composition.dialogueStateRepository.publish({
+        command: claimed!.command,
+        content: {
+          currentTopic: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: source.text },
+          emotionalTone: { confidence: 0, sourceRevisionIds: [], value: null },
+          pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
+          userIntent: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: "sharing" },
+        },
+        now: fixedResponseClock(),
+      }),
+    ).resolves.toBe("stale");
+    await expect(
+      database.pool.query(`SELECT 1 FROM dialogue_state_versions WHERE daily_session_id = $1`, [dailySessionId]),
+    ).resolves.toMatchObject({ rows: [] });
+  });
+
+  it("does not restore an older in-flight projection after current is invalidated", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-watermark-first-event",
+      clientTurnId: "dialogue-state-watermark-first-turn",
+      text: "The older projection remains in flight while a newer one completes.",
+    });
+    const composition = buildComposition();
+    await composition.dialogueStateService.scanPending();
+    const firstCommand = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    const olderClaim = await composition.dialogueStateRepository.loadCommand({
+      commandId: firstCommand.rows[0]!.dialogue_state_command_id,
+      now: fixedResponseClock(),
+    });
+
+    await submitConversation({
+      clientEventId: "dialogue-state-watermark-second-event",
+      clientTurnId: "dialogue-state-watermark-second-turn",
+      text: "The newer projection will be invalidated after it publishes.",
+    });
+    await composition.dialogueStateService.scanPending();
+    const commands = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1 ORDER BY created_at`,
+      [dailySessionId],
+    );
+    await composition.dialogueStateService.run(commands.rows[1]!.dialogue_state_command_id);
+    const secondEvent = await database.pool.query<{ conversation_event_id: string }>(
+      `SELECT conversation_event_id FROM conversation_events
+       WHERE daily_session_id = $1 AND client_event_id = 'dialogue-state-watermark-second-event'`,
+      [dailySessionId],
+    );
+    await composition.conversationService.correct(fixedInternalOwnerPrincipal.userId, {
+      eventId: secondEvent.rows[0]!.conversation_event_id,
+      locale: "en-US",
+      text: "The newer source has been corrected and is no longer valid for that version.",
+    });
+    await composition.dialogueStateService.scanPending();
+
+    const source = olderClaim!.sources[0]!;
+    await expect(
+      composition.dialogueStateRepository.publish({
+        command: olderClaim!.command,
+        content: {
+          currentTopic: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: source.text },
+          emotionalTone: { confidence: 0, sourceRevisionIds: [], value: null },
+          pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
+          userIntent: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: "sharing" },
+        },
+        now: fixedResponseClock(),
+      }),
+    ).resolves.toBe("stale");
+    await expect(
+      database.pool.query(`SELECT 1 FROM current_dialogue_states WHERE daily_session_id = $1`, [dailySessionId]),
+    ).resolves.toMatchObject({ rows: [] });
+  });
+
+  it("invalidates DialogueState when an assistant delivery loses authoritative status", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-assistant-delivery-event",
+      clientTurnId: "dialogue-state-assistant-delivery-turn",
+      text: "The assistant delivery may be reconciled after projection.",
+    });
+    const composition = buildComposition();
+    await composition.dialogueStateService.scanPending();
+    const command = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    await composition.dialogueStateService.run(command.rows[0]!.dialogue_state_command_id);
+
+    const assistant = await database.pool.query<{ generation_command_id: string }>(
+      `SELECT generation_command_id FROM conversation_events
+       WHERE daily_session_id = $1 AND actor = 'assistant'`,
+      [dailySessionId],
+    );
+    await database.pool.query(
+      `UPDATE generation_commands
+       SET status = 'failed', authoritative_result_id = NULL
+       WHERE generation_command_id = $1`,
+      [assistant.rows[0]!.generation_command_id],
+    );
+    await expect(composition.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
+
+    await expect(
+      database.pool.query(`SELECT 1 FROM current_dialogue_states WHERE daily_session_id = $1`, [dailySessionId]),
+    ).resolves.toMatchObject({ rows: [] });
+    await expect(
+      database.pool.query<{ status: string }>(
+        `SELECT status FROM dialogue_state_commands WHERE dialogue_state_command_id = $1`,
+        [command.rows[0]!.dialogue_state_command_id],
+      ),
+    ).resolves.toMatchObject({ rows: [{ status: "stale" }] });
+    const rebuilt = await database.pool.query<{
+      dialogue_state_command_id: string;
+      status: string;
+      coverage_through_sequence_no: string;
+    }>(
+      `SELECT dialogue_state_command_id, status, coverage_through_sequence_no
+       FROM dialogue_state_commands WHERE daily_session_id = $1
+       ORDER BY created_at, dialogue_state_command_id`,
+      [dailySessionId],
+    );
+    expect(rebuilt.rows).toHaveLength(2);
+    const rebuiltCommand = rebuilt.rows.find((row) => row.status === "created");
+    expect(rebuiltCommand).toMatchObject({ status: "created", coverage_through_sequence_no: "1" });
+    await expect(
+      composition.dialogueStateService.run(rebuiltCommand!.dialogue_state_command_id),
+    ).resolves.toEqual({ outcome: "published" });
+  });
+
+  it("selects the newest still-valid historical version after current is invalidated", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-history-first-event",
+      clientTurnId: "dialogue-state-history-first-turn",
+      text: "The first topic remains valid context.",
+    });
+    const composition = buildComposition();
+    await composition.dialogueStateService.scanPending();
+    const firstCommand = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1 ORDER BY created_at`,
+      [dailySessionId],
+    );
+    await composition.dialogueStateService.run(firstCommand.rows[0]!.dialogue_state_command_id);
+
+    await submitConversation({
+      clientEventId: "dialogue-state-history-second-event",
+      clientTurnId: "dialogue-state-history-second-turn",
+      text: "The second topic will later be corrected.",
+    });
+    await composition.dialogueStateService.scanPending();
+    const commands = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1 ORDER BY created_at`,
+      [dailySessionId],
+    );
+    await composition.dialogueStateService.run(commands.rows[1]!.dialogue_state_command_id);
+
+    const secondEvent = await database.pool.query<{ conversation_event_id: string }>(
+      `SELECT conversation_event_id FROM conversation_events
+       WHERE daily_session_id = $1 AND client_event_id = 'dialogue-state-history-second-event'`,
+      [dailySessionId],
+    );
+    await composition.conversationService.correct(fixedInternalOwnerPrincipal.userId, {
+      eventId: secondEvent.rows[0]!.conversation_event_id,
+      locale: "en-US",
+      text: "The corrected second topic is different.",
+    });
+    await composition.dialogueStateService.scanPending();
+
+    const session = await database.pool.query<{
+      dialogue_revision: string;
+      source_revision: string;
+    }>(
+      `SELECT dialogue_revision, source_revision FROM daily_sessions WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    const client = await database.pool.connect();
+    try {
+      const fallback = await loadDialogueStateForContext(client, {
+        dailySessionId: asDailySessionId(dailySessionId),
+        dialogueRevision: Number(session.rows[0]!.dialogue_revision),
+        expectedDataEpoch: 1,
+        sourceRevision: Number(session.rows[0]!.source_revision),
+      });
+      expect(fallback.dialogueState).toMatchObject({ status: "lagging", version: 1 });
+      expect(fallback.failure).toBe(false);
+    } finally {
+      client.release();
+    }
   });
 
   it("creates the idempotent eligibility command and outbox event after an explicit end, then reaches an eligible date outcome (AC #1, #4, #5, #6, #10)", async () => {

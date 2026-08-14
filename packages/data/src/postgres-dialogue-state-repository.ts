@@ -2,6 +2,7 @@ import type {
   CurrentDialogueState,
   DialogueStateCommand,
   DialogueStateContent,
+  DialogueStatePolicy,
   DialogueStateRepository,
   DialogueStateSource,
 } from "@sayhear/application";
@@ -16,6 +17,7 @@ import type { Pool } from "pg";
 import { createUuidV7 } from "./uuid-v7";
 
 type DialogueStateCommandRow = Readonly<{
+  claim_id: string;
   coverage_through_sequence_no: string;
   daily_session_id: string;
   dialogue_revision: string;
@@ -41,7 +43,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
       const policy = await client.query(
         `SELECT 1 FROM dialogue_state_policies
          WHERE policy_version = $1 AND prompt_version = $2 AND model_config_version = $3`,
-        [input.policyVersion, input.promptVersion, input.modelConfigVersion],
+        [input.policy.policyVersion, input.policy.promptVersion, input.policy.modelConfigVersion],
       );
       if (policy.rowCount !== 1) {
         throw new Error("DialogueState policy is unavailable or has drifted.");
@@ -50,7 +52,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
       await client.query(
         `UPDATE dialogue_state_commands command
          SET status = 'stale'
-         WHERE command.status IN ('created', 'running')
+         WHERE command.status IN ('created', 'running', 'published')
            AND EXISTS (
              SELECT 1
              FROM dialogue_state_command_source_refs ref
@@ -61,9 +63,21 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
              WHERE ref.dialogue_state_command_id = command.dialogue_state_command_id
                AND (revision.content_purged_at IS NOT NULL
                OR event.lifecycle_status <> 'active'
-                 OR revision.conversation_event_revision_id IS NULL
-                 OR revision.transcript_status NOT IN ('final', 'corrected')
-                 OR event.current_revision_id <> ref.conversation_event_revision_id)
+               OR revision.conversation_event_revision_id IS NULL
+               OR revision.transcript_status NOT IN ('final', 'corrected')
+               OR event.current_revision_id <> ref.conversation_event_revision_id
+               OR (event.actor = 'assistant' AND NOT EXISTS (
+                 SELECT 1 FROM generation_commands response
+                 WHERE response.generation_command_id = event.generation_command_id
+                   AND response.status = 'succeeded'
+                   AND response.authoritative_result_id = ref.conversation_event_revision_id
+               )))
+           )
+           OR EXISTS (
+             SELECT 1 FROM app_users owner
+             WHERE owner.user_id = command.user_id
+               AND (owner.status <> 'active'
+                 OR owner.data_epoch <> command.expected_data_epoch)
            )`,
       );
       await client.query(
@@ -71,18 +85,30 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
          WHERE EXISTS (
            SELECT 1
            FROM dialogue_state_versions version
+           INNER JOIN dialogue_state_commands command
+             ON command.dialogue_state_command_id = version.dialogue_state_command_id
+           INNER JOIN app_users owner
+             ON owner.user_id = version.user_id
            INNER JOIN dialogue_state_command_source_refs ref
              ON ref.dialogue_state_command_id = version.dialogue_state_command_id
            LEFT JOIN conversation_event_revisions revision
              ON revision.conversation_event_revision_id = ref.conversation_event_revision_id
            LEFT JOIN conversation_events event
              ON event.conversation_event_id = revision.conversation_event_id
-           WHERE version.dialogue_state_version_id = current_state.dialogue_state_version_id
+         WHERE version.dialogue_state_version_id = current_state.dialogue_state_version_id
              AND (revision.content_purged_at IS NOT NULL
+             OR owner.data_epoch <> command.expected_data_epoch
+             OR owner.status <> 'active'
              OR event.lifecycle_status <> 'active'
-               OR revision.conversation_event_revision_id IS NULL
-               OR revision.transcript_status NOT IN ('final', 'corrected')
-               OR event.current_revision_id <> ref.conversation_event_revision_id)
+             OR revision.conversation_event_revision_id IS NULL
+             OR revision.transcript_status NOT IN ('final', 'corrected')
+             OR event.current_revision_id <> ref.conversation_event_revision_id
+             OR (event.actor = 'assistant' AND NOT EXISTS (
+               SELECT 1 FROM generation_commands response
+               WHERE response.generation_command_id = event.generation_command_id
+                 AND response.status = 'succeeded'
+                 AND response.authoritative_result_id = ref.conversation_event_revision_id
+             )))
          )`,
       );
 
@@ -99,57 +125,118 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
            ON owner.user_id = session.user_id
           AND owner.status = 'active'
           AND owner.data_epoch = $1
-         LEFT JOIN current_dialogue_states current_state
-           ON current_state.daily_session_id = session.daily_session_id
-         WHERE current_state.daily_session_id IS NULL
-            OR current_state.source_revision < session.source_revision
-            OR current_state.dialogue_revision < session.dialogue_revision
          ORDER BY session.updated_at, session.daily_session_id`,
         [input.expectedDataEpoch],
       );
 
       for (const session of sessions.rows) {
-        const locked = await client.query(
-          `SELECT daily_session_id FROM daily_sessions
+        const locked = await client.query<{
+          daily_session_id: string;
+          dialogue_revision: string;
+          source_revision: string;
+          user_id: string;
+        }>(
+          `SELECT daily_session_id, dialogue_revision::text, source_revision::text, user_id
+           FROM daily_sessions
            WHERE daily_session_id = $1 AND user_id = $2 FOR UPDATE`,
           [session.daily_session_id, session.user_id],
         );
         if (locked.rowCount !== 1) continue;
-
+        const freshSession = locked.rows[0]!;
         const sources = await readValidSources(client, {
-          dailySessionId: session.daily_session_id,
-          userId: session.user_id,
+          dailySessionId: freshSession.daily_session_id,
+          userId: freshSession.user_id,
         });
         const coverage = sources.at(-1)?.sequence ?? 0;
         if (coverage === 0) continue;
+        const current = await client.query<{
+          covered_through_sequence_no: string;
+          dialogue_revision: string;
+          source_revision: string;
+        }>(
+          `SELECT source_revision, dialogue_revision, covered_through_sequence_no
+           FROM current_dialogue_states
+           WHERE daily_session_id = $1`,
+          [freshSession.daily_session_id],
+        );
+        const currentRow = current.rows[0];
+        if (
+          currentRow &&
+          (Number(currentRow.source_revision) > Number(freshSession.source_revision) ||
+            (Number(currentRow.source_revision) === Number(freshSession.source_revision) &&
+              Number(currentRow.dialogue_revision) > Number(freshSession.dialogue_revision)) ||
+            (Number(currentRow.source_revision) === Number(freshSession.source_revision) &&
+              Number(currentRow.dialogue_revision) === Number(freshSession.dialogue_revision) &&
+              Number(currentRow.covered_through_sequence_no) >= coverage))
+        ) {
+          continue;
+        }
 
         const commandId = createUuidV7(input.now);
         const inserted = await client.query<{ dialogue_state_command_id: string }>(
           `INSERT INTO dialogue_state_commands (
              dialogue_state_command_id, user_id, daily_session_id,
              expected_data_epoch, source_revision, dialogue_revision,
-             coverage_through_sequence_no, policy_version, prompt_version,
+             coverage_through_sequence_no, coverage_key, policy_version, prompt_version,
              model_config_version, status, created_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'created', $11)
-           ON CONFLICT (daily_session_id, source_revision, dialogue_revision, policy_version)
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, 'created', $11)
+           ON CONFLICT (
+             daily_session_id, source_revision, dialogue_revision,
+             expected_data_epoch, policy_version, coverage_key
+           )
            DO NOTHING
            RETURNING dialogue_state_command_id`,
           [
             commandId,
-            session.user_id,
-            session.daily_session_id,
+            freshSession.user_id,
+            freshSession.daily_session_id,
             input.expectedDataEpoch,
-            Number(session.source_revision),
-            Number(session.dialogue_revision),
+            Number(freshSession.source_revision),
+            Number(freshSession.dialogue_revision),
             coverage,
-            input.policyVersion,
-            input.promptVersion,
-            input.modelConfigVersion,
+            input.policy.policyVersion,
+            input.policy.promptVersion,
+            input.policy.modelConfigVersion,
             input.now,
           ],
         );
-        if (inserted.rowCount !== 1) continue;
-        const insertedCommandId = inserted.rows[0]!.dialogue_state_command_id;
+        let insertedCommandId = inserted.rows[0]?.dialogue_state_command_id;
+        if (!insertedCommandId) {
+          const recovered = await client.query<{ dialogue_state_command_id: string }>(
+            `UPDATE dialogue_state_commands
+             SET status = 'created', claimed_at = NULL, claim_id = NULL,
+                 last_error_code = NULL
+             WHERE daily_session_id = $1
+               AND source_revision = $2
+               AND dialogue_revision = $3
+             AND expected_data_epoch = $4
+             AND policy_version = $5
+             AND coverage_key = $6
+               AND status = 'failed'
+               AND last_error_code = 'dialogue_state_result_unknown'
+             RETURNING dialogue_state_command_id`,
+            [
+              freshSession.daily_session_id,
+              Number(freshSession.source_revision),
+              Number(freshSession.dialogue_revision),
+              input.expectedDataEpoch,
+              input.policy.policyVersion,
+              coverage,
+            ],
+          );
+          insertedCommandId = recovered.rows[0]?.dialogue_state_command_id;
+          if (!insertedCommandId) continue;
+          await client.query(
+            `UPDATE outbox_events
+             SET status = 'pending', lease_owner = NULL, lease_expires_at = NULL,
+                 workflow_receipt_id = NULL, next_attempt_at = $2
+             WHERE workflow_command_id = $1
+               AND event_type = 'dialogue_state_requested'`,
+            [insertedCommandId, input.now],
+          );
+          queued += 1;
+          continue;
+        }
         for (const source of sources) {
           await client.query(
             `INSERT INTO dialogue_state_command_source_refs (
@@ -161,37 +248,42 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
         await client.query(
           `INSERT INTO workflow_commands (
              workflow_command_id, command_type, subject_type, subject_id,
-             source_revision, policy_version, expected_data_epoch, status, created_at
-           ) VALUES ($1, 'dialogue_state', 'daily_session', $2, $3, $4, $5, 'created', $6)`,
+             source_revision, policy_version, expected_data_epoch,
+             coverage_through_sequence_no, status, created_at
+           ) VALUES ($1, 'dialogue_state', 'daily_session', $2, $3, $4, $5, $6, 'created', $7)`,
           [
             insertedCommandId,
-            session.daily_session_id,
-            Number(session.source_revision),
-            input.policyVersion,
+            freshSession.daily_session_id,
+            Number(freshSession.source_revision),
+            input.policy.policyVersion,
             input.expectedDataEpoch,
+            coverage,
             input.now,
           ],
         );
         await client.query(
           `INSERT INTO outbox_events (
              outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
-             aggregate_revision, event_type, status, next_attempt_at,
-             attempt_count, payload, created_at
+             aggregate_revision, aggregate_data_epoch, aggregate_coverage,
+             event_type, status,
+             next_attempt_at, attempt_count, payload, created_at
            ) VALUES ($1, $2, 'daily_session', $3, $4,
-             'dialogue_state_requested', 'pending', $5, 0, $6::jsonb, $5)`,
+             $5, $6, 'dialogue_state_requested', 'pending', $7, 0, $8::jsonb, $7)`,
           [
             createUuidV7(input.now),
             insertedCommandId,
-            session.daily_session_id,
-            Number(session.source_revision),
+            freshSession.daily_session_id,
+            Number(freshSession.source_revision),
+            input.expectedDataEpoch,
+            coverage,
             input.now,
             JSON.stringify({
               eventType: "dialogue_state_requested",
               expectedDataEpoch: input.expectedDataEpoch,
-              policyVersion: input.policyVersion,
-              sourceRevision: Number(session.source_revision),
+              policyVersion: input.policy.policyVersion,
+              sourceRevision: Number(freshSession.source_revision),
               status: "pending",
-              subjectId: session.daily_session_id,
+              subjectId: freshSession.daily_session_id,
               subjectType: "daily_session",
               workflowCommandId: insertedCommandId,
             }),
@@ -212,7 +304,8 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
   public async reconcile(input: { now: Date; maximumClaimAgeMs: number }): Promise<void> {
     await this.pool.query(
       `UPDATE dialogue_state_commands
-       SET status = 'failed', last_error_code = 'dialogue_state_result_unknown'
+       SET status = 'failed', claimed_at = NULL, claim_id = NULL,
+           last_error_code = 'dialogue_state_result_unknown'
        WHERE status = 'running' AND claimed_at <= $1`,
       [new Date(input.now.getTime() - input.maximumClaimAgeMs)],
     );
@@ -222,12 +315,13 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
     commandId: string;
     now: Date;
   }): Promise<Awaited<ReturnType<DialogueStateRepository["loadCommand"]>>> {
+    const claimId = createUuidV7(input.now);
     const command = await this.pool.query<DialogueStateCommandRow>(
       `UPDATE dialogue_state_commands
-       SET status = 'running', claimed_at = $2
+       SET status = 'running', claim_id = $2, claimed_at = $3
        WHERE dialogue_state_command_id = $1 AND status = 'created'
        RETURNING *`,
-      [input.commandId, input.now],
+      [input.commandId, claimId, input.now],
     );
     const row = command.rows[0];
     if (!row) return null;
@@ -256,6 +350,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
         AND event.daily_session_id = frozen.daily_session_id
         AND event.current_revision_id = ref.conversation_event_revision_id
         AND event.lifecycle_status = 'active'
+        AND event.actor IN ('user', 'assistant')
         AND (event.actor = 'user' OR EXISTS (
           SELECT 1 FROM generation_commands response
           WHERE response.generation_command_id = event.generation_command_id
@@ -268,6 +363,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
     );
     return {
       command: {
+        claimId: row.claim_id,
         coverageThroughSequence: Number(row.coverage_through_sequence_no),
         dailySessionId: asDailySessionId(row.daily_session_id),
         dialogueRevision: Number(row.dialogue_revision),
@@ -298,6 +394,21 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      const claimed = await client.query<{ claim_id: string | null; status: string }>(
+        `SELECT claim_id, status
+         FROM dialogue_state_commands
+         WHERE dialogue_state_command_id = $1
+         FOR UPDATE`,
+        [input.command.id],
+      );
+      if (
+        claimed.rowCount !== 1 ||
+        claimed.rows[0]!.status !== "running" ||
+        claimed.rows[0]!.claim_id !== input.command.claimId
+      ) {
+        await client.query("COMMIT");
+        return "stale";
+      }
       const session = await client.query<{
         data_epoch: string;
         source_revision: string;
@@ -314,6 +425,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
       );
       const sources = await client.query<{
         actor: "user" | "assistant";
+        conversation_event_revision_id: string;
         current_revision_id: string;
         data_epoch: string;
         event_sequence_no: string;
@@ -324,7 +436,8 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
         authoritative: boolean;
       }>(
         `SELECT ref.sequence_no, event.sequence_no AS event_sequence_no,
-            event.actor, event.lifecycle_status, event.current_revision_id,
+            ref.conversation_event_revision_id, event.actor,
+            event.lifecycle_status, event.current_revision_id,
             revision.content_purged_at, revision.transcript_status,
             owner.data_epoch::text,
             CASE WHEN event.actor = 'user' THEN TRUE ELSE EXISTS (
@@ -340,6 +453,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
            ON event.conversation_event_id = revision.conversation_event_id
          INNER JOIN app_users owner ON owner.user_id = event.user_id
          WHERE ref.dialogue_state_command_id = $1
+           AND event.actor IN ('user', 'assistant')
          ORDER BY ref.sequence_no
          FOR UPDATE OF event, revision, owner`,
         [input.command.id],
@@ -348,13 +462,15 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
         session.rowCount === 1 &&
         session.rows[0]!.user_status === "active" &&
         Number(session.rows[0]!.data_epoch) === input.command.expectedDataEpoch &&
+        Number(session.rows[0]!.source_revision) === input.command.sourceRevision &&
+        Number(session.rows[0]!.dialogue_revision) === input.command.dialogueRevision &&
         sources.rows.length === input.command.coverageThroughSequence &&
         sources.rows.every(
           (source, index) =>
             Number(source.sequence_no) === index + 1 &&
             Number(source.sequence_no) === Number(source.event_sequence_no) &&
             source.lifecycle_status === "active" &&
-            source.current_revision_id !== null &&
+            source.current_revision_id === source.conversation_event_revision_id &&
             source.content_purged_at === null &&
             (source.transcript_status === "final" ||
               source.transcript_status === "corrected") &&
@@ -372,13 +488,59 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
         [input.command.dailySessionId],
       );
       const currentRow = current.rows[0];
-      const advances = !currentRow ||
-        Number(currentRow.source_revision) < input.command.sourceRevision ||
-        (Number(currentRow.source_revision) === input.command.sourceRevision &&
-          Number(currentRow.dialogue_revision) < input.command.dialogueRevision) ||
-        (Number(currentRow.source_revision) === input.command.sourceRevision &&
-          Number(currentRow.dialogue_revision) === input.command.dialogueRevision &&
-          Number(currentRow.covered_through_sequence_no) < input.command.coverageThroughSequence);
+      const watermark = currentRow ?? (await client.query<{
+        covered_through_sequence_no: string;
+        dialogue_revision: string;
+        source_revision: string;
+      }>(
+        `SELECT version.source_revision, version.dialogue_revision,
+            version.covered_through_sequence_no
+         FROM dialogue_state_versions version
+         INNER JOIN dialogue_state_commands command
+           ON command.dialogue_state_command_id = version.dialogue_state_command_id
+         INNER JOIN app_users owner
+           ON owner.user_id = version.user_id
+          AND owner.status = 'active'
+          AND owner.data_epoch = command.expected_data_epoch
+         WHERE version.daily_session_id = $1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM dialogue_state_command_source_refs ref
+             LEFT JOIN conversation_event_revisions revision
+               ON revision.conversation_event_revision_id = ref.conversation_event_revision_id
+             LEFT JOIN conversation_events event
+               ON event.conversation_event_id = revision.conversation_event_id
+             WHERE ref.dialogue_state_command_id = version.dialogue_state_command_id
+               AND (
+                 revision.conversation_event_revision_id IS NULL
+                 OR revision.user_id <> version.user_id
+                 OR revision.content_purged_at IS NOT NULL
+                 OR revision.transcript_status NOT IN ('final', 'corrected')
+                 OR event.conversation_event_id IS NULL
+                 OR event.user_id <> version.user_id
+                 OR event.daily_session_id <> version.daily_session_id
+                 OR event.lifecycle_status <> 'active'
+                 OR event.current_revision_id <> ref.conversation_event_revision_id
+                 OR (event.actor = 'assistant' AND NOT EXISTS (
+                   SELECT 1 FROM generation_commands response
+                   WHERE response.generation_command_id = event.generation_command_id
+                     AND response.status = 'succeeded'
+                     AND response.authoritative_result_id = ref.conversation_event_revision_id
+                 ))
+               )
+           )
+         ORDER BY version.source_revision DESC, version.dialogue_revision DESC,
+           version.covered_through_sequence_no DESC, version.version_no DESC
+         LIMIT 1`,
+        [input.command.dailySessionId],
+      )).rows[0];
+      const advances = !watermark ||
+        Number(watermark.source_revision) < input.command.sourceRevision ||
+        (Number(watermark.source_revision) === input.command.sourceRevision &&
+          Number(watermark.dialogue_revision) < input.command.dialogueRevision) ||
+        (Number(watermark.source_revision) === input.command.sourceRevision &&
+          Number(watermark.dialogue_revision) === input.command.dialogueRevision &&
+          Number(watermark.covered_through_sequence_no) < input.command.coverageThroughSequence);
       if (!valid || !advances) {
         await client.query(
           `UPDATE dialogue_state_commands SET status = 'stale'
@@ -455,9 +617,10 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
             ],
           );
       await client.query(
-        `UPDATE dialogue_state_commands SET status = $2
-         WHERE dialogue_state_command_id = $1`,
-        [input.command.id, pointer.rowCount === 1 ? "published" : "stale"],
+        `UPDATE dialogue_state_commands SET status = $2, last_error_code = NULL
+         WHERE dialogue_state_command_id = $1
+           AND status = 'running' AND claim_id = $3`,
+        [input.command.id, pointer.rowCount === 1 ? "published" : "stale", input.command.claimId],
       );
       await client.query("COMMIT");
       return pointer.rowCount === 1 ? "published" : "stale";
@@ -469,19 +632,19 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
     }
   }
 
-  public async fail(input: { commandId: string; errorCode: string }): Promise<void> {
+  public async fail(input: { claimId: string; commandId: string; errorCode: string }): Promise<void> {
     await this.pool.query(
       `UPDATE dialogue_state_commands SET status = 'failed', last_error_code = $2
-       WHERE dialogue_state_command_id = $1 AND status IN ('created', 'running')`,
-      [input.commandId, input.errorCode],
+       WHERE dialogue_state_command_id = $1 AND status = 'running' AND claim_id = $3`,
+      [input.commandId, input.errorCode, input.claimId],
     );
   }
 
-  public async stale(input: { commandId: string }): Promise<void> {
+  public async stale(input: { claimId: string; commandId: string }): Promise<void> {
     await this.pool.query(
       `UPDATE dialogue_state_commands SET status = 'stale'
-       WHERE dialogue_state_command_id = $1 AND status IN ('created', 'running')`,
-      [input.commandId],
+       WHERE dialogue_state_command_id = $1 AND status = 'running' AND claim_id = $2`,
+      [input.commandId, input.claimId],
     );
   }
 }
@@ -516,7 +679,7 @@ async function readValidSources(
      ORDER BY event.sequence_no`,
     [input.dailySessionId, input.userId],
   );
-  return result.rows.map((source) => ({
+  const mapped = result.rows.map((source) => ({
     actor: source.actor,
     revisionId: asConversationEventRevisionId(
       source.conversation_event_revision_id,
@@ -524,6 +687,12 @@ async function readValidSources(
     sequence: Number(source.sequence_no),
     text: source.canonical_text,
   }));
+  const contiguous: DialogueStateSource[] = [];
+  for (const source of mapped) {
+    if (source.sequence !== contiguous.length + 1) break;
+    contiguous.push(source);
+  }
+  return contiguous;
 }
 
 export async function loadDialogueStateForContext(
@@ -548,37 +717,55 @@ export async function loadDialogueStateForContext(
     model_config_version: string;
     content: DialogueStateContent;
   }>(
-    `SELECT current_state.covered_through_sequence_no,
-        current_state.dialogue_state_version_id,
-        current_state.dialogue_revision, current_state.source_revision,
-        current_state.updated_at, version.version_no, version.user_id,
+    `SELECT version.covered_through_sequence_no,
+        version.dialogue_state_version_id,
+        version.dialogue_revision, version.source_revision,
+        version.created_at AS updated_at, version.version_no, version.user_id,
         command.policy_version, command.prompt_version,
         command.model_config_version, version.content
-     FROM current_dialogue_states current_state
-     INNER JOIN dialogue_state_versions version
-       ON version.dialogue_state_version_id = current_state.dialogue_state_version_id
+     FROM dialogue_state_versions version
      INNER JOIN dialogue_state_commands command
        ON command.dialogue_state_command_id = version.dialogue_state_command_id
      INNER JOIN app_users owner
-       ON owner.user_id = current_state.user_id
+       ON owner.user_id = version.user_id
       AND owner.status = 'active'
       AND owner.data_epoch = $2
-     WHERE current_state.daily_session_id = $1
-       AND current_state.source_revision <= $3
-       AND current_state.dialogue_revision <= $4
+     WHERE version.daily_session_id = $1
+       AND command.status = 'published'
+       AND version.source_revision <= $3
+       AND version.dialogue_revision <= $4
        AND NOT EXISTS (
          SELECT 1
          FROM dialogue_state_command_source_refs ref
-         INNER JOIN conversation_event_revisions revision
+         LEFT JOIN conversation_event_revisions revision
            ON revision.conversation_event_revision_id = ref.conversation_event_revision_id
-         INNER JOIN conversation_events event
+         LEFT JOIN conversation_events event
            ON event.conversation_event_id = revision.conversation_event_id
+         LEFT JOIN app_users source_owner
+           ON source_owner.user_id = event.user_id
          WHERE ref.dialogue_state_command_id = version.dialogue_state_command_id
-           AND (revision.content_purged_at IS NOT NULL
+           AND (revision.conversation_event_revision_id IS NULL
+             OR event.conversation_event_id IS NULL
+             OR event.actor NOT IN ('user', 'assistant')
+             OR revision.content_purged_at IS NOT NULL
+             OR revision.user_id <> version.user_id
              OR event.lifecycle_status <> 'active'
+             OR event.user_id <> version.user_id
+             OR event.daily_session_id <> version.daily_session_id
+             OR source_owner.status <> 'active'
+             OR source_owner.data_epoch <> $2
              OR revision.transcript_status NOT IN ('final', 'corrected')
-             OR event.current_revision_id <> ref.conversation_event_revision_id)
-       )`,
+             OR event.current_revision_id <> ref.conversation_event_revision_id
+             OR (event.actor = 'assistant' AND NOT EXISTS (
+               SELECT 1 FROM generation_commands response
+               WHERE response.generation_command_id = event.generation_command_id
+                 AND response.status = 'succeeded'
+                 AND response.authoritative_result_id = revision.conversation_event_revision_id
+             )))
+       )
+     ORDER BY version.source_revision DESC, version.dialogue_revision DESC,
+       version.covered_through_sequence_no DESC, version.version_no DESC
+     LIMIT 1`,
     [
       input.dailySessionId,
       input.expectedDataEpoch,
@@ -595,6 +782,7 @@ export async function loadDialogueStateForContext(
        SELECT 1 FROM dialogue_state_commands command
        WHERE command.daily_session_id = $1
          AND command.status = 'failed'
+         AND command.last_error_code IS NOT NULL
          AND command.source_revision = (
            SELECT MAX(latest.source_revision)
            FROM dialogue_state_commands latest
@@ -626,6 +814,11 @@ export async function loadDialogueStateForContext(
   } catch {
     return { dialogueState: null, failure: true };
   }
+  const currentSources = await readValidSources(client, {
+    dailySessionId: input.dailySessionId,
+    userId: row.user_id,
+  });
+  const currentCoverage = currentSources.at(-1)?.sequence ?? 0;
   return {
     dialogueState: {
       content,
@@ -641,7 +834,8 @@ export async function loadDialogueStateForContext(
       ),
       status:
         Number(row.source_revision) === input.sourceRevision &&
-        Number(row.dialogue_revision) === input.dialogueRevision
+        Number(row.dialogue_revision) === input.dialogueRevision &&
+        Number(row.covered_through_sequence_no) === currentCoverage
           ? "current"
           : "lagging",
       updatedAt: row.updated_at,
