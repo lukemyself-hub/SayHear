@@ -148,6 +148,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        conversation_action_payloads,
+        conversation_action_receipts,
+        conversation_action_executions,
+        conversation_action_handles,
         current_rolling_summaries,
         rolling_summary_versions,
         rolling_summary_command_source_refs,
@@ -1022,11 +1026,11 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         totalTokens: expect.any(Number),
       },
       costMicros: 0,
-      conversationActionCatalogVersion: "conversation-action-catalog:empty:v1",
+      conversationActionCatalogVersion: "conversation-action-catalog:journal-regeneration:v1",
       disposition: "completed",
       freshnessPolicy: "source_valid:v1",
       generationCommandId,
-      harnessPolicyVersion: "conversation-harness:v1",
+      harnessPolicyVersion: "conversation-harness:v2",
       inputTokens: expect.any(Number),
       model: "gpt-5.4",
       modelRunAttemptId,

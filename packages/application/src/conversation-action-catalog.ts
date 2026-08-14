@@ -1,4 +1,9 @@
-import type { ConversationEventRevisionId } from "@sayhear/domain";
+import type {
+  CompiledContextId,
+  ConversationEventRevisionId,
+  GenerationCommandId,
+  UserId,
+} from "@sayhear/domain";
 
 /**
  * The immutable Conversation Action Catalog (ADR-0093, ADR-0094, architecture
@@ -29,7 +34,39 @@ import type { ConversationEventRevisionId } from "@sayhear/domain";
  * example `regenerate_journal`) is published only when its Definition validates.
  * Until then the only valid Catalog has no kind to select.
  */
-export type ConversationActionKind = string;
+export type ConversationActionKind =
+  | "regenerate_journal"
+  | (string & {});
+
+export type ConversationActionTargetKind = "journal";
+
+export type ActionReferenceHandle = Readonly<{
+  actionKinds: readonly ConversationActionKind[];
+  handle: string;
+  targetKind: ConversationActionTargetKind;
+}>;
+
+export type ActionReferenceTarget = Readonly<{
+  actionKinds: readonly ConversationActionKind[];
+  targetId: string;
+  targetKind: ConversationActionTargetKind;
+  targetVersionId: string;
+  sourceRevision: number;
+}>;
+
+export type ConversationFunctionDefinition = Readonly<{
+  description: string;
+  name: string;
+  parameters: Readonly<Record<string, unknown>>;
+  strict: true;
+}>;
+
+export type ConversationActionSchema = Readonly<{
+  additionalProperties: false;
+  properties: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  required: readonly string[];
+  type: "object";
+}>;
 
 /**
  * A single capability descriptor in the Catalog. The full capability metadata
@@ -41,7 +78,24 @@ export type ConversationActionKind = string;
  */
 export type ConversationActionDefinition = Readonly<{
   actionKind: ConversationActionKind;
+  availabilityPolicy: "authenticated_owner";
+  consistencyPolicy: "exact_head";
+  confirmationPolicy: "none";
+  effectClass: "derived_artifact_regeneration";
+  executionMode: "async";
+  handlerBinding: "journal.regeneration.v1";
+  idempotencyScope: "decision_command_action_target";
+  inputSchema: ConversationActionSchema;
+  ratePolicy: Readonly<{
+    maxInFlightPerTarget: 1;
+    name: "journal_regeneration:v1";
+  }>;
   schemaVersion: string;
+  targetContract: Readonly<{
+    handleKind: "journal";
+    versioned: true;
+  }>;
+  trustClass: "user_private_derived_artifact";
 }>;
 
 /**
@@ -62,9 +116,20 @@ export type ConversationActionCatalog = Readonly<{
  * closed rather than accept or invent an Action (AC8).
  */
 export type ConversationActionProposal = Readonly<{
-  actionKind: never;
+  actionKind: "regenerate_journal";
+  arguments: Readonly<{
+    guidance?: string;
+    journalHandle: string;
+  }>;
   requestEventRevisionId: ConversationEventRevisionId;
-  schemaVersion: string;
+  schemaVersion: "regenerate-journal:v1";
+}>;
+
+export type ConversationActionGatewayContext = Readonly<{
+  compiledContextId: CompiledContextId;
+  decisionCommandId: GenerationCommandId;
+  requestEventRevisionId: ConversationEventRevisionId;
+  userId: UserId;
 }>;
 
 /**
@@ -81,7 +146,8 @@ export type ConversationActionProposal = Readonly<{
 export type ConversationHarnessPolicy = Readonly<{
   version: string;
   maxDecisionStages: 1;
-  maxStateChangingActions: 0;
+  maxStateChangingActions: 0 | 1;
+  toolsDisabled?: boolean;
 }>;
 
 /**
@@ -108,3 +174,185 @@ export const INITIAL_CONVERSATION_HARNESS_POLICY: ConversationHarnessPolicy =
     maxDecisionStages: 1,
     maxStateChangingActions: 0,
   });
+
+export const ACTION_ENABLED_CONVERSATION_HARNESS_POLICY: ConversationHarnessPolicy =
+  Object.freeze({
+    version: "conversation-harness:v2",
+    maxDecisionStages: 1,
+    maxStateChangingActions: 1,
+  });
+
+export const REGENERATE_JOURNAL_ACTION_DEFINITION: ConversationActionDefinition =
+  Object.freeze({
+    actionKind: "regenerate_journal",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "exact_head",
+    confirmationPolicy: "none",
+    effectClass: "derived_artifact_regeneration",
+    executionMode: "async",
+    handlerBinding: "journal.regeneration.v1",
+    idempotencyScope: "decision_command_action_target",
+    inputSchema: Object.freeze({
+      additionalProperties: false,
+      properties: Object.freeze({
+        guidance: Object.freeze({
+          maxLength: 1_000,
+          type: "string",
+        }),
+        journalHandle: Object.freeze({
+          minLength: 1,
+          type: "string",
+        }),
+      }),
+      required: Object.freeze(["journalHandle"]),
+      type: "object",
+    }),
+    ratePolicy: Object.freeze({
+      maxInFlightPerTarget: 1,
+      name: "journal_regeneration:v1",
+    }),
+    schemaVersion: "regenerate-journal:v1",
+    targetContract: Object.freeze({
+      handleKind: "journal",
+      versioned: true,
+    }),
+    trustClass: "user_private_derived_artifact",
+  });
+
+export const JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG: ConversationActionCatalog =
+  Object.freeze({
+    definitions: Object.freeze([REGENERATE_JOURNAL_ACTION_DEFINITION]),
+    version: "conversation-action-catalog:journal-regeneration:v1",
+  });
+
+export function actionFunctionsForCatalog(
+  catalog: ConversationActionCatalog,
+  handles: readonly ActionReferenceHandle[] = [],
+): readonly ConversationFunctionDefinition[] {
+  if (!validateConversationActionCatalog(catalog).valid) return [];
+  return catalog.definitions.flatMap((definition) => {
+    if (definition.actionKind !== "regenerate_journal") return [];
+    const handlesForAction = handles.filter((handle) =>
+      handle.actionKinds.includes(definition.actionKind),
+    );
+    if (handlesForAction.length === 0) return [];
+    return [
+      {
+        description:
+          "Regenerate the current Journal using the same evidence. Optional guidance may improve emphasis, clarity, or organization but cannot change facts.",
+        name: definition.actionKind,
+        parameters: definition.inputSchema,
+        strict: true,
+      },
+    ];
+  });
+}
+
+export function normalizeProviderActionProposal(input: {
+  rawArguments: string;
+  rawFunctionName: string;
+  requestEventRevisionId: ConversationEventRevisionId;
+  functions: readonly ConversationFunctionDefinition[];
+}):
+  | Readonly<{
+      proposal: ConversationActionProposal;
+      type: "normalized";
+    }>
+  | Readonly<{ type: "invalid" }> {
+  const definition = input.functions.find(
+    (candidate) => candidate.name === input.rawFunctionName,
+  );
+  if (!definition || definition.strict !== true) return { type: "invalid" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input.rawArguments);
+  } catch {
+    return { type: "invalid" };
+  }
+  if (!isRecord(parsed) || typeof parsed.journalHandle !== "string") {
+    return { type: "invalid" };
+  }
+  if (
+    Object.keys(parsed).some(
+      (key) => key !== "journalHandle" && key !== "guidance",
+    ) ||
+    parsed.journalHandle.length === 0
+  ) {
+    return { type: "invalid" };
+  }
+  if (
+    parsed.guidance !== undefined &&
+    (typeof parsed.guidance !== "string" ||
+      parsed.guidance.length >
+        Number(
+          REGENERATE_JOURNAL_ACTION_DEFINITION.inputSchema.properties.guidance
+            ?.maxLength ?? 1_000,
+        ))
+  ) {
+    return { type: "invalid" };
+  }
+  return {
+    proposal: {
+      actionKind: "regenerate_journal",
+      arguments: {
+        journalHandle: parsed.journalHandle,
+        ...(parsed.guidance === undefined ? {} : { guidance: parsed.guidance }),
+      },
+      requestEventRevisionId: input.requestEventRevisionId,
+      schemaVersion: "regenerate-journal:v1",
+    },
+    type: "normalized",
+  };
+}
+
+export function validateConversationActionCatalog(
+  catalog: ConversationActionCatalog,
+): { valid: true } | { valid: false; reason: string } {
+  if (!catalog.version || !Array.isArray(catalog.definitions)) {
+    return { valid: false, reason: "invalid_catalog" };
+  }
+  if (catalog.definitions.length > 1) {
+    return { valid: false, reason: "multiple_action_definitions" };
+  }
+  const seen = new Set<string>();
+  for (const definition of catalog.definitions) {
+    if (seen.has(definition.actionKind)) {
+      return { valid: false, reason: "duplicate_action_kind" };
+    }
+    seen.add(definition.actionKind);
+    const propertyNames = Object.keys(definition.inputSchema.properties).sort();
+    if (
+      definition.actionKind !== "regenerate_journal" ||
+      definition.availabilityPolicy !== "authenticated_owner" ||
+      definition.consistencyPolicy !== "exact_head" ||
+      definition.effectClass !== "derived_artifact_regeneration" ||
+      definition.trustClass !== "user_private_derived_artifact" ||
+      definition.confirmationPolicy !== "none" ||
+      definition.executionMode !== "async" ||
+      definition.handlerBinding !== "journal.regeneration.v1" ||
+      definition.idempotencyScope !== "decision_command_action_target" ||
+      definition.targetContract.versioned !== true ||
+      definition.targetContract.handleKind !== "journal" ||
+      definition.ratePolicy.maxInFlightPerTarget !== 1 ||
+      definition.ratePolicy.name !== "journal_regeneration:v1" ||
+      definition.inputSchema.type !== "object" ||
+      definition.inputSchema.additionalProperties !== false ||
+      definition.inputSchema.required.length !== 1 ||
+      definition.inputSchema.required[0] !== "journalHandle" ||
+      propertyNames.length !== 2 ||
+      propertyNames[0] !== "guidance" ||
+      propertyNames[1] !== "journalHandle" ||
+      definition.inputSchema.properties.journalHandle?.type !== "string" ||
+      definition.inputSchema.properties.journalHandle?.minLength !== 1 ||
+      definition.inputSchema.properties.guidance?.type !== "string" ||
+      definition.inputSchema.properties.guidance?.maxLength !== 1_000
+    ) {
+      return { valid: false, reason: "invalid_definition_contract" };
+    }
+  }
+  return { valid: true };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

@@ -1,5 +1,7 @@
 import type {
   CompleteResponseMetadata,
+  ActionReferenceHandle,
+  ActionReferenceTarget,
   CompiledContextReferencedEvent,
   CompiledContextSection,
   ContextCompilerRepository,
@@ -37,6 +39,10 @@ type ContextHeadRow = Readonly<{
   closure_policy_version: string;
   continuous_exchange_no: string;
   daily_session_id: string;
+  current_journal_id: string | null;
+  current_journal_version_id: string | null;
+  current_journal_source_revision: string | null;
+  current_journal_version_status: "published" | "stale" | "validation_failed" | "needs_review" | null;
   dialogue_revision: string;
   input_revision_id: string;
   locale: string;
@@ -604,6 +610,10 @@ export class PostgresConversationResponseRepository
             command.relationship_policy_version,
             command.safety_policy_version,
             session.daily_session_id,
+            current_journal.journal_id AS current_journal_id,
+            current_journal.current_version_id AS current_journal_version_id,
+            current_journal_version.source_revision AS current_journal_source_revision,
+            current_journal_version.status AS current_journal_version_status,
             session.activity_state,
             session.closure_policy_version,
             session.current_continuous_exchange_no AS continuous_exchange_no,
@@ -626,6 +636,13 @@ export class PostgresConversationResponseRepository
           INNER JOIN daily_sessions session
             ON session.daily_session_id = turn.daily_session_id
             AND session.user_id = turn.user_id
+          LEFT JOIN journals current_journal
+            ON current_journal.daily_session_id = session.daily_session_id
+            AND current_journal.user_id = command.user_id
+            AND current_journal.deleted_at IS NULL
+          LEFT JOIN journal_versions current_journal_version
+            ON current_journal_version.journal_version_id = current_journal.current_version_id
+            AND current_journal_version.user_id = command.user_id
           LEFT JOIN current_rolling_summaries current_summary
             ON current_summary.daily_session_id = session.daily_session_id
           LEFT JOIN rolling_summary_versions summary
@@ -709,6 +726,22 @@ export class PostgresConversationResponseRepository
 
       await client.query("COMMIT");
       return {
+        ...((row.current_journal_id &&
+          row.current_journal_version_id &&
+          row.current_journal_source_revision &&
+          row.current_journal_version_status === "published")
+          ? {
+              actionReferenceTargets: [
+                {
+                  actionKinds: ["regenerate_journal"],
+                  targetId: row.current_journal_id,
+                  targetKind: "journal" as const,
+                  targetVersionId: row.current_journal_version_id,
+                  sourceRevision: Number(row.current_journal_source_revision),
+                } satisfies ActionReferenceTarget,
+              ],
+            }
+          : {}),
         dailySession: {
           activityState: row.activity_state,
           closurePolicyVersion: row.closure_policy_version,
@@ -889,8 +922,48 @@ export class PostgresConversationResponseRepository
       if (linked.rowCount !== 1) {
         throw new Error("The CompiledContext command link was not established.");
       }
+      for (const handle of input.actionReferenceHandles ?? []) {
+        for (const actionKind of handle.actionKinds) {
+          await client.query(
+            `
+              INSERT INTO conversation_action_handles (
+                handle, compiled_context_id, user_id, generation_command_id,
+                action_kind, target_kind, target_id, target_version_id,
+                source_revision, expected_data_epoch, created_at, expires_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                (SELECT expected_data_epoch FROM generation_commands
+                 WHERE generation_command_id = $4 AND user_id = $3), $10, $11)
+            `,
+            [
+              handle.handle,
+              compiledContextId,
+              input.userId,
+              input.generationCommandId,
+              actionKind,
+              handle.targetKind,
+              handle.targetId,
+              handle.targetVersionId,
+              handle.sourceRevision,
+              input.now,
+              new Date(input.now.getTime() + 30 * 60 * 1_000),
+            ],
+          );
+        }
+      }
       await client.query("COMMIT");
       return {
+        ...(input.actionReferenceHandles === undefined
+          ? {}
+          : {
+              actionReferenceHandles: input.actionReferenceHandles.map(
+                ({ actionKinds, handle, targetKind }) => ({
+                  actionKinds,
+                  handle,
+                  targetKind,
+                }),
+              ),
+            }),
         degradedReason: input.degradedReason,
         dialogueRevision: input.dialogueRevision,
         id: asCompiledContextId(compiledContextId),
@@ -1132,9 +1205,33 @@ export class PostgresConversationResponseRepository
         client,
         input.compiledContextId,
       );
+      const actionHandles = await client.query<{
+        action_kind: string;
+        handle: string;
+        target_kind: "journal";
+      }>(
+        `
+          SELECT action_kind, handle, target_kind
+          FROM conversation_action_handles
+          WHERE compiled_context_id = $1
+            AND generation_command_id = $2
+            AND expires_at > CURRENT_TIMESTAMP
+          ORDER BY handle
+        `,
+        [input.compiledContextId, input.generationCommandId],
+      );
       await client.query("COMMIT");
       return {
         context: {
+          ...(actionHandles.rows.length === 0
+            ? {}
+            : {
+                actionReferenceHandles: actionHandles.rows.map((handle) => ({
+                  actionKinds: [handle.action_kind],
+                  handle: handle.handle,
+                  targetKind: handle.target_kind,
+                })),
+              }),
           compilerVersion: row.context_compiler_version,
           integrity: {
             algorithm: row.context_integrity_algorithm,
@@ -2199,7 +2296,30 @@ async function loadCompiledContext(
     `,
     [compiledContextId],
   );
+  const actionHandles = await client.query<{
+    action_kind: string;
+    handle: string;
+    target_kind: "journal";
+  }>(
+    `
+      SELECT action_kind, handle, target_kind
+      FROM conversation_action_handles
+      WHERE compiled_context_id = $1
+        AND expires_at > CURRENT_TIMESTAMP
+      ORDER BY handle
+    `,
+    [compiledContextId],
+  );
   return {
+    ...(actionHandles.rows.length === 0
+      ? {}
+      : {
+          actionReferenceHandles: actionHandles.rows.map((handle) => ({
+            actionKinds: [handle.action_kind],
+            handle: handle.handle,
+            targetKind: handle.target_kind,
+          })),
+        }),
     degradedReason: row.degraded_reason,
     dialogueRevision: Number(row.dialogue_revision),
     id: compiledContextId,
