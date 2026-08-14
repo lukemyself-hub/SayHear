@@ -3,6 +3,7 @@ import { start } from "workflow/api";
 
 import { createServerComposition } from "../server-composition";
 import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
+import { dialogueStateWorkflow } from "./dialogue-state.workflow";
 
 export async function rollingSummaryWorkflow(input: {
   workflowCommandId: string; subjectId: string; sourceRevision: number; policyVersion: string; expectedDataEpoch: number;
@@ -22,6 +23,8 @@ export function createWorkflowStarter(): WorkflowStarter {
     let run;
     if (input.eventType === "rolling_summary_requested") {
       run = await start(rollingSummaryWorkflow, [workflowInput]);
+    } else if (input.eventType === "dialogue_state_requested") {
+      run = await start(dialogueStateWorkflow, [workflowInput]);
     } else if (input.eventType === "journal_eligibility_requested") {
       run = await start(journalEligibilityWorkflow, [workflowInput]);
     } else {

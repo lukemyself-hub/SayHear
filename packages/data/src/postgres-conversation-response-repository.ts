@@ -30,6 +30,7 @@ import {
 import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
+import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 
 type ContextHeadRow = Readonly<{
   activity_state: "active" | "finalized" | "quiescent";
@@ -47,6 +48,7 @@ type ContextHeadRow = Readonly<{
   relationship_policy_version: string;
   safety_policy_version: string;
   source_revision: string;
+  expected_data_epoch: string;
   rolling_summary_id: string | null;
   rolling_summary_version: string | null;
   rolling_summary_covered_through: string | null;
@@ -607,6 +609,7 @@ export class PostgresConversationResponseRepository
             session.current_continuous_exchange_no AS continuous_exchange_no,
             session.dialogue_revision,
             session.source_revision,
+            command.expected_data_epoch,
             summary.rolling_summary_version_id AS rolling_summary_id,
             summary.version_no AS rolling_summary_version,
             summary.covered_through_sequence_no AS rolling_summary_covered_through,
@@ -678,6 +681,7 @@ export class PostgresConversationResponseRepository
             AND event.actor IN ('user', 'assistant')
             AND event.lifecycle_status = 'active'
             AND revision.content_purged_at IS NULL
+            AND revision.transcript_status IN ('final', 'corrected')
             AND (
               event.actor = 'user'
               OR EXISTS (
@@ -696,6 +700,13 @@ export class PostgresConversationResponseRepository
         [input.generationCommandId, input.userId],
       );
 
+      const dialogueState = await loadDialogueStateForContext(client, {
+        dailySessionId: row.daily_session_id,
+        dialogueRevision: Number(row.dialogue_revision),
+        expectedDataEpoch: Number(row.expected_data_epoch),
+        sourceRevision: Number(row.source_revision),
+      });
+
       await client.query("COMMIT");
       return {
         dailySession: {
@@ -705,6 +716,8 @@ export class PostgresConversationResponseRepository
           id: asDailySessionId(row.daily_session_id),
         },
         dialogueRevision: Number(row.dialogue_revision),
+        dialogueState: dialogueState.dialogueState,
+        dialogueStateFailure: dialogueState.failure,
         events: events.rows.map((event) => ({
           actor: event.actor,
           locale: event.locale,

@@ -6,6 +6,7 @@ import {
   createContinuousExchangeService,
   createConversationResponseService,
   createJournalEligibilityService,
+  createDialogueStateService,
   createEvidenceService,
   createJournalService,
   createRollingSummaryService,
@@ -30,6 +31,7 @@ import {
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
+  PostgresDialogueStateRepository,
   PostgresRollingSummaryRepository,
 } from "@sayhear/data";
 
@@ -69,6 +71,7 @@ export function createServerComposition() {
       { role: "evidence.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:evidence`, policyVersion: "evidence-extraction:v2", promptFingerprint: "evidence-extract:spans:v2" },
       { role: "journal.draft", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-draft`, policyVersion: "journal-generation:v2", promptFingerprint: "journal-draft:evidence-only:v2" },
       { role: "journal.validate", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-validate`, policyVersion: "journal-validator:v2", promptFingerprint: "journal-validate:semantic:v2" },
+      { role: "dialogue.state", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
       { role: "summary.compress", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:summary`, policyVersion: "rolling-summary:v1", promptFingerprint: "rolling-summary:neutral-structured:v1" },
     ],
   });
@@ -118,6 +121,18 @@ export function createServerComposition() {
   });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);
+  const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
+  const dialogueStateService = createDialogueStateService({
+    clock: configuration.clock,
+    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
+    model: journalRoleRegistry.dialogueStateProjector,
+    policy: {
+      modelConfigVersion: dialogueStateConfiguration.configVersion,
+      policyVersion: dialogueStateConfiguration.policyVersion,
+      promptVersion: dialogueStateConfiguration.promptFingerprint,
+    },
+    repository: new PostgresDialogueStateRepository(pool),
+  });
   const rollingSummaryService = createRollingSummaryService({
     clock: configuration.clock,
     expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
@@ -223,6 +238,7 @@ export function createServerComposition() {
     journalEligibilityRepository,
     rollingSummaryService,
     journalEligibilityService,
+    dialogueStateService,
     evidenceService,
     journalService,
     journalRepository,

@@ -15,6 +15,169 @@ import {
 } from "./context-compiler";
 
 describe("Context Compiler", () => {
+  it("uses a valid lagging DialogueState and only sends raw Events after its coverage", async () => {
+    const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
+    const dailySessionId = asDailySessionId(
+      "01984477-59a9-7d20-9d97-e588769566a1",
+    );
+    const generationCommandId = asGenerationCommandId(
+      "01984477-59a9-7d20-9d97-e588769566a2",
+    );
+    const interactionTurnId = asInteractionTurnId(
+      "01984477-59a9-7d20-9d97-e588769566a3",
+    );
+    const coveredRevisionId = asConversationEventRevisionId(
+      "01984477-59a9-7d20-9d97-e588769566a4",
+    );
+    const afterProjectionRevisionId = asConversationEventRevisionId(
+      "01984477-59a9-7d20-9d97-e588769566a5",
+    );
+    const inputRevisionId = asConversationEventRevisionId(
+      "01984477-59a9-7d20-9d97-e588769566a6",
+    );
+    let saved:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const repository: ContextCompilerRepository = {
+      async loadContextSource() {
+        return {
+          dailySession: {
+            activityState: "active" as const,
+            closurePolicyVersion: "daily-session-inactivity:v1",
+            continuousExchangeNo: 1,
+            id: dailySessionId,
+          },
+          dialogueRevision: 3,
+          dialogueState: {
+            content: {
+              currentTopic: {
+                confidence: 0.8,
+                sourceRevisionIds: [coveredRevisionId],
+                value: "the meeting",
+              },
+              emotionalTone: {
+                confidence: 0.6,
+                sourceRevisionIds: [coveredRevisionId],
+                value: "mixed" as const,
+              },
+              pendingQuestion: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+              userIntent: {
+                confidence: 0.9,
+                sourceRevisionIds: [coveredRevisionId],
+                value: "sharing" as const,
+              },
+            },
+            coveredThroughSequence: 1,
+            dialogueRevision: 1,
+            id: "01984477-59a9-7d20-9d97-e588769566a7",
+            modelConfigVersion: "dialogue-state-model:v1",
+            policyVersion: "dialogue-state:v1",
+            promptVersion: "dialogue-state-prompt:v1",
+            sourceRevision: 1,
+            sourceRevisionIds: [coveredRevisionId],
+            status: "lagging" as const,
+            updatedAt: new Date("2026-08-13T11:59:00.000Z"),
+            version: 1,
+          },
+          events: [
+            {
+              actor: "user" as const,
+              locale: "en-US",
+              revisionId: coveredRevisionId,
+              sequence: 1,
+              text: "The meeting was difficult.",
+            },
+            {
+              actor: "assistant" as const,
+              locale: "en-US",
+              revisionId: afterProjectionRevisionId,
+              sequence: 2,
+              text: "I hear that it was difficult.",
+            },
+            {
+              actor: "user" as const,
+              locale: "en-US",
+              revisionId: inputRevisionId,
+              sequence: 3,
+              text: "I want to keep talking about it.",
+            },
+          ],
+          inputRevisionId,
+          locale: "en-US",
+          policyVersions: {
+            localePolicyVersion: "locale-pack-en:v1",
+            outputFormatVersion: "conversation-output:v1",
+            personaVersion: "sayhear-persona:v1",
+            productPolicyVersion: "product-policy:v1",
+            relationshipPolicyVersion: "relationship-boundary:v1",
+            safetyPolicyVersion: "minimum-high-risk-response:v1",
+            taskInstructionVersion: "conversation-text:v1",
+          },
+          sourceRevision: 3,
+        };
+      },
+      async saveCompiledContext(input) {
+        saved = input;
+        return {
+          degradedReason: input.degradedReason,
+          dialogueRevision: input.dialogueRevision,
+          id: asCompiledContextId(
+            "01984477-59a9-7d20-9d97-e588769566a8",
+          ),
+          locale: input.locale,
+          referencedRevisionIds: input.referencedEvents.map(
+            (event) => event.revisionId,
+          ),
+          sourceRevision: input.sourceRevision,
+          statistics: {
+            rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+            selectedEventCount: input.referencedEvents.length,
+            totalTokens: input.totalTokens,
+          },
+        };
+      },
+    };
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-13T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "dialogue-state-context-secret",
+      rawEventTokenBudget: 4_000,
+      repository,
+    });
+
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+
+    expect(saved).toMatchObject({
+      degradedReason: "dialogue_state_lagging",
+      referencedEvents: [
+        { revisionId: afterProjectionRevisionId, sequence: 2 },
+        { revisionId: inputRevisionId, sequence: 3 },
+      ],
+      sections: expect.arrayContaining([
+        expect.objectContaining({ key: "dialogue_state" }),
+      ]),
+    });
+    const payload = compiler.renderPermittedPayload({
+      compilerVersion: saved!.compilerVersion,
+      integrity: saved!.integrity,
+      locale: saved!.locale,
+      policyVersions: saved!.policyVersions,
+      referencedEvents: saved!.referencedEvents,
+      sections: saved!.sections,
+      totalTokens: saved!.totalTokens,
+    });
+    expect(payload.messages.map((message) => message.revisionId)).toEqual([
+      afterProjectionRevisionId,
+      inputRevisionId,
+    ]);
+    expect(payload.instructions).toContain("status=lagging");
+    expect(payload.instructions).toContain("Do not use DialogueState confidence");
+  });
+
   it("keeps the current User input and the newest contiguous history within budget", async () => {
     const userId = asUserId("01984477-59a9-7d20-9d97-e588769566a0");
     const dailySessionId = asDailySessionId(

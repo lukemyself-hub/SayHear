@@ -10,6 +10,7 @@ export async function GET(request: Request): Promise<Response> {
     continuousExchangeService: composition.continuousExchangeService,
     conversationResponseService: composition.conversationResponseService,
     journalEligibilityService: composition.journalEligibilityService,
+    dialogueStateService: composition.dialogueStateService,
     rollingSummaryService: composition.rollingSummaryService,
     outboxDispatcherService: composition.outboxDispatcherService,
     scannerSecret: composition.recoveryScannerSecret,

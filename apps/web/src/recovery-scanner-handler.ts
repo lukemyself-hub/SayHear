@@ -1,6 +1,7 @@
 import type {
   ContinuousExchangeService,
   ConversationResponseService,
+  DialogueStateService,
   JournalEligibilityService,
   OutboxDispatcherService,
   RollingSummaryService,
@@ -12,6 +13,7 @@ export function createRecoveryScannerHandler(dependencies: {
   continuousExchangeService: ContinuousExchangeService;
   journalEligibilityService: JournalEligibilityService;
   outboxDispatcherService: OutboxDispatcherService;
+  dialogueStateService?: DialogueStateService;
   rollingSummaryService?: RollingSummaryService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
@@ -31,6 +33,9 @@ export function createRecoveryScannerHandler(dependencies: {
       await dependencies.continuousExchangeService.scanDueInactivity();
     const eligibility =
       await dependencies.journalEligibilityService.scanPendingEligibility();
+    const dialogueState = dependencies.dialogueStateService
+      ? await dependencies.dialogueStateService.scanPending()
+      : { queued: 0 };
     const rollingSummary = dependencies.rollingSummaryService
       ? await dependencies.rollingSummaryService.scanPending()
       : { queued: 0 };
@@ -40,6 +45,7 @@ export function createRecoveryScannerHandler(dependencies: {
       inactivity,
       responses,
       eligibility,
+      dialogueState,
       rollingSummary,
       outbox,
     });

@@ -75,6 +75,20 @@ export {
 export { hasContiguousCoverage, validateRollingSummaryContent, type CurrentRollingSummary, type RollingSummaryCommand, type RollingSummaryContent, type RollingSummarySource } from "./rolling-summary";
 export { createRollingSummaryService, type RollingSummaryModel, type RollingSummaryRepository, type RollingSummaryService } from "./rolling-summary-service";
 export {
+  createDialogueStateService,
+  hasCompleteDialogueStateCoverage,
+  validateDialogueStateContent,
+  type CurrentDialogueState,
+  type DialogueStateCommand,
+  type DialogueStateContent,
+  type DialogueStateField,
+  type DialogueStateModel,
+  type DialogueStatePolicy,
+  type DialogueStateRepository,
+  type DialogueStateService,
+  type DialogueStateSource,
+} from "./dialogue-state";
+export {
   createConversationResponseService,
   type CompleteResponseMetadata,
   type ConversationResponseRepository,
