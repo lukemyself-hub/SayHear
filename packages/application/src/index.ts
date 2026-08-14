@@ -110,14 +110,38 @@ export {
   type ProviderEgressStreamEvent,
 } from "./conversation-model";
 export {
+  ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
+  JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  REGENERATE_JOURNAL_ACTION_DEFINITION,
+  actionFunctionsForCatalog,
+  normalizeProviderActionProposal,
+  validateConversationActionCatalog,
+  type ActionReferenceHandle,
+  type ActionReferenceTarget,
+  type ConversationActionSchema,
   type ConversationActionCatalog,
   type ConversationActionDefinition,
   type ConversationActionKind,
+  type ConversationActionGatewayContext,
   type ConversationActionProposal,
+  type ConversationActionTargetKind,
+  type ConversationFunctionDefinition,
   type ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
+export {
+  createConversationActionGateway,
+  createJournalRegenerationActionHandler,
+  type ConversationActionAdmission,
+  type ConversationActionExecution,
+  type ConversationActionGateway,
+  type ConversationActionGatewayRepository,
+  type ConversationActionHandler,
+  type ConversationActionReceipt,
+  type PreparedConversationAction,
+} from "./conversation-action-gateway";
+export type { ActionReferenceBinding } from "./conversation-action-handles";
 export {
   createConversationAgentHarness,
   type ConversationAgentHarness,

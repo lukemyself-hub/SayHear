@@ -302,9 +302,10 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | Source Revision 被 corrected | 旧 Evidence 失效，新 Evidence 指向新 Revision |
 | 同一 Journal Workflow 并发启动 | 只有一个正式 published 版本 |
 | Journal / Reflection 对同一 source 重新生成 | logical ID 不变；产生新的不可变 Version ID |
-| 用户因表达质量请求重新生成某一天 Journal | 一个 Derived Artifact Regeneration Action 冻结 current target、有效 source、generation / validation contract 与 rate policy；验证后的新 JournalVersion 原子取代 current |
+| 用户因表达质量请求重新生成某一天 Journal | 一个 Derived Artifact Regeneration Action 冻结 current target、有效 source、受限 Regeneration Guidance、generation / validation contract 与 rate policy；验证后的新 JournalVersion 原子取代 current |
 | 用户只说“这篇不满意”，无法区分理解错误或表达质量 | 0 个 Action；自然澄清一次是 Understanding Correction 还是 regeneration |
-| 用户要求第一人称、指定正文、多种候选或连续抽卡 | 当前 Catalog / policy 返回 `unsupported` 或 rate rejection；不绕过第三人称观察与自动发布边界 |
+| 用户提供表达建议但未纠正事实 | Guidance 作为本次 GenerationCommand 的短期加密输入；只影响重点、清晰度或组织方式，不能改变 source、Evidence、第三人称观察或不确定性边界 |
+| 用户要求事实改写、第一人称、指定正文、多种候选或连续抽卡 | 不按 regeneration 执行；明确事实纠正进入 Journal Correction 语义，无法判断时自然澄清一次，其他不支持的要求返回 `unsupported` 或 rate rejection |
 | Journal regeneration 生成失败 | receipt 准确报告失败；仍安全的旧 current Journal 保持可见，不提交部分 Version |
 | 1A.1 已显示部分 text 后崩溃 | Turn 标记 `interrupted`；无 Assistant Event；显式 Retry |
 | 模型完成但 Assistant revision 提交前崩溃 | `result_unknown` 后收敛为 `interrupted`；不猜测正文 |
@@ -460,8 +461,9 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 - Catalog 只发布无需二次确认的 Action；Definition / handler binding、安全
   conformance 与中英文 selection dataset 通过后才由开发者 enable；
 - Journal Regeneration 使用 current 有效 source 和同一 validation / publication
-  pipeline；成功创建新 JournalVersion，失败保留旧 current，任意风格与连续抽卡
-  返回 `unsupported`；
+  pipeline；成功创建新 JournalVersion，失败保留旧 current；受限 Regeneration Guidance
+  可以影响表达重点与组织，但不能改写事实、Evidence、第三人称观察或不确定性边界；
+  任意正文、事实纠正与连续抽卡返回不支持或进入对应的澄清路径；
 - Action Admission checkpoint 后临时 payload 不可读，长期 envelope / Receipt、
   日志、Trace 与 Workflow history 不复制用户正文；
 - 验证通过的 Journal 按 v0.1 policy 自动发布，失败结果不发布；

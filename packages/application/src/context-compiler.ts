@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import {
   CHINESE_LOCALE_PACK_VERSION,
@@ -14,6 +15,10 @@ import type {
 } from "@sayhear/domain";
 import type { CurrentDialogueState } from "./dialogue-state";
 import type { CurrentRollingSummary } from "./rolling-summary";
+import type {
+  ActionReferenceHandle,
+  ActionReferenceTarget,
+} from "./conversation-action-catalog";
 
 export type ContextPolicyVersions = Readonly<{
   localePolicyVersion: string;
@@ -34,6 +39,7 @@ export type ContextSourceEvent = Readonly<{
 }>;
 
 export type ContextSourceSnapshot = Readonly<{
+  actionReferenceTargets?: readonly ActionReferenceTarget[];
   dailySession: Readonly<{
     activityState: "active" | "finalized" | "quiescent";
     closurePolicyVersion: string;
@@ -91,6 +97,7 @@ export type CompiledContextReferencedEvent = ContextSourceEvent &
   }>;
 
 export type CompiledContext = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   degradedReason: CompiledContextDegradedReason;
   dialogueRevision: number;
   id: CompiledContextId;
@@ -105,6 +112,7 @@ export type CompiledContext = Readonly<{
 }>;
 
 export type CompiledContextRenderSource = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   compilerVersion: string;
   integrity: Readonly<{
     algorithm: "hmac-sha256";
@@ -120,6 +128,7 @@ export type CompiledContextRenderSource = Readonly<{
 }>;
 
 export type RenderedCompiledContextPayload = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   instructions: string;
   messages: readonly Readonly<{
     revisionId: ConversationEventRevisionId;
@@ -135,6 +144,12 @@ export type ContextCompilerRepository = Readonly<{
     userId: UserId;
   }): Promise<ContextSourceSnapshot>;
   saveCompiledContext(input: {
+    actionReferenceHandles?: readonly (ActionReferenceHandle &
+      Readonly<{
+        sourceRevision: number;
+        targetId: string;
+        targetVersionId: string;
+      }>)[];
     compilerVersion: string;
     degradedReason: CompiledContextDegradedReason;
     dialogueRevision: number;
@@ -278,8 +293,21 @@ export function createContextCompiler(dependencies: {
         dependencies.contentHmacSecret,
         sections,
       );
+      const actionReferenceHandles = (source.actionReferenceTargets ?? []).map(
+        (target) => ({
+          actionKinds: target.actionKinds,
+          handle: `shh-handle-${randomUUID()}`,
+          targetKind: target.targetKind,
+          targetId: target.targetId,
+          targetVersionId: target.targetVersionId,
+          sourceRevision: target.sourceRevision,
+        }),
+      );
 
       return dependencies.repository.saveCompiledContext({
+        ...(actionReferenceHandles.length === 0
+          ? {}
+          : { actionReferenceHandles }),
         compilerVersion: dependencies.compilerVersion,
         degradedReason,
         dialogueRevision: source.dialogueRevision,
@@ -297,10 +325,10 @@ export function createContextCompiler(dependencies: {
         sectionBudgets: {
           committedRawEvents: dependencies.rawEventTokenBudget,
         },
-        sections,
-        sourceRevision: source.sourceRevision,
-        totalTokens,
-        userId: input.userId,
+          sections,
+          sourceRevision: source.sourceRevision,
+          totalTokens,
+          userId: input.userId,
       });
     },
     renderPermittedPayload(source) {
@@ -373,6 +401,9 @@ export function createContextCompiler(dependencies: {
       }
 
       return {
+        ...(source.actionReferenceHandles === undefined
+          ? {}
+          : { actionReferenceHandles: source.actionReferenceHandles }),
         instructions: renderableSections
           .filter(
             (section) =>
@@ -380,7 +411,8 @@ export function createContextCompiler(dependencies: {
               section.key !== "current_user_input",
           )
           .map((section) => section.content)
-          .join("\n"),
+          .join("\n") +
+          renderActionReferenceInstructions(source.actionReferenceHandles),
         messages: [...history, currentInput]
           .toSorted((left, right) => left.sequence - right.sequence)
           .map((event) => ({
@@ -391,6 +423,20 @@ export function createContextCompiler(dependencies: {
       };
     },
   };
+}
+
+function renderActionReferenceInstructions(
+  handles: readonly ActionReferenceHandle[] | undefined,
+): string {
+  if (!handles || handles.length === 0) return "";
+  return [
+    "Available Action Reference Handles (opaque and command-scoped):",
+    ...handles.flatMap((handle) =>
+      handle.actionKinds.map(
+        (actionKind) => `- ${actionKind}: ${handle.handle}`,
+      ),
+    ),
+  ].join("\n");
 }
 
 function estimateTokens(text: string): number {

@@ -6,6 +6,10 @@ import type {
 } from "@sayhear/domain";
 
 import type { CompiledContextRenderSource } from "./context-compiler";
+import type {
+  ConversationActionProposal,
+  ConversationFunctionDefinition,
+} from "./conversation-action-catalog";
 
 /**
  * The Provider identity recorded on a Conversation Text Champion and frozen on
@@ -38,11 +42,13 @@ export type ConversationTextMessage = Readonly<{
 }>;
 
 export type ConversationTextModelRequest = Readonly<{
+  functions?: readonly ConversationFunctionDefinition[];
   instructions: string;
   locale: string;
   messages: readonly ConversationTextMessage[];
   model: string;
   signal?: AbortSignal;
+  toolsDisabled?: boolean;
 }>;
 
 export type ConversationTextModelStreamEvent =
@@ -68,14 +74,27 @@ export type ConversationTextModel = Readonly<{
   ): AsyncIterable<ConversationTextModelStreamEvent>;
 }>;
 
-export type ProviderEgressStreamEvent = ConversationTextModelStreamEvent;
+export type ProviderEgressStreamEvent =
+  | Exclude<ConversationTextModelStreamEvent, { type: "tool_call" }>
+  | Readonly<{
+      rawArguments: string;
+      rawFunctionName: string;
+      type: "tool_call";
+    }>
+  | Readonly<{
+      proposal: ConversationActionProposal;
+      type: "action_proposal";
+    }>;
 
 export type ProviderEgressPort = Readonly<{
   stream(input: {
     compiledContextId: CompiledContextId;
+    functions?: readonly ConversationFunctionDefinition[];
     generationCommandId: GenerationCommandId;
     modelRunAttemptId: ModelRunAttemptId;
+    requestEventRevisionId?: ConversationEventRevisionId;
     signal?: AbortSignal;
+    toolsDisabled?: boolean;
   }): AsyncIterable<ProviderEgressStreamEvent>;
 }>;
 

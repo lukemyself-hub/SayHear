@@ -125,10 +125,13 @@ Journal Correction 不把 Journal 变成用户亲自编辑的文本；它通过�
 保留 AI 观察视角，同时让错误版本不再作为当前正式记录。
 
 Journal Regeneration 不表示原理解错误。用户可以针对某一天 current Journal 请求
-重新生成表达，但仍使用当前有效 Conversation / Evidence、第三人称观察视角和同一
-事实 / 推断边界。新 JournalVersion 只有通过既有 validator 后才替换 current；
-产品不提供任意文风、第一人称、指定正文、多候选批准或连续抽卡。用户仅表示“不满意”
-而无法判断是理解错误还是表达质量问题时，SayHear 自然澄清一次。
+重新生成表达，并附带受限的自然语言 `Regeneration Guidance`，例如指出希望突出某个
+情绪变化、减少流水账或改善组织方式；系统仍使用当前有效 Conversation / Evidence、
+第三人称观察视角和同一事实 / 推断边界。新 JournalVersion 只有通过既有 validator
+后才替换 current；产品不提供事实改写、任意正文、第一人称、指定最终文本、多候选批准
+或连续抽卡。用户仅表示“不满意”而无法判断是理解错误还是表达质量问题时，SayHear
+自然澄清一次；明确的事实纠正进入 Journal Correction 语义，不作为 regeneration
+guidance 执行。
 
 ---
 

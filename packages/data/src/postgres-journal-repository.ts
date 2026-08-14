@@ -77,7 +77,8 @@ export class PostgresJournalRepository implements JournalRepository {
         `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
           generation_policy_version, expected_data_epoch, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version) DO NOTHING
+         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version)
+         WHERE generation_kind = 'automatic' DO NOTHING
          RETURNING generation_command_id`,
         [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion, input.expectedDataEpoch],
       );
@@ -138,7 +139,8 @@ export class PostgresJournalRepository implements JournalRepository {
         `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
           generation_policy_version, expected_data_epoch, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version) DO NOTHING
+         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version)
+         WHERE generation_kind = 'automatic' DO NOTHING
          RETURNING generation_command_id`,
         [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision,
           input.generationPolicyVersion, input.expectedDataEpoch, now],
@@ -186,6 +188,7 @@ export class PostgresJournalRepository implements JournalRepository {
           generation_command_id, model_run_attempt_id, supersedes_version_id, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', $10, $11, $12, $13)
          ON CONFLICT (journal_id, source_revision, generation_policy_version)
+         WHERE generation_kind = 'automatic'
          DO NOTHING
          RETURNING journal_version_id, (xmax = 0) AS inserted`,
         [createUuidV7(now), journal.rows[0]!.journal_id, input.userId, input.dailySessionId, input.sourceRevision,
@@ -278,7 +281,8 @@ export class PostgresJournalRepository implements JournalRepository {
         `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
           generation_policy_version, expected_data_epoch, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version) DO NOTHING`,
+         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version)
+         WHERE generation_kind = 'automatic' DO NOTHING`,
         [input.generationCommandId, ownerRow.user_id, input.dailySessionId, input.sourceRevision,
           input.generationPolicyVersion, input.expectedDataEpoch],
       );

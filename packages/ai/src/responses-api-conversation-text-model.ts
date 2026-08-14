@@ -42,6 +42,20 @@ export function createResponsesApiConversationTextModel(input: {
             model: request.model,
             store: false,
             stream: true,
+            ...(request.functions && request.functions.length > 0
+              ? {
+                  tool_choice: "auto",
+                  tools: request.functions.map((definition) => ({
+                    function: {
+                      description: definition.description,
+                      name: definition.name,
+                      parameters: definition.parameters,
+                      strict: definition.strict,
+                    },
+                    type: "function",
+                  })),
+                }
+              : {}),
           }),
           headers: {
             authorization: `Bearer ${input.apiKey}`,
@@ -60,6 +74,11 @@ export function createResponsesApiConversationTextModel(input: {
         }
 
         let completed = false;
+        let functionName: string | null = null;
+        let functionArguments = "";
+        let functionCallEmitted = false;
+        let functionCallStarted = false;
+        let functionCallOutputItemDone = false;
         for await (const event of parseServerSentEvents(response.body)) {
           if (event.type === "response.output_text.delta") {
             const delta = event.delta;
@@ -67,6 +86,65 @@ export function createResponsesApiConversationTextModel(input: {
               throw new ProviderDispatchError("invalid_response");
             }
             yield { delta, type: "delta" };
+          } else if (event.type === "response.output_item.added") {
+            const item = isRecord(event.item) ? event.item : null;
+            if (
+              item &&
+              item.type === "function_call" &&
+              typeof item.name === "string"
+            ) {
+              if (functionCallStarted) {
+                throw new ProviderDispatchError("invalid_response");
+              }
+              functionCallStarted = true;
+              functionName = item.name;
+              if (typeof item.arguments === "string") {
+                functionArguments = item.arguments;
+              }
+            }
+          } else if (event.type === "response.function_call_arguments.delta") {
+            if (typeof event.delta !== "string") {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            functionArguments += event.delta;
+          } else if (event.type === "response.function_call_arguments.done") {
+            if (
+              typeof event.arguments !== "string" ||
+              !functionName ||
+              functionCallEmitted
+            ) {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            functionArguments = event.arguments;
+            functionCallEmitted = true;
+            yield {
+              rawArguments: functionArguments,
+              rawFunctionName: functionName,
+              type: "tool_call",
+            };
+          } else if (event.type === "response.output_item.done") {
+            const item = isRecord(event.item) ? event.item : null;
+            if (item && item.type === "function_call") {
+              if (
+                functionCallOutputItemDone ||
+                typeof item.name !== "string"
+              ) {
+                throw new ProviderDispatchError("invalid_response");
+              }
+              functionCallOutputItemDone = true;
+              if (!functionCallStarted) functionCallStarted = true;
+              const argumentsValue = item.arguments;
+              if (functionCallEmitted) continue;
+              if (typeof argumentsValue !== "string") {
+                throw new ProviderDispatchError("invalid_response");
+              }
+              functionCallEmitted = true;
+              yield {
+                rawArguments: argumentsValue,
+                rawFunctionName: item.name,
+                type: "tool_call",
+              };
+            }
           } else if (event.type === "response.completed") {
             const completedResponse = event.response;
             if (!isRecord(completedResponse)) {

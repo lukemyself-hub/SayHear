@@ -10,8 +10,10 @@ import type {
 import type { ContextCompiler } from "./context-compiler";
 import type {
   ConversationActionCatalog,
+  ActionReferenceHandle,
   ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
+import type { ConversationActionReceipt } from "./conversation-action-gateway";
 import type { ConversationAgentHarness } from "./conversation-agent-harness";
 import { type ProviderDispatchErrorCategory } from "./conversation-model";
 import type {
@@ -47,6 +49,10 @@ export type ConversationResponseStreamEvent =
   | Readonly<{
       category: ProviderDispatchErrorCategory;
       type: "response_failed" | "response_interrupted";
+    }>
+  | Readonly<{
+      receipt: ConversationActionReceipt;
+      type: "action_admitted";
     }>;
 
 export type CompleteResponseMetadata = Readonly<{
@@ -200,6 +206,7 @@ export function createConversationResponseService(dependencies: {
   async function* streamResponse(
     userId: UserId,
     turn: Pick<UserTextTurn, "generation" | "turn">,
+    requestEventRevisionId: ConversationEventRevisionId | null,
     initialEvent:
       | Extract<
           ConversationResponseStreamEvent,
@@ -257,6 +264,9 @@ export function createConversationResponseService(dependencies: {
       });
       for await (const event of dependencies.harness.runDecision(
         {
+          ...(context.actionReferenceHandles === undefined
+            ? {}
+            : { actionReferenceHandles: context.actionReferenceHandles }),
           catalog: dependencies.catalog,
           catalogVersion: dependencies.catalog.version,
           compiledContextId: context.id,
@@ -264,6 +274,7 @@ export function createConversationResponseService(dependencies: {
           harnessPolicy: dependencies.harnessPolicy,
           interactionTurnId: turn.turn.id,
           modelRunAttemptId: turn.generation.attemptId,
+          ...(requestEventRevisionId ? { requestEventRevisionId } : {}),
           userId,
         },
         signal,
@@ -278,6 +289,9 @@ export function createConversationResponseService(dependencies: {
             revisionId: event.assistantEventRevisionId,
             type: "assistant_committed",
           };
+        } else if (event.type === "action_admitted") {
+          settled = true;
+          yield event;
         } else {
           settled = true;
           yield {
@@ -307,6 +321,7 @@ export function createConversationResponseService(dependencies: {
       yield* streamResponse(
         userId,
         turn,
+        turn.message.revisionId,
         {
           generationCommandId: turn.generation.commandId,
           message: turn.message,
@@ -324,6 +339,7 @@ export function createConversationResponseService(dependencies: {
       yield* streamResponse(
         userId,
         retry,
+        null,
         {
           generationCommandId: retry.generation.commandId,
           modelRunAttemptId: retry.generation.attemptId,
@@ -384,6 +400,7 @@ export function createConversationResponseService(dependencies: {
               status: "open",
             },
           },
+          null,
           null,
         )) {
           owned = true;

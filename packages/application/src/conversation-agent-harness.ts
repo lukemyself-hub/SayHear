@@ -13,9 +13,17 @@ import type {
   ConversationResponseRepository,
 } from "./conversation-response";
 import type {
+  ActionReferenceHandle,
   ConversationActionCatalog,
   ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
+import {
+  actionFunctionsForCatalog,
+  validateConversationActionCatalog,
+} from "./conversation-action-catalog";
+import type { ConversationActionGateway } from "./conversation-action-gateway";
+import type { ConversationActionReceipt } from "./conversation-action-gateway";
+import type { ConversationActionProposal } from "./conversation-action-catalog";
 import {
   ProviderDispatchError,
   type ProviderDispatchErrorCategory,
@@ -85,6 +93,7 @@ type ExistingConversationResponse =
  * reconstructs or re-freezes them.
  */
 export type ConversationDecisionCommand = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   catalog: ConversationActionCatalog;
   catalogVersion: string;
   compiledContextId: CompiledContextId;
@@ -92,6 +101,7 @@ export type ConversationDecisionCommand = Readonly<{
   harnessPolicy: ConversationHarnessPolicy;
   interactionTurnId: InteractionTurnId;
   modelRunAttemptId: ModelRunAttemptId;
+  requestEventRevisionId?: ConversationEventRevisionId;
   userId: UserId;
 }>;
 
@@ -111,6 +121,10 @@ export type ConversationHarnessEvent =
       category: ProviderDispatchErrorCategory;
       interrupted: boolean;
       type: "decision_failed";
+    }>
+  | Readonly<{
+      receipt: ConversationActionReceipt;
+      type: "action_admitted";
     }>;
 
 export type ConversationAgentHarness = Readonly<{
@@ -131,6 +145,7 @@ export type ConversationAgentHarness = Readonly<{
 export function createConversationAgentHarness(dependencies: {
   clock: () => Date;
   delay?: (delayMs: number) => Promise<void>;
+  actionGateway?: ConversationActionGateway;
   egressPort: ProviderEgressPort;
   jitter?: () => number;
   repository: ConversationAgentHarnessRepository;
@@ -148,29 +163,82 @@ export function createConversationAgentHarness(dependencies: {
     let possiblyVisible = false;
     let completeText = "";
     let completion: CompleteResponseMetadata | null = null;
+    let pendingActionProposal: ConversationActionProposal | null = null;
 
     try {
+      if (!validateConversationActionCatalog(command.catalog).valid) {
+        throw new ProviderDispatchError("invalid_response");
+      }
+      let actionSeen = false;
       for await (const event of dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
+        ...(command.requestEventRevisionId
+          ? { requestEventRevisionId: command.requestEventRevisionId }
+          : {}),
+        functions:
+          command.harnessPolicy.toolsDisabled === true
+            ? []
+            : actionFunctionsForCatalog(
+                command.catalog,
+                command.actionReferenceHandles,
+              ),
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
         ...(signal ? { signal } : {}),
+        toolsDisabled: command.harnessPolicy.toolsDisabled === true,
       })) {
         if (event.type === "delta") {
+          if (pendingActionProposal) {
+            throw new ProviderDispatchError("invalid_response");
+          }
           possiblyVisible = true;
           completeText += event.delta;
           yield { delta: event.delta, type: "decision_delta" };
         } else if (event.type === "tool_call") {
-          // A provider-native tool selection is not a Final Response. With the
-          // initial empty Catalog there is no eligible Definition, so the model
-          // cannot have requested an admitted Action: fail closed, settle the
-          // attempt, and never commit an Assistant Event or fabricate a success
-          // response (issue #24 AC8). The raw function name and arguments stay
-          // inside the Harness and never reach product truth (AC6).
+          // Provider-native events must be normalized by the Adapter before
+          // reaching the application seam. A raw call is never admissible.
           throw new ProviderDispatchError("invalid_response");
+        } else if (event.type === "action_proposal") {
+          if (
+            actionSeen ||
+            completion !== null ||
+            command.harnessPolicy.toolsDisabled === true ||
+            !dependencies.actionGateway ||
+            !command.requestEventRevisionId
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          actionSeen = true;
+          const proposal = event.proposal;
+          if (
+            proposal.requestEventRevisionId !== command.requestEventRevisionId ||
+            !command.catalog.definitions.some(
+              (definition) => definition.actionKind === proposal.actionKind,
+            )
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          pendingActionProposal = proposal;
         } else {
+          if (pendingActionProposal && event.type !== "completed") {
+            throw new ProviderDispatchError("invalid_response");
+          }
           completion = event;
         }
+      }
+      if (pendingActionProposal) {
+        const receipt = await dependencies.actionGateway!.admit({
+          catalog: command.catalog,
+          context: {
+            compiledContextId: command.compiledContextId,
+            decisionCommandId: command.generationCommandId,
+            requestEventRevisionId: command.requestEventRevisionId!,
+            userId: command.userId,
+          },
+          proposal: pendingActionProposal,
+        });
+        yield { receipt, type: "action_admitted" };
+        return;
       }
       if (completion === null || completeText.length === 0) {
         throw new ProviderDispatchError("invalid_response");
