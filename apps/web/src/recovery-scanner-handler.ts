@@ -1,6 +1,7 @@
 import type {
   ContinuousExchangeService,
   ConversationResponseService,
+  DialogueStateService,
   JournalEligibilityService,
   OutboxDispatcherService,
 } from "@sayhear/application";
@@ -11,6 +12,7 @@ export function createRecoveryScannerHandler(dependencies: {
   continuousExchangeService: ContinuousExchangeService;
   journalEligibilityService: JournalEligibilityService;
   outboxDispatcherService: OutboxDispatcherService;
+  dialogueStateService?: DialogueStateService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -29,12 +31,16 @@ export function createRecoveryScannerHandler(dependencies: {
       await dependencies.continuousExchangeService.scanDueInactivity();
     const eligibility =
       await dependencies.journalEligibilityService.scanPendingEligibility();
+    const dialogueState = dependencies.dialogueStateService
+      ? await dependencies.dialogueStateService.scanPending()
+      : { queued: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
       inactivity,
       responses,
       eligibility,
+      dialogueState,
       outbox,
     });
   };

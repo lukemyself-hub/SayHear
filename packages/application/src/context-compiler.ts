@@ -12,6 +12,7 @@ import type {
   InteractionTurnId,
   UserId,
 } from "@sayhear/domain";
+import type { CurrentDialogueState } from "./dialogue-state";
 
 export type ContextPolicyVersions = Readonly<{
   localePolicyVersion: string;
@@ -39,6 +40,8 @@ export type ContextSourceSnapshot = Readonly<{
     id: DailySessionId;
   }>;
   dialogueRevision: number;
+  dialogueState?: CurrentDialogueState | null;
+  dialogueStateFailure?: boolean;
   events: readonly ContextSourceEvent[];
   inputRevisionId: ConversationEventRevisionId;
   locale: string;
@@ -48,6 +51,8 @@ export type ContextSourceSnapshot = Readonly<{
 
 export type CompiledContextDegradedReason =
   | "raw_event_budget_exceeded"
+  | "dialogue_state_failed"
+  | "dialogue_state_lagging"
   | null;
 
 export type CompiledContextSectionKey =
@@ -59,6 +64,7 @@ export type CompiledContextSectionKey =
   | "output_format"
   | "locale_pack"
   | "daily_session"
+  | "dialogue_state"
   | "committed_raw_events"
   | "current_user_input";
 
@@ -186,8 +192,20 @@ export function createContextCompiler(dependencies: {
         );
       }
 
+      const dialogueState = usableDialogueState(source);
+      const dialogueStateFailure =
+        source.dialogueStateFailure === true ||
+        (source.dialogueState !== undefined &&
+          source.dialogueState !== null &&
+          dialogueState === null);
+
       const historyNewestFirst = source.events
-        .filter((event) => event.revisionId !== source.inputRevisionId)
+        .filter(
+          (event) =>
+            event.revisionId !== source.inputRevisionId &&
+            (dialogueState === null ||
+              event.sequence > dialogueState.coveredThroughSequence),
+        )
         .toSorted((left, right) => right.sequence - left.sequence);
       const selectedNewestFirst: CompiledContextReferencedEvent[] = [];
       let remaining = dependencies.rawEventTokenBudget;
@@ -230,6 +248,7 @@ export function createContextCompiler(dependencies: {
         locale: source.locale,
         policyVersions: source.policyVersions,
         rawEventTokenBudget: dependencies.rawEventTokenBudget,
+        dialogueState,
       });
       const sections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -238,10 +257,13 @@ export function createContextCompiler(dependencies: {
         (total, section) => total + section.selectedTokens,
         0,
       );
-      const degradedReason =
-        selectedHistory.length < historyNewestFirst.length
-          ? "raw_event_budget_exceeded"
-          : null;
+      const degradedReason = dialogueStateFailure
+        ? "dialogue_state_failed"
+        : dialogueState?.status === "lagging"
+          ? "dialogue_state_lagging"
+          : selectedHistory.length < historyNewestFirst.length
+            ? "raw_event_budget_exceeded"
+            : null;
       const contentHmac = createManifestContentHmac(
         dependencies.contentHmacSecret,
         sections,
@@ -292,13 +314,17 @@ export function createContextCompiler(dependencies: {
       const rawEventBudget = source.sections.find(
         (section) => section.key === "committed_raw_events",
       )?.budgetTokens;
+      const dialogueStateSection = source.sections.find(
+        (section) => section.key === "dialogue_state",
+      );
       if (
         currentInputs.length !== 1 ||
         !currentInput ||
         currentInput.actor !== "user" ||
         !dailySessionReference ||
         rawEventBudget === null ||
-        rawEventBudget === undefined
+        rawEventBudget === undefined ||
+        (dialogueStateSection && !dialogueStateSection.reference)
       ) {
         throw new CompiledContextIntegrityError();
       }
@@ -310,6 +336,10 @@ export function createContextCompiler(dependencies: {
         locale: source.locale,
         policyVersions: source.policyVersions,
         rawEventTokenBudget: rawEventBudget,
+        dialogueState: null,
+        ...(dialogueStateSection?.reference
+          ? { dialogueStateContent: dialogueStateSection.reference }
+          : {}),
       });
       const expectedSections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -363,6 +393,8 @@ function createSections(input: {
   locale: string;
   policyVersions: ContextPolicyVersions;
   rawEventTokenBudget: number;
+  dialogueState?: CurrentDialogueState | null;
+  dialogueStateContent?: string;
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
@@ -433,6 +465,20 @@ function createSections(input: {
       reference: input.dailySessionReference,
       truncatable: false,
     },
+    ...((input.dialogueState !== null && input.dialogueState !== undefined) ||
+    input.dialogueStateContent
+      ? [
+          {
+            budgetTokens: null,
+            content:
+              input.dialogueStateContent ?? renderDialogueState(input.dialogueState!),
+            key: "dialogue_state" as const,
+            reference:
+              input.dialogueStateContent ?? renderDialogueState(input.dialogueState!),
+            truncatable: false,
+          },
+        ]
+      : []),
     {
       budgetTokens: input.rawEventTokenBudget,
       content: input.history
@@ -475,6 +521,37 @@ function createSections(input: {
       section.selectedTokens ?? estimateTokens(section.content),
     truncatable: section.truncatable,
   }));
+}
+
+function usableDialogueState(
+  source: ContextSourceSnapshot,
+): CurrentDialogueState | null {
+  const projection = source.dialogueState;
+  if (!projection) return null;
+  const highestSequence = Math.max(
+    ...source.events.map((event) => event.sequence),
+  );
+  if (
+    projection.dialogueRevision > source.dialogueRevision ||
+    projection.sourceRevision > source.sourceRevision ||
+    projection.coveredThroughSequence > highestSequence
+  ) {
+    return null;
+  }
+  return projection;
+}
+
+function renderDialogueState(state: CurrentDialogueState): string {
+  const renderField = <T>(field: { confidence: number; sourceRevisionIds: readonly ConversationEventRevisionId[]; value: T }) =>
+    `${String(field.value ?? "none")} (confidence=${field.confidence.toFixed(2)}, sources=${field.sourceRevisionIds.join(",") || "none"})`;
+  return [
+    `DialogueState (non-authoritative; status=${state.status}; dialogue_revision=${state.dialogueRevision}; source_revision=${state.sourceRevision}; covered_through_sequence=${state.coveredThroughSequence}):`,
+    `Current topic: ${renderField(state.content.currentTopic)}`,
+    `User intent: ${renderField(state.content.userIntent)}`,
+    `Emotional tone: ${renderField(state.content.emotionalTone)}`,
+    `Pending question: ${renderField(state.content.pendingQuestion)}`,
+    "Do not use DialogueState confidence to close the exchange or authorize a Conversation Action.",
+  ].join("\n");
 }
 
 function createContentHmac(secret: string, content: string): string {

@@ -13,6 +13,7 @@ describe("Journal role safeguards", () => {
     { role: "evidence.extract" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "journal.draft" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "journal.validate" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
+    { role: "dialogue.state" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
   ] as const;
   const registry = createRuntimeJournalRoleProviderRegistry({ adapter: { type: "deterministic" }, roles });
 
@@ -59,5 +60,22 @@ describe("Journal role safeguards", () => {
         "The owner described: they finished the task, 但是还是有点担心明天。",
       );
     }
+  });
+
+  it("projects transient DialogueState with source-bound fields", async () => {
+    const result = await registry.dialogueStateProjector.project({
+      modelConfigVersion: "test",
+      policyVersion: "test",
+      promptVersion: "test",
+      sources: [{
+        actor: "user",
+        revisionId: "01984477-59a9-7d20-9d97-e588769566a2" as never,
+        sequence: 1,
+        text: "The meeting was difficult.",
+      }],
+    });
+    expect(result.currentTopic.value).toBe("The meeting was difficult.");
+    expect(result.currentTopic.sourceRevisionIds).toHaveLength(1);
+    expect(result.userIntent.value).toBe("sharing");
   });
 });

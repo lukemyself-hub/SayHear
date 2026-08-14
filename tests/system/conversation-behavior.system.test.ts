@@ -102,6 +102,10 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
         journal_model_run_attempts,
         journal_generation_commands,
         journal_workflow_outcomes,
+        dialogue_state_command_source_refs,
+        dialogue_state_versions,
+        current_dialogue_states,
+        dialogue_state_commands,
         evidence_lineage,
         evidence_model_run_attempts,
         evidence_items,
@@ -518,8 +522,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
             'audio%',
             'transcript%',
             'delivery%',
-            'summary%',
-            'dialogue_state%'
+            'summary%'
           ])
         ORDER BY table_name
       `,

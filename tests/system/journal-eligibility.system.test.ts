@@ -7,6 +7,7 @@ import {
   createEvidenceService,
   createJournalService,
   createJournalEligibilityService,
+  createDialogueStateService,
   createOutboxDispatcherService,
   createConversationResponseService,
   createContextCompiler,
@@ -30,6 +31,7 @@ import {
   PostgresEvidenceRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
+  PostgresDialogueStateRepository,
   runMigrations,
 } from "@sayhear/data";
 import {
@@ -115,6 +117,10 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         journal_model_run_attempts,
         journal_generation_commands,
         journal_workflow_outcomes,
+        dialogue_state_command_source_refs,
+        dialogue_state_versions,
+        current_dialogue_states,
+        dialogue_state_commands,
         evidence_lineage,
         evidence_model_run_attempts,
         evidence_items,
@@ -163,7 +169,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     await database?.dispose();
   }, 10_000);
 
-  function buildComposition() {
+  function buildComposition(input: { dialogueStateModel?: import("@sayhear/application").DialogueStateModel } = {}) {
     const responseRepository = new PostgresConversationResponseRepository(
       database.pool,
     );
@@ -171,6 +177,9 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       database.pool,
     );
     const journalEligibilityRepository = new PostgresJournalEligibilityRepository(
+      database.pool,
+    );
+    const dialogueStateRepository = new PostgresDialogueStateRepository(
       database.pool,
     );
     const evidenceRepository = new PostgresEvidenceRepository(database.pool, {
@@ -187,6 +196,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         { role: "evidence.extract", provider: "deterministic", model: "test", configVersion: "test:evidence", policyVersion: "evidence-extraction:v1", promptFingerprint: "test:evidence" },
         { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:draft", policyVersion: "journal-generation:v2", promptFingerprint: "test:draft" },
         { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:validate", policyVersion: "journal-validator:v2", promptFingerprint: "test:validate" },
+        { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
       ],
     });
     const journalRepository = new PostgresJournalRepository(database.pool);
@@ -209,6 +219,16 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       },
       validationProvider: journalRoleRegistry.validator,
       validatorVersion: "journal-validator:v2",
+    });
+    const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
+    const dialogueStateService = createDialogueStateService({
+      clock: fixedResponseClock,
+      expectedDataEpoch: 1,
+      model: input.dialogueStateModel ?? journalRoleRegistry.dialogueStateProjector,
+      modelConfigVersion: dialogueStateConfiguration.configVersion,
+      policyVersion: dialogueStateConfiguration.policyVersion,
+      promptVersion: dialogueStateConfiguration.promptFingerprint,
+      repository: dialogueStateRepository,
     });
     const evidenceService = createEvidenceService({
       clock: fixedResponseClock,
@@ -274,6 +294,8 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       journalEligibilityRepository,
       journalEligibilityService,
       journalService,
+      dialogueStateRepository,
+      dialogueStateService,
       evidenceRepository,
       evidenceService,
       outboxRepository,
@@ -338,6 +360,219 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     );
     expect(response.status).toBe(200);
   }
+
+  it("enqueues and publishes a session-scoped DialogueState, then uses its coverage conservatively in Context", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-event",
+      clientTurnId: "dialogue-state-turn",
+      text: "The meeting was difficult and I want to keep talking about it.",
+    });
+    const composition = buildComposition();
+    await expect(composition.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
+    const pendingOutbox = await database.pool.query<{
+      event_type: string;
+      status: string;
+    }>(
+      `SELECT event_type, status FROM outbox_events
+       WHERE event_type = 'dialogue_state_requested'`,
+    );
+    expect(pendingOutbox.rows).toEqual([{
+      event_type: "dialogue_state_requested",
+      status: "pending",
+    }]);
+    const command = await database.pool.query<{
+      dialogue_state_command_id: string;
+      source_revision: string;
+      dialogue_revision: string;
+      status: string;
+    }>(
+      `SELECT dialogue_state_command_id, source_revision, dialogue_revision, status
+       FROM dialogue_state_commands WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    expect(command.rows[0]).toMatchObject({
+      dialogue_revision: "2",
+      source_revision: "2",
+      status: "created",
+    });
+    const sourceRefs = await database.pool.query(
+      `SELECT sequence_no FROM dialogue_state_command_source_refs
+       WHERE dialogue_state_command_id = $1 ORDER BY sequence_no`,
+      [command.rows[0]!.dialogue_state_command_id],
+    );
+    expect(sourceRefs.rows.map((row) => row.sequence_no)).toEqual(["1", "2"]);
+
+    await expect(
+      composition.dialogueStateService.run(
+        command.rows[0]!.dialogue_state_command_id,
+      ),
+    ).resolves.toEqual({ outcome: "published" });
+    const current = await database.pool.query<{
+      source_revision: string;
+      dialogue_revision: string;
+      covered_through_sequence_no: string;
+    }>(
+      `SELECT source_revision, dialogue_revision, covered_through_sequence_no
+       FROM current_dialogue_states WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    expect(current.rows[0]).toEqual({
+      covered_through_sequence_no: "2",
+      dialogue_revision: "2",
+      source_revision: "2",
+    });
+
+    await submitConversation({
+      clientEventId: "dialogue-state-follow-up-event",
+      clientTurnId: "dialogue-state-follow-up-turn",
+      text: "Please stay with what happened in that meeting.",
+    });
+    const context = await database.pool.query<{
+      degraded_reason: string | null;
+      sections: Array<{ key: string; reference: string }>;
+      compiled_context_id: string;
+    }>(
+      `SELECT context.compiled_context_id, context.degraded_reason, context.sections
+       FROM compiled_contexts context
+       INNER JOIN generation_commands command
+         ON command.compiled_context_id = context.compiled_context_id
+       INNER JOIN conversation_events input_event
+         ON input_event.conversation_event_id = command.subject_id
+       WHERE input_event.client_event_id = 'dialogue-state-follow-up-event'
+       ORDER BY context.created_at DESC LIMIT 1`,
+    );
+    expect(context.rows[0]?.degraded_reason).toBe("dialogue_state_lagging");
+    expect(context.rows[0]?.sections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "dialogue_state",
+          reference: expect.stringContaining("status=lagging"),
+        }),
+      ]),
+    );
+    const referenced = await database.pool.query<{ sequence_no: string }>(
+      `SELECT sequence_no FROM compiled_context_revision_refs
+       WHERE compiled_context_id = $1 ORDER BY ordinal`,
+      [context.rows[0]!.compiled_context_id],
+    );
+    expect(referenced.rows.map((row) => row.sequence_no)).toEqual(["3"]);
+  });
+
+  it("fails closed to raw Events when DialogueState generation fails", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-failure-event",
+      clientTurnId: "dialogue-state-failure-turn",
+      text: "The model should not be able to turn a failed projection into history.",
+    });
+    const failing = buildComposition({
+      dialogueStateModel: {
+        async project() {
+          throw new Error("synthetic projection failure");
+        },
+      },
+    });
+    await failing.dialogueStateService.scanPending();
+    const command = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    await expect(
+      failing.dialogueStateService.run(command.rows[0]!.dialogue_state_command_id),
+    ).resolves.toEqual({ outcome: "failed" });
+
+    await submitConversation({
+      clientEventId: "dialogue-state-failure-follow-up-event",
+      clientTurnId: "dialogue-state-failure-follow-up-turn",
+      text: "The raw committed conversation remains available while projection is unavailable.",
+    });
+    const context = await database.pool.query<{
+      degraded_reason: string | null;
+      sections: Array<{ key: string }>;
+      compiled_context_id: string;
+    }>(
+      `SELECT context.compiled_context_id, context.degraded_reason, context.sections
+       FROM compiled_contexts context
+       INNER JOIN generation_commands command
+         ON command.compiled_context_id = context.compiled_context_id
+       INNER JOIN conversation_events input_event
+         ON input_event.conversation_event_id = command.subject_id
+       WHERE input_event.client_event_id = 'dialogue-state-failure-follow-up-event'
+       ORDER BY context.created_at DESC LIMIT 1`,
+    );
+    expect(context.rows[0]?.degraded_reason).toBe("dialogue_state_failed");
+    expect(context.rows[0]?.sections).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "dialogue_state" })]),
+    );
+    const referenced = await database.pool.query<{ sequence_no: string }>(
+      `SELECT sequence_no FROM compiled_context_revision_refs
+       WHERE compiled_context_id = $1 ORDER BY ordinal`,
+      [context.rows[0]!.compiled_context_id],
+    );
+    expect(referenced.rows.map((row) => row.sequence_no)).toEqual(["1", "2", "3"]);
+  });
+
+  it("invalidates a corrected source and refuses a late older projection", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-correction-event",
+      clientTurnId: "dialogue-state-correction-turn",
+      text: "The original account of the meeting was incomplete.",
+    });
+    const composition = buildComposition();
+    await composition.dialogueStateService.scanPending();
+    const first = await database.pool.query<{ dialogue_state_command_id: string }>(
+      `SELECT dialogue_state_command_id FROM dialogue_state_commands
+       WHERE daily_session_id = $1 ORDER BY created_at`,
+      [dailySessionId],
+    );
+    await expect(
+      composition.dialogueStateService.run(first.rows[0]!.dialogue_state_command_id),
+    ).resolves.toEqual({ outcome: "published" });
+
+    const event = await database.pool.query<{ conversation_event_id: string }>(
+      `SELECT conversation_event_id FROM conversation_events
+       WHERE daily_session_id = $1 AND actor = 'user'`,
+      [dailySessionId],
+    );
+    await expect(
+      composition.conversationService.correct(fixedInternalOwnerPrincipal.userId, {
+        eventId: event.rows[0]!.conversation_event_id,
+        locale: "en-US",
+        text: "The corrected account says the meeting was difficult, but one colleague helped.",
+      }),
+    ).resolves.toMatchObject({ dailySessionId });
+
+    await expect(composition.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
+    const commands = await database.pool.query<{
+      dialogue_state_command_id: string;
+      source_revision: string;
+      status: string;
+    }>(
+      `SELECT dialogue_state_command_id, source_revision, status
+       FROM dialogue_state_commands WHERE daily_session_id = $1 ORDER BY created_at`,
+      [dailySessionId],
+    );
+    expect(commands.rows[0]!.status).toBe("published");
+    expect(commands.rows[1]).toMatchObject({ source_revision: "3", status: "created" });
+    const newResult = await composition.dialogueStateService.run(
+      commands.rows[1]!.dialogue_state_command_id,
+    );
+    expect(newResult).toEqual({ outcome: "published" });
+    await expect(
+      composition.dialogueStateService.run(commands.rows[0]!.dialogue_state_command_id),
+    ).resolves.toEqual({ outcome: "stale" });
+
+    await expect(
+      database.pool.query<{ source_revision: string }>(
+        `SELECT source_revision FROM current_dialogue_states WHERE daily_session_id = $1`,
+        [dailySessionId],
+      ),
+    ).resolves.toMatchObject({ rows: [{ source_revision: "3" }] });
+  });
 
   it("creates the idempotent eligibility command and outbox event after an explicit end, then reaches an eligible date outcome (AC #1, #4, #5, #6, #10)", async () => {
     const dailySessionId = await submitConversation({

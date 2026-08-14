@@ -6,6 +6,7 @@ import {
   createContinuousExchangeService,
   createConversationResponseService,
   createJournalEligibilityService,
+  createDialogueStateService,
   createEvidenceService,
   createJournalService,
   createOutboxDispatcherService,
@@ -29,11 +30,12 @@ import {
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresUserTextConversationRepository,
+  PostgresDialogueStateRepository,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
 import { loadRuntimeConfiguration } from "./runtime-config";
-import { createJournalEligibilityWorkflowStarter } from "./workflows/journal-eligibility.workflow";
+import { createWorkflowStarter } from "./workflows/dialogue-state.workflow";
 
 const globalPool = globalThis as typeof globalThis & {
   sayHearPool?: ReturnType<typeof createPostgresPool>;
@@ -67,6 +69,7 @@ export function createServerComposition() {
       { role: "evidence.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:evidence`, policyVersion: "evidence-extraction:v2", promptFingerprint: "evidence-extract:spans:v2" },
       { role: "journal.draft", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-draft`, policyVersion: "journal-generation:v2", promptFingerprint: "journal-draft:evidence-only:v2" },
       { role: "journal.validate", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-validate`, policyVersion: "journal-validator:v2", promptFingerprint: "journal-validate:semantic:v2" },
+      { role: "dialogue.state", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
     ],
   });
   const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
@@ -115,6 +118,16 @@ export function createServerComposition() {
   });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);
+  const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
+  const dialogueStateService = createDialogueStateService({
+    clock: configuration.clock,
+    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
+    model: journalRoleRegistry.dialogueStateProjector,
+    modelConfigVersion: dialogueStateConfiguration.configVersion,
+    policyVersion: dialogueStateConfiguration.policyVersion,
+    promptVersion: dialogueStateConfiguration.promptFingerprint,
+    repository: new PostgresDialogueStateRepository(pool),
+  });
   const journalEligibilityService = createJournalEligibilityService({
     clock: configuration.clock,
     expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
@@ -128,7 +141,7 @@ export function createServerComposition() {
     leaseDurationMs: configuration.outboxDispatcher.leaseDurationMs,
     leaseOwner: configuration.outboxDispatcher.leaseOwner,
     repository: outboxDispatcherRepository,
-    startWorkflow: createJournalEligibilityWorkflowStarter(),
+    startWorkflow: createWorkflowStarter(),
   });
   const conversationService = createUserTextConversationService({
     clock: configuration.clock,
@@ -210,6 +223,7 @@ export function createServerComposition() {
     clock: configuration.clock,
     journalEligibilityRepository,
     journalEligibilityService,
+    dialogueStateService,
     evidenceService,
     journalService,
     journalRepository,

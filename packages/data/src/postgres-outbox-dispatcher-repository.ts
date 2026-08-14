@@ -16,15 +16,19 @@ type OutboxRow = Readonly<{
   workflow_command_id: string;
   aggregate_id: string;
   aggregate_revision: number;
-  payload: string;
+  payload: unknown;
 }>;
 
 function mapLeased(row: OutboxRow): LeasedOutboxEvent {
   let payload: Record<string, unknown> = {};
-  try {
-    payload = row.payload ? (JSON.parse(row.payload) as Record<string, unknown>) : {};
-  } catch {
-    payload = {};
+  if (typeof row.payload === "string") {
+    try {
+      payload = JSON.parse(row.payload) as Record<string, unknown>;
+    } catch {
+      payload = {};
+    }
+  } else if (typeof row.payload === "object" && row.payload !== null) {
+    payload = row.payload as Record<string, unknown>;
   }
   return {
     outboxEventId: asOutboxEventId(row.outbox_event_id),

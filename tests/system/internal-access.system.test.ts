@@ -156,6 +156,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         journal_model_run_attempts,
         journal_generation_commands,
         journal_workflow_outcomes,
+        dialogue_state_command_source_refs,
+        dialogue_state_versions,
+        current_dialogue_states,
+        dialogue_state_commands,
         evidence_lineage,
         evidence_model_run_attempts,
         evidence_items,
@@ -536,8 +540,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
             'audio%',
             'transcript%',
             'delivery%',
-            'summary%',
-            'dialogue_state%'
+            'summary%'
           ])
         ORDER BY table_name
       `,
@@ -3976,13 +3979,16 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         commandsCreated: 0,
         evaluated: 0,
       },
+      dialogueState: {
+        queued: 1,
+      },
       inactivity: {
         applied: 0,
         processed: 1,
         stale: 1,
       },
       outbox: {
-        dispatched: 0,
+        dispatched: 1,
         failed: 0,
         reclaimed: 0,
       },

@@ -5,11 +5,17 @@ import type {
   JournalEvidenceReference,
   JournalProviderEgress,
   JournalValidationProvider,
+  DialogueStateContent,
+  DialogueStateModel,
 } from "@sayhear/application";
 import { asConversationEventRevisionId } from "@sayhear/application";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
-export type JournalModelRole = "evidence.extract" | "journal.draft" | "journal.validate";
+export type JournalModelRole =
+  | "evidence.extract"
+  | "journal.draft"
+  | "journal.validate"
+  | "dialogue.state";
 export type JournalRoleConfiguration = Readonly<{
   role: JournalModelRole;
   provider: "openai" | "deepseek" | "deterministic";
@@ -26,6 +32,7 @@ export type JournalRoleProviderRegistry = Readonly<{
   evidenceExtractor: EvidenceExtractionProvider;
   draft: JournalProviderEgress;
   validator: JournalValidationProvider;
+  dialogueStateProjector: DialogueStateModel;
   configuration(role: JournalModelRole): JournalRoleConfiguration;
 }>;
 
@@ -36,10 +43,10 @@ export type JournalRoleProviderRegistry = Readonly<{
  */
 export function createRuntimeJournalRoleProviderRegistry(input: {
   adapter: Adapter;
-  roles: readonly [JournalRoleConfiguration, JournalRoleConfiguration, JournalRoleConfiguration];
+  roles: readonly JournalRoleConfiguration[];
 }): JournalRoleProviderRegistry {
   const configurations = new Map(input.roles.map((role) => [role.role, role]));
-  for (const role of ["evidence.extract", "journal.draft", "journal.validate"] as const) {
+  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state"] as const) {
     const configuration = configurations.get(role);
     if (!configuration || !configuration.model || !configuration.configVersion || !configuration.policyVersion || !configuration.promptFingerprint) {
       throw new Error(`Journal role ${role} requires complete versioned configuration.`);
@@ -51,6 +58,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       evidenceExtractor: deterministicEvidenceExtractor,
       draft: deterministicJournalDraft,
       validator: deterministicJournalValidator,
+      dialogueStateProjector: deterministicDialogueStateProjector,
       configuration,
     };
   }
@@ -91,6 +99,19 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       async validate(request) {
         const parsed = await askJson("journal.validate", "You are SayHear journal.validate. Return only JSON {valid:boolean,reason?:string}. Reject unsupported facts, insufficient evidence, omitted material evidence, certainty inflation, diagnosis, preaching, blind agreement, or unmarked inference. Accept only evidence-grounded third-person Journal prose.", request);
         if (!isValidationResult(parsed)) throw new Error("journal.validate returned invalid JSON.");
+        return parsed;
+      },
+    },
+    dialogueStateProjector: {
+      async project(request) {
+        const parsed = await askJson(
+          "dialogue.state",
+          "You are SayHear dialogue.state. Return only JSON with currentTopic, userIntent, emotionalTone, and pendingQuestion. Each field must be {value,confidence,sourceRevisionIds}. Use only the supplied committed Event revisions. This is transient, non-authoritative conversation context; never return a closure decision, safety verdict, action authorization, Profile, Memory, or Recall.",
+          request,
+        );
+        if (!isDialogueStateContent(parsed)) {
+          throw new Error("dialogue.state returned invalid JSON.");
+        }
         return parsed;
       },
     },
@@ -156,6 +177,37 @@ const deterministicJournalValidator: JournalValidationProvider = {
   },
 };
 
+const deterministicDialogueStateProjector: DialogueStateModel = {
+  async project({ sources }) {
+    const source =
+      sources.filter((candidate) => candidate.actor === "user").at(-1) ??
+      sources.at(-1);
+    const sourceRevisionIds = source ? [source.revisionId] : [];
+    return {
+      currentTopic: {
+        confidence: source ? 0.5 : 0,
+        sourceRevisionIds,
+        value: source ? source.text.slice(0, 240) : null,
+      },
+      emotionalTone: {
+        confidence: 0,
+        sourceRevisionIds: [],
+        value: null,
+      },
+      pendingQuestion: {
+        confidence: 0,
+        sourceRevisionIds: [],
+        value: null,
+      },
+      userIntent: {
+        confidence: source ? 0.5 : 0,
+        sourceRevisionIds,
+        value: source ? "sharing" as const : "unknown" as const,
+      },
+    };
+  },
+};
+
 function validateLocator(value: unknown, sourceText: string): { locatorType: "text_span"; locatorKey: string; role: EvidenceRole } {
   if (typeof value !== "object" || value === null) throw new Error("evidence.extract returned an invalid locator.");
   const candidate = value as { locatorType?: unknown; locatorKey?: unknown; role?: unknown };
@@ -171,4 +223,15 @@ function isJournalDraft(value: unknown): value is JournalDraft {
 
 function isValidationResult(value: unknown): value is { valid: true } | { valid: false; reason: string } {
   return typeof value === "object" && value !== null && typeof (value as { valid?: unknown }).valid === "boolean" && ((value as { valid: boolean; reason?: unknown }).valid || typeof (value as { reason?: unknown }).reason === "string");
+}
+
+function isDialogueStateContent(value: unknown): value is DialogueStateContent {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return ["currentTopic", "emotionalTone", "pendingQuestion", "userIntent"].every((key) => {
+    const field = record[key];
+    return typeof field === "object" && field !== null &&
+      typeof (field as Record<string, unknown>).confidence === "number" &&
+      Array.isArray((field as Record<string, unknown>).sourceRevisionIds);
+  });
 }

@@ -73,6 +73,19 @@ export {
   type RenderedCompiledContextPayload,
 } from "./context-compiler";
 export {
+  createDialogueStateService,
+  hasCompleteDialogueStateCoverage,
+  validateDialogueStateContent,
+  type CurrentDialogueState,
+  type DialogueStateCommand,
+  type DialogueStateContent,
+  type DialogueStateField,
+  type DialogueStateModel,
+  type DialogueStateRepository,
+  type DialogueStateService,
+  type DialogueStateSource,
+} from "./dialogue-state";
+export {
   createConversationResponseService,
   type CompleteResponseMetadata,
   type ConversationResponseRepository,
