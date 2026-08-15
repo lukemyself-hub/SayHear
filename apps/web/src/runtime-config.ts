@@ -221,6 +221,32 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (!Number.isSafeInteger(expectedDataEpoch) || expectedDataEpoch <= 0) {
     throw new Error("SAYHEAR_EXPECTED_DATA_EPOCH must be a positive safe integer.");
   }
+  // The purge marker store must live OUTSIDE the business database backup
+  // domain (issue #27, architecture 20.6): a marker schema inside the business
+  // database would be restored together with old backups and defeat the
+  // anti-resurrection purpose.
+  const databaseUrl = required(environment, "DATABASE_URL");
+  const purgeMarkerDatabaseUrl = required(
+    environment,
+    "PURGE_MARKER_DATABASE_URL",
+  );
+  if (purgeMarkerDatabaseUrl.trim() === databaseUrl.trim()) {
+    throw new Error(
+      "PURGE_MARKER_DATABASE_URL must point to a separate database, not the business DATABASE_URL.",
+    );
+  }
+  const providerRetentionDays = Number(
+    environment.SAYHEAR_PROVIDER_RETENTION_DAYS ?? "30",
+  );
+  if (
+    !Number.isInteger(providerRetentionDays) ||
+    providerRetentionDays <= 0 ||
+    providerRetentionDays > 3_650
+  ) {
+    throw new Error(
+      "SAYHEAR_PROVIDER_RETENTION_DAYS must be an integer from 1 through 3650.",
+    );
+  }
   const writeSwitches = Object.freeze({
     evidenceExtractionEnabled: enabledSwitch(
       environment,
@@ -243,8 +269,12 @@ export function loadRuntimeConfiguration(environment: Environment) {
       "SAYHEAR_BACKUP_POLICY_VERSION",
     ),
     clock: testNow ? () => new Date(testNow) : () => new Date(),
-    databaseUrl: required(environment, "DATABASE_URL"),
+    databaseUrl,
     deployment,
+    ownerPurge: Object.freeze({
+      markerDatabaseUrl: purgeMarkerDatabaseUrl,
+      providerRetentionDays,
+    }),
     githubClientId: required(environment, "GITHUB_CLIENT_ID"),
     githubClientSecret: required(environment, "GITHUB_CLIENT_SECRET"),
     contextHmacSecret: required(environment, "SAYHEAR_CONTEXT_HMAC_SECRET"),

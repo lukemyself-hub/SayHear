@@ -12,6 +12,7 @@ export async function GET(request: Request): Promise<Response> {
     journalEligibilityService: composition.journalEligibilityService,
     dialogueStateService: composition.dialogueStateService,
     rollingSummaryService: composition.rollingSummaryService,
+    ownerPurgeService: composition.ownerPurgeService,
     outboxDispatcherService: composition.outboxDispatcherService,
     scannerSecret: composition.recoveryScannerSecret,
   })(request);

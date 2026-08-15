@@ -1,4 +1,8 @@
-export { runMigrations } from "./migrations";
+export {
+  businessMigrationsDirectory,
+  purgeMarkerMigrationsDirectory,
+  runMigrations,
+} from "./migrations";
 export { createPostgresPool } from "./pool";
 export {
   createPostgresAuthAdapter,
@@ -18,3 +22,5 @@ export {
   PostgresDialogueStateRepository,
 } from "./postgres-dialogue-state-repository";
 export { PostgresRollingSummaryRepository } from "./postgres-rolling-summary-repository";
+export { PostgresOwnerPurgeRepository } from "./postgres-owner-purge-repository";
+export { PostgresPurgeMarkerRepository } from "./postgres-purge-marker-repository";

@@ -148,6 +148,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        owner_purge_receipts,
+        owner_purge_orders,
         current_rolling_summaries,
         rolling_summary_versions,
         rolling_summary_command_source_refs,
@@ -3990,6 +3992,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         applied: 0,
         processed: 1,
         stale: 1,
+      },
+      purge: {
+        remaining: 0,
+        retried: 0,
       },
       outbox: {
         dispatched: 1,

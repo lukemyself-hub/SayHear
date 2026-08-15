@@ -113,6 +113,8 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        owner_purge_receipts,
+        owner_purge_orders,
         current_rolling_summaries,
         rolling_summary_versions,
         rolling_summary_command_source_refs,
