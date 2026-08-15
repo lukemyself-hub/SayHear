@@ -107,6 +107,20 @@ describe("runtime safety configuration", () => {
         PURGE_MARKER_DATABASE_URL: base.DATABASE_URL,
       }),
     ).toThrow("separate database");
+    // The startup assertion (validate-startup.ts) fails closed on the same
+    // invariant even before a composition is built.
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        DATABASE_URL: "postgres://test",
+        PURGE_MARKER_DATABASE_URL: "postgres://test",
+      }),
+    ).toThrow("separate database");
+    expect(
+      assertSafeRuntimeConfiguration({
+        DATABASE_URL: "postgres://test",
+        PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+      }),
+    ).toBe("development");
     expect(
       loadRuntimeConfiguration(base).ownerPurge.providerRetentionDays,
     ).toBe(30);

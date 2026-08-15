@@ -69,6 +69,22 @@ export function assertSafeRuntimeConfiguration(
     );
   }
 
+  // Startup-level guard (validate-startup.ts): the purge marker store must
+  // never be the business database — a same-database marker would be restored
+  // together with old backups and defeat the anti-resurrection purpose
+  // (issue #27, architecture 20.6). Presence is enforced per composition by
+  // loadRuntimeConfiguration.
+  if (
+    environment.PURGE_MARKER_DATABASE_URL &&
+    environment.DATABASE_URL &&
+    environment.PURGE_MARKER_DATABASE_URL.trim() ===
+      environment.DATABASE_URL.trim()
+  ) {
+    throw new Error(
+      "PURGE_MARKER_DATABASE_URL must point to a separate database, not the business DATABASE_URL.",
+    );
+  }
+
   return deployment;
 }
 

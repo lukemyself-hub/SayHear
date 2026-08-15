@@ -83,6 +83,7 @@ const ORDER_COLUMNS = `
  */
 const CLEARED_SURFACES: ReadonlyArray<Readonly<{
   label: string;
+  params?: string[];
   sql: string;
 }>> = [
   { label: "daily_sessions", sql: "SELECT count(*) FROM daily_sessions WHERE user_id = $1" },
@@ -115,6 +116,10 @@ const CLEARED_SURFACES: ReadonlyArray<Readonly<{
   { label: "current_dialogue_states", sql: "SELECT count(*) FROM current_dialogue_states WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
   { label: "daily_session_date_outcomes", sql: "SELECT count(*) FROM daily_session_date_outcomes WHERE user_id = $1" },
   { label: "auth_sessions", sql: "SELECT count(*) FROM auth_sessions WHERE user_id = $1" },
+  // Source-ref tables have no user_id and are cleared by ON DELETE CASCADE
+  // from their commands; verification asserts no orphans survived.
+  { label: "rolling_summary_command_source_refs", params: [], sql: "SELECT count(*) FROM rolling_summary_command_source_refs ref LEFT JOIN rolling_summary_commands command ON command.rolling_summary_command_id = ref.rolling_summary_command_id WHERE command.rolling_summary_command_id IS NULL" },
+  { label: "dialogue_state_command_source_refs", params: [], sql: "SELECT count(*) FROM dialogue_state_command_source_refs ref LEFT JOIN dialogue_state_commands command ON command.dialogue_state_command_id = ref.dialogue_state_command_id WHERE command.dialogue_state_command_id IS NULL" },
 ];
 
 export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
@@ -742,7 +747,10 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       const userId = row.user_id;
 
       for (const surface of CLEARED_SURFACES) {
-        const count = await client.query<{ count: string }>(surface.sql, [userId]);
+        const count = await client.query<{ count: string }>(
+          surface.sql,
+          surface.params ?? [userId],
+        );
         if (Number(count.rows[0]?.count ?? 0) > 0) {
           await client.query("ROLLBACK");
           throw new PurgeVerificationError(`${surface.label}_not_empty`);
@@ -759,10 +767,14 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         await client.query("ROLLBACK");
         throw new PurgeVerificationError("revisions_not_purged");
       }
+      // No executable command of the purged owner may remain. Sessions of the
+      // owner are gone, so any dangling daily_session command is a miss;
+      // commands of other owners (Phase 2+) must not false-park this order.
       const executable = await client.query<{ count: string }>(
         `
           SELECT count(*) AS count FROM workflow_commands
           WHERE subject_type = 'daily_session'
+            AND subject_id NOT IN (SELECT daily_session_id FROM daily_sessions)
         `,
       );
       if (Number(executable.rows[0]?.count ?? 0) > 0) {
@@ -814,36 +826,23 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       }
       const backupRetentionUntil =
         row.backup_retention_until ?? input.backupRetentionUntil;
-      await client.query(
-        `
-          INSERT INTO owner_purge_receipts (
-            owner_purge_receipt_id, owner_purge_order_id, destination,
-            destination_disposition, provider_disposition,
-            provider_retention_until, backup_retention_until, recorded_at
-          )
-          VALUES (
-            gen_random_uuid(), $1, 'business_database', 'verified_deleted',
-            NULL, NULL, $2, $3
-          )
-          ON CONFLICT (owner_purge_order_id, destination) DO NOTHING
-        `,
-        [input.ownerPurgeOrderId, backupRetentionUntil, input.now],
-      );
-      await client.query(
-        `
-          INSERT INTO owner_purge_receipts (
-            owner_purge_receipt_id, owner_purge_order_id, destination,
-            destination_disposition, provider_disposition,
-            provider_retention_until, backup_retention_until, recorded_at
-          )
-          VALUES (
-            gen_random_uuid(), $1, 'purge_marker_store', 'verified_deleted',
-            NULL, NULL, $2, $3
-          )
-          ON CONFLICT (owner_purge_order_id, destination) DO NOTHING
-        `,
-        [input.ownerPurgeOrderId, backupRetentionUntil, input.now],
-      );
+      for (const destination of ["business_database", "purge_marker_store"]) {
+        await client.query(
+          `
+            INSERT INTO owner_purge_receipts (
+              owner_purge_receipt_id, owner_purge_order_id, destination,
+              destination_disposition, provider_disposition,
+              provider_retention_until, backup_retention_until, recorded_at
+            )
+            VALUES (
+              gen_random_uuid(), $1, $2, 'verified_deleted', NULL, NULL, $3,
+              $4
+            )
+            ON CONFLICT (owner_purge_order_id, destination) DO NOTHING
+          `,
+          [input.ownerPurgeOrderId, destination, backupRetentionUntil, input.now],
+        );
+      }
       await client.query(
         `UPDATE owner_purge_orders
          SET status = 'active_system_deleted',

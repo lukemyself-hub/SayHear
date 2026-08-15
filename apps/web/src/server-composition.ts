@@ -250,6 +250,24 @@ export function createServerComposition() {
     }),
     ownerPurgeService: createOwnerFullPurgeService({
       clock: configuration.clock,
+      // Best-effort durable-workflow cancellation via the public SDK
+      // (`getRun(...).cancel()`); correctness never depends on it — the epoch
+      // fences, revoked egress authorization, and cancelled commands own the
+      // guarantees (issue #27 settled decisions).
+      cancelWorkflows: async (workflowReceiptIds) => {
+        try {
+          const { getRun } = await import("workflow/api");
+          for (const workflowReceiptId of workflowReceiptIds) {
+            try {
+              await getRun(workflowReceiptId).cancel();
+            } catch {
+              // Best-effort per run; a receipt without a live run is fine.
+            }
+          }
+        } catch {
+          // The SDK being unavailable in this environment is not fatal.
+        }
+      },
       markerRepository: new PostgresPurgeMarkerRepository(purgeMarkerPool),
       providerRetentionDays: configuration.ownerPurge.providerRetentionDays,
       repository: new PostgresOwnerPurgeRepository(pool),

@@ -418,7 +418,7 @@ export function createOwnerFullPurgeService(dependencies: {
           dependencies.clock().getTime() +
             dependencies.providerRetentionDays * 24 * 60 * 60 * 1_000,
         );
-        const cleared =
+        const clearResult =
           await dependencies.repository.transitionToPropagatingAndClear({
             now: dependencies.clock(),
             ownerPurgeOrderId: order.ownerPurgeOrderId,
@@ -432,7 +432,7 @@ export function createOwnerFullPurgeService(dependencies: {
         // provider receipts are read back from the durable receipts table so
         // a retry writes the identical marker content.
         const providerMarkerReceipts =
-          cleared.outcome === "not_applicable"
+          clearResult.outcome === "not_applicable"
             ? (
                 await dependencies.repository.listReceipts({
                   ownerPurgeOrderId: order.ownerPurgeOrderId,
@@ -444,7 +444,7 @@ export function createOwnerFullPurgeService(dependencies: {
                   destinationDisposition: receipt.destinationDisposition,
                   providerRetentionUntil: receipt.providerRetentionUntil,
                 }))
-            : cleared.providerRoles.map((role) => ({
+            : clearResult.providerRoles.map((role) => ({
                 destination: `provider:${role}` as const,
                 destinationDisposition: "retention_pending" as const,
                 providerRetentionUntil,
@@ -459,9 +459,9 @@ export function createOwnerFullPurgeService(dependencies: {
         ];
         await dependencies.markerRepository.writeMarker({
           backupRetentionUntil:
-            cleared.outcome === "not_applicable"
+            clearResult.outcome === "not_applicable"
               ? order.backupRetentionUntil
-              : cleared.backupRetentionUntil,
+              : clearResult.backupRetentionUntil,
           dataEpoch: order.dataEpoch,
           purgedAt: dependencies.clock(),
           receipts: markerReceipts,
@@ -484,9 +484,9 @@ export function createOwnerFullPurgeService(dependencies: {
         // Step 5 — active_system_deleted + terminal receipts.
         await dependencies.repository.transitionToActiveSystemDeleted({
           backupRetentionUntil:
-            cleared.outcome === "not_applicable"
+            clearResult.outcome === "not_applicable"
               ? order.backupRetentionUntil
-              : cleared.backupRetentionUntil,
+              : clearResult.backupRetentionUntil,
           now: dependencies.clock(),
           ownerPurgeOrderId: order.ownerPurgeOrderId,
         });
