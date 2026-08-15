@@ -93,6 +93,37 @@ export function createBehaviorAwareConversationTextModel(input: {
       const currentMessage = [...request.messages]
         .reverse()
         .find((message) => message.role === "user");
+      const regenerationHandle = findRegenerationHandle(request.instructions);
+      if (
+        currentMessage &&
+        request.functions?.some(
+          (definition) => definition.name === "regenerate_journal",
+        ) &&
+        regenerationHandle &&
+        isSupportedRegenerationRequest(currentMessage.text)
+      ) {
+        yield {
+          rawArguments: JSON.stringify({
+            guidance: currentMessage.text,
+            journalHandle: regenerationHandle,
+          }),
+          rawFunctionName: "regenerate_journal",
+          type: "tool_call",
+        };
+        yield {
+          costMicros: 0,
+          finishReason: "tool_call",
+          inputTokens: request.messages.reduce(
+            (total, message) => total + Math.ceil([...message.text].length / 4),
+            0,
+          ),
+          modelSnapshot: request.model,
+          outputTokens: 0,
+          providerRequestId: "deterministic-action-request",
+          type: "completed",
+        };
+        return;
+      }
       const history = currentMessage
         ? request.messages.filter((message) => message !== currentMessage)
         : [...request.messages];
@@ -135,4 +166,32 @@ export function createBehaviorAwareConversationTextModel(input: {
       }
     },
   };
+}
+
+function findRegenerationHandle(instructions: string): string | null {
+  return instructions.match(/- regenerate_journal:\s+(\S+)/)?.[1] ?? null;
+}
+
+function isSupportedRegenerationRequest(text: string): boolean {
+  const normalized = text.trim().toLocaleLowerCase();
+  if (!normalized) return false;
+  const boundedExpressionSignal =
+    /(wording|expression|written|clearer|clarity|organ(?:i|a)z|emphasis|重点|表达|措辞|清楚|组织)/i;
+  const explicitRegenerationSignal =
+    /\b(regenerat(?:e|ion)|re-?write|rewrite|redo|reroll|try again|do it again|make)\b|重新生成|重写|再来一次|换一种|写得更清楚|写得清楚/i;
+  if (
+    /(delete|remove|erase|first person|use\s+["']?i|style|poetic|formal|funny|romantic|candidate|option|version|reroll|again and again|add|include|invent|promoted|promotion|fact|event|事实|事件|错误|不对|删除|删掉|第一人称|我的口吻|风格|诗意|候选|增加|加入)/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  if (/\b(and|then)\b|以及|并且|同时/.test(normalized) &&
+      /(delete|remove|erase|事实|错误|删除|删掉|第一人称|风格|candidate|option)/i.test(normalized)) {
+    return false;
+  }
+  if (/^(i )?(don't|do not) like (this|it)|^not happy with (this|it)$|^不喜欢(这个|这篇)?$/.test(normalized)) {
+    return false;
+  }
+  return explicitRegenerationSignal.test(normalized) && boundedExpressionSignal.test(normalized);
 }

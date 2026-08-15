@@ -7,11 +7,16 @@ import type {
   ModelRunAttemptId,
   UserId,
 } from "@sayhear/domain";
+import {
+  asGenerationCommandId,
+  asModelRunAttemptId,
+} from "@sayhear/domain";
 
 import type {
   CompleteResponseMetadata,
   ConversationResponseRepository,
 } from "./conversation-response";
+import type { ContextCompiler } from "./context-compiler";
 import type {
   ActionReferenceHandle,
   ConversationActionCatalog,
@@ -22,7 +27,10 @@ import {
   validateConversationActionCatalog,
 } from "./conversation-action-catalog";
 import type { ConversationActionGateway } from "./conversation-action-gateway";
-import type { ConversationActionReceipt } from "./conversation-action-gateway";
+import type {
+  ConversationActionFinalizationCommand,
+  ConversationActionReceipt,
+} from "./conversation-action-gateway";
 import type { ConversationActionProposal } from "./conversation-action-catalog";
 import {
   ProviderDispatchError,
@@ -62,6 +70,7 @@ export type ConversationAgentHarnessRepository = Pick<
   ConversationResponseRepository,
   | "claimResponseExecution"
   | "claimStaleResponseExecution"
+  | "commitActionDecision"
   | "commitCompleteResponse"
   | "loadResponse"
   | "settleResponseFailure"
@@ -140,6 +149,18 @@ export type ConversationAgentHarness = Readonly<{
     command: ConversationDecisionCommand,
     signal?: AbortSignal,
   ): AsyncIterable<ConversationHarnessEvent>;
+  runFinalization?(
+    command: ConversationDecisionCommand,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
+  runFinalizationCommand?(
+    command: ConversationActionFinalizationCommand,
+    input: Readonly<{
+      catalog: ConversationActionCatalog;
+      harnessPolicy: ConversationHarnessPolicy;
+    }>,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
 }>;
 
 export function createConversationAgentHarness(dependencies: {
@@ -148,6 +169,7 @@ export function createConversationAgentHarness(dependencies: {
   actionGateway?: ConversationActionGateway;
   egressPort: ProviderEgressPort;
   jitter?: () => number;
+  contextCompiler?: Pick<ContextCompiler, "compile">;
   repository: ConversationAgentHarnessRepository;
 }): ConversationAgentHarness {
   const delay =
@@ -237,6 +259,14 @@ export function createConversationAgentHarness(dependencies: {
           },
           proposal: pendingActionProposal,
         });
+        if (receipt.admission === "accepted") {
+          await dependencies.repository.commitActionDecision?.({
+            completedAt: dependencies.clock(),
+            generationCommandId: command.generationCommandId,
+            modelRunAttemptId: command.modelRunAttemptId,
+            userId: command.userId,
+          });
+        }
         yield { receipt, type: "action_admitted" };
         return;
       }
@@ -345,6 +375,93 @@ export function createConversationAgentHarness(dependencies: {
   return {
     runDecision(command, signal) {
       return runDecisionAttempt(command, signal);
+    },
+    runFinalization(command, signal) {
+      if (command.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("Action Finalization must disable tools.");
+      }
+      return runDecisionAttempt(command, signal);
+    },
+    async *runFinalizationCommand(command, input, signal) {
+      if (input.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("Action Finalization must disable tools.");
+      }
+      if (!dependencies.contextCompiler) {
+        throw new Error("Action Finalization requires a Context Compiler.");
+      }
+      const ownership = await dependencies.repository.claimResponseExecution({
+        generationCommandId: asGenerationCommandId(command.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+        userId: command.userId,
+      });
+      if (ownership === "shared") {
+        const existing = await dependencies.repository.loadResponse({
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          userId: command.userId,
+        });
+        if (existing.outcome !== "running") {
+          yield* streamExistingDecision(existing);
+          return;
+        }
+        const recovery = await dependencies.repository.claimStaleResponseExecution({
+          expectedModelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          now: dependencies.clock(),
+          userId: command.userId,
+        });
+        if (recovery.outcome !== "execute") {
+          if (recovery.outcome !== "not_due") {
+            yield* streamExistingDecision(
+              await dependencies.repository.loadResponse({
+                generationCommandId: asGenerationCommandId(command.generationCommandId),
+                userId: command.userId,
+              }),
+            );
+          }
+          return;
+        }
+        command = {
+          ...command,
+          generationCommandId: recovery.generationCommandId,
+          modelRunAttemptId: recovery.modelRunAttemptId,
+        };
+        const retryOwnership = await dependencies.repository.claimResponseExecution({
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          userId: command.userId,
+        });
+        if (retryOwnership === "shared") {
+          yield* streamExistingDecision(
+            await dependencies.repository.loadResponse({
+              generationCommandId: asGenerationCommandId(command.generationCommandId),
+              userId: command.userId,
+            }),
+          );
+          return;
+        }
+      }
+      const context = await dependencies.contextCompiler.compile({
+        generationCommandId: asGenerationCommandId(command.generationCommandId),
+        interactionTurnId: command.interactionTurnId,
+        userId: command.userId,
+      });
+      yield* runDecisionAttempt(
+        {
+          ...(context.actionReferenceHandles === undefined
+            ? {}
+            : { actionReferenceHandles: context.actionReferenceHandles }),
+          catalog: input.catalog,
+          catalogVersion: input.catalog.version,
+          compiledContextId: context.id,
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          harnessPolicy: input.harnessPolicy,
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        },
+        signal,
+      );
     },
   };
 }

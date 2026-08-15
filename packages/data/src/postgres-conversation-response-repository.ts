@@ -2,6 +2,7 @@ import type {
   CompleteResponseMetadata,
   ActionReferenceHandle,
   ActionReferenceTarget,
+  ActionFinalizationReceiptSnapshot,
   CompiledContextReferencedEvent,
   CompiledContextSection,
   ContextCompilerRepository,
@@ -35,6 +36,10 @@ import { createUuidV7 } from "./uuid-v7";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 
 type ContextHeadRow = Readonly<{
+  action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
+  action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
+  action_receipt_disposition: string | null;
+  action_receipt_sequence: number | null;
   activity_state: "active" | "finalized" | "quiescent";
   closure_policy_version: string;
   continuous_exchange_no: string;
@@ -75,6 +80,10 @@ type ContextEventRow = Readonly<{
 }>;
 
 type DispatchRow = Readonly<{
+  action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
+  action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
+  action_receipt_disposition: string | null;
+  action_receipt_sequence: number | null;
   attempt_status: string;
   consent_active: boolean;
   consent_policy_version: string | null;
@@ -122,6 +131,49 @@ export class PostgresConversationResponseRepository
     ProviderEgressRepository
 {
   public constructor(private readonly pool: Pool) {}
+
+  public async commitActionDecision(input: {
+    completedAt: Date;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    userId: UserId;
+  }): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE generation_commands
+         SET status = 'succeeded', settled_at = $4,
+             recovery_status = 'not_needed', next_recovery_at = NULL
+         WHERE generation_command_id = $1 AND user_id = $2
+           AND status IN ('running', 'compiling')
+           AND authoritative_result_id IS NULL
+           AND generation_stage = 'decision'`,
+        [input.generationCommandId, input.userId, input.modelRunAttemptId, input.completedAt],
+      );
+      await client.query(
+        `UPDATE model_run_attempts
+         SET status = 'succeeded', completed_at = COALESCE(completed_at, $3),
+             recovery_status = 'not_needed', recovery_claimed_at = NULL
+         WHERE model_run_attempt_id = $1 AND generation_command_id = $2
+           AND user_id = $4 AND status = 'running'`,
+        [input.modelRunAttemptId, input.generationCommandId, input.completedAt, input.userId],
+      );
+      await client.query(
+        `UPDATE provider_egress_dispositions
+         SET status = 'completed', completed_at = COALESCE(completed_at, $3)
+         WHERE model_run_attempt_id = $1 AND user_id = $2
+           AND status IN ('dispatched', 'completed')`,
+        [input.modelRunAttemptId, input.userId, input.completedAt],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   public async claimResponseExecution(input: {
     generationCommandId: GenerationCommandId;
@@ -548,6 +600,7 @@ export class PostgresConversationResponseRepository
         INNER JOIN conversation_response_recovery_policies policy
           ON policy.policy_version = command.recovery_policy_version
         WHERE command.authoritative_result_id IS NULL
+          AND command.generation_stage <> 'action_finalization'
           AND turn.status IN ('open', 'responding')
           AND (
             (
@@ -620,6 +673,10 @@ export class PostgresConversationResponseRepository
             session.dialogue_revision,
             session.source_revision,
             command.expected_data_epoch,
+            command.action_execution_status,
+            command.action_receipt_sequence,
+            frozen_receipt.admission_status AS action_receipt_admission,
+            frozen_receipt.disposition AS action_receipt_disposition,
             summary.rolling_summary_version_id AS rolling_summary_id,
             summary.version_no AS rolling_summary_version,
             summary.covered_through_sequence_no AS rolling_summary_covered_through,
@@ -643,6 +700,10 @@ export class PostgresConversationResponseRepository
           LEFT JOIN journal_versions current_journal_version
             ON current_journal_version.journal_version_id = current_journal.current_version_id
             AND current_journal_version.user_id = command.user_id
+          LEFT JOIN conversation_action_receipts frozen_receipt
+            ON frozen_receipt.action_execution_id = command.action_execution_id
+           AND frozen_receipt.receipt_sequence = command.action_receipt_sequence
+           AND command.generation_stage = 'action_finalization'
           LEFT JOIN current_rolling_summaries current_summary
             ON current_summary.daily_session_id = session.daily_session_id
           LEFT JOIN rolling_summary_versions summary
@@ -726,6 +787,18 @@ export class PostgresConversationResponseRepository
 
       await client.query("COMMIT");
       return {
+        ...(row.action_receipt_sequence !== null &&
+        row.action_execution_status !== null &&
+        row.action_receipt_admission !== null
+          ? {
+              actionFinalizationReceipt: {
+                admission: row.action_receipt_admission,
+                disposition: row.action_receipt_disposition,
+                execution: row.action_execution_status,
+                sequence: row.action_receipt_sequence,
+              },
+            }
+          : {}),
         ...((row.current_journal_id &&
           row.current_journal_version_id &&
           row.current_journal_source_revision &&
@@ -1019,6 +1092,10 @@ export class PostgresConversationResponseRepository
             command.provider_policy_version,
             command.consent_policy_version,
             command.freshness_policy,
+            command.action_execution_status,
+            command.action_receipt_sequence,
+            frozen_receipt.admission_status AS action_receipt_admission,
+            frozen_receipt.disposition AS action_receipt_disposition,
             context.compiler_version AS context_compiler_version,
             context.dialogue_revision AS context_dialogue_revision,
             context.policy_versions AS context_policy_versions,
@@ -1062,6 +1139,10 @@ export class PostgresConversationResponseRepository
             AND context.generation_command_id =
               command.generation_command_id
             AND context.user_id = command.user_id
+          LEFT JOIN conversation_action_receipts frozen_receipt
+            ON frozen_receipt.action_execution_id = command.action_execution_id
+           AND frozen_receipt.receipt_sequence = command.action_receipt_sequence
+           AND command.generation_stage = 'action_finalization'
           INNER JOIN provider_egress_policy_versions policy
             ON policy.policy_version = command.provider_policy_version
             AND policy.provider = command.provider
@@ -1223,6 +1304,18 @@ export class PostgresConversationResponseRepository
       await client.query("COMMIT");
       return {
         context: {
+          ...(row.action_receipt_sequence !== null &&
+          row.action_execution_status !== null &&
+          row.action_receipt_admission !== null
+            ? {
+                actionFinalizationReceipt: {
+                  admission: row.action_receipt_admission,
+                  disposition: row.action_receipt_disposition,
+                  execution: row.action_execution_status,
+                  sequence: row.action_receipt_sequence,
+                },
+              }
+            : {}),
           ...(actionHandles.rows.length === 0
             ? {}
             : {

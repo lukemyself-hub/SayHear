@@ -6,6 +6,10 @@ import type {
 } from "./conversation-action-catalog";
 import { validateConversationActionCatalog } from "./conversation-action-catalog";
 import type { ActionReferenceBinding } from "./conversation-action-handles";
+import type {
+  ConversationEventRevisionId,
+  InteractionTurnId,
+} from "@sayhear/domain";
 
 export type ConversationActionAdmission =
   | "accepted"
@@ -30,6 +34,10 @@ export type ConversationActionReceipt = Readonly<{
   execution: ConversationActionExecution;
   receiptSequence: number;
   schemaVersion: string;
+  finalization?: Readonly<{
+    generationCommandId: string;
+    modelRunAttemptId: string;
+  }>;
 }>;
 
 export type PreparedConversationAction = Readonly<{
@@ -39,6 +47,41 @@ export type PreparedConversationAction = Readonly<{
   guidance: string | null;
   generationPolicyVersion: string;
   sourceRevision: number;
+  targetVersionId: string;
+}>;
+
+export type JournalRegenerationWorkflowCommand = Readonly<{
+  actionExecutionId: string;
+  dailySessionId: string;
+  expectedDataEpoch: number;
+  generationCommandId: string;
+  generationPolicyVersion: string;
+  guidance: string | null;
+  modelRunAttemptId: string | null;
+  sourceRevision: number;
+  targetVersionId: string;
+  userId: ConversationActionGatewayContext["userId"];
+  workflowCommandId: string;
+}>;
+
+export type JournalRegenerationExecutionOutcome =
+  | "canceled"
+  | "failed"
+  | "succeeded";
+
+export type ConversationActionFinalizationCommand = Readonly<{
+  actionExecutionId: string;
+  generationCommandId: string;
+  interactionTurnId: InteractionTurnId;
+  modelRunAttemptId: string;
+  requestEventRevisionId: ConversationEventRevisionId;
+  receipt: Readonly<{
+    admission: ConversationActionAdmission;
+    disposition: string | null;
+    execution: ConversationActionExecution;
+    sequence: number;
+  }>;
+  userId: ConversationActionGatewayContext["userId"];
 }>;
 
 export type ConversationActionHandler = Readonly<{
@@ -52,6 +95,7 @@ export type ConversationActionHandler = Readonly<{
 
 export type ConversationActionGatewayRepository = Readonly<{
   commitAccepted(input: {
+    catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition;
     prepare: () => PreparedConversationAction;
@@ -59,6 +103,7 @@ export type ConversationActionGatewayRepository = Readonly<{
   }): Promise<ConversationActionReceipt>;
   commitNonAccepted(input: {
     admission: Exclude<ConversationActionAdmission, "accepted">;
+    catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition | null;
     disposition: string | null;
@@ -78,6 +123,20 @@ export type ConversationActionGatewayRepository = Readonly<{
     context: ConversationActionGatewayContext;
     handle: string;
   }): Promise<ActionReferenceBinding | null>;
+  readRegenerationWorkflowCommand?(input: {
+    workflowCommandId: string;
+  }): Promise<JournalRegenerationWorkflowCommand | null>;
+  claimRegenerationExecution?(input: {
+    actionExecutionId: string;
+  }): Promise<"execute" | "replayed">;
+  recordRegenerationExecution?(input: {
+    actionExecutionId: string;
+    disposition: string;
+    outcome: JournalRegenerationExecutionOutcome;
+  }): Promise<void>;
+  listPendingFinalizations?(input: {
+    limit: number;
+  }): Promise<readonly ConversationActionFinalizationCommand[]>;
 }>;
 
 export type ConversationActionGateway = Readonly<{
@@ -86,6 +145,9 @@ export type ConversationActionGateway = Readonly<{
     context: ConversationActionGatewayContext;
     proposal: ConversationActionProposal | null;
   }): Promise<ConversationActionReceipt>;
+  listPendingFinalizations?(input: {
+    limit: number;
+  }): Promise<readonly ConversationActionFinalizationCommand[]>;
 }>;
 
 export function createConversationActionGateway(input: {
@@ -100,6 +162,7 @@ export function createConversationActionGateway(input: {
       if (!catalogValidation.valid) {
         return input.repository.commitNonAccepted({
           admission: "unsupported",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition: null,
           disposition: catalogValidation.reason,
@@ -128,6 +191,7 @@ export function createConversationActionGateway(input: {
       if (!proposal || !definition || definition.schemaVersion !== schemaVersion) {
         return input.repository.commitNonAccepted({
           admission: "unsupported",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: "catalog_or_schema",
@@ -144,6 +208,7 @@ export function createConversationActionGateway(input: {
       if (!validation.valid) {
         return input.repository.commitNonAccepted({
           admission: "unsupported",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: validation.reason,
@@ -159,6 +224,7 @@ export function createConversationActionGateway(input: {
       if (!target || !target.actionKinds.includes(proposal.actionKind)) {
         return input.repository.commitNonAccepted({
           admission: "rejected",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: "handle_invalid_or_not_owned",
@@ -172,6 +238,7 @@ export function createConversationActionGateway(input: {
       ) {
         return input.repository.commitNonAccepted({
           admission: "rejected",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: "owner_or_deletion_fence",
@@ -185,6 +252,7 @@ export function createConversationActionGateway(input: {
       ) {
         return input.repository.commitNonAccepted({
           admission: "rejected",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: "source_invalid",
@@ -195,6 +263,7 @@ export function createConversationActionGateway(input: {
       if (target.currentVersionId !== target.targetVersionId) {
         return input.repository.commitNonAccepted({
           admission: "clarification_required",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: "exact_head_advanced",
@@ -208,6 +277,7 @@ export function createConversationActionGateway(input: {
       })) {
         return input.repository.commitNonAccepted({
           admission: "rejected",
+          catalogVersion: request.catalog.version,
           context: request.context,
           definition,
           disposition: "rate_limited_in_flight",
@@ -217,6 +287,7 @@ export function createConversationActionGateway(input: {
       }
 
       return input.repository.commitAccepted({
+        catalogVersion: request.catalog.version,
         context: request.context,
         definition,
         prepare: () =>
@@ -228,6 +299,13 @@ export function createConversationActionGateway(input: {
         proposal,
       });
     },
+    ...(input.repository.listPendingFinalizations
+      ? {
+          listPendingFinalizations(inputRequest: { limit: number }) {
+            return input.repository.listPendingFinalizations!(inputRequest);
+          },
+        }
+      : {}),
   };
 }
 
@@ -253,6 +331,7 @@ export function createJournalRegenerationActionHandler(input: {
         guidance: guidance || null,
         generationPolicyVersion: input.generationPolicyVersion,
         sourceRevision: target.sourceRevision,
+        targetVersionId: target.targetVersionId,
       };
     },
   };

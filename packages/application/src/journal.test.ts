@@ -16,6 +16,71 @@ const evidence = {
 };
 
 describe("automatic evidence-backed Journal", () => {
+  it("runs regeneration through the same validation and publish seam with bounded guidance", async () => {
+    const publish = vi.fn().mockResolvedValue({ outcome: "published" });
+    const generate = vi.fn().mockResolvedValue({
+      locale: "en-US",
+      statements: [{
+        id: "statement-1",
+        text: "The owner described a turning point in the day.",
+        epistemicStatus: "supported_expression" as const,
+        evidenceItemIds: [evidence.id],
+      }],
+    });
+    const startGeneration = vi.fn().mockResolvedValue({
+      accepted: true,
+      generationCommandId: "regeneration-command-1",
+    });
+    const service = createJournalService({
+      journalPolicyVersion: "journal-generation:v1",
+      validatorVersion: "journal-validator:v1",
+      evidenceExtractionPolicyVersion: "evidence-extraction:v1",
+      generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
+      validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
+      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      model: { generate },
+      repository: {
+        readSource: vi.fn().mockResolvedValue({
+          sourceSnapshotId: "snapshot-1",
+          dailySessionId: sessionId,
+          userId: "user-1",
+          sourceRevision: 4,
+          evidenceItems: [evidence],
+        }),
+        startGeneration,
+        publish,
+        recordValidationFailure: vi.fn(),
+        readLatestCurrent: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    await expect(service.generate({
+      dailySessionId: sessionId,
+      sourceRevision: 4,
+      generationCommandId: "regeneration-command-1",
+      modelRunAttemptId: "attempt-1",
+      expectedDataEpoch: 1,
+      policyVersion: "journal-generation:v1",
+      generationKind: "regeneration",
+      actionExecutionId: "action-1",
+      targetVersionId: "version-1",
+      guidance: "Make the turning point clearer.",
+    })).resolves.toEqual({ outcome: "published" });
+
+    expect(startGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      generationKind: "regeneration",
+      actionExecutionId: "action-1",
+    }));
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      guidance: "Make the turning point clearer.",
+    }));
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+      generationKind: "regeneration",
+      actionExecutionId: "action-1",
+      targetVersionId: "version-1",
+    }));
+  });
+
   it("validates and publishes a third-person Journal from the frozen Evidence snapshot", async () => {
     const publish = vi.fn().mockResolvedValue({ outcome: "published" });
     const service = createJournalService({

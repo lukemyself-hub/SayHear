@@ -26,7 +26,7 @@ import {
   createPostgresPool,
   PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
-  PostgresConversationActionRepository,
+  PostgresJournalRegenerationActionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
@@ -62,7 +62,7 @@ export function createServerComposition() {
   const conversationRepository =
     new PostgresUserTextConversationRepository(pool);
   const responseRepository = new PostgresConversationResponseRepository(pool);
-  const actionRepository = new PostgresConversationActionRepository(
+  const actionRepository = new PostgresJournalRegenerationActionRepository(
     pool,
     configuration.contextHmacSecret,
   );
@@ -227,15 +227,17 @@ export function createServerComposition() {
     contextCompiler,
     repository: responseRepository,
   });
-  const conversationAgentHarness = createConversationAgentHarness({
-    actionGateway: createConversationActionGateway({
-      handler: createJournalRegenerationActionHandler({
-        generationPolicyVersion: draftConfiguration.policyVersion,
-      }),
-      repository: actionRepository,
+  const actionGateway = createConversationActionGateway({
+    handler: createJournalRegenerationActionHandler({
+      generationPolicyVersion: draftConfiguration.policyVersion,
     }),
+    repository: actionRepository,
+  });
+  const conversationAgentHarness = createConversationAgentHarness({
+    actionGateway,
     clock: configuration.clock,
     egressPort,
+    contextCompiler,
     repository: responseRepository,
   });
   return {
@@ -249,6 +251,8 @@ export function createServerComposition() {
     authOptions: createAuthOptions({ configuration, pool }),
     clock: configuration.clock,
     journalEligibilityRepository,
+    actionRepository,
+    actionGateway,
     rollingSummaryService,
     journalEligibilityService,
     dialogueStateService,
@@ -266,6 +270,7 @@ export function createServerComposition() {
     }),
     conversationResponseService: createConversationResponseService({
       catalog: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+      actionGateway,
       clock: configuration.clock,
       contextCompiler,
       conversationService,

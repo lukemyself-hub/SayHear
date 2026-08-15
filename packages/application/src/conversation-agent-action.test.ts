@@ -133,4 +133,50 @@ describe("Conversation Agent Harness Action boundary", () => {
     expect(receipts).toHaveLength(1);
     expect(events).toEqual([{ receipt: receipts[0], type: "action_admitted" }]);
   });
+
+  it("runs Action Finalization with tools disabled and commits the final response", async () => {
+    let toolsDisabled: boolean | undefined;
+    const egressPort: ProviderEgressPort = {
+      async *stream(input) {
+        toolsDisabled = input.toolsDisabled;
+        yield { delta: "The Journal is now expressed more clearly.", type: "delta" } as const;
+        yield {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 1,
+          modelSnapshot: "test",
+          outputTokens: 1,
+          providerRequestId: null,
+          type: "completed",
+        } as const;
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: () => new Date("2026-08-14T00:00:00.000Z"),
+      egressPort,
+      repository: {
+        ...repository(),
+        async commitCompleteResponse() {
+          return {
+            eventId: asConversationEventId("01984477-1f9a-7d25-9d97-e588769566c7"),
+            outcome: "committed" as const,
+            revisionId: asConversationEventRevisionId("01984477-1f9a-7d25-9d97-e588769566c8"),
+          };
+        },
+      },
+    });
+
+    const events = [];
+    for await (const event of harness.runFinalization!({
+      ...command(),
+      harnessPolicy: {
+        ...ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+        maxStateChangingActions: 0,
+        toolsDisabled: true,
+      },
+    })) events.push(event);
+
+    expect(toolsDisabled).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: "decision_committed" });
+  });
 });

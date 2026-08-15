@@ -1,6 +1,7 @@
 import { asDailySessionId } from "@sayhear/domain";
 
 export type JournalEpistemicStatus = "supported_expression" | "inferred_observation";
+export type JournalGenerationKind = "automatic" | "regeneration";
 export type JournalEvidenceReference = Readonly<{
   id: string;
   sourceEventId: string;
@@ -78,6 +79,8 @@ export type JournalRepository = Readonly<{
     configVersion: string;
     rolePolicyVersion: string;
     promptFingerprint: string;
+    generationKind?: JournalGenerationKind;
+    actionExecutionId?: string;
   }): Promise<{ accepted: boolean; generationCommandId: string }>;
   publish(input: {
     dailySessionId: string;
@@ -99,6 +102,9 @@ export type JournalRepository = Readonly<{
     locale: string;
     statements: readonly JournalStatementDraft[];
     modelValid: boolean;
+    generationKind?: JournalGenerationKind;
+    actionExecutionId?: string;
+    targetVersionId?: string;
   }): Promise<{ outcome: "published" | "stale" | "fenced" }>;
   recordWorkflowOutcome?(input: {
     dailySessionId: string;
@@ -125,6 +131,8 @@ export type JournalRepository = Readonly<{
     validatorConfigVersion?: string;
     validatorPolicyVersion?: string;
     validatorPromptFingerprint?: string;
+    generationKind?: JournalGenerationKind;
+    actionExecutionId?: string;
   }): Promise<void>;
   readCurrent?(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
   readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
@@ -135,6 +143,7 @@ export type JournalModel = Readonly<{
     locale: string;
     evidenceItems: readonly JournalEvidenceReference[];
     sourceTextByEvidenceId: JournalSourceText;
+    guidance?: string | null;
   }): Promise<JournalDraft>;
 }>;
 export type JournalProviderEgress = JournalModel;
@@ -151,6 +160,10 @@ export type JournalService = Readonly<{
     modelRunAttemptId: string;
     expectedDataEpoch: number;
     policyVersion: string;
+    generationKind?: JournalGenerationKind;
+    actionExecutionId?: string;
+    targetVersionId?: string;
+    guidance?: string | null;
   }): Promise<{
     outcome: "published" | "stale" | "fenced" | "not_found" | "validation_failed" | "writes_disabled";
     reason?: string;
@@ -203,6 +216,10 @@ export function createJournalService(dependencies: {
         generationPolicyVersion: dependencies.journalPolicyVersion,
         expectedDataEpoch: input.expectedDataEpoch,
         ...dependencies.generationMetadata,
+        generationKind: input.generationKind ?? "automatic",
+        ...(input.actionExecutionId === undefined
+          ? {}
+          : { actionExecutionId: input.actionExecutionId }),
       });
       if (!generation.accepted) return { outcome: "fenced" };
       const generationCommandId = generation.generationCommandId;
@@ -212,6 +229,7 @@ export function createJournalService(dependencies: {
           locale: source.locale ?? "en-US",
           evidenceItems: source.evidenceItems,
           sourceTextByEvidenceId: source.sourceTextByEvidenceId ?? {},
+          ...(input.guidance === undefined ? {} : { guidance: input.guidance }),
         });
       } catch {
         await dependencies.repository.recordValidationFailure?.({
@@ -219,6 +237,8 @@ export function createJournalService(dependencies: {
           modelRunAttemptId: input.modelRunAttemptId, validatorVersion: dependencies.validatorVersion,
           failureCode: "model_run_failed", expectedDataEpoch: input.expectedDataEpoch,
           generationPolicyVersion: dependencies.journalPolicyVersion,
+          generationKind: input.generationKind ?? "automatic",
+          ...(input.actionExecutionId === undefined ? {} : { actionExecutionId: input.actionExecutionId }),
         });
         return { outcome: "validation_failed", reason: "model_run_failed" };
       }
@@ -233,6 +253,8 @@ export function createJournalService(dependencies: {
           failureCode: validation.reason,
           expectedDataEpoch: input.expectedDataEpoch,
           generationPolicyVersion: dependencies.journalPolicyVersion,
+          generationKind: input.generationKind ?? "automatic",
+          ...(input.actionExecutionId === undefined ? {} : { actionExecutionId: input.actionExecutionId }),
         });
         return { outcome: "validation_failed", reason: validation.reason };
       }
@@ -245,6 +267,8 @@ export function createJournalService(dependencies: {
           modelRunAttemptId: input.modelRunAttemptId, validatorVersion: dependencies.validatorVersion,
           failureCode: "validator_model_failed", expectedDataEpoch: input.expectedDataEpoch,
           generationPolicyVersion: dependencies.journalPolicyVersion,
+          generationKind: input.generationKind ?? "automatic",
+          ...(input.actionExecutionId === undefined ? {} : { actionExecutionId: input.actionExecutionId }),
           validationAttemptId: `${input.modelRunAttemptId}:validate`,
           validatorRole: dependencies.validationMetadata.role,
           validatorProvider: dependencies.validationMetadata.provider,
@@ -265,6 +289,8 @@ export function createJournalService(dependencies: {
           failureCode: narrativeValidation.reason,
           expectedDataEpoch: input.expectedDataEpoch,
           generationPolicyVersion: dependencies.journalPolicyVersion,
+          generationKind: input.generationKind ?? "automatic",
+          ...(input.actionExecutionId === undefined ? {} : { actionExecutionId: input.actionExecutionId }),
           validationAttemptId: `${input.modelRunAttemptId}:validate`,
           validatorRole: dependencies.validationMetadata.role,
           validatorProvider: dependencies.validationMetadata.provider,
@@ -295,6 +321,13 @@ export function createJournalService(dependencies: {
         locale: draft.locale,
         statements: draft.statements,
         modelValid: narrativeValidation.valid,
+        generationKind: input.generationKind ?? "automatic",
+        ...(input.actionExecutionId === undefined
+          ? {}
+          : { actionExecutionId: input.actionExecutionId }),
+        ...(input.targetVersionId === undefined
+          ? {}
+          : { targetVersionId: input.targetVersionId }),
       });
     },
     async inspect(input) {
@@ -331,6 +364,34 @@ export async function runAutomaticJournal(input: {
     modelRunAttemptId: input.modelRunAttemptId,
     expectedDataEpoch: input.command.expectedDataEpoch,
     policyVersion: input.command.policyVersion,
+  });
+}
+
+export async function runJournalRegeneration(input: {
+  service: JournalService;
+  command: AutomaticJournalCommand & Readonly<{
+    actionExecutionId: string;
+    guidance: string | null;
+    targetVersionId: string;
+  }>;
+  generationCommandId: string;
+  modelRunAttemptId: string;
+}): ReturnType<JournalService["generate"]> {
+  asDailySessionId(input.command.subjectId);
+  if (!input.command.workflowCommandId || !input.command.policyVersion || !input.command.actionExecutionId) {
+    throw new Error("Journal regeneration command is incomplete.");
+  }
+  return input.service.generate({
+    dailySessionId: input.command.subjectId,
+    sourceRevision: input.command.sourceRevision,
+    generationCommandId: input.generationCommandId,
+    modelRunAttemptId: input.modelRunAttemptId,
+    expectedDataEpoch: input.command.expectedDataEpoch,
+    policyVersion: input.command.policyVersion,
+    generationKind: "regeneration",
+    actionExecutionId: input.command.actionExecutionId,
+    guidance: input.command.guidance,
+    targetVersionId: input.command.targetVersionId,
   });
 }
 

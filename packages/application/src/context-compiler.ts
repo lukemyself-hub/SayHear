@@ -19,6 +19,17 @@ import type {
   ActionReferenceHandle,
   ActionReferenceTarget,
 } from "./conversation-action-catalog";
+import type {
+  ConversationActionAdmission,
+  ConversationActionExecution,
+} from "./conversation-action-gateway";
+
+export type ActionFinalizationReceiptSnapshot = Readonly<{
+  admission: ConversationActionAdmission;
+  disposition: string | null;
+  execution: ConversationActionExecution;
+  sequence: number;
+}>;
 
 export type ContextPolicyVersions = Readonly<{
   localePolicyVersion: string;
@@ -39,6 +50,7 @@ export type ContextSourceEvent = Readonly<{
 }>;
 
 export type ContextSourceSnapshot = Readonly<{
+  actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
   actionReferenceTargets?: readonly ActionReferenceTarget[];
   dailySession: Readonly<{
     activityState: "active" | "finalized" | "quiescent";
@@ -77,7 +89,8 @@ export type CompiledContextSectionKey =
   | "dialogue_state"
   | "rolling_summary"
   | "committed_raw_events"
-  | "current_user_input";
+  | "current_user_input"
+  | "action_finalization_receipt";
 
 export type CompiledContextSection = Readonly<{
   budgetTokens: number | null;
@@ -112,6 +125,7 @@ export type CompiledContext = Readonly<{
 }>;
 
 export type CompiledContextRenderSource = Readonly<{
+  actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
   actionReferenceHandles?: readonly ActionReferenceHandle[];
   compilerVersion: string;
   integrity: Readonly<{
@@ -272,6 +286,7 @@ export function createContextCompiler(dependencies: {
         rawEventTokenBudget: dependencies.rawEventTokenBudget,
         dialogueState,
         rollingSummary: source.rollingSummary ?? null,
+        actionFinalizationReceipt: source.actionFinalizationReceipt,
       });
       const sections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -380,6 +395,7 @@ export function createContextCompiler(dependencies: {
           ? { dialogueStateContent: dialogueStateSection.reference }
           : {}),
         rollingSummary: source.rollingSummary ?? null,
+        actionFinalizationReceipt: source.actionFinalizationReceipt,
       });
       const expectedSections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -439,6 +455,20 @@ function renderActionReferenceInstructions(
   ].join("\n");
 }
 
+function renderActionFinalizationReceipt(
+  receipt: ActionFinalizationReceiptSnapshot,
+): string {
+  const completionRule = receipt.execution === "succeeded"
+    ? "The Action completed successfully; it is valid to say the regenerated Journal is complete."
+    : "The Action is not complete; do not claim that a new Journal Version was generated or became current.";
+  return [
+    "Action Finalization Receipt (frozen committed source):",
+    `Admission: ${receipt.admission}; execution: ${receipt.execution}; sequence: ${receipt.sequence}; disposition: ${receipt.disposition ?? "none"}.`,
+    completionRule,
+    "Only this Receipt snapshot may determine the Action status in the final response.",
+  ].join("\n");
+}
+
 function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil([...text].length / 4));
 }
@@ -454,6 +484,7 @@ function createSections(input: {
   dialogueState?: CurrentDialogueState | null;
   dialogueStateContent?: string;
   rollingSummary: CurrentRollingSummary | null;
+  actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
@@ -478,6 +509,15 @@ function createSections(input: {
       reference: `${input.rollingSummary.id}:version:${input.rollingSummary.version}:covered-through:${input.rollingSummary.coveredThrough}:sources:${input.rollingSummary.sourceRevisionIds.join(",")}:policy:${input.rollingSummary.policyVersion}:prompt:${input.rollingSummary.promptVersion}:model:${input.rollingSummary.modelConfigVersion}`,
       truncatable: false,
     }]),
+    ...(input.actionFinalizationReceipt === undefined
+      ? []
+      : [{
+          budgetTokens: null,
+          content: renderActionFinalizationReceipt(input.actionFinalizationReceipt),
+          key: "action_finalization_receipt" as const,
+          reference: `receipt:${input.actionFinalizationReceipt.sequence}`,
+          truncatable: false,
+        }]),
     {
       budgetTokens: null,
       content:

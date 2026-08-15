@@ -60,6 +60,7 @@ export {
   CompiledContextIntegrityError,
   createContextCompiler,
   type CompiledContext,
+  type ActionFinalizationReceiptSnapshot,
   type CompiledContextDegradedReason,
   type CompiledContextReferencedEvent,
   type CompiledContextRenderSource,
@@ -134,11 +135,14 @@ export {
   createConversationActionGateway,
   createJournalRegenerationActionHandler,
   type ConversationActionAdmission,
+  type ConversationActionFinalizationCommand,
   type ConversationActionExecution,
   type ConversationActionGateway,
   type ConversationActionGatewayRepository,
   type ConversationActionHandler,
   type ConversationActionReceipt,
+  type JournalRegenerationExecutionOutcome,
+  type JournalRegenerationWorkflowCommand,
   type PreparedConversationAction,
 } from "./conversation-action-gateway";
 export type { ActionReferenceBinding } from "./conversation-action-handles";
@@ -163,11 +167,13 @@ export {
 export {
   createJournalService,
   runAutomaticJournal,
+  runJournalRegeneration,
   validateJournalDraft,
   type JournalDraft,
   type CurrentJournal,
   type CurrentJournalVersion,
   type JournalEpistemicStatus,
+  type JournalGenerationKind,
   type JournalEvidenceReference,
   type JournalModel,
   type JournalProviderEgress,
@@ -179,6 +185,10 @@ export {
   type JournalStatementDraft,
   type AutomaticJournalCommand,
 } from "./journal";
+export {
+  runJournalRegenerationWorkflow,
+  type JournalRegenerationWorkflowResult,
+} from "./journal-regeneration";
 export {
   createEvidenceService,
   type EvidenceChampion,
