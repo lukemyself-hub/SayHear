@@ -4,12 +4,23 @@ import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
-const migrationsDirectory = join(
+const migrationsRoot = join(
   dirname(fileURLToPath(import.meta.url)),
   "../migrations",
 );
 
-export async function runMigrations(pool: Pool): Promise<void> {
+export const businessMigrationsDirectory = migrationsRoot;
+export const purgeMarkerMigrationsDirectory = join(
+  migrationsRoot,
+  "../migrations-purge-marker",
+);
+
+export async function runMigrations(
+  pool: Pool,
+  options: Readonly<{ migrationsDirectory?: string }> = {},
+): Promise<void> {
+  const migrationsDirectory =
+    options.migrationsDirectory ?? businessMigrationsDirectory;
   const client = await pool.connect();
 
   try {

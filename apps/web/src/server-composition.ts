@@ -11,6 +11,7 @@ import {
   createDialogueStateService,
   createEvidenceService,
   createJournalService,
+  createOwnerFullPurgeService,
   createRollingSummaryService,
   createOutboxDispatcherService,
   createUserTextConversationService,
@@ -33,6 +34,8 @@ import {
   PostgresEvidenceRepository,
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
+  PostgresOwnerPurgeRepository,
+  PostgresPurgeMarkerRepository,
   PostgresUserTextConversationRepository,
   PostgresDialogueStateRepository,
   PostgresRollingSummaryRepository,
@@ -44,6 +47,7 @@ import { createWorkflowStarter } from "./workflows/rolling-summary.workflow";
 
 const globalPool = globalThis as typeof globalThis & {
   sayHearPool?: ReturnType<typeof createPostgresPool>;
+  sayHearPurgeMarkerPool?: ReturnType<typeof createPostgresPool>;
 };
 
 export function createServerComposition() {
@@ -56,6 +60,17 @@ export function createServerComposition() {
     });
 
   globalPool.sayHearPool = pool;
+
+  // The purge marker store is a separate database outside the business backup
+  // domain (issue #27, architecture 20.6); validated at startup that it never
+  // equals DATABASE_URL.
+  const purgeMarkerPool =
+    globalPool.sayHearPurgeMarkerPool ??
+    createPostgresPool({
+      applicationName: "sayhear-purge-marker",
+      connectionString: configuration.ownerPurge.markerDatabaseUrl,
+    });
+  globalPool.sayHearPurgeMarkerPool = purgeMarkerPool;
 
   const accessRepository = new PostgresInternalOwnerAccessRepository(pool);
   const inspectionRepository = new PostgresInternalInspectionRepository(pool);
@@ -247,6 +262,30 @@ export function createServerComposition() {
       expectedConfigurationFingerprint:
         configuration.backupConfigurationFingerprint,
       repository: accessRepository,
+    }),
+    ownerPurgeService: createOwnerFullPurgeService({
+      clock: configuration.clock,
+      // Best-effort durable-workflow cancellation via the public SDK
+      // (`getRun(...).cancel()`); correctness never depends on it — the epoch
+      // fences, revoked egress authorization, and cancelled commands own the
+      // guarantees (issue #27 settled decisions).
+      cancelWorkflows: async (workflowReceiptIds) => {
+        try {
+          const { getRun } = await import("workflow/api");
+          for (const workflowReceiptId of workflowReceiptIds) {
+            try {
+              await getRun(workflowReceiptId).cancel();
+            } catch {
+              // Best-effort per run; a receipt without a live run is fine.
+            }
+          }
+        } catch {
+          // The SDK being unavailable in this environment is not fatal.
+        }
+      },
+      markerRepository: new PostgresPurgeMarkerRepository(purgeMarkerPool),
+      providerRetentionDays: configuration.ownerPurge.providerRetentionDays,
+      repository: new PostgresOwnerPurgeRepository(pool),
     }),
     authOptions: createAuthOptions({ configuration, pool }),
     clock: configuration.clock,

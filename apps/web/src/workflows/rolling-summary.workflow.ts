@@ -6,6 +6,7 @@ import { start } from "workflow/api";
 import { createServerComposition } from "../server-composition";
 import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
 import { dialogueStateWorkflow } from "./dialogue-state.workflow";
+import { ownerFullPurgeWorkflow } from "./owner-full-purge.workflow";
 
 export async function journalRegenerationWorkflow(input: {
   workflowCommandId: string;
@@ -65,6 +66,14 @@ export function createWorkflowStarter(): WorkflowStarter {
       run = await start(dialogueStateWorkflow, [workflowInput]);
     } else if (input.eventType === "journal_eligibility_requested") {
       run = await start(journalEligibilityWorkflow, [workflowInput]);
+    } else if (input.eventType === "owner_full_purge_requested") {
+      run = await start(ownerFullPurgeWorkflow, [
+        {
+          workflowCommandId: input.workflowCommandId,
+          subjectId: input.subjectId,
+          expectedDataEpoch: input.expectedDataEpoch,
+        },
+      ]);
     } else if (input.eventType === "journal_regeneration_requested") {
       if (!input.actionExecutionId) {
         throw new Error("Journal regeneration outbox event has no Action execution.");

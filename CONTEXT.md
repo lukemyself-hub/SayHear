@@ -358,6 +358,22 @@ _Avoid_: Automatic relearning, Forget expiration, ClaimVersion reactivation
 Internal Core 中仅供运维触发的单 owner 全量活跃系统清除；从 1A.2 开始覆盖 Conversation、Evidence 与 Journal，1A.3 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、Reflection、Memory、Profile，1A.4 扩展到 Replay，1B.1 和 1B.2 再分别覆盖音频 / transcript 与 delivery 数据。它不提供单条内容删除、消费者账号生命周期或“所有保留副本已经过期”的承诺。
 _Avoid_: Granular Content Deletion, Account Deletion
 
+**Data Epoch**:
+附加在 Internal Owner 上的单调递增数据代际号；每次 Internal Owner Full Purge 推进一次。命令冻结时的旧代际与当前代际不匹配时，一切在途读取、写入、派生物提交与 Provider Egress 都必须失败关闭；它代表“哪一代数据仍可存活”，不是时间戳、版本号或计数器。
+_Avoid_: Version number, Timestamp, Revision counter
+
+**Deletion Receipt**:
+每个活跃存储目的地对一个 owner 清除结果的无正文记录；它只回答该目的地的处置与剩余保留窗口，不包含任何被清除内容，也不证明所有保留副本已经物理消失。
+_Avoid_: Deletion ledger, Deletion proof
+
+**Purge Marker**:
+保存在业务数据库备份域之外的单 owner 无正文清除标记；它记录清除代际与时间，用于阻止旧备份未经比对直接恢复上线，本身不构成对外可见的删除承诺，也不是多用户删除台账。
+_Avoid_: Tombstone, Deletion ledger, Backup registry
+
+**Active-System Deletion**:
+Internal Owner Full Purge 到达“在线产品已不可读取、召回或重建相关内容”的生命周期阶段；它可以同时声明仍有未届满的保留窗口（Retention Pending），但绝不等于、也不能对外声称所有保留副本已经过期。
+_Avoid_: Fully Expired, Physical deletion
+
 **Voice Preflight Harness**:
 1B.1 内部使用录音 fixture、合成音频或单独授权样本验证 canonical STT、Transcript revision、音频保留与删除的非产品测试路径；它不出现在用户界面，不创建新的输入渠道，也不承担 Realtime 故障降级。
 _Avoid_: Push-to-Talk, Product Voice Mode

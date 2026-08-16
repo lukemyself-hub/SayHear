@@ -4,6 +4,7 @@ import type {
   DialogueStateService,
   JournalEligibilityService,
   OutboxDispatcherService,
+  OwnerFullPurgeService,
   RollingSummaryService,
 } from "@sayhear/application";
 
@@ -15,6 +16,7 @@ export function createRecoveryScannerHandler(dependencies: {
   outboxDispatcherService: OutboxDispatcherService;
   dialogueStateService?: DialogueStateService;
   rollingSummaryService?: RollingSummaryService;
+  ownerPurgeService?: OwnerFullPurgeService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -40,6 +42,13 @@ export function createRecoveryScannerHandler(dependencies: {
     const rollingSummary = dependencies.rollingSummaryService
       ? await dependencies.rollingSummaryService.scanPending()
       : { queued: 0 };
+    // Stuck or needs_attention purge orders are auto-retried here before the
+    // dispatcher runs, so cancelled owner commands are already terminal.
+    const purge = dependencies.ownerPurgeService
+      ? await dependencies.ownerPurgeService.scanPendingOrders({
+          now: new Date(),
+        })
+      : { retried: 0, remaining: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
@@ -48,6 +57,7 @@ export function createRecoveryScannerHandler(dependencies: {
       eligibility,
       dialogueState,
       rollingSummary,
+      purge,
       outbox,
     });
   };

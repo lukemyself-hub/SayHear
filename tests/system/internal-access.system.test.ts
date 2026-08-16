@@ -148,6 +148,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        owner_purge_receipts,
+        owner_purge_orders,
         conversation_action_payloads,
         conversation_action_receipts,
         conversation_action_executions,
@@ -3995,6 +3997,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         processed: 1,
         stale: 1,
       },
+      purge: {
+        remaining: 0,
+        retried: 0,
+      },
       outbox: {
         dispatched: 1,
         failed: 0,
@@ -4911,6 +4917,13 @@ async function startNextTestServer(
         SAYHEAR_CONTEXT_HMAC_SECRET: "system-test-context-integrity-secret",
         SAYHEAR_DEPLOYMENT: "test",
         SAYHEAR_PROVIDER_ADAPTER: "deterministic",
+        // Pin the deterministic adapter's champion metadata: local .env files
+        // (apps/web/.env symlinks the repo root .env) may carry a real
+        // production model override, and the egress claim requires the frozen
+        // command to match the runtime champion field-by-field — otherwise
+        // recovery fails closed as policy_blocked/terminal.
+        SAYHEAR_CONVERSATION_TEXT_MODEL: "gpt-5.4",
+        SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT: "gpt-5.4",
         CRON_SECRET: "system-test-recovery-scanner-secret",
         SAYHEAR_TEST_PROVIDER_CHUNKS: JSON.stringify([
           "That sounds like ",
