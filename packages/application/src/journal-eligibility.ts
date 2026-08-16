@@ -84,7 +84,6 @@ export type JournalEligibilityRepository = Readonly<{
     dailySessionId: DailySessionId;
     evaluatedAt: Date;
     policyVersion: string;
-    expectedDataEpoch: number;
   }): Promise<
     | Readonly<{ outcome: "evaluated"; result: JournalEligibilityEvaluationResult }>
     | Readonly<{ outcome: "not_found" }>
@@ -194,7 +193,6 @@ export type JournalEligibilityService = Readonly<{
 
 export function createJournalEligibilityService(dependencies: {
   clock: () => Date;
-  expectedDataEpoch: number;
   policyVersion: string;
   minimumSubstantiveExpressionLength: number;
   repository: JournalEligibilityRepository;
@@ -203,9 +201,6 @@ export function createJournalEligibilityService(dependencies: {
   const scanLimit = dependencies.scanLimit ?? 100;
   if (!Number.isInteger(scanLimit) || scanLimit <= 0 || scanLimit > 1_000) {
     throw new Error("scanLimit must be an integer from 1 through 1000.");
-  }
-  if (!Number.isInteger(dependencies.expectedDataEpoch) || dependencies.expectedDataEpoch <= 0) {
-    throw new Error("expectedDataEpoch must be a positive integer.");
   }
   if (
     !Number.isInteger(dependencies.minimumSubstantiveExpressionLength) ||
@@ -229,7 +224,6 @@ export function createJournalEligibilityService(dependencies: {
       dailySessionId,
       evaluatedAt: dependencies.clock(),
       policyVersion: dependencies.policyVersion,
-      expectedDataEpoch: dependencies.expectedDataEpoch,
     });
     if (result.outcome !== "evaluated") {
       return result;
@@ -457,7 +451,7 @@ export type JournalEligibilityEntrypointInput = Readonly<{
   subjectId: string;
   sourceRevision: number;
   policyVersion: string;
-  expectedDataEpoch?: number;
+  expectedDataEpoch: number;
 }>;
 
 export type JournalEligibilityEntrypointResult = Readonly<{
@@ -520,6 +514,7 @@ export async function runJournalEligibility(input: {
     const evidence = await input.evidenceService.freeze({
         dailySessionId: snapshot.dailySessionId,
         sourceRevision: snapshot.sourceRevision,
+        expectedDataEpoch: input.command.expectedDataEpoch,
         commandId: input.command.workflowCommandId,
         attemptId: input.workflowReceiptId,
     });

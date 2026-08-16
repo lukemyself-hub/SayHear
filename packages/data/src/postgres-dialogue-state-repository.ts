@@ -14,6 +14,7 @@ import {
 } from "@sayhear/domain";
 import type { Pool } from "pg";
 
+import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
 
 type DialogueStateCommandRow = Readonly<{
@@ -123,13 +124,12 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
          FROM daily_sessions session
          INNER JOIN app_users owner
            ON owner.user_id = session.user_id
-          AND owner.status = 'active'
-          AND owner.data_epoch = $1
          ORDER BY session.updated_at, session.daily_session_id`,
-        [input.expectedDataEpoch],
       );
 
       for (const session of sessions.rows) {
+        const expectedDataEpoch = await lockActiveOwnerEpoch(client, session.user_id);
+        if (expectedDataEpoch === null) continue;
         const locked = await client.query<{
           daily_session_id: string;
           dialogue_revision: string;
@@ -190,7 +190,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
             commandId,
             freshSession.user_id,
             freshSession.daily_session_id,
-            input.expectedDataEpoch,
+            expectedDataEpoch,
             Number(freshSession.source_revision),
             Number(freshSession.dialogue_revision),
             coverage,
@@ -219,7 +219,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
               freshSession.daily_session_id,
               Number(freshSession.source_revision),
               Number(freshSession.dialogue_revision),
-              input.expectedDataEpoch,
+              expectedDataEpoch,
               input.policy.policyVersion,
               coverage,
             ],
@@ -256,7 +256,7 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
             freshSession.daily_session_id,
             Number(freshSession.source_revision),
             input.policy.policyVersion,
-            input.expectedDataEpoch,
+            expectedDataEpoch,
             coverage,
             input.now,
           ],
@@ -274,12 +274,12 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
             insertedCommandId,
             freshSession.daily_session_id,
             Number(freshSession.source_revision),
-            input.expectedDataEpoch,
+            expectedDataEpoch,
             coverage,
             input.now,
             JSON.stringify({
               eventType: "dialogue_state_requested",
-              expectedDataEpoch: input.expectedDataEpoch,
+              expectedDataEpoch,
               policyVersion: input.policy.policyVersion,
               sourceRevision: Number(freshSession.source_revision),
               status: "pending",

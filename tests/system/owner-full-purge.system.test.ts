@@ -567,7 +567,6 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     // and journal generation are rejected for a non-active owner.
     const eligibilityService = createJournalEligibilityService({
       clock,
-      expectedDataEpoch: 1,
       minimumSubstantiveExpressionLength: 20,
       policyVersion: "journal-eligibility:v1",
       repository: new PostgresJournalEligibilityRepository(database.pool),
@@ -807,7 +806,6 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     };
     const rollingSummaryService = createRollingSummaryService({
       clock,
-      expectedDataEpoch: 1,
       model: { compress: neverCallModel },
       modelConfigVersion: "conversation-text-champion:v1:summary",
       policyVersion: "rolling-summary:v1",
@@ -819,7 +817,6 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     });
     const dialogueStateService = createDialogueStateService({
       clock,
-      expectedDataEpoch: 1,
       model: { project: neverCallModel },
       policy: {
         modelConfigVersion: "dialogue-state-model:v1",
@@ -1008,7 +1005,6 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     expect(
       await journalRepository.readCurrent({
         dailySessionId: S1,
-        expectedDataEpoch: 2,
         userId: OWNER,
       }),
     ).toBeNull();

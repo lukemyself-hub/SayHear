@@ -2,7 +2,6 @@ import { asDailySessionId, asUserId, RecoveryGateClosedError, SensitiveInspectio
 
 export function createJournalInspectionHandler(dependencies: {
   authenticate(request: Request): Promise<{ authSessionId: string; userId: UserId } | null>;
-  expectedDataEpoch: number;
   authorize(userId: UserId, authSessionId: string): Promise<void>;
   service: JournalService;
 }): (request: Request) => Promise<Response> {
@@ -25,7 +24,6 @@ export function createJournalInspectionHandler(dependencies: {
       const journal = await dependencies.service.inspect({
         dailySessionId: asDailySessionId(dailySessionId),
         userId: asUserId(principal.userId),
-        expectedDataEpoch: dependencies.expectedDataEpoch,
       });
       return journal ? Response.json(journal) : Response.json({ error: "not_found" }, { status: 404 });
     } catch {

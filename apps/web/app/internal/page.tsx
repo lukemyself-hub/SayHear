@@ -21,7 +21,7 @@ export default async function InternalPage() {
     composition.accessService.getAccess(userId),
     composition.conversationService.listInterruptedResponses(userId),
     composition.conversationService.listMessages(userId),
-    composition.journalService.readLatest({ userId, expectedDataEpoch: composition.configurationExpectedDataEpoch }),
+    composition.journalService.readLatest({ userId }),
   ]);
   const state = access.privateWrites.allowed ? "Open" : "Blocked";
 

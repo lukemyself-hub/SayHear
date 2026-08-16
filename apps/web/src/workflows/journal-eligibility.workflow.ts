@@ -49,11 +49,8 @@ async function runEligibilityStep(input: {
   const composition = createServerComposition();
   const policy =
     await composition.journalEligibilityService.resolvePolicyForStep();
-  if (
-    input.policyVersion !== policy.policyVersion ||
-    input.expectedDataEpoch !== composition.configurationExpectedDataEpoch
-  ) {
-    throw new Error("Journal eligibility command fence does not match runtime policy.");
+  if (input.policyVersion !== policy.policyVersion) {
+    throw new Error("Journal eligibility command policy does not match runtime policy.");
   }
   const eligibility = await runJournalEligibility({
     clock: composition.clock,
@@ -71,6 +68,7 @@ async function runEligibilityStep(input: {
       evidence = await composition.evidenceService.freeze({
         dailySessionId: input.subjectId,
         sourceRevision: input.sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
         commandId: input.workflowCommandId,
         attemptId: evidenceAttemptId,
       });

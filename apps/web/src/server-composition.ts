@@ -108,7 +108,6 @@ export function createServerComposition() {
   const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor);
   const evidenceService = createEvidenceService({
     clock: configuration.clock,
-    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     extractionPolicyVersion: evidenceConfiguration.policyVersion,
     champion: {
       configVersion: evidenceConfiguration.configVersion,
@@ -155,7 +154,6 @@ export function createServerComposition() {
   const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
   const dialogueStateService = createDialogueStateService({
     clock: configuration.clock,
-    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     model: journalRoleRegistry.dialogueStateProjector,
     policy: {
       modelConfigVersion: dialogueStateConfiguration.configVersion,
@@ -167,7 +165,6 @@ export function createServerComposition() {
   });
   const rollingSummaryService = createRollingSummaryService({
     clock: configuration.clock,
-    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     model: journalRoleRegistry.summaryCompressor,
     modelConfigVersion: journalRoleRegistry.configuration("summary.compress").configVersion,
     policyVersion: journalRoleRegistry.configuration("summary.compress").policyVersion,
@@ -177,7 +174,6 @@ export function createServerComposition() {
   });
   const journalEligibilityService = createJournalEligibilityService({
     clock: configuration.clock,
-    expectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     minimumSubstantiveExpressionLength:
       configuration.journalEligibilityPolicy.minimumSubstantiveExpressionLength,
     policyVersion: configuration.journalEligibilityPolicy.version,
@@ -313,7 +309,6 @@ export function createServerComposition() {
     journalService,
     journalRepository,
     journalGenerationPolicyVersion: draftConfiguration.policyVersion,
-    configurationExpectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
     recoveryGate,
     recoveryReapplyService: createRecoveryReapplyService({
       clock: configuration.clock,

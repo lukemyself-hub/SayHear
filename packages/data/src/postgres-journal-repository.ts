@@ -429,7 +429,7 @@ export class PostgresJournalRepository implements JournalRepository {
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
   }
 
-  public async readCurrent(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<import("@sayhear/application").JournalDraft | null> {
+  public async readCurrent(input: { dailySessionId: string; userId: string }): Promise<import("@sayhear/application").JournalDraft | null> {
     const result = await this.pool.query<{ journal_version_id: string; evidence_source_snapshot_id: string; extraction_policy_version: string; champion_config_version: string; champion_provider: string; champion_model: string; champion_snapshot: string; champion_provider_policy_version: string; source_revision: string; generation_command_id: string; model_run_attempt_id: string; validation_status: "validated" | "validation_failed" | "needs_review" | null; validation_failure_code: string | null; provider_role: string; provider: string; model: string; config_version: string; role_policy_version: string; prompt_fingerprint: string; provider_completed_at: Date | null; result_metadata: Record<string, unknown>; locale: string; statement_key: string; statement_text: string; epistemic_status: "supported_expression" | "inferred_observation"; evidence_item_id: string; source_event_id: string; source_revision_id: string; source_status: "final" | "corrected"; locator_type: JournalEvidenceReference["locatorType"]; locator_key: string; evidence_role: JournalEvidenceReference["role"] }>(
       `SELECT version.journal_version_id, version.evidence_source_snapshot_id, snapshot.extraction_policy_version,
          snapshot.champion_config_version, snapshot.champion_provider, snapshot.champion_model, snapshot.champion_snapshot, snapshot.champion_provider_policy_version,
@@ -454,7 +454,6 @@ export class PostgresJournalRepository implements JournalRepository {
        WHERE journal.daily_session_id = $1
          AND journal.user_id = $2
          AND owner.status = 'active'
-         AND owner.data_epoch = $3
          AND evidence.status = 'active'
          AND source.content_purged_at IS NULL
          AND NOT EXISTS (
@@ -479,7 +478,7 @@ export class PostgresJournalRepository implements JournalRepository {
            WHERE invalid_link.journal_statement_id = statement.journal_statement_id
              AND (invalid_evidence.status <> 'active' OR invalid_source.content_purged_at IS NOT NULL)
          )
-       ORDER BY statement.statement_index`, [input.dailySessionId, input.userId, input.expectedDataEpoch],
+       ORDER BY statement.statement_index`, [input.dailySessionId, input.userId],
     );
     if (!result.rows[0]) return null;
     return {
@@ -521,7 +520,7 @@ export class PostgresJournalRepository implements JournalRepository {
     };
   }
 
-  public async readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<import("@sayhear/application").CurrentJournal | null> {
+  public async readLatestCurrent(input: { userId: string }): Promise<import("@sayhear/application").CurrentJournal | null> {
     const session = await this.pool.query<{ daily_session_id: string; logical_date: string; activity_state: "active" | "quiescent" | "finalized"; source_revision: string; journal_source_revision: string }>(
       `SELECT journal.daily_session_id, daily_session.logical_date::text,
           daily_session.activity_state, daily_session.source_revision::text,
@@ -536,17 +535,15 @@ export class PostgresJournalRepository implements JournalRepository {
          AND journal.current_version_id IS NOT NULL
          AND journal.deleted_at IS NULL
          AND owner.status = 'active'
-         AND owner.data_epoch = $2
        ORDER BY daily_session.logical_date DESC, journal.created_at DESC
        LIMIT 1`,
-      [input.userId, input.expectedDataEpoch],
+      [input.userId],
     );
     const row = session.rows[0];
     if (!row) return null;
     const journal = await this.readCurrent({
       dailySessionId: row.daily_session_id,
       userId: input.userId,
-      expectedDataEpoch: input.expectedDataEpoch,
     });
     return journal
       ? {

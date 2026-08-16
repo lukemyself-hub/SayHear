@@ -136,8 +136,8 @@ export type JournalRepository = Readonly<{
     generationKind?: JournalGenerationKind;
     actionExecutionId?: string;
   }): Promise<void>;
-  readCurrent?(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
-  readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
+  readCurrent?(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
+  readLatestCurrent(input: { userId: string }): Promise<CurrentJournal | null>;
 }>;
 
 export type JournalModel = Readonly<{
@@ -170,8 +170,8 @@ export type JournalService = Readonly<{
     outcome: "published" | "stale" | "fenced" | "not_found" | "validation_failed" | "writes_disabled";
     reason?: string;
   }>;
-  inspect(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
-  readLatest(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
+  inspect(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
+  readLatest(input: { userId: string }): Promise<CurrentJournal | null>;
 }>;
 
 export type AutomaticJournalCommand = Readonly<{
@@ -338,11 +338,11 @@ export function createJournalService(dependencies: {
       await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
       let dailySessionId: string;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return null; }
-      return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId, expectedDataEpoch: input.expectedDataEpoch }) ?? null;
+      return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId }) ?? null;
     },
     async readLatest(input) {
       await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
-      return dependencies.repository.readLatestCurrent(input);
+      return dependencies.repository.readLatestCurrent({ userId: input.userId });
     },
   };
 }
