@@ -26,6 +26,7 @@ import type {
   UserTextConversationService,
   UserTextTurn,
 } from "./user-text-conversation";
+import type { RecoveryGate } from "./recovery-gate";
 
 export type ConversationResponseStreamEvent =
   | Readonly<{
@@ -203,6 +204,7 @@ export function createConversationResponseService(dependencies: {
   harnessPolicy: ConversationHarnessPolicy;
   jitter?: () => number;
   recoveryScanLimit?: number;
+  recoveryGate?: RecoveryGate;
   repository: ConversationResponseRepository;
 }): ConversationResponseService {
   const recoveryScanLimit = dependencies.recoveryScanLimit ?? 100;
@@ -401,6 +403,7 @@ export function createConversationResponseService(dependencies: {
 
   return {
     async *respond(userId, input, signal) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       const turn = await dependencies.conversationService.submit(userId, input);
       yield* streamResponse(
         userId,
@@ -418,6 +421,7 @@ export function createConversationResponseService(dependencies: {
       );
     },
     async *retry(userId, input, signal) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       const retry: ConversationRetryTurn =
         await dependencies.conversationService.retry(userId, input);
       yield* streamResponse(

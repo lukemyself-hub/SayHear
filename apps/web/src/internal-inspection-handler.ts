@@ -1,6 +1,7 @@
 import {
   asGenerationCommandId,
   InternalInspectionNotFoundError,
+  RecoveryGateClosedError,
   type InternalInspectionService,
   type UserId,
 } from "@sayhear/application";
@@ -44,6 +45,12 @@ export function createInternalInspectionHandler(dependencies: {
     } catch (error) {
       if (error instanceof InternalInspectionNotFoundError) {
         return Response.json({ error: "not_found" }, { status: 404 });
+      }
+      if (error instanceof RecoveryGateClosedError) {
+        return Response.json(
+          { error: "recovery_gate_closed", status: error.result.status },
+          { status: 503 },
+        );
       }
       throw error;
     }

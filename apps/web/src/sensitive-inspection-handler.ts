@@ -1,6 +1,7 @@
 import {
   asGenerationCommandId,
   InternalInspectionNotFoundError,
+  RecoveryGateClosedError,
   SensitiveInspectionDeniedError,
   type InternalInspectionService,
   type UserId,
@@ -52,6 +53,12 @@ export function createSensitiveInspectionHandler(dependencies: {
       }
       if (error instanceof InternalInspectionNotFoundError) {
         return Response.json({ error: "not_found" }, { status: 404 });
+      }
+      if (error instanceof RecoveryGateClosedError) {
+        return Response.json(
+          { error: "recovery_gate_closed", status: error.result.status },
+          { status: 503 },
+        );
       }
       throw error;
     }

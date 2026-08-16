@@ -206,6 +206,7 @@ export function createConversationAgentHarness(dependencies: {
               ),
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
+        userId: command.userId,
         ...(signal ? { signal } : {}),
         toolsDisabled: command.harnessPolicy.toolsDisabled === true,
       })) {

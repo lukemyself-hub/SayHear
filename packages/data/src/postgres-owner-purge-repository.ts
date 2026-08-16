@@ -971,4 +971,94 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
     );
     return result.rows.map(mapOrder);
   }
+
+  public async reapplyMarker(input: {
+    userId: UserId;
+    dataEpoch: number;
+    now: Date;
+  }): Promise<Readonly<{ outcome: "reapplied" }>> {
+    const client = await this.pool.connect();
+    let orderId: string;
+    try {
+      await client.query("BEGIN");
+      const owner = await client.query<{
+        data_epoch: string;
+        status: "active" | "deleting" | "disabled";
+      }>(
+        "SELECT data_epoch::text, status FROM app_users WHERE user_id = $1 FOR UPDATE",
+        [input.userId],
+      );
+      const ownerRow = owner.rows[0];
+      if (!ownerRow || Number(ownerRow.data_epoch) > input.dataEpoch) {
+        await client.query("ROLLBACK");
+        throw new Error("recovery_marker_is_older_than_business_database");
+      }
+
+      const existing = await client.query<{ owner_purge_order_id: string }>(
+        `SELECT owner_purge_order_id
+         FROM owner_purge_orders
+         WHERE user_id = $1 AND data_epoch = $2
+         ORDER BY requested_at DESC LIMIT 1`,
+        [input.userId, input.dataEpoch],
+      );
+      orderId = existing.rows[0]?.owner_purge_order_id ?? crypto.randomUUID();
+      if (!existing.rows[0]) {
+        const fromDataEpoch = Math.max(1, Number(ownerRow.data_epoch));
+        await client.query(
+          `INSERT INTO owner_purge_orders (
+             owner_purge_order_id, user_id, from_data_epoch, data_epoch,
+             status, confirmation, policy_version, requested_at, last_attempt_at
+           ) VALUES ($1, $2, $3, $4, 'requested', 'PURGE',
+             'recovery-marker-reapply:v1', $5, $5)`,
+          [orderId, input.userId, fromDataEpoch, input.dataEpoch, input.now],
+        );
+      }
+      await client.query(
+        `UPDATE app_users
+         SET status = 'deleting', data_epoch = $2, updated_at = $3
+         WHERE user_id = $1`,
+        [input.userId, input.dataEpoch, input.now],
+      );
+      await client.query(
+        `UPDATE provider_egress_consents
+         SET status = 'revoked', revoked_at = $2
+         WHERE user_id = $1 AND status = 'active'`,
+        [input.userId, input.now],
+      );
+      await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [
+        input.userId,
+      ]);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const now = input.now;
+    try {
+      await this.transitionToAccessRevoked({ ownerPurgeOrderId: orderId!, now });
+      await this.transitionToPropagatingAndClear({
+        ownerPurgeOrderId: orderId!,
+        providerRetentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1_000),
+        now,
+      });
+      await this.transitionToVerifying({ ownerPurgeOrderId: orderId!, now });
+      await this.transitionToActiveSystemDeleted({
+        backupRetentionUntil: null,
+        ownerPurgeOrderId: orderId!,
+        now,
+      });
+      await this.finalizeRetentionPending({ ownerPurgeOrderId: orderId!, now });
+    } catch (error) {
+      await this.markNeedsAttention({
+        ownerPurgeOrderId: orderId!,
+        reason: "recovery_reapply_failed",
+        now,
+      });
+      throw error;
+    }
+    return { outcome: "reapplied" };
+  }
 }

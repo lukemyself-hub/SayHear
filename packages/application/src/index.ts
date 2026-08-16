@@ -22,6 +22,22 @@ export {
   type PurgeMarkerSnapshot,
 } from "./owner-purge";
 export {
+  createRecoveryGate,
+  RecoveryGateClosedError,
+  type RecoveryBusinessState,
+  type RecoveryBusinessStateRepository,
+  type RecoveryGate,
+  type RecoveryGateResult,
+  type RecoveryGateStatus,
+} from "./recovery-gate";
+export {
+  createRecoveryReapplyService,
+  RecoveryReapplyConfirmationError,
+  RecoveryReapplyNotRequiredError,
+  type RecoveryReapplyRepository,
+  type RecoveryReapplyService,
+} from "./recovery-reapply";
+export {
   assertWorkflowSafe,
   classifyExpressionPolicy,
   createJournalEligibilityService,

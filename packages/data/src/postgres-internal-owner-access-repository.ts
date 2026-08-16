@@ -1,7 +1,11 @@
 import type {
   InternalOwnerAccessRepository,
 } from "@sayhear/application";
-import { asUserId, type BackupPolicyEvidence, type UserId } from "@sayhear/domain";
+import {
+  asUserId,
+  type BackupPolicyEvidence,
+  type UserId,
+} from "@sayhear/domain";
 import type { Pool } from "pg";
 
 import { findLatestBackupPolicyEvidence } from "./postgres-backup-policy-evidence";
@@ -24,6 +28,22 @@ export class PostgresInternalOwnerAccessRepository
     );
     const row = result.rows[0];
     return row ? { userId: asUserId(row.user_id) } : null;
+  }
+
+  public async findRecoveryBusinessState(userId: UserId) {
+    const result = await this.pool.query<{
+      data_epoch: string;
+      status: "active" | "deleting" | "disabled";
+    }>(
+      `SELECT data_epoch::text, status
+       FROM app_users
+       WHERE user_id = $1`,
+      [userId],
+    );
+    const row = result.rows[0];
+    return row
+      ? { dataEpoch: Number(row.data_epoch), status: row.status }
+      : null;
   }
 
   public async findLatestBackupPolicyEvidence(): Promise<BackupPolicyEvidence | null> {

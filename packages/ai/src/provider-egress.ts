@@ -7,6 +7,7 @@ import {
   type ConversationTextModel,
   type ProviderEgressPort,
   type ProviderEgressRepository,
+  type RecoveryGate,
 } from "@sayhear/application";
 
 export function createProviderEgressPort(dependencies: {
@@ -14,10 +15,14 @@ export function createProviderEgressPort(dependencies: {
   clock: () => Date;
   contextCompiler: Pick<ContextCompiler, "renderPermittedPayload">;
   model: ConversationTextModel;
+  recoveryGate?: RecoveryGate;
   repository: ProviderEgressRepository;
 }): ProviderEgressPort {
   return {
     async *stream(input) {
+      if (dependencies.recoveryGate && input.userId) {
+        await dependencies.recoveryGate.requireOpen(input.userId);
+      }
       const claim = await dependencies.repository.claimDispatch({
         champion: dependencies.champion,
         compiledContextId: input.compiledContextId,

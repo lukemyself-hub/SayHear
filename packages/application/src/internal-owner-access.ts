@@ -5,8 +5,12 @@ import {
   type UserId,
 } from "@sayhear/domain";
 
+import type { RecoveryBusinessState } from "./recovery-gate";
+import type { RecoveryGate } from "./recovery-gate";
+
 export type InternalOwnerAccessRepository = Readonly<{
   findActiveOwner(userId: UserId): Promise<{ userId: UserId } | null>;
+  findRecoveryBusinessState?(userId: UserId): Promise<RecoveryBusinessState | null>;
   findLatestBackupPolicyEvidence(): Promise<BackupPolicyEvidence | null>;
 }>;
 
@@ -27,6 +31,7 @@ export function createInternalOwnerAccessService(dependencies: {
   clock: () => Date;
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
+  recoveryGate?: RecoveryGate;
   repository: InternalOwnerAccessRepository;
 }): InternalOwnerAccessService {
   return {
@@ -35,6 +40,8 @@ export function createInternalOwnerAccessService(dependencies: {
       if (owner === null) {
         throw new InternalOwnerAccessDeniedError();
       }
+
+      await dependencies.recoveryGate?.requireOpen(userId);
 
       const evidence =
         await dependencies.repository.findLatestBackupPolicyEvidence();

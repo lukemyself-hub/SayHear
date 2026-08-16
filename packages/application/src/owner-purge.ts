@@ -182,10 +182,23 @@ export type OwnerPurgeRepository = Readonly<{
     staleAfterMs: number;
     limit: number;
   }): Promise<readonly OwnerPurgeOrder[]>;
+  /**
+   * Recovery-only marker reapply. The adapter advances the restored database
+   * directly to the marker epoch and reuses the purge verification walker;
+   * it never creates a later epoch or writes the external marker.
+   */
+  reapplyMarker?(input: {
+    userId: UserId;
+    dataEpoch: number;
+    now: Date;
+  }): Promise<Readonly<{ outcome: "reapplied" }>>;
 }>;
 
 export type PurgeMarkerRepository = Readonly<{
-  /** Idempotent: ON CONFLICT (user_id, data_epoch) DO NOTHING. */
+  /**
+   * Atomic per-owner high-water update. Equal epochs are immutable no-ops and
+   * lower epochs cannot replace a newer marker.
+   */
   writeMarker(input: {
     userId: UserId;
     dataEpoch: number;
@@ -197,7 +210,10 @@ export type PurgeMarkerRepository = Readonly<{
       providerRetentionUntil: Date | null;
     }>[];
   }): Promise<void>;
-  findMarker(input: {
+  /** Recovery always reads the latest marker; it never guesses an epoch. */
+  findLatestMarker(input: { userId: UserId }): Promise<PurgeMarkerSnapshot | null>;
+  /** Compatibility helper for existing purge-drill callers; recovery must use latest. */
+  findMarker?(input: {
     userId: UserId;
     dataEpoch: number;
   }): Promise<PurgeMarkerSnapshot | null>;
@@ -467,12 +483,13 @@ export function createOwnerFullPurgeService(dependencies: {
           receipts: markerReceipts,
           userId: order.userId,
         });
-        const marker = await dependencies.markerRepository.findMarker({
-          dataEpoch: order.dataEpoch,
+        const marker = await dependencies.markerRepository.findLatestMarker({
           userId: order.userId,
         });
-        if (marker === null) {
-          throw new PurgeVerificationError("purge_marker_missing");
+        if (marker === null || marker.dataEpoch !== order.dataEpoch) {
+          throw new PurgeVerificationError(
+            marker === null ? "purge_marker_missing" : "purge_marker_epoch_mismatch",
+          );
         }
 
         // Step 4 — verifying: assert no content and no executable work remain.
@@ -544,6 +561,29 @@ export function createOwnerFullPurgeService(dependencies: {
       });
       let remaining = 0;
       for (const order of stale) {
+        if (order.status === "active_system_deleted") {
+          let marker: PurgeMarkerSnapshot | null = null;
+          try {
+            marker = await dependencies.markerRepository.findLatestMarker({
+              userId: order.userId,
+            });
+          } catch {
+            // The order remains parked until the external recovery authority
+            // is reachable and verified.
+          }
+          if (marker === null || marker.dataEpoch !== order.dataEpoch) {
+            await dependencies.repository.markNeedsAttention({
+              now: input.now,
+              ownerPurgeOrderId: order.ownerPurgeOrderId,
+              reason:
+                marker === null
+                  ? "purge_marker_missing"
+                  : "purge_marker_epoch_mismatch",
+            });
+            remaining += 1;
+            continue;
+          }
+        }
         try {
           await this.propagate({ ownerPurgeOrderId: order.ownerPurgeOrderId });
         } catch {

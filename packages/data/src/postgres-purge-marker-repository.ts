@@ -18,7 +18,7 @@ type MarkerRow = Readonly<{
  * Purge marker store backed by a SEPARATE PostgreSQL database
  * (PURGE_MARKER_DATABASE_URL) outside the business database's backup domain.
  * The marker carries only the deletion epoch, time, and content-free receipts
- * (issue #27, architecture 20.6).
+ * (issue #28, architecture 20.6).
  */
 export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
   public constructor(private readonly pool: Pool) {}
@@ -41,7 +41,14 @@ export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
           backup_retention_until, receipts
         )
         VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-        ON CONFLICT (user_id, data_epoch) DO NOTHING
+        ON CONFLICT (user_id) DO UPDATE
+        SET data_epoch = EXCLUDED.data_epoch,
+            status = EXCLUDED.status,
+            purged_at = EXCLUDED.purged_at,
+            backup_retention_until = EXCLUDED.backup_retention_until,
+            receipts = EXCLUDED.receipts,
+            written_at = EXCLUDED.written_at
+        WHERE purge_markers.data_epoch < EXCLUDED.data_epoch
       `,
       [
         input.userId,
@@ -65,18 +72,19 @@ export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
     );
   }
 
-  public async findMarker(input: {
+  public async findLatestMarker(input: {
     userId: UserId;
-    dataEpoch: number;
   }): Promise<PurgeMarkerSnapshot | null> {
     const result = await this.pool.query<MarkerRow>(
       `
         SELECT data_epoch::text, status, purged_at,
           backup_retention_until, receipts, written_at
         FROM purge_markers
-        WHERE user_id = $1 AND data_epoch = $2
+        WHERE user_id = $1
+        ORDER BY data_epoch DESC
+        LIMIT 1
       `,
-      [input.userId, input.dataEpoch],
+      [input.userId],
     );
     const row = result.rows[0];
     if (!row) {
@@ -102,5 +110,13 @@ export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
       status: row.status as "active_system_deleted" | "retention_pending",
       writtenAt: row.written_at,
     };
+  }
+
+  public async findMarker(input: {
+    userId: UserId;
+    dataEpoch: number;
+  }): Promise<PurgeMarkerSnapshot | null> {
+    const marker = await this.findLatestMarker({ userId: input.userId });
+    return marker?.dataEpoch === input.dataEpoch ? marker : null;
   }
 }

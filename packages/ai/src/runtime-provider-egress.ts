@@ -3,6 +3,7 @@ import type {
   ConversationTextChampion,
   ProviderEgressPort,
   ProviderEgressRepository,
+  RecoveryGate,
 } from "@sayhear/application";
 
 import { createBehaviorAwareConversationTextModel } from "./behavior-aware-conversation-text-model";
@@ -29,6 +30,7 @@ export function createRuntimeProviderEgressPort(input: {
   champion: ConversationTextChampion;
   clock: () => Date;
   contextCompiler: Pick<ContextCompiler, "renderPermittedPayload">;
+  recoveryGate?: RecoveryGate;
   repository: ProviderEgressRepository;
 }): ProviderEgressPort {
   const model =
@@ -45,6 +47,7 @@ export function createRuntimeProviderEgressPort(input: {
     clock: input.clock,
     contextCompiler: input.contextCompiler,
     model,
+    ...(input.recoveryGate ? { recoveryGate: input.recoveryGate } : {}),
     repository: input.repository,
   });
 }

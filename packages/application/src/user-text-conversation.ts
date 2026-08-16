@@ -13,6 +13,7 @@ import {
 } from "@sayhear/domain";
 
 import type { ConversationTextProvider } from "./conversation-model";
+import type { RecoveryGate } from "./recovery-gate";
 
 declare const clientEventIdBrand: unique symbol;
 declare const clientTurnIdBrand: unique symbol;
@@ -285,6 +286,7 @@ export function createUserTextConversationService(dependencies: {
   expectedConfigurationFingerprint: string;
   generationPolicy: GenerationPolicy;
   inactivityPolicy?: InactivityPolicy;
+  recoveryGate?: RecoveryGate;
   repository: UserTextConversationRepository;
 }): UserTextConversationService {
   const inactivityPolicy =
@@ -295,6 +297,7 @@ export function createUserTextConversationService(dependencies: {
     });
   return {
     async correct(userId, rawInput) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       let eventId: ConversationEventId;
       try { eventId = asConversationEventId(rawInput.eventId); } catch { throw new InvalidUserTextTurnError("eventId must be an opaque Conversation Event UUIDv7."); }
       const text = rawInput.text?.trim();
@@ -307,6 +310,7 @@ export function createUserTextConversationService(dependencies: {
       return corrected;
     },
     async endContinuousExchange(userId, rawInput) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       let dailySessionId: DailySessionId;
       try {
         dailySessionId = asDailySessionId(rawInput.dailySessionId);
@@ -327,12 +331,15 @@ export function createUserTextConversationService(dependencies: {
       return result.end;
     },
     async listInterruptedResponses(userId) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       return dependencies.repository.listInterruptedResponses(userId);
     },
     async listMessages(userId) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       return dependencies.repository.listUserTextMessages(userId);
     },
     async retry(userId, rawInput) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       let originalTurnId: InteractionTurnId;
       try {
         originalTurnId = asInteractionTurnId(rawInput.originalTurnId);
@@ -371,6 +378,7 @@ export function createUserTextConversationService(dependencies: {
       return result.retry;
     },
     async submit(userId, rawInput) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       const input = validateUserTextInput(rawInput);
       const now = dependencies.clock();
       const result = await dependencies.repository.recordUserTextTurn({

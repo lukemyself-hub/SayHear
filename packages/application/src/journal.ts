@@ -1,4 +1,6 @@
-import { asDailySessionId } from "@sayhear/domain";
+import { asDailySessionId, type UserId } from "@sayhear/domain";
+
+import type { RecoveryGate } from "./recovery-gate";
 
 export type JournalEpistemicStatus = "supported_expression" | "inferred_observation";
 export type JournalGenerationKind = "automatic" | "regeneration";
@@ -188,6 +190,7 @@ export function createJournalService(dependencies: {
   generationMetadata: Readonly<{ role: "journal.draft"; provider: string; model: string; configVersion: string; rolePolicyVersion: string; promptFingerprint: string }>;
   validationMetadata: Readonly<{ role: "journal.validate"; provider: string; model: string; configVersion: string; rolePolicyVersion: string; promptFingerprint: string }>;
   model: JournalModel;
+  recoveryGate?: RecoveryGate;
   repository: JournalRepository;
   publishingEnabled?: boolean;
 }): JournalService {
@@ -331,11 +334,13 @@ export function createJournalService(dependencies: {
       });
     },
     async inspect(input) {
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
       let dailySessionId: string;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return null; }
       return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId, expectedDataEpoch: input.expectedDataEpoch }) ?? null;
     },
     async readLatest(input) {
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
       return dependencies.repository.readLatestCurrent(input);
     },
   };

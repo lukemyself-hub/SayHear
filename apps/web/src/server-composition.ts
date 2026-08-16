@@ -12,6 +12,8 @@ import {
   createEvidenceService,
   createJournalService,
   createOwnerFullPurgeService,
+  createRecoveryGate,
+  createRecoveryReapplyService,
   createRollingSummaryService,
   createOutboxDispatcherService,
   createUserTextConversationService,
@@ -73,6 +75,11 @@ export function createServerComposition() {
   globalPool.sayHearPurgeMarkerPool = purgeMarkerPool;
 
   const accessRepository = new PostgresInternalOwnerAccessRepository(pool);
+  const purgeMarkerRepository = new PostgresPurgeMarkerRepository(purgeMarkerPool);
+  const recoveryGate = createRecoveryGate({
+    businessStateRepository: accessRepository,
+    markerRepository: purgeMarkerRepository,
+  });
   const inspectionRepository = new PostgresInternalInspectionRepository(pool);
   const conversationRepository =
     new PostgresUserTextConversationRepository(pool);
@@ -138,6 +145,7 @@ export function createServerComposition() {
     },
     validationProvider: journalRoleRegistry.validator,
     model: journalRoleRegistry.draft,
+    recoveryGate,
     repository: journalRepository,
     publishingEnabled: configuration.writeSwitches.journalPublishEnabled,
   });
@@ -206,6 +214,7 @@ export function createServerComposition() {
       safetyPolicyVersion: "minimum-high-risk-response:v1",
     },
     inactivityPolicy: configuration.inactivityPolicy,
+    recoveryGate,
     repository: conversationRepository,
   });
   const contextCompiler = createContextCompiler({
@@ -240,6 +249,7 @@ export function createServerComposition() {
     champion: configuration.provider.champion,
     clock: configuration.clock,
     contextCompiler,
+    recoveryGate,
     repository: responseRepository,
   });
   const actionGateway = createConversationActionGateway({
@@ -261,6 +271,7 @@ export function createServerComposition() {
       expectedBackupPolicyVersion: configuration.backupPolicyVersion,
       expectedConfigurationFingerprint:
         configuration.backupConfigurationFingerprint,
+      recoveryGate,
       repository: accessRepository,
     }),
     ownerPurgeService: createOwnerFullPurgeService({
@@ -283,7 +294,7 @@ export function createServerComposition() {
           // The SDK being unavailable in this environment is not fatal.
         }
       },
-      markerRepository: new PostgresPurgeMarkerRepository(purgeMarkerPool),
+      markerRepository: purgeMarkerRepository,
       providerRetentionDays: configuration.ownerPurge.providerRetentionDays,
       repository: new PostgresOwnerPurgeRepository(pool),
     }),
@@ -300,10 +311,18 @@ export function createServerComposition() {
     journalRepository,
     journalGenerationPolicyVersion: draftConfiguration.policyVersion,
     configurationExpectedDataEpoch: configuration.outboxDispatcher.expectedDataEpoch,
+    recoveryGate,
+    recoveryReapplyService: createRecoveryReapplyService({
+      clock: configuration.clock,
+      gate: recoveryGate,
+      markerRepository: purgeMarkerRepository,
+      repository: new PostgresOwnerPurgeRepository(pool),
+    }),
     outboxDispatcherService,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
       policyVersion: "sensitive-inspection:v1",
+      recoveryGate,
       repository: inspectionRepository,
       stepUpMaxAgeMs: 10 * 60 * 1_000,
     }),
@@ -316,6 +335,7 @@ export function createServerComposition() {
       harness: conversationAgentHarness,
       harnessPolicy: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
+      recoveryGate,
     }),
     continuousExchangeService: createContinuousExchangeService({
       clock: configuration.clock,
