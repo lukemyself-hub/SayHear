@@ -46,6 +46,7 @@ Accepted
 - [`0003`](adr/0003-journal-correction-creates-a-new-version.md)：Journal 纠错创建新版本
 - [`0004`](adr/0004-account-data-export-is-a-public-release-gate.md)：Account Data Export 是外部发布门槛
 - [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md)：删除能力随数据面扩展
+- [`0104`](adr/0104-purge-marker-owns-backup-recovery-authority.md)：Purge Marker 是备份恢复防复活的权威来源
 - [`0070`](adr/0070-user-audio-is-not-retained-long-term.md)：正式用户音频不长期保留，内部 opt-in 以 72 小时为访问边界
 - [`0090`](adr/0090-one-conversation-action-represents-one-semantic-intent.md)：一次 Conversation Action 表达一个语义意图，可确定性传播到多个对象
 - [`0091`](adr/0091-conversation-actions-come-from-a-versioned-allowlist.md)：Conversation Action 只能来自版本化 allowlist，不支持时明确拒绝

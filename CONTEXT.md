@@ -367,8 +367,12 @@ _Avoid_: Version number, Timestamp, Revision counter
 _Avoid_: Deletion ledger, Deletion proof
 
 **Purge Marker**:
-保存在业务数据库备份域之外的单 owner 无正文清除标记；它记录清除代际与时间，用于阻止旧备份未经比对直接恢复上线，本身不构成对外可见的删除承诺，也不是多用户删除台账。
+保存在业务数据库备份域之外的单 owner 无正文清除标记；每位 owner 只保留不可回退的最新清除代际与时间，用于阻止旧备份未经比对直接恢复上线，本身不构成对外可见的删除承诺，也不是多用户删除台账。
 _Avoid_: Tombstone, Deletion ledger, Backup registry
+
+**Recovery Gate**:
+每次私人读取、写入或 Provider Egress 前，比较业务库状态与业务库外最新 Purge Marker 的 fail-closed 准入关卡；发现旧备份、不一致或无法读取 marker 时，必须在重新应用清除状态并复核前保持关闭。
+_Avoid_: Startup check, Recovery scanner, Deployment epoch floor
 
 **Active-System Deletion**:
 Internal Owner Full Purge 到达“在线产品已不可读取、召回或重建相关内容”的生命周期阶段；它可以同时声明仍有未届满的保留窗口（Retention Pending），但绝不等于、也不能对外声称所有保留副本已经过期。
