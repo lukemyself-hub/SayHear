@@ -20,6 +20,11 @@ export async function GET(request: Request): Promise<Response> {
       { status: 400 },
     );
   }
+  try {
+    await composition.accessService.assertOperator(asUserId(session.user.id));
+  } catch {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
   return Response.json(
     await composition.recoveryReapplyService.inspect(
       asUserId(session.user.id),

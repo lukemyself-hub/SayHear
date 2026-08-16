@@ -7,6 +7,7 @@ import {
   type RollingSummaryContent,
   type RollingSummarySource,
 } from "./rolling-summary";
+import type { RecoveryGate } from "./recovery-gate";
 
 export type RollingSummaryModel = Readonly<{
   compress(input: { sources: readonly RollingSummarySource[]; policyVersion: string; promptVersion: string; modelConfigVersion: string }): Promise<RollingSummaryContent>;
@@ -27,6 +28,7 @@ export function createRollingSummaryService(dependencies: {
   clock: () => Date; repository: RollingSummaryRepository; model: RollingSummaryModel;
   expectedDataEpoch: number; policyVersion: string; promptVersion: string; modelConfigVersion: string;
   maximumClaimAgeMs?: number;
+  recoveryGate?: RecoveryGate;
 }): RollingSummaryService {
   const maximumClaimAgeMs = dependencies.maximumClaimAgeMs ?? 5 * 60 * 1_000;
   return {
@@ -39,6 +41,7 @@ export function createRollingSummaryService(dependencies: {
     async run(commandId) {
       const frozen = await dependencies.repository.loadCommand({ commandId, now: dependencies.clock() });
       if (!frozen) return { outcome: "stale" };
+      await dependencies.recoveryGate?.requireOpen(frozen.command.userId);
       if (!hasContiguousCoverage(frozen.command, frozen.sources)) {
         await dependencies.repository.stale({ commandId });
         return { outcome: "stale" };

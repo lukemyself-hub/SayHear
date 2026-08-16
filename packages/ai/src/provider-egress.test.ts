@@ -3,6 +3,7 @@ import {
   asConversationEventRevisionId,
   asGenerationCommandId,
   asModelRunAttemptId,
+  asUserId,
   type ContextCompiler,
   type ConversationTextModel,
   type ProviderEgressRepository,
@@ -10,6 +11,8 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { createProviderEgressPort } from "./provider-egress";
+
+const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
 
 describe("Provider Egress", () => {
   it("uses the Context Compiler rendered payload after the dispatch fence", async () => {
@@ -107,6 +110,7 @@ describe("Provider Egress", () => {
     });
 
     for await (const _event of port.stream({
+      userId,
       compiledContextId: asCompiledContextId(
         "01984477-59a9-7d20-9d97-e588769566c1",
       ),
@@ -219,6 +223,7 @@ describe("Provider Egress", () => {
 
     const events = [];
     for await (const event of port.stream({
+      userId,
       compiledContextId: asCompiledContextId(
         "01984477-59a9-7d20-9d97-e588769566c1",
       ),

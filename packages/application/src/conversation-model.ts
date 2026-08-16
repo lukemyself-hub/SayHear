@@ -93,7 +93,7 @@ export type ProviderEgressPort = Readonly<{
     functions?: readonly ConversationFunctionDefinition[];
     generationCommandId: GenerationCommandId;
     modelRunAttemptId: ModelRunAttemptId;
-    userId?: UserId;
+    userId: UserId;
     requestEventRevisionId?: ConversationEventRevisionId;
     signal?: AbortSignal;
     toolsDisabled?: boolean;

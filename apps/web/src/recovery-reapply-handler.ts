@@ -2,6 +2,8 @@ import {
   RecoveryReapplyConfirmationError,
   RecoveryReapplyNotRequiredError,
   RecoveryGateClosedError,
+  InternalOwnerAccessDeniedError,
+  type InternalOwnerAccessService,
   type RecoveryReapplyService,
   type UserId,
 } from "@sayhear/application";
@@ -10,12 +12,21 @@ type AuthenticatedPrincipal = Readonly<{ userId: UserId }>;
 
 export function createRecoveryReapplyHandler(dependencies: {
   authenticate(request: Request): Promise<AuthenticatedPrincipal | null>;
+  operatorService: InternalOwnerAccessService;
   service: RecoveryReapplyService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     const principal = await dependencies.authenticate(request);
     if (principal === null) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
+    }
+    try {
+      await dependencies.operatorService.assertOperator(principal.userId);
+    } catch (error) {
+      if (error instanceof InternalOwnerAccessDeniedError) {
+        return Response.json({ error: "forbidden" }, { status: 403 });
+      }
+      throw error;
     }
     const url = new URL(request.url);
     if (url.searchParams.has("user_id") || url.searchParams.has("owner_id")) {

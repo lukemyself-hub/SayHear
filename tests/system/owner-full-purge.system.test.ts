@@ -731,6 +731,34 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     expect(finalOrder?.needsAttentionReason).toBeNull();
   });
 
+  it("keeps the external purge marker at the per-owner high-water epoch", async () => {
+    await markerRepository.writeMarker({
+      userId: OWNER,
+      dataEpoch: 2,
+      purgedAt: BASE_TIME,
+      backupRetentionUntil: null,
+      receipts: [],
+    });
+    await markerRepository.writeMarker({
+      userId: OWNER,
+      dataEpoch: 1,
+      purgedAt: new Date(BASE_TIME.getTime() + 1_000),
+      backupRetentionUntil: null,
+      receipts: [],
+    });
+    await markerRepository.writeMarker({
+      userId: OWNER,
+      dataEpoch: 3,
+      purgedAt: new Date(BASE_TIME.getTime() + 2_000),
+      backupRetentionUntil: null,
+      receipts: [],
+    });
+
+    await expect(markerRepository.findLatestMarker({ userId: OWNER })).resolves.toMatchObject({
+      dataEpoch: 3,
+    });
+  });
+
   it("concurrency drill: journal publication and projection current-pointer writes cannot resurrect after the deletion epoch advances", async () => {
     const { order } = await startPurgeOrder();
 

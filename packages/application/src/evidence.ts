@@ -1,4 +1,6 @@
-import { asDailySessionId, type DailySessionId } from "@sayhear/domain";
+import { asDailySessionId, asUserId, type DailySessionId } from "@sayhear/domain";
+
+import type { RecoveryGate } from "./recovery-gate";
 
 export type EvidenceLocatorType = "whole_revision" | "segment" | "text_span" | "time_range";
 export type EvidenceRole = "factual_support" | "subjective_report";
@@ -72,6 +74,7 @@ export function createEvidenceService(dependencies: {
   extractionPolicyVersion: string;
   champion: EvidenceChampion;
   repository: EvidenceRepository;
+  recoveryGate?: RecoveryGate;
   writesEnabled?: boolean;
 }): EvidenceService {
   if (!dependencies.extractionPolicyVersion) throw new Error("extractionPolicyVersion must be non-empty.");
@@ -84,13 +87,17 @@ export function createEvidenceService(dependencies: {
       }
       let dailySessionId: DailySessionId;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return { outcome: "not_found" }; }
-      return dependencies.repository.freezeUserEvidence({
+      const result = await dependencies.repository.freezeUserEvidence({
         dailySessionId, sourceRevision: input.sourceRevision,
         extractionPolicyVersion: dependencies.extractionPolicyVersion,
         expectedDataEpoch: dependencies.expectedDataEpoch,
         commandId: input.commandId, attemptId: input.attemptId,
         champion: dependencies.champion, now: dependencies.clock(),
       });
+      if (result.outcome === "frozen") {
+        await dependencies.recoveryGate?.requireOpen(asUserId(result.snapshot.userId));
+      }
+      return result;
     },
     async inspect(input) {
       let dailySessionId: DailySessionId;

@@ -4,6 +4,8 @@ import type {
   UserId,
 } from "@sayhear/domain";
 
+import type { RecoveryGate } from "./recovery-gate";
+
 export type DialogueStateField<T> = Readonly<{
   confidence: number;
   sourceRevisionIds: readonly ConversationEventRevisionId[];
@@ -176,6 +178,7 @@ export function createDialogueStateService(dependencies: {
   model: DialogueStateModel;
   policy: DialogueStatePolicy;
   repository: DialogueStateRepository;
+  recoveryGate?: RecoveryGate;
 }): DialogueStateService {
   if (!Number.isInteger(dependencies.expectedDataEpoch) || dependencies.expectedDataEpoch <= 0) {
     throw new Error("expectedDataEpoch must be a positive integer.");
@@ -189,6 +192,7 @@ export function createDialogueStateService(dependencies: {
         now: dependencies.clock(),
       });
       if (!frozen) return { outcome: "stale" };
+      await dependencies.recoveryGate?.requireOpen(frozen.command.userId);
       if (
         frozen.command.expectedDataEpoch !== dependencies.expectedDataEpoch ||
         frozen.command.policyVersion !== dependencies.policy.policyVersion ||

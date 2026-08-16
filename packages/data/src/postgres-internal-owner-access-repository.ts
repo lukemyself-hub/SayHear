@@ -30,6 +30,17 @@ export class PostgresInternalOwnerAccessRepository
     return row ? { userId: asUserId(row.user_id) } : null;
   }
 
+  public async findInternalOwner(userId: UserId) {
+    const result = await this.pool.query<{ user_id: string }>(
+      `SELECT user_id
+       FROM internal_owner_identities
+       WHERE user_id = $1 AND active = TRUE`,
+      [userId],
+    );
+    const row = result.rows[0];
+    return row ? { userId: asUserId(row.user_id) } : null;
+  }
+
   public async findRecoveryBusinessState(userId: UserId) {
     const result = await this.pool.query<{
       data_epoch: string;

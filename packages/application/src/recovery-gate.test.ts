@@ -4,7 +4,6 @@ import { asUserId } from "@sayhear/domain";
 
 import {
   createRecoveryGate,
-  RecoveryGateClosedError,
   type RecoveryBusinessState,
 } from "./recovery-gate";
 import type { PurgeMarkerSnapshot } from "./owner-purge";
@@ -53,18 +52,21 @@ describe("Recovery Gate", () => {
       marker(2),
     ).evaluate(userId);
     expect(result).toMatchObject({
-      businessDataEpoch: 1,
       markerDataEpoch: 2,
       status: "reapply_required",
     });
   });
 
+  it("fails closed when a restored database has purge history but the marker is missing", async () => {
+    await expect(
+      gate({ dataEpoch: 2, status: "active" }, null).evaluate(userId),
+    ).resolves.toMatchObject({ status: "needs_attention" });
+  });
+
   it("fails closed for reverse inconsistency and marker-store failure", async () => {
     await expect(
       gate({ dataEpoch: 3, status: "active" }, marker(2)).requireOpen(userId),
-    ).rejects.toMatchObject({
-      result: { status: "needs_attention" },
-    } satisfies Partial<RecoveryGateClosedError>);
+    ).rejects.toMatchObject({ result: { status: "needs_attention" } });
 
     const unavailable = createRecoveryGate({
       businessStateRepository: {

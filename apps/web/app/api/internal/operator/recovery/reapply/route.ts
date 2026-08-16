@@ -15,6 +15,7 @@ async function handle(request: Request): Promise<Response> {
       const session = await getServerSession(composition.authOptions);
       return session?.user?.id ? { userId: asUserId(session.user.id) } : null;
     },
+    operatorService: composition.accessService,
     service: composition.recoveryReapplyService,
   })(request);
 }

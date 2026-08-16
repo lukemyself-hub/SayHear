@@ -20,9 +20,7 @@ export function createProviderEgressPort(dependencies: {
 }): ProviderEgressPort {
   return {
     async *stream(input) {
-      if (dependencies.recoveryGate && input.userId) {
-        await dependencies.recoveryGate.requireOpen(input.userId);
-      }
+      await dependencies.recoveryGate?.requireOpen(input.userId);
       const claim = await dependencies.repository.claimDispatch({
         champion: dependencies.champion,
         compiledContextId: input.compiledContextId,

@@ -15,8 +15,6 @@ export type RecoveryGateStatus =
 
 export type RecoveryGateResult = Readonly<{
   status: RecoveryGateStatus;
-  businessDataEpoch: number | null;
-  businessStatus: RecoveryBusinessState["status"] | null;
   markerDataEpoch: number | null;
   markerPurgedAt: Date | null;
   markerWrittenAt: Date | null;
@@ -43,12 +41,9 @@ export class RecoveryGateClosedError extends Error {
 
 function resultFor(
   status: RecoveryGateStatus,
-  state: RecoveryBusinessState | null,
   marker: PurgeMarkerSnapshot | null,
 ): RecoveryGateResult {
   return {
-    businessDataEpoch: state?.dataEpoch ?? null,
-    businessStatus: state?.status ?? null,
     markerDataEpoch: marker?.dataEpoch ?? null,
     markerPurgedAt: marker?.purgedAt ?? null,
     markerWrittenAt: marker?.writtenAt ?? null,
@@ -72,11 +67,11 @@ export function createRecoveryGate(dependencies: {
           dependencies.markerRepository.findLatestMarker({ userId }),
         ]);
       } catch {
-        return resultFor("unavailable", null, null);
+        return resultFor("unavailable", null);
       }
 
       if (state === null) {
-        return resultFor("unavailable", state, marker);
+        return resultFor("unavailable", marker);
       }
       if (marker === null) {
         // A clean first-generation database has no purge history. Any
@@ -86,20 +81,19 @@ export function createRecoveryGate(dependencies: {
           state.status === "active" && state.dataEpoch === 1
             ? "open"
             : "needs_attention",
-          state,
           marker,
         );
       }
       if (state.dataEpoch < marker.dataEpoch) {
-        return resultFor("reapply_required", state, marker);
+        return resultFor("reapply_required", marker);
       }
       if (state.dataEpoch > marker.dataEpoch) {
-        return resultFor("needs_attention", state, marker);
+        return resultFor("needs_attention", marker);
       }
       if (state.status !== "active") {
-        return resultFor("needs_attention", state, marker);
+        return resultFor("needs_attention", marker);
       }
-      return resultFor("open", state, marker);
+      return resultFor("open", marker);
     },
 
     async requireOpen(userId) {

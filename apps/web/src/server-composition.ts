@@ -118,6 +118,7 @@ export function createServerComposition() {
       snapshot: evidenceConfiguration.promptFingerprint,
     },
     repository: evidenceRepository,
+    recoveryGate,
     writesEnabled: configuration.writeSwitches.evidenceExtractionEnabled,
   });
   const journalRepository = new PostgresJournalRepository(pool);
@@ -162,6 +163,7 @@ export function createServerComposition() {
       promptVersion: dialogueStateConfiguration.promptFingerprint,
     },
     repository: new PostgresDialogueStateRepository(pool),
+    recoveryGate,
   });
   const rollingSummaryService = createRollingSummaryService({
     clock: configuration.clock,
@@ -171,6 +173,7 @@ export function createServerComposition() {
     policyVersion: journalRoleRegistry.configuration("summary.compress").policyVersion,
     promptVersion: journalRoleRegistry.configuration("summary.compress").promptFingerprint,
     repository: new PostgresRollingSummaryRepository(pool),
+    recoveryGate,
   });
   const journalEligibilityService = createJournalEligibilityService({
     clock: configuration.clock,

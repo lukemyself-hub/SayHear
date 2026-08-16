@@ -10,11 +10,13 @@ import type { RecoveryGate } from "./recovery-gate";
 
 export type InternalOwnerAccessRepository = Readonly<{
   findActiveOwner(userId: UserId): Promise<{ userId: UserId } | null>;
+  findInternalOwner(userId: UserId): Promise<{ userId: UserId } | null>;
   findRecoveryBusinessState?(userId: UserId): Promise<RecoveryBusinessState | null>;
   findLatestBackupPolicyEvidence(): Promise<BackupPolicyEvidence | null>;
 }>;
 
 export type InternalOwnerAccessService = Readonly<{
+  assertOperator(userId: UserId): Promise<void>;
   getAccess(userId: UserId): Promise<{
     privateWrites: PrivateWriteGateStatus;
   }>;
@@ -35,6 +37,12 @@ export function createInternalOwnerAccessService(dependencies: {
   repository: InternalOwnerAccessRepository;
 }): InternalOwnerAccessService {
   return {
+    async assertOperator(userId) {
+      const owner = await dependencies.repository.findInternalOwner(userId);
+      if (owner === null) {
+        throw new InternalOwnerAccessDeniedError();
+      }
+    },
     async getAccess(userId) {
       const owner = await dependencies.repository.findActiveOwner(userId);
       if (owner === null) {

@@ -210,6 +210,7 @@ export function createJournalService(dependencies: {
       if (!source || source.sourceRevision !== input.sourceRevision) return { outcome: "stale" };
       if (source.extractionPolicyVersion !== undefined && source.extractionPolicyVersion !== dependencies.evidenceExtractionPolicyVersion) return { outcome: "fenced" };
       if (source.dataEpoch !== undefined && source.dataEpoch !== input.expectedDataEpoch) return { outcome: "fenced" };
+      await dependencies.recoveryGate?.requireOpen(source.userId as UserId);
       const generation = await dependencies.repository.startGeneration({
         dailySessionId,
         userId: source.userId,
