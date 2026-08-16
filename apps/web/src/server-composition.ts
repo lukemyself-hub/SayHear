@@ -178,6 +178,7 @@ export function createServerComposition() {
       configuration.journalEligibilityPolicy.minimumSubstantiveExpressionLength,
     policyVersion: configuration.journalEligibilityPolicy.version,
     repository: journalEligibilityRepository,
+    recoveryGate,
   });
   const outboxDispatcherService = createOutboxDispatcherService({
     clock: configuration.clock,

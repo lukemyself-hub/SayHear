@@ -7,6 +7,7 @@ import {
   type WorkflowCommandId,
 } from "@sayhear/domain";
 import type { EvidenceService } from "./evidence";
+import type { RecoveryGate } from "./recovery-gate";
 
 // ---- Date outcome -----------------------------------------------------------
 
@@ -111,6 +112,7 @@ export type JournalEligibilityRepository = Readonly<{
   recordDateOutcome(input: {
     dailySessionId: DailySessionId;
     userId: UserId;
+    expectedDataEpoch: number;
     logicalDate: string;
     outcome: JournalEligibilityDateOutcome;
     eligibilityPolicyVersion: string;
@@ -196,6 +198,7 @@ export function createJournalEligibilityService(dependencies: {
   policyVersion: string;
   minimumSubstantiveExpressionLength: number;
   repository: JournalEligibilityRepository;
+  recoveryGate?: RecoveryGate;
   scanLimit?: number;
 }): JournalEligibilityService {
   const scanLimit = dependencies.scanLimit ?? 100;
@@ -219,6 +222,13 @@ export function createJournalEligibilityService(dependencies: {
       dailySessionId = asDailySessionId(rawDailySessionId);
     } catch {
       return { outcome: "not_found" };
+    }
+    const snapshot = await dependencies.repository.readEligibilitySnapshot({
+      dailySessionId,
+      policyVersion: dependencies.policyVersion,
+    });
+    if (snapshot !== null) {
+      await dependencies.recoveryGate?.requireOpen(snapshot.userId);
     }
     const result = await dependencies.repository.evaluateEligibility({
       dailySessionId,
@@ -474,6 +484,7 @@ export async function runJournalEligibility(input: {
   workflowReceiptId: string;
   command: JournalEligibilityEntrypointInput;
   evidenceService?: EvidenceService;
+  recoveryGate?: RecoveryGate;
 }): Promise<JournalEligibilityEntrypointResult> {
   // Validate the command's opaque IDs before trusting them.
   asWorkflowCommandId(input.command.workflowCommandId);
@@ -496,6 +507,9 @@ export async function runJournalEligibility(input: {
   });
   if (snapshot !== null && snapshot.sourceRevision !== input.command.sourceRevision) {
     throw new Error("Journal eligibility command is stale at the current source head.");
+  }
+  if (snapshot !== null) {
+    await input.recoveryGate?.requireOpen(snapshot.userId);
   }
   // A Daily Session with zero user Conversation Events has no activity to
   // evaluate (AC #2). A snapshot that cannot be read is also treated as
@@ -523,9 +537,10 @@ export async function runJournalEligibility(input: {
     }
   }
   if (snapshot !== null) {
-    await input.repository.recordDateOutcome({
+    const recorded = await input.repository.recordDateOutcome({
       dailySessionId: snapshot.dailySessionId,
       userId: snapshot.userId,
+      expectedDataEpoch: input.command.expectedDataEpoch,
       logicalDate: snapshot.logicalDate,
       outcome,
       eligibilityPolicyVersion: input.eligibilityPolicyVersion,
@@ -533,6 +548,9 @@ export async function runJournalEligibility(input: {
       workflowReceiptId: input.workflowReceiptId,
       computedAt: input.clock(),
     });
+    if (!recorded.applied) {
+      throw new Error("Journal eligibility command was fenced at date outcome commit.");
+    }
   }
 
   const result = {

@@ -280,6 +280,7 @@ export class PostgresJournalEligibilityRepository
   public async recordDateOutcome(input: {
     dailySessionId: DailySessionId;
     userId: UserId;
+    expectedDataEpoch: number;
     logicalDate: string;
     outcome: JournalEligibilityDateOutcome;
     eligibilityPolicyVersion: string;
@@ -302,7 +303,11 @@ export class PostgresJournalEligibilityRepository
         `,
         [input.userId],
       );
-      if (!owner.rows[0] || owner.rows[0].status !== "active") {
+      if (
+        !owner.rows[0] ||
+        owner.rows[0].status !== "active" ||
+        Number(owner.rows[0].data_epoch) !== input.expectedDataEpoch
+      ) {
         await client.query("ROLLBACK");
         return { applied: false };
       }

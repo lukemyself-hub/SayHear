@@ -60,6 +60,7 @@ async function runEligibilityStep(input: {
       policy.minimumSubstantiveExpressionLength,
     workflowReceiptId: `wf-${randomUUID()}`,
     command: input,
+    recoveryGate: composition.recoveryGate,
   });
   if (eligibility.outcome === "eligible_queued") {
     const evidenceAttemptId = randomUUID();
