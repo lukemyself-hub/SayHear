@@ -6,6 +6,7 @@ import type {
 } from "@sayhear/application";
 import { asConversationEventRevisionId, asDailySessionId, asUserId } from "@sayhear/domain";
 import type { Pool } from "pg";
+import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
 
 export class PostgresRollingSummaryRepository implements RollingSummaryRepository {
@@ -43,16 +44,18 @@ export class PostgresRollingSummaryRepository implements RollingSummaryRepositor
           COUNT(*) FILTER (WHERE event.sequence_no > COALESCE(current.covered_through_sequence_no, 0))::text AS uncovered_count,
           COALESCE(SUM(GREATEST(1, CEIL(CHAR_LENGTH(revision.canonical_text) / 4.0))) FILTER (WHERE event.sequence_no > COALESCE(current.covered_through_sequence_no, 0)), 0)::text AS uncovered_tokens
         FROM daily_sessions session
-        INNER JOIN app_users owner ON owner.user_id = session.user_id AND owner.status = 'active' AND owner.data_epoch = $1
+        INNER JOIN app_users owner ON owner.user_id = session.user_id AND owner.status = 'active'
         LEFT JOIN current_rolling_summaries current ON current.daily_session_id = session.daily_session_id
         INNER JOIN conversation_events event ON event.daily_session_id = session.daily_session_id AND event.user_id = session.user_id AND event.lifecycle_status = 'active' AND event.actor IN ('user','assistant')
         INNER JOIN conversation_event_revisions revision ON revision.conversation_event_revision_id = event.current_revision_id AND revision.user_id = event.user_id AND revision.content_purged_at IS NULL
         WHERE (event.actor = 'user' OR EXISTS (SELECT 1 FROM generation_commands command WHERE command.generation_command_id = event.generation_command_id AND command.status = 'succeeded' AND command.authoritative_result_id = revision.conversation_event_revision_id))
         GROUP BY session.daily_session_id, session.user_id, session.source_revision, session.dialogue_revision, current.covered_through_sequence_no
-        HAVING COUNT(*) FILTER (WHERE event.sequence_no > COALESCE(current.covered_through_sequence_no, 0)) > $2
-          OR COALESCE(SUM(GREATEST(1, CEIL(CHAR_LENGTH(revision.canonical_text) / 4.0))) FILTER (WHERE event.sequence_no > COALESCE(current.covered_through_sequence_no, 0)), 0) > $3
-      `, [input.expectedDataEpoch, policyRow.minimum_uncovered_event_count, policyRow.minimum_uncovered_token_count]);
+        HAVING COUNT(*) FILTER (WHERE event.sequence_no > COALESCE(current.covered_through_sequence_no, 0)) > $1
+          OR COALESCE(SUM(GREATEST(1, CEIL(CHAR_LENGTH(revision.canonical_text) / 4.0))) FILTER (WHERE event.sequence_no > COALESCE(current.covered_through_sequence_no, 0)), 0) > $2
+      `, [policyRow.minimum_uncovered_event_count, policyRow.minimum_uncovered_token_count]);
       for (const session of sessions.rows) {
+        const expectedDataEpoch = await lockActiveOwnerEpoch(client, session.user_id);
+        if (expectedDataEpoch === null) continue;
         const locked = await client.query(`SELECT daily_session_id FROM daily_sessions WHERE daily_session_id = $1 AND user_id = $2 FOR UPDATE`, [session.daily_session_id, session.user_id]);
         if (locked.rowCount !== 1) continue;
         // Every replacement Summary is self-contained: it re-freezes all valid
@@ -63,7 +66,7 @@ export class PostgresRollingSummaryRepository implements RollingSummaryRepositor
           INSERT INTO rolling_summary_commands (rolling_summary_command_id,user_id,daily_session_id,expected_data_epoch,source_revision,dialogue_revision,coverage_start_sequence_no,covered_through_sequence_no,policy_version,minimum_uncovered_event_count,minimum_uncovered_token_count,prompt_version,model_config_version,status,created_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'created',$14)
           ON CONFLICT (daily_session_id,source_revision,coverage_start_sequence_no,covered_through_sequence_no,policy_version) DO NOTHING RETURNING rolling_summary_command_id
-        `,[id,session.user_id,session.daily_session_id,input.expectedDataEpoch,session.source_revision,session.dialogue_revision,start,end,input.policyVersion,policyRow.minimum_uncovered_event_count,policyRow.minimum_uncovered_token_count,input.promptVersion,input.modelConfigVersion,input.now]);
+        `,[id,session.user_id,session.daily_session_id,expectedDataEpoch,session.source_revision,session.dialogue_revision,start,end,input.policyVersion,policyRow.minimum_uncovered_event_count,policyRow.minimum_uncovered_token_count,input.promptVersion,input.modelConfigVersion,input.now]);
         if (inserted.rowCount !== 1) continue;
         await client.query(`INSERT INTO rolling_summary_command_source_refs (rolling_summary_command_id,conversation_event_revision_id,sequence_no)
           SELECT $1, revision.conversation_event_revision_id, event.sequence_no
@@ -80,8 +83,8 @@ export class PostgresRollingSummaryRepository implements RollingSummaryRepositor
                 AND command.authoritative_result_id = revision.conversation_event_revision_id
             ))
           ORDER BY event.sequence_no`,[id,session.daily_session_id,session.user_id,start,end]);
-        await client.query(`INSERT INTO workflow_commands (workflow_command_id,command_type,subject_type,subject_id,source_revision,policy_version,expected_data_epoch,status,created_at) VALUES ($1,'rolling_summary','daily_session',$2,$3,$4,$5,'created',$6)`,[id,session.daily_session_id,session.source_revision,input.policyVersion,input.expectedDataEpoch,input.now]);
-        await client.query(`INSERT INTO outbox_events (outbox_event_id,workflow_command_id,aggregate_type,aggregate_id,aggregate_revision,event_type,status,next_attempt_at,attempt_count,payload,created_at) VALUES ($1,$2,'daily_session',$3,$4,'rolling_summary_requested','pending',$5,0,$6::jsonb,$5)`,[createUuidV7(input.now),id,session.daily_session_id,session.source_revision,input.now,JSON.stringify({workflowCommandId:id,subjectId:session.daily_session_id,sourceRevision:Number(session.source_revision),policyVersion:input.policyVersion,expectedDataEpoch:input.expectedDataEpoch,eventType:'rolling_summary_requested',status:'pending'})]);
+        await client.query(`INSERT INTO workflow_commands (workflow_command_id,command_type,subject_type,subject_id,source_revision,policy_version,expected_data_epoch,status,created_at) VALUES ($1,'rolling_summary','daily_session',$2,$3,$4,$5,'created',$6)`,[id,session.daily_session_id,session.source_revision,input.policyVersion,expectedDataEpoch,input.now]);
+        await client.query(`INSERT INTO outbox_events (outbox_event_id,workflow_command_id,aggregate_type,aggregate_id,aggregate_revision,event_type,status,next_attempt_at,attempt_count,payload,created_at) VALUES ($1,$2,'daily_session',$3,$4,'rolling_summary_requested','pending',$5,0,$6::jsonb,$5)`,[createUuidV7(input.now),id,session.daily_session_id,session.source_revision,input.now,JSON.stringify({workflowCommandId:id,subjectId:session.daily_session_id,sourceRevision:Number(session.source_revision),policyVersion:input.policyVersion,expectedDataEpoch:expectedDataEpoch,eventType:'rolling_summary_requested',status:'pending'})]);
         queued += 1;
       } await client.query("COMMIT"); return queued;
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }

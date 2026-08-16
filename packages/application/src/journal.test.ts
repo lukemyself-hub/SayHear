@@ -224,7 +224,7 @@ describe("automatic evidence-backed Journal", () => {
       repository: { readSource: vi.fn(), startGeneration: vi.fn(), publish: vi.fn(), recordValidationFailure: vi.fn(), readLatestCurrent },
     });
 
-    await expect(service.readLatest({ userId: "user-1", expectedDataEpoch: 3 })).resolves.toMatchObject({ logicalDate: "2026-08-12" });
-    expect(readLatestCurrent).toHaveBeenCalledWith({ userId: "user-1", expectedDataEpoch: 3 });
+    await expect(service.readLatest({ userId: "user-1" })).resolves.toMatchObject({ logicalDate: "2026-08-12" });
+    expect(readLatestCurrent).toHaveBeenCalledWith({ userId: "user-1" });
   });
 });

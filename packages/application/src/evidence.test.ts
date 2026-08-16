@@ -9,7 +9,6 @@ describe("Evidence service", () => {
     const freezeUserEvidence = vi.fn().mockResolvedValue({ outcome: "not_eligible" });
     const service = createEvidenceService({
       clock: () => new Date("2026-08-12T16:00:00.000Z"),
-      expectedDataEpoch: 3,
       extractionPolicyVersion: "evidence-extraction:v1",
       champion: {
         configVersion: "evidence-champion:v1",
@@ -24,6 +23,7 @@ describe("Evidence service", () => {
     await service.freeze({
       dailySessionId: sessionId,
       sourceRevision: 8,
+      expectedDataEpoch: 3,
       commandId: "journal-command-8",
       attemptId: "workflow-attempt-8",
     });
@@ -41,26 +41,26 @@ describe("Evidence service", () => {
   it("fails closed for an invalid session id", async () => {
     const freezeUserEvidence = vi.fn();
     const service = createEvidenceService({
-      clock: () => new Date(), expectedDataEpoch: 1,
+      clock: () => new Date(),
       extractionPolicyVersion: "evidence-extraction:v1",
       champion: { configVersion: "c", model: "m", provider: "openai", providerPolicyVersion: "p", snapshot: "s" },
       repository: { freezeUserEvidence, findEvidenceSnapshot: vi.fn().mockResolvedValue(null) },
     });
-    await expect(service.freeze({ dailySessionId: "not-a-uuid", sourceRevision: 1, commandId: "c", attemptId: "a" })).resolves.toEqual({ outcome: "not_found" });
+    await expect(service.freeze({ dailySessionId: "not-a-uuid", sourceRevision: 1, expectedDataEpoch: 1, commandId: "c", attemptId: "a" })).resolves.toEqual({ outcome: "not_found" });
     expect(freezeUserEvidence).not.toHaveBeenCalled();
   });
 
   it("does not create Evidence when the independent Evidence write switch is disabled", async () => {
     const freezeUserEvidence = vi.fn();
     const service = createEvidenceService({
-      clock: () => new Date(), expectedDataEpoch: 1,
+      clock: () => new Date(),
       extractionPolicyVersion: "evidence-extraction:v1",
       champion: { configVersion: "c", model: "m", provider: "openai", providerPolicyVersion: "p", snapshot: "s" },
       repository: { freezeUserEvidence, findEvidenceSnapshot: vi.fn().mockResolvedValue(null) },
       writesEnabled: false,
     });
 
-    await expect(service.freeze({ dailySessionId: sessionId, sourceRevision: 1, commandId: "c", attemptId: "a" }))
+    await expect(service.freeze({ dailySessionId: sessionId, sourceRevision: 1, expectedDataEpoch: 1, commandId: "c", attemptId: "a" }))
       .resolves.toEqual({ outcome: "writes_disabled" });
     expect(freezeUserEvidence).not.toHaveBeenCalled();
   });

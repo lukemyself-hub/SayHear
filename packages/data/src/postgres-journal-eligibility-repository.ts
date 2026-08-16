@@ -14,6 +14,7 @@ import {
 } from "@sayhear/domain";
 import type { Pool } from "pg";
 
+import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
 
 type EligibilitySessionRow = Readonly<{
@@ -64,25 +65,12 @@ export class PostgresJournalEligibilityRepository
         await client.query("ROLLBACK");
         return { outcome: "not_quiescent" };
       }
-      // §13.4 concurrency fence: lock the owning User and verify it is still
-      // active at the expected data_epoch in the SAME transaction. A user whose
-      // data_epoch advanced (deletion / re-creation) must never receive a new
-      // eligibility command. No authoritative write may happen without this.
-      const owner = await client.query<{ status: string; data_epoch: string }>(
-        `
-          SELECT status, data_epoch::text AS data_epoch
-          FROM app_users
-          WHERE user_id = $1
-          FOR UPDATE
-        `,
-        [lockedRow.user_id],
-      );
-      const ownerRow = owner.rows[0];
-      if (
-        !ownerRow ||
-        ownerRow.status !== "active" ||
-        Number(ownerRow.data_epoch) !== input.expectedDataEpoch
-      ) {
+      // §13.4 concurrency fence: lock the owning User and capture its current
+      // epoch in the SAME transaction. A user whose data_epoch advances after
+      // this point cannot invalidate this command admission without waiting on
+      // the owner lock.
+      const ownerEpoch = await lockActiveOwnerEpoch(client, lockedRow.user_id);
+      if (ownerEpoch === null) {
         await client.query("ROLLBACK");
         return { outcome: "not_found" };
       }
@@ -147,7 +135,7 @@ export class PostgresJournalEligibilityRepository
           input.dailySessionId,
           sessionRow.source_revision,
           input.policyVersion,
-          input.expectedDataEpoch,
+          ownerEpoch,
           input.evaluatedAt,
         ],
       );
@@ -183,7 +171,7 @@ export class PostgresJournalEligibilityRepository
             commandId,
             input.dailySessionId,
             sessionRow.source_revision,
-            input.expectedDataEpoch,
+            ownerEpoch,
             input.evaluatedAt,
             JSON.stringify({
               workflowCommandId: commandId,
@@ -191,7 +179,7 @@ export class PostgresJournalEligibilityRepository
               subjectId: input.dailySessionId,
               sourceRevision: sessionRow.source_revision,
               policyVersion: input.policyVersion,
-              expectedDataEpoch: input.expectedDataEpoch,
+              expectedDataEpoch: ownerEpoch,
               eventType: "journal_eligibility_requested",
               status: "pending",
             }),
@@ -292,6 +280,7 @@ export class PostgresJournalEligibilityRepository
   public async recordDateOutcome(input: {
     dailySessionId: DailySessionId;
     userId: UserId;
+    expectedDataEpoch: number;
     logicalDate: string;
     outcome: JournalEligibilityDateOutcome;
     eligibilityPolicyVersion: string;
@@ -314,7 +303,11 @@ export class PostgresJournalEligibilityRepository
         `,
         [input.userId],
       );
-      if (!owner.rows[0] || owner.rows[0].status !== "active") {
+      if (
+        !owner.rows[0] ||
+        owner.rows[0].status !== "active" ||
+        Number(owner.rows[0].data_epoch) !== input.expectedDataEpoch
+      ) {
         await client.query("ROLLBACK");
         return { applied: false };
       }

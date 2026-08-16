@@ -1,6 +1,7 @@
 import type { EvidenceChampion, EvidenceExtractionProvider, EvidenceRepository, EvidenceSourceSnapshot } from "@sayhear/application";
 import { asDailySessionId, type DailySessionId } from "@sayhear/domain";
 import type { Pool } from "pg";
+import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
 
 type SnapshotRow = {
@@ -32,8 +33,8 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
       if (!row) { await client.query("ROLLBACK"); return { outcome: "not_found" }; }
       if (row.activity_state === "active") { await client.query("ROLLBACK"); return { outcome: "stale" }; }
       if (Number(row.source_revision) !== input.sourceRevision) { await client.query("ROLLBACK"); return { outcome: "stale" }; }
-      const owner = await client.query<{ status: string; data_epoch: string }>("SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE", [row.user_id]);
-      if (!owner.rows[0] || owner.rows[0].status !== "active" || Number(owner.rows[0].data_epoch) !== input.expectedDataEpoch) { await client.query("ROLLBACK"); return { outcome: "not_found" }; }
+      const ownerEpoch = await lockActiveOwnerEpoch(client, row.user_id);
+      if (ownerEpoch === null || ownerEpoch !== input.expectedDataEpoch) { await client.query("ROLLBACK"); return { outcome: "not_found" }; }
       const snapshotId = createUuidV7(input.now);
       const snapshotResult = await client.query<SnapshotRow & { inserted: boolean }>(
         `INSERT INTO evidence_source_snapshots (

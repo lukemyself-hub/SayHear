@@ -4,6 +4,8 @@ import type {
   UserId,
 } from "@sayhear/domain";
 
+import type { RecoveryGate } from "./recovery-gate";
+
 export type DialogueStateField<T> = Readonly<{
   confidence: number;
   sourceRevisionIds: readonly ConversationEventRevisionId[];
@@ -85,7 +87,6 @@ export type DialogueStateRepository = Readonly<{
     now: Date;
   }): Promise<"published" | "stale">;
   queueEligible(input: {
-    expectedDataEpoch: number;
     now: Date;
     policy: DialogueStatePolicy;
   }): Promise<number>;
@@ -171,15 +172,12 @@ export function hasCompleteDialogueStateCoverage(
 
 export function createDialogueStateService(dependencies: {
   clock: () => Date;
-  expectedDataEpoch: number;
   maximumClaimAgeMs?: number;
   model: DialogueStateModel;
   policy: DialogueStatePolicy;
   repository: DialogueStateRepository;
+  recoveryGate?: RecoveryGate;
 }): DialogueStateService {
-  if (!Number.isInteger(dependencies.expectedDataEpoch) || dependencies.expectedDataEpoch <= 0) {
-    throw new Error("expectedDataEpoch must be a positive integer.");
-  }
   const maximumClaimAgeMs = dependencies.maximumClaimAgeMs ?? 5 * 60 * 1_000;
 
   return {
@@ -189,8 +187,8 @@ export function createDialogueStateService(dependencies: {
         now: dependencies.clock(),
       });
       if (!frozen) return { outcome: "stale" };
+      await dependencies.recoveryGate?.requireOpen(frozen.command.userId);
       if (
-        frozen.command.expectedDataEpoch !== dependencies.expectedDataEpoch ||
         frozen.command.policyVersion !== dependencies.policy.policyVersion ||
         frozen.command.promptVersion !== dependencies.policy.promptVersion ||
         frozen.command.modelConfigVersion !== dependencies.policy.modelConfigVersion ||
@@ -240,7 +238,6 @@ export function createDialogueStateService(dependencies: {
       });
       return {
         queued: await dependencies.repository.queueEligible({
-          expectedDataEpoch: dependencies.expectedDataEpoch,
           now,
           policy: dependencies.policy,
         }),

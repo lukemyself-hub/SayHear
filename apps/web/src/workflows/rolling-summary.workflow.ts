@@ -31,11 +31,8 @@ async function runJournalRegenerationStep(input: {
 }) {
   "use step";
   const composition = createServerComposition();
-  if (
-    input.policyVersion !== composition.journalGenerationPolicyVersion ||
-    input.expectedDataEpoch !== composition.configurationExpectedDataEpoch
-  ) {
-    throw new Error("Journal regeneration command fence does not match runtime policy.");
+  if (input.policyVersion !== composition.journalGenerationPolicyVersion) {
+    throw new Error("Journal regeneration command policy does not match runtime policy.");
   }
   return runJournalRegenerationWorkflow({
     actionRepository: composition.actionRepository,

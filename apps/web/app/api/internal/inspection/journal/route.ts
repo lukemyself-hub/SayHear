@@ -19,7 +19,6 @@ export async function GET(request: Request): Promise<Response> {
       return session?.user?.id && authSessionId ? { authSessionId, userId: asUserId(session.user.id) } : null;
     },
     authorize: composition.inspectionService.authorizeSensitiveInspection,
-    expectedDataEpoch: composition.configurationExpectedDataEpoch,
     service: composition.journalService,
   })(request);
 }

@@ -7,12 +7,13 @@ import {
   type RollingSummaryContent,
   type RollingSummarySource,
 } from "./rolling-summary";
+import type { RecoveryGate } from "./recovery-gate";
 
 export type RollingSummaryModel = Readonly<{
   compress(input: { sources: readonly RollingSummarySource[]; policyVersion: string; promptVersion: string; modelConfigVersion: string }): Promise<RollingSummaryContent>;
 }>;
 export type RollingSummaryRepository = Readonly<{
-  queueEligible(input: { now: Date; expectedDataEpoch: number; policyVersion: string; promptVersion: string; modelConfigVersion: string }): Promise<number>;
+  queueEligible(input: { now: Date; policyVersion: string; promptVersion: string; modelConfigVersion: string }): Promise<number>;
   reconcile(input: { now: Date; maximumClaimAgeMs: number }): Promise<void>;
   loadCommand(input: { commandId: string; now: Date }): Promise<{ command: RollingSummaryCommand; sources: readonly RollingSummarySource[] } | null>;
   publish(input: { command: RollingSummaryCommand; content: RollingSummaryContent; now: Date }): Promise<"published" | "stale">;
@@ -25,20 +26,22 @@ export type RollingSummaryService = Readonly<{
 }>;
 export function createRollingSummaryService(dependencies: {
   clock: () => Date; repository: RollingSummaryRepository; model: RollingSummaryModel;
-  expectedDataEpoch: number; policyVersion: string; promptVersion: string; modelConfigVersion: string;
+  policyVersion: string; promptVersion: string; modelConfigVersion: string;
   maximumClaimAgeMs?: number;
+  recoveryGate?: RecoveryGate;
 }): RollingSummaryService {
   const maximumClaimAgeMs = dependencies.maximumClaimAgeMs ?? 5 * 60 * 1_000;
   return {
     async scanPending() {
       const now = dependencies.clock();
       await dependencies.repository.reconcile({ now, maximumClaimAgeMs });
-      const queued = await dependencies.repository.queueEligible({ now, expectedDataEpoch: dependencies.expectedDataEpoch, policyVersion: dependencies.policyVersion, promptVersion: dependencies.promptVersion, modelConfigVersion: dependencies.modelConfigVersion });
+      const queued = await dependencies.repository.queueEligible({ now, policyVersion: dependencies.policyVersion, promptVersion: dependencies.promptVersion, modelConfigVersion: dependencies.modelConfigVersion });
       return { queued };
     },
     async run(commandId) {
       const frozen = await dependencies.repository.loadCommand({ commandId, now: dependencies.clock() });
       if (!frozen) return { outcome: "stale" };
+      await dependencies.recoveryGate?.requireOpen(frozen.command.userId);
       if (!hasContiguousCoverage(frozen.command, frozen.sources)) {
         await dependencies.repository.stale({ commandId });
         return { outcome: "stale" };

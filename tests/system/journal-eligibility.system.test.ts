@@ -238,7 +238,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
     const dialogueStateService = createDialogueStateService({
       clock: fixedResponseClock,
-      expectedDataEpoch: 1,
       model: input.dialogueStateModel ?? journalRoleRegistry.dialogueStateProjector,
       policy: {
         modelConfigVersion: dialogueStateConfiguration.configVersion,
@@ -249,7 +248,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     });
     const evidenceService = createEvidenceService({
       clock: fixedResponseClock,
-      expectedDataEpoch: 1,
       extractionPolicyVersion: "evidence-extraction:v1",
       champion: {
         configVersion: "evidence-champion:v1",
@@ -300,7 +298,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     });
     const journalEligibilityService = createJournalEligibilityService({
       clock: fixedResponseClock,
-      expectedDataEpoch: 1,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
       policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       repository: journalEligibilityRepository,
@@ -308,7 +305,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const summaryConfiguration = journalRoleRegistry.configuration("summary.compress");
     const rollingSummaryService = createRollingSummaryService({
       clock: fixedResponseClock,
-      expectedDataEpoch: 1,
       model: journalRoleRegistry.summaryCompressor,
       modelConfigVersion: summaryConfiguration.configVersion,
       policyVersion: summaryConfiguration.policyVersion,
@@ -914,6 +910,32 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     }
   });
 
+  it("freezes every newly admitted command at the active owner epoch after a purge", async () => {
+    await database.pool.query(
+      "UPDATE app_users SET status = 'active', data_epoch = 2 WHERE user_id = $1",
+      [fixedInternalOwnerPrincipal.userId],
+    );
+    const dailySessionId = await submitConversation({
+      clientEventId: "post-purge-epoch-event",
+      clientTurnId: "post-purge-epoch-turn",
+      text: "The new data generation must work immediately after purge.",
+    });
+    await endExchange(dailySessionId);
+
+    const composition = buildComposition();
+    await composition.dialogueStateService.scanPending();
+    await composition.rollingSummaryService.scanPending();
+    await composition.journalEligibilityService.evaluate(dailySessionId);
+
+    const commands = await database.pool.query<{ command_type: string; expected_data_epoch: string }>(
+      `SELECT command_type, expected_data_epoch::text
+       FROM workflow_commands
+       ORDER BY command_type`,
+    );
+    expect(commands.rows.length).toBeGreaterThan(0);
+    expect(commands.rows.every((row) => row.expected_data_epoch === "2")).toBe(true);
+  });
+
   it("creates the idempotent eligibility command and outbox event after an explicit end, then reaches an eligible date outcome (AC #1, #4, #5, #6, #10)", async () => {
     const dailySessionId = await submitConversation({
       clientEventId: "eligible-event",
@@ -957,6 +979,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
         sourceRevision: Number(command.rows[0]!.source_revision),
         subjectId: dailySessionId,
+        expectedDataEpoch: 1,
       },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
@@ -1011,7 +1034,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const sourceRevision = Number(command.rows[0]!.source_revision);
     await expect(runJournalEligibility({
       clock: fixedResponseClock,
-      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision, subjectId: dailySessionId },
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
       repository: composition.journalEligibilityRepository,
@@ -1027,7 +1050,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     await expect(composition.journalService.inspect({
       dailySessionId,
       userId: fixedInternalOwnerPrincipal.userId,
-      expectedDataEpoch: 1,
     })).resolves.toMatchObject({
       locale,
       statements: [expect.objectContaining({ epistemicStatus: "supported_expression" })],
@@ -1070,7 +1092,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const firstSourceRevision = Number(firstCommand.rows[0]!.source_revision);
     await runJournalEligibility({
       clock: fixedResponseClock,
-      command: { workflowCommandId: firstCommand.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision: firstSourceRevision, subjectId: dailySessionId },
+      command: { workflowCommandId: firstCommand.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision: firstSourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
       repository: composition.journalEligibilityRepository,
@@ -1095,7 +1117,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     })).resolves.toMatchObject({ dailySessionId });
     await expect(composition.journalService.readLatest({
       userId: fixedInternalOwnerPrincipal.userId,
-      expectedDataEpoch: 1,
     })).resolves.toMatchObject({ state: "updating" });
     await expect(composition.journalEligibilityService.evaluate(dailySessionId))
       .resolves.toMatchObject({ outcome: "evaluated", commandCreated: true });
@@ -1107,7 +1128,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     expect(successorSourceRevision).toBeGreaterThan(firstSourceRevision);
     await runJournalEligibility({
       clock: fixedResponseClock,
-      command: { workflowCommandId: commands.rows[1]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision: successorSourceRevision, subjectId: dailySessionId },
+      command: { workflowCommandId: commands.rows[1]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision: successorSourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
       repository: composition.journalEligibilityRepository,
@@ -1137,7 +1158,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     });
     await expect(composition.journalService.readLatest({
       userId: fixedInternalOwnerPrincipal.userId,
-      expectedDataEpoch: 1,
     })).resolves.toMatchObject({ state: "current" });
   });
 
@@ -1186,6 +1206,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
         sourceRevision: Number(command.rows[0]!.source_revision),
         subjectId: dailySessionId,
+        expectedDataEpoch: 1,
       },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
@@ -1247,6 +1268,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
           policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
           sourceRevision: Number(command.rows[0]!.source_revision),
           subjectId: dailySessionId,
+          expectedDataEpoch: 1,
         },
         eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
         minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
@@ -1413,7 +1435,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     await composition.rollingSummaryService.scanPending();
     const command = await database.pool.query<{ rolling_summary_command_id: string }>(`SELECT rolling_summary_command_id FROM rolling_summary_commands`);
     const failing = createRollingSummaryService({
-      clock: fixedResponseClock, expectedDataEpoch: 1, model: { async compress() { throw new Error("synthetic provider outage"); } },
+      clock: fixedResponseClock, model: { async compress() { throw new Error("synthetic provider outage"); } },
       modelConfigVersion: "test:summary", policyVersion: "rolling-summary:v1", promptVersion: "test:summary", repository: new PostgresRollingSummaryRepository(database.pool),
     });
     await expect(failing.run(command.rows[0]!.rolling_summary_command_id)).resolves.toEqual({ outcome: "failed" });
@@ -1518,6 +1540,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
         sourceRevision: 0,
         subjectId: dailySessionId,
+        expectedDataEpoch: 1,
       },
       eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
       minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,

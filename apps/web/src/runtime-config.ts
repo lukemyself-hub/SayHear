@@ -231,12 +231,6 @@ export function loadRuntimeConfiguration(environment: Environment) {
       "SAYHEAR_OUTBOX_LEASE_DURATION_MS must be a positive safe integer.",
     );
   }
-  const expectedDataEpoch = Number(
-    environment.SAYHEAR_EXPECTED_DATA_EPOCH ?? "1",
-  );
-  if (!Number.isSafeInteger(expectedDataEpoch) || expectedDataEpoch <= 0) {
-    throw new Error("SAYHEAR_EXPECTED_DATA_EPOCH must be a positive safe integer.");
-  }
   // The purge marker store must live OUTSIDE the business database backup
   // domain (issue #27, architecture 20.6): a marker schema inside the business
   // database would be restored together with old backups and defeat the
@@ -303,7 +297,6 @@ export function loadRuntimeConfiguration(environment: Environment) {
       version: journalEligibilityPolicyVersion,
     }),
     outboxDispatcher: Object.freeze({
-      expectedDataEpoch,
       leaseDurationMs: outboxLeaseDurationMs,
       leaseOwner: "sayhear-cron",
     }),

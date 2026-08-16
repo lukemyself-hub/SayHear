@@ -1,5 +1,6 @@
 import {
   InternalOwnerAccessDeniedError,
+  RecoveryGateClosedError,
   type InternalOwnerAccessService,
   type UserId,
 } from "@sayhear/application";
@@ -29,6 +30,12 @@ export function createInternalAccessHandler(dependencies: {
     } catch (error) {
       if (error instanceof InternalOwnerAccessDeniedError) {
         return Response.json({ error: "forbidden" }, { status: 403 });
+      }
+      if (error instanceof RecoveryGateClosedError) {
+        return Response.json(
+          { error: "recovery_gate_closed", status: error.result.status },
+          { status: 503 },
+        );
       }
       throw error;
     }

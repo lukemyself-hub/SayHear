@@ -1,6 +1,10 @@
 import { getServerSession } from "next-auth";
 
-import { asDailySessionId, asUserId } from "@sayhear/application";
+import {
+  asDailySessionId,
+  asUserId,
+  RecoveryGateClosedError,
+} from "@sayhear/application";
 
 import { createServerComposition } from "../../../../../src/server-composition";
 
@@ -14,7 +18,18 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   // Touch the principal so an unauthenticated caller cannot read date outcomes.
-  void asUserId(session.user.id);
+  const userId = asUserId(session.user.id);
+  try {
+    await composition.recoveryGate.requireOpen(userId);
+  } catch (error) {
+    if (error instanceof RecoveryGateClosedError) {
+      return Response.json(
+        { error: "recovery_gate_closed", status: error.result.status },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
 
   const url = new URL(request.url);
   const rawDailySessionId = url.searchParams.get("dailySessionId") ?? "";

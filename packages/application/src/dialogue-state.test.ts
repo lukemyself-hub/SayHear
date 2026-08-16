@@ -111,7 +111,6 @@ describe("DialogueState", () => {
     };
     const service = createDialogueStateService({
       clock: () => new Date("2026-08-13T12:00:00.000Z"),
-      expectedDataEpoch: 1,
       model: { project: async () => content() },
       policy: {
         modelConfigVersion: "dialogue-state-model:v1",
@@ -168,7 +167,6 @@ describe("DialogueState", () => {
     };
     const service = createDialogueStateService({
       clock: () => new Date("2026-08-13T12:00:00.000Z"),
-      expectedDataEpoch: 1,
       model: {
         project: async () => ({
           ...content(),

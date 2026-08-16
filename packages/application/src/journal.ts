@@ -1,4 +1,6 @@
-import { asDailySessionId } from "@sayhear/domain";
+import { asDailySessionId, type UserId } from "@sayhear/domain";
+
+import type { RecoveryGate } from "./recovery-gate";
 
 export type JournalEpistemicStatus = "supported_expression" | "inferred_observation";
 export type JournalGenerationKind = "automatic" | "regeneration";
@@ -134,8 +136,8 @@ export type JournalRepository = Readonly<{
     generationKind?: JournalGenerationKind;
     actionExecutionId?: string;
   }): Promise<void>;
-  readCurrent?(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
-  readLatestCurrent(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
+  readCurrent?(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
+  readLatestCurrent(input: { userId: string }): Promise<CurrentJournal | null>;
 }>;
 
 export type JournalModel = Readonly<{
@@ -168,8 +170,8 @@ export type JournalService = Readonly<{
     outcome: "published" | "stale" | "fenced" | "not_found" | "validation_failed" | "writes_disabled";
     reason?: string;
   }>;
-  inspect(input: { dailySessionId: string; userId: string; expectedDataEpoch: number }): Promise<JournalDraft | null>;
-  readLatest(input: { userId: string; expectedDataEpoch: number }): Promise<CurrentJournal | null>;
+  inspect(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
+  readLatest(input: { userId: string }): Promise<CurrentJournal | null>;
 }>;
 
 export type AutomaticJournalCommand = Readonly<{
@@ -188,6 +190,7 @@ export function createJournalService(dependencies: {
   generationMetadata: Readonly<{ role: "journal.draft"; provider: string; model: string; configVersion: string; rolePolicyVersion: string; promptFingerprint: string }>;
   validationMetadata: Readonly<{ role: "journal.validate"; provider: string; model: string; configVersion: string; rolePolicyVersion: string; promptFingerprint: string }>;
   model: JournalModel;
+  recoveryGate?: RecoveryGate;
   repository: JournalRepository;
   publishingEnabled?: boolean;
 }): JournalService {
@@ -207,6 +210,7 @@ export function createJournalService(dependencies: {
       if (!source || source.sourceRevision !== input.sourceRevision) return { outcome: "stale" };
       if (source.extractionPolicyVersion !== undefined && source.extractionPolicyVersion !== dependencies.evidenceExtractionPolicyVersion) return { outcome: "fenced" };
       if (source.dataEpoch !== undefined && source.dataEpoch !== input.expectedDataEpoch) return { outcome: "fenced" };
+      await dependencies.recoveryGate?.requireOpen(source.userId as UserId);
       const generation = await dependencies.repository.startGeneration({
         dailySessionId,
         userId: source.userId,
@@ -331,12 +335,14 @@ export function createJournalService(dependencies: {
       });
     },
     async inspect(input) {
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
       let dailySessionId: string;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return null; }
-      return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId, expectedDataEpoch: input.expectedDataEpoch }) ?? null;
+      return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId }) ?? null;
     },
     async readLatest(input) {
-      return dependencies.repository.readLatestCurrent(input);
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
+      return dependencies.repository.readLatestCurrent({ userId: input.userId });
     },
   };
 }

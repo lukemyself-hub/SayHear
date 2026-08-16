@@ -11,6 +11,7 @@ import type {
   CompiledContextSectionKey,
   ContextPolicyVersions,
 } from "./context-compiler";
+import type { RecoveryGate } from "./recovery-gate";
 
 export type CompiledContextInspection = Readonly<{
   compilerVersion: string;
@@ -171,11 +172,13 @@ export class SensitiveInspectionDeniedError extends Error {
 export function createInternalInspectionService(dependencies: {
   clock: () => Date;
   policyVersion: string;
+  recoveryGate?: RecoveryGate;
   repository: InternalInspectionRepository;
   stepUpMaxAgeMs: number;
 }): InternalInspectionService {
   return {
     async authorizeSensitiveInspection(userId, authSessionId) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       const result = await dependencies.repository.authorizeSensitiveInspection({
         authSessionId,
         capability: "conversation_content:read",
@@ -187,6 +190,7 @@ export function createInternalInspectionService(dependencies: {
       if (result.outcome === "denied") throw new SensitiveInspectionDeniedError(result.reason);
     },
     async getGenerationMetadata(userId, generationCommandId) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       const metadata = await dependencies.repository.findGenerationMetadata({
         generationCommandId,
         userId,
@@ -201,6 +205,7 @@ export function createInternalInspectionService(dependencies: {
       authSessionId,
       generationCommandId,
     ) {
+      await dependencies.recoveryGate?.requireOpen(userId);
       const result = await dependencies.repository.inspectConversationContent({
         authSessionId,
         capability: "conversation_content:read",
