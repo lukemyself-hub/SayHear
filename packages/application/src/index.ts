@@ -223,6 +223,11 @@ export {
   type JournalRegenerationWorkflowResult,
 } from "./journal-regeneration";
 export {
+  assertWorkflowHistoryCanaryClean,
+  type WorkflowCanaryArtifacts,
+  type WorkflowCanaryValues,
+} from "./workflow-history-canary";
+export {
   createEvidenceService,
   type EvidenceChampion,
   type EvidenceItem,
