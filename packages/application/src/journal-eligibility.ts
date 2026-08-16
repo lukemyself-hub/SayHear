@@ -280,7 +280,9 @@ export type WorkflowStarter = (input: {
     | "dialogue_state_requested"
     | "journal_eligibility_requested"
     | "rolling_summary_requested"
-    | "owner_full_purge_requested";
+    | "owner_full_purge_requested"
+    | "journal_regeneration_requested";
+  actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId: DailySessionId | UserId;
   sourceRevision: number;
@@ -347,7 +349,11 @@ export function createOutboxDispatcherService(dependencies: {
               | "dialogue_state_requested"
               | "journal_eligibility_requested"
               | "rolling_summary_requested"
-              | "owner_full_purge_requested",
+              | "owner_full_purge_requested"
+              | "journal_regeneration_requested",
+            ...(typeof event.payload.actionExecutionId === "string"
+              ? { actionExecutionId: event.payload.actionExecutionId }
+              : {}),
             workflowCommandId: event.workflowCommandId,
             subjectId: event.aggregateId,
             sourceRevision: event.aggregateRevision,
@@ -419,6 +425,7 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "errorCode",
   "workflowReceiptId",
   "dailySessionId",
+  "actionExecutionId",
   "outcome",
 ]);
 

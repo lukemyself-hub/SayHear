@@ -2,6 +2,8 @@ import {
   createInternalOwnerAccessService,
   createInternalInspectionService,
   createConversationAgentHarness,
+  createConversationActionGateway,
+  createJournalRegenerationActionHandler,
   createContextCompiler,
   createContinuousExchangeService,
   createConversationResponseService,
@@ -14,8 +16,8 @@ import {
   createOutboxDispatcherService,
   createUserTextConversationService,
   type JournalEligibilityRepository,
-  EMPTY_CONVERSATION_ACTION_CATALOG,
-  INITIAL_CONVERSATION_HARNESS_POLICY,
+  JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -25,6 +27,7 @@ import {
   createPostgresPool,
   PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
+  PostgresJournalRegenerationActionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
@@ -74,6 +77,10 @@ export function createServerComposition() {
   const conversationRepository =
     new PostgresUserTextConversationRepository(pool);
   const responseRepository = new PostgresConversationResponseRepository(pool);
+  const actionRepository = new PostgresJournalRegenerationActionRepository(
+    pool,
+    configuration.contextHmacSecret,
+  );
   const continuousExchangeRepository =
     new PostgresContinuousExchangeRepository(pool);
   const journalEligibilityRepository =
@@ -183,8 +190,8 @@ export function createServerComposition() {
       freshnessPolicy: "source_valid:v1",
       chineseLocalePackVersion: "locale-pack-zh:v1",
       englishLocalePackVersion: "locale-pack-en:v1",
-      harnessPolicyVersion: INITIAL_CONVERSATION_HARNESS_POLICY.version,
-      conversationActionCatalogVersion: EMPTY_CONVERSATION_ACTION_CATALOG.version,
+      harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
+      conversationActionCatalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
@@ -235,9 +242,17 @@ export function createServerComposition() {
     contextCompiler,
     repository: responseRepository,
   });
+  const actionGateway = createConversationActionGateway({
+    handler: createJournalRegenerationActionHandler({
+      generationPolicyVersion: draftConfiguration.policyVersion,
+    }),
+    repository: actionRepository,
+  });
   const conversationAgentHarness = createConversationAgentHarness({
+    actionGateway,
     clock: configuration.clock,
     egressPort,
+    contextCompiler,
     repository: responseRepository,
   });
   return {
@@ -275,6 +290,8 @@ export function createServerComposition() {
     authOptions: createAuthOptions({ configuration, pool }),
     clock: configuration.clock,
     journalEligibilityRepository,
+    actionRepository,
+    actionGateway,
     rollingSummaryService,
     journalEligibilityService,
     dialogueStateService,
@@ -291,12 +308,13 @@ export function createServerComposition() {
       stepUpMaxAgeMs: 10 * 60 * 1_000,
     }),
     conversationResponseService: createConversationResponseService({
-      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
+      catalog: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+      actionGateway,
       clock: configuration.clock,
       contextCompiler,
       conversationService,
       harness: conversationAgentHarness,
-      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
+      harnessPolicy: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     }),
     continuousExchangeService: createContinuousExchangeService({

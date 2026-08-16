@@ -69,23 +69,43 @@ export class PostgresJournalRepository implements JournalRepository {
          WHERE session.daily_session_id = $1 FOR UPDATE`, [input.dailySessionId],
       );
       const row = owner.rows[0];
+      const generationKind = input.generationKind ?? "automatic";
       if (!row || row.user_id !== input.userId || row.status !== "active" || Number(row.data_epoch) !== input.expectedDataEpoch ||
-        Number(row.source_revision) !== input.sourceRevision || row.activity_state === "active") {
+        Number(row.source_revision) !== input.sourceRevision ||
+        (generationKind !== "regeneration" && row.activity_state === "active")) {
         await client.query("ROLLBACK"); return { accepted: false, generationCommandId: input.generationCommandId };
       }
-      const inserted = await client.query<{ generation_command_id: string }>(
-        `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
-          generation_policy_version, expected_data_epoch, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version) DO NOTHING
-         RETURNING generation_command_id`,
-        [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion, input.expectedDataEpoch],
-      );
-      const existing = inserted.rows[0] ?? (await client.query<{ generation_command_id: string }>(
-        `SELECT generation_command_id FROM journal_generation_commands
-         WHERE user_id = $1 AND daily_session_id = $2 AND source_revision = $3 AND generation_policy_version = $4`,
-        [input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion],
-      )).rows[0];
+      let existing: { generation_command_id: string } | undefined;
+      if (generationKind === "regeneration") {
+        if (!input.actionExecutionId) {
+          await client.query("ROLLBACK");
+          return { accepted: false, generationCommandId: input.generationCommandId };
+        }
+        existing = (await client.query<{ generation_command_id: string }>(
+          `SELECT generation_command_id FROM journal_generation_commands
+           WHERE action_execution_id = $1 AND user_id = $2 AND daily_session_id = $3
+             AND source_revision = $4 AND generation_policy_version = $5
+             AND generation_kind = 'regeneration'
+           FOR UPDATE`,
+          [input.actionExecutionId, input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion],
+        )).rows[0];
+      } else {
+        const inserted = await client.query<{ generation_command_id: string }>(
+          `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
+            generation_policy_version, expected_data_epoch, generation_kind, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'automatic', CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version)
+           WHERE generation_kind = 'automatic' DO NOTHING
+           RETURNING generation_command_id`,
+          [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion, input.expectedDataEpoch],
+        );
+        existing = inserted.rows[0] ?? (await client.query<{ generation_command_id: string }>(
+          `SELECT generation_command_id FROM journal_generation_commands
+           WHERE user_id = $1 AND daily_session_id = $2 AND source_revision = $3
+             AND generation_policy_version = $4 AND generation_kind = 'automatic'`,
+          [input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion],
+        )).rows[0];
+      }
       if (!existing) { await client.query("ROLLBACK"); return { accepted: false, generationCommandId: input.generationCommandId }; }
       const attempt = await client.query<{ generation_command_id: string; status: "started" | "completed" | "failed" }>(
         `SELECT generation_command_id, status FROM journal_model_run_attempts WHERE model_run_attempt_id = $1`,
@@ -117,7 +137,9 @@ export class PostgresJournalRepository implements JournalRepository {
         [input.dailySessionId],
       );
       const row = session.rows[0];
-      if (!row || row.user_id !== input.userId || Number(row.source_revision) !== input.sourceRevision || row.activity_state === "active") {
+      const generationKind = input.generationKind ?? "automatic";
+      if (!row || row.user_id !== input.userId || Number(row.source_revision) !== input.sourceRevision ||
+        (generationKind !== "regeneration" && row.activity_state === "active")) {
         await client.query("ROLLBACK"); return { outcome: "stale" };
       }
       const owner = await client.query<{ status: string; data_epoch: string }>("SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE", [row.user_id]);
@@ -134,24 +156,42 @@ export class PostgresJournalRepository implements JournalRepository {
       }
       if (attemptRow.status === "completed") { await client.query("ROLLBACK"); return { outcome: "published" }; }
       if (attemptRow.status !== "started") { await client.query("ROLLBACK"); return { outcome: "fenced" }; }
-      const generationCommand = await client.query<{ generation_command_id: string }>(
-        `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
-          generation_policy_version, expected_data_epoch, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version) DO NOTHING
-         RETURNING generation_command_id`,
-        [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision,
-          input.generationPolicyVersion, input.expectedDataEpoch, now],
-      );
       let generationCommandId = input.generationCommandId;
-      if (!generationCommand.rows[0]) {
+      if (generationKind === "regeneration") {
+        const regenerationCommand = await client.query<{ generation_command_id: string }>(
+          `SELECT generation_command_id FROM journal_generation_commands
+           WHERE generation_command_id = $1 AND user_id = $2 AND daily_session_id = $3
+             AND source_revision = $4 AND generation_policy_version = $5
+             AND generation_kind = 'regeneration'
+             AND action_execution_id = $6
+           FOR UPDATE`,
+          [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision,
+            input.generationPolicyVersion, input.actionExecutionId ?? null],
+        );
+        if (!regenerationCommand.rows[0]) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced" };
+        }
+      } else {
+        const generationCommand = await client.query<{ generation_command_id: string }>(
+          `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
+            generation_policy_version, expected_data_epoch, generation_kind, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'automatic', $7)
+           ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version)
+           WHERE generation_kind = 'automatic' DO NOTHING
+           RETURNING generation_command_id`,
+          [input.generationCommandId, input.userId, input.dailySessionId, input.sourceRevision,
+            input.generationPolicyVersion, input.expectedDataEpoch, now],
+        );
+        if (!generationCommand.rows[0]) {
         const existingCommand = await client.query<{ generation_command_id: string }>(
           `SELECT generation_command_id FROM journal_generation_commands
            WHERE user_id = $1 AND daily_session_id = $2 AND source_revision = $3
-             AND generation_policy_version = $4 FOR UPDATE`,
+             AND generation_policy_version = $4 AND generation_kind = 'automatic' FOR UPDATE`,
           [input.userId, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion],
         );
         generationCommandId = existingCommand.rows[0]?.generation_command_id ?? input.generationCommandId;
+        }
       }
       await client.query(
         `INSERT INTO journal_model_run_attempts (model_run_attempt_id, generation_command_id, status, created_at)
@@ -180,24 +220,67 @@ export class PostgresJournalRepository implements JournalRepository {
         await client.query("ROLLBACK");
         return { outcome: "fenced" };
       }
-      let version = await client.query<{ journal_version_id: string; inserted: boolean }>(
-        `INSERT INTO journal_versions (journal_version_id, journal_id, user_id, daily_session_id,
-          source_revision, generation_policy_version, validator_version, locale, evidence_source_snapshot_id, status,
-          generation_command_id, model_run_attempt_id, supersedes_version_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', $10, $11, $12, $13)
-         ON CONFLICT (journal_id, source_revision, generation_policy_version)
-         DO NOTHING
-         RETURNING journal_version_id, (xmax = 0) AS inserted`,
-        [createUuidV7(now), journal.rows[0]!.journal_id, input.userId, input.dailySessionId, input.sourceRevision,
-          input.generationPolicyVersion, input.validatorVersion, input.locale, input.sourceSnapshotId,
-          generationCommandId, input.modelRunAttemptId, journal.rows[0]!.current_version_id, now],
-      );
-      if (!version.rows[0]) {
-        version = await client.query<{ journal_version_id: string; inserted: boolean }>(
-          `SELECT journal_version_id, FALSE AS inserted FROM journal_versions
-           WHERE journal_id = $1 AND source_revision = $2 AND generation_policy_version = $3`,
-          [journal.rows[0]!.journal_id, input.sourceRevision, input.generationPolicyVersion],
+      if (generationKind === "regeneration") {
+        const target = await client.query<{
+          target_id: string;
+          target_version_id: string;
+          user_id: string;
+        }>(
+          `SELECT target_id, target_version_id, user_id
+           FROM conversation_action_executions
+           WHERE action_execution_id = $1
+           FOR SHARE`,
+          [input.actionExecutionId ?? null],
         );
+        const frozenTarget = target.rows[0];
+        if (
+          !frozenTarget ||
+          frozenTarget.user_id !== input.userId ||
+          frozenTarget.target_id !== journal.rows[0].journal_id ||
+          frozenTarget.target_version_id !== input.targetVersionId ||
+          journal.rows[0].current_version_id !== frozenTarget.target_version_id
+        ) {
+          await client.query("ROLLBACK");
+          return { outcome: "stale" };
+        }
+      }
+      const versionValues = [createUuidV7(now), journal.rows[0]!.journal_id, input.userId, input.dailySessionId, input.sourceRevision,
+        input.generationPolicyVersion, input.validatorVersion, input.locale, input.sourceSnapshotId,
+        generationCommandId, input.modelRunAttemptId, journal.rows[0]!.current_version_id, now];
+      let version = generationKind === "regeneration"
+        ? await client.query<{ journal_version_id: string; inserted: boolean }>(
+          `INSERT INTO journal_versions (journal_version_id, journal_id, user_id, daily_session_id,
+            source_revision, generation_policy_version, validator_version, locale, evidence_source_snapshot_id, status,
+            generation_command_id, model_run_attempt_id, supersedes_version_id, generation_kind, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', $10, $11, $12, 'regeneration', $13)
+           ON CONFLICT (journal_id, generation_command_id) DO NOTHING
+           RETURNING journal_version_id, (xmax = 0) AS inserted`,
+          versionValues,
+        )
+        : await client.query<{ journal_version_id: string; inserted: boolean }>(
+          `INSERT INTO journal_versions (journal_version_id, journal_id, user_id, daily_session_id,
+            source_revision, generation_policy_version, validator_version, locale, evidence_source_snapshot_id, status,
+            generation_command_id, model_run_attempt_id, supersedes_version_id, generation_kind, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'published', $10, $11, $12, 'automatic', $13)
+           ON CONFLICT (journal_id, source_revision, generation_policy_version)
+           WHERE generation_kind = 'automatic'
+           DO NOTHING
+           RETURNING journal_version_id, (xmax = 0) AS inserted`,
+          versionValues,
+        );
+      if (!version.rows[0]) {
+        version = generationKind === "regeneration"
+          ? await client.query<{ journal_version_id: string; inserted: boolean }>(
+            `SELECT journal_version_id, FALSE AS inserted FROM journal_versions
+             WHERE journal_id = $1 AND generation_command_id = $2`,
+            [journal.rows[0]!.journal_id, generationCommandId],
+          )
+          : await client.query<{ journal_version_id: string; inserted: boolean }>(
+            `SELECT journal_version_id, FALSE AS inserted FROM journal_versions
+             WHERE journal_id = $1 AND source_revision = $2 AND generation_policy_version = $3
+               AND generation_kind = 'automatic'`,
+            [journal.rows[0]!.journal_id, input.sourceRevision, input.generationPolicyVersion],
+          );
         await client.query("COMMIT");
         return { outcome: "published" };
       }
@@ -274,20 +357,32 @@ export class PostgresJournalRepository implements JournalRepository {
       if (!ownerRow || ownerRow.status !== "active" || Number(ownerRow.data_epoch) !== input.expectedDataEpoch) {
         await client.query("ROLLBACK"); return;
       }
-      await client.query(
-        `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
-          generation_policy_version, expected_data_epoch, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-         ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version) DO NOTHING`,
-        [input.generationCommandId, ownerRow.user_id, input.dailySessionId, input.sourceRevision,
-          input.generationPolicyVersion, input.expectedDataEpoch],
-      );
-      const command = await client.query<{ generation_command_id: string }>(
-        `SELECT generation_command_id FROM journal_generation_commands
-         WHERE user_id = $1 AND daily_session_id = $2 AND source_revision = $3
-           AND generation_policy_version = $4`,
-        [ownerRow.user_id, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion],
-      );
+      if (input.generationKind !== "regeneration") {
+        await client.query(
+          `INSERT INTO journal_generation_commands (generation_command_id, user_id, daily_session_id, source_revision,
+            generation_policy_version, expected_data_epoch, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id, daily_session_id, source_revision, generation_policy_version)
+           WHERE generation_kind = 'automatic' DO NOTHING`,
+          [input.generationCommandId, ownerRow.user_id, input.dailySessionId, input.sourceRevision,
+            input.generationPolicyVersion, input.expectedDataEpoch],
+        );
+      }
+      const command = input.generationKind === "regeneration"
+        ? await client.query<{ generation_command_id: string }>(
+          `SELECT generation_command_id FROM journal_generation_commands
+           WHERE generation_command_id = $1 AND user_id = $2 AND daily_session_id = $3
+             AND source_revision = $4 AND generation_policy_version = $5
+             AND generation_kind = 'regeneration' AND action_execution_id = $6`,
+          [input.generationCommandId, ownerRow.user_id, input.dailySessionId, input.sourceRevision,
+            input.generationPolicyVersion, input.actionExecutionId ?? null],
+        )
+        : await client.query<{ generation_command_id: string }>(
+          `SELECT generation_command_id FROM journal_generation_commands
+           WHERE user_id = $1 AND daily_session_id = $2 AND source_revision = $3
+             AND generation_policy_version = $4 AND generation_kind = 'automatic'`,
+          [ownerRow.user_id, input.dailySessionId, input.sourceRevision, input.generationPolicyVersion],
+        );
       const generationCommandId = command.rows[0]?.generation_command_id ?? input.generationCommandId;
       const attemptState = await client.query<{ generation_command_id: string; status: "started" | "completed" | "failed" }>(
         "SELECT generation_command_id, status FROM journal_model_run_attempts WHERE model_run_attempt_id = $1 FOR UPDATE",

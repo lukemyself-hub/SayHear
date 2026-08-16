@@ -77,6 +77,7 @@ export {
   CompiledContextIntegrityError,
   createContextCompiler,
   type CompiledContext,
+  type ActionFinalizationReceiptSnapshot,
   type CompiledContextDegradedReason,
   type CompiledContextReferencedEvent,
   type CompiledContextRenderSource,
@@ -127,14 +128,41 @@ export {
   type ProviderEgressStreamEvent,
 } from "./conversation-model";
 export {
+  ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
+  JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  REGENERATE_JOURNAL_ACTION_DEFINITION,
+  actionFunctionsForCatalog,
+  normalizeProviderActionProposal,
+  validateConversationActionCatalog,
+  type ActionReferenceHandle,
+  type ActionReferenceTarget,
+  type ConversationActionSchema,
   type ConversationActionCatalog,
   type ConversationActionDefinition,
   type ConversationActionKind,
+  type ConversationActionGatewayContext,
   type ConversationActionProposal,
+  type ConversationActionTargetKind,
+  type ConversationFunctionDefinition,
   type ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
+export {
+  createConversationActionGateway,
+  createJournalRegenerationActionHandler,
+  type ConversationActionAdmission,
+  type ConversationActionFinalizationCommand,
+  type ConversationActionExecution,
+  type ConversationActionGateway,
+  type ConversationActionGatewayRepository,
+  type ConversationActionHandler,
+  type ConversationActionReceipt,
+  type JournalRegenerationExecutionOutcome,
+  type JournalRegenerationWorkflowCommand,
+  type PreparedConversationAction,
+} from "./conversation-action-gateway";
+export type { ActionReferenceBinding } from "./conversation-action-handles";
 export {
   createConversationAgentHarness,
   type ConversationAgentHarness,
@@ -156,11 +184,13 @@ export {
 export {
   createJournalService,
   runAutomaticJournal,
+  runJournalRegeneration,
   validateJournalDraft,
   type JournalDraft,
   type CurrentJournal,
   type CurrentJournalVersion,
   type JournalEpistemicStatus,
+  type JournalGenerationKind,
   type JournalEvidenceReference,
   type JournalModel,
   type JournalProviderEgress,
@@ -172,6 +202,10 @@ export {
   type JournalStatementDraft,
   type AutomaticJournalCommand,
 } from "./journal";
+export {
+  runJournalRegenerationWorkflow,
+  type JournalRegenerationWorkflowResult,
+} from "./journal-regeneration";
 export {
   createEvidenceService,
   type EvidenceChampion,

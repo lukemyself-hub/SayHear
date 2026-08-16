@@ -57,9 +57,13 @@ for (const [moduleName, sourceRoot] of Object.entries(sourceRoots)) {
     );
     for (const match of imports) {
       const dependency = match[1];
+      const dependencyModule = dependency?.startsWith("@sayhear/")
+        ? dependency.split("/").slice(0, 2).join("/")
+        : dependency;
       if (
         dependency?.startsWith("@sayhear/") &&
-        !allowedInternalDependencies[moduleName].has(dependency)
+        !allowedInternalDependencies[moduleName].has(dependency) &&
+        !allowedInternalDependencies[moduleName].has(dependencyModule)
       ) {
         failures.push(
           `${relativeFilename} imports forbidden ${dependency}`,

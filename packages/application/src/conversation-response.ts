@@ -6,12 +6,19 @@ import type {
   ModelRunAttemptId,
   UserId,
 } from "@sayhear/domain";
+import {
+  asGenerationCommandId,
+  asModelRunAttemptId,
+} from "@sayhear/domain";
 
 import type { ContextCompiler } from "./context-compiler";
 import type {
   ConversationActionCatalog,
+  ActionReferenceHandle,
   ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
+import type { ConversationActionReceipt } from "./conversation-action-gateway";
+import type { ConversationActionGateway } from "./conversation-action-gateway";
 import type { ConversationAgentHarness } from "./conversation-agent-harness";
 import { type ProviderDispatchErrorCategory } from "./conversation-model";
 import type {
@@ -47,6 +54,10 @@ export type ConversationResponseStreamEvent =
   | Readonly<{
       category: ProviderDispatchErrorCategory;
       type: "response_failed" | "response_interrupted";
+    }>
+  | Readonly<{
+      receipt: ConversationActionReceipt;
+      type: "action_admitted";
     }>;
 
 export type CompleteResponseMetadata = Readonly<{
@@ -72,6 +83,12 @@ type ExistingConversationResponse =
     }>;
 
 export type ConversationResponseRepository = Readonly<{
+  commitActionDecision?(input: {
+    completedAt: Date;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    userId: UserId;
+  }): Promise<void>;
   claimStaleResponseExecution(input: {
     expectedModelRunAttemptId: ModelRunAttemptId;
     generationCommandId: GenerationCommandId;
@@ -173,10 +190,12 @@ export type ConversationResponseService = Readonly<{
       terminal: number;
     }>
   >;
+  scanPendingActionFinalizations?(): Promise<number>;
 }>;
 
 export function createConversationResponseService(dependencies: {
   catalog: ConversationActionCatalog;
+  actionGateway?: ConversationActionGateway;
   clock: () => Date;
   contextCompiler: ContextCompiler;
   conversationService: UserTextConversationService;
@@ -200,6 +219,7 @@ export function createConversationResponseService(dependencies: {
   async function* streamResponse(
     userId: UserId,
     turn: Pick<UserTextTurn, "generation" | "turn">,
+    requestEventRevisionId: ConversationEventRevisionId | null,
     initialEvent:
       | Extract<
           ConversationResponseStreamEvent,
@@ -257,6 +277,9 @@ export function createConversationResponseService(dependencies: {
       });
       for await (const event of dependencies.harness.runDecision(
         {
+          ...(context.actionReferenceHandles === undefined
+            ? {}
+            : { actionReferenceHandles: context.actionReferenceHandles }),
           catalog: dependencies.catalog,
           catalogVersion: dependencies.catalog.version,
           compiledContextId: context.id,
@@ -264,6 +287,7 @@ export function createConversationResponseService(dependencies: {
           harnessPolicy: dependencies.harnessPolicy,
           interactionTurnId: turn.turn.id,
           modelRunAttemptId: turn.generation.attemptId,
+          ...(requestEventRevisionId ? { requestEventRevisionId } : {}),
           userId,
         },
         signal,
@@ -278,6 +302,80 @@ export function createConversationResponseService(dependencies: {
             revisionId: event.assistantEventRevisionId,
             type: "assistant_committed",
           };
+        } else if (event.type === "action_admitted") {
+          yield event;
+          const finalization = event.receipt.finalization;
+          if (
+            event.receipt.admission === "accepted" &&
+            finalization &&
+            dependencies.harness.runFinalizationCommand
+          ) {
+            const finalizationCommandId = asGenerationCommandId(
+              finalization.generationCommandId,
+            );
+            const finalizationAttemptId = asModelRunAttemptId(
+              finalization.modelRunAttemptId,
+            );
+            if (!dependencies.harness.runFinalizationCommand) {
+              throw new Error("Action Finalization orchestration is unavailable.");
+            }
+            for await (const finalizationEvent of dependencies.harness.runFinalizationCommand(
+              {
+                actionExecutionId: event.receipt.actionExecutionId,
+                generationCommandId: finalizationCommandId,
+                interactionTurnId: turn.turn.id,
+                modelRunAttemptId: finalizationAttemptId,
+                requestEventRevisionId: requestEventRevisionId!,
+                receipt: {
+                  admission: event.receipt.admission,
+                  disposition: event.receipt.disposition,
+                  execution: event.receipt.execution,
+                  sequence: event.receipt.receiptSequence,
+                },
+                userId,
+              },
+              {
+                catalog: dependencies.catalog,
+                harnessPolicy: {
+                  ...dependencies.harnessPolicy,
+                  maxStateChangingActions: 0,
+                  toolsDisabled: true,
+                },
+              },
+              signal,
+            )) {
+              if (finalizationEvent.type === "decision_delta") {
+                possiblyVisible = true;
+                yield {
+                  delta: finalizationEvent.delta,
+                  type: "assistant_delta",
+                };
+              } else if (finalizationEvent.type === "decision_committed") {
+                settled = true;
+                yield {
+                  eventId: finalizationEvent.assistantEventId,
+                  revisionId: finalizationEvent.assistantEventRevisionId,
+                  type: "assistant_committed",
+                };
+              } else if (finalizationEvent.type === "decision_failed") {
+                settled = true;
+                yield {
+                  category: finalizationEvent.category,
+                  type: finalizationEvent.interrupted
+                    ? "response_interrupted"
+                    : "response_failed",
+                };
+              } else {
+                settled = true;
+                yield {
+                  category: "invalid_response",
+                  type: "response_failed",
+                };
+              }
+            }
+          } else {
+            settled = true;
+          }
         } else {
           settled = true;
           yield {
@@ -307,6 +405,7 @@ export function createConversationResponseService(dependencies: {
       yield* streamResponse(
         userId,
         turn,
+        turn.message.revisionId,
         {
           generationCommandId: turn.generation.commandId,
           message: turn.message,
@@ -324,6 +423,7 @@ export function createConversationResponseService(dependencies: {
       yield* streamResponse(
         userId,
         retry,
+        null,
         {
           generationCommandId: retry.generation.commandId,
           modelRunAttemptId: retry.generation.attemptId,
@@ -385,6 +485,7 @@ export function createConversationResponseService(dependencies: {
             },
           },
           null,
+          null,
         )) {
           owned = true;
           if (event.type === "assistant_committed") {
@@ -417,6 +518,36 @@ export function createConversationResponseService(dependencies: {
         retried,
         terminal,
       };
+    },
+    async scanPendingActionFinalizations() {
+      const pending = await dependencies.actionGateway?.listPendingFinalizations?.({
+        limit: recoveryScanLimit,
+      });
+      if (!pending || !dependencies.harness.runFinalizationCommand) return 0;
+      let processed = 0;
+      for (const command of pending) {
+        if (!dependencies.harness.runFinalizationCommand) continue;
+        for await (const event of dependencies.harness.runFinalizationCommand(
+          command,
+          {
+            catalog: dependencies.catalog,
+            harnessPolicy: {
+              ...dependencies.harnessPolicy,
+              maxStateChangingActions: 0,
+              toolsDisabled: true,
+            },
+          },
+        )) {
+          if (
+            event.type === "decision_committed" ||
+            event.type === "decision_failed"
+          ) {
+            processed += 1;
+            break;
+          }
+        }
+      }
+      return processed;
     },
   };
 }

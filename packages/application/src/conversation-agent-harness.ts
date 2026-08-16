@@ -7,15 +7,31 @@ import type {
   ModelRunAttemptId,
   UserId,
 } from "@sayhear/domain";
+import {
+  asGenerationCommandId,
+  asModelRunAttemptId,
+} from "@sayhear/domain";
 
 import type {
   CompleteResponseMetadata,
   ConversationResponseRepository,
 } from "./conversation-response";
+import type { ContextCompiler } from "./context-compiler";
 import type {
+  ActionReferenceHandle,
   ConversationActionCatalog,
   ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
+import {
+  actionFunctionsForCatalog,
+  validateConversationActionCatalog,
+} from "./conversation-action-catalog";
+import type { ConversationActionGateway } from "./conversation-action-gateway";
+import type {
+  ConversationActionFinalizationCommand,
+  ConversationActionReceipt,
+} from "./conversation-action-gateway";
+import type { ConversationActionProposal } from "./conversation-action-catalog";
 import {
   ProviderDispatchError,
   type ProviderDispatchErrorCategory,
@@ -54,6 +70,7 @@ export type ConversationAgentHarnessRepository = Pick<
   ConversationResponseRepository,
   | "claimResponseExecution"
   | "claimStaleResponseExecution"
+  | "commitActionDecision"
   | "commitCompleteResponse"
   | "loadResponse"
   | "settleResponseFailure"
@@ -85,6 +102,7 @@ type ExistingConversationResponse =
  * reconstructs or re-freezes them.
  */
 export type ConversationDecisionCommand = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   catalog: ConversationActionCatalog;
   catalogVersion: string;
   compiledContextId: CompiledContextId;
@@ -92,6 +110,7 @@ export type ConversationDecisionCommand = Readonly<{
   harnessPolicy: ConversationHarnessPolicy;
   interactionTurnId: InteractionTurnId;
   modelRunAttemptId: ModelRunAttemptId;
+  requestEventRevisionId?: ConversationEventRevisionId;
   userId: UserId;
 }>;
 
@@ -111,6 +130,10 @@ export type ConversationHarnessEvent =
       category: ProviderDispatchErrorCategory;
       interrupted: boolean;
       type: "decision_failed";
+    }>
+  | Readonly<{
+      receipt: ConversationActionReceipt;
+      type: "action_admitted";
     }>;
 
 export type ConversationAgentHarness = Readonly<{
@@ -126,13 +149,27 @@ export type ConversationAgentHarness = Readonly<{
     command: ConversationDecisionCommand,
     signal?: AbortSignal,
   ): AsyncIterable<ConversationHarnessEvent>;
+  runFinalization?(
+    command: ConversationDecisionCommand,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
+  runFinalizationCommand?(
+    command: ConversationActionFinalizationCommand,
+    input: Readonly<{
+      catalog: ConversationActionCatalog;
+      harnessPolicy: ConversationHarnessPolicy;
+    }>,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
 }>;
 
 export function createConversationAgentHarness(dependencies: {
   clock: () => Date;
   delay?: (delayMs: number) => Promise<void>;
+  actionGateway?: ConversationActionGateway;
   egressPort: ProviderEgressPort;
   jitter?: () => number;
+  contextCompiler?: Pick<ContextCompiler, "compile">;
   repository: ConversationAgentHarnessRepository;
 }): ConversationAgentHarness {
   const delay =
@@ -148,29 +185,90 @@ export function createConversationAgentHarness(dependencies: {
     let possiblyVisible = false;
     let completeText = "";
     let completion: CompleteResponseMetadata | null = null;
+    let pendingActionProposal: ConversationActionProposal | null = null;
 
     try {
+      if (!validateConversationActionCatalog(command.catalog).valid) {
+        throw new ProviderDispatchError("invalid_response");
+      }
+      let actionSeen = false;
       for await (const event of dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
+        ...(command.requestEventRevisionId
+          ? { requestEventRevisionId: command.requestEventRevisionId }
+          : {}),
+        functions:
+          command.harnessPolicy.toolsDisabled === true
+            ? []
+            : actionFunctionsForCatalog(
+                command.catalog,
+                command.actionReferenceHandles,
+              ),
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
         ...(signal ? { signal } : {}),
+        toolsDisabled: command.harnessPolicy.toolsDisabled === true,
       })) {
         if (event.type === "delta") {
+          if (pendingActionProposal) {
+            throw new ProviderDispatchError("invalid_response");
+          }
           possiblyVisible = true;
           completeText += event.delta;
           yield { delta: event.delta, type: "decision_delta" };
         } else if (event.type === "tool_call") {
-          // A provider-native tool selection is not a Final Response. With the
-          // initial empty Catalog there is no eligible Definition, so the model
-          // cannot have requested an admitted Action: fail closed, settle the
-          // attempt, and never commit an Assistant Event or fabricate a success
-          // response (issue #24 AC8). The raw function name and arguments stay
-          // inside the Harness and never reach product truth (AC6).
+          // Provider-native events must be normalized by the Adapter before
+          // reaching the application seam. A raw call is never admissible.
           throw new ProviderDispatchError("invalid_response");
+        } else if (event.type === "action_proposal") {
+          if (
+            actionSeen ||
+            completion !== null ||
+            command.harnessPolicy.toolsDisabled === true ||
+            !dependencies.actionGateway ||
+            !command.requestEventRevisionId
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          actionSeen = true;
+          const proposal = event.proposal;
+          if (
+            proposal.requestEventRevisionId !== command.requestEventRevisionId ||
+            !command.catalog.definitions.some(
+              (definition) => definition.actionKind === proposal.actionKind,
+            )
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          pendingActionProposal = proposal;
         } else {
+          if (pendingActionProposal && event.type !== "completed") {
+            throw new ProviderDispatchError("invalid_response");
+          }
           completion = event;
         }
+      }
+      if (pendingActionProposal) {
+        const receipt = await dependencies.actionGateway!.admit({
+          catalog: command.catalog,
+          context: {
+            compiledContextId: command.compiledContextId,
+            decisionCommandId: command.generationCommandId,
+            requestEventRevisionId: command.requestEventRevisionId!,
+            userId: command.userId,
+          },
+          proposal: pendingActionProposal,
+        });
+        if (receipt.admission === "accepted") {
+          await dependencies.repository.commitActionDecision?.({
+            completedAt: dependencies.clock(),
+            generationCommandId: command.generationCommandId,
+            modelRunAttemptId: command.modelRunAttemptId,
+            userId: command.userId,
+          });
+        }
+        yield { receipt, type: "action_admitted" };
+        return;
       }
       if (completion === null || completeText.length === 0) {
         throw new ProviderDispatchError("invalid_response");
@@ -277,6 +375,93 @@ export function createConversationAgentHarness(dependencies: {
   return {
     runDecision(command, signal) {
       return runDecisionAttempt(command, signal);
+    },
+    runFinalization(command, signal) {
+      if (command.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("Action Finalization must disable tools.");
+      }
+      return runDecisionAttempt(command, signal);
+    },
+    async *runFinalizationCommand(command, input, signal) {
+      if (input.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("Action Finalization must disable tools.");
+      }
+      if (!dependencies.contextCompiler) {
+        throw new Error("Action Finalization requires a Context Compiler.");
+      }
+      const ownership = await dependencies.repository.claimResponseExecution({
+        generationCommandId: asGenerationCommandId(command.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+        userId: command.userId,
+      });
+      if (ownership === "shared") {
+        const existing = await dependencies.repository.loadResponse({
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          userId: command.userId,
+        });
+        if (existing.outcome !== "running") {
+          yield* streamExistingDecision(existing);
+          return;
+        }
+        const recovery = await dependencies.repository.claimStaleResponseExecution({
+          expectedModelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          now: dependencies.clock(),
+          userId: command.userId,
+        });
+        if (recovery.outcome !== "execute") {
+          if (recovery.outcome !== "not_due") {
+            yield* streamExistingDecision(
+              await dependencies.repository.loadResponse({
+                generationCommandId: asGenerationCommandId(command.generationCommandId),
+                userId: command.userId,
+              }),
+            );
+          }
+          return;
+        }
+        command = {
+          ...command,
+          generationCommandId: recovery.generationCommandId,
+          modelRunAttemptId: recovery.modelRunAttemptId,
+        };
+        const retryOwnership = await dependencies.repository.claimResponseExecution({
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          userId: command.userId,
+        });
+        if (retryOwnership === "shared") {
+          yield* streamExistingDecision(
+            await dependencies.repository.loadResponse({
+              generationCommandId: asGenerationCommandId(command.generationCommandId),
+              userId: command.userId,
+            }),
+          );
+          return;
+        }
+      }
+      const context = await dependencies.contextCompiler.compile({
+        generationCommandId: asGenerationCommandId(command.generationCommandId),
+        interactionTurnId: command.interactionTurnId,
+        userId: command.userId,
+      });
+      yield* runDecisionAttempt(
+        {
+          ...(context.actionReferenceHandles === undefined
+            ? {}
+            : { actionReferenceHandles: context.actionReferenceHandles }),
+          catalog: input.catalog,
+          catalogVersion: input.catalog.version,
+          compiledContextId: context.id,
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          harnessPolicy: input.harnessPolicy,
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        },
+        signal,
+      );
     },
   };
 }

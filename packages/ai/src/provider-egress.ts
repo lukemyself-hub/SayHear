@@ -1,5 +1,6 @@
 import {
   CompiledContextIntegrityError,
+  normalizeProviderActionProposal,
   ProviderDispatchError,
   type ContextCompiler,
   type ConversationTextChampion,
@@ -37,7 +38,7 @@ export function createProviderEgressPort(dependencies: {
 
       let payload;
       try {
-        payload = dependencies.contextCompiler.renderPermittedPayload(
+      payload = dependencies.contextCompiler.renderPermittedPayload(
           claim.context,
         );
       } catch (error) {
@@ -52,6 +53,12 @@ export function createProviderEgressPort(dependencies: {
         locale: claim.context.locale,
         messages: payload.messages,
         model: claim.model,
+        ...(input.functions && input.functions.length > 0
+          ? { functions: input.functions }
+          : {}),
+        ...(input.toolsDisabled === undefined
+          ? {}
+          : { toolsDisabled: input.toolsDisabled }),
         ...(input.signal ? { signal: input.signal } : {}),
       })) {
         if (event.type === "delta" && !firstTokenRecorded) {
@@ -83,11 +90,28 @@ export function createProviderEgressPort(dependencies: {
             );
           }
         } else if (event.type === "tool_call") {
-          // Provider-native function calls are forwarded to the Harness
-          // untouched. The Provider Egress Port intentionally does not consult
-          // the Conversation Action Catalog or decide whether the call is
-          // admissible: that is the Harness's bounded responsibility, and a
-          // tool_call against an empty Catalog must fail closed upstream.
+          if (
+            input.functions &&
+            input.functions.length > 0 &&
+            input.requestEventRevisionId
+          ) {
+            const normalized = normalizeProviderActionProposal({
+              functions: input.functions,
+              rawArguments: event.rawArguments,
+              rawFunctionName: event.rawFunctionName,
+              requestEventRevisionId: input.requestEventRevisionId,
+            });
+            if (normalized.type === "invalid") {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            yield { proposal: normalized.proposal, type: "action_proposal" };
+          } else {
+            // Keep the legacy raw event available to the empty-Catalog
+            // conformance test. Once the Harness publishes Functions, the
+            // adapter normalizes this provider-native selection here.
+            yield event;
+          }
+          continue;
         }
         yield event;
       }

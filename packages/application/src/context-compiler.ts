@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import {
   CHINESE_LOCALE_PACK_VERSION,
@@ -14,6 +15,21 @@ import type {
 } from "@sayhear/domain";
 import type { CurrentDialogueState } from "./dialogue-state";
 import type { CurrentRollingSummary } from "./rolling-summary";
+import type {
+  ActionReferenceHandle,
+  ActionReferenceTarget,
+} from "./conversation-action-catalog";
+import type {
+  ConversationActionAdmission,
+  ConversationActionExecution,
+} from "./conversation-action-gateway";
+
+export type ActionFinalizationReceiptSnapshot = Readonly<{
+  admission: ConversationActionAdmission;
+  disposition: string | null;
+  execution: ConversationActionExecution;
+  sequence: number;
+}>;
 
 export type ContextPolicyVersions = Readonly<{
   localePolicyVersion: string;
@@ -34,6 +50,8 @@ export type ContextSourceEvent = Readonly<{
 }>;
 
 export type ContextSourceSnapshot = Readonly<{
+  actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
+  actionReferenceTargets?: readonly ActionReferenceTarget[];
   dailySession: Readonly<{
     activityState: "active" | "finalized" | "quiescent";
     closurePolicyVersion: string;
@@ -71,7 +89,8 @@ export type CompiledContextSectionKey =
   | "dialogue_state"
   | "rolling_summary"
   | "committed_raw_events"
-  | "current_user_input";
+  | "current_user_input"
+  | "action_finalization_receipt";
 
 export type CompiledContextSection = Readonly<{
   budgetTokens: number | null;
@@ -91,6 +110,7 @@ export type CompiledContextReferencedEvent = ContextSourceEvent &
   }>;
 
 export type CompiledContext = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   degradedReason: CompiledContextDegradedReason;
   dialogueRevision: number;
   id: CompiledContextId;
@@ -105,6 +125,8 @@ export type CompiledContext = Readonly<{
 }>;
 
 export type CompiledContextRenderSource = Readonly<{
+  actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   compilerVersion: string;
   integrity: Readonly<{
     algorithm: "hmac-sha256";
@@ -120,6 +142,7 @@ export type CompiledContextRenderSource = Readonly<{
 }>;
 
 export type RenderedCompiledContextPayload = Readonly<{
+  actionReferenceHandles?: readonly ActionReferenceHandle[];
   instructions: string;
   messages: readonly Readonly<{
     revisionId: ConversationEventRevisionId;
@@ -135,6 +158,12 @@ export type ContextCompilerRepository = Readonly<{
     userId: UserId;
   }): Promise<ContextSourceSnapshot>;
   saveCompiledContext(input: {
+    actionReferenceHandles?: readonly (ActionReferenceHandle &
+      Readonly<{
+        sourceRevision: number;
+        targetId: string;
+        targetVersionId: string;
+      }>)[];
     compilerVersion: string;
     degradedReason: CompiledContextDegradedReason;
     dialogueRevision: number;
@@ -257,6 +286,7 @@ export function createContextCompiler(dependencies: {
         rawEventTokenBudget: dependencies.rawEventTokenBudget,
         dialogueState,
         rollingSummary: source.rollingSummary ?? null,
+        actionFinalizationReceipt: source.actionFinalizationReceipt,
       });
       const sections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -278,8 +308,21 @@ export function createContextCompiler(dependencies: {
         dependencies.contentHmacSecret,
         sections,
       );
+      const actionReferenceHandles = (source.actionReferenceTargets ?? []).map(
+        (target) => ({
+          actionKinds: target.actionKinds,
+          handle: `shh-handle-${randomUUID()}`,
+          targetKind: target.targetKind,
+          targetId: target.targetId,
+          targetVersionId: target.targetVersionId,
+          sourceRevision: target.sourceRevision,
+        }),
+      );
 
       return dependencies.repository.saveCompiledContext({
+        ...(actionReferenceHandles.length === 0
+          ? {}
+          : { actionReferenceHandles }),
         compilerVersion: dependencies.compilerVersion,
         degradedReason,
         dialogueRevision: source.dialogueRevision,
@@ -297,10 +340,10 @@ export function createContextCompiler(dependencies: {
         sectionBudgets: {
           committedRawEvents: dependencies.rawEventTokenBudget,
         },
-        sections,
-        sourceRevision: source.sourceRevision,
-        totalTokens,
-        userId: input.userId,
+          sections,
+          sourceRevision: source.sourceRevision,
+          totalTokens,
+          userId: input.userId,
       });
     },
     renderPermittedPayload(source) {
@@ -352,6 +395,7 @@ export function createContextCompiler(dependencies: {
           ? { dialogueStateContent: dialogueStateSection.reference }
           : {}),
         rollingSummary: source.rollingSummary ?? null,
+        actionFinalizationReceipt: source.actionFinalizationReceipt,
       });
       const expectedSections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -373,6 +417,9 @@ export function createContextCompiler(dependencies: {
       }
 
       return {
+        ...(source.actionReferenceHandles === undefined
+          ? {}
+          : { actionReferenceHandles: source.actionReferenceHandles }),
         instructions: renderableSections
           .filter(
             (section) =>
@@ -380,7 +427,8 @@ export function createContextCompiler(dependencies: {
               section.key !== "current_user_input",
           )
           .map((section) => section.content)
-          .join("\n"),
+          .join("\n") +
+          renderActionReferenceInstructions(source.actionReferenceHandles),
         messages: [...history, currentInput]
           .toSorted((left, right) => left.sequence - right.sequence)
           .map((event) => ({
@@ -391,6 +439,34 @@ export function createContextCompiler(dependencies: {
       };
     },
   };
+}
+
+function renderActionReferenceInstructions(
+  handles: readonly ActionReferenceHandle[] | undefined,
+): string {
+  if (!handles || handles.length === 0) return "";
+  return [
+    "Available Action Reference Handles (opaque and command-scoped):",
+    ...handles.flatMap((handle) =>
+      handle.actionKinds.map(
+        (actionKind) => `- ${actionKind}: ${handle.handle}`,
+      ),
+    ),
+  ].join("\n");
+}
+
+function renderActionFinalizationReceipt(
+  receipt: ActionFinalizationReceiptSnapshot,
+): string {
+  const completionRule = receipt.execution === "succeeded"
+    ? "The Action completed successfully; it is valid to say the regenerated Journal is complete."
+    : "The Action is not complete; do not claim that a new Journal Version was generated or became current.";
+  return [
+    "Action Finalization Receipt (frozen committed source):",
+    `Admission: ${receipt.admission}; execution: ${receipt.execution}; sequence: ${receipt.sequence}; disposition: ${receipt.disposition ?? "none"}.`,
+    completionRule,
+    "Only this Receipt snapshot may determine the Action status in the final response.",
+  ].join("\n");
 }
 
 function estimateTokens(text: string): number {
@@ -408,6 +484,7 @@ function createSections(input: {
   dialogueState?: CurrentDialogueState | null;
   dialogueStateContent?: string;
   rollingSummary: CurrentRollingSummary | null;
+  actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
@@ -432,6 +509,15 @@ function createSections(input: {
       reference: `${input.rollingSummary.id}:version:${input.rollingSummary.version}:covered-through:${input.rollingSummary.coveredThrough}:sources:${input.rollingSummary.sourceRevisionIds.join(",")}:policy:${input.rollingSummary.policyVersion}:prompt:${input.rollingSummary.promptVersion}:model:${input.rollingSummary.modelConfigVersion}`,
       truncatable: false,
     }]),
+    ...(input.actionFinalizationReceipt === undefined
+      ? []
+      : [{
+          budgetTokens: null,
+          content: renderActionFinalizationReceipt(input.actionFinalizationReceipt),
+          key: "action_finalization_receipt" as const,
+          reference: `receipt:${input.actionFinalizationReceipt.sequence}`,
+          truncatable: false,
+        }]),
     {
       budgetTokens: null,
       content:

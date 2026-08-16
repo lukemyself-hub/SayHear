@@ -315,8 +315,12 @@ Action Gateway 为一次 Conversation Action 的受理、进展或完成状态�
 _Avoid_: Model tool result, Assistant claim, Workflow completion
 
 **Derived Artifact Regeneration Action**:
-用户要求 SayHear 使用当前有效 source、现行生成 policy 与同一 logical artifact identity，重新生成 Journal、Profile 等派生产物的高层 Conversation Action；它不声称底层理解错误，不接受任意正文编辑或无限候选抽取，并只通过验证后的新 Version 替换 current Version。
+用户要求 SayHear 使用当前有效 source、现行生成 policy 与同一 logical artifact identity，重新生成 Journal、Profile 等派生产物的高层 Conversation Action；它不声称底层理解错误，可以携带受限的 `Regeneration Guidance` 改善表达，但不接受事实改写、任意正文编辑或无限候选抽取，并只通过验证后的新 Version 替换 current Version。
 _Avoid_: Understanding Correction, Free-form edit, Model retry
+
+**Regeneration Guidance**:
+用户随 Derived Artifact Regeneration Action 提供的自然语言表达建议，用于调整派生产物的重点、清晰度或组织方式；它不是 Evidence、事实更正或用户自写正文，不能改变有效 source、第三人称观察、不确定性边界或验证规则。
+_Avoid_: Journal Correction, User-authored Journal, Evidence update
 
 **Conversation Agent Harness**:
 SayHear 应用层拥有的深 Module；它围绕一个冻结的 InteractionTurn 组织 Context、模型判断、高层 Function Calling、Conversation Action receipt 与最终回复，但不拥有长期产品状态或领域编排。当前为受限自有实现，未来可以由通过同一契约与 Replay 验证的 Framework-backed Adapter 替换。

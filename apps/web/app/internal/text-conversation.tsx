@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import {
+  useRef,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 
 type VisibleUserMessage = Readonly<{
   actor: "user" | "assistant";
@@ -167,6 +173,10 @@ export function TextConversation(props: {
                 ],
           );
           setPendingAssistant(null);
+        } else if (result.type === "action_admitted") {
+          responseCommitted = true;
+          appendActionStatus(result, submission.locale, setTimeline);
+          setPendingAssistant(null);
         } else if (result.type === "response_interrupted") {
           if (currentTurnId && streamedAssistantText.length > 0) {
             appendInterruptedResponse(
@@ -285,6 +295,11 @@ export function TextConversation(props: {
               },
             },
           ]);
+          setPendingAssistant(null);
+          updateRetryStatus(originalTurnId, "retried", setTimeline);
+        } else if (result.type === "action_admitted") {
+          responseCommitted = true;
+          appendActionStatus(result, navigator.language, setTimeline);
           setPendingAssistant(null);
           updateRetryStatus(originalTurnId, "retried", setTimeline);
         } else if (result.type === "response_interrupted") {
@@ -458,6 +473,45 @@ function appendInterruptedResponse(
           },
         ],
   );
+}
+
+function appendActionStatus(
+  result: Record<string, unknown>,
+  locale: string,
+  setTimeline: Dispatch<SetStateAction<readonly TimelineItem[]>>,
+): void {
+  const receipt =
+    typeof result.receipt === "object" && result.receipt !== null
+      ? (result.receipt as Record<string, unknown>)
+      : {};
+  const admission =
+    typeof receipt.admission === "string" ? receipt.admission : "rejected";
+  const text =
+    admission === "accepted"
+      ? locale.toLowerCase().startsWith("zh")
+        ? "已接受，Journal 正在重新生成。"
+        : "Accepted. The Journal is being regenerated."
+      : admission === "clarification_required"
+        ? locale.toLowerCase().startsWith("zh")
+          ? "这篇 Journal 已有新版本，需要重新确认目标。"
+          : "The Journal changed; please choose the current version again."
+        : locale.toLowerCase().startsWith("zh")
+          ? "这项 Journal 操作没有执行。"
+          : "The Journal action was not executed.";
+  setTimeline((current) => [
+    ...current,
+    {
+      kind: "message",
+      message: {
+        actor: "assistant",
+        eventId: `action-status:${String(receipt.actionExecutionId ?? crypto.randomUUID())}`,
+        locale,
+        revisionId: `action-status:${String(receipt.actionExecutionId ?? crypto.randomUUID())}`,
+        sequence: nextVisibleSequence(current),
+        text,
+      },
+    },
+  ]);
 }
 
 function updateRetryStatus(

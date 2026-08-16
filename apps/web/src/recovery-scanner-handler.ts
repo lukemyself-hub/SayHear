@@ -31,6 +31,7 @@ export function createRecoveryScannerHandler(dependencies: {
     // outbox dispatcher — no second scheduler service is introduced (AC #8).
     const responses =
       await dependencies.conversationResponseService.scanStaleResponses();
+    await dependencies.conversationResponseService.scanPendingActionFinalizations?.();
     const inactivity =
       await dependencies.continuousExchangeService.scanDueInactivity();
     const eligibility =

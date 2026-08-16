@@ -1,5 +1,8 @@
 import type {
   CompleteResponseMetadata,
+  ActionReferenceHandle,
+  ActionReferenceTarget,
+  ActionFinalizationReceiptSnapshot,
   CompiledContextReferencedEvent,
   CompiledContextSection,
   ContextCompilerRepository,
@@ -33,10 +36,18 @@ import { createUuidV7 } from "./uuid-v7";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 
 type ContextHeadRow = Readonly<{
+  action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
+  action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
+  action_receipt_disposition: string | null;
+  action_receipt_sequence: number | null;
   activity_state: "active" | "finalized" | "quiescent";
   closure_policy_version: string;
   continuous_exchange_no: string;
   daily_session_id: string;
+  current_journal_id: string | null;
+  current_journal_version_id: string | null;
+  current_journal_source_revision: string | null;
+  current_journal_version_status: "published" | "stale" | "validation_failed" | "needs_review" | null;
   dialogue_revision: string;
   input_revision_id: string;
   locale: string;
@@ -69,6 +80,10 @@ type ContextEventRow = Readonly<{
 }>;
 
 type DispatchRow = Readonly<{
+  action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
+  action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
+  action_receipt_disposition: string | null;
+  action_receipt_sequence: number | null;
   attempt_status: string;
   consent_active: boolean;
   consent_policy_version: string | null;
@@ -116,6 +131,49 @@ export class PostgresConversationResponseRepository
     ProviderEgressRepository
 {
   public constructor(private readonly pool: Pool) {}
+
+  public async commitActionDecision(input: {
+    completedAt: Date;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    userId: UserId;
+  }): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `UPDATE generation_commands
+         SET status = 'succeeded', settled_at = $4,
+             recovery_status = 'not_needed', next_recovery_at = NULL
+         WHERE generation_command_id = $1 AND user_id = $2
+           AND status IN ('running', 'compiling')
+           AND authoritative_result_id IS NULL
+           AND generation_stage = 'decision'`,
+        [input.generationCommandId, input.userId, input.modelRunAttemptId, input.completedAt],
+      );
+      await client.query(
+        `UPDATE model_run_attempts
+         SET status = 'succeeded', completed_at = COALESCE(completed_at, $3),
+             recovery_status = 'not_needed', recovery_claimed_at = NULL
+         WHERE model_run_attempt_id = $1 AND generation_command_id = $2
+           AND user_id = $4 AND status = 'running'`,
+        [input.modelRunAttemptId, input.generationCommandId, input.completedAt, input.userId],
+      );
+      await client.query(
+        `UPDATE provider_egress_dispositions
+         SET status = 'completed', completed_at = COALESCE(completed_at, $3)
+         WHERE model_run_attempt_id = $1 AND user_id = $2
+           AND status IN ('dispatched', 'completed')`,
+        [input.modelRunAttemptId, input.userId, input.completedAt],
+      );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   public async claimResponseExecution(input: {
     generationCommandId: GenerationCommandId;
@@ -542,6 +600,7 @@ export class PostgresConversationResponseRepository
         INNER JOIN conversation_response_recovery_policies policy
           ON policy.policy_version = command.recovery_policy_version
         WHERE command.authoritative_result_id IS NULL
+          AND command.generation_stage <> 'action_finalization'
           AND turn.status IN ('open', 'responding')
           AND (
             (
@@ -604,12 +663,20 @@ export class PostgresConversationResponseRepository
             command.relationship_policy_version,
             command.safety_policy_version,
             session.daily_session_id,
+            current_journal.journal_id AS current_journal_id,
+            current_journal.current_version_id AS current_journal_version_id,
+            current_journal_version.source_revision AS current_journal_source_revision,
+            current_journal_version.status AS current_journal_version_status,
             session.activity_state,
             session.closure_policy_version,
             session.current_continuous_exchange_no AS continuous_exchange_no,
             session.dialogue_revision,
             session.source_revision,
             command.expected_data_epoch,
+            command.action_execution_status,
+            command.action_receipt_sequence,
+            frozen_receipt.admission_status AS action_receipt_admission,
+            frozen_receipt.disposition AS action_receipt_disposition,
             summary.rolling_summary_version_id AS rolling_summary_id,
             summary.version_no AS rolling_summary_version,
             summary.covered_through_sequence_no AS rolling_summary_covered_through,
@@ -626,6 +693,17 @@ export class PostgresConversationResponseRepository
           INNER JOIN daily_sessions session
             ON session.daily_session_id = turn.daily_session_id
             AND session.user_id = turn.user_id
+          LEFT JOIN journals current_journal
+            ON current_journal.daily_session_id = session.daily_session_id
+            AND current_journal.user_id = command.user_id
+            AND current_journal.deleted_at IS NULL
+          LEFT JOIN journal_versions current_journal_version
+            ON current_journal_version.journal_version_id = current_journal.current_version_id
+            AND current_journal_version.user_id = command.user_id
+          LEFT JOIN conversation_action_receipts frozen_receipt
+            ON frozen_receipt.action_execution_id = command.action_execution_id
+           AND frozen_receipt.receipt_sequence = command.action_receipt_sequence
+           AND command.generation_stage = 'action_finalization'
           LEFT JOIN current_rolling_summaries current_summary
             ON current_summary.daily_session_id = session.daily_session_id
           LEFT JOIN rolling_summary_versions summary
@@ -709,6 +787,34 @@ export class PostgresConversationResponseRepository
 
       await client.query("COMMIT");
       return {
+        ...(row.action_receipt_sequence !== null &&
+        row.action_execution_status !== null &&
+        row.action_receipt_admission !== null
+          ? {
+              actionFinalizationReceipt: {
+                admission: row.action_receipt_admission,
+                disposition: row.action_receipt_disposition,
+                execution: row.action_execution_status,
+                sequence: row.action_receipt_sequence,
+              },
+            }
+          : {}),
+        ...((row.current_journal_id &&
+          row.current_journal_version_id &&
+          row.current_journal_source_revision &&
+          row.current_journal_version_status === "published")
+          ? {
+              actionReferenceTargets: [
+                {
+                  actionKinds: ["regenerate_journal"],
+                  targetId: row.current_journal_id,
+                  targetKind: "journal" as const,
+                  targetVersionId: row.current_journal_version_id,
+                  sourceRevision: Number(row.current_journal_source_revision),
+                } satisfies ActionReferenceTarget,
+              ],
+            }
+          : {}),
         dailySession: {
           activityState: row.activity_state,
           closurePolicyVersion: row.closure_policy_version,
@@ -889,8 +995,48 @@ export class PostgresConversationResponseRepository
       if (linked.rowCount !== 1) {
         throw new Error("The CompiledContext command link was not established.");
       }
+      for (const handle of input.actionReferenceHandles ?? []) {
+        for (const actionKind of handle.actionKinds) {
+          await client.query(
+            `
+              INSERT INTO conversation_action_handles (
+                handle, compiled_context_id, user_id, generation_command_id,
+                action_kind, target_kind, target_id, target_version_id,
+                source_revision, expected_data_epoch, created_at, expires_at
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                (SELECT expected_data_epoch FROM generation_commands
+                 WHERE generation_command_id = $4 AND user_id = $3), $10, $11)
+            `,
+            [
+              handle.handle,
+              compiledContextId,
+              input.userId,
+              input.generationCommandId,
+              actionKind,
+              handle.targetKind,
+              handle.targetId,
+              handle.targetVersionId,
+              handle.sourceRevision,
+              input.now,
+              new Date(input.now.getTime() + 30 * 60 * 1_000),
+            ],
+          );
+        }
+      }
       await client.query("COMMIT");
       return {
+        ...(input.actionReferenceHandles === undefined
+          ? {}
+          : {
+              actionReferenceHandles: input.actionReferenceHandles.map(
+                ({ actionKinds, handle, targetKind }) => ({
+                  actionKinds,
+                  handle,
+                  targetKind,
+                }),
+              ),
+            }),
         degradedReason: input.degradedReason,
         dialogueRevision: input.dialogueRevision,
         id: asCompiledContextId(compiledContextId),
@@ -946,6 +1092,10 @@ export class PostgresConversationResponseRepository
             command.provider_policy_version,
             command.consent_policy_version,
             command.freshness_policy,
+            command.action_execution_status,
+            command.action_receipt_sequence,
+            frozen_receipt.admission_status AS action_receipt_admission,
+            frozen_receipt.disposition AS action_receipt_disposition,
             context.compiler_version AS context_compiler_version,
             context.dialogue_revision AS context_dialogue_revision,
             context.policy_versions AS context_policy_versions,
@@ -989,6 +1139,10 @@ export class PostgresConversationResponseRepository
             AND context.generation_command_id =
               command.generation_command_id
             AND context.user_id = command.user_id
+          LEFT JOIN conversation_action_receipts frozen_receipt
+            ON frozen_receipt.action_execution_id = command.action_execution_id
+           AND frozen_receipt.receipt_sequence = command.action_receipt_sequence
+           AND command.generation_stage = 'action_finalization'
           INNER JOIN provider_egress_policy_versions policy
             ON policy.policy_version = command.provider_policy_version
             AND policy.provider = command.provider
@@ -1132,9 +1286,45 @@ export class PostgresConversationResponseRepository
         client,
         input.compiledContextId,
       );
+      const actionHandles = await client.query<{
+        action_kind: string;
+        handle: string;
+        target_kind: "journal";
+      }>(
+        `
+          SELECT action_kind, handle, target_kind
+          FROM conversation_action_handles
+          WHERE compiled_context_id = $1
+            AND generation_command_id = $2
+            AND expires_at > CURRENT_TIMESTAMP
+          ORDER BY handle
+        `,
+        [input.compiledContextId, input.generationCommandId],
+      );
       await client.query("COMMIT");
       return {
         context: {
+          ...(row.action_receipt_sequence !== null &&
+          row.action_execution_status !== null &&
+          row.action_receipt_admission !== null
+            ? {
+                actionFinalizationReceipt: {
+                  admission: row.action_receipt_admission,
+                  disposition: row.action_receipt_disposition,
+                  execution: row.action_execution_status,
+                  sequence: row.action_receipt_sequence,
+                },
+              }
+            : {}),
+          ...(actionHandles.rows.length === 0
+            ? {}
+            : {
+                actionReferenceHandles: actionHandles.rows.map((handle) => ({
+                  actionKinds: [handle.action_kind],
+                  handle: handle.handle,
+                  targetKind: handle.target_kind,
+                })),
+              }),
           compilerVersion: row.context_compiler_version,
           integrity: {
             algorithm: row.context_integrity_algorithm,
@@ -2199,7 +2389,30 @@ async function loadCompiledContext(
     `,
     [compiledContextId],
   );
+  const actionHandles = await client.query<{
+    action_kind: string;
+    handle: string;
+    target_kind: "journal";
+  }>(
+    `
+      SELECT action_kind, handle, target_kind
+      FROM conversation_action_handles
+      WHERE compiled_context_id = $1
+        AND expires_at > CURRENT_TIMESTAMP
+      ORDER BY handle
+    `,
+    [compiledContextId],
+  );
   return {
+    ...(actionHandles.rows.length === 0
+      ? {}
+      : {
+          actionReferenceHandles: actionHandles.rows.map((handle) => ({
+            actionKinds: [handle.action_kind],
+            handle: handle.handle,
+            targetKind: handle.target_kind,
+          })),
+        }),
     degradedReason: row.degraded_reason,
     dialogueRevision: Number(row.dialogue_revision),
     id: compiledContextId,
