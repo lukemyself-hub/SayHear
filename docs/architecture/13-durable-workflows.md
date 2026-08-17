@@ -101,13 +101,13 @@ Outbox dispatcher：
 route 先运行恢复扫描，再补捞 outbox；不要建设第二套调度服务。异步派生的即时
 best-effort 提供低延迟，Cron + lease 才提供最终启动保证。
 
-部署要求（由 ADR-0105 修订）：
+部署要求（由 ADR-0106 修订）：
 
 - Internal Owner 阶段由 GitHub Actions `schedule`（每小时、错峰 `13 * * * *`）
   调用已部署的 Cron route，使用独立 `CRON_SECRET`；不要求 minute-level
   Vercel plan；
 - 调度器只负责触发，正确性仍只依赖数据库 lease、idempotency 和下一次扫描；
-  漏跑或延迟只造成延迟恢复，不丢数据（ADR-0105）；
+  漏跑或延迟只造成延迟恢复，不丢数据（ADR-0106）；
 - 引入第二个真实数据账号、进入 External MVP 或恢复延迟要求收紧时，
   调度迁回 Vercel Cron，届时再要求 minute-level plan；
 - 只能按日触发的方案仍然不满足 Core Flow async reliability gate。

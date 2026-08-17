@@ -9,6 +9,7 @@
   "scripts": {
     "build": "pnpm --filter @sayhear/web build",
     "check:boundaries": "node scripts/check-boundaries.mjs",
+    "canary:workflow": "tsx scripts/verify-hosted-workflow-canary.ts",
     "check:runtime": "node scripts/check-runtime.mjs",
     "db:migrate": "tsx packages/data/src/cli/migrate.ts",
     "db:provision-owner": "tsx packages/data/src/cli/provision-internal-owner.ts",

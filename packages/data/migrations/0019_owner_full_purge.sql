@@ -181,7 +181,10 @@ ALTER TABLE workflow_commands
   DROP CONSTRAINT workflow_commands_command_type_check;
 ALTER TABLE workflow_commands
   ADD CONSTRAINT workflow_commands_command_type_check
-  CHECK (command_type IN ('journal_eligibility', 'rolling_summary', 'dialogue_state', 'owner_full_purge'));
+  CHECK (command_type IN (
+    'journal_eligibility', 'rolling_summary', 'dialogue_state',
+    'journal_regeneration', 'owner_full_purge'
+  ));
 
 ALTER TABLE workflow_commands
   DROP CONSTRAINT workflow_commands_subject_type_check;
@@ -209,7 +212,8 @@ ALTER TABLE outbox_events
   ADD CONSTRAINT outbox_events_event_type_check
   CHECK (event_type IN (
     'journal_eligibility_requested', 'rolling_summary_requested',
-    'dialogue_state_requested', 'owner_full_purge_requested'
+    'dialogue_state_requested', 'journal_regeneration_requested',
+    'owner_full_purge_requested'
   ));
 
 ALTER TABLE outbox_events

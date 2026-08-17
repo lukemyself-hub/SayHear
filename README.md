@@ -46,7 +46,7 @@ The protected surface is `/internal`. Real private writes remain blocked until t
 latest verified policy version is current and its configuration fingerprint matches
 the deployed expectation.
 
-The Recovery Scan is triggered hourly by GitHub Actions (see ADR-0105 and
+The Recovery Scan is triggered hourly by GitHub Actions (see ADR-0106 and
 `.github/workflows/internal-recovery-scan.yml`) and authenticates with a standalone
 `CRON_SECRET`. `SAYHEAR_INACTIVITY_TIMEOUT_MS` is tied to
 `SAYHEAR_INACTIVITY_POLICY_VERSION`; changing the timeout requires publishing a new
