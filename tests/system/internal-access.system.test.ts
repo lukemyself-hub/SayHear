@@ -35,6 +35,7 @@ import {
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresUserTextConversationRepository,
+  purgeMarkerMigrationsDirectory,
   runMigrations,
 } from "@sayhear/data";
 import {
@@ -47,9 +48,15 @@ import { createConversationRetryHandler } from "../../apps/web/src/conversation-
 import { createUserTextTurnHandler } from "../../apps/web/src/user-text-turn-handler";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-if (!testDatabaseUrl) {
+const testPurgeMarkerDatabaseUrl = process.env.TEST_PURGE_MARKER_DATABASE_URL;
+if (!testDatabaseUrl || !testPurgeMarkerDatabaseUrl) {
   throw new Error(
-    "TEST_DATABASE_URL is required; the system seam never falls back to a mock database.",
+    "TEST_DATABASE_URL and TEST_PURGE_MARKER_DATABASE_URL are required; the system seam never falls back to a mock database.",
+  );
+}
+if (testDatabaseUrl === testPurgeMarkerDatabaseUrl) {
+  throw new Error(
+    "TEST_PURGE_MARKER_DATABASE_URL must be a separate database outside the business backup domain.",
   );
 }
 const testGenerationPolicy = Object.freeze({
@@ -131,19 +138,31 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   const sessionCookieName = "sayhear.session-token";
   const sessionToken = "request-path-session-token";
   let database: IsolatedPostgresSchema;
+  let markerDatabase: IsolatedPostgresSchema;
   let nextServer: RunningNextServer | undefined;
 
+  // A real disposable PostgreSQL service can need longer than a local socket
+  // to create an isolated schema, apply every migration, and boot Next.
   beforeAll(async () => {
     database = await createIsolatedPostgresSchema(testDatabaseUrl);
     await runMigrations(database.pool);
+    markerDatabase = await createIsolatedPostgresSchema(
+      testPurgeMarkerDatabaseUrl,
+    );
+    await runMigrations(markerDatabase.pool, {
+      migrationsDirectory: purgeMarkerMigrationsDirectory,
+    });
     const repository = new PostgresInternalOwnerAccessRepository(database.pool);
     await repository.provisionInternalOwner({
       issuer: "https://github.com",
       subject: "test-owner",
       userId: fixedInternalOwnerPrincipal.userId,
     });
-    nextServer = await startNextTestServer(database.connectionString);
-  }, 20_000);
+    nextServer = await startNextTestServer(
+      database.connectionString,
+      markerDatabase.connectionString,
+    );
+  }, 60_000);
 
   beforeEach(async () => {
     await database.pool.query(`
@@ -215,6 +234,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   afterAll(async () => {
     await nextServer?.stop();
     await database.dispose();
+    await markerDatabase.dispose();
   }, 10_000);
 
   async function openPrivateWrites(): Promise<void> {
@@ -4888,6 +4908,7 @@ type RunningNextServer = Readonly<{
 
 async function startNextTestServer(
   databaseUrl: string,
+  purgeMarkerDatabaseUrl: string,
 ): Promise<RunningNextServer> {
   const port = await reservePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -4905,6 +4926,7 @@ async function startNextTestServer(
       env: {
         ...process.env,
         DATABASE_URL: databaseUrl,
+        PURGE_MARKER_DATABASE_URL: purgeMarkerDatabaseUrl,
         GITHUB_CLIENT_ID: "system-test-client",
         GITHUB_CLIENT_SECRET: "system-test-client-secret",
         NEXTAUTH_SECRET: "system-test-server-only-secret",

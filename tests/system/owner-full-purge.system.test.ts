@@ -431,6 +431,10 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
       TRUNCATE TABLE
         owner_purge_receipts,
         owner_purge_orders,
+        conversation_action_payloads,
+        conversation_action_receipts,
+        conversation_action_executions,
+        conversation_action_handles,
         current_rolling_summaries,
         rolling_summary_versions,
         rolling_summary_command_source_refs,

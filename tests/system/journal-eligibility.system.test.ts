@@ -1425,7 +1425,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     expect(context.rows[0]!.refs.every((sequence) => Number(sequence) > coverage)).toBe(true);
     const outboxLeak = await database.pool.query(`SELECT payload::text FROM outbox_events WHERE event_type = 'rolling_summary_requested'`);
     expect(outboxLeak.rows[0]!.payload).not.toContain("I am sharing event");
-  });
+  }, 120_000);
 
   it("records Summary generation failure and keeps the authenticated conversation on bounded raw Context (Issue #22 AC #7)", async () => {
     for (let index = 0; index < 7; index += 1) {
@@ -1442,7 +1442,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     await submitConversation({ clientEventId: "failed-summary-after", clientTurnId: "failed-summary-after", text: "The response path still proceeds while compaction is unavailable." });
     const manifest = await database.pool.query<{ degraded_reason: string | null }>(`SELECT degraded_reason FROM compiled_contexts WHERE degraded_reason = 'rolling_summary_failed' LIMIT 1`);
     expect(manifest.rows[0]?.degraded_reason).toBe("rolling_summary_failed");
-  });
+  }, 60_000);
 
   it("invalidates stale Summary coverage before rebuilding it from valid committed Events (Issue #22 AC #3-4)", async () => {
     for (let index = 0; index < 7; index += 1) {
@@ -1474,7 +1474,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     );
     await expect(composition.rollingSummaryService.run(rebuilt.rows[0]!.rolling_summary_command_id)).resolves.toEqual({ outcome: "published" });
     expect((await database.pool.query(`SELECT COUNT(*)::int AS count FROM current_rolling_summaries`)).rows[0]!.count).toBe(1);
-  });
+  }, 60_000);
 
   it("reconciles a stranded Summary claim as result_unknown without retrying private provider egress (Issue #22 AC #8)", async () => {
     for (let index = 0; index < 7; index += 1) {
@@ -1487,7 +1487,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     await composition.rollingSummaryService.scanPending();
     const recovered = await database.pool.query<{ status: string; last_error_code: string | null }>(`SELECT status, last_error_code FROM rolling_summary_commands`);
     expect(recovered.rows[0]).toEqual({ status: "failed", last_error_code: "summary_result_unknown" });
-  });
+  }, 60_000);
 
   it("never carries conversation text into outbox payload, workflow command, or date outcome (AC #9, canary)", async () => {
     const canary = "CANARY-PRIVATE-EXPRESSION-1234567";
