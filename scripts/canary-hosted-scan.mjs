@@ -37,6 +37,9 @@ async function runCanaryChecks() {
   const client = await pool.connect();
 
   try {
+    // Set read-only mode to ensure no accidental writes
+    await client.query("SET TRANSACTION READ ONLY");
+    await client.query("SET default_transaction_read_only = on");
     const results = {
       checked_tables: [],
       structural_checks: {},
