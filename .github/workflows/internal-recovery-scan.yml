@@ -1,0 +1,46 @@
+name: Internal Recovery Scan
+
+on:
+  schedule:
+    - cron: "13 * * * *"
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Recovery scan endpoint URL (empty = use RECOVERY_SCAN_URL variable)"
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: internal-recovery-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call recovery scan endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CONFIGURED_URL: ${{ vars.RECOVERY_SCAN_URL }}
+          OVERRIDE_URL: ${{ inputs.url }}
+        run: |
+          set -euo pipefail
+          url="${OVERRIDE_URL:-$CONFIGURED_URL}"
+          if [ -z "$url" ]; then
+            echo "::error::RECOVERY_SCAN_URL variable is not configured and no url input was provided"
+            exit 1
+          fi
+          start=$(date -u +%s)
+          status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
+            --max-time 120 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "$url")
+          end=$(date -u +%s)
+          echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ) status=${status} duration_seconds=$((end-start))"
+          if [ "$status" != "200" ]; then
+            echo "::error::recovery scan returned HTTP ${status}"
+            exit 1
+          fi
