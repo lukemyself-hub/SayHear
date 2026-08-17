@@ -39,6 +39,7 @@ Accepted
 - [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：当前 Agent Catalog 只允许无需二次确认的安全 Action
 - [`0101`](adr/0101-conversation-action-audit-does-not-duplicate-user-content.md)：Action 审计只保留最小 envelope，执行 payload 加密短存并及时清除
 - [`0103`](adr/0103-journal-regeneration-accepts-bounded-user-guidance.md)：Journal regeneration 接受受限用户 guidance，但保留事实、版本与幂等边界
+- [`0106`](adr/0106-github-actions-schedules-the-internal-owner-recovery-scan.md)：Internal Owner 阶段由 GitHub Actions schedule 调用 Recovery Scan
 
 ### 用户控制、删除与导出
 

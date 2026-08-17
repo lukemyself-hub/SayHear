@@ -3,6 +3,7 @@ import { createServerComposition } from "../../../../../src/server-composition";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function GET(request: Request): Promise<Response> {
   const composition = createServerComposition();

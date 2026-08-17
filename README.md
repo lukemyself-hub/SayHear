@@ -46,13 +46,11 @@ The protected surface is `/internal`. Real private writes remain blocked until t
 latest verified policy version is current and its configuration fingerprint matches
 the deployed expectation.
 
-The recovery scanner is available at `/api/internal/recovery/scan` and authenticates
-with the server-only `CRON_SECRET`. It is not scheduled in `vercel.json` during
-development or preview. Before the first production deployment that accepts real
-private data, ADR-0105 requires a minute-level Vercel Cron, its secret, and a hosted
-canary together; a daily schedule does not pass that gate. `SAYHEAR_INACTIVITY_TIMEOUT_MS`
-is tied to `SAYHEAR_INACTIVITY_POLICY_VERSION`; changing the timeout requires publishing
-a new policy version rather than mutating an existing version.
+The Recovery Scan is triggered hourly by GitHub Actions (see ADR-0106 and
+`.github/workflows/internal-recovery-scan.yml`) and authenticates with a standalone
+`CRON_SECRET`. `SAYHEAR_INACTIVITY_TIMEOUT_MS` is tied to
+`SAYHEAR_INACTIVITY_POLICY_VERSION`; changing the timeout requires publishing a new
+policy version rather than mutating an existing version.
 
 ## Local configuration loading
 
