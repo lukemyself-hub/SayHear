@@ -399,7 +399,7 @@ export class PostgresJournalRepository implements JournalRepository {
       );
       await client.query(
         `UPDATE journal_model_run_attempts SET status = 'failed', provider_completed_at = CURRENT_TIMESTAMP,
-           result_metadata = jsonb_build_object('outcome', 'validation_failed', 'failure_code', $3)
+           result_metadata = jsonb_build_object('outcome', 'validation_failed', 'failure_code', $3::text)
          WHERE model_run_attempt_id = $1 AND generation_command_id = $2 AND status = 'started'`,
         [input.modelRunAttemptId, generationCommandId, input.failureCode],
       );
@@ -410,7 +410,7 @@ export class PostgresJournalRepository implements JournalRepository {
              model_run_attempt_id, generation_command_id, role, provider, model, config_version,
              role_policy_version, prompt_fingerprint, status, provider_completed_at, result_metadata, created_at
            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'failed', CURRENT_TIMESTAMP,
-             jsonb_build_object('outcome', 'validation_failed', 'failure_code', $9), CURRENT_TIMESTAMP)
+             jsonb_build_object('outcome', 'validation_failed', 'failure_code', $9::text), CURRENT_TIMESTAMP)
            ON CONFLICT (model_run_attempt_id) DO NOTHING`,
           [validationAttemptId, generationCommandId, input.validatorRole, input.validatorProvider,
             input.validatorModel, input.validatorConfigVersion, input.validatorPolicyVersion,

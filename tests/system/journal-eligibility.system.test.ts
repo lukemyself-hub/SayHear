@@ -183,7 +183,11 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     await database?.dispose();
   }, 10_000);
 
-  function buildComposition(input: { dialogueStateModel?: import("@sayhear/application").DialogueStateModel } = {}) {
+  function buildComposition(input: {
+    dialogueStateModel?: import("@sayhear/application").DialogueStateModel;
+    journalDraftModel?: import("@sayhear/application").JournalModel;
+    journalValidationProvider?: import("@sayhear/application").JournalValidationProvider;
+  } = {}) {
     const responseRepository = new PostgresConversationResponseRepository(
       database.pool,
     );
@@ -223,14 +227,14 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         rolePolicyVersion: draftConfiguration.policyVersion,
       },
       journalPolicyVersion: "journal-generation:v2",
-      model: journalRoleRegistry.draft,
+      model: input.journalDraftModel ?? journalRoleRegistry.draft,
       repository: journalRepository,
       validationMetadata: {
         ...validationConfiguration,
         role: "journal.validate",
         rolePolicyVersion: validationConfiguration.policyVersion,
       },
-      validationProvider: journalRoleRegistry.validator,
+      validationProvider: input.journalValidationProvider ?? journalRoleRegistry.validator,
       validatorVersion: "journal-validator:v2",
     });
     const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
@@ -1124,6 +1128,103 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       [dailySessionId],
     );
     expect(statements.rows[0]!.count).toBe(3);
+  });
+
+  it("records a Journal draft model failure as a failed attempt (jsonb failure_code regression)", async () => {
+    // Regression for production replay 2026-08-18: when the draft model throws,
+    // recordValidationFailure ran
+    //   result_metadata = jsonb_build_object(..., 'failure_code', $3)
+    // where jsonb_build_object's value parameter is "any", so PostgreSQL could
+    // not infer $3's type and the whole workflow logged
+    // "could not determine data type of parameter $3" instead of the failure
+    // record. The $3::text cast keeps the attempt row persistent.
+    const dailySessionId = await submitConversation({
+      clientEventId: "draft-failure-event",
+      clientTurnId: "draft-failure-turn",
+      text: "I keep rehearsing the same disagreement with my manager all afternoon.",
+    });
+    await endExchange(dailySessionId);
+    const composition = buildComposition({
+      journalDraftModel: {
+        generate: async () => { throw new Error("synthetic draft failure"); },
+      },
+    });
+    const command = await database.pool.query<{ source_revision: string; workflow_command_id: string }>(
+      "SELECT source_revision, workflow_command_id FROM workflow_commands",
+    );
+    const sourceRevision = Number(command.rows[0]!.source_revision);
+    await runJournalEligibility({
+      clock: fixedResponseClock,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
+      repository: composition.journalEligibilityRepository,
+      workflowReceiptId: "draft-failure-receipt",
+      evidenceService: composition.evidenceService,
+    });
+    await expect(runAutomaticJournal({
+      service: composition.journalService,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      generationCommandId: "journal-draft-fail",
+      modelRunAttemptId: "attempt-draft-fail",
+    })).resolves.toEqual({ outcome: "validation_failed", reason: "model_run_failed" });
+    const attempt = await database.pool.query<{ status: string; failure_code: string | null }>(
+      `SELECT status, result_metadata->>'failure_code' AS failure_code
+       FROM journal_model_run_attempts WHERE model_run_attempt_id = $1`,
+      ["attempt-draft-fail"],
+    );
+    expect(attempt.rows[0]).toEqual({ status: "failed", failure_code: "model_run_failed" });
+    const review = await database.pool.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM journal_validation_results
+       WHERE generation_command_id = $1 AND status = 'needs_review'`,
+      ["journal-draft-fail"],
+    );
+    expect(review.rows[0]!.count).toBe(1);
+  });
+
+  it("records a Journal validation model failure with validator attempt metadata", async () => {
+    // Covers the second jsonb_build_object('failure_code', $9) INSERT branch
+    // in recordValidationFailure, which also previously failed type inference.
+    const dailySessionId = await submitConversation({
+      clientEventId: "validator-failure-event",
+      clientTurnId: "validator-failure-turn",
+      text: "I keep second-guessing whether I should have pushed back on the deadline.",
+    });
+    await endExchange(dailySessionId);
+    const composition = buildComposition({
+      journalValidationProvider: {
+        role: "journal.validate",
+        validate: async () => { throw new Error("synthetic validator failure"); },
+      },
+    });
+    const command = await database.pool.query<{ source_revision: string; workflow_command_id: string }>(
+      "SELECT source_revision, workflow_command_id FROM workflow_commands",
+    );
+    const sourceRevision = Number(command.rows[0]!.source_revision);
+    await runJournalEligibility({
+      clock: fixedResponseClock,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
+      repository: composition.journalEligibilityRepository,
+      workflowReceiptId: "validator-failure-receipt",
+      evidenceService: composition.evidenceService,
+    });
+    await expect(runAutomaticJournal({
+      service: composition.journalService,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      generationCommandId: "journal-validator-fail",
+      modelRunAttemptId: "attempt-validator-fail",
+    })).resolves.toEqual({ outcome: "validation_failed", reason: "validator_model_failed" });
+    // Both the generation attempt (UPDATE $3) and the validator attempt (INSERT $9)
+    // persisted — failure_code is inferred as text in both jsonb_build_object calls.
+    const attempts = await database.pool.query<{ model_run_attempt_id: string; status: string; failure_code: string | null }>(
+      `SELECT model_run_attempt_id, status, result_metadata->>'failure_code' AS failure_code
+       FROM journal_model_run_attempts WHERE generation_command_id = $1 ORDER BY created_at`,
+      ["journal-validator-fail"],
+    );
+    expect(attempts.rows).toContainEqual({ model_run_attempt_id: "attempt-validator-fail", status: "failed", failure_code: "validator_model_failed" });
+    expect(attempts.rows).toContainEqual({ model_run_attempt_id: "attempt-validator-fail:validate", status: "failed", failure_code: "validator_model_failed" });
   });
 
   it("supersedes the current Journal once after a same-day source advance", async () => {
