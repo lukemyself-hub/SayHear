@@ -75,7 +75,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       locale: "en-US",
       model: configuration(role).model,
       messages: [{
-        revisionId: asConversationEventRevisionId("00000000-0000-4000-8000-000000000001"),
+        revisionId: asConversationEventRevisionId("00000000-0000-7000-8000-000000000001"),
         role: "user",
         text: JSON.stringify(payload),
       }],
