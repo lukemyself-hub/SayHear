@@ -81,18 +81,31 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
           AND revision.content_purged_at IS NULL`, [input.dailySessionId, row.user_id]);
       const sources = sourceRows.rows;
       // Provider evidence extraction is network-bound: one DeepSeek/OpenAI
-      // round-trip per source, ~20s each from production (Vercel). A serial
-      // pass over ten sources exceeded the provider timeout on every replay
-      // (incident 2026-08-18, category=timeout), so sources are extracted
-      // concurrently and the rows inserted in source order for a stable
-      // snapshot.
-      const extractedChunks = await Promise.all(
+      // round-trip per source, ~20s each from production (Vercel), against a
+      // 60s function ceiling (Vercel Hobby). A serial pass exceeded the timeout
+      // on every replay, so sources are extracted concurrently (incident
+      // 2026-08-18, category=timeout). Even concurrently, a single slow source
+      // that hits the provider deadline must not fail the whole freeze: each
+      // source settles independently and the successful extractions are kept.
+      const extractedChunks = await Promise.allSettled(
         sources.map((source) => this.extractor.extract({ locale: source.locale, sourceText: source.canonical_text })),
       );
+      let insertedSources = 0;
       for (let i = 0; i < sources.length; i++) {
         const source = sources[i]!;
-        const extracted = extractedChunks[i]!;
-        if (extracted.length === 0) throw new Error("Evidence extractor returned no locators.");
+        const settled = extractedChunks[i]!;
+        if (settled.status === "rejected") {
+          // Runtime log only (never Workflow history): a transient provider
+          // failure on one source is not a reason to discard the rest.
+          console.error(
+            "[evidence-freeze] source extraction failed:",
+            settled.reason instanceof Error ? `${settled.reason.name}: ${settled.reason.message}` : String(settled.reason),
+          );
+          continue;
+        }
+        const extracted = settled.value;
+        if (extracted.length === 0) continue;
+        insertedSources++;
         for (const locator of extracted) await client.query(
         `INSERT INTO evidence_items (
           evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id,
@@ -107,6 +120,12 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
       if (sourceRows.rows.length === 0) {
         await client.query("ROLLBACK");
         return { outcome: "not_eligible" };
+      }
+      if (insertedSources === 0) {
+        // Every source failed or produced no usable locators — a provider-level
+        // outage, not a valid but empty transcript. Fail so the workflow records
+        // retryable_failed and the recovery scan can retry later.
+        throw new Error("Evidence extraction failed for every source.");
       }
       await client.query(
         `INSERT INTO evidence_lineage (evidence_item_id, command_id, attempt_id, created_at)

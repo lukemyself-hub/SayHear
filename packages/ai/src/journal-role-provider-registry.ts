@@ -115,7 +115,19 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       async extract(request) {
         const parsed = await askJson("evidence.extract", "You are SayHear evidence.extract. Return only JSON array of source-grounded spans: [{locatorType:'text_span',locatorKey:'start:end',role:'factual_support'|'subjective_report'}]. Cover each independently meaningful user claim. Never invent text.", request);
         if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("evidence.extract returned no spans.");
-        return parsed.map((item) => validateLocator(item, request.sourceText));
+        // Provider models do not compute character offsets reliably (observed
+        // with DeepSeek: out-of-range and inverted ranges on real transcripts).
+        // Keep every locator that maps to real source text and drop the rest —
+        // one bad span must not invalidate a source that otherwise extracted
+        // correctly (incident 2026-08-18).
+        const locators = parsed
+          .map((item) => {
+            try { return validateLocator(item, request.sourceText); }
+            catch { return null; }
+          })
+          .filter((locator): locator is { locatorType: "text_span"; locatorKey: string; role: EvidenceRole } => locator !== null);
+        if (locators.length === 0) throw new Error("evidence.extract returned no valid spans.");
+        return locators;
       },
     },
     draft: {
