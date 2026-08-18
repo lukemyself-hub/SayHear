@@ -461,4 +461,46 @@ describe("Journal eligibility stale-command recovery system seam", () => {
     const visible = await readJournal();
     expect(visible).not.toBeNull();
   });
+
+  it("dispatches a numeric sourceRevision to the Workflow starter (production incident 2026-08-17 root cause)", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "numeric-revision-event",
+      clientTurnId: "numeric-revision-turn",
+      text: "The Workflow starter must receive the source revision as a number.",
+    });
+    const composition = buildComposition();
+    // End without the best-effort dispatch stub so the outbox row stays pending
+    // and can be leased through the real dispatcher repository below.
+    await composition.conversationService.endContinuousExchange(
+      fixedInternalOwnerPrincipal.userId,
+      { dailySessionId },
+    );
+    await composition.journalEligibilityService.evaluate(dailySessionId);
+
+    const command = await database.pool.query<{ source_revision: string }>(
+      `SELECT source_revision FROM workflow_commands WHERE command_type = 'journal_eligibility'`,
+    );
+    expect(command.rows).toHaveLength(1);
+    const admittedRevision = Number(command.rows[0]!.source_revision);
+
+    // Drive the REAL Postgres dispatcher repository so the BIGINT round-trip is
+    // exercised. Before the fix, node-postgres returned aggregate_revision as
+    // the string "2", mapLeased leaked it through as-is, and the Workflow
+    // starter received sourceRevision="2" — where 2 !== "2" tripped the stale
+    // fence deterministically and burned every durable retry.
+    const captured: Array<unknown> = [];
+    const dispatcher = createOutboxDispatcherService({
+      clock: fixedResponseClock,
+      leaseDurationMs: 60_000,
+      leaseOwner: "numeric-revision-dispatcher",
+      repository: composition.outboxRepository,
+      startWorkflow: async (input) => {
+        captured.push(input.sourceRevision);
+        return { workflowReceiptId: "numeric-revision-receipt" };
+      },
+    });
+    const dispatch = await dispatcher.dispatchPending();
+    expect(dispatch.dispatched).toBe(1);
+    expect(captured).toEqual([admittedRevision]);
+  });
 });

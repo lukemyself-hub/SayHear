@@ -360,7 +360,7 @@ export function createOutboxDispatcherService(dependencies: {
               : {}),
             workflowCommandId: event.workflowCommandId,
             subjectId: event.aggregateId,
-            sourceRevision: event.aggregateRevision,
+            sourceRevision: Number(event.aggregateRevision),
             policyVersion: String(event.payload.policyVersion ?? ""),
             expectedDataEpoch: Number(event.payload.expectedDataEpoch ?? 0),
           });
