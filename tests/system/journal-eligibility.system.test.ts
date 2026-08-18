@@ -196,14 +196,6 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     const dialogueStateRepository = new PostgresDialogueStateRepository(
       database.pool,
     );
-    const evidenceRepository = new PostgresEvidenceRepository(database.pool, {
-      role: "evidence.extract",
-      extract: async ({ sourceText }) => [{
-        locatorType: "text_span",
-        locatorKey: `0:${sourceText.length}`,
-        role: "factual_support",
-      }],
-    });
     const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
       adapter: { type: "deterministic" },
       roles: [
@@ -214,6 +206,12 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
       ],
     });
+    // Use the deterministic evidence extractor (sentence-spanning) instead of a
+    // whole-source stub so a multi-sentence source produces several evidence
+    // items and therefore several Journal statements — the shape production
+    // providers produce and the shape that exercised the journal_statements
+    // unique-constraint bug (migration 0024).
+    const evidenceRepository = new PostgresEvidenceRepository(database.pool, journalRoleRegistry.evidenceExtractor);
     const journalRepository = new PostgresJournalRepository(database.pool);
     const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
     const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
@@ -1076,6 +1074,56 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       evidence_source_session_id: dailySessionId,
       statement_source_session_id: dailySessionId,
     }]);
+  });
+
+  it("publishes a Journal version with many statements from one source", async () => {
+    // Regression: journal_statements carried UNIQUE (journal_version_id,
+    // user_id, source_revision, evidence_source_snapshot_id), which collapsed
+    // the intended 1:many statements-per-version into 1:1. The deterministic
+    // draft emits one statement per evidence item, so a multi-sentence source
+    // produced a second statement that violated the constraint and rolled back
+    // the whole version (production replay 2026-08-18). Migration 0024 drops
+    // that constraint; statement uniqueness stays covered by
+    // (journal_version_id, statement_index) and (journal_version_id, statement_key).
+    const dailySessionId = await submitConversation({
+      clientEventId: "multi-statement-event",
+      clientTurnId: "multi-statement-turn",
+      text: "I finished the report this morning. The meeting went well afterwards. I still worry about tomorrow.",
+    });
+    await endExchange(dailySessionId);
+    const composition = buildComposition();
+    const command = await database.pool.query<{ source_revision: string; workflow_command_id: string }>(
+      "SELECT source_revision, workflow_command_id FROM workflow_commands",
+    );
+    const sourceRevision = Number(command.rows[0]!.source_revision);
+    await expect(runJournalEligibility({
+      clock: fixedResponseClock,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION, sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      eligibilityPolicyVersion: JOURNAL_ELIGIBILITY_POLICY_VERSION,
+      minimumSubstantiveExpressionLength: MINIMUM_SUBSTANTIVE_EXPRESSION_LENGTH,
+      repository: composition.journalEligibilityRepository,
+      workflowReceiptId: "multi-statement-receipt",
+      evidenceService: composition.evidenceService,
+    })).resolves.toMatchObject({ outcome: "eligible_queued" });
+    await expect(runAutomaticJournal({
+      service: composition.journalService,
+      command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
+      generationCommandId: "journal-multi",
+      modelRunAttemptId: "attempt-multi",
+    })).resolves.toEqual({ outcome: "published" });
+    const inspected = await composition.journalService.inspect({
+      dailySessionId,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(inspected?.statements).toHaveLength(3);
+    expect(inspected?.statements.every((statement) => statement.epistemicStatus === "supported_expression")).toBe(true);
+    const statements = await database.pool.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM journal_statements statement
+       INNER JOIN journal_versions version ON version.journal_version_id = statement.journal_version_id
+       WHERE version.daily_session_id = $1`,
+      [dailySessionId],
+    );
+    expect(statements.rows[0]!.count).toBe(3);
   });
 
   it("supersedes the current Journal once after a same-day source advance", async () => {
