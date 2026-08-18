@@ -466,7 +466,7 @@ export type JournalEligibilityEntrypointInput = Readonly<{
 
 export type JournalEligibilityEntrypointResult = Readonly<{
   dailySessionId: string;
-  outcome: JournalEligibilityDateOutcome;
+  outcome: JournalEligibilityDateOutcome | "stale_superseded";
   workflowReceiptId: string;
 }>;
 
@@ -506,7 +506,21 @@ export async function runJournalEligibility(input: {
     policyVersion: input.eligibilityPolicyVersion,
   });
   if (snapshot !== null && snapshot.sourceRevision !== input.command.sourceRevision) {
-    throw new Error("Journal eligibility command is stale at the current source head.");
+    // A writer advanced the source head after this command was admitted, so
+    // the frozen command is superseded. This is deterministic — retrying the
+    // step can never close the gap — and benign: no date outcome is recorded,
+    // so the next Recovery Scan re-lists the session and admits a fresh
+    // command at the current head (source_revision is part of the admission
+    // conflict key). Production incident 2026-08-17: throwing here made the
+    // durable workflow burn every retry on the mismatch and die, delaying the
+    // Journal by a full scan cycle.
+    const superseded: JournalEligibilityEntrypointResult = {
+      dailySessionId: subjectId,
+      outcome: "stale_superseded",
+      workflowReceiptId: input.workflowReceiptId,
+    };
+    assertWorkflowSafe(superseded, "result");
+    return superseded;
   }
   if (snapshot !== null) {
     await input.recoveryGate?.requireOpen(snapshot.userId);

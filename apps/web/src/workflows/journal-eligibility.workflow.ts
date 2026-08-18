@@ -31,7 +31,7 @@ export async function journalEligibilityWorkflow(input: {
   expectedDataEpoch: number;
 }): Promise<{
   dailySessionId: string;
-  outcome: "no_activity" | "insufficient_expression" | "eligible_queued" | "journal_available" | "published" | "needs_review" | "retryable_failed";
+  outcome: "no_activity" | "insufficient_expression" | "eligible_queued" | "journal_available" | "published" | "needs_review" | "retryable_failed" | "stale_superseded";
   workflowReceiptId: string;
 }> {
   "use workflow";
