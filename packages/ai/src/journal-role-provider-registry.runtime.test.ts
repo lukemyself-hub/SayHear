@@ -88,6 +88,27 @@ describe("Journal runtime role provider messages", () => {
     }
   });
 
+  it("skips out-of-range locators instead of failing the whole extraction", async () => {
+    mockOutput.current =
+      '[{"locatorType":"text_span","locatorKey":"0:5","role":"factual_support"},{"locatorType":"text_span","locatorKey":"999:1005","role":"factual_support"}]';
+    try {
+      const registry = createRuntimeJournalRoleProviderRegistry({
+        adapter: { type: "responses-api", apiKey: "test", baseUrl: "https://example.test", timeoutMs: 1000 },
+        roles,
+      });
+      // The second span is beyond the 13-char source text; it must be dropped,
+      // keeping the extraction viable (incident 2026-08-18, out-of-range
+      // locator failing the evidence freeze).
+      await expect(
+        registry.evidenceExtractor.extract({ locale: "en-US", sourceText: "Walked home." }),
+      ).resolves.toEqual([
+        { locatorType: "text_span", locatorKey: "0:5", role: "factual_support" },
+      ]);
+    } finally {
+      mockOutput.current = DEFAULT_DELTA;
+    }
+  });
+
   it("strips a markdown code fence before parsing provider JSON", async () => {
     mockOutput.current =
       '```json\n[{"locatorType":"text_span","locatorKey":"0:3","role":"factual_support"}]\n```';
