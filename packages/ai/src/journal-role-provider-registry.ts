@@ -9,7 +9,7 @@ import type {
   DialogueStateModel,
   RollingSummaryModel,
 } from "@sayhear/application";
-import { asConversationEventRevisionId } from "@sayhear/application";
+import { ProviderDispatchError, asConversationEventRevisionId } from "@sayhear/application";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
 export type JournalModelRole =
@@ -70,16 +70,31 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
   const model = createResponsesApiConversationTextModel(input.adapter);
   const askJson = async (role: JournalModelRole, instructions: string, payload: unknown): Promise<unknown> => {
     let output = "";
-    for await (const event of model.stream({
-      instructions,
-      locale: "en-US",
-      model: configuration(role).model,
-      messages: [{
-        revisionId: asConversationEventRevisionId("00000000-0000-7000-8000-000000000001"),
-        role: "user",
-        text: JSON.stringify(payload),
-      }],
-    })) if (event.type === "delta") output += event.delta;
+    try {
+      for await (const event of model.stream({
+        instructions,
+        locale: "en-US",
+        model: configuration(role).model,
+        messages: [{
+          revisionId: asConversationEventRevisionId("00000000-0000-7000-8000-000000000001"),
+          role: "user",
+          text: JSON.stringify(payload),
+        }],
+      })) if (event.type === "delta") output += event.delta;
+    } catch (error) {
+      if (error instanceof ProviderDispatchError) {
+        // Runtime log only (never Workflow history): fold the dispatch category
+        // into the message so an incident can distinguish authentication from
+        // timeout/configuration. Incident 2026-08-17 logged only the default
+        // ProviderDispatchError message, which hid the failure class.
+        throw new ProviderDispatchError(
+          error.category,
+          `${role} (model=${configuration(role).model}) dispatch failed with category ${error.category}: ${error.message}`,
+          error.settlesAttempt,
+        );
+      }
+      throw error;
+    }
     try { return JSON.parse(output); } catch { throw new Error(`${role} returned non-JSON output.`); }
   };
   return {
