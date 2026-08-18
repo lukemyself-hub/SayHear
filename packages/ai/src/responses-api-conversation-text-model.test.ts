@@ -164,10 +164,12 @@ describe("Responses API Conversation Text adapter", () => {
     });
   });
 
-  it("classifies Provider authentication and configuration failures as terminal", async () => {
+  it("classifies Provider authentication, configuration, and gateway failures as terminal and carries the HTTP status", async () => {
     for (const [status, category] of [
       [401, "authentication"],
       [400, "configuration"],
+      [504, "timeout"],
+      [500, "unavailable"],
     ] as const) {
       const model = createResponsesApiConversationTextModel({
         apiKey: "synthetic-server-key",
@@ -175,7 +177,8 @@ describe("Responses API Conversation Text adapter", () => {
         fetchImplementation: async () => new Response(null, { status }),
       });
 
-      await expect(async () => {
+      let caught: unknown;
+      try {
         for await (const _event of model.stream({
           instructions: "Synthetic instructions",
           locale: "en-US",
@@ -184,7 +187,14 @@ describe("Responses API Conversation Text adapter", () => {
         })) {
           // Terminal Provider failures must not yield.
         }
-      }).rejects.toMatchObject({ category });
+      } catch (error) {
+        caught = error;
+      }
+
+      // The concrete status must survive into the message so an incident log
+      // can tell a gateway 504 from a rate-limit 429 (incident 2026-08-18).
+      expect(caught).toMatchObject({ category });
+      expect(String(caught)).toContain(`HTTP ${status}`);
     }
   });
 
