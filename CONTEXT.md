@@ -374,6 +374,10 @@ _Avoid_: Tombstone, Deletion ledger, Backup registry
 每次私人读取、写入或 Provider Egress 前，比较业务库状态与业务库外最新 Purge Marker 的 fail-closed 准入关卡；发现旧备份、不一致或无法读取 marker 时，必须在重新应用清除状态并复核前保持关闭。
 _Avoid_: Startup check, Recovery scanner, Deployment epoch floor
 
+**Recovery Scan**:
+由定时触发驱动的幂等后台清扫，负责把最佳努力失败或从未触发的后台推进（不活跃收尾、Journal Eligibility、outbox 投递等）最终启动；正确性从不依赖它——只依赖数据库租约、幂等键与下一次扫描——因此漏跑或延迟只造成延迟恢复，不丢数据；它不是第二套调度服务，也不承担 Recovery Gate 的 fail-closed 准入职责。
+_Avoid_: Scheduler, Cron job, Recovery Gate
+
 **Active-System Deletion**:
 Internal Owner Full Purge 到达“在线产品已不可读取、召回或重建相关内容”的生命周期阶段；它可以同时声明仍有未届满的保留窗口（Retention Pending），但绝不等于、也不能对外声称所有保留副本已经过期。
 _Avoid_: Fully Expired, Physical deletion
