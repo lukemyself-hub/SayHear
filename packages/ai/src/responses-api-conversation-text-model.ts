@@ -67,7 +67,15 @@ export function createResponsesApiConversationTextModel(input: {
 
         if (!response.ok) {
           await response.body?.cancel();
-          throw new ProviderDispatchError(categoryForStatus(response.status));
+          // Carry the concrete HTTP status (never the response body) so an
+          // incident log can distinguish a gateway 504 from a rate-limit 429
+          // or a config 4xx. Incident 2026-08-18 reported only
+          // category=timeout, which hid whether DeepSeek rejected the request
+          // or the platform cut the stream.
+          throw new ProviderDispatchError(
+            categoryForStatus(response.status),
+            `Provider returned HTTP ${response.status}.`,
+          );
         }
         if (!response.body) {
           throw new ProviderDispatchError("invalid_response");
