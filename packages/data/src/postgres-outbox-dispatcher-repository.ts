@@ -15,7 +15,9 @@ type OutboxRow = Readonly<{
   outbox_event_id: string;
   workflow_command_id: string;
   aggregate_id: string;
-  aggregate_revision: number;
+  // aggregate_revision is BIGINT, which node-postgres always returns as a
+  // string regardless of the value's size.
+  aggregate_revision: string;
   event_type: string;
   payload: unknown;
 }>;
@@ -35,7 +37,11 @@ function mapLeased(row: OutboxRow): LeasedOutboxEvent {
     outboxEventId: asOutboxEventId(row.outbox_event_id),
     workflowCommandId: asWorkflowCommandId(row.workflow_command_id),
     aggregateId: asDailySessionId(row.aggregate_id) as DailySessionId,
-    aggregateRevision: row.aggregate_revision,
+    // Production incident 2026-08-17: leaking the BIGINT string here made the
+    // Journal eligibility Workflow receive sourceRevision="20", so the strict
+    // stale fence (20 !== "20") threw on every durable retry and the Journal
+    // never published.
+    aggregateRevision: Number(row.aggregate_revision),
     eventType: row.event_type,
     payload,
   };
