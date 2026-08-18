@@ -74,6 +74,14 @@ async function runEligibilityStep(input: {
         attemptId: evidenceAttemptId,
       });
     } catch (error) {
+      // Runtime log only (never Workflow history): the failure class was
+      // invisible during incident 2026-08-17 because the swallowed error had
+      // no log line. Name/message carry status codes and provider errors —
+      // never conversation text.
+      console.error(
+        "[journal-eligibility] evidence freeze threw:",
+        error instanceof Error ? `${error.name}: ${error.message}` : error,
+      );
       await composition.journalRepository.recordWorkflowOutcome?.({
         dailySessionId: input.subjectId, userId: null, sourceRevision: input.sourceRevision,
         expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
@@ -98,7 +106,11 @@ async function runEligibilityStep(input: {
           generationCommandId: `${input.workflowCommandId}:journal`,
           modelRunAttemptId: randomUUID(),
         });
-      } catch {
+      } catch (error) {
+        console.error(
+          "[journal-eligibility] journal generation threw:",
+          error instanceof Error ? `${error.name}: ${error.message}` : error,
+        );
         await composition.journalRepository.recordWorkflowOutcome?.({
           dailySessionId: input.subjectId, userId: evidence.snapshot.userId, sourceRevision: input.sourceRevision,
           expectedDataEpoch: input.expectedDataEpoch, workflowCommandId: input.workflowCommandId,
