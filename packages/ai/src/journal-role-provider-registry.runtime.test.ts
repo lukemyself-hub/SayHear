@@ -1,14 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { asConversationEventRevisionId } from "@sayhear/application";
+import {
+  asConversationEventRevisionId,
+  type ProviderDispatchErrorCategory,
+} from "@sayhear/application";
 
-const { capturedMessages, failWithCategory } = vi.hoisted<{
+const { capturedMessages, failWithCategory, mockOutput } = vi.hoisted<{
   capturedMessages: unknown[];
-  failWithCategory: { current: string | null };
+  failWithCategory: { current: ProviderDispatchErrorCategory | null };
+  mockOutput: { current: string };
 }>(() => ({
   capturedMessages: [],
   failWithCategory: { current: null },
+  mockOutput: {
+    current: '[{"locatorType":"text_span","locatorKey":"0:3","role":"factual_support"}]',
+  },
 }));
+
+const DEFAULT_DELTA =
+  '[{"locatorType":"text_span","locatorKey":"0:3","role":"factual_support"}]';
 
 // The runtime (responses-api) adapter path is exercised here so the opaque
 // placeholder revision used to build provider messages is checked against the
@@ -26,10 +36,7 @@ vi.mock("./responses-api-conversation-text-model", async () => {
           throw new ProviderDispatchError(failWithCategory.current);
         }
         capturedMessages.push(request.messages);
-        yield {
-          type: "delta",
-          delta: '[{"locatorType":"text_span","locatorKey":"0:3","role":"factual_support"}]',
-        };
+        yield { type: "delta", delta: mockOutput.current };
       },
     }),
   };
@@ -74,8 +81,28 @@ describe("Journal runtime role provider messages", () => {
       expect(error).not.toBeNull();
       expect(error!.message).toContain("evidence.extract");
       expect(error!.message).toContain("category authentication");
+      expect(error!.message).toContain("baseUrl=https://example.test");
+      expect(error!.message).toContain("timeoutMs=1000");
     } finally {
       failWithCategory.current = null;
+    }
+  });
+
+  it("strips a markdown code fence before parsing provider JSON", async () => {
+    mockOutput.current =
+      '```json\n[{"locatorType":"text_span","locatorKey":"0:3","role":"factual_support"}]\n```';
+    try {
+      const registry = createRuntimeJournalRoleProviderRegistry({
+        adapter: { type: "responses-api", apiKey: "test", baseUrl: "https://example.test", timeoutMs: 1000 },
+        roles,
+      });
+      await expect(
+        registry.evidenceExtractor.extract({ locale: "en-US", sourceText: "Walked home." }),
+      ).resolves.toEqual([
+        { locatorType: "text_span", locatorKey: "0:3", role: "factual_support" },
+      ]);
+    } finally {
+      mockOutput.current = DEFAULT_DELTA;
     }
   });
 });

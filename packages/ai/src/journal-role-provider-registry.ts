@@ -67,7 +67,8 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
     };
   }
 
-  const model = createResponsesApiConversationTextModel(input.adapter);
+  const adapter = input.adapter;
+  const model = createResponsesApiConversationTextModel(adapter);
   const askJson = async (role: JournalModelRole, instructions: string, payload: unknown): Promise<unknown> => {
     let output = "";
     try {
@@ -86,16 +87,27 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
         // Runtime log only (never Workflow history): fold the dispatch category
         // into the message so an incident can distinguish authentication from
         // timeout/configuration. Incident 2026-08-17 logged only the default
-        // ProviderDispatchError message, which hid the failure class.
+        // ProviderDispatchError message, which hid the failure class; the
+        // non-secret transport settings (baseUrl, timeoutMs) identify which
+        // environment value is misconfigured.
         throw new ProviderDispatchError(
           error.category,
-          `${role} (model=${configuration(role).model}) dispatch failed with category ${error.category}: ${error.message}`,
+          `${role} (model=${configuration(role).model}) dispatch failed with category ${error.category} (baseUrl=${adapter.baseUrl} timeoutMs=${adapter.timeoutMs}): ${error.message}`,
           error.settlesAttempt,
         );
       }
       throw error;
     }
-    try { return JSON.parse(output); } catch { throw new Error(`${role} returned non-JSON output.`); }
+    try { return JSON.parse(output); } catch {
+      // Some Providers occasionally wrap the JSON in a markdown code fence
+      // (observed with DeepSeek). Strip the fence before the last-resort
+      // failure so a transient formatting choice does not fail the Journal.
+      const fenced = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(output);
+      if (fenced) {
+        try { return JSON.parse(fenced[1] ?? ""); } catch { /* fall through */ }
+      }
+      throw new Error(`${role} returned non-JSON output.`);
+    }
   };
   return {
     evidenceExtractor: {

@@ -79,8 +79,19 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
           AND event.actor = 'user' AND event.lifecycle_status = 'active'
           AND revision.transcript_status IN ('final', 'corrected')
           AND revision.content_purged_at IS NULL`, [input.dailySessionId, row.user_id]);
-      for (const source of sourceRows.rows) {
-        const extracted = await this.extractor.extract({ locale: source.locale, sourceText: source.canonical_text });
+      const sources = sourceRows.rows;
+      // Provider evidence extraction is network-bound: one DeepSeek/OpenAI
+      // round-trip per source, ~20s each from production (Vercel). A serial
+      // pass over ten sources exceeded the provider timeout on every replay
+      // (incident 2026-08-18, category=timeout), so sources are extracted
+      // concurrently and the rows inserted in source order for a stable
+      // snapshot.
+      const extractedChunks = await Promise.all(
+        sources.map((source) => this.extractor.extract({ locale: source.locale, sourceText: source.canonical_text })),
+      );
+      for (let i = 0; i < sources.length; i++) {
+        const source = sources[i]!;
+        const extracted = extractedChunks[i]!;
         if (extracted.length === 0) throw new Error("Evidence extractor returned no locators.");
         for (const locator of extracted) await client.query(
         `INSERT INTO evidence_items (
