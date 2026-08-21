@@ -285,11 +285,11 @@ async function seedOwnerData(pool: IsolatedPostgresSchema["pool"]) {
       WHERE journal_id = '${J1}';
     INSERT INTO journal_statements (
       journal_statement_id, journal_version_id, statement_index,
-      statement_key, statement_text, epistemic_status, user_id,
+      statement_key, statement_text, user_id,
       source_revision, evidence_source_snapshot_id
     ) VALUES (
       '${JS1}', '${JV1}', 0, 'shipped', 'The owner shipped a privacy design.',
-      'supported_expression', '${OWNER}', 1, '${ES1}'
+      '${OWNER}', 1, '${ES1}'
     );
     INSERT INTO journal_statement_evidence_links (
       journal_statement_id, evidence_item_id, user_id, source_revision,
@@ -300,10 +300,10 @@ async function seedOwnerData(pool: IsolatedPostgresSchema["pool"]) {
     INSERT INTO journal_validation_results (
       journal_validation_result_id, journal_version_id, daily_session_id,
       source_revision, generation_command_id, model_run_attempt_id,
-      programmatic_valid, model_valid, status, validator_version, created_at
+      programmatic_valid, status, validator_version, created_at
     ) VALUES (
       '11111111-1111-7111-8111-11111111112a', '${JV1}', '${S1}', 1, 'jg-1',
-      'ja-1', TRUE, TRUE, 'validated', '${VALIDATOR_POLICY}', '${t1}'
+      'ja-1', TRUE, 'validated', '${VALIDATOR_POLICY}', '${t1}'
     );
     INSERT INTO daily_session_date_outcomes (
       daily_session_id, user_id, logical_date, outcome,
@@ -440,6 +440,7 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
         rolling_summary_command_source_refs,
         rolling_summary_commands,
         journal_statement_evidence_links,
+        journal_diagnostic_findings,
         journal_statements,
         journal_validation_results,
         journal_versions,
@@ -623,6 +624,7 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
       "evidence_model_run_attempts",
       "journals",
       "journal_versions",
+      "journal_diagnostic_findings",
       "journal_statements",
       "journal_statement_evidence_links",
       "journal_validation_results",
@@ -775,14 +777,14 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
         generationPolicyVersion: JOURNAL_POLICY,
         locale: "en",
         modelRunAttemptId: "drill-ja",
-        modelValid: true,
+        diagnosticStatus: "available",
+        diagnosticFindings: [],
         sourceRevision: 1,
         sourceSnapshotId: ES1,
         statements: [
           {
             id: "drill-statement",
             text: "A resurrection attempt that must never publish.",
-            epistemicStatus: "supported_expression",
             evidenceItemIds: [EI1],
           },
         ],
@@ -791,7 +793,7 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
         validatorConfigVersion: "conversation-text-champion:v1:journal-validate",
         validatorModel: "gpt-5.4",
         validatorPolicyVersion: VALIDATOR_POLICY,
-        validatorPromptFingerprint: "journal-validate:semantic:v2",
+        validatorPromptFingerprint: "journal-validate:diagnostic:v3",
         validatorProvider: "openai",
         validatorRole: "journal.validate",
         validatorVersion: VALIDATOR_POLICY,

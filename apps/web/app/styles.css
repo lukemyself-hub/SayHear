@@ -103,6 +103,8 @@ h1 {
 .journalHeading h2 { margin: 0; }
 .journalHeading a { color: #625d54; font-size: .9rem; }
 .journalStatement { line-height: 1.6; margin: 0; white-space: pre-wrap; }
+.journalStatementBlock { display: grid; gap: 0.35rem; }
+.journalFinding, .diagnosticNotice { color: #8a5a00; font-size: 0.9rem; line-height: 1.45; margin: 0; }
 .journalActions { display: flex; flex-wrap: wrap; gap: .7rem; }
 .journalActions button { background: transparent; border: 1px solid #83745e; border-radius: 999px; color: #22211f; cursor: pointer; font: inherit; padding: .5rem .8rem; }
 

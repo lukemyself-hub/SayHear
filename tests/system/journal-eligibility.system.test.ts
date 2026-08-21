@@ -124,6 +124,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         rolling_summary_command_source_refs,
         rolling_summary_commands,
         journal_statement_evidence_links,
+        journal_diagnostic_findings,
         journal_statements,
         journal_validation_results,
         journal_versions,
@@ -1054,7 +1055,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       userId: fixedInternalOwnerPrincipal.userId,
     })).resolves.toMatchObject({
       locale,
-      statements: [expect.objectContaining({ epistemicStatus: "supported_expression" })],
+      statements: [expect.objectContaining({ evidenceItemIds: expect.any(Array) })],
     });
     const lineage = await database.pool.query<{
       daily_session_id: string;
@@ -1120,7 +1121,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       userId: fixedInternalOwnerPrincipal.userId,
     });
     expect(inspected?.statements).toHaveLength(3);
-    expect(inspected?.statements.every((statement) => statement.epistemicStatus === "supported_expression")).toBe(true);
+    expect(inspected?.statements.every((statement) => statement.evidenceItemIds.length > 0)).toBe(true);
     const statements = await database.pool.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM journal_statements statement
        INNER JOIN journal_versions version ON version.journal_version_id = statement.journal_version_id
@@ -1182,9 +1183,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     expect(review.rows[0]!.count).toBe(1);
   });
 
-  it("records a Journal validation model failure with validator attempt metadata", async () => {
-    // Covers the second jsonb_build_object('failure_code', $9) INSERT branch
-    // in recordValidationFailure, which also previously failed type inference.
+  it("publishes a Journal when the diagnostic validator is unavailable", async () => {
     const dailySessionId = await submitConversation({
       clientEventId: "validator-failure-event",
       clientTurnId: "validator-failure-turn",
@@ -1215,16 +1214,19 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       command: { workflowCommandId: command.rows[0]!.workflow_command_id, policyVersion: "journal-generation:v2", sourceRevision, subjectId: dailySessionId, expectedDataEpoch: 1 },
       generationCommandId: "journal-validator-fail",
       modelRunAttemptId: "attempt-validator-fail",
-    })).resolves.toEqual({ outcome: "validation_failed", reason: "validator_model_failed" });
-    // Both the generation attempt (UPDATE $3) and the validator attempt (INSERT $9)
-    // persisted — failure_code is inferred as text in both jsonb_build_object calls.
-    const attempts = await database.pool.query<{ model_run_attempt_id: string; status: string; failure_code: string | null }>(
-      `SELECT model_run_attempt_id, status, result_metadata->>'failure_code' AS failure_code
+    })).resolves.toEqual({ outcome: "published" });
+    const attempts = await database.pool.query<{ model_run_attempt_id: string; status: string; diagnostic_status: string | null }>(
+      `SELECT model_run_attempt_id, status, result_metadata->>'diagnostic_status' AS diagnostic_status
        FROM journal_model_run_attempts WHERE generation_command_id = $1 ORDER BY created_at`,
       ["journal-validator-fail"],
     );
-    expect(attempts.rows).toContainEqual({ model_run_attempt_id: "attempt-validator-fail", status: "failed", failure_code: "validator_model_failed" });
-    expect(attempts.rows).toContainEqual({ model_run_attempt_id: "attempt-validator-fail:validate", status: "failed", failure_code: "validator_model_failed" });
+    expect(attempts.rows).toContainEqual({ model_run_attempt_id: "attempt-validator-fail", status: "completed", diagnostic_status: null });
+    expect(attempts.rows).toContainEqual({ model_run_attempt_id: "attempt-validator-fail:validate", status: "completed", diagnostic_status: "unavailable" });
+    const validation = await database.pool.query<{ status: string; diagnostic_status: string }>(
+      `SELECT status, diagnostic_status FROM journal_validation_results WHERE generation_command_id = $1`,
+      ["journal-validator-fail"],
+    );
+    expect(validation.rows[0]).toEqual({ status: "validated", diagnostic_status: "unavailable" });
   });
 
   it("supersedes the current Journal once after a same-day source advance", async () => {

@@ -404,6 +404,14 @@ _Avoid_: Journal Export
 SayHear 基于一天中用户表达形成的第三人称观察记录；它不是用户亲自撰写的文本，也不是对用户生活的事实裁决。
 _Avoid_: Conversation summary, User-authored diary
 
+**Journal Publish Gate**:
+Journal 发布前必须通过的、可以公开复核的结构与 User Evidence 来源约束；它不把写作视角、措辞风格或关键词黑名单当作事实门槛。
+_Avoid_: Editorial filter, Keyword blacklist, Model opinion
+
+**Journal Diagnostic Finding**:
+Validator 对 Journal 某个 Statement 的表达、推断或证据覆盖提出的可解释诊断；一次验证可以产生多条 Finding。Finding 必须能转换为用户可理解的固定类型和自然语言说明，并在 Internal Portal 对应 Statement 下展示；它不携带数值或 `info`/`warning` 严重程度，也不在没有明确、可复核的发布约束时单独阻止 Automatic Journal Delivery。Finding 和诊断异常均不展示失败 draft 原文。
+_Avoid_: Hidden rejection, Opaque validator block, Publication veto
+
 **Journal Correction**:
 用户明确指出 Journal 中存在事实错误或被写成事实的不当推断，或纠正后的 User Evidence 能确定 Entity 身份误判使原 Statement 错误归属；纠正来源后，SayHear 生成新的 Journal Version 取代旧版本。
 _Avoid_: Free-form edit, Regenerate
@@ -417,7 +425,7 @@ Relationship Memory Claim 或 Qualifier 被纠正后，通过反向血缘只复�
 _Avoid_: Full Journal scan, Model-selected Journal rewrite
 
 **Journal Observation**:
-AI 基于充分对话依据形成、但用户未直接陈述的主观理解；Journal 必须用自然的不确定性语言表达，不能把它写成确定事实。
+AI 基于充分对话依据形成、但用户未直接陈述的主观理解；它仍是 Journal 的写作目标，但不再依赖 `inferred_observation` 机器状态或固定词匹配来判断，也不因缺少特定不确定性词而单独阻止发布。
 _Avoid_: Fact, Unsupported inference
 
 **Automatic Journal Delivery**:

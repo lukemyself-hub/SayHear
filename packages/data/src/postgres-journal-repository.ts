@@ -1,4 +1,6 @@
 import type {
+  JournalDiagnosticCode,
+  JournalDiagnosticDetailCode,
   JournalEvidenceReference,
   JournalRepository,
   JournalSourceSnapshot,
@@ -284,13 +286,15 @@ export class PostgresJournalRepository implements JournalRepository {
         await client.query("COMMIT");
         return { outcome: "published" };
       }
+      const statementIds = new Map<string, string>();
       for (const [index, statement] of input.statements.entries()) {
         const created = await client.query<{ id: string }>(
           `INSERT INTO journal_statements (journal_statement_id, journal_version_id, statement_index,
-            statement_key, statement_text, epistemic_status, user_id, source_revision, evidence_source_snapshot_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING journal_statement_id AS id`,
-          [createUuidV7(now), version.rows[0]!.journal_version_id, index, statement.id, statement.text, statement.epistemicStatus, input.userId, input.sourceRevision, input.sourceSnapshotId],
+            statement_key, statement_text, user_id, source_revision, evidence_source_snapshot_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING journal_statement_id AS id`,
+          [createUuidV7(now), version.rows[0]!.journal_version_id, index, statement.id, statement.text, input.userId, input.sourceRevision, input.sourceSnapshotId],
         );
+        statementIds.set(statement.id, created.rows[0]!.id);
         for (const evidenceId of statement.evidenceItemIds) {
           await client.query(`INSERT INTO journal_statement_evidence_links (journal_statement_id, evidence_item_id, user_id, source_revision, evidence_source_snapshot_id, evidence_role)
             SELECT $1, evidence_item_id, user_id, $5, evidence_source_snapshot_id, evidence_role FROM evidence_items
@@ -303,20 +307,40 @@ export class PostgresJournalRepository implements JournalRepository {
            model_run_attempt_id, generation_command_id, role, provider, model, config_version,
            role_policy_version, prompt_fingerprint, status, provider_completed_at, result_metadata, created_at
          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'completed', $9,
-           jsonb_build_object('outcome', 'validated'), $9)
-         ON CONFLICT (model_run_attempt_id) DO NOTHING`,
+           jsonb_build_object('outcome', 'published', 'diagnostic_status', $10::text), $9)
+           ON CONFLICT (model_run_attempt_id) DO NOTHING`,
         [input.validationAttemptId, generationCommandId, input.validatorRole, input.validatorProvider,
           input.validatorModel, input.validatorConfigVersion, input.validatorPolicyVersion,
-          input.validatorPromptFingerprint, now],
+          input.validatorPromptFingerprint, now, input.diagnosticStatus],
       );
       await client.query(
         `INSERT INTO journal_validation_results (journal_validation_result_id, journal_version_id, daily_session_id,
-          source_revision, generation_command_id, model_run_attempt_id, programmatic_valid, model_valid,
+          source_revision, generation_command_id, model_run_attempt_id, programmatic_valid, diagnostic_status,
           status, validator_version, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, TRUE, $7, 'validated', $8, $9)`,
         [createUuidV7(now), version.rows[0]!.journal_version_id, input.dailySessionId, input.sourceRevision,
-          generationCommandId, input.validationAttemptId, input.modelValid, input.validatorVersion, now],
+          generationCommandId, input.validationAttemptId, input.diagnosticStatus, input.validatorVersion, now],
       );
+      const validationResult = await client.query<{ journal_validation_result_id: string }>(
+        `SELECT journal_validation_result_id
+         FROM journal_validation_results
+         WHERE journal_version_id = $1 AND generation_command_id = $2
+         ORDER BY created_at DESC LIMIT 1`,
+        [version.rows[0]!.journal_version_id, generationCommandId],
+      );
+      for (const finding of input.diagnosticFindings) {
+        const statementId = statementIds.get(finding.statementId);
+        if (!statementId || !validationResult.rows[0]) continue;
+        await client.query(
+          `INSERT INTO journal_diagnostic_findings (
+             journal_diagnostic_finding_id, journal_validation_result_id, journal_version_id,
+             journal_statement_id, code, detail_code, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (journal_validation_result_id, journal_statement_id, code, detail_code) DO NOTHING`,
+          [createUuidV7(now), validationResult.rows[0].journal_validation_result_id,
+            version.rows[0]!.journal_version_id, statementId, finding.code, finding.detailCode, now],
+        );
+      }
       await client.query("UPDATE journals SET current_version_id = $1 WHERE journal_id = $2", [version.rows[0]!.journal_version_id, journal.rows[0]!.journal_id]);
       await client.query(
         `UPDATE daily_session_date_outcomes
@@ -419,8 +443,8 @@ export class PostgresJournalRepository implements JournalRepository {
       }
       await client.query(
         `INSERT INTO journal_validation_results (journal_validation_result_id, journal_version_id, daily_session_id, source_revision,
-           generation_command_id, model_run_attempt_id, programmatic_valid, model_valid, failure_code, status, validator_version, created_at)
-         VALUES ($1, NULL, $2, $3, $4, $5, FALSE, FALSE, $6, 'needs_review', $7, CURRENT_TIMESTAMP)
+           generation_command_id, model_run_attempt_id, programmatic_valid, failure_code, status, validator_version, created_at)
+         VALUES ($1, NULL, $2, $3, $4, $5, FALSE, $6, 'needs_review', $7, CURRENT_TIMESTAMP)
          ON CONFLICT (daily_session_id, source_revision, generation_command_id, failure_code, status) DO NOTHING`,
         [createUuidV7(new Date()), input.dailySessionId, input.sourceRevision, generationCommandId,
           validationAttemptId ?? input.modelRunAttemptId, input.failureCode, input.validatorVersion],
@@ -430,15 +454,17 @@ export class PostgresJournalRepository implements JournalRepository {
   }
 
   public async readCurrent(input: { dailySessionId: string; userId: string }): Promise<import("@sayhear/application").JournalDraft | null> {
-    const result = await this.pool.query<{ journal_version_id: string; evidence_source_snapshot_id: string; extraction_policy_version: string; champion_config_version: string; champion_provider: string; champion_model: string; champion_snapshot: string; champion_provider_policy_version: string; source_revision: string; generation_command_id: string; model_run_attempt_id: string; validation_status: "validated" | "validation_failed" | "needs_review" | null; validation_failure_code: string | null; provider_role: string; provider: string; model: string; config_version: string; role_policy_version: string; prompt_fingerprint: string; provider_completed_at: Date | null; result_metadata: Record<string, unknown>; locale: string; statement_key: string; statement_text: string; epistemic_status: "supported_expression" | "inferred_observation"; evidence_item_id: string; source_event_id: string; source_revision_id: string; source_status: "final" | "corrected"; locator_type: JournalEvidenceReference["locatorType"]; locator_key: string; evidence_role: JournalEvidenceReference["role"] }>(
+    const result = await this.pool.query<{ journal_version_id: string; evidence_source_snapshot_id: string; extraction_policy_version: string; champion_config_version: string; champion_provider: string; champion_model: string; champion_snapshot: string; champion_provider_policy_version: string; source_revision: string; generation_command_id: string; model_run_attempt_id: string; validation_status: "validated" | "validation_failed" | "needs_review" | null; validation_failure_code: string | null; diagnostic_status: "available" | "unavailable" | "not_run" | null; provider_role: string; provider: string; model: string; config_version: string; role_policy_version: string; prompt_fingerprint: string; provider_completed_at: Date | null; result_metadata: Record<string, unknown>; locale: string; statement_key: string; statement_text: string; evidence_item_id: string; source_event_id: string; source_revision_id: string; source_status: "final" | "corrected"; locator_type: JournalEvidenceReference["locatorType"]; locator_key: string; evidence_role: JournalEvidenceReference["role"]; diagnostic_code: JournalDiagnosticCode | null; diagnostic_detail_code: JournalDiagnosticDetailCode | null }>(
       `SELECT version.journal_version_id, version.evidence_source_snapshot_id, snapshot.extraction_policy_version,
          snapshot.champion_config_version, snapshot.champion_provider, snapshot.champion_model, snapshot.champion_snapshot, snapshot.champion_provider_policy_version,
          version.source_revision, version.generation_command_id, version.model_run_attempt_id,
          validation.status AS validation_status, validation.failure_code AS validation_failure_code,
+         validation.diagnostic_status,
          attempt.role AS provider_role, attempt.provider, attempt.model, attempt.config_version, attempt.role_policy_version, attempt.prompt_fingerprint, attempt.provider_completed_at, attempt.result_metadata,
-         version.locale, statement.statement_key, statement.statement_text, statement.epistemic_status,
+         version.locale, statement.statement_key, statement.statement_text,
          link.evidence_item_id, evidence.source_event_id, evidence.source_revision_id, evidence.source_status,
-         evidence.locator_type, evidence.locator_key, evidence.evidence_role
+         evidence.locator_type, evidence.locator_key, evidence.evidence_role,
+         finding.code AS diagnostic_code, finding.detail_code AS diagnostic_detail_code
        FROM journals journal
        INNER JOIN journal_versions version ON version.journal_version_id = journal.current_version_id
        INNER JOIN evidence_source_snapshots snapshot ON snapshot.evidence_source_snapshot_id = version.evidence_source_snapshot_id
@@ -450,6 +476,9 @@ export class PostgresJournalRepository implements JournalRepository {
        INNER JOIN conversation_event_revisions source ON source.conversation_event_revision_id = evidence.source_revision_id
        INNER JOIN app_users owner ON owner.user_id = journal.user_id
        LEFT JOIN journal_validation_results validation ON validation.journal_version_id = version.journal_version_id
+       LEFT JOIN journal_diagnostic_findings finding
+         ON finding.journal_statement_id = statement.journal_statement_id
+        AND finding.journal_version_id = version.journal_version_id
        INNER JOIN journal_model_run_attempts attempt ON attempt.model_run_attempt_id = version.model_run_attempt_id
        WHERE journal.daily_session_id = $1
          AND journal.user_id = $2
@@ -497,6 +526,7 @@ export class PostgresJournalRepository implements JournalRepository {
       modelRunAttemptId: result.rows[0].model_run_attempt_id,
       validationStatus: result.rows[0].validation_status ?? "validated",
       validationFailureCode: result.rows[0].validation_failure_code,
+      diagnosticStatus: result.rows[0].diagnostic_status === "unavailable" ? "unavailable" : "available",
       providerRole: result.rows[0].provider_role,
       provider: result.rows[0].provider,
       model: result.rows[0].model,
@@ -514,8 +544,14 @@ export class PostgresJournalRepository implements JournalRepository {
       statements: [...new Map(result.rows.map((row) => [row.statement_key, row])).values()].map((row) => ({
         id: row.statement_key,
         text: row.statement_text,
-        epistemicStatus: row.epistemic_status,
-        evidenceItemIds: result.rows.filter((candidate) => candidate.statement_key === row.statement_key && candidate.evidence_item_id).map((candidate) => candidate.evidence_item_id!),
+        evidenceItemIds: [...new Set(result.rows.filter((candidate) => candidate.statement_key === row.statement_key && candidate.evidence_item_id).map((candidate) => candidate.evidence_item_id!))],
+        diagnosticFindings: [...new Map(result.rows
+          .filter((candidate) => candidate.statement_key === row.statement_key && candidate.diagnostic_code && candidate.diagnostic_detail_code)
+          .map((candidate) => [`${candidate.diagnostic_code}:${candidate.diagnostic_detail_code}`, {
+            statementId: row.statement_key,
+            code: candidate.diagnostic_code!,
+            detailCode: candidate.diagnostic_detail_code!,
+          }])).values()],
       })),
     };
   }
@@ -552,8 +588,29 @@ export class PostgresJournalRepository implements JournalRepository {
           state: Number(row.source_revision) === Number(row.journal_source_revision)
             ? "current"
             : row.activity_state === "quiescent" ? "updating" : "outdated",
-          version: { locale: journal.locale, statements: journal.statements },
+          version: {
+            locale: journal.locale,
+            statements: journal.statements,
+            diagnosticStatus: journal.diagnosticStatus ?? "available",
+          },
         }
+      : null;
+  }
+
+  public async readLatestGenerationNotice(input: { userId: string }): Promise<import("@sayhear/application").JournalGenerationNotice | null> {
+    const result = await this.pool.query<{ logical_date: string; status: "validated" | "validation_failed" | "needs_review"; failure_code: string | null }>(
+      `SELECT session.logical_date::text, validation.status, validation.failure_code
+       FROM journal_validation_results validation
+       INNER JOIN daily_sessions session ON session.daily_session_id = validation.daily_session_id
+       INNER JOIN app_users owner ON owner.user_id = session.user_id
+       WHERE session.user_id = $1 AND owner.status = 'active'
+       ORDER BY validation.created_at DESC
+       LIMIT 1`,
+      [input.userId],
+    );
+    const row = result.rows[0];
+    return row?.status === "needs_review" && row.failure_code
+      ? { logicalDate: row.logical_date, failureCode: row.failure_code }
       : null;
   }
 }

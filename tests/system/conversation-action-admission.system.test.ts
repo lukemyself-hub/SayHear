@@ -76,6 +76,7 @@ describe("Journal regeneration Action admission system seam", () => {
         rolling_summary_command_source_refs,
         rolling_summary_commands,
         journal_statement_evidence_links,
+        journal_diagnostic_findings,
         journal_statements,
         journal_validation_results,
         journal_versions,
@@ -325,7 +326,7 @@ describe("Journal regeneration Action admission system seam", () => {
       },
       validationProvider: {
         role: "journal.validate",
-        validate: async () => ({ valid: true }),
+        validate: async () => ({ status: "available", findings: [] }),
       },
       model: {
         generate: async (input) => ({
@@ -333,7 +334,6 @@ describe("Journal regeneration Action admission system seam", () => {
           statements: [{
             id: "regenerated-statement",
             text: "The owner described the day with a clearer turning point.",
-            epistemicStatus: "supported_expression" as const,
             evidenceItemIds: [evidenceItemId],
           }],
         }),

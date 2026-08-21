@@ -23,7 +23,6 @@ describe("automatic evidence-backed Journal", () => {
       statements: [{
         id: "statement-1",
         text: "The owner described a turning point in the day.",
-        epistemicStatus: "supported_expression" as const,
         evidenceItemIds: [evidence.id],
       }],
     });
@@ -37,7 +36,7 @@ describe("automatic evidence-backed Journal", () => {
       evidenceExtractionPolicyVersion: "evidence-extraction:v1",
       generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
       validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
-      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      validationProvider: { role: "journal.validate", validate: async () => ({ status: "available", findings: [] }) },
       model: { generate },
       repository: {
         readSource: vi.fn().mockResolvedValue({
@@ -89,14 +88,13 @@ describe("automatic evidence-backed Journal", () => {
       evidenceExtractionPolicyVersion: "evidence-extraction:v1",
       generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
       validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
-      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      validationProvider: { role: "journal.validate", validate: async () => ({ status: "available", findings: [] }) },
       model: {
         generate: vi.fn().mockImplementation(async () => ({
           locale: "en-US",
           statements: [{
             id: "statement-1",
             text: "The owner described finishing a difficult task.",
-            epistemicStatus: "supported_expression",
             evidenceItemIds: [evidence.id],
           }],
         })),
@@ -132,7 +130,43 @@ describe("automatic evidence-backed Journal", () => {
     }));
   });
 
-  it("does not publish drafts that cite missing Evidence or use first-person prose", async () => {
+  it("publishes structured non-blocking findings using only cited Evidence", async () => {
+    const publish = vi.fn().mockResolvedValue({ outcome: "published" });
+    const validate = vi.fn().mockResolvedValue({
+      status: "available",
+      findings: [{ statementId: "statement-1", code: "third_person_style", detailCode: "first_person_expression" }],
+    });
+    const secondEvidence = { ...evidence, id: "evidence-2" };
+    const service = createJournalService({
+      journalPolicyVersion: "journal-generation:v1",
+      validatorVersion: "journal-validator:v1",
+      evidenceExtractionPolicyVersion: "evidence-extraction:v1",
+      generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
+      validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
+      validationProvider: { role: "journal.validate", validate },
+      model: { generate: async () => ({ locale: "en-US", statements: [{ id: "statement-1", text: "I had a hard day.", evidenceItemIds: [evidence.id] }] }) },
+      repository: {
+        readSource: vi.fn().mockResolvedValue({ sourceSnapshotId: "snapshot-1", dailySessionId: sessionId, userId: "user-1", sourceRevision: 4, evidenceItems: [evidence, secondEvidence], sourceTextByEvidenceId: { [evidence.id]: "A hard day.", [secondEvidence.id]: "Another event." } }),
+        startGeneration: vi.fn().mockResolvedValue({ accepted: true, generationCommandId: "command-1" }),
+        publish,
+        recordValidationFailure: vi.fn(),
+        readLatestCurrent: vi.fn().mockResolvedValue(null),
+      },
+    });
+
+    await expect(service.generate({ dailySessionId: sessionId, sourceRevision: 4, generationCommandId: "command-1", modelRunAttemptId: "attempt-1", expectedDataEpoch: 1, policyVersion: "journal-generation:v1" }))
+      .resolves.toEqual({ outcome: "published" });
+    expect(validate).toHaveBeenCalledWith(expect.objectContaining({
+      evidenceItems: [evidence],
+      sourceTextByEvidenceId: { [evidence.id]: "A hard day." },
+    }));
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+      diagnosticStatus: "available",
+      diagnosticFindings: [{ statementId: "statement-1", code: "third_person_style", detailCode: "first_person_expression" }],
+    }));
+  });
+
+  it("does not publish drafts that cite missing Evidence", async () => {
     const publish = vi.fn();
     const service = createJournalService({
       journalPolicyVersion: "journal-generation:v1",
@@ -140,10 +174,10 @@ describe("automatic evidence-backed Journal", () => {
       evidenceExtractionPolicyVersion: "evidence-extraction:v1",
       generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
       validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
-      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      validationProvider: { role: "journal.validate", validate: async () => ({ status: "available", findings: [] }) },
       model: { generate: vi.fn().mockImplementation(async () => ({
         locale: "en-US",
-        statements: [{ id: "s", text: "I had a hard day.", epistemicStatus: "supported_expression", evidenceItemIds: ["missing"] }],
+        statements: [{ id: "s", text: "I had a hard day.", evidenceItemIds: ["missing"] }],
       })) },
       repository: {
         readSource: vi.fn().mockResolvedValue({ sourceSnapshotId: "snapshot-1", dailySessionId: sessionId, userId: "user-1", sourceRevision: 4, evidenceItems: [evidence] }),
@@ -159,15 +193,15 @@ describe("automatic evidence-backed Journal", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("rejects Chinese first-person prose and inferred statements without uncertainty", () => {
+  it("does not hard-block first-person or inferred wording", () => {
     expect(validateJournalDraft({
       locale: "zh-CN",
-      statements: [{ id: "s1", text: "我今天很累。", epistemicStatus: "supported_expression", evidenceItemIds: [evidence.id] }],
-    }, [evidence])).toEqual({ valid: false, reason: "first_person_journal" });
+      statements: [{ id: "s1", text: "我今天很累。", evidenceItemIds: [evidence.id] }],
+    }, [evidence])).toEqual({ valid: true });
     expect(validateJournalDraft({
       locale: "en-US",
-      statements: [{ id: "s2", text: "The owner is overwhelmed.", epistemicStatus: "inferred_observation", evidenceItemIds: [evidence.id] }],
-    }, [evidence])).toEqual({ valid: false, reason: "uncertainty_not_preserved" });
+      statements: [{ id: "s2", text: "The owner is overwhelmed.", evidenceItemIds: [evidence.id] }],
+    }, [evidence])).toEqual({ valid: true });
   });
 
   it("settles both attempts when the model validator throws", async () => {
@@ -177,15 +211,15 @@ describe("automatic evidence-backed Journal", () => {
       generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
       validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
       validationProvider: { role: "journal.validate", validate: async () => { throw new Error("provider unavailable"); } },
-      model: { generate: async () => ({ locale: "en-US", statements: [{ id: "s", text: "The owner described a walk.", epistemicStatus: "supported_expression", evidenceItemIds: [evidence.id] }] }) },
+      model: { generate: async () => ({ locale: "en-US", statements: [{ id: "s", text: "The owner described a walk.", evidenceItemIds: [evidence.id] }] }) },
       repository: {
         readSource: async () => ({ sourceSnapshotId: "snapshot-1", dailySessionId: sessionId, userId: "user-1", sourceRevision: 4, evidenceItems: [evidence] }),
-        startGeneration: async () => ({ accepted: true, generationCommandId: "command-1" }), publish: vi.fn(), recordValidationFailure, readLatestCurrent: vi.fn().mockResolvedValue(null),
+        startGeneration: async () => ({ accepted: true, generationCommandId: "command-1" }), publish: vi.fn().mockResolvedValue({ outcome: "published" }), recordValidationFailure, readLatestCurrent: vi.fn().mockResolvedValue(null),
       },
     });
     await expect(service.generate({ dailySessionId: sessionId, sourceRevision: 4, generationCommandId: "command-1", modelRunAttemptId: "attempt-1", expectedDataEpoch: 1, policyVersion: "journal-generation:v1" }))
-      .resolves.toEqual({ outcome: "validation_failed", reason: "validator_model_failed" });
-    expect(recordValidationFailure).toHaveBeenCalledWith(expect.objectContaining({ validationAttemptId: "attempt-1:validate", failureCode: "validator_model_failed" }));
+      .resolves.toEqual({ outcome: "published" });
+    expect(recordValidationFailure).not.toHaveBeenCalled();
   });
 
   it("does not dispatch a Journal model or publish when the independent Journal write switch is disabled", async () => {
@@ -195,7 +229,7 @@ describe("automatic evidence-backed Journal", () => {
       journalPolicyVersion: "journal-generation:v1", validatorVersion: "journal-validator:v1", evidenceExtractionPolicyVersion: "evidence-extraction:v1",
       generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
       validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
-      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      validationProvider: { role: "journal.validate", validate: async () => ({ status: "available", findings: [] }) },
       model: { generate },
       repository: {
         readSource: vi.fn(), startGeneration: vi.fn(), publish, recordValidationFailure: vi.fn(), readLatestCurrent: vi.fn().mockResolvedValue(null),
@@ -213,13 +247,13 @@ describe("automatic evidence-backed Journal", () => {
     const readLatestCurrent = vi.fn().mockResolvedValue({
       dailySessionId: sessionId,
       logicalDate: "2026-08-12",
-      version: { locale: "en-US", statements: [] },
+      version: { locale: "en-US", statements: [], diagnosticStatus: "available" },
     });
     const service = createJournalService({
       journalPolicyVersion: "journal-generation:v1", validatorVersion: "journal-validator:v1", evidenceExtractionPolicyVersion: "evidence-extraction:v1",
       generationMetadata: { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-generation:v1", promptFingerprint: "test" },
       validationMetadata: { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:v1", rolePolicyVersion: "journal-validator:v1", promptFingerprint: "test" },
-      validationProvider: { role: "journal.validate", validate: async () => ({ valid: true }) },
+      validationProvider: { role: "journal.validate", validate: async () => ({ status: "available", findings: [] }) },
       model: { generate: async () => ({ locale: "en-US", statements: [] }) },
       repository: { readSource: vi.fn(), startGeneration: vi.fn(), publish: vi.fn(), recordValidationFailure: vi.fn(), readLatestCurrent },
     });

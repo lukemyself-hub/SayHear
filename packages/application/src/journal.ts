@@ -2,8 +2,65 @@ import { asDailySessionId, type UserId } from "@sayhear/domain";
 
 import type { RecoveryGate } from "./recovery-gate";
 
-export type JournalEpistemicStatus = "supported_expression" | "inferred_observation";
 export type JournalGenerationKind = "automatic" | "regeneration";
+export type JournalDiagnosticCode =
+  | "third_person_style"
+  | "evidence_grounding"
+  | "narrative_safety"
+  | "certainty_or_agreement";
+export type JournalDiagnosticDetailCode =
+  | "first_person_expression"
+  | "evidence_support_unclear"
+  | "diagnosis_or_treatment_language"
+  | "prescriptive_language"
+  | "certainty_language"
+  | "agreement_language";
+export type JournalDiagnosticFinding = Readonly<{
+  statementId: string;
+  code: JournalDiagnosticCode;
+  detailCode: JournalDiagnosticDetailCode;
+}>;
+export type JournalDiagnosticStatus = "available" | "unavailable";
+export type JournalGenerationNotice = Readonly<{
+  logicalDate: string;
+  failureCode: string;
+}>;
+const JOURNAL_DIAGNOSTIC_DETAIL_CODES: Readonly<Record<JournalDiagnosticCode, readonly JournalDiagnosticDetailCode[]>> = {
+  third_person_style: ["first_person_expression"],
+  evidence_grounding: ["evidence_support_unclear"],
+  narrative_safety: ["diagnosis_or_treatment_language", "prescriptive_language"],
+  certainty_or_agreement: ["certainty_language", "agreement_language"],
+};
+
+export function normalizeJournalDiagnosticFindings(
+  value: unknown,
+  draft: Pick<JournalDraft, "statements">,
+): readonly JournalDiagnosticFinding[] | null {
+  if (!Array.isArray(value)) return null;
+  const statementIds = new Set(draft.statements.map((statement) => statement.id));
+  const seen = new Set<string>();
+  const findings: JournalDiagnosticFinding[] = [];
+  for (const candidate of value) {
+    if (typeof candidate !== "object" || candidate === null) return null;
+    const record = candidate as Record<string, unknown>;
+    if (Object.keys(record).some((key) => !["statementId", "code", "detailCode"].includes(key))) return null;
+    if (typeof record.statementId !== "string" || typeof record.code !== "string" || typeof record.detailCode !== "string") return null;
+    if (!statementIds.has(record.statementId)) return null;
+    if (!(record.code in JOURNAL_DIAGNOSTIC_DETAIL_CODES)) return null;
+    const code = record.code as JournalDiagnosticCode;
+    if (!(JOURNAL_DIAGNOSTIC_DETAIL_CODES[code] as readonly string[]).includes(record.detailCode)) return null;
+    const key = `${record.statementId}:${record.code}:${record.detailCode}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    findings.push({
+      statementId: record.statementId,
+      code,
+      detailCode: record.detailCode as JournalDiagnosticDetailCode,
+    });
+    if (findings.length > 32) return null;
+  }
+  return findings;
+}
 export type JournalEvidenceReference = Readonly<{
   id: string;
   sourceEventId: string;
@@ -18,8 +75,8 @@ export type JournalSourceText = Readonly<Record<string, string>>;
 export type JournalStatementDraft = Readonly<{
   id: string;
   text: string;
-  epistemicStatus: JournalEpistemicStatus;
   evidenceItemIds: readonly string[];
+  diagnosticFindings?: readonly JournalDiagnosticFinding[];
 }>;
 export type JournalDraft = Readonly<{
   journalVersionId?: string;
@@ -31,6 +88,7 @@ export type JournalDraft = Readonly<{
   modelRunAttemptId?: string;
   validationStatus?: "validated" | "validation_failed" | "needs_review";
   validationFailureCode?: string | null;
+  diagnosticStatus?: JournalDiagnosticStatus;
   providerRole?: string;
   provider?: string;
   model?: string;
@@ -57,6 +115,7 @@ export type JournalSourceSnapshot = Readonly<{
 export type CurrentJournalVersion = Readonly<{
   locale: string;
   statements: readonly JournalStatementDraft[];
+  diagnosticStatus: JournalDiagnosticStatus;
 }>;
 export type CurrentJournal = Readonly<{
   dailySessionId: string;
@@ -103,7 +162,8 @@ export type JournalRepository = Readonly<{
     sourceSnapshotId: string;
     locale: string;
     statements: readonly JournalStatementDraft[];
-    modelValid: boolean;
+    diagnosticStatus: JournalDiagnosticStatus;
+    diagnosticFindings: readonly JournalDiagnosticFinding[];
     generationKind?: JournalGenerationKind;
     actionExecutionId?: string;
     targetVersionId?: string;
@@ -138,6 +198,7 @@ export type JournalRepository = Readonly<{
   }): Promise<void>;
   readCurrent?(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
   readLatestCurrent(input: { userId: string }): Promise<CurrentJournal | null>;
+  readLatestGenerationNotice?(input: { userId: string }): Promise<JournalGenerationNotice | null>;
 }>;
 
 export type JournalModel = Readonly<{
@@ -151,7 +212,10 @@ export type JournalModel = Readonly<{
 export type JournalProviderEgress = JournalModel;
 export type JournalValidationProvider = Readonly<{
   role: "journal.validate";
-  validate(input: { draft: JournalDraft; evidenceItems: readonly JournalEvidenceReference[]; sourceTextByEvidenceId: JournalSourceText }): Promise<{ valid: true } | { valid: false; reason: string }>;
+  validate(input: { draft: JournalDraft; evidenceItems: readonly JournalEvidenceReference[]; sourceTextByEvidenceId: JournalSourceText }): Promise<{
+    status: "available";
+    findings: readonly JournalDiagnosticFinding[];
+  }>;
 }>;
 
 export type JournalService = Readonly<{
@@ -172,6 +236,7 @@ export type JournalService = Readonly<{
   }>;
   inspect(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
   readLatest(input: { userId: string }): Promise<CurrentJournal | null>;
+  readLatestGenerationNotice(input: { userId: string }): Promise<JournalGenerationNotice | null>;
 }>;
 
 export type AutomaticJournalCommand = Readonly<{
@@ -262,48 +327,31 @@ export function createJournalService(dependencies: {
         });
         return { outcome: "validation_failed", reason: validation.reason };
       }
-      let narrativeValidation: Awaited<ReturnType<JournalValidationProvider["validate"]>>;
+      const citedEvidenceIds = new Set(draft.statements.flatMap((statement) => statement.evidenceItemIds));
+      const diagnosticEvidenceItems = source.evidenceItems.filter((item) => citedEvidenceIds.has(item.id));
+      const diagnosticSourceText = Object.fromEntries(
+        diagnosticEvidenceItems
+          .filter((item) => source.sourceTextByEvidenceId?.[item.id] !== undefined)
+          .map((item) => [item.id, source.sourceTextByEvidenceId?.[item.id] as string]),
+      );
+      let diagnosticStatus: JournalDiagnosticStatus = "available";
+      let diagnosticFindings: readonly JournalDiagnosticFinding[] = [];
       try {
-        narrativeValidation = await dependencies.validationProvider.validate({ draft, evidenceItems: source.evidenceItems, sourceTextByEvidenceId: source.sourceTextByEvidenceId ?? {} });
+        const result = await dependencies.validationProvider.validate({
+          draft,
+          evidenceItems: diagnosticEvidenceItems,
+          sourceTextByEvidenceId: diagnosticSourceText,
+        });
+        const normalized = result.status === "available"
+          ? normalizeJournalDiagnosticFindings(result.findings, draft)
+          : null;
+        if (!normalized) {
+          diagnosticStatus = "unavailable";
+        } else {
+          diagnosticFindings = normalized;
+        }
       } catch {
-        await dependencies.repository.recordValidationFailure?.({
-          dailySessionId, sourceRevision: source.sourceRevision, generationCommandId,
-          modelRunAttemptId: input.modelRunAttemptId, validatorVersion: dependencies.validatorVersion,
-          failureCode: "validator_model_failed", expectedDataEpoch: input.expectedDataEpoch,
-          generationPolicyVersion: dependencies.journalPolicyVersion,
-          generationKind: input.generationKind ?? "automatic",
-          ...(input.actionExecutionId === undefined ? {} : { actionExecutionId: input.actionExecutionId }),
-          validationAttemptId: `${input.modelRunAttemptId}:validate`,
-          validatorRole: dependencies.validationMetadata.role,
-          validatorProvider: dependencies.validationMetadata.provider,
-          validatorModel: dependencies.validationMetadata.model,
-          validatorConfigVersion: dependencies.validationMetadata.configVersion,
-          validatorPolicyVersion: dependencies.validationMetadata.rolePolicyVersion,
-          validatorPromptFingerprint: dependencies.validationMetadata.promptFingerprint,
-        });
-        return { outcome: "validation_failed", reason: "validator_model_failed" };
-      }
-      if (!narrativeValidation.valid) {
-        await dependencies.repository.recordValidationFailure?.({
-          dailySessionId,
-          sourceRevision: source.sourceRevision,
-          generationCommandId,
-          modelRunAttemptId: input.modelRunAttemptId,
-          validatorVersion: dependencies.validatorVersion,
-          failureCode: narrativeValidation.reason,
-          expectedDataEpoch: input.expectedDataEpoch,
-          generationPolicyVersion: dependencies.journalPolicyVersion,
-          generationKind: input.generationKind ?? "automatic",
-          ...(input.actionExecutionId === undefined ? {} : { actionExecutionId: input.actionExecutionId }),
-          validationAttemptId: `${input.modelRunAttemptId}:validate`,
-          validatorRole: dependencies.validationMetadata.role,
-          validatorProvider: dependencies.validationMetadata.provider,
-          validatorModel: dependencies.validationMetadata.model,
-          validatorConfigVersion: dependencies.validationMetadata.configVersion,
-          validatorPolicyVersion: dependencies.validationMetadata.rolePolicyVersion,
-          validatorPromptFingerprint: dependencies.validationMetadata.promptFingerprint,
-        });
-        return { outcome: "validation_failed", reason: narrativeValidation.reason };
+        diagnosticStatus = "unavailable";
       }
       return dependencies.repository.publish({
         dailySessionId,
@@ -324,7 +372,8 @@ export function createJournalService(dependencies: {
         sourceSnapshotId: source.sourceSnapshotId,
         locale: draft.locale,
         statements: draft.statements,
-        modelValid: narrativeValidation.valid,
+        diagnosticStatus,
+        diagnosticFindings,
         generationKind: input.generationKind ?? "automatic",
         ...(input.actionExecutionId === undefined
           ? {}
@@ -343,6 +392,10 @@ export function createJournalService(dependencies: {
     async readLatest(input) {
       await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
       return dependencies.repository.readLatestCurrent({ userId: input.userId });
+    },
+    async readLatestGenerationNotice(input) {
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
+      return dependencies.repository.readLatestGenerationNotice?.({ userId: input.userId }) ?? null;
     },
   };
 }
@@ -417,8 +470,7 @@ export function validateJournalDraft(
   const texts = new Set<string>();
   for (const statement of draft.statements) {
     if (!statement || typeof statement !== "object" || typeof statement.id !== "string" ||
-      typeof statement.text !== "string" || !Array.isArray(statement.evidenceItemIds) ||
-      !["supported_expression", "inferred_observation"].includes(statement.epistemicStatus)) {
+      typeof statement.text !== "string" || !Array.isArray(statement.evidenceItemIds)) {
       return { valid: false, reason: "invalid_schema" };
     }
     if (!statement.id || /\s/.test(statement.id) || ids.has(statement.id)) return { valid: false, reason: "duplicate_statement_id" };
@@ -426,27 +478,12 @@ export function validateJournalDraft(
     const normalizedText = statement.text.trim();
     if (!normalizedText || texts.has(normalizedText)) return { valid: false, reason: "empty_or_duplicate_statement" };
     texts.add(normalizedText);
-    if (/(?:\bI\b|\bme\b|\bmy\b|我|我的|我们)/i.test(normalizedText)) return { valid: false, reason: "first_person_journal" };
-    if (statement.epistemicStatus === "inferred_observation" && !/(?:may|might|seems?|appears?|可能|似乎|看起来)/i.test(normalizedText)) {
-      return { valid: false, reason: "uncertainty_not_preserved" };
-    }
     if (statement.evidenceItemIds.length === 0) return { valid: false, reason: "missing_evidence" };
     for (const evidenceId of statement.evidenceItemIds) {
       const evidence = evidenceById.get(evidenceId);
       if (!evidence || evidence.sourceActor !== "user" || !["final", "corrected"].includes(evidence.sourceStatus)) {
         return { valid: false, reason: "invalid_evidence" };
       }
-    }
-  }
-  return { valid: true };
-}
-
-export function validateJournalNarrative(
-  draft: JournalDraft,
-): { valid: true } | { valid: false; reason: string } {
-  for (const statement of draft.statements) {
-    if (/(?:\b(?:diagnos(?:e|is|ed|ing)|therap(?:y|ist)|should|must|you need)\b|诊断|治疗|应该|必须)/i.test(statement.text)) {
-      return { valid: false, reason: "unsafe_narrative" };
     }
   }
   return { valid: true };

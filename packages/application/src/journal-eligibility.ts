@@ -440,17 +440,24 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
  * review alone — and is exercised by the canary system test.
  */
 export function assertWorkflowSafe(value: unknown, path = "payload"): void {
-  if (value === null || typeof value !== "object") {
-    return;
-  }
-  const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    if (!ALLOWLISTED_PAYLOAD_KEYS.has(key)) {
-      throw new Error(
-        `Workflow ${path} contains a non-allowlisted field: ${key}`,
-      );
+  const pending: Array<{ value: unknown; path: string }> = [{ value, path }];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current || current.value === null || typeof current.value !== "object") {
+      continue;
     }
-    assertWorkflowSafe(record[key], `${path}.${key}`);
+    const record = current.value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      if (!ALLOWLISTED_PAYLOAD_KEYS.has(key)) {
+        throw new Error(
+          `Workflow ${current.path} contains a non-allowlisted field: ${key}`,
+        );
+      }
+      const child = record[key];
+      if (child !== null && typeof child === "object") {
+        pending.push({ value: child, path: `${current.path}.${key}` });
+      }
+    }
   }
 }
 

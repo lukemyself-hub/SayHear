@@ -250,7 +250,6 @@ journal_statements
   journal_version_id
   statement_index
   statement_text
-  epistemic_status
   validation_status
   content_purged_at
 
@@ -283,10 +282,12 @@ journal_statement_relationship_links
   link_role                      # asserted_relationship / relationship_context
 ```
 
-每条 JournalStatement 必须区分用户明确表达与 `inferred_observation`。
-`inferred_observation` 必须有充分 User Evidence，并在正文中使用与认识状态一致的
-自然不确定性语言；技术状态不直接展示给用户。程序校验认识状态与 Evidence，
-模型校验文字是否把推断说成事实。
+JournalStatement 不再持久化 `inferred_observation` 认识状态。每条 Statement 仍必须
+通过结构与 Evidence provenance 的 Publish Gate；第三人称视角、观察与事实的表达
+边界，以及语义 Evidence 支持关系由 `journal.validate` 以固定 Code / detail Code
+产出非阻断 Journal Diagnostic Finding。Finding 与对应 Statement 和 published
+JournalVersion 关联，Portal 转换为自然语言展示；诊断器不可用不阻止发布。详见
+ADR-0107。
 
 每条使用 Entity enrichment 的 JournalStatement 必须保存生成时采用的
 `entity_id + entity_version_id + entity_role`。Entity link 只用于身份引用、

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --experimental-strip-types src/validate-startup.ts && next build && node ../../scripts/check-browser-bundle.mjs",
+    "build": "node --experimental-strip-types src/validate-startup.ts && next build --webpack && node ../../scripts/check-browser-bundle.mjs",
     "dev": "next dev",
     "prestart": "node --experimental-strip-types src/validate-startup.ts",
     "start": "next start",
