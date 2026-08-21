@@ -178,6 +178,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         rolling_summary_command_source_refs,
         rolling_summary_commands,
         journal_statement_evidence_links,
+        journal_diagnostic_findings,
         journal_statements,
         journal_validation_results,
         journal_versions,

@@ -26,13 +26,13 @@ describe("Journal role safeguards", () => {
       ]);
   });
 
-  it("rejects a Journal which omits frozen Evidence", async () => {
+  it("does not apply semantic hard gates in the deterministic validator", async () => {
     const result = await registry.validator.validate({
-      draft: { locale: "en-US", statements: [{ id: "s", text: "The owner walked home.", epistemicStatus: "supported_expression", evidenceItemIds: ["one"] }] },
+      draft: { locale: "en-US", statements: [{ id: "s", text: "The owner walked home.", evidenceItemIds: ["one"] }] },
       evidenceItems: evidence,
       sourceTextByEvidenceId: { one: "Walked home.", two: "Called a friend." },
     });
-    expect(result).toEqual({ valid: false, reason: "material_evidence_omitted" });
+    expect(result).toEqual({ status: "available", findings: [] });
   });
 
   it.each([

@@ -102,6 +102,7 @@ const CLEARED_SURFACES: ReadonlyArray<Readonly<{
   { label: "evidence_model_run_attempts", sql: "SELECT count(*) FROM evidence_model_run_attempts WHERE evidence_source_snapshot_id IN (SELECT evidence_source_snapshot_id FROM evidence_source_snapshots WHERE user_id = $1)" },
   { label: "journals", sql: "SELECT count(*) FROM journals WHERE user_id = $1" },
   { label: "journal_versions", sql: "SELECT count(*) FROM journal_versions WHERE user_id = $1" },
+  { label: "journal_diagnostic_findings", sql: "SELECT count(*) FROM journal_diagnostic_findings WHERE journal_statement_id IN (SELECT journal_statement_id FROM journal_statements WHERE user_id = $1)" },
   { label: "journal_statements", sql: "SELECT count(*) FROM journal_statements WHERE user_id = $1" },
   { label: "journal_statement_evidence_links", sql: "SELECT count(*) FROM journal_statement_evidence_links WHERE user_id = $1" },
   { label: "journal_validation_results", sql: "SELECT count(*) FROM journal_validation_results WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
@@ -558,6 +559,13 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       // Hard-DELETE every other owner-scoped surface, FK-safe order.
       await client.query(
         "DELETE FROM journal_statement_evidence_links WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        `DELETE FROM journal_diagnostic_findings
+         WHERE journal_statement_id IN (
+           SELECT journal_statement_id FROM journal_statements WHERE user_id = $1
+         )`,
         [userId],
       );
       await client.query("DELETE FROM journal_statements WHERE user_id = $1", [userId]);

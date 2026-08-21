@@ -25,7 +25,6 @@ Accepted
 - [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
 - [`0065`](adr/0065-vercel-hosts-web-bff-and-durable-workflows.md)：Vercel 承载 Web、BFF 与 Durable Workflow
 - [`0066`](adr/0066-vercel-workflows-v4-runs-durable-asynchronous-work.md)：1A.2 起由 Vercel Workflows v4 承载持久异步任务
-- [`0105`](adr/0105-minute-level-cron-is-a-production-reliability-gate.md)：分钟级 Cron 是生产异步可靠性门槛，不是开发期配置
 - [`0068`](adr/0068-agent-frameworks-do-not-own-long-term-product-state.md)：Agent Framework 不保存产品长期状态
 - [`0069`](adr/0069-internal-core-does-not-add-python-redis-or-temporal.md)：Internal Core 不增加 Python Worker、Redis 或 Temporal
 - [`0072`](adr/0072-internal-core-validates-bilingual-and-code-switched-use.md)：Internal Core 验收英文、中文与 code-switching，不建设中国大陆部署
@@ -39,7 +38,6 @@ Accepted
 - [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：当前 Agent Catalog 只允许无需二次确认的安全 Action
 - [`0101`](adr/0101-conversation-action-audit-does-not-duplicate-user-content.md)：Action 审计只保留最小 envelope，执行 payload 加密短存并及时清除
 - [`0103`](adr/0103-journal-regeneration-accepts-bounded-user-guidance.md)：Journal regeneration 接受受限用户 guidance，但保留事实、版本与幂等边界
-- [`0106`](adr/0106-github-actions-schedules-the-internal-owner-recovery-scan.md)：Internal Owner 阶段由 GitHub Actions schedule 调用 Recovery Scan
 
 ### 用户控制、删除与导出
 
@@ -49,6 +47,8 @@ Accepted
 - [`0004`](adr/0004-account-data-export-is-a-public-release-gate.md)：Account Data Export 是外部发布门槛
 - [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md)：删除能力随数据面扩展
 - [`0104`](adr/0104-purge-marker-owns-backup-recovery-authority.md)：Purge Marker 是备份恢复防复活的权威来源
+- [`0106`](adr/0106-github-actions-schedules-the-internal-owner-recovery-scan.md)：Internal Owner 阶段由 GitHub Actions schedule 调用 Recovery Scan
+- [`0107`](adr/0107-journal-diagnostics-do-not-block-publication.md)：Journal Diagnostic Finding 不阻止 Journal 发布
 - [`0070`](adr/0070-user-audio-is-not-retained-long-term.md)：正式用户音频不长期保留，内部 opt-in 以 72 小时为访问边界
 - [`0090`](adr/0090-one-conversation-action-represents-one-semantic-intent.md)：一次 Conversation Action 表达一个语义意图，可确定性传播到多个对象
 - [`0091`](adr/0091-conversation-actions-come-from-a-versioned-allowlist.md)：Conversation Action 只能来自版本化 allowlist，不支持时明确拒绝

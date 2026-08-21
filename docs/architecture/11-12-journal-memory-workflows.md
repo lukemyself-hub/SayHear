@@ -162,14 +162,14 @@ human-edited JournalVersion，保留原 Draft 和编辑者审计，避免把人�
 - 语言与目标 locale 一致；
 - 没有空 Journal 或重复段落。
 
-模型验证：
+模型诊断：
 
-- 是否存在无证据事实；
-- Journal Observation 是否有充分依据并使用自然不确定性语言；
-- 是否把推断写成确定事实；
-- 是否诊断、说教或成长化；
-- 是否盲目认同用户的事实判断；
-- 是否遗漏当天关键事件；
+- 只对已通过 Publish Gate、并且已经引用的 Evidence 做 Statement-local review；
+- 以固定 Code / detail Code 产出第三人称、Evidence 支持、叙事安全、确定性或赞同
+  表达方面的非阻断 Finding；
+- 不使用固定词、正则、词汇重叠、uncertainty token 或全量 Evidence 覆盖判断；
+- 诊断器不可用或返回未知 Code 时，记录 `diagnostic_status=unavailable`，不改变
+  Journal 发布结果。
 - 是否符合第三人称观察视角。
 
 未通过验证的结果进入 `needs_review`，不静默发布。

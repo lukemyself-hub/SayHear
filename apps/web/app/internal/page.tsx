@@ -17,11 +17,12 @@ export default async function InternalPage() {
   }
 
   const userId = asUserId(session.user.id);
-  const [access, interruptedResponses, messages, currentJournal] = await Promise.all([
+  const [access, interruptedResponses, messages, currentJournal, latestJournalNotice] = await Promise.all([
     composition.accessService.getAccess(userId),
     composition.conversationService.listInterruptedResponses(userId),
     composition.conversationService.listMessages(userId),
     composition.journalService.readLatest({ userId }),
+    composition.journalService.readLatestGenerationNotice({ userId }),
   ]);
   const state = access.privateWrites.allowed ? "Open" : "Blocked";
 
@@ -45,7 +46,7 @@ export default async function InternalPage() {
         The gate opens only when the configured backup policy has current,
         verified retention evidence.
       </p>
-      <JournalCard currentJournal={currentJournal} />
+      <JournalCard currentJournal={currentJournal} latestNotice={latestJournalNotice} />
       <TextConversation
         initialInterruptedResponses={interruptedResponses}
         initialMessages={messages}

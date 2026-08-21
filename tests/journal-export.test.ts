@@ -7,7 +7,7 @@ describe("bounded Journal export", () => {
     dailySessionId: "01984477-31e1-7595-92c6-06889cb0fdde",
     logicalDate: "2026-08-12",
     state: "current" as const,
-    version: { locale: "en-US", statements: [{ id: "s", text, epistemicStatus: "supported_expression" as const, evidenceItemIds: ["e"] }] },
+    version: { locale: "en-US", statements: [{ id: "s", text, evidenceItemIds: ["e"] }], diagnosticStatus: "available" as const },
   });
 
   it("exports exactly one current Journal without Account Data", () => {
