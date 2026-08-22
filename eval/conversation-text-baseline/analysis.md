@@ -29,6 +29,11 @@ locale packs `locale-pack-en:v1` / `locale-pack-zh:v1`、safety
 场景隔离：每个场景从干净的对话状态开始（见 `run/manifest.json`
 `scenarioIsolation`），因此各情境的失败模式可以按场景归因。
 
+产物勘误：本次运行中 `transcripts.json` 的场景级 `domainClockStartIso` 记录的
+是场景末轮时钟（捕获时机 bug，已在 harness 修复），且场景间 domain clock 累计
+漂移；每轮的 `domainClockIso` 与所有回复内容不受影响。重新运行时每个场景都会
+从同一冻结时钟开始。
+
 ## 量化概览
 
 | 指标 | en | zh | code-switch |

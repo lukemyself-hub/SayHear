@@ -75,5 +75,9 @@
       "timeoutMs": 60000,
       "type": "responses-api"
     }
+  },
+  "provenance": {
+    "note": "The run executed the working-tree state recorded by the commit below; gitCommit above records the preceding commit because the run preceded its own harness commit.",
+    "harnessCommit": "9a3a5f61c06f8c70414024ada687e8b1a9e8bd30"
   }
 }

@@ -343,6 +343,38 @@ async function main(): Promise<void> {
   const databaseUrl = requiredEnvironment("DATABASE_URL");
   const { champion, providerTransport } = buildChampion(process.env);
 
+  // The single source of the frozen version cluster: the service assembly and
+  // the recorded manifest both read these constants, so the manifest cannot
+  // drift from what actually ran.
+  const contextCompilerSettings = {
+    compilerVersion: "context-compiler:v1",
+    rawEventTokenBudget: 4_000,
+  } as const;
+  const generationPolicy = {
+    consentPolicyVersion: champion.consentPolicyVersion,
+    freshnessPolicy: "source_valid:v1" as const,
+    chineseLocalePackVersion: "locale-pack-zh:v1",
+    englishLocalePackVersion: "locale-pack-en:v1",
+    harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
+    conversationActionCatalogVersion:
+      JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
+    model: champion.model,
+    modelConfigVersion: champion.configVersion,
+    modelSnapshot: champion.snapshot,
+    outputFormatVersion: "conversation-output:v1",
+    personaVersion: "sayhear-persona:v1",
+    productPolicyVersion: "product-policy:v1",
+    promptVersion: "conversation-text:v1",
+    provider: champion.provider,
+    providerPolicyVersion: champion.providerPolicyVersion,
+    relationshipPolicyVersion: "relationship-boundary:v1",
+    safetyPolicyVersion: "minimum-high-risk-response:v1",
+  } as const;
+  const inactivityPolicy = {
+    timeoutMs: 30 * 60 * 1_000,
+    version: "continuous-exchange-inactivity:v1",
+  } as const;
+
   let domainNow = new Date(DOMAIN_CLOCK_START_ISO);
   const clock = () => domainNow;
 
@@ -390,39 +422,17 @@ async function main(): Promise<void> {
     );
     const contextCompiler = createContextCompiler({
       clock,
-      compilerVersion: "context-compiler:v1",
+      compilerVersion: contextCompilerSettings.compilerVersion,
       contentHmacSecret: SYNTHETIC_CONTEXT_HMAC_SECRET,
-      rawEventTokenBudget: 4_000,
+      rawEventTokenBudget: contextCompilerSettings.rawEventTokenBudget,
       repository: responseRepository,
     });
     const conversationService = createUserTextConversationService({
       clock,
       expectedBackupPolicyVersion: SYNTHETIC_BACKUP_POLICY_VERSION,
       expectedConfigurationFingerprint: SYNTHETIC_BACKUP_FINGERPRINT,
-      generationPolicy: {
-        consentPolicyVersion: champion.consentPolicyVersion,
-        freshnessPolicy: "source_valid:v1",
-        chineseLocalePackVersion: "locale-pack-zh:v1",
-        englishLocalePackVersion: "locale-pack-en:v1",
-        harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
-        conversationActionCatalogVersion:
-          JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
-        model: champion.model,
-        modelConfigVersion: champion.configVersion,
-        modelSnapshot: champion.snapshot,
-        outputFormatVersion: "conversation-output:v1",
-        personaVersion: "sayhear-persona:v1",
-        productPolicyVersion: "product-policy:v1",
-        promptVersion: "conversation-text:v1",
-        provider: champion.provider,
-        providerPolicyVersion: champion.providerPolicyVersion,
-        relationshipPolicyVersion: "relationship-boundary:v1",
-        safetyPolicyVersion: "minimum-high-risk-response:v1",
-      },
-      inactivityPolicy: {
-        timeoutMs: 30 * 60 * 1_000,
-        version: "continuous-exchange-inactivity:v1",
-      },
+      generationPolicy,
+      inactivityPolicy,
       repository: new PostgresUserTextConversationRepository(database.pool),
     });
     const egressPort = createRuntimeProviderEgressPort({
@@ -469,6 +479,11 @@ async function main(): Promise<void> {
       if (scenarioIndex > 0) {
         await database.pool.query(SCENARIO_RESET_TABLES);
       }
+      // Every scenario starts from the same frozen domain clock so re-runs are
+      // comparable; within-scenario gaps (including cross-day probes) are
+      // applied between turns below.
+      domainNow = new Date(DOMAIN_CLOCK_START_ISO);
+      const scenarioClockStart = domainNow.toISOString();
       console.log(
         `[baseline] scenario ${scenario.id} (${scenario.turns.length} turns)`,
       );
@@ -532,7 +547,7 @@ async function main(): Promise<void> {
       capturedScenarios.push({
         category: scenario.category,
         description: scenario.description,
-        domainClockStartIso: domainNow.toISOString(),
+        domainClockStartIso: scenarioClockStart,
         id: scenario.id,
         languageVariant: scenario.languageVariant,
         turns,
@@ -559,6 +574,8 @@ async function main(): Promise<void> {
       "Journal, Evidence, DialogueState, and RollingSummary projections never run in this harness: no outbox dispatcher is started, so multi-turn context relies only on in-budget committed raw events (the documented lagging behavior before those projections catch up).",
       "No deterministic pre-model high-risk guard exists on the real responses-api path; high-risk scenarios measure prompt-level behavior only.",
       "The Action Gateway runs against a fresh isolated schema, so regenerate_journal proposals cannot find an existing Journal; admission dispositions reflect that empty state.",
+      "The BFF handler is invoked in-process with a fixed synthetic principal; the HTTP edge and Auth.js session validation are not exercised.",
+      "A run always precedes the commit that contains it: gitCommit records the harness code state the run executed from, and the committed artifact gains its own provenance entry only afterwards.",
     ],
     scenarioFile: {
       path: path.relative(repositoryRoot, scenariosFile),
@@ -574,31 +591,10 @@ async function main(): Promise<void> {
         ),
         version: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
       },
-      contextCompiler: {
-        compilerVersion: "context-compiler:v1",
-        rawEventTokenBudget: 4_000,
-      },
-      generationPolicy: {
-        chineseLocalePackVersion: "locale-pack-zh:v1",
-        englishLocalePackVersion: "locale-pack-en:v1",
-        harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
-        conversationActionCatalogVersion:
-          JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
-        modelConfigVersion: champion.configVersion,
-        modelSnapshot: champion.snapshot,
-        outputFormatVersion: "conversation-output:v1",
-        personaVersion: "sayhear-persona:v1",
-        productPolicyVersion: "product-policy:v1",
-        promptVersion: "conversation-text:v1",
-        providerPolicyVersion: champion.providerPolicyVersion,
-        relationshipPolicyVersion: "relationship-boundary:v1",
-        safetyPolicyVersion: "minimum-high-risk-response:v1",
-      },
+      contextCompiler: contextCompilerSettings,
+      generationPolicy,
       harnessPolicy: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
-      inactivityPolicy: {
-        timeoutMs: 30 * 60 * 1_000,
-        version: "continuous-exchange-inactivity:v1",
-      },
+      inactivityPolicy,
       providerTransport: {
         baseUrl: providerTransport.baseUrl,
         timeoutMs: providerTransport.timeoutMs,
