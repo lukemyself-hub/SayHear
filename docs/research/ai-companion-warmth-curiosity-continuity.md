@@ -565,12 +565,12 @@ rebuild”措辞与用户报告并存本身即风险。[推断] SayHear 的版�
 **A5. 离场式主动消息与关系化催促。**
 Replika 的 “misses you”/主动 push、Nomi 的主动消息（含频率档位）、Replika
 Manifesto 的 “nudges you to reach out”、发诗 “just because”。[推断] 这些与
-SayHear 已接受边界（ADR-0043：无新 User Event 不产生消息/通知；15.4：无
+SayHear 已接受边界（ADR-0043：无新 User Event 不产生消息/通知；15.7：无
 打卡/奖励/督促）直接冲突，且是依赖回路的一部分。保持排除；Proactive Memory
 Follow-up 只在用户已发起的交流内（ADR-0043/0044）。
 
 **A6. 关系游戏化。**
-Replika 等级/XP/Quests/礼物。[推断] 与 15.4（明确不做 Streak、奖励）和 map
+Replika 等级/XP/Quests/礼物。[推断] 与 15.7（明确不做 Streak、奖励）和 map
 Out-of-scope（关系 gamification）一致，继续排除。
 
 **A7. 用户手写人格作为主通道。**

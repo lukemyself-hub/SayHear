@@ -77,6 +77,8 @@ Accepted
 - [`0056`](adr/0056-profile-refresh-is-manual-weekly-and-trust-reactive.md)：Bio 手动或每周重写，信任边界变化立即失效并重建
 - [`0057`](adr/0057-validated-bio-refreshes-do-not-require-approval.md)：验证通过的新 Bio 直接生效，不增加预览、批准或编辑流程
 - [`0062`](adr/0062-external-mvp-launches-on-web-before-ios.md)：External MVP 首发仅提供 Web，正式 iOS 在核心价值验证后再引入
+- [`0108`](adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md)：Canonical Persona 以慈悲陪伴建立体验，但不建立需要维护的关系身份
+- [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除
 
 ### Memory 准入与认识状态
 

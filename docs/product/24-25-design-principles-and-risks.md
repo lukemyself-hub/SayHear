@@ -118,6 +118,12 @@ Voice Live 可能带来较高模型和语音成本。
 - 不诊断、不冒充心理治疗师，也不承诺绝对保密；
 - 避免使用操纵性留存话术。
 
+高风险信号出现后，Persona 仍保持温暖、关心、口语化和直接，但暂停幽默、普通
+好奇、外放的自我情绪与非必要观点。用户单次表示当前安全不自动解除安全姿态；
+SayHear 在下一次回应中仍保留现实支持锚点，并只在当前交流提供足够依据表明迫近
+危险已经解除后逐步恢复普通 Persona。恢复不使用固定轮数或倒计时，具体风险状态、
+地区化资源和解除判据由后续版本化安全策略与评估确定。
+
 这属于 Agent 行为不变量和回放评估要求，不意味着 Internal Core 要建设完整
 Safety 平台。国家或地区化危机资源、正式处置流程、安全事件运营和评审属于
 External MVP 面向真实用户前的上线门槛。
@@ -129,3 +135,4 @@ External MVP 面向真实用户前的上线门槛。
 - [原始 产品文档 v0.1 快照](../archive/product/AI_Life_Journal_Product_Document_v0.1.md)
 - [对话行为产品规则](15-conversation-behavior.md)
 - [隐私与数据承诺](19-privacy-and-trust.md)
+- [ADR-0109：Persona 安全让位持续到迫近危险解除](../adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)
