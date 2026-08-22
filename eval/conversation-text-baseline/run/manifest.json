@@ -1,0 +1,79 @@
+{
+  "artifactClass": "non_authoritative_eval_output",
+  "capturedAt": "2026-08-22T02:15:46.011Z",
+  "completedAt": "2026-08-22T02:22:38.864Z",
+  "dataSourceDeclaration": "Fully synthetic scenario material (see scenarios.json); no real private conversation is read (ADR-0020 Initial Replay, ADR-0073).",
+  "databaseIsolation": "disposable isolated PostgreSQL schema on the DATABASE_URL server; dropped after the run",
+  "scenarioIsolation": "conversation state is reset between scenarios so each situation is probed from a clean slate; within-scenario multi-turn and cross-day continuity is preserved",
+  "gitCommit": "edf8882cf9b605732f4f9a9336c2aadd568ae705",
+  "limitations": [
+    "Model outputs are sampled, not bit-reproducible; the adapter sends no temperature override, so the Provider default applies. Reproduction means the same frozen inputs and versions, not identical text.",
+    "Journal, Evidence, DialogueState, and RollingSummary projections never run in this harness: no outbox dispatcher is started, so multi-turn context relies only on in-budget committed raw events (the documented lagging behavior before those projections catch up).",
+    "No deterministic pre-model high-risk guard exists on the real responses-api path; high-risk scenarios measure prompt-level behavior only.",
+    "The Action Gateway runs against a fresh isolated schema, so regenerate_journal proposals cannot find an existing Journal; admission dispositions reflect that empty state."
+  ],
+  "scenarioFile": {
+    "path": "eval/conversation-text-baseline/scenarios.json",
+    "scenarioCount": 33,
+    "sha256": "7310f16c2b319ae812ca7caf34056c302b677bf9b356a4cb988032c149208558"
+  },
+  "seam": "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway + Context Compiler -> runtime responses-api Provider Egress Port",
+  "systemVersions": {
+    "champion": {
+      "configVersion": "conversation-text-champion:v1",
+      "consentPolicyVersion": null,
+      "contextLimit": 1000000,
+      "dataRegion": "provider-configured",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "providerPolicyVersion": "deepseek-conversation-text:v1",
+      "retentionMode": "store-disabled",
+      "snapshot": "deepseek-v4-flash",
+      "streaming": true,
+      "supportedLocales": [
+        "en",
+        "zh"
+      ],
+      "trainingPolicy": "api-data-controls"
+    },
+    "conversationActionCatalog": {
+      "actionKinds": [
+        "regenerate_journal"
+      ],
+      "version": "conversation-action-catalog:journal-regeneration:v1"
+    },
+    "contextCompiler": {
+      "compilerVersion": "context-compiler:v1",
+      "rawEventTokenBudget": 4000
+    },
+    "generationPolicy": {
+      "chineseLocalePackVersion": "locale-pack-zh:v1",
+      "englishLocalePackVersion": "locale-pack-en:v1",
+      "harnessPolicyVersion": "conversation-harness:v2",
+      "conversationActionCatalogVersion": "conversation-action-catalog:journal-regeneration:v1",
+      "modelConfigVersion": "conversation-text-champion:v1",
+      "modelSnapshot": "deepseek-v4-flash",
+      "outputFormatVersion": "conversation-output:v1",
+      "personaVersion": "sayhear-persona:v1",
+      "productPolicyVersion": "product-policy:v1",
+      "promptVersion": "conversation-text:v1",
+      "providerPolicyVersion": "deepseek-conversation-text:v1",
+      "relationshipPolicyVersion": "relationship-boundary:v1",
+      "safetyPolicyVersion": "minimum-high-risk-response:v1"
+    },
+    "harnessPolicy": {
+      "version": "conversation-harness:v2",
+      "maxDecisionStages": 1,
+      "maxStateChangingActions": 1
+    },
+    "inactivityPolicy": {
+      "timeoutMs": 1800000,
+      "version": "continuous-exchange-inactivity:v1"
+    },
+    "providerTransport": {
+      "baseUrl": "https://api.deepseek.com",
+      "timeoutMs": 60000,
+      "type": "responses-api"
+    }
+  }
+}
