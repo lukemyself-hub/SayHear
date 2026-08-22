@@ -38,6 +38,7 @@ Accepted
 - [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：当前 Agent Catalog 只允许无需二次确认的安全 Action
 - [`0101`](adr/0101-conversation-action-audit-does-not-duplicate-user-content.md)：Action 审计只保留最小 envelope，执行 payload 加密短存并及时清除
 - [`0103`](adr/0103-journal-regeneration-accepts-bounded-user-guidance.md)：Journal regeneration 接受受限用户 guidance，但保留事实、版本与幂等边界
+- [`0111`](adr/0111-persona-and-conversation-state-inputs-are-compiled-versioned-contracts.md)：Persona 与对话状态输入由编译的版本化契约承载，Person Portrait 逐条注入，Profile 不进对话 Context
 
 ### 用户控制、删除与导出
 
@@ -78,7 +79,8 @@ Accepted
 - [`0057`](adr/0057-validated-bio-refreshes-do-not-require-approval.md)：验证通过的新 Bio 直接生效，不增加预览、批准或编辑流程
 - [`0062`](adr/0062-external-mvp-launches-on-web-before-ios.md)：External MVP 首发仅提供 Web，正式 iOS 在核心价值验证后再引入
 - [`0108`](adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md)：Canonical Persona 以慈悲陪伴建立体验，但不建立需要维护的关系身份
-- [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除
+- [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除（已被 0112 取代）
+- [`0112`](adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)：Persona 安全姿态按 Daily Session 存活，连续干净 turn 自动解除
 
 ### 行为评测
 

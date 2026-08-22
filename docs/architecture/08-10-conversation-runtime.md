@@ -361,16 +361,17 @@ Context Compiler 是正式应用服务，不是散落在 API handler 中的字�
 按优先级编译：
 
 1. 不可覆盖的产品、安全与关系边界；
-2. Persona 稳定特征；
-3. 当前 Daily Session 信息；
+2. Persona 稳定特征（结构化三块工件，见 15.6 与 ADR-0111）；
+3. 当前 Daily Session 信息（含 Safety Posture 状态）；
 4. 当前 Session 滚动摘要（1A.2+）；
 5. 最近 committed raw Events（1A.1 起）；
-6. 模型生成的当前会话状态和语气（1A.2+）；
-7. 相关 Objective Memory（1A.3+）；
-8. 少量相关且未过期的 AI Impression（1A.3+）；
-9. 必要的 Open Loop（1A.3+）；
-10. 实时客户端信号（1B）；
-11. 输出格式，以及当前版本化 Conversation Action Catalog 中允许的高层 Action 定义。
+6. 当前会话状态与语气（1A.2+），语义字段与确定性投影的拆分见下文；
+7. Person Portrait：固定注入的“用户是怎样的人”选集（1A.3+，ADR-0111）；
+8. 相关 Objective Memory（1A.3+）；
+9. 少量相关且未过期的 AI Impression（1A.3+）；
+10. 必要的 Open Loop（1A.3+）；
+11. 实时客户端信号（1B）；
+12. 输出格式，以及当前版本化 Conversation Action Catalog 中允许的高层 Action 定义。
 
 Open Loop 只读取 current Version 为 open 且尚未超过 `expires_at` 的少量
 projection。当前 Turn 已有新提交的 User Event 时，selector 可以选出一个合适的
@@ -378,11 +379,21 @@ Open Loop，让 Assistant 在本轮主动询问进展，不要求 utterance 已�
 没有新 User Event 时，Open Loop 不得单独创建 GenerationCommand、消息或通知；
 它也不能触发任务型输出。过期或关闭的 Loop fail closed。
 
+Person Portrait（1A.3+，ADR-0111）是每轮固定注入的“用户是怎样的人”选集：由
+版本化选择策略从当前有效、描述用户本身的 Objective Memory 与 active AI
+Impression 中逐条选出，每条携带 `claim_version_id + evidence_id` 与对应认识类型的
+召回措辞，并逐条适用 Correction、Forget、contested 与 dormant fence。叙事版
+Profile Projection 不进入对话 Context，Profile 只作为用户可见产物存在；早期合格
+条目不足时该 section 为空，不编造画像。
+
 1A.1 只使用 DailySession / InteractionTurn 上的确定性领域状态，例如
 `activity_state`、revision 和 closure policy；它不持久化或消费模型生成的
 DialogueState projection。
 
-从 1A.2 开始，`DialogueState` 是当前 Session 的短期结构化 projection，可以包括：
+从 1A.2 开始，当前会话状态按“谁能确定它”拆成两类（ADR-0111）。
+
+模型异步生成、每个 field 必须带来源与置信度的语义字段
+（`dialogue_state_versions`）：
 
 ```text
 current_topic
@@ -390,14 +401,19 @@ emotional_intensity
 advice_explicitly_requested
 current_request_requires_focus
 close_intent
-follow_up_relevance
 user_willing_to_elaborate
-proactive_followup_used_in_exchange
-safety_state
 ```
 
-它必须带来源与置信度，不能直接晋升为长期 Profile。
-尤其是 `advice_explicitly_requested`，用于落实“默认倾听，只有用户主动询问才给建议”。
+`advice_explicitly_requested` 用于落实“默认倾听，只有用户主动询问才给建议”；
+`current_request_requires_focus` 是 Proactive Memory Follow-up 选择器的确定性
+判据。DialogueState 只用于当前 Session，不能直接晋升为长期 Profile。
+
+确定性领域投影不经模型生成：Safety Posture（见 9.6）、
+`proactive_followup_used_in_exchange`，以及 Curiosity Stop Signal 停止投影——
+模型可以带证据提出“用户已回避 / 拒绝 / 转换某方向”，由确定性代码提交并记录
+被停止的追问方向；解除只由用户主动重提或提供新的实质内容触发。单方向停止在
+当天 Session 内持续，全量“别再问问题”停止按术语定义限于当前 Continuous
+Exchange。
 
 Proactive Memory Follow-up selector 在 1A.3+ 必须 fail closed：
 
@@ -463,6 +479,12 @@ Action Reference Handle 只在该 CompiledContext 与 Decision Command 内有效
 1A.1 Text 只有完整提交的 Assistant Event revision 可进入 Context；
 Interrupted Response 和未播放 Voice 内容一律排除。
 
+Internal Portal 提供只读 Context Inspector（照 Reflection Inspector 模式，
+ADR-0111）：展示每轮 CompiledContext 的分节内容、预算与实际占用、degraded
+reason、检索候选及选中 / 淘汰理由、DialogueState 各字段的证据与置信度、
+Person Portrait 条目及 claim 版本、Safety Posture 当前状态与干净 turn 计数。
+它不是第二写入口，也不出现在用户界面。
+
 ### 9.3 Token Budget
 
 每层有独立预算和截断策略：
@@ -481,7 +503,12 @@ Interrupted Response 和未播放 Voice 内容一律排除。
   fallback 时降级为“家长 / 孩子”“手足”“伴侣”等中性投影；
 - 注入 Claim 时保留 `claim_version_id + evidence_id`，不能只发送无来源的自然语言 Memory；
 - 检索结果按相关性、置信度、时效和重复度裁剪；
-- 不把完整历史持续发送给模型。
+- 不把完整历史持续发送给模型；
+- 记忆类注入使用版本化预算 v1（ADR-0111）：Person Portrait ≤3 条（其中 AI
+  Impression ≤2）、按话题检索注入 ≤2 条、每轮记忆类总注入 ≤5 条，raw Events
+  预算 4000 tokens；具体数值由 retrieval manifest 的实际命中与浪费调整；
+- Person Portrait 无合格条目时静默省略该 section，不编造；
+- persona / locale pack 版本解析失败时编译 fail closed：身份层不允许缺席上线。
 
 ### 9.4 Realtime 使用
 
@@ -554,6 +581,24 @@ created_at
 - 每个 field 有 evidence 和 confidence；
 - 它只用于当前 Session，不进入长期 Profile；
 - source 修正、删除或 delivery reconciliation 会使受影响版本失效并重建。
+
+### 9.6 Safety Posture 生命周期
+
+Safety Posture（ADR-0112）是 DailySession 上的确定性让位状态，不由模型生成或
+解除：
+
+- 激活：版本化检测规则识别到明确自伤、伤人或迫在眉睫的危险信号；
+- 存活：当天内跨 Continuous Exchange 存活、不过夜；次日新 Session 从默认状态
+  开始，新的危险信号随时重新激活；
+- 解除：连续 K 个用户 turn 未再出现危险信号即自动解除；K 是版本化参数，当前为
+  2。用户明确表示安全计为一个干净 turn，不单独立即解除；再次出现的危险信号
+  重置计数；
+- 生效：激活期间 Context Compiler 直接渲染缩减版 persona 变体（收起 Playful
+  Warmth、普通 Selective Curiosity、外放自我情绪与非必要观点，保留温暖与
+  直接感），并保持现实支持锚点与白名单号码，不依赖模型自觉；
+- 故障：检测器故障时不激活新姿态、已激活姿态保持并告警；风险行为由 prompt 层
+  Minimum High-Risk Response 兜底；
+- 它不是 DialogueState 字段，也不是跨日危机跟踪状态。
 
 ## 10. 检索与记忆召回
 

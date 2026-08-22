@@ -1382,7 +1382,10 @@ Prompt、policy、随机性和用户确认影响，必须保留原 Version ID �
 
 `CompiledContext.referenced_versions` 保存所有 Event、Evidence、Entity、Summary、
 Episode、Open Loop、Proactive Follow-up State、Journal、Reflection、Claim 和
-Profile 的具体 version / identity ID。
+Profile 的具体 version / identity ID。这是全部消费者的并集：对话 Context 只引用
+对话输入层（08-10 §9.1）声明的对象，Profile、Journal、Reflection 只在各自派生
+workflow 的 Context 中被引用。Profile Projection 不进入对话 Context；对话中的
+“用户是怎样的人”由 Person Portrait 逐条 Claim 承载（ADR-0111）。
 需要向 Conversation Functions 暴露已有对象 target 时，CompiledContext 另外保存
 Command-scoped Action Reference manifest。每个 Handle 通过 typed link 指向同一
 owner 下的具体对象与 Version，并记录允许使用它的 Catalog action kinds；不得只保存

@@ -291,7 +291,7 @@
 | --- | --- | --- |
 | Tolan turn-level 检索（用户消息 + 系统合成问题） | `docs/architecture/08-10-conversation-runtime.md` §10.2（查询来自 utterance/话题/DialogueState/日期/Open Loop 多路） | 一致，外部验证 |
 | Tolan 每轮重建 context | Context Compiler（arch 08-10 §9）；ADR-0068（Framework 不拥有长期状态） | 一致，外部验证 |
-| Nomi 对话内 initiative 增强 | §15.2/§15.3 追问与提醒边界；DialogueState `follow_up_relevance` 等字段（arch 08-10 §9.1） | 一致（在"每轮最多一个问题"等约束内） |
+| Nomi 对话内 initiative 增强 | §15.2/§15.3 追问与提醒边界；DialogueState 语义字段与 Curiosity Stop Signal 停止投影（arch 08-10 §9.1；字段集后经 ADR-0111 定案，原候选 `follow_up_relevance` 未入选，其语义由停止投影与 `user_willing_to_elaborate` 承接） | 一致（在"每轮最多一个问题"等约束内） |
 | **Nomi 对话外主动消息（含频率分档、退避、静默时段）** | ADR-0043：Internal Core/External MVP 不允许 Memory/Open Loop/Workflow 在用户缺席时发消息或通知；§24 原则 8 | **冲突**：SayHear 已显式排除。ADR-0043 预留了未来 opt-in 决策空间；届时 Nomi 的分档频率 + 指数退避 + 22:00–8:00 静默 + 通知不含正文是应抄的控制面基线 |
 | **Nomi 免费用户额度用尽仍收主动消息** | §24 原则 8（不惩罚中断）、ADR-0043 | **冲突**：转化压力型再互动，永不采纳 |
 
