@@ -80,6 +80,10 @@ Accepted
 - [`0108`](adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md)：Canonical Persona 以慈悲陪伴建立体验，但不建立需要维护的关系身份
 - [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除
 
+### 行为评测
+
+- [`0110`](adr/0110-human-taste-is-authoritative-in-behavior-evaluation.md)：行为评测的最终权威是人工味觉裁定，机械检查与 LLM judge 只做结构预筛
+
 ### Memory 准入与认识状态
 
 - [`0038`](adr/0038-explicit-user-statements-create-confirmed-objective-memory.md)：用户一次明确陈述即可形成 confirmed Objective Memory

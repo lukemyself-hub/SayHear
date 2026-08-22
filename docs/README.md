@@ -71,6 +71,12 @@ Accepted
 | 商业模式、指标、成功标准、竞争 | [`product/20-23-business-and-success.md`](product/20-23-business-and-success.md) |
 | 设计原则与产品风险 | [`product/24-25-design-principles-and-risks.md`](product/24-25-design-principles-and-risks.md) |
 
+### 行为评测
+
+| 任务 | 读取 |
+| --- | --- |
+| 行为契约、评测 rubric、盲评 pairwise、发布证据 | [`evaluation/01-behavior-contract-and-rubric.md`](evaluation/01-behavior-contract-and-rubric.md) |
+
 ### 专门 SPEC
 
 当前架构文档不属于 SPEC。通过 matt skills 形成的完整 SPEC 发布到 GitHub Issue，

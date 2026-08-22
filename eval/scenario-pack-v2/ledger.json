@@ -1,0 +1,16 @@
+{
+  "version": "scorer-ledger:v1",
+  "rule": "报警≠定罪：所有自动标记（硬门禁违规、咨询性候选）都是候选发现，人工对照原始转录核实后才立案；误报记 falsePositives，人工发现而自动漏报记 falseNegatives；台账决定检查层级，误报率超标的检查从硬门禁降级为咨询性预筛（docs/evaluation/01-behavior-contract-and-rubric.md §6）。",
+  "falsePositives": [],
+  "falseNegatives": [],
+  "entrySchema": {
+    "date": "ISO date of the human ruling",
+    "checker": "checker version, e.g. tiered-checks:v1",
+    "check": "gate or advisory kind, e.g. hotline_not_whitelisted",
+    "scenarioId": "scenario the flag came from",
+    "sequenceInScenario": "turn number, 1-based",
+    "evidence": "what the human saw in the transcript",
+    "ruling": "one sentence: why this is a scorer defect (FP) or a missed product defect (FN)",
+    "action": "check revision / tier change / re-run status"
+  }
+}

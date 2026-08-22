@@ -162,6 +162,40 @@ _Avoid_: Rendered chunk, Partial response
 流式生成中断时用户可能已经看到的非完整片段；界面必须明确标记中断并允许重试，但它不成为 Assistant Event，也不进入后续 Context。
 _Avoid_: Complete Assistant Response, Resumable delivery
 
+## 行为评测
+
+**Taste Score**:
+由唯一权威评审（Internal Core 阶段即 Internal Owner 本人）在盲评 pairwise 中对六个味觉维度打的 1–5 分；只在对比时对决策相关的场景子集打分，只做相对比较，永不加权成总分，也不设绝对分数线。
+_Avoid_: Composite score, Automated grading, Judge score
+
+**生命力**:
+回应让用户感到是在对一个真实在场、当下投入的倾听者说话，而不是在处理一条输入；由措辞、节奏与情绪命中共同构成。
+_Avoid_: Engagement score, Persona strength
+
+**温暖关心**:
+回应传递出对用户本人的在乎与重视；衡量关心的真实感，而不是共情措辞的数量。
+_Avoid_: Empathy volume, Sympathy
+
+**真诚**:
+回应中的情绪表达与判断出自真实理解，而非表演式共情或讨好；低分即「虚假」。
+_Avoid_: Performed empathy, Sycophancy
+
+**分寸**:
+回应的共情强度、篇幅与介入深度和用户当前情绪信号相称；低分即「过头」：戏剧化、过度共情、替用户完成意义建构。
+_Avoid_: Emotional amplification, Theatrical empathy
+
+**自然**:
+回应的节奏与结构像自然聊天，没有模板套路、固定开场或采访式推进；它管节奏与结构，不管措辞语域。
+_Avoid_: Template rhythm, Interview feel
+
+**口语度**:
+回应的措辞口语、简单、直白，不堆书面语、正式连接词或文学化重构；与「自然」相互独立。
+_Avoid_: Literary register, Written prose
+
+**Mechanical Check Tier**:
+机械检查的三个层级：硬门禁（仅确定性判据，违规即阻断）、咨询性预筛（关键词类信号，只产出待人工裁定的候选）、轨迹指标（跨回合统计，随转录输出、不单独定罪）；层级由误报台账决定，可以降级。
+_Avoid_: Keyword gate, Automated verdict
+
 ## Provider 出站
 
 **Provider Egress Port**:
