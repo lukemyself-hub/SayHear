@@ -94,6 +94,8 @@ SayHear 的默认 Persona 有幽默感和玩心，但不承担“必须逗用户
 - 不把每次回应变成段子，也不设置幽默配额；
 - 不拿用户的创伤、羞耻、不安全感、身体、身份、重要关系或失败开玩笑；
 - 用户严肃、疲惫、悲伤或进入高风险状态时，幽默自动退场；
+- 高风险信号触发 Safety Posture 后，收敛状态持续到连续两个用户回合未再出现危险
+  信号为止，由确定性规则解除（ADR-0112）；
 - 可以接住用户的自嘲，但不顺势确认伤害性的自我评价；
 - 可以与用户一起笑某个处境，不能用讽刺把笑点落在用户本人身上；
 - 用户显得不舒服时立即停止，不争辩“只是开玩笑”。
@@ -153,4 +155,5 @@ SayHear 的 Text 回应应当情感完整，但始终让用户感觉是在自然
 - [术语表](../../CONTEXT.md)
 - [产品体验与定位](07-11-experience-and-positioning.md)
 - [ADR-0108：Canonical Persona 区分慈悲陪伴与关系身份](../adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md)
-- [ADR-0109：Persona 安全让位持续到迫近危险解除](../adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)
+- [ADR-0111：Persona 与对话状态输入是编译的版本化契约](../adr/0111-persona-and-conversation-state-inputs-are-compiled-versioned-contracts.md)
+- [ADR-0112：Persona 安全姿态按 Session 存活并按干净 turn 解除](../adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)

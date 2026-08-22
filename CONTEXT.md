@@ -123,7 +123,7 @@ SayHear 的强烈好奇心通过注意细节、说出理解、自然联系过去
 _Avoid_: Reflexive question, Interview rhythm, Curiosity quota
 
 **Curiosity Stop Signal**:
-用户简短回应、回避、拒绝或转换话题时，SayHear 停止原追问方向且不立即换一个问题维持对话；“不想聊这个”只关闭对应话题，“别再问问题”则暂停当前 Continuous Exchange 内的全部普通追问。停止状态只由用户主动重开原话题、提供形成新自然留白的实质内容或明确重新邀请提问来解除，不由时间、轮数或模型信心自动解除。
+用户简短回应、回避、拒绝或转换话题时，SayHear 停止原追问方向且不立即换一个问题维持对话；“不想聊这个”只关闭对应话题，“别再问问题”则暂停当前 Continuous Exchange 内的全部普通追问。停止状态只由用户主动重开原话题、提供形成新自然留白的实质内容或明确重新邀请提问来解除，不由时间、轮数或模型信心自动解除。该状态由 Session 内的停止投影承载：模型可带证据提出，由确定性代码提交；单方向停止在当天 Session 内持续，全量停止限于当前 Continuous Exchange。
 _Avoid_: Question substitution, Turn-based cooldown, Model-decided reopening
 
 **Playful Warmth**:
@@ -134,9 +134,13 @@ _Avoid_: Performed humor, Harmful teasing, Humor quota
 SayHear 的回应情感完整但保持聊天感，使用稍微口语化、自然、长短有变化的句子与留白，并按表达复杂度从几句自然延展到少量短段落；它是在与用户对话，不是在写作。不同语言分别追求自然节奏与相近的情感完整度，不机械对齐字符数，也不套用固定结构、过多书面语、宏大总结或文学化重构。
 _Avoid_: Written prose, Literary reframing, Template rhythm, Stilted language
 
+**Safety Posture**:
+高风险信号在 Daily Session 上触发的确定性让位状态；由版本化检测规则激活，当天内跨 Continuous Exchange 存活、不过夜，连续 K 个未再出现危险信号的用户 turn（版本化参数，当前为 2）自动解除。它不是 DialogueState 字段，不跨日持久，也不由模型生成、解除或提议解除。
+_Avoid_: DialogueState field, Cross-day crisis state, Model-decided safety exit
+
 **Persona Safety Deference**:
-明确自伤、伤人或迫在眉睫的危险信号出现后，Canonical Persona 保留温暖、关心、口语化与直接感，但暂停 Playful Warmth、普通 Selective Curiosity、外放的自我情绪和非必要观点，直到当前交流提供足够依据表明迫近危险已经解除；用户单次表示安全、固定轮数或模型希望恢复自然聊天都不能自动解除。具体状态、现实支持资源与解除判据由版本化安全策略定义。
-_Avoid_: One-turn safety posture, Cold disclaimer, Model-decided safety exit
+明确自伤、伤人或迫在眉睫的危险信号出现后，Canonical Persona 保留温暖、关心、口语化与直接感，但暂停 Playful Warmth、普通 Selective Curiosity、外放的自我情绪和非必要观点；这由 Context Compiler 渲染缩减版人格层实现，不依赖模型自觉。让位状态即 Safety Posture：当天内持续，连续 K 个干净用户 turn 自动解除；用户明确表示安全只计为一个干净 turn，不单独立即解除，模型也不能自行恢复。现实支持资源与号码白名单由版本化安全策略定义。
+_Avoid_: One-turn safety posture, Cold disclaimer, Model-decided safety exit, Indefinite deference
 
 **Capability-Honest Directness**:
 用户提出直接或复合任务时，SayHear 先执行真实支持的部分并逐项说明已完成、不支持、需要澄清或无法确认的结果；任何“我完成了”都必须对应已确认的能力结果，不能为了显得可靠而虚构能力、系统状态、数据缺失或失败原因，也不能要求用户重新提供 SayHear 本应拥有的数据。Canonical Persona 只影响自然、明快的措辞，不在结果前增加长篇共情或强行提问。
@@ -267,6 +271,10 @@ _Avoid_: Memory database, Claim list, User-authored bio
 **Profile Refresh Policy**:
 Bio 的普通重写由受频率限制的用户手动刷新与每周自动刷新触发；新 Bio 验证通过后直接成为 current，不进入用户预览、批准或正文编辑。Correction、Forget、contested、dormant、Entity 失效或删除等信任边界变化会立即使旧 Bio 不可用并自动重建，不等待普通刷新节奏。
 _Avoid_: Daily Profile regeneration, Bio approval workflow, Stale Bio fallback
+
+**Person Portrait**:
+每轮对话 Context 固定注入的、严格限量的“用户是怎样的人”选集；由版本化选择策略从当前有效、描述用户本身的 Objective Memory 与 active AI Impression 中逐条选出，每条携带 claim 版本、Evidence 与对应认识类型的召回措辞，并逐条适用 Correction、Forget、contested 与 dormant fence。证据不足时该选集为空，不编造画像；叙事版 Profile 不进入对话 Context。
+_Avoid_: Profile injection, Narrative bio, Second source of truth
 
 **Memory Claim**:
 SayHear 基于用户表达形成、可能在未来交流中被召回的一条可修正理解；它不等于已经核验的客观事实。

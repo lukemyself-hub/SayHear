@@ -242,6 +242,16 @@ safety_policy
 ```
 
 每层独立版本化。Prompt migration 不批量覆写历史输出。
+
+persona 层是结构化工件（ADR-0111），分三块：Persona Contract Invariant（所有
+Persona 共享、不可被风格调节的身份、关系、信任与安全承诺）、Canonical Persona
+自我概念与声音描述，以及行为锚点（Selective Curiosity、Curiosity Stop Signal、
+Playful Warmth、Conversational Rhythm、Grounded Persona Perspective、
+Capability-Honest Directness 的操作性描述）。locale pack 承担各语言自己的语气与
+用词习惯，不做机械翻译；task_instruction 按 GenerationCommand 阶段区分（Decision
+与 Action Finalization 使用不同 Prompt / Schema）。Safety Posture 激活期间，
+Context Compiler 渲染缩减版 persona 变体（见 08-10 §9.6 与 ADR-0112）。人格
+承诺同时由 prompt 表达与行为评测硬门禁机械执行。
 旧 Journal / Reflection / Claim projection 保留原版本标记，
 必要时通过明确 reprocess command 重建新版本。
 
