@@ -37,7 +37,7 @@ auth_sessions(id, user_id, expires_at, revoked_at)
 
 - Phase 1 部署配置只允许一个明确的 `(issuer, subject)`，并绑定到预置且稳定的
   Internal Owner `user_id`；email 不作为 owner key；
-- Internal Owner 进入 1A.3 时幂等创建唯一 Self Entity 与
+- Internal Owner 进入 1A.3a 时幂等创建唯一 Self Entity 与
   `user_self_entities` binding；1A.1 / 1A.2 的 Auth identity 仍只映射到
   `user_id`，不提前充当或建设 Entity identity；
 - 任何其他人类身份都拒绝登录，不建设注册、邀请、账号恢复、角色管理或用户后台；
@@ -302,7 +302,8 @@ S3 Lifecycle 的 eligibility 和执行都不是精确时钟，因此不能把 96
 | --- | --- | --- |
 | Foundation / 1A.1 | stable `user_id`、`data_epoch`、owner / active / epoch 读取与 Egress fence、deletion-compatible lineage、日志脱敏、传输与静态加密、已核验 `backup_policy_version` | 删除 API、通用 deletion workflow、完整 ledger、恢复演练、消费者 UI |
 | 1A.2 | operator-only Internal Owner Full Purge；撤销 session / Egress、增加 epoch、清理 Conversation、Evidence、Summary、DialogueState、Conversation Action envelope / payload / Execution / Receipt 与 Journal，生成 active-system receipts；在业务 DB 备份之外保存单 owner 最小 purge marker | 单条 Conversation / Journal 删除、消费者账号生命周期、对所有未来数据类型预建 handler |
-| 1A.3 | Full Purge 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、Reflection、Memory、Profile、Embedding 与相关索引 | 提前建设 Replay 或 Voice 删除 |
+| 1A.3a | Full Purge 扩展到 Entity、Memory、Embedding 与相关索引 | 提前建设 Replay 或 Voice 删除 |
+| 1A.3b | Full Purge 扩展到 Episode、Open Loop、Proactive Follow-up State、Reflection、Profile 与相关索引 | 提前建设 Replay 或 Voice 删除 |
 | 1A.4 | Full Purge 扩展到 Replay input / output 与相关 eval artifact | 提前建设 Voice 删除 |
 | 1B.1 | Full Purge 扩展到 AudioAsset、Transcript revision / segment、Voice runtime metadata 与临时对象 | 提前建设 delivered-prefix buffer |
 | 1B.2 | Full Purge 扩展到 delivery metadata、confirmed prefix 与短期 buffer | 改变 1B.1 的 turn-only 语义 |

@@ -17,7 +17,7 @@ SayHear 接住用户对生活的自然表达，将被理解的交流沉淀为可
 ## 产品阶段
 
 **Internal Core**:
-Phase 1 的内部自用阶段，由 Core Flow 1A 与 1B 构成，默认只允许一个 Internal Owner Account 写入真实私人内容。交付顺序是 1A.1 Text Foundation、1A.2 Journal、1A.3 Entity 与长期 Memory、1A.4 Replay，再进入 1B Realtime Voice；不建设临时 Push-to-Talk 产品路径。其结果不代表外部用户需求或商业模式已经成立。
+Phase 1 的内部自用阶段，由 Core Flow 1A 与 1B 构成，默认只允许一个 Internal Owner Account 写入真实私人内容。交付顺序是 1A.1 Text Foundation、1A.2 Journal、1A.2P Persona & Safety、1A.3a Memory & Recall、1A.3b Continuation & Reflection、1A.4 Replay，再进入 1B Realtime Voice；不建设临时 Push-to-Talk 产品路径。其结果不代表外部用户需求或商业模式已经成立。
 _Avoid_: MVP, External MVP
 
 **Internal Owner Account**:
@@ -461,7 +461,7 @@ _Avoid_: Memory Correction, Content Deletion
 _Avoid_: Automatic relearning, Forget expiration, ClaimVersion reactivation
 
 **Internal Owner Full Purge**:
-Internal Core 中仅供运维触发的单 owner 全量活跃系统清除；从 1A.2 开始覆盖 Conversation、Evidence 与 Journal，1A.3 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、Reflection、Memory、Profile，1A.4 扩展到 Replay，1B.1 和 1B.2 再分别覆盖音频 / transcript 与 delivery 数据。它不提供单条内容删除、消费者账号生命周期或“所有保留副本已经过期”的承诺。
+Internal Core 中仅供运维触发的单 owner 全量活跃系统清除；从 1A.2 开始覆盖 Conversation、Evidence 与 Journal，1A.3a 扩展到 Entity 与 Memory，1A.3b 扩展到 Episode、Open Loop、Proactive Follow-up State、Reflection、Profile，1A.4 扩展到 Replay，1B.1 和 1B.2 再分别覆盖音频 / transcript 与 delivery 数据。它不提供单条内容删除、消费者账号生命周期或“所有保留副本已经过期”的承诺。
 _Avoid_: Granular Content Deletion, Account Deletion
 
 **Data Epoch**:

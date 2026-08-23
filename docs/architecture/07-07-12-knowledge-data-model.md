@@ -142,10 +142,10 @@ entity_external_identifiers
 
 规则：
 
-- 每个 User 在写入第一条 1A.3 Entity 或 Memory Claim 前必须恰好绑定一个
+- 每个 User 在写入第一条 1A.3a Entity 或 Memory Claim 前必须恰好绑定一个
   `sh.entity.person` Self Entity；`user_self_entities` 的双向唯一约束建立
   Account 与领域身份的一对一关系；
-- 现有 Internal Owner 在进入 1A.3 时幂等创建 active Self Entity 与 binding；
+- 现有 Internal Owner 在进入 1A.3a 时幂等创建 active Self Entity 与 binding；
   1A.1 / 1A.2 不为此提前建设 Entity 子系统。External MVP 的新 Account
   provisioning 在同一事务创建 Self Entity 与 binding；
 - provisioning 或 migration 重试必须收敛到同一 `user_id + entity_id`，

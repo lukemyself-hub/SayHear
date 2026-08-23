@@ -71,8 +71,8 @@ Framework Adapter，但任何实现都必须服从相同 Conversation Harness Po
 恢复扫描器从 PostgreSQL 读取到期的 `next_evaluation_at_utc` 与长期未 settled
 的 InteractionTurn / ModelRunAttempt；它直接调用带 revision fencing 的领域命令，
 重复扫描不得重复结束 Exchange 或产生 Assistant Event。从 1A.2 开始，完整 Turn
-提交可在同一事务中插入 outbox row，先触发 Journal 派生；1A.3 再增加
-Entity、Reflection 和 Memory 等消费者。
+提交可在同一事务中插入 outbox row，先触发 Journal 派生；1A.3a 再增加
+Entity 和 Memory 等消费者，1A.3b 再增加 Reflection 消费者。
 
 ### 8.2 失败语义
 
@@ -366,10 +366,10 @@ Context Compiler 是正式应用服务，不是散落在 API handler 中的字�
 4. 当前 Session 滚动摘要（1A.2+）；
 5. 最近 committed raw Events（1A.1 起）；
 6. 当前会话状态与语气（1A.2+），语义字段与确定性投影的拆分见下文；
-7. Person Portrait：固定注入的“用户是怎样的人”选集（1A.3+，ADR-0111）；
-8. 相关 Objective Memory（1A.3+）；
-9. 少量相关且未过期的 AI Impression（1A.3+）；
-10. 必要的 Open Loop（1A.3+）；
+7. Person Portrait：固定注入的“用户是怎样的人”选集（1A.3a+，ADR-0111）；
+8. 相关 Objective Memory（1A.3a+）；
+9. 少量相关且未过期的 AI Impression（1A.3a+）；
+10. 必要的 Open Loop（1A.3b+）；
 11. 实时客户端信号（1B）；
 12. 输出格式，以及当前版本化 Conversation Action Catalog 中允许的高层 Action 定义。
 
@@ -379,7 +379,7 @@ Open Loop，让 Assistant 在本轮主动询问进展，不要求 utterance 已�
 没有新 User Event 时，Open Loop 不得单独创建 GenerationCommand、消息或通知；
 它也不能触发任务型输出。过期或关闭的 Loop fail closed。
 
-Person Portrait（1A.3+，ADR-0111）是每轮固定注入的“用户是怎样的人”选集：由
+Person Portrait（1A.3a+，ADR-0111）是每轮固定注入的“用户是怎样的人”选集：由
 版本化选择策略从当前有效、描述用户本身的 Objective Memory 与 active AI
 Impression 中逐条选出，每条携带 `claim_version_id + evidence_id` 与对应认识类型的
 召回措辞，并逐条适用 Correction、Forget、contested 与 dormant fence。叙事版
@@ -415,7 +415,7 @@ user_willing_to_elaborate
 当天 Session 内持续，全量“别再问问题”停止按术语定义限于当前 Continuous
 Exchange。
 
-Proactive Memory Follow-up selector 在 1A.3+ 必须 fail closed：
+Proactive Memory Follow-up selector 在 1A.3b+ 必须 fail closed：
 
 1. 当前 Turn 必须有新 User Event，且同一
    `daily_session_id + continuous_exchange_no` 尚未提交 Proactive Follow-up；

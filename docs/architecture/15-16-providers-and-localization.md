@@ -116,7 +116,7 @@ Catalog 外 Function 或 Finalization 阶段 tool call 均 fail closed。
 ### 15.3 Role-based Model Registry
 
 从 1A.2 开始，Journal 与 Evidence 职责出现后引入 Role-based Model Registry；
-1A.3 再随 Entity、Reflection 和 Memory 消费者增加对应 role：
+1A.3a 再随 Entity 和 Memory 消费者、1A.3b 随 Reflection 消费者增加对应 role：
 
 ```text
 conversation.text
@@ -154,9 +154,9 @@ Policy 按 role 显式决定，默认 `disabled`。
 | Embedding | 中英跨语言效果达标的多语言模型 | Qwen3 Embedding |
 
 1A.1 只从中配置一个 `conversation.text` Champion，不同时实现 Challenger adapter。
-Journal / Evidence role 从 1A.2 开始，Entity / Reflection / Memory role 从
-1A.3 开始；Challenger 比较从 1A.4 Replay 开始。这只是评估起点，不是永久
-供应商决定。
+Journal / Evidence role 从 1A.2 开始，Entity / Memory role 从 1A.3a 开始、
+Reflection role 从 1A.3b 开始；Challenger 比较从 1A.4 Replay 开始。这只是
+评估起点，不是永久供应商决定。
 
 ### 15.5 Champion / Challenger 规则
 
