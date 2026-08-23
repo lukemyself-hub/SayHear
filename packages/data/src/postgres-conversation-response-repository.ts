@@ -41,6 +41,7 @@ type ContextHeadRow = Readonly<{
   action_receipt_disposition: string | null;
   action_receipt_sequence: number | null;
   activity_state: "active" | "finalized" | "quiescent";
+  canonical_persona_version: string | null;
   closure_policy_version: string;
   continuous_exchange_no: string;
   daily_session_id: string;
@@ -49,11 +50,13 @@ type ContextHeadRow = Readonly<{
   current_journal_source_revision: string | null;
   current_journal_version_status: "published" | "stale" | "validation_failed" | "needs_review" | null;
   dialogue_revision: string;
+  generation_stage: "decision" | "action_finalization";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
   output_format_version: string;
-  persona_version: string;
+  persona_behavior_anchors_version: string | null;
+  persona_contract_invariant_version: string | null;
   product_policy_version: string;
   prompt_version: string;
   relationship_policy_version: string;
@@ -85,6 +88,7 @@ type DispatchRow = Readonly<{
   action_receipt_disposition: string | null;
   action_receipt_sequence: number | null;
   attempt_status: string;
+  canonical_persona_version: string | null;
   consent_active: boolean;
   consent_policy_version: string | null;
   context_compiler_version: string;
@@ -100,6 +104,7 @@ type DispatchRow = Readonly<{
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
+  generation_stage: "decision" | "action_finalization";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -107,7 +112,8 @@ type DispatchRow = Readonly<{
   model_config_version: string;
   model_snapshot: string;
   output_format_version: string;
-  persona_version: string;
+  persona_behavior_anchors_version: string | null;
+  persona_contract_invariant_version: string | null;
   product_policy_version: string;
   prompt_version: string;
   provider: string;
@@ -657,7 +663,10 @@ export class PostgresConversationResponseRepository
             command.locale,
             command.locale_policy_version,
             command.output_format_version,
-            command.persona_version,
+            command.persona_contract_invariant_version,
+            command.canonical_persona_version,
+            command.persona_behavior_anchors_version,
+            command.generation_stage,
             command.product_policy_version,
             command.prompt_version,
             command.relationship_policy_version,
@@ -831,12 +840,20 @@ export class PostgresConversationResponseRepository
           sequence: Number(event.sequence_no),
           text: event.text,
         })),
+        generationStage: row.generation_stage,
         inputRevisionId: asConversationEventRevisionId(row.input_revision_id),
         locale: row.locale,
+        // A pre-migration command has no persona block versions; the empty
+        // string keeps the field typed while guaranteeing the compiler's
+        // fail-closed artifact resolution rejects it.
         policyVersions: {
+          canonicalPersonaVersion: row.canonical_persona_version ?? "",
           localePolicyVersion: row.locale_policy_version,
           outputFormatVersion: row.output_format_version,
-          personaVersion: row.persona_version,
+          personaBehaviorAnchorsVersion:
+            row.persona_behavior_anchors_version ?? "",
+          personaContractInvariantVersion:
+            row.persona_contract_invariant_version ?? "",
           productPolicyVersion: row.product_policy_version,
           relationshipPolicyVersion: row.relationship_policy_version,
           safetyPolicyVersion: row.safety_policy_version,
@@ -1083,7 +1100,9 @@ export class PostgresConversationResponseRepository
             command.relationship_policy_version,
             command.locale_policy_version,
             command.output_format_version,
-            command.persona_version,
+            command.persona_contract_invariant_version,
+            command.canonical_persona_version,
+            command.persona_behavior_anchors_version,
             command.locale,
             command.provider,
             command.model,
@@ -1092,6 +1111,7 @@ export class PostgresConversationResponseRepository
             command.provider_policy_version,
             command.consent_policy_version,
             command.freshness_policy,
+            command.generation_stage,
             command.action_execution_status,
             command.action_receipt_sequence,
             frozen_receipt.admission_status AS action_receipt_admission,
@@ -1214,8 +1234,12 @@ export class PostgresConversationResponseRepository
           row.locale_policy_version &&
         row.context_policy_versions.outputFormatVersion ===
           row.output_format_version &&
-        row.context_policy_versions.personaVersion ===
-          row.persona_version &&
+        row.context_policy_versions.personaContractInvariantVersion ===
+          row.persona_contract_invariant_version &&
+        row.context_policy_versions.canonicalPersonaVersion ===
+          row.canonical_persona_version &&
+        row.context_policy_versions.personaBehaviorAnchorsVersion ===
+          row.persona_behavior_anchors_version &&
         row.context_policy_versions.productPolicyVersion ===
           row.product_policy_version &&
         row.context_policy_versions.relationshipPolicyVersion ===
@@ -1331,6 +1355,7 @@ export class PostgresConversationResponseRepository
             contentHmac: row.context_content_hmac,
             keyVersion: row.context_integrity_key_version,
           },
+          generationStage: row.generation_stage,
           locale: row.locale,
           policyVersions: row.context_policy_versions,
           rollingSummary: row.context_rolling_summary,

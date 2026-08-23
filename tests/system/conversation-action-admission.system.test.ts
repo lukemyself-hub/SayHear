@@ -19,6 +19,11 @@ import {
   runMigrations,
 } from "@sayhear/data";
 import {
+  asGenerationCommandId,
+  asInteractionTurnId,
+  asModelRunAttemptId,
+} from "@sayhear/domain";
+import {
   createIsolatedPostgresSchema,
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
@@ -42,9 +47,11 @@ const policy = Object.freeze({
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
   outputFormatVersion: "conversation-output:v1",
-  personaVersion: "sayhear-persona:v1",
+  canonicalPersonaVersion: "canonical-persona:v1",
+  personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+  personaContractInvariantVersion: "persona-contract-invariant:v1",
   productPolicyVersion: "product-policy:v1",
-  promptVersion: "conversation-text:v1",
+  taskInstructionVersion: "task-instruction-decision:v1",
   provider: "openai" as const,
   providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
@@ -303,6 +310,113 @@ describe("Journal regeneration Action admission system seam", () => {
       action_receipt_sequence: 1,
       action_execution_status: "pending",
       status: "prepared",
+    });
+    // Each GenerationCommand stage pins its own task instruction version while
+    // carrying the same three-block persona artifact (ADR-0094, issue #73).
+    const stagePins = await database.pool.query<{
+      generation_command_id: string;
+      generation_stage: string;
+      interaction_turn_id: string;
+      model_run_attempt_id: string;
+      prompt_version: string;
+      canonical_persona_version: string | null;
+      persona_contract_invariant_version: string | null;
+      persona_behavior_anchors_version: string | null;
+    }>(
+      `SELECT command.generation_command_id, command.generation_stage,
+          command.interaction_turn_id, command.prompt_version,
+          command.canonical_persona_version,
+          command.persona_contract_invariant_version,
+          command.persona_behavior_anchors_version,
+          attempt.model_run_attempt_id
+       FROM generation_commands command
+       INNER JOIN model_run_attempts attempt
+         ON attempt.generation_command_id = command.generation_command_id
+        AND attempt.attempt_no = 1
+       ORDER BY command.generation_stage`,
+    );
+    expect(
+      stagePins.rows.map((row) => ({
+        generation_stage: row.generation_stage,
+        prompt_version: row.prompt_version,
+        canonical_persona_version: row.canonical_persona_version,
+        persona_contract_invariant_version:
+          row.persona_contract_invariant_version,
+        persona_behavior_anchors_version: row.persona_behavior_anchors_version,
+      })),
+    ).toEqual([
+      {
+        generation_stage: "action_finalization",
+        prompt_version: "task-instruction-action-finalization:v1",
+        canonical_persona_version: "canonical-persona:v1",
+        persona_contract_invariant_version: "persona-contract-invariant:v1",
+        persona_behavior_anchors_version: "persona-behavior-anchors:v1",
+      },
+      {
+        generation_stage: "decision",
+        prompt_version: "task-instruction-decision:v1",
+        canonical_persona_version: "canonical-persona:v1",
+        persona_contract_invariant_version: "persona-contract-invariant:v1",
+        persona_behavior_anchors_version: "persona-behavior-anchors:v1",
+      },
+    ]);
+    // The finalization-stage compile resolves its own stage's task instruction
+    // through the versioned artifact registry on the real command row (the
+    // decision stage never reuses it).
+    const finalizationRow = stagePins.rows.find(
+      (row) => row.generation_stage === "action_finalization",
+    );
+    const finalizationResponseRepository =
+      new PostgresConversationResponseRepository(database.pool);
+    const ownership = await finalizationResponseRepository.claimResponseExecution({
+      generationCommandId: asGenerationCommandId(
+        finalizationRow!.generation_command_id,
+      ),
+      modelRunAttemptId: asModelRunAttemptId(
+        finalizationRow!.model_run_attempt_id,
+      ),
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(ownership).toBe("owner");
+    const contextCompiler = createContextCompiler({
+      clock: () => now,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: finalizationResponseRepository,
+    });
+    const finalizationContext = await contextCompiler.compile({
+      generationCommandId: asGenerationCommandId(
+        finalizationRow!.generation_command_id,
+      ),
+      interactionTurnId: asInteractionTurnId(
+        finalizationRow!.interaction_turn_id,
+      ),
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(finalizationContext.referencedRevisionIds).toContain(
+      turn.message.revisionId,
+    );
+    const finalizationManifest = await database.pool.query<{
+      policy_versions: Readonly<Record<string, string>>;
+      sections: readonly Readonly<{
+        key: string;
+        reference: string;
+      }>[];
+    }>(
+      `SELECT policy_versions, sections FROM compiled_contexts
+       WHERE compiled_context_id = $1`,
+      [String(finalizationContext.id)],
+    );
+    expect(finalizationManifest.rows[0]?.policy_versions).toMatchObject({
+      taskInstructionVersion: "task-instruction-action-finalization:v1",
+    });
+    expect(
+      finalizationManifest.rows[0]?.sections.find(
+        (section) => section.key === "task_instruction",
+      ),
+    ).toMatchObject({
+      reference: "task-instruction-action-finalization:v1",
     });
     const journalService = createJournalService({
       journalPolicyVersion: "journal-generation:v2",

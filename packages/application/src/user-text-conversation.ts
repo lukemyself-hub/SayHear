@@ -72,14 +72,16 @@ export type GenerationPolicy = Readonly<{
   model: string;
   modelConfigVersion: string;
   modelSnapshot: string;
+  canonicalPersonaVersion: string;
   outputFormatVersion: string;
-  personaVersion: string;
+  personaBehaviorAnchorsVersion: string;
+  personaContractInvariantVersion: string;
   providerPolicyVersion: string;
   productPolicyVersion: string;
-  promptVersion: string;
   provider: ConversationTextProvider;
   relationshipPolicyVersion: string;
   safetyPolicyVersion: string;
+  taskInstructionVersion: string;
 }>;
 
 export type InactivityPolicy = Readonly<{

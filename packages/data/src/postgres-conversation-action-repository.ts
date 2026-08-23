@@ -4,6 +4,7 @@ import type {
   ConversationActionReceipt,
   PreparedConversationAction,
 } from "@sayhear/application";
+import { ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION } from "@sayhear/application";
 import type { ConversationActionDefinition, ConversationActionProposal } from "@sayhear/application";
 import {
   asCompiledContextId,
@@ -762,7 +763,9 @@ async function createActionFinalizationCommand(
     `INSERT INTO generation_commands (
        generation_command_id, user_id, interaction_turn_id, operation_type,
        intent_key, subject_type, subject_id, input_revision_kind,
-       input_revision_id, prompt_version, output_format_version, persona_version,
+       input_revision_id, prompt_version, output_format_version,
+       persona_contract_invariant_version, canonical_persona_version,
+       persona_behavior_anchors_version,
        product_policy_version, safety_policy_version, relationship_policy_version,
        locale_policy_version, locale, provider, model, model_snapshot,
        model_config_version, provider_policy_version, consent_policy_version,
@@ -772,8 +775,10 @@ async function createActionFinalizationCommand(
      )
      SELECT $1, command.user_id, command.interaction_turn_id, command.operation_type,
        $2, command.subject_type, command.subject_id, command.input_revision_kind,
-       command.input_revision_id, command.prompt_version, command.output_format_version,
-       command.persona_version, command.product_policy_version, command.safety_policy_version,
+       command.input_revision_id, $9, command.output_format_version,
+       command.persona_contract_invariant_version, command.canonical_persona_version,
+       command.persona_behavior_anchors_version,
+       command.product_policy_version, command.safety_policy_version,
        command.relationship_policy_version, command.locale_policy_version, command.locale,
        command.provider, command.model, command.model_snapshot, command.model_config_version,
        command.provider_policy_version, command.consent_policy_version, command.freshness_policy,
@@ -792,6 +797,10 @@ async function createActionFinalizationCommand(
       input.now,
       input.decisionCommandId,
       input.userId,
+      // Action Finalization is its own GenerationCommand stage and pins its own
+      // task instruction version instead of inheriting the Decision stage's
+      // (ADR-0094, issue #73).
+      ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
     ],
   );
   await client.query(

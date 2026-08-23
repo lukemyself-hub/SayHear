@@ -20,6 +20,10 @@ import {
   type JournalEligibilityRepository,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+  CANONICAL_PERSONA_VERSION,
+  CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
+  PERSONA_BEHAVIOR_ANCHORS_VERSION,
+  PERSONA_CONTRACT_INVARIANT_VERSION,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -203,10 +207,12 @@ export function createServerComposition() {
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
+      canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
       outputFormatVersion: "conversation-output:v1",
-      personaVersion: "sayhear-persona:v1",
+      personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
+      personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
       productPolicyVersion: "product-policy:v1",
-      promptVersion: "conversation-text:v1",
+      taskInstructionVersion: CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
       provider: configuration.provider.champion.provider,
       providerPolicyVersion:
         configuration.provider.champion.providerPolicyVersion,

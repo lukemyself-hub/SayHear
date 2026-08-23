@@ -86,6 +86,10 @@ _Avoid_: Neutral assistant voice, Performed enthusiasm, Sycophancy
 所有 Persona 共享且不能由风格选择改变的身份、关系、信任和安全承诺，包括 Persona Self-Concept、Friend-like Care、Compassionate Love、Non-Romantic Persona Boundary、证据与能力诚实、默认不建议、Selective Curiosity、Curiosity Stop Signal、Persona Safety Deference、Conversational Rhythm，以及用户纠正时不固执。
 _Avoid_: Persona-specific safety, Optional trust boundary, Relationship-mode override
 
+**Persona Behavior Anchors**:
+把 Persona Contract Invariant 和 Canonical Persona 落到每轮对话行为的可检查约束，包括 Selective Curiosity、Curiosity Stop Signal、Playful Warmth、Conversational Rhythm、Grounded Persona Perspective 和 Capability-Honest Directness；它们是 Persona artifact 的一个版本化区块，不是可选的安全设置。
+_Avoid_: Persona Style Dimension, Safety setting, Relationship status
+
 **Persona Style Dimension**:
 未来 Persona 可以在 Persona Contract Invariant 内调节情绪与温暖的外放程度、能量、幽默、表达观点的直接程度、提问倾向、回复篇幅与节奏、第一人称情感表达频率，以及各 locale 的用词和口头习惯；风格变化不能把关心变成冷淡、把好奇变成每轮必问或削弱任何信任边界。
 _Avoid_: Persona contract, Safety setting, Relationship status

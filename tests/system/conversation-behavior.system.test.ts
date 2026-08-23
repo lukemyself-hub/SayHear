@@ -14,6 +14,7 @@ import {
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
   type ConversationTextChampion,
+  type GenerationPolicy,
   type ConversationTurnSignal,
 } from "@sayhear/application";
 import { createBehaviorAwareConversationTextModel, createProviderEgressPort } from "@sayhear/ai/testing";
@@ -67,9 +68,11 @@ const testGenerationPolicy = Object.freeze({
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
   outputFormatVersion: "conversation-output:v1",
-  personaVersion: "sayhear-persona:v1",
+  canonicalPersonaVersion: "canonical-persona:v1",
+  personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+  personaContractInvariantVersion: "persona-contract-invariant:v1",
   productPolicyVersion: "product-policy:v1",
-  promptVersion: "conversation-text:v1",
+  taskInstructionVersion: "task-instruction-decision:v1",
   provider: "openai" as const,
   providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
@@ -163,12 +166,15 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
     await database?.dispose();
   }, 10_000);
 
-  function createService(responder: (turn: {
-    history: readonly Readonly<{ role: "user" | "assistant"; text: string }>[];
-    locale: string;
-    signal: ConversationTurnSignal;
-    text: string;
-  }) => readonly string[]) {
+  function createService(
+    responder: (turn: {
+      history: readonly Readonly<{ role: "user" | "assistant"; text: string }>[];
+      locale: string;
+      signal: ConversationTurnSignal;
+      text: string;
+    }) => readonly string[],
+    policyOverrides?: Partial<GenerationPolicy>,
+  ) {
     const responseRepository = new PostgresConversationResponseRepository(
       database.pool,
     );
@@ -183,7 +189,9 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       clock: fixedResponseClock,
       expectedBackupPolicyVersion: "neon-production-v1",
       expectedConfigurationFingerprint: "sha256:expected",
-      generationPolicy: testGenerationPolicy,
+      generationPolicy: policyOverrides
+        ? { ...testGenerationPolicy, ...policyOverrides }
+        : testGenerationPolicy,
       repository: new PostgresUserTextConversationRepository(database.pool),
     });
     const service = createConversationResponseService({
@@ -487,15 +495,113 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       userId: fixedInternalOwnerPrincipal.userId,
     });
     expect(metadata?.compiledContext.policyVersions).toMatchObject({
+      canonicalPersonaVersion: "canonical-persona:v1",
       localePolicyVersion: "locale-pack-zh:v1",
       outputFormatVersion: "conversation-output:v1",
-      personaVersion: "sayhear-persona:v1",
+      personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+      personaContractInvariantVersion: "persona-contract-invariant:v1",
       productPolicyVersion: "product-policy:v1",
       relationshipPolicyVersion: "relationship-boundary:v1",
       safetyPolicyVersion: "minimum-high-risk-response:v1",
-      taskInstructionVersion: "conversation-text:v1",
+      taskInstructionVersion: "task-instruction-decision:v1",
     });
     expect(metadata?.compiledContext.locale).toBe("zh-CN");
+  });
+
+  it("records the resolved artifact versions with per-section budget vs selected in the CompiledContext manifest", async () => {
+    const { service } = createService(() => [
+      "听到了，这件事对你很重要。",
+    ]);
+    const events = await submit(service, {
+      clientEventId: "artifact-manifest-event",
+      clientTurnId: "artifact-manifest-turn",
+      locale: "zh-CN",
+      text: "今天的 review 让我有点失落。",
+    });
+    expect(events.at(-1)?.type).toBe("assistant_committed");
+    const manifest = await database.pool.query<{
+      policy_versions: Readonly<Record<string, string>>;
+      sections: readonly Readonly<{
+        budgetTokens: number | null;
+        key: string;
+        reference: string;
+        selectedTokens: number;
+      }>[];
+    }>(
+      `SELECT context.policy_versions, context.sections
+       FROM compiled_contexts context
+       INNER JOIN generation_commands command
+         ON command.compiled_context_id = context.compiled_context_id
+       WHERE command.generation_command_id = $1`,
+      [String(events[0]?.generationCommandId)],
+    );
+    const row = manifest.rows[0];
+    expect(row?.policy_versions).toMatchObject({
+      canonicalPersonaVersion: "canonical-persona:v1",
+      localePolicyVersion: "locale-pack-zh:v1",
+      personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+      personaContractInvariantVersion: "persona-contract-invariant:v1",
+      taskInstructionVersion: "task-instruction-decision:v1",
+    });
+    const sectionsByKey = new Map(row?.sections.map((section) => [section.key, section]));
+    expect(sectionsByKey.has("persona")).toBe(false);
+    for (const [key, reference] of [
+      ["persona_contract_invariant", "persona-contract-invariant:v1"],
+      ["canonical_persona", "canonical-persona:v1"],
+      ["persona_behavior_anchors", "persona-behavior-anchors:v1"],
+      ["task_instruction", "task-instruction-decision:v1"],
+      ["locale_pack", "locale-pack-zh:v1"],
+    ] as const) {
+      expect(sectionsByKey.get(key)).toMatchObject({
+        budgetTokens: null,
+        reference,
+        selectedTokens: expect.any(Number),
+        truncatable: false,
+      });
+    }
+    const rawEvents = sectionsByKey.get("committed_raw_events");
+    expect(rawEvents?.budgetTokens).toBe(4000);
+    expect(rawEvents?.selectedTokens).toBeLessThanOrEqual(4000);
+  });
+
+  it("fails the compile closed and ships no Assistant Response when a persona or locale version cannot be resolved", async () => {
+    async function expectFailClosedCompile(
+      caseName: string,
+      policyOverrides: Partial<GenerationPolicy>,
+    ) {
+      const { service } = createService(() => ["I hear you."], policyOverrides);
+      const events = await submit(service, {
+        clientEventId: `fail-closed-${caseName}-event`,
+        clientTurnId: `fail-closed-${caseName}-turn`,
+        locale: "en-US",
+        text: "The identity layer must never ship defaulted.",
+      });
+      expect(events.at(-1)?.type).toBe("response_failed");
+      const commandId = String(events[0]?.generationCommandId);
+      const command = await database.pool.query<{
+        compiled_context_id: string | null;
+        status: string;
+      }>(
+        `SELECT status, compiled_context_id FROM generation_commands
+         WHERE generation_command_id = $1`,
+        [commandId],
+      );
+      expect(command.rows[0]?.status).toBe("failed");
+      expect(command.rows[0]?.compiled_context_id).toBeNull();
+      const assistantEvents = await database.pool.query(
+        `SELECT COUNT(*)::int AS count FROM conversation_events
+         WHERE generation_command_id = $1 AND actor = 'assistant'`,
+        [commandId],
+      );
+      expect(assistantEvents.rows[0]?.count).toBe(0);
+    }
+
+    await expectFailClosedCompile("persona", {
+      canonicalPersonaVersion: "canonical-persona:vUnregistered",
+    });
+    await expectFailClosedCompile("locale", {
+      englishLocalePackVersion: "locale-pack-en:vUnregistered",
+    });
   });
 
   it("creates no Journal product state and leaves the 1A.2 durability foundation empty while a conversation is active", async () => {
