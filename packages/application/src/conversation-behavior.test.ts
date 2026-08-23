@@ -15,6 +15,7 @@ import {
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
 } from "./conversation-behavior";
+import { listSafetyResourceNumbers } from "./safety-resources";
 
 describe("conversation behavior locale resolution", () => {
   it.each([
@@ -123,6 +124,34 @@ describe("minimum high-risk response rendering", () => {
     });
     expect(validateMinimumHighRiskResponse(response).violations).toEqual([]);
     expect(response).toMatch(/危机热线|急救|心理援助|联系|求助/u);
+  });
+
+  it("renders the anchor numbers of the versioned whitelist verbatim in English", () => {
+    const response = renderMinimumHighRiskResponse({
+      kind: "self_harm",
+      locale: "en-US",
+    });
+    for (const number of listSafetyResourceNumbers({
+      region: "US",
+      kind: "crisis_hotline",
+    })) {
+      expect(response).toContain(number);
+    }
+  });
+
+  it("renders the anchor numbers of the versioned whitelist verbatim in Chinese", () => {
+    const response = renderMinimumHighRiskResponse({
+      kind: "imminent_danger",
+      locale: "zh-CN",
+    });
+    const numbers = [
+      ...listSafetyResourceNumbers({ region: "CN", kind: "crisis_hotline" }),
+      ...listSafetyResourceNumbers({ region: "CN", kind: "emergency_number" }),
+    ];
+    expect(numbers.length).toBeGreaterThan(0);
+    for (const number of numbers) {
+      expect(response).toContain(number);
+    }
   });
 
   it("asks at most one narrow immediate-safety question", () => {

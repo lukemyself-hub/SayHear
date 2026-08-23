@@ -5,8 +5,12 @@
  * versioned behavior invariants (ADR-0010, ADR-0072). This module owns the
  * deterministic, locale-aware detection path, the versioned safety response, and
  * the structural contract checks used by both the deterministic Champion and the
- * minimum synthetic evaluation set. It holds no product state.
+ * minimum synthetic evaluation set. It holds no product state. The hotline
+ * numbers in the safety response come from the versioned whitelist in
+ * ./safety-resources — the single source shared with the eval hard gate.
  */
+
+import { listSafetyResourceNumbers } from "./safety-resources";
 
 export const MINIMUM_HIGH_RISK_RESPONSE_POLICY_VERSION =
   "minimum-high-risk-response:v1";
@@ -365,7 +369,8 @@ export function detectMinimumHighRiskSignal(input: {
 
 /**
  * Render the versioned Minimum High-Risk Response. It encourages immediate
- * real-world support, asks at most one narrow immediate-safety question, and
+ * real-world support anchored to the whitelisted safety-resource numbers
+ * (./safety-resources), asks at most one narrow immediate-safety question, and
  * never diagnoses, impersonates a therapist, promises absolute confidentiality,
  * or returns to ordinary listening, follow-up, or advice.
  */
@@ -375,16 +380,29 @@ export function renderMinimumHighRiskResponse(input: {
 }): string {
   const locale = resolveConversationLocale(input.locale);
   if (locale === "zh") {
+    const crisisHotlines = listSafetyResourceNumbers({
+      region: "CN",
+      kind: "crisis_hotline",
+    }).join(" 或 ");
+    const emergencyNumbers = listSafetyResourceNumbers({
+      region: "CN",
+      kind: "emergency_number",
+    }).join(" 或 ");
     return (
       "谢谢你愿意告诉我——你现在是否安全，是我此刻最关心的。" +
-      "请立刻联系危机热线或急救服务：可以拨打当地的心理援助热线，或直接呼叫急救号码。" +
+      `请立刻联系危机热线或急救服务：可以拨打心理援助热线 ${crisisHotlines}，` +
+      `紧急情况直接呼叫 ${emergencyNumbers}。` +
       "你现在身边有可以陪伴、保证你安全的人吗，或者你能马上联系到这样的人吗？"
     );
   }
+  const crisisHotlines = listSafetyResourceNumbers({
+    region: "US",
+    kind: "crisis_hotline",
+  }).join(" or ");
   return (
     "Thank you for telling me — whether you are safe right now matters most to me. " +
     "Please reach out to a crisis line or emergency services right away: you can call or text a " +
-    "local suicide & crisis lifeline (such as 988 in the US) or your local emergency number. " +
+    `local suicide & crisis lifeline (such as ${crisisHotlines} in the US) or your local emergency number. ` +
     "Are you with someone who can keep you safe right now, or able to reach someone?"
   );
 }
