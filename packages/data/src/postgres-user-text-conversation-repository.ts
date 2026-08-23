@@ -648,7 +648,9 @@ export class PostgresUserTextConversationRepository
           input_revision_id,
           prompt_version,
           output_format_version,
-          persona_version,
+          persona_contract_invariant_version,
+          canonical_persona_version,
+          persona_behavior_anchors_version,
           product_policy_version,
           safety_policy_version,
           relationship_policy_version,
@@ -669,9 +671,9 @@ export class PostgresUserTextConversationRepository
         )
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
-          'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
-          'prepared', $25
+          'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
+          $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+          'prepared', $27
         )
       `,
       [
@@ -681,9 +683,11 @@ export class PostgresUserTextConversationRepository
         intentKey,
         source.subject_id,
         source.input_revision_id,
-        input.generationPolicy.promptVersion,
+        input.generationPolicy.taskInstructionVersion,
         input.generationPolicy.outputFormatVersion,
-        input.generationPolicy.personaVersion,
+        input.generationPolicy.personaContractInvariantVersion,
+        input.generationPolicy.canonicalPersonaVersion,
+        input.generationPolicy.personaBehaviorAnchorsVersion,
         input.generationPolicy.productPolicyVersion,
         input.generationPolicy.safetyPolicyVersion,
         input.generationPolicy.relationshipPolicyVersion,
@@ -734,7 +738,7 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.provider,
         input.generationPolicy.model,
         input.generationPolicy.modelSnapshot,
-        input.generationPolicy.promptVersion,
+        input.generationPolicy.taskInstructionVersion,
         input.now,
       ],
     );
@@ -1095,7 +1099,9 @@ export class PostgresUserTextConversationRepository
           input_revision_id,
           prompt_version,
           output_format_version,
-          persona_version,
+          persona_contract_invariant_version,
+          canonical_persona_version,
+          persona_behavior_anchors_version,
           product_policy_version,
           safety_policy_version,
           relationship_policy_version,
@@ -1116,9 +1122,9 @@ export class PostgresUserTextConversationRepository
         )
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
-          'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
-          'prepared', $25
+          'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
+          $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+          'prepared', $27
         )
       `,
       [
@@ -1128,9 +1134,11 @@ export class PostgresUserTextConversationRepository
         `conversation-response/${conversationEventId}`,
         conversationEventId,
         revisionId,
-        input.generationPolicy.promptVersion,
+        input.generationPolicy.taskInstructionVersion,
         input.generationPolicy.outputFormatVersion,
-        input.generationPolicy.personaVersion,
+        input.generationPolicy.personaContractInvariantVersion,
+        input.generationPolicy.canonicalPersonaVersion,
+        input.generationPolicy.personaBehaviorAnchorsVersion,
         input.generationPolicy.productPolicyVersion,
         input.generationPolicy.safetyPolicyVersion,
         input.generationPolicy.relationshipPolicyVersion,
@@ -1181,7 +1189,7 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.provider,
         input.generationPolicy.model,
         input.generationPolicy.modelSnapshot,
-        input.generationPolicy.promptVersion,
+        input.generationPolicy.taskInstructionVersion,
         input.now,
       ],
     );
@@ -1372,7 +1380,9 @@ async function addGenerationToLegacyTurn(
         input_revision_id,
         prompt_version,
         output_format_version,
-        persona_version,
+        persona_contract_invariant_version,
+        canonical_persona_version,
+        persona_behavior_anchors_version,
         product_policy_version,
         safety_policy_version,
         relationship_policy_version,
@@ -1393,9 +1403,9 @@ async function addGenerationToLegacyTurn(
       )
       VALUES (
         $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
-        'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12,
-        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
-        'prepared', $25
+        'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+        'prepared', $27
       )
     `,
     [
@@ -1405,9 +1415,11 @@ async function addGenerationToLegacyTurn(
       `conversation-response/${row.conversation_event_id}`,
       row.conversation_event_id,
       row.revision_id,
-      input.generationPolicy.promptVersion,
+      input.generationPolicy.taskInstructionVersion,
       input.generationPolicy.outputFormatVersion,
-      input.generationPolicy.personaVersion,
+      input.generationPolicy.personaContractInvariantVersion,
+      input.generationPolicy.canonicalPersonaVersion,
+      input.generationPolicy.personaBehaviorAnchorsVersion,
       input.generationPolicy.productPolicyVersion,
       input.generationPolicy.safetyPolicyVersion,
       input.generationPolicy.relationshipPolicyVersion,
@@ -1458,7 +1470,7 @@ async function addGenerationToLegacyTurn(
       input.generationPolicy.provider,
       input.generationPolicy.model,
       input.generationPolicy.modelSnapshot,
-      input.generationPolicy.promptVersion,
+      input.generationPolicy.taskInstructionVersion,
       input.now,
     ],
   );

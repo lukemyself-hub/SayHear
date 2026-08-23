@@ -83,9 +83,11 @@ const testGenerationPolicy = Object.freeze({
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
   outputFormatVersion: "conversation-output:v1",
-  personaVersion: "sayhear-persona:v1",
+  canonicalPersonaVersion: "canonical-persona:v1",
+  personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+  personaContractInvariantVersion: "persona-contract-invariant:v1",
   productPolicyVersion: "product-policy:v1",
-  promptVersion: "conversation-text:v1",
+  taskInstructionVersion: "task-instruction-decision:v1",
   provider: "openai" as const,
   providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
@@ -209,7 +211,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         { role: "evidence.extract", provider: "deterministic", model: "test", configVersion: "test:evidence", policyVersion: "evidence-extraction:v1", promptFingerprint: "test:evidence" },
         { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:draft", policyVersion: "journal-generation:v2", promptFingerprint: "test:draft" },
         { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:validate", policyVersion: "journal-validator:v2", promptFingerprint: "test:validate" },
-        { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
+        { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v2", promptFingerprint: "dialogue-state-prompt:v2" },
         { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
       ],
     });
@@ -647,18 +649,16 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
 
     const source = claimed!.sources[0]!;
     const lateContent: DialogueStateContent = {
-      currentTopic: {
+      current_topic: {
         confidence: 0.5,
         sourceRevisionIds: [source.revisionId],
         value: source.text.slice(0, 240),
       },
-      emotionalTone: { confidence: 0, sourceRevisionIds: [], value: null },
-      pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
-      userIntent: {
-        confidence: 0.5,
-        sourceRevisionIds: [source.revisionId],
-        value: "sharing",
-      },
+      emotional_intensity: { confidence: 0, sourceRevisionIds: [], value: null },
+      advice_explicitly_requested: { confidence: 0, sourceRevisionIds: [], value: null },
+      current_request_requires_focus: { confidence: 0, sourceRevisionIds: [], value: null },
+      close_intent: { confidence: 0, sourceRevisionIds: [], value: null },
+      user_willing_to_elaborate: { confidence: 0, sourceRevisionIds: [], value: null },
     };
     await expect(
       composition.dialogueStateRepository.publish({
@@ -723,10 +723,12 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       composition.dialogueStateRepository.publish({
         command: claimed!.command,
         content: {
-          currentTopic: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: source.text },
-          emotionalTone: { confidence: 0, sourceRevisionIds: [], value: null },
-          pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
-          userIntent: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: "sharing" },
+          current_topic: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: source.text.slice(0, 240) },
+          emotional_intensity: { confidence: 0, sourceRevisionIds: [], value: null },
+          advice_explicitly_requested: { confidence: 0, sourceRevisionIds: [], value: null },
+          current_request_requires_focus: { confidence: 0, sourceRevisionIds: [], value: null },
+          close_intent: { confidence: 0, sourceRevisionIds: [], value: null },
+          user_willing_to_elaborate: { confidence: 0, sourceRevisionIds: [], value: null },
         },
         now: fixedResponseClock(),
       }),
@@ -783,10 +785,12 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       composition.dialogueStateRepository.publish({
         command: olderClaim!.command,
         content: {
-          currentTopic: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: source.text },
-          emotionalTone: { confidence: 0, sourceRevisionIds: [], value: null },
-          pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
-          userIntent: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: "sharing" },
+          current_topic: { confidence: 0.5, sourceRevisionIds: [source.revisionId], value: source.text.slice(0, 240) },
+          emotional_intensity: { confidence: 0, sourceRevisionIds: [], value: null },
+          advice_explicitly_requested: { confidence: 0, sourceRevisionIds: [], value: null },
+          current_request_requires_focus: { confidence: 0, sourceRevisionIds: [], value: null },
+          close_intent: { confidence: 0, sourceRevisionIds: [], value: null },
+          user_willing_to_elaborate: { confidence: 0, sourceRevisionIds: [], value: null },
         },
         now: fixedResponseClock(),
       }),

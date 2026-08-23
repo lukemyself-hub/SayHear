@@ -46,12 +46,10 @@ CREATE TABLE curiosity_stop_signals (
     AND content ? 'suppressedDirections'
     AND jsonb_typeof(content->'suppressedDirections') = 'array'
     AND content ? 'blanketStop'
-    -- A jsonb `null` is a value, not SQL NULL, so the unwritten-slot check
-    -- must go through jsonb_typeof (absent key or explicit json null).
-    AND (
-      content->'proactiveFollowupUsage' IS NULL
-      OR jsonb_typeof(content->'proactiveFollowupUsage') = 'null'
-    )
+    -- A jsonb `null` is a value, not SQL NULL, so require the slot to exist
+    -- and carry explicit JSON null until 1A.3b writes it.
+    AND content ? 'proactiveFollowupUsage'
+    AND jsonb_typeof(content->'proactiveFollowupUsage') = 'null'
   ),
   committed_generation_command_id UUID NOT NULL
     REFERENCES generation_commands(generation_command_id),

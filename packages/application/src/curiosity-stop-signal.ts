@@ -4,7 +4,8 @@
  *
  * The projection records question directions the user has stopped for the rest
  * of the day's Daily Session. The Conversation Text Champion may PROPOSE a
- * stop-signal change — suppression ("avoided / refused / topic changed"), the
+ * stop-signal change — suppression ("short response / avoided / refused /
+ * topic changed"), the
  * blanket "stop asking questions" form, or a release — but every commit and
  * release decision below is deterministic code: the proposal carries only the
  * semantic claim, and the evidence envelope (which committed Event revisions
@@ -38,11 +39,13 @@ export const CURIOSITY_STOP_SIGNAL_MAX_DIRECTION_LABEL_LENGTH = 120;
 
 /** How the user stopped the direction (the model's semantic proposal). */
 export type CuriosityStopSignalKind =
+  | "short_response"
   | "avoided"
   | "refused"
   | "topic_changed";
 
 export const CURIOSITY_STOP_SIGNAL_KINDS = Object.freeze([
+  "short_response",
   "avoided",
   "refused",
   "topic_changed",
@@ -219,6 +222,8 @@ export function applyCuriosityStopSignalProposals(input: {
   content: CuriosityStopSignalContent;
   currentExchangeNo: number;
   currentUserEventRevisionId: ConversationEventRevisionId;
+  /** Supplied by the transaction boundary for deterministic release checks. */
+  currentUserText?: string;
   precedingAssistantQuestion: Readonly<{
     containsQuestion: boolean;
     revisionId: ConversationEventRevisionId;
@@ -308,6 +313,21 @@ export function applyCuriosityStopSignalProposals(input: {
         });
         continue;
       }
+      if (
+        input.currentUserText !== undefined &&
+        !releaseEvidenceMatches({
+          direction,
+          reason: proposal.releaseReason,
+          userText: input.currentUserText,
+        })
+      ) {
+        outcomes.push({
+          index,
+          outcome: "rejected",
+          reason: "missing_user_release_evidence",
+        });
+        continue;
+      }
       entry.releasedBy = {
         reason: proposal.releaseReason,
         triggerUserEventRevisionId: input.currentUserEventRevisionId,
@@ -316,6 +336,17 @@ export function applyCuriosityStopSignalProposals(input: {
       continue;
     }
     if (proposal.kind === "suppress_all_questions") {
+      if (
+        input.currentUserText !== undefined &&
+        !containsBlanketQuestionStop(input.currentUserText)
+      ) {
+        outcomes.push({
+          index,
+          outcome: "rejected",
+          reason: "missing_blanket_stop_evidence",
+        });
+        continue;
+      }
       if (
         blanketStop !== null &&
         blanketStop.releasedBy === null &&
@@ -346,6 +377,17 @@ export function applyCuriosityStopSignalProposals(input: {
         index,
         outcome: "rejected",
         reason: "not_suppressed",
+      });
+      continue;
+    }
+    if (
+      input.currentUserText !== undefined &&
+      !containsExplicitQuestionReinvitation(input.currentUserText)
+    ) {
+      outcomes.push({
+        index,
+        outcome: "rejected",
+        reason: "missing_reinvitation_evidence",
       });
       continue;
     }
@@ -436,6 +478,39 @@ function isValidDirectionLabel(direction: string): boolean {
   );
 }
 
+function releaseEvidenceMatches(input: {
+  direction: string;
+  reason: CuriosityStopSignalReleaseReason;
+  userText: string;
+}): boolean {
+  if (input.reason === "explicit_reinvitation") {
+    return containsExplicitQuestionReinvitation(input.userText);
+  }
+  const normalizedText = normalizeDirectionLabel(input.userText);
+  return (
+    normalizedText.includes(input.direction) &&
+    !containsStopSignal(input.userText)
+  );
+}
+
+function containsBlanketQuestionStop(text: string): boolean {
+  return /(?:\b(?:stop|no more|don't|do not|please stop)\s+(?:asking|questions?)\b|别再问|别问了|不要再问|先别提问)/iu.test(
+    text,
+  );
+}
+
+function containsExplicitQuestionReinvitation(text: string): boolean {
+  return /(?:\b(?:ask me|ask away|you can ask|go ahead and ask|feel free to ask|question me)\b|可以问我|你可以问|继续问|再问吧)/iu.test(
+    text,
+  );
+}
+
+function containsStopSignal(text: string): boolean {
+  return /(?:\b(?:stop asking|don't want to talk about|do not want to talk about|rather not|never mind|let's not|not now)\b|别再问|别问了|不想谈|不要再说|不想聊|不想说|换个话题|聊点别的)/iu.test(
+    text,
+  );
+}
+
 /**
  * Direction labels are model-authored strings compiled into model input, so
  * they must not smuggle instructions (same discipline as the DialogueState
@@ -523,7 +598,12 @@ export const CURIOSITY_STOP_SIGNAL_FUNCTION: ConversationFunctionDefinition =
               signal_kind: Object.freeze({
                 description:
                   "How the user stopped the direction. Required for suppress proposals.",
-                enum: Object.freeze(["avoided", "refused", "topic_changed"]),
+                enum: Object.freeze([
+                  "short_response",
+                  "avoided",
+                  "refused",
+                  "topic_changed",
+                ]),
                 type: "string",
               }),
             }),

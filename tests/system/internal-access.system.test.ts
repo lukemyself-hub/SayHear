@@ -70,9 +70,11 @@ const testGenerationPolicy = Object.freeze({
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
   outputFormatVersion: "conversation-output:v1",
-  personaVersion: "sayhear-persona:v1",
+  canonicalPersonaVersion: "canonical-persona:v1",
+  personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+  personaContractInvariantVersion: "persona-contract-invariant:v1",
   productPolicyVersion: "product-policy:v1",
-  promptVersion: "conversation-text:v1",
+  taskInstructionVersion: "task-instruction-decision:v1",
   provider: "openai" as const,
   providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
@@ -750,8 +752,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       locale: "en-US",
       model_config_version: "conversation-text-champion:v1",
       output_format_version: testGenerationPolicy.outputFormatVersion,
-      persona_version: testGenerationPolicy.personaVersion,
-      prompt_version: "conversation-text:v1",
+      persona_version: null,
+      prompt_version: "task-instruction-decision:v1",
       turn_status: "settled",
       user_events: "1",
     });
@@ -988,12 +990,14 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         policyVersions: {
           localePolicyVersion: testGenerationPolicy.englishLocalePackVersion,
           outputFormatVersion: "conversation-output:v1",
-          personaVersion: "sayhear-persona:v1",
+          canonicalPersonaVersion: "canonical-persona:v1",
+          personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+          personaContractInvariantVersion: "persona-contract-invariant:v1",
           productPolicyVersion: testGenerationPolicy.productPolicyVersion,
           relationshipPolicyVersion:
             testGenerationPolicy.relationshipPolicyVersion,
           safetyPolicyVersion: testGenerationPolicy.safetyPolicyVersion,
-          taskInstructionVersion: testGenerationPolicy.promptVersion,
+          taskInstructionVersion: testGenerationPolicy.taskInstructionVersion,
         },
         referencedEvents: [
           {
@@ -1015,13 +1019,23 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
             truncatable: false,
           }),
           expect.objectContaining({
-            key: "persona",
-            reference: "sayhear-persona:v1",
+            key: "persona_contract_invariant",
+            reference: "persona-contract-invariant:v1",
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            key: "canonical_persona",
+            reference: "canonical-persona:v1",
+            truncatable: false,
+          }),
+          expect.objectContaining({
+            key: "persona_behavior_anchors",
+            reference: "persona-behavior-anchors:v1",
             truncatable: false,
           }),
           expect.objectContaining({
             key: "task_instruction",
-            reference: "conversation-text:v1",
+            reference: "task-instruction-decision:v1",
             truncatable: false,
           }),
           expect.objectContaining({
@@ -4458,8 +4472,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       command_id: committed.value?.generationCommandId,
       frozen_models: [testGenerationPolicy.model, testGenerationPolicy.model],
       frozen_prompts: [
-        testGenerationPolicy.promptVersion,
-        testGenerationPolicy.promptVersion,
+        testGenerationPolicy.taskInstructionVersion,
+        testGenerationPolicy.taskInstructionVersion,
       ],
     });
     expect(recovered.rows[0]?.retry_sources[0]).toBeNull();

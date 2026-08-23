@@ -2,9 +2,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 
 import {
-  CHINESE_LOCALE_PACK_VERSION,
-  ENGLISH_LOCALE_PACK_VERSION,
-} from "./conversation-behavior";
+  resolvePromptArtifacts,
+  type GenerationCommandStage,
+  type ResolvedPromptArtifacts,
+} from "./prompt-artifacts";
 import type {
   CompiledContextId,
   ConversationEventRevisionId,
@@ -38,9 +39,11 @@ export type ActionFinalizationReceiptSnapshot = Readonly<{
 }>;
 
 export type ContextPolicyVersions = Readonly<{
+  canonicalPersonaVersion: string;
   localePolicyVersion: string;
   outputFormatVersion: string;
-  personaVersion: string;
+  personaBehaviorAnchorsVersion: string;
+  personaContractInvariantVersion: string;
   productPolicyVersion: string;
   relationshipPolicyVersion: string;
   safetyPolicyVersion: string;
@@ -69,6 +72,7 @@ export type ContextSourceSnapshot = Readonly<{
   dialogueState?: CurrentDialogueState | null;
   dialogueStateFailure?: boolean;
   events: readonly ContextSourceEvent[];
+  generationStage: GenerationCommandStage;
   inputRevisionId: ConversationEventRevisionId;
   locale: string;
   policyVersions: ContextPolicyVersions;
@@ -88,7 +92,9 @@ export type CompiledContextSectionKey =
   | "product_policy"
   | "safety_policy"
   | "relationship_boundary"
-  | "persona"
+  | "persona_contract_invariant"
+  | "canonical_persona"
+  | "persona_behavior_anchors"
   | "task_instruction"
   | "output_format"
   | "locale_pack"
@@ -141,6 +147,7 @@ export type CompiledContextRenderSource = Readonly<{
     contentHmac: string;
     keyVersion: string;
   }>;
+  generationStage: GenerationCommandStage;
   locale: string;
   policyVersions: ContextPolicyVersions;
   rollingSummary?: CurrentRollingSummary | null;
@@ -227,6 +234,14 @@ export function createContextCompiler(dependencies: {
     async compile(input) {
       const source = await dependencies.repository.loadContextSource(input);
       assertSupportedPolicyVersions(source.policyVersions);
+      // Identity-layer resolution is fail-closed: an unknown persona, locale,
+      // or stage-mismatched task version throws and no Assistant Response
+      // ships with an absent or defaulted identity layer (issue #73).
+      const promptArtifacts = resolvePromptArtifacts({
+        generationStage: source.generationStage,
+        locale: source.locale,
+        policyVersions: source.policyVersions,
+      });
       const currentInput = source.events.find(
         (event) => event.revisionId === source.inputRevisionId,
       );
@@ -291,6 +306,7 @@ export function createContextCompiler(dependencies: {
         history: selectedHistory,
         locale: source.locale,
         policyVersions: source.policyVersions,
+        promptArtifacts,
         rawEventTokenBudget: dependencies.rawEventTokenBudget,
         curiosityStopSignal: source.curiosityStopSignal ?? null,
         currentExchangeNo: source.dailySession.continuousExchangeNo,
@@ -365,6 +381,13 @@ export function createContextCompiler(dependencies: {
       ) {
         throw new CompiledContextIntegrityError();
       }
+      // Re-resolution is deterministic by version, so the recomputed section
+      // HMACs below prove the frozen manifest resolved the same artifacts.
+      const promptArtifacts = resolvePromptArtifacts({
+        generationStage: source.generationStage,
+        locale: source.locale,
+        policyVersions: source.policyVersions,
+      });
       const currentInputs = source.referencedEvents.filter(
         (event) => event.section === "current_user_input",
       );
@@ -403,6 +426,7 @@ export function createContextCompiler(dependencies: {
         history,
         locale: source.locale,
         policyVersions: source.policyVersions,
+        promptArtifacts,
         rawEventTokenBudget: rawEventBudget,
         curiosityStopSignal: null,
         ...(dialogueStateSection?.reference
@@ -498,6 +522,7 @@ function createSections(input: {
   history: readonly CompiledContextReferencedEvent[];
   locale: string;
   policyVersions: ContextPolicyVersions;
+  promptArtifacts: ResolvedPromptArtifacts;
   rawEventTokenBudget: number;
   curiosityStopSignal: CurrentCuriosityStopSignal | null;
   dialogueState?: CurrentDialogueState | null;
@@ -555,15 +580,28 @@ function createSections(input: {
     },
     {
       budgetTokens: null,
-      content: "You are SayHear, a private AI life-journal conversation companion.",
-      key: "persona",
-      reference: input.policyVersions.personaVersion,
+      content: input.promptArtifacts.personaContractInvariant,
+      key: "persona_contract_invariant",
+      reference: input.policyVersions.personaContractInvariantVersion,
       truncatable: false,
     },
     {
       budgetTokens: null,
-      content:
-        "Continue the private journal conversation. Ask at most one question, anchored in the user's current expression.",
+      content: input.promptArtifacts.canonicalPersona,
+      key: "canonical_persona",
+      reference: input.policyVersions.canonicalPersonaVersion,
+      truncatable: false,
+    },
+    {
+      budgetTokens: null,
+      content: input.promptArtifacts.personaBehaviorAnchors,
+      key: "persona_behavior_anchors",
+      reference: input.policyVersions.personaBehaviorAnchorsVersion,
+      truncatable: false,
+    },
+    {
+      budgetTokens: null,
+      content: input.promptArtifacts.taskInstruction,
       key: "task_instruction",
       reference: input.policyVersions.taskInstructionVersion,
       truncatable: false,
@@ -578,7 +616,7 @@ function createSections(input: {
     },
     {
       budgetTokens: null,
-      content: `Respond naturally in the user's locale (${input.locale}), preserving natural English/Chinese code-switching.`,
+      content: input.promptArtifacts.localePack,
       key: "locale_pack",
       reference: input.policyVersions.localePolicyVersion,
       truncatable: false,
@@ -728,12 +766,18 @@ function renderCuriosityStopSignalSection(input: {
 function renderDialogueState(state: CurrentDialogueState): string {
   const renderField = <T>(field: { confidence: number; sourceRevisionIds: readonly ConversationEventRevisionId[]; value: T }) =>
     `${String(field.value ?? "none")} (confidence=${field.confidence.toFixed(2)}, sources=${field.sourceRevisionIds.join(",") || "none"})`;
+  const advicePermitted = state.content.advice_explicitly_requested.value === true;
   return [
     `DialogueState (non-authoritative; status=${state.status}; dialogue_revision=${state.dialogueRevision}; source_revision=${state.sourceRevision}; covered_through_sequence=${state.coveredThroughSequence}):`,
-    `Current topic: ${renderField(state.content.currentTopic)}`,
-    `User intent: ${renderField(state.content.userIntent)}`,
-    `Emotional tone: ${renderField(state.content.emotionalTone)}`,
-    `Pending question: ${renderField(state.content.pendingQuestion)}`,
+    `Current topic: ${renderField(state.content.current_topic)}`,
+    `Emotional intensity: ${renderField(state.content.emotional_intensity)}`,
+    `Advice explicitly requested: ${renderField(state.content.advice_explicitly_requested)}`,
+    `Current request requires focus: ${renderField(state.content.current_request_requires_focus)}`,
+    `Close intent: ${renderField(state.content.close_intent)}`,
+    `User willing to elaborate: ${renderField(state.content.user_willing_to_elaborate)}`,
+    advicePermitted
+      ? "Advice gate: the user explicitly requested advice in the covered turns; advice serving that request is permitted."
+      : "Advice gate: the user has not explicitly requested advice in the covered turns; listen and understand rather than advise.",
     "Do not use DialogueState confidence to close the exchange or authorize a Conversation Action.",
   ].join("\n");
 }
@@ -777,23 +821,15 @@ function createManifestContentHmac(
 function assertSupportedPolicyVersions(
   versions: ContextPolicyVersions,
 ): void {
-  // The English and Chinese locale packs carry independent version identities;
-  // the applicable one is resolved per turn, so either is supported here.
-  const supportedLocalePackVersions = new Set([
-    ENGLISH_LOCALE_PACK_VERSION,
-    CHINESE_LOCALE_PACK_VERSION,
-  ]);
+  // The exact-match allowlist covers the static policy layers; the identity
+  // layers (persona blocks, locale pack, task instruction) are resolved
+  // fail-closed from the versioned prompt-artifact registry instead.
   const supported = {
     outputFormatVersion: "conversation-output:v1",
-    personaVersion: "sayhear-persona:v1",
     productPolicyVersion: "product-policy:v1",
     relationshipPolicyVersion: "relationship-boundary:v1",
     safetyPolicyVersion: "minimum-high-risk-response:v1",
-    taskInstructionVersion: "conversation-text:v1",
   };
-  if (!supportedLocalePackVersions.has(versions.localePolicyVersion)) {
-    throw new CompiledContextIntegrityError();
-  }
   for (const key of Object.keys(supported) as Array<keyof typeof supported>) {
     if (versions[key] !== supported[key]) {
       throw new CompiledContextIntegrityError();

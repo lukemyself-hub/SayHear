@@ -353,6 +353,27 @@ describe("normalizeCuriosityStopSignalCall", () => {
     ]);
   });
 
+  it("accepts a short-response stop signal", () => {
+    const normalized = normalizeCuriosityStopSignalCall({
+      rawArguments: JSON.stringify({
+        proposals: [
+          {
+            direction: "work pressure",
+            kind: "suppress_direction",
+            signal_kind: "short_response",
+          },
+        ],
+      }),
+    });
+    expect("proposals" in normalized && normalized.proposals).toEqual([
+      {
+        direction: "work pressure",
+        kind: "suppress_direction",
+        signalKind: "short_response",
+      },
+    ]);
+  });
+
   it.each([
     ["malformed JSON", "{not json"],
     ["missing proposals array", JSON.stringify({})],

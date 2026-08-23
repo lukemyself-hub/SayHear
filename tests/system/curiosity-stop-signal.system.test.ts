@@ -64,6 +64,9 @@ const testGenerationPolicy = Object.freeze({
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
   outputFormatVersion: "conversation-output:v1",
+  canonicalPersonaVersion: "canonical-persona:v1",
+  personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+  personaContractInvariantVersion: "persona-contract-invariant:v1",
   personaVersion: "sayhear-persona:v1",
   productPolicyVersion: "product-policy:v1",
   promptVersion: "conversation-text:v1",
@@ -71,6 +74,7 @@ const testGenerationPolicy = Object.freeze({
   providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
   safetyPolicyVersion: "minimum-high-risk-response:v1",
+  taskInstructionVersion: "task-instruction-decision:v1",
 });
 
 describe("Authenticated Internal Text Conversation System Seam — Curiosity Stop Signal projection", () => {
@@ -379,6 +383,15 @@ describe("Authenticated Internal Text Conversation System Seam — Curiosity Sto
             },
           ];
         }
+        if (turn.text === "The weather has been strange.") {
+          return [
+            {
+              direction: "work pressure",
+              kind: "release_direction" as const,
+              releaseReason: "user_reopened" as const,
+            },
+          ];
+        }
         return null;
       },
     });
@@ -409,11 +422,18 @@ describe("Authenticated Internal Text Conversation System Seam — Curiosity Sto
     );
 
     // An unrelated turn does not release the direction.
-    await submit(service, {
+    const unrelatedTurn = await submit(service, {
       text: "The weather has been strange.",
       turnId: "exchange-2-turn-2",
     });
-    expect(await projectionVersion()).not.toBeNull();
+    const unrelatedSections = await compiledSections(
+      unrelatedTurn.generationCommandId,
+    );
+    expect(
+      unrelatedSections.find(
+        (section) => section.key === "curiosity_stop_signal",
+      )?.content_reference,
+    ).toContain("work pressure (refused)");
 
     // The user re-opens the topic: the model proposes, deterministic code
     // releases, and the next compile no longer carries the section.

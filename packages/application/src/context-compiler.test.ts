@@ -12,7 +12,10 @@ import {
   CompiledContextIntegrityError,
   createContextCompiler,
   type ContextCompilerRepository,
+  type ContextPolicyVersions,
+  type ContextSourceSnapshot,
 } from "./context-compiler";
+import { PromptArtifactResolutionError } from "./prompt-artifacts";
 
 describe("Context Compiler", () => {
   it("uses a valid lagging DialogueState and only sends raw Events after its coverage", async () => {
@@ -56,25 +59,35 @@ describe("Context Compiler", () => {
           dialogueRevision: 3,
           dialogueState: {
             content: {
-              currentTopic: {
+              current_topic: {
                 confidence: 0.8,
                 sourceRevisionIds: [coveredRevisionId],
                 value: "the meeting",
               },
-              emotionalTone: {
+              emotional_intensity: {
                 confidence: 0.6,
                 sourceRevisionIds: [coveredRevisionId],
-                value: "mixed" as const,
+                value: "moderate" as const,
               },
-              pendingQuestion: {
+              advice_explicitly_requested: {
+                confidence: 0.9,
+                sourceRevisionIds: [coveredRevisionId],
+                value: false,
+              },
+              current_request_requires_focus: {
+                confidence: 0.7,
+                sourceRevisionIds: [coveredRevisionId],
+                value: false,
+              },
+              close_intent: {
                 confidence: 0,
                 sourceRevisionIds: [],
                 value: null,
               },
-              userIntent: {
-                confidence: 0.9,
+              user_willing_to_elaborate: {
+                confidence: 0.75,
                 sourceRevisionIds: [coveredRevisionId],
-                value: "sharing" as const,
+                value: true,
               },
             },
             coveredThroughSequence: 1,
@@ -114,14 +127,17 @@ describe("Context Compiler", () => {
           ],
           inputRevisionId,
           locale: "en-US",
+          generationStage: "decision" as const,
           policyVersions: {
+            canonicalPersonaVersion: "canonical-persona:v1",
             localePolicyVersion: "locale-pack-en:v1",
             outputFormatVersion: "conversation-output:v1",
-            personaVersion: "sayhear-persona:v1",
+            personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+            personaContractInvariantVersion: "persona-contract-invariant:v1",
             productPolicyVersion: "product-policy:v1",
             relationshipPolicyVersion: "relationship-boundary:v1",
             safetyPolicyVersion: "minimum-high-risk-response:v1",
-            taskInstructionVersion: "conversation-text:v1",
+            taskInstructionVersion: "task-instruction-decision:v1",
           },
           sourceRevision: 3,
         };
@@ -169,6 +185,7 @@ describe("Context Compiler", () => {
     });
     const payload = compiler.renderPermittedPayload({
       compilerVersion: saved!.compilerVersion,
+      generationStage: "decision",
       integrity: saved!.integrity,
       locale: saved!.locale,
       policyVersions: saved!.policyVersions,
@@ -188,8 +205,147 @@ describe("Context Compiler", () => {
     ]);
     expect(payload.instructions).toContain("status=lagging");
     expect(payload.instructions).toContain("Do not use DialogueState confidence");
+    expect(payload.instructions).toContain("Advice explicitly requested: false");
+    expect(payload.instructions).toContain("listen and understand rather than advise");
     expect(payload.instructions).toContain("execution: pending");
     expect(payload.instructions).toContain("do not claim that a new Journal Version was generated");
+  });
+
+  it("permits advice only when the projection records an explicit request", async () => {
+    const userId = asUserId("01984477-59a9-7d20-9d97-e588769566d0");
+    const dailySessionId = asDailySessionId(
+      "01984477-59a9-7d20-9d97-e588769566a1",
+    );
+    const generationCommandId = asGenerationCommandId(
+      "01984477-59a9-7d20-9d97-e588769566a2",
+    );
+    const interactionTurnId = asInteractionTurnId(
+      "01984477-59a9-7d20-9d97-e588769566a3",
+    );
+    const inputRevisionId = asConversationEventRevisionId(
+      "01984477-59a9-7d20-9d97-e588769566a6",
+    );
+    let saved:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const repository: ContextCompilerRepository = {
+      async loadContextSource() {
+        return {
+          dailySession: {
+            activityState: "active" as const,
+            closurePolicyVersion: "daily-session-inactivity:v1",
+            continuousExchangeNo: 1,
+            id: dailySessionId,
+          },
+          dialogueRevision: 1,
+          dialogueState: {
+            content: {
+              current_topic: {
+                confidence: 0.8,
+                sourceRevisionIds: [inputRevisionId],
+                value: "the meeting",
+              },
+              emotional_intensity: {
+                confidence: 0.6,
+                sourceRevisionIds: [inputRevisionId],
+                value: "moderate" as const,
+              },
+              advice_explicitly_requested: {
+                confidence: 0.9,
+                sourceRevisionIds: [inputRevisionId],
+                value: true,
+              },
+              current_request_requires_focus: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+              close_intent: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+              user_willing_to_elaborate: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+            },
+            coveredThroughSequence: 1,
+            dialogueRevision: 1,
+            id: "01984477-59a9-7d20-9d97-e588769566a7",
+            modelConfigVersion: "dialogue-state-model:v1",
+            policyVersion: "dialogue-state:v2",
+            promptVersion: "dialogue-state-prompt:v2",
+            sourceRevision: 1,
+            sourceRevisionIds: [inputRevisionId],
+            status: "current" as const,
+            updatedAt: new Date("2026-08-13T11:59:00.000Z"),
+            version: 1,
+          },
+          events: [
+            {
+              actor: "user" as const,
+              locale: "en-US",
+              revisionId: inputRevisionId,
+              sequence: 1,
+              text: "What should I do about the meeting?",
+            },
+          ],
+          inputRevisionId,
+          locale: "en-US",
+          generationStage: "decision" as const,
+          policyVersions: {
+            canonicalPersonaVersion: "canonical-persona:v1",
+            localePolicyVersion: "locale-pack-en:v1",
+            outputFormatVersion: "conversation-output:v1",
+            personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+            personaContractInvariantVersion: "persona-contract-invariant:v1",
+            productPolicyVersion: "product-policy:v1",
+            relationshipPolicyVersion: "relationship-boundary:v1",
+            safetyPolicyVersion: "minimum-high-risk-response:v1",
+            taskInstructionVersion: "task-instruction-decision:v1",
+          },
+          sourceRevision: 1,
+        };
+      },
+      async saveCompiledContext(input) {
+        saved = input;
+        return {
+          degradedReason: input.degradedReason,
+          dialogueRevision: input.dialogueRevision,
+          id: asCompiledContextId(
+            "01984477-59a9-7d20-9d97-e588769566a8",
+          ),
+          locale: input.locale,
+          referencedRevisionIds: input.referencedEvents.map(
+            (event) => event.revisionId,
+          ),
+          sourceRevision: input.sourceRevision,
+          statistics: {
+            rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+            selectedEventCount: input.referencedEvents.length,
+            totalTokens: input.totalTokens,
+          },
+        };
+      },
+    };
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-13T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "dialogue-state-context-secret",
+      rawEventTokenBudget: 4_000,
+      repository,
+    });
+
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+
+    expect(saved?.degradedReason).toBeNull();
+    const dialogueStateSection = saved?.sections.find(
+      (section) => section.key === "dialogue_state",
+    );
+    expect(dialogueStateSection?.reference).toContain("Advice explicitly requested: true");
+    expect(dialogueStateSection?.reference).toContain("advice serving that request is permitted");
   });
 
   it("keeps the current User input and the newest contiguous history within budget", async () => {
@@ -248,14 +404,17 @@ describe("Context Compiler", () => {
           ],
           inputRevisionId,
           locale: "en-US",
+          generationStage: "decision" as const,
           policyVersions: {
+            canonicalPersonaVersion: "canonical-persona:v1",
             localePolicyVersion: "locale-pack-en:v1",
             outputFormatVersion: "conversation-output:v1",
-            personaVersion: "sayhear-persona:v1",
+            personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+            personaContractInvariantVersion: "persona-contract-invariant:v1",
             productPolicyVersion: "product-policy:v1",
             relationshipPolicyVersion: "relationship-boundary:v1",
             safetyPolicyVersion: "minimum-high-risk-response:v1",
-            taskInstructionVersion: "conversation-text:v1",
+            taskInstructionVersion: "task-instruction-decision:v1",
           },
           sourceRevision: 7,
         };
@@ -305,13 +464,15 @@ describe("Context Compiler", () => {
         keyVersion: "context-integrity:v1",
       },
       policyVersions: {
+        canonicalPersonaVersion: "canonical-persona:v1",
         localePolicyVersion: "locale-pack-en:v1",
         outputFormatVersion: "conversation-output:v1",
-        personaVersion: "sayhear-persona:v1",
+        personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+        personaContractInvariantVersion: "persona-contract-invariant:v1",
         productPolicyVersion: "product-policy:v1",
         relationshipPolicyVersion: "relationship-boundary:v1",
         safetyPolicyVersion: "minimum-high-risk-response:v1",
-        taskInstructionVersion: "conversation-text:v1",
+        taskInstructionVersion: "task-instruction-decision:v1",
       },
       referencedEvents: [
         {
@@ -349,13 +510,23 @@ describe("Context Compiler", () => {
           truncatable: false,
         }),
         expect.objectContaining({
-          key: "persona",
-          reference: "sayhear-persona:v1",
+          key: "persona_contract_invariant",
+          reference: "persona-contract-invariant:v1",
+          truncatable: false,
+        }),
+        expect.objectContaining({
+          key: "canonical_persona",
+          reference: "canonical-persona:v1",
+          truncatable: false,
+        }),
+        expect.objectContaining({
+          key: "persona_behavior_anchors",
+          reference: "persona-behavior-anchors:v1",
           truncatable: false,
         }),
         expect.objectContaining({
           key: "task_instruction",
-          reference: "conversation-text:v1",
+          reference: "task-instruction-decision:v1",
           truncatable: false,
         }),
         expect.objectContaining({
@@ -418,14 +589,17 @@ describe("Context Compiler", () => {
           ],
           inputRevisionId,
           locale: "zh-CN",
+          generationStage: "decision" as const,
           policyVersions: {
+            canonicalPersonaVersion: "canonical-persona:v1",
             localePolicyVersion: "locale-pack-zh:v1",
             outputFormatVersion: "conversation-output:v1",
-            personaVersion: "sayhear-persona:v1",
+            personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+            personaContractInvariantVersion: "persona-contract-invariant:v1",
             productPolicyVersion: "product-policy:v1",
             relationshipPolicyVersion: "relationship-boundary:v1",
             safetyPolicyVersion: "minimum-high-risk-response:v1",
-            taskInstructionVersion: "conversation-text:v1",
+            taskInstructionVersion: "task-instruction-decision:v1",
           },
           sourceRevision: 1,
         };
@@ -465,7 +639,9 @@ describe("Context Compiler", () => {
       ),
       userId,
     });
-    const capturedManifest = manifest;
+    const capturedManifest = manifest
+      ? { ...manifest, generationStage: "decision" as const }
+      : undefined;
     if (!capturedManifest) {
       throw new Error("The test manifest was not captured.");
     }
@@ -480,13 +656,160 @@ describe("Context Compiler", () => {
       },
     ]);
     expect(payload.instructions).toMatch(
-      /Listen and understand by default[\s\S]*immediate real-world support[\s\S]*Distinguish user facts[\s\S]*locale \(zh-CN\)[\s\S]*daily_session=/,
+      /Listen and understand by default[\s\S]*immediate real-world support[\s\S]*Distinguish user facts[\s\S]*Canonical Persona[\s\S]*code-switching[\s\S]*daily_session=/,
     );
+    expect(() =>
+      compiler.renderPermittedPayload({
+        ...capturedManifest,
+        generationStage: "action_finalization",
+      }),
+    ).toThrow(PromptArtifactResolutionError);
     expect(() =>
       compiler.renderPermittedPayload({
         ...capturedManifest,
         totalTokens: capturedManifest.totalTokens + 1,
       }),
     ).toThrow(CompiledContextIntegrityError);
+  });
+});
+
+describe("Context Compiler identity-layer fail-closed resolution", () => {
+  const inputRevisionId = asConversationEventRevisionId(
+    "01984477-59a9-7d20-9d97-e588769566d1",
+  );
+
+  function createSnapshot(
+    policyVersions: ContextPolicyVersions,
+    generationStage: ContextSourceSnapshot["generationStage"] = "decision",
+  ): ContextSourceSnapshot {
+    return {
+      dailySession: {
+        activityState: "active",
+        closurePolicyVersion: "daily-session-inactivity:v1",
+        continuousExchangeNo: 1,
+        id: asDailySessionId("01984477-59a9-7d20-9d97-e588769566d2"),
+      },
+      dialogueRevision: 1,
+      events: [
+        {
+          actor: "user",
+          locale: "en-US",
+          revisionId: inputRevisionId,
+          sequence: 1,
+          text: "The persona identity must never ship defaulted.",
+        },
+      ],
+      generationStage,
+      inputRevisionId,
+      locale: "en-US",
+      policyVersions,
+      sourceRevision: 1,
+    };
+  }
+
+  const supportedVersions: ContextPolicyVersions = {
+    canonicalPersonaVersion: "canonical-persona:v1",
+    localePolicyVersion: "locale-pack-en:v1",
+    outputFormatVersion: "conversation-output:v1",
+    personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+    personaContractInvariantVersion: "persona-contract-invariant:v1",
+    productPolicyVersion: "product-policy:v1",
+    relationshipPolicyVersion: "relationship-boundary:v1",
+    safetyPolicyVersion: "minimum-high-risk-response:v1",
+    taskInstructionVersion: "task-instruction-decision:v1",
+  };
+
+  function createCompilerWith(
+    snapshot: ContextSourceSnapshot,
+  ): Readonly<{
+    compile: ReturnType<typeof createContextCompiler>["compile"];
+    saved: () => boolean;
+  }> {
+    let saved = false;
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-22T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "identity-resolution-secret",
+      rawEventTokenBudget: 4_000,
+      repository: {
+        async loadContextSource() {
+          return snapshot;
+        },
+        async saveCompiledContext() {
+          saved = true;
+          throw new Error("A failed compile must not save a manifest.");
+        },
+      } satisfies ContextCompilerRepository,
+    });
+    return { compile: compiler.compile, saved: () => saved };
+  }
+
+  it("fails the compile closed when a persona block version is unresolvable", async () => {
+    const { compile, saved } = createCompilerWith(
+      createSnapshot({
+        ...supportedVersions,
+        canonicalPersonaVersion: "canonical-persona:vUnregistered",
+      }),
+    );
+    const userId = asUserId("01984477-59a9-7d20-9d97-e588769566d0");
+    await expect(
+      compile({
+        generationCommandId: asGenerationCommandId(
+          "01984477-59a9-7d20-9d97-e588769566d3",
+        ),
+        interactionTurnId: asInteractionTurnId(
+          "01984477-59a9-7d20-9d97-e588769566d4",
+        ),
+        userId,
+      }),
+    ).rejects.toThrow(PromptArtifactResolutionError);
+    expect(saved()).toBe(false);
+  });
+
+  it("fails the compile closed when the locale pack version is unresolvable", async () => {
+    const { compile, saved } = createCompilerWith(
+      createSnapshot({
+        ...supportedVersions,
+        localePolicyVersion: "locale-pack-ko:v1",
+      }),
+    );
+    const userId = asUserId("01984477-59a9-7d20-9d97-e588769566d0");
+    await expect(
+      compile({
+        generationCommandId: asGenerationCommandId(
+          "01984477-59a9-7d20-9d97-e588769566d3",
+        ),
+        interactionTurnId: asInteractionTurnId(
+          "01984477-59a9-7d20-9d97-e588769566d4",
+        ),
+        userId,
+      }),
+    ).rejects.toThrow(PromptArtifactResolutionError);
+    expect(saved()).toBe(false);
+  });
+
+  it("fails the compile closed when a GenerationCommand stage carries the other stage's task instruction", async () => {
+    const { compile, saved } = createCompilerWith(
+      createSnapshot(
+        {
+          ...supportedVersions,
+          taskInstructionVersion: "task-instruction-action-finalization:v1",
+        },
+        "decision",
+      ),
+    );
+    const userId = asUserId("01984477-59a9-7d20-9d97-e588769566d0");
+    await expect(
+      compile({
+        generationCommandId: asGenerationCommandId(
+          "01984477-59a9-7d20-9d97-e588769566d3",
+        ),
+        interactionTurnId: asInteractionTurnId(
+          "01984477-59a9-7d20-9d97-e588769566d4",
+        ),
+        userId,
+      }),
+    ).rejects.toThrow(PromptArtifactResolutionError);
+    expect(saved()).toBe(false);
   });
 });

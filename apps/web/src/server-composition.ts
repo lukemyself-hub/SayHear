@@ -20,6 +20,10 @@ import {
   type JournalEligibilityRepository,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+  CANONICAL_PERSONA_VERSION,
+  CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
+  PERSONA_BEHAVIOR_ANCHORS_VERSION,
+  PERSONA_CONTRACT_INVARIANT_VERSION,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -100,7 +104,7 @@ export function createServerComposition() {
       { role: "evidence.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:evidence`, policyVersion: "evidence-extraction:v2", promptFingerprint: "evidence-extract:spans:v2" },
       { role: "journal.draft", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-draft`, policyVersion: "journal-generation:v2", promptFingerprint: "journal-draft:evidence-only:v2" },
       { role: "journal.validate", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-validate`, policyVersion: "journal-validator:v3", promptFingerprint: "journal-validate:diagnostic:v3" },
-      { role: "dialogue.state", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
+      { role: "dialogue.state", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v2", promptFingerprint: "dialogue-state-prompt:v2" },
       { role: "summary.compress", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:summary`, policyVersion: "rolling-summary:v1", promptFingerprint: "rolling-summary:neutral-structured:v1" },
     ],
   });
@@ -203,10 +207,12 @@ export function createServerComposition() {
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
+      canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
       outputFormatVersion: "conversation-output:v1",
-      personaVersion: "sayhear-persona:v1",
+      personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
+      personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
       productPolicyVersion: "product-policy:v1",
-      promptVersion: "conversation-text:v1",
+      taskInstructionVersion: CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
       provider: configuration.provider.champion.provider,
       providerPolicyVersion:
         configuration.provider.champion.providerPolicyVersion,
