@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createRuntimeJournalRoleProviderRegistry } from "./journal-role-provider-registry";
-import { validateJournalDraft } from "@sayhear/application";
+import { validateJournalDraft, validateDialogueStateContent } from "@sayhear/application";
 
 const evidence = [
   { id: "one", sourceEventId: "event-one", sourceRevisionId: "revision-one", sourceActor: "user" as const, sourceStatus: "final" as const, locatorType: "text_span" as const, locatorKey: "0:3", role: "factual_support" as const },
@@ -63,7 +63,8 @@ describe("Journal role safeguards", () => {
     }
   });
 
-  it("projects transient DialogueState with source-bound fields", async () => {
+  it("projects transient DialogueState with source-bound semantic fields", async () => {
+    const revisionId = "01984477-59a9-7d20-9d97-e588769566a2" as never;
     const result = await registry.dialogueStateProjector.project({
       policy: {
         modelConfigVersion: "test",
@@ -72,13 +73,16 @@ describe("Journal role safeguards", () => {
       },
       sources: [{
         actor: "user",
-        revisionId: "01984477-59a9-7d20-9d97-e588769566a2" as never,
+        revisionId,
         sequence: 1,
         text: "The meeting was difficult.",
       }],
     });
-    expect(result.currentTopic.value).toBe("The meeting was difficult.");
-    expect(result.currentTopic.sourceRevisionIds).toHaveLength(1);
-    expect(result.userIntent.value).toBe("sharing");
+    expect(result.current_topic.value).toBe("The meeting was difficult.");
+    expect(result.current_topic.sourceRevisionIds).toHaveLength(1);
+    expect(result.advice_explicitly_requested.value).toBeNull();
+    expect(() =>
+      validateDialogueStateContent(result, [revisionId]),
+    ).not.toThrow();
   });
 });

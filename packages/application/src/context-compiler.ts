@@ -650,12 +650,18 @@ function usableDialogueState(
 function renderDialogueState(state: CurrentDialogueState): string {
   const renderField = <T>(field: { confidence: number; sourceRevisionIds: readonly ConversationEventRevisionId[]; value: T }) =>
     `${String(field.value ?? "none")} (confidence=${field.confidence.toFixed(2)}, sources=${field.sourceRevisionIds.join(",") || "none"})`;
+  const advicePermitted = state.content.advice_explicitly_requested.value === true;
   return [
     `DialogueState (non-authoritative; status=${state.status}; dialogue_revision=${state.dialogueRevision}; source_revision=${state.sourceRevision}; covered_through_sequence=${state.coveredThroughSequence}):`,
-    `Current topic: ${renderField(state.content.currentTopic)}`,
-    `User intent: ${renderField(state.content.userIntent)}`,
-    `Emotional tone: ${renderField(state.content.emotionalTone)}`,
-    `Pending question: ${renderField(state.content.pendingQuestion)}`,
+    `Current topic: ${renderField(state.content.current_topic)}`,
+    `Emotional intensity: ${renderField(state.content.emotional_intensity)}`,
+    `Advice explicitly requested: ${renderField(state.content.advice_explicitly_requested)}`,
+    `Current request requires focus: ${renderField(state.content.current_request_requires_focus)}`,
+    `Close intent: ${renderField(state.content.close_intent)}`,
+    `User willing to elaborate: ${renderField(state.content.user_willing_to_elaborate)}`,
+    advicePermitted
+      ? "Advice gate: the user explicitly requested advice in the covered turns; advice serving that request is permitted."
+      : "Advice gate: the user has not explicitly requested advice in the covered turns; listen and understand rather than advise.",
     "Do not use DialogueState confidence to close the exchange or authorize a Conversation Action.",
   ].join("\n");
 }

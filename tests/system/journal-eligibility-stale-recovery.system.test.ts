@@ -205,7 +205,7 @@ describe("Journal eligibility stale-command recovery system seam", () => {
         { role: "evidence.extract", provider: "deterministic", model: "test", configVersion: "test:evidence", policyVersion: "evidence-extraction:v1", promptFingerprint: "test:evidence" },
         { role: "journal.draft", provider: "deterministic", model: "test", configVersion: "test:draft", policyVersion: "journal-generation:v2", promptFingerprint: "test:draft" },
         { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:validate", policyVersion: "journal-validator:v2", promptFingerprint: "test:validate" },
-        { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v1", promptFingerprint: "dialogue-state-prompt:v1" },
+        { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v2", promptFingerprint: "dialogue-state-prompt:v2" },
         { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
       ],
     });

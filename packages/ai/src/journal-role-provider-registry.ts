@@ -167,7 +167,7 @@ Do not return valid, reason, severity, free-form messages, epistemic states, unc
       async project(request) {
         const parsed = await askJson(
           "dialogue.state",
-          "You are SayHear dialogue.state. Return only JSON with currentTopic, userIntent, emotionalTone, and pendingQuestion. Each field must be {value,confidence,sourceRevisionIds}. Use only the supplied committed Event revisions. This is transient, non-authoritative conversation context; never return a closure decision, safety verdict, action authorization, Profile, Memory, or Recall.",
+          "You are SayHear dialogue.state. Return only JSON with current_topic, emotional_intensity, advice_explicitly_requested, current_request_requires_focus, close_intent, and user_willing_to_elaborate. Each field must be {value,confidence,sourceRevisionIds}. current_topic is a short topic phrase or null; emotional_intensity is one of low, moderate, high, or null; the remaining fields are booleans or null. advice_explicitly_requested is true only when the user explicitly asks for advice, suggestions, or recommendations. Use only the supplied committed Event revisions. This is transient, non-authoritative conversation context; never return a closure decision, safety verdict, action authorization, Profile, Memory, or Recall.",
           request,
         );
         if (!isDialogueStateContent(parsed)) {
@@ -240,27 +240,18 @@ const deterministicDialogueStateProjector: DialogueStateModel = {
       sources.filter((candidate) => candidate.actor === "user").at(-1) ??
       sources.at(-1);
     const sourceRevisionIds = source ? [source.revisionId] : [];
+    const noEvidence = () => ({ confidence: 0, sourceRevisionIds: [], value: null });
     return {
-      currentTopic: {
+      current_topic: {
         confidence: source ? 0.5 : 0,
         sourceRevisionIds,
         value: source ? source.text.slice(0, 240) : null,
       },
-      emotionalTone: {
-        confidence: 0,
-        sourceRevisionIds: [],
-        value: null,
-      },
-      pendingQuestion: {
-        confidence: 0,
-        sourceRevisionIds: [],
-        value: null,
-      },
-      userIntent: {
-        confidence: source ? 0.5 : 0,
-        sourceRevisionIds,
-        value: source ? "sharing" as const : "unknown" as const,
-      },
+      emotional_intensity: noEvidence(),
+      advice_explicitly_requested: noEvidence(),
+      current_request_requires_focus: noEvidence(),
+      close_intent: noEvidence(),
+      user_willing_to_elaborate: noEvidence(),
     };
   },
 };
@@ -291,7 +282,14 @@ function isJournalDraft(value: unknown): value is JournalDraft {
 function isDialogueStateContent(value: unknown): value is DialogueStateContent {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
-  return ["currentTopic", "emotionalTone", "pendingQuestion", "userIntent"].every((key) => {
+  return [
+    "current_topic",
+    "emotional_intensity",
+    "advice_explicitly_requested",
+    "current_request_requires_focus",
+    "close_intent",
+    "user_willing_to_elaborate",
+  ].every((key) => {
     const field = record[key];
     return typeof field === "object" && field !== null &&
       typeof (field as Record<string, unknown>).confidence === "number" &&

@@ -13,14 +13,14 @@ export type DialogueStateField<T> = Readonly<{
 }>;
 
 export type DialogueStateContent = Readonly<{
-  currentTopic: DialogueStateField<string | null>;
-  emotionalTone: DialogueStateField<
-    "calm" | "positive" | "negative" | "mixed" | "uncertain" | null
+  current_topic: DialogueStateField<string | null>;
+  emotional_intensity: DialogueStateField<
+    "low" | "moderate" | "high" | null
   >;
-  pendingQuestion: DialogueStateField<string | null>;
-  userIntent: DialogueStateField<
-    "sharing" | "asking" | "correcting" | "seeking_understanding" | "unknown"
-  >;
+  advice_explicitly_requested: DialogueStateField<boolean | null>;
+  current_request_requires_focus: DialogueStateField<boolean | null>;
+  close_intent: DialogueStateField<boolean | null>;
+  user_willing_to_elaborate: DialogueStateField<boolean | null>;
 }>;
 
 export type DialogueStateSource = Readonly<{
@@ -102,10 +102,19 @@ export type DialogueStateService = Readonly<{
 }>;
 
 const fieldDefinitions = [
-  "currentTopic",
-  "emotionalTone",
-  "pendingQuestion",
-  "userIntent",
+  "current_topic",
+  "emotional_intensity",
+  "advice_explicitly_requested",
+  "current_request_requires_focus",
+  "close_intent",
+  "user_willing_to_elaborate",
+] as const;
+
+const booleanFieldNames = [
+  "advice_explicitly_requested",
+  "current_request_requires_focus",
+  "close_intent",
+  "user_willing_to_elaborate",
 ] as const;
 
 const boundaryViolationPattern =
@@ -118,6 +127,9 @@ export function validateDialogueStateContent(
   const allowedSourceIds = new Set(sourceRevisionIds);
   for (const fieldName of fieldDefinitions) {
     const field = content[fieldName];
+    if (!field || typeof field !== "object") {
+      throw new Error(`DialogueState ${fieldName} is missing.`);
+    }
     if (!Number.isFinite(field.confidence) || field.confidence < 0 || field.confidence > 1) {
       throw new Error(`DialogueState ${fieldName} confidence must be between 0 and 1.`);
     }
@@ -132,26 +144,32 @@ export function validateDialogueStateContent(
       }
       continue;
     }
-    if (
-      (fieldName === "currentTopic" || fieldName === "pendingQuestion") &&
-      typeof field.value !== "string"
-    ) {
-      throw new Error(`DialogueState ${fieldName} value must be a string or null.`);
-    }
-    if (typeof field.value === "string" && (!field.value.trim() || field.value.length > 240)) {
-      throw new Error(`DialogueState ${fieldName} value is outside the bounded policy.`);
-    }
-    if (typeof field.value === "string" && boundaryViolationPattern.test(field.value)) {
-      throw new Error(`DialogueState ${fieldName} contains a forbidden boundary decision.`);
-    }
-    if (fieldName === "emotionalTone" && !["calm", "positive", "negative", "mixed", "uncertain"].includes(field.value)) {
-      throw new Error("DialogueState emotionalTone is outside the bounded policy.");
+    if (fieldName === "current_topic") {
+      if (typeof field.value !== "string") {
+        throw new Error(`DialogueState ${fieldName} value must be a string or null.`);
+      }
+      if (!field.value.trim() || field.value.length > 240) {
+        throw new Error(`DialogueState ${fieldName} value is outside the bounded policy.`);
+      }
+      if (boundaryViolationPattern.test(field.value)) {
+        throw new Error(`DialogueState ${fieldName} contains a forbidden boundary decision.`);
+      }
     }
     if (
-      fieldName === "userIntent" &&
-      !["sharing", "asking", "correcting", "seeking_understanding", "unknown"].includes(field.value)
+      fieldName === "emotional_intensity" &&
+      field.value !== "low" &&
+      field.value !== "moderate" &&
+      field.value !== "high"
     ) {
-      throw new Error("DialogueState userIntent is outside the bounded policy.");
+      throw new Error("DialogueState emotional_intensity is outside the bounded policy.");
+    }
+    if (
+      booleanFieldNames.includes(
+        fieldName as (typeof booleanFieldNames)[number],
+      ) &&
+      typeof field.value !== "boolean"
+    ) {
+      throw new Error(`DialogueState ${fieldName} value must be a boolean or null.`);
     }
     if (field.sourceRevisionIds.length === 0) {
       throw new Error(`DialogueState ${fieldName} non-null values require source revisions.`);

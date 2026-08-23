@@ -56,25 +56,35 @@ describe("Context Compiler", () => {
           dialogueRevision: 3,
           dialogueState: {
             content: {
-              currentTopic: {
+              current_topic: {
                 confidence: 0.8,
                 sourceRevisionIds: [coveredRevisionId],
                 value: "the meeting",
               },
-              emotionalTone: {
+              emotional_intensity: {
                 confidence: 0.6,
                 sourceRevisionIds: [coveredRevisionId],
-                value: "mixed" as const,
+                value: "moderate" as const,
               },
-              pendingQuestion: {
+              advice_explicitly_requested: {
+                confidence: 0.9,
+                sourceRevisionIds: [coveredRevisionId],
+                value: false,
+              },
+              current_request_requires_focus: {
+                confidence: 0.7,
+                sourceRevisionIds: [coveredRevisionId],
+                value: false,
+              },
+              close_intent: {
                 confidence: 0,
                 sourceRevisionIds: [],
                 value: null,
               },
-              userIntent: {
-                confidence: 0.9,
+              user_willing_to_elaborate: {
+                confidence: 0.75,
                 sourceRevisionIds: [coveredRevisionId],
-                value: "sharing" as const,
+                value: true,
               },
             },
             coveredThroughSequence: 1,
@@ -188,8 +198,144 @@ describe("Context Compiler", () => {
     ]);
     expect(payload.instructions).toContain("status=lagging");
     expect(payload.instructions).toContain("Do not use DialogueState confidence");
+    expect(payload.instructions).toContain("Advice explicitly requested: false");
+    expect(payload.instructions).toContain("listen and understand rather than advise");
     expect(payload.instructions).toContain("execution: pending");
     expect(payload.instructions).toContain("do not claim that a new Journal Version was generated");
+  });
+
+  it("permits advice only when the projection records an explicit request", async () => {
+    const userId = asUserId("01984477-59a9-7d20-9d97-e588769566d0");
+    const dailySessionId = asDailySessionId(
+      "01984477-59a9-7d20-9d97-e588769566a1",
+    );
+    const generationCommandId = asGenerationCommandId(
+      "01984477-59a9-7d20-9d97-e588769566a2",
+    );
+    const interactionTurnId = asInteractionTurnId(
+      "01984477-59a9-7d20-9d97-e588769566a3",
+    );
+    const inputRevisionId = asConversationEventRevisionId(
+      "01984477-59a9-7d20-9d97-e588769566a6",
+    );
+    let saved:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const repository: ContextCompilerRepository = {
+      async loadContextSource() {
+        return {
+          dailySession: {
+            activityState: "active" as const,
+            closurePolicyVersion: "daily-session-inactivity:v1",
+            continuousExchangeNo: 1,
+            id: dailySessionId,
+          },
+          dialogueRevision: 1,
+          dialogueState: {
+            content: {
+              current_topic: {
+                confidence: 0.8,
+                sourceRevisionIds: [inputRevisionId],
+                value: "the meeting",
+              },
+              emotional_intensity: {
+                confidence: 0.6,
+                sourceRevisionIds: [inputRevisionId],
+                value: "moderate" as const,
+              },
+              advice_explicitly_requested: {
+                confidence: 0.9,
+                sourceRevisionIds: [inputRevisionId],
+                value: true,
+              },
+              current_request_requires_focus: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+              close_intent: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+              user_willing_to_elaborate: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+            },
+            coveredThroughSequence: 1,
+            dialogueRevision: 1,
+            id: "01984477-59a9-7d20-9d97-e588769566a7",
+            modelConfigVersion: "dialogue-state-model:v1",
+            policyVersion: "dialogue-state:v2",
+            promptVersion: "dialogue-state-prompt:v2",
+            sourceRevision: 1,
+            sourceRevisionIds: [inputRevisionId],
+            status: "current" as const,
+            updatedAt: new Date("2026-08-13T11:59:00.000Z"),
+            version: 1,
+          },
+          events: [
+            {
+              actor: "user" as const,
+              locale: "en-US",
+              revisionId: inputRevisionId,
+              sequence: 1,
+              text: "What should I do about the meeting?",
+            },
+          ],
+          inputRevisionId,
+          locale: "en-US",
+          policyVersions: {
+            localePolicyVersion: "locale-pack-en:v1",
+            outputFormatVersion: "conversation-output:v1",
+            personaVersion: "sayhear-persona:v1",
+            productPolicyVersion: "product-policy:v1",
+            relationshipPolicyVersion: "relationship-boundary:v1",
+            safetyPolicyVersion: "minimum-high-risk-response:v1",
+            taskInstructionVersion: "conversation-text:v1",
+          },
+          sourceRevision: 1,
+        };
+      },
+      async saveCompiledContext(input) {
+        saved = input;
+        return {
+          degradedReason: input.degradedReason,
+          dialogueRevision: input.dialogueRevision,
+          id: asCompiledContextId(
+            "01984477-59a9-7d20-9d97-e588769566a8",
+          ),
+          locale: input.locale,
+          referencedRevisionIds: input.referencedEvents.map(
+            (event) => event.revisionId,
+          ),
+          sourceRevision: input.sourceRevision,
+          statistics: {
+            rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+            selectedEventCount: input.referencedEvents.length,
+            totalTokens: input.totalTokens,
+          },
+        };
+      },
+    };
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-13T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "dialogue-state-context-secret",
+      rawEventTokenBudget: 4_000,
+      repository,
+    });
+
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+
+    expect(saved?.degradedReason).toBeNull();
+    const dialogueStateSection = saved?.sections.find(
+      (section) => section.key === "dialogue_state",
+    );
+    expect(dialogueStateSection?.reference).toContain("Advice explicitly requested: true");
+    expect(dialogueStateSection?.reference).toContain("advice serving that request is permitted");
   });
 
   it("keeps the current User input and the newest contiguous history within budget", async () => {
