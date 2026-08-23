@@ -19,6 +19,8 @@ Accepted
 
 - [#1 — Internal Core / Core Flow 1A.1 — Text Foundation](https://github.com/lukemyself-hub/SayHear/issues/1)
   — Core Flow 1A.1（Internal Core）— `ready-for-agent`
+- [#70 — Internal Core / Core Flow 1A.2P — Persona & Safety](https://github.com/lukemyself-hub/SayHear/issues/70)
+  — Core Flow 1A.2P（Internal Core）— `ready-for-agent`
 
 创建 SPEC 后，在这里增加一条简短索引，包含：
 
