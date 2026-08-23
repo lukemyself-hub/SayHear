@@ -11,11 +11,19 @@ import type {
   CompiledContextSectionKey,
   ContextPolicyVersions,
 } from "./context-compiler";
+import type { CurrentDialogueState } from "./dialogue-state";
 import type { RecoveryGate } from "./recovery-gate";
+import type { CurrentSafetyPosture } from "./safety-posture";
+
+export type CompiledContextSafetyPostureInspection = Readonly<{
+  posture: CurrentSafetyPosture | null;
+  state: "active" | "default" | "released";
+}>;
 
 export type CompiledContextInspection = Readonly<{
   compilerVersion: string;
   degradedReason: CompiledContextDegradedReason;
+  dialogueState: CurrentDialogueState | null;
   dialogueRevision: number;
   id: CompiledContextId;
   integrity: Readonly<{
@@ -41,6 +49,7 @@ export type CompiledContextInspection = Readonly<{
     selectedTokens: number;
     truncatable: boolean;
   }>[];
+  safetyPosture: CompiledContextSafetyPostureInspection;
   sourceRevision: number;
   totalTokens: number;
 }>;

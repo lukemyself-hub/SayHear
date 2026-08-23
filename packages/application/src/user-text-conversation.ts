@@ -148,6 +148,7 @@ export type ExplicitContinuousExchangeEnd = Readonly<{
 export type UserTextMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: ConversationEventId;
+  generationCommandId: GenerationCommandId | null;
   locale: string;
   logicalDate: string;
   revisionId: ConversationEventRevisionId;

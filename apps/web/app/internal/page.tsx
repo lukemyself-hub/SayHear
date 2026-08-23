@@ -46,6 +46,9 @@ export default async function InternalPage() {
         The gate opens only when the configured backup policy has current,
         verified retention evidence.
       </p>
+      <nav className="internalNav" aria-label="Internal tools">
+        <a href="/internal/context-inspector">Open Context Inspector →</a>
+      </nav>
       <JournalCard currentJournal={currentJournal} latestNotice={latestJournalNotice} />
       <TextConversation
         initialInterruptedResponses={interruptedResponses}

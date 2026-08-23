@@ -1015,6 +1015,11 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         sectionBudgets: {
           committedRawEvents: 4_000,
         },
+        dialogueState: null,
+        safetyPosture: {
+          posture: null,
+          state: "default",
+        },
         sections: expect.arrayContaining([
           expect.objectContaining({
             key: "product_policy",
