@@ -6,7 +6,9 @@ import path from "node:path";
 
 import {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+  CANONICAL_PERSONA_VERSION,
   countFollowUpQuestions,
+  CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   createConversationActionGateway,
   createConversationAgentHarness,
   createConversationResponseService,
@@ -14,9 +16,12 @@ import {
   createJournalRegenerationActionHandler,
   createUserTextConversationService,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  PERSONA_BEHAVIOR_ANCHORS_VERSION,
+  PERSONA_CONTRACT_INVARIANT_VERSION,
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
   type ConversationTextChampion,
+  type GenerationPolicy,
 } from "@sayhear/application";
 import { createRuntimeProviderEgressPort } from "@sayhear/ai";
 import {
@@ -350,7 +355,7 @@ async function main(): Promise<void> {
     compilerVersion: "context-compiler:v1",
     rawEventTokenBudget: 4_000,
   } as const;
-  const generationPolicy = {
+  const generationPolicy: GenerationPolicy = {
     consentPolicyVersion: champion.consentPolicyVersion,
     freshnessPolicy: "source_valid:v1" as const,
     chineseLocalePackVersion: "locale-pack-zh:v1",
@@ -362,9 +367,11 @@ async function main(): Promise<void> {
     modelConfigVersion: champion.configVersion,
     modelSnapshot: champion.snapshot,
     outputFormatVersion: "conversation-output:v1",
-    personaVersion: "sayhear-persona:v1",
+    canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
+    personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
+    personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
     productPolicyVersion: "product-policy:v1",
-    promptVersion: "conversation-text:v1",
+    taskInstructionVersion: CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
     provider: champion.provider,
     providerPolicyVersion: champion.providerPolicyVersion,
     relationshipPolicyVersion: "relationship-boundary:v1",
