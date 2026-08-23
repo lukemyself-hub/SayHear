@@ -80,12 +80,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 166,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -97,12 +92,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 296,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -114,12 +104,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 169,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -131,12 +116,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 250,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -148,12 +128,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 333,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -165,12 +140,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 0.6666666666666666,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 129,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -191,15 +161,17 @@
             "signal": "topic_change"
           }
         ],
-        "stopSignalSuppression": {
-          "fromTurn": 2,
-          "throughTurn": 3,
-          "releasedAtTurn": 4,
-          "questionTurnsInWindow": [
-            2,
-            3
-          ]
-        },
+        "stopSignalWindows": [
+          {
+            "fromTurn": 2,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              2,
+              3
+            ]
+          }
+        ],
         "medianAssistantChars": 98,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -211,12 +183,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 186,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -228,12 +195,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 342,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -245,12 +207,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 490,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -262,12 +219,7 @@
         "turnsWithQuestion": 4,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 221,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -279,12 +231,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 81,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -296,12 +243,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 111,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -313,12 +255,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 113,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -330,12 +267,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 88,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -347,12 +279,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 69,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -369,15 +296,17 @@
             "signal": "short_response"
           }
         ],
-        "stopSignalSuppression": {
-          "fromTurn": 2,
-          "throughTurn": 3,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": [
-            2,
-            3
-          ]
-        },
+        "stopSignalWindows": [
+          {
+            "fromTurn": 2,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              2,
+              3
+            ]
+          }
+        ],
         "medianAssistantChars": 63,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -389,12 +318,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": 4,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 32,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -411,15 +335,17 @@
             "signal": "topic_change"
           }
         ],
-        "stopSignalSuppression": {
-          "fromTurn": 2,
-          "throughTurn": 3,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": [
-            2,
-            3
-          ]
-        },
+        "stopSignalWindows": [
+          {
+            "fromTurn": 2,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              2,
+              3
+            ]
+          }
+        ],
         "medianAssistantChars": 74,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -431,12 +357,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 94,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -448,12 +369,7 @@
         "turnsWithQuestion": 1,
         "questionRate": 0.5,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 122,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -465,12 +381,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 0.5,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 74,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -482,12 +393,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 60,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -499,12 +405,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 61,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -516,12 +417,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 64,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -533,12 +429,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 77,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -550,12 +441,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 131,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -572,14 +458,16 @@
             "signal": "short_response"
           }
         ],
-        "stopSignalSuppression": {
-          "fromTurn": 2,
-          "throughTurn": 3,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": [
-            3
-          ]
-        },
+        "stopSignalWindows": [
+          {
+            "fromTurn": 2,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              3
+            ]
+          }
+        ],
         "medianAssistantChars": 35,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -600,14 +488,16 @@
             "signal": "topic_change"
           }
         ],
-        "stopSignalSuppression": {
-          "fromTurn": 2,
-          "throughTurn": 3,
-          "releasedAtTurn": 4,
-          "questionTurnsInWindow": [
-            3
-          ]
-        },
+        "stopSignalWindows": [
+          {
+            "fromTurn": 2,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              3
+            ]
+          }
+        ],
         "medianAssistantChars": 39,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -624,15 +514,17 @@
             "signal": "topic_change"
           }
         ],
-        "stopSignalSuppression": {
-          "fromTurn": 2,
-          "throughTurn": 3,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": [
-            2,
-            3
-          ]
-        },
+        "stopSignalWindows": [
+          {
+            "fromTurn": 2,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              2,
+              3
+            ]
+          }
+        ],
         "medianAssistantChars": 52,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -644,12 +536,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 88,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
@@ -661,12 +548,7 @@
         "turnsWithQuestion": 2,
         "questionRate": 1,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 274,
         "postureActiveTurns": [
           1,
@@ -681,12 +563,7 @@
         "turnsWithQuestion": 3,
         "questionRate": 0.75,
         "stopSignals": [],
-        "stopSignalSuppression": {
-          "fromTurn": null,
-          "throughTurn": null,
-          "releasedAtTurn": null,
-          "questionTurnsInWindow": []
-        },
+        "stopSignalWindows": [],
         "medianAssistantChars": 68,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0

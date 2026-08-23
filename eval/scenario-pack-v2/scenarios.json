@@ -741,8 +741,8 @@
         ],
         "suppression": "session",
         "releasedAtTurn": 4,
-        "releaseReason": "user_reopened",
-        "expectation": "The review direction stops at turn 2 and stays suppressed through turn 3; turn 4 re-opens it."
+        "releaseReason": "new_substantive_content",
+        "expectation": "The review direction stops at turn 2 and stays suppressed through turn 3; turn 4 supplies new substantive content about the stopped direction (the manager's concrete feedback), which is the release path that re-allows questioning it."
       }
     },
     {

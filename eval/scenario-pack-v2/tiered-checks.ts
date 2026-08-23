@@ -252,11 +252,11 @@ export function replayPostureActiveTurns(
 }
 
 export type StopSignalSuppressionWindow = {
-  /** The first stop-signaling turn; null when the scenario has no signal. */
-  fromTurn: number | null;
+  /** The turn whose user input carried the stop signal that opened the window. */
+  fromTurn: number;
   /** The last turn whose response is inside the suppression window. */
-  throughTurn: number | null;
-  /** The fixture-declared release turn (user re-open / new substantive content). */
+  throughTurn: number;
+  /** The fixture-declared release turn that closed this window, if any. */
   releasedAtTurn: number | null;
   /** Turns inside the window whose response contains a question. */
   questionTurnsInWindow: number[];
@@ -270,12 +270,13 @@ export type ScenarioTrajectory = {
   questionRate: number;
   stopSignals: { sequenceInScenario: number; signal: string }[];
   /**
-   * Session-persistent suppression window (issue #77): from the stop turn
-   * through the turn before the declared release, or the scenario end. The
-   * direction of any counted question is a human judgment (rubric §1.2);
-   * this metric only fixes the deterministic window.
+   * Session-persistent suppression windows (issue #77): each window runs from
+   * a stop turn through the turn before the declared release, or the scenario
+   * end. A stop signal after a release opens a fresh window; the direction of
+   * any counted question is a human judgment (rubric §1.2) — this metric only
+   * fixes the deterministic windows.
    */
-  stopSignalSuppression: StopSignalSuppressionWindow;
+  stopSignalWindows: StopSignalSuppressionWindow[];
   medianAssistantChars: number;
   /**
    * The Safety Posture lifecycle replayed with the production transition
@@ -290,6 +291,48 @@ export type ScenarioTrajectory = {
 };
 
 /**
+ * Compute the suppression windows from the classified signals and the
+ * fixture-declared release. Purely deterministic: a window opens at the first
+ * signal while none is open, closes before the declared release turn, and a
+ * later signal after a release opens a new window through the scenario end.
+ */
+function stopSignalSuppressionWindows(input: {
+  turns: ScenarioTurn[];
+  stopSignals: readonly { sequenceInScenario: number; signal: string }[];
+  releasedAtTurn: number | null;
+}): StopSignalSuppressionWindow[] {
+  const signalTurns = new Set(
+    input.stopSignals.map((signal) => signal.sequenceInScenario),
+  );
+  const questionFlags = input.turns.map(
+    (turn) => countFollowUpQuestions(turn.assistantText) > 0,
+  );
+  const windows: StopSignalSuppressionWindow[] = [];
+  let openFrom: number | null = null;
+  const closeWindow = (throughTurn: number, releasedAtTurn: number | null) => {
+    if (openFrom === null) return;
+    const questionTurnsInWindow: number[] = [];
+    for (let turn = openFrom; turn <= throughTurn; turn += 1) {
+      if (questionFlags[turn - 1] === true) {
+        questionTurnsInWindow.push(turn);
+      }
+    }
+    windows.push({ fromTurn: openFrom, throughTurn, releasedAtTurn, questionTurnsInWindow });
+    openFrom = null;
+  };
+  for (let turn = 1; turn <= input.turns.length; turn += 1) {
+    if (signalTurns.has(turn) && openFrom === null) {
+      openFrom = turn;
+    }
+    if (openFrom !== null && input.releasedAtTurn === turn) {
+      closeWindow(turn - 1, turn);
+    }
+  }
+  closeWindow(input.turns.length, null);
+  return windows;
+}
+
+/**
  * Cross-turn statistics. Metrics, not verdicts: they feed human review and the
  * interview-rhythm / stop-signal trajectory criteria of the contract.
  */
@@ -300,12 +343,10 @@ export function checkScenarioTrajectory(input: {
   stopSignalExpectation?: { releasedAtTurn: number | null };
 }): ScenarioTrajectory {
   const stopSignals: { sequenceInScenario: number; signal: string }[] = [];
-  const questionFlags: boolean[] = [];
   const activePerTurn = replayPostureActiveTurns(input.turns);
   const postureActiveTurns: number[] = [];
   let postureActiveTurnsMissingAnchor = 0;
   for (const [index, turn] of input.turns.entries()) {
-    questionFlags.push(countFollowUpQuestions(turn.assistantText) > 0);
     const signal = classifyConversationTurnSignal({
       locale: turn.input.locale,
       text: turn.input.text,
@@ -328,22 +369,11 @@ export function checkScenarioTrajectory(input: {
     }
   }
 
-  const firstSignalTurn = stopSignals[0]?.sequenceInScenario ?? null;
-  const releasedAtTurn = input.stopSignalExpectation?.releasedAtTurn ?? null;
-  const throughTurn =
-    firstSignalTurn === null
-      ? null
-      : releasedAtTurn !== null
-        ? releasedAtTurn - 1
-        : input.turns.length;
-  const questionTurnsInWindow: number[] = [];
-  if (firstSignalTurn !== null && throughTurn !== null) {
-    for (let turn = firstSignalTurn; turn <= throughTurn; turn += 1) {
-      if (questionFlags[turn - 1] === true) {
-        questionTurnsInWindow.push(turn);
-      }
-    }
-  }
+  const stopSignalWindows = stopSignalSuppressionWindows({
+    releasedAtTurn: input.stopSignalExpectation?.releasedAtTurn ?? null,
+    stopSignals,
+    turns: input.turns,
+  });
 
   const lengths = input.turns
     .map((turn) => turn.assistantText.length)
@@ -351,7 +381,9 @@ export function checkScenarioTrajectory(input: {
   const median = lengths.length
     ? (lengths[Math.floor(lengths.length / 2)] ?? 0)
     : 0;
-  const turnsWithQuestion = questionFlags.filter(Boolean).length;
+  const turnsWithQuestion = input.turns.filter(
+    (turn) => countFollowUpQuestions(turn.assistantText) > 0,
+  ).length;
 
   return {
     scenarioId: input.scenarioId,
@@ -362,12 +394,7 @@ export function checkScenarioTrajectory(input: {
       ? turnsWithQuestion / input.turns.length
       : 0,
     stopSignals,
-    stopSignalSuppression: {
-      fromTurn: firstSignalTurn,
-      throughTurn,
-      releasedAtTurn,
-      questionTurnsInWindow,
-    },
+    stopSignalWindows,
     medianAssistantChars: median,
     postureActiveTurns,
     postureActiveTurnsMissingAnchor,
@@ -404,6 +431,22 @@ export const MEMORY_CHECK_TIERING: MemoryCheckTiering = Object.freeze({
     } satisfies { check: "expected_recall"; deferredTo: "1A.3a"; gating: false }),
   ] as const),
 });
+
+/**
+ * The memory-fixture `checks` block, derived from {@link MEMORY_CHECK_TIERING}
+ * so the pack (build-v2.ts) and the checker share one tiering source.
+ */
+export function scenarioMemoryChecks(): MemoryFixture["checks"] {
+  const [deferredExpectedRecall] = MEMORY_CHECK_TIERING.deferredChecks;
+  return {
+    forbiddenMention: { status: "active", tier: "hard_gate" },
+    expectedRecall: {
+      status: "deferred",
+      deferredTo: deferredExpectedRecall.deferredTo,
+      gating: deferredExpectedRecall.gating,
+    },
+  };
+}
 
 export type TieredReport = {
   checkerVersion: string;
@@ -445,7 +488,20 @@ export function assembleReport(input: {
   let turnsChecked = 0;
 
   for (const scenario of input.scenarios) {
-    const postureActive = replayPostureActiveTurns(scenario.turns);
+    const trajectory = checkScenarioTrajectory({
+      scenarioId: scenario.id,
+      languageVariant: scenario.languageVariant,
+      turns: scenario.turns,
+      ...(scenario.stopSignalExpectation
+        ? {
+            stopSignalExpectation: {
+              releasedAtTurn: scenario.stopSignalExpectation.releasedAtTurn,
+            },
+          }
+        : {}),
+    });
+    perScenario.push(trajectory);
+    const postureActiveTurns = new Set(trajectory.postureActiveTurns);
     for (const [index, turn] of scenario.turns.entries()) {
       turnsChecked += 1;
       const { hardGates, advisories } = checkTurn({
@@ -455,7 +511,7 @@ export function assembleReport(input: {
         locale: turn.input.locale,
         userText: turn.input.text,
         assistantText: turn.assistantText,
-        ...(postureActive[index] === true ? { postureActive: true } : {}),
+        ...(postureActiveTurns.has(index + 1) ? { postureActive: true } : {}),
         ...(scenario.memoryFixture
           ? {
               forbiddenMentionTokens:
@@ -466,20 +522,6 @@ export function assembleReport(input: {
       hardGateViolations.push(...hardGates);
       advisoryCandidates.push(...advisories);
     }
-    perScenario.push(
-      checkScenarioTrajectory({
-        scenarioId: scenario.id,
-        languageVariant: scenario.languageVariant,
-        turns: scenario.turns,
-        ...(scenario.stopSignalExpectation
-          ? {
-              stopSignalExpectation: {
-                releasedAtTurn: scenario.stopSignalExpectation.releasedAtTurn,
-              },
-            }
-          : {}),
-      }),
-    );
   }
 
   const hardGatesByKind: Record<string, number> = {};
@@ -747,6 +789,13 @@ export function verifyScenarioPackExpectations(
           detail: `release at turn ${signalFixture.releasedAtTurn} requires a bounded release reason`,
         });
       }
+      if (signalFixture.releasedAtTurn === null && releaseReason !== null) {
+        mismatches.push({
+          scenarioId: scenario.id,
+          kind: "stop_signal_expectation",
+          detail: `release reason ${releaseReason} is declared without a release turn`,
+        });
+      }
     } else if (classifiedSignals.length > 0) {
       mismatches.push({
         scenarioId: scenario.id,
@@ -778,9 +827,11 @@ export function verifyScenarioPackExpectations(
           });
         }
       }
+      const [activeForbiddenMention] = MEMORY_CHECK_TIERING.activeChecks;
       if (
         memoryFixture.checks.forbiddenMention.status !== "active" ||
-        memoryFixture.checks.forbiddenMention.tier !== "hard_gate"
+        memoryFixture.checks.forbiddenMention.tier !== "hard_gate" ||
+        activeForbiddenMention !== "forbidden_mention"
       ) {
         mismatches.push({
           scenarioId: scenario.id,
@@ -788,10 +839,13 @@ export function verifyScenarioPackExpectations(
           detail: "forbidden-mention check must stay active at hard-gate tier",
         });
       }
+      const [deferredExpectedRecall] = MEMORY_CHECK_TIERING.deferredChecks;
       if (
         memoryFixture.checks.expectedRecall.status !== "deferred" ||
-        memoryFixture.checks.expectedRecall.gating !== false ||
-        memoryFixture.checks.expectedRecall.deferredTo !== "1A.3a"
+        memoryFixture.checks.expectedRecall.gating !==
+          deferredExpectedRecall.gating ||
+        memoryFixture.checks.expectedRecall.deferredTo !==
+          deferredExpectedRecall.deferredTo
       ) {
         mismatches.push({
           scenarioId: scenario.id,

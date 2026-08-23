@@ -102,13 +102,21 @@ describe("scenario pack fixtures (#77)", () => {
     expect(scenarioById("high-risk-en").turns).toHaveLength(4);
   });
 
-  it("expects session-persistent stop-signal suppression with an in-scenario release", () => {
-    for (const id of ["refusal-en", "refusal-zh", "refusal-mix"]) {
+  it("expects session-persistent stop-signal suppression with in-scenario releases", () => {
+    const releaseReasons: Record<string, string> = {
+      "refusal-en": "user_reopened",
+      "refusal-zh": "user_reopened",
+      // Exercising the second release path: turn 4 supplies new substantive
+      // content about the stopped direction.
+      "refusal-mix": "new_substantive_content",
+    };
+    for (const [id, reason] of Object.entries(releaseReasons)) {
       const fixture = scenarioById(id).stopSignalExpectation;
       expect(fixture?.policyVersion).toBe(CURIOSITY_STOP_SIGNAL_POLICY_VERSION);
       expect(fixture?.suppression).toBe("session");
       expect(fixture?.releasedAtTurn).toBe(4);
       if (fixture && fixture.releaseReason !== null) {
+        expect(fixture.releaseReason).toBe(reason);
         expect(
           CURIOSITY_STOP_SIGNAL_RELEASE_REASONS.includes(
             fixture.releaseReason,
@@ -128,6 +136,10 @@ describe("scenario pack fixtures (#77)", () => {
       expect(scenarioById(id).stopSignalExpectation?.releasedAtTurn, id).toBe(
         null,
       );
+      expect(
+        scenarioById(id).stopSignalExpectation?.releaseReason,
+        id,
+      ).toBeNull();
     }
   });
 
@@ -207,6 +219,29 @@ describe("pack expectation verifier catches drift", () => {
     expect(mismatches[0]).toMatchObject({
       scenarioId: "refusal-en",
       kind: "stop_signal_coverage",
+    });
+  });
+
+  it("flags a release reason declared without a release turn", () => {
+    const tainted: ScenarioPack = {
+      ...pack,
+      scenarios: pack.scenarios.map((s) =>
+        s.id === "topic-change-zh"
+          ? {
+              ...s,
+              stopSignalExpectation: {
+                ...s.stopSignalExpectation!,
+                releaseReason: "user_reopened",
+              },
+            }
+          : s,
+      ),
+    };
+    const mismatches = verifyScenarioPackExpectations(tainted).mismatches;
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0]).toMatchObject({
+      scenarioId: "topic-change-zh",
+      kind: "stop_signal_expectation",
     });
   });
 
@@ -322,12 +357,14 @@ describe("session-persistent stop-signal window counting (#77)", () => {
     });
     // The response to the stop turn (turn 2) is inside the window; the
     // response to the re-opening turn (turn 4) is outside it.
-    expect(trajectory.stopSignalSuppression).toEqual({
-      fromTurn: 2,
-      throughTurn: 3,
-      releasedAtTurn: 4,
-      questionTurnsInWindow: [2],
-    });
+    expect(trajectory.stopSignalWindows).toEqual([
+      {
+        fromTurn: 2,
+        throughTurn: 3,
+        releasedAtTurn: 4,
+        questionTurnsInWindow: [2],
+      },
+    ]);
   });
 
   it("extends the window to the scenario end when nothing re-opens the direction", () => {
@@ -337,26 +374,76 @@ describe("session-persistent stop-signal window counting (#77)", () => {
       stopSignalExpectation: { releasedAtTurn: null },
       turns: turns.slice(0, 3),
     });
-    expect(trajectory.stopSignalSuppression).toEqual({
-      fromTurn: 2,
-      throughTurn: 3,
-      releasedAtTurn: null,
-      questionTurnsInWindow: [2],
-    });
+    expect(trajectory.stopSignalWindows).toEqual([
+      {
+        fromTurn: 2,
+        throughTurn: 3,
+        releasedAtTurn: null,
+        questionTurnsInWindow: [2],
+      },
+    ]);
   });
 
-  it("reports no window for a scenario without stop signals", () => {
+  it("opens a fresh window when a stop signal fires again after a release", () => {
+    const trajectory = checkScenarioTrajectory({
+      languageVariant: "en",
+      scenarioId: "stop-signal-renewal",
+      stopSignalExpectation: { releasedAtTurn: 3 },
+      turns: [
+        turns[0]!,
+        turns[1]!,
+        {
+          assistantText: "Dinner as the highlight sounds earned.",
+          input: {
+            locale: "en-US",
+            text: "Anyway. I'm cooking dinner now - that's the highlight of the day.",
+          },
+        },
+        {
+          assistantText: "That reframe matters. What did she point to?",
+          input: {
+            locale: "en-US",
+            text: "Actually, the review wasn't all bad. She said my debugging saved the release.",
+          },
+        },
+        {
+          assistantText: "Sure.",
+          input: {
+            locale: "en-US",
+            text: "I'd rather not go back into the review after all.",
+          },
+        },
+        {
+          assistantText: "Understood.",
+          input: { locale: "en-US", text: "The rain finally stopped here." },
+        },
+      ],
+    });
+    // Window one: signal at turn 2, released at turn 3. The renewed signal at
+    // turn 5 opens a second window that runs to the scenario end.
+    expect(trajectory.stopSignalWindows).toEqual([
+      {
+        fromTurn: 2,
+        throughTurn: 2,
+        releasedAtTurn: 3,
+        questionTurnsInWindow: [2],
+      },
+      {
+        fromTurn: 5,
+        throughTurn: 6,
+        releasedAtTurn: null,
+        questionTurnsInWindow: [],
+      },
+    ]);
+  });
+
+  it("reports no windows for a scenario without stop signals", () => {
     const trajectory = checkScenarioTrajectory({
       languageVariant: "en",
       scenarioId: "ordinary",
       turns: turns.slice(0, 1),
     });
-    expect(trajectory.stopSignalSuppression).toEqual({
-      fromTurn: null,
-      throughTurn: null,
-      releasedAtTurn: null,
-      questionTurnsInWindow: [],
-    });
+    expect(trajectory.stopSignalWindows).toEqual([]);
   });
 });
 
