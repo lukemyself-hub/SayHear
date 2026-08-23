@@ -268,6 +268,15 @@ export {
   type UnderstandingResponseViolation,
 } from "./conversation-behavior";
 export {
+  isWhitelistedSafetyResourceNumber,
+  listSafetyResourceNumbers,
+  SAFETY_RESOURCE_WHITELIST,
+  SAFETY_RESOURCE_WHITELIST_VERSION,
+  type SafetyResourceKind,
+  type SafetyResourceRegion,
+  type WhitelistedSafetyResource,
+} from "./safety-resources";
+export {
   asCompiledContextId,
   asConversationEventId,
   asConversationEventRevisionId,

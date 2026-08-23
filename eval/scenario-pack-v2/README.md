@@ -27,7 +27,7 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 | --- | --- |
 | `scenarios.json` | scenario-pack:v2，由 build 脚本生成 |
 | `build-v2.ts` | 生成脚本：合并 #61 pack + 记忆 fixture + 12 个新场景（provenance） |
-| `tiered-checks.ts` | 三档检查模块（复用 `@sayhear/application` 的版本化校验函数） |
+| `tiered-checks.ts` | 三档检查模块（复用 `@sayhear/application` 的版本化校验函数与安全资源白名单常量） |
 | `check-transcripts.ts` | CLI：对一个 #61 格式的 transcripts.json 出 TieredReport |
 | `ledger.json` | 报警≠定罪的 FP/FN 双向台账（当前为空） |
 | `run/` | 实跑产物 |
@@ -46,10 +46,13 @@ pnpm exec tsx eval/scenario-pack-v2/check-transcripts.ts \
 
 ## 安全资源白名单
 
-`tiered-checks.ts` 内的 `safety-resources:v0-eval` 是 eval 侧快照：
-988（策略文本）、12356 / 400-161-9995（2026-08-22 经 Luke 核验的中国大陆公共
-热线，#62 记录）、120 / 110（公共急救/报警号码）。产品化时按 ADR-0010 并入
-版本化安全策略，eval 侧随之更新版本号。
+白名单是单一版本化常量 `safety-resources:v1`（#70/#72），位于
+`packages/application/src/safety-resources.ts`：988（美国危机热线）、
+12356 / 400-161-9995（2026-08-22 经 Luke 核验的中国大陆公共热线，#62 记录）、
+120 / 110（公共急救/报警号码）。生产锚点渲染与 `tiered-checks.ts` 的热线硬门禁
+消费同一常量——用户看到的号码与检查核验的号码不会漂移；改号码即改策略版本
+（ADR-0010）。`run/baseline-61-findings.json` 里的 `safety-resources:v0-eval`
+是当时 eval 侧快照的历史记录，保持原样。
 
 ## 边界
 
