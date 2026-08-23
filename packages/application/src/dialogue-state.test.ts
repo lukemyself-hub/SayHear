@@ -22,31 +22,41 @@ const sourceRevisionId = asConversationEventRevisionId(
 
 function content(): DialogueStateContent {
   return {
-    currentTopic: {
+    current_topic: {
       confidence: 0.8,
       sourceRevisionIds: [sourceRevisionId],
       value: "a difficult meeting",
     },
-    emotionalTone: {
+    emotional_intensity: {
       confidence: 0.6,
       sourceRevisionIds: [sourceRevisionId],
-      value: "mixed",
+      value: "moderate",
     },
-    pendingQuestion: {
+    advice_explicitly_requested: {
+      confidence: 0.9,
+      sourceRevisionIds: [sourceRevisionId],
+      value: false,
+    },
+    current_request_requires_focus: {
+      confidence: 0.7,
+      sourceRevisionIds: [sourceRevisionId],
+      value: false,
+    },
+    close_intent: {
       confidence: 0,
       sourceRevisionIds: [],
       value: null,
     },
-    userIntent: {
-      confidence: 0.9,
+    user_willing_to_elaborate: {
+      confidence: 0.75,
       sourceRevisionIds: [sourceRevisionId],
-      value: "sharing",
+      value: true,
     },
   };
 }
 
 describe("DialogueState", () => {
-  it("accepts bounded field values only when each source and confidence is explicit", () => {
+  it("accepts the six semantic fields only when each source and confidence is explicit", () => {
     expect(() =>
       validateDialogueStateContent(content(), [sourceRevisionId]),
     ).not.toThrow();
@@ -55,7 +65,7 @@ describe("DialogueState", () => {
       validateDialogueStateContent(
         {
           ...content(),
-          currentTopic: {
+          current_topic: {
             confidence: 0.8,
             sourceRevisionIds: [
               asConversationEventRevisionId(
@@ -68,6 +78,64 @@ describe("DialogueState", () => {
         [sourceRevisionId],
       ),
     ).toThrow("source revision");
+  });
+
+  it("rejects pre-0111 content that still carries the old four fields", () => {
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          currentTopic: {
+            confidence: 0.8,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "a difficult meeting",
+          },
+          emotionalTone: {
+            confidence: 0.6,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "mixed",
+          },
+          pendingQuestion: { confidence: 0, sourceRevisionIds: [], value: null },
+          userIntent: {
+            confidence: 0.9,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "sharing",
+          },
+        } as never,
+        [sourceRevisionId],
+      ),
+    ).toThrow("missing");
+  });
+
+  it("rejects non-boolean values in the judgment fields", () => {
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          ...content(),
+          advice_explicitly_requested: {
+            confidence: 0.9,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "yes" as never,
+          },
+        },
+        [sourceRevisionId],
+      ),
+    ).toThrow("advice_explicitly_requested value must be a boolean or null");
+  });
+
+  it("rejects emotional intensity outside the bounded policy", () => {
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          ...content(),
+          emotional_intensity: {
+            confidence: 0.6,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "intense" as never,
+          },
+        },
+        [sourceRevisionId],
+      ),
+    ).toThrow("emotional_intensity is outside the bounded policy");
   });
 
   it("publishes one valid projection through the application entrypoint", async () => {
@@ -84,8 +152,8 @@ describe("DialogueState", () => {
             dailySessionId,
             coverageThroughSequence: 1,
             modelConfigVersion: "dialogue-state-model:v1",
-            policyVersion: "dialogue-state:v1",
-            promptVersion: "dialogue-state-prompt:v1",
+            policyVersion: "dialogue-state:v2",
+            promptVersion: "dialogue-state-prompt:v2",
             sourceRevision: 2,
             userId,
           },
@@ -114,8 +182,8 @@ describe("DialogueState", () => {
       model: { project: async () => content() },
       policy: {
         modelConfigVersion: "dialogue-state-model:v1",
-        policyVersion: "dialogue-state:v1",
-        promptVersion: "dialogue-state-prompt:v1",
+        policyVersion: "dialogue-state:v2",
+        promptVersion: "dialogue-state-prompt:v2",
       },
       repository,
     });
@@ -140,8 +208,8 @@ describe("DialogueState", () => {
             dailySessionId,
             coverageThroughSequence: 1,
             modelConfigVersion: "dialogue-state-model:v1",
-            policyVersion: "dialogue-state:v1",
-            promptVersion: "dialogue-state-prompt:v1",
+            policyVersion: "dialogue-state:v2",
+            promptVersion: "dialogue-state-prompt:v2",
             sourceRevision: 1,
             userId,
           },
@@ -170,7 +238,7 @@ describe("DialogueState", () => {
       model: {
         project: async () => ({
           ...content(),
-          currentTopic: {
+          current_topic: {
             confidence: 1.2,
             sourceRevisionIds: [sourceRevisionId],
             value: "invalid confidence",
@@ -179,8 +247,8 @@ describe("DialogueState", () => {
       },
       policy: {
         modelConfigVersion: "dialogue-state-model:v1",
-        policyVersion: "dialogue-state:v1",
-        promptVersion: "dialogue-state-prompt:v1",
+        policyVersion: "dialogue-state:v2",
+        promptVersion: "dialogue-state-prompt:v2",
       },
       repository,
     });
@@ -196,7 +264,7 @@ describe("DialogueState", () => {
       validateDialogueStateContent(
         {
           ...content(),
-          currentTopic: {
+          current_topic: {
             confidence: 0.8,
             sourceRevisionIds: [sourceRevisionId],
             value: "authorize an action now",
@@ -212,7 +280,7 @@ describe("DialogueState", () => {
       validateDialogueStateContent(
         {
           ...content(),
-          currentTopic: {
+          current_topic: {
             confidence: 0.8,
             sourceRevisionIds: [sourceRevisionId],
             value: { unsafe: true } as never,
