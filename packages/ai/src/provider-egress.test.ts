@@ -63,6 +63,7 @@ describe("Provider Egress", () => {
               contentHmac: "0".repeat(64),
               keyVersion: "context-integrity:v1",
             },
+            generationStage: "decision",
             locale: "en-US",
             policyVersions: {
               canonicalPersonaVersion: "canonical-persona:v1",
@@ -176,6 +177,7 @@ describe("Provider Egress", () => {
               contentHmac: "0".repeat(64),
               keyVersion: "context-integrity:v1",
             },
+            generationStage: "decision",
             locale: "en-US",
             policyVersions: {
               canonicalPersonaVersion: "canonical-persona:v1",

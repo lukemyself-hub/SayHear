@@ -139,6 +139,7 @@ export type CompiledContextRenderSource = Readonly<{
     contentHmac: string;
     keyVersion: string;
   }>;
+  generationStage: GenerationCommandStage;
   locale: string;
   policyVersions: ContextPolicyVersions;
   rollingSummary?: CurrentRollingSummary | null;
@@ -373,6 +374,7 @@ export function createContextCompiler(dependencies: {
       // Re-resolution is deterministic by version, so the recomputed section
       // HMACs below prove the frozen manifest resolved the same artifacts.
       const promptArtifacts = resolvePromptArtifacts({
+        generationStage: source.generationStage,
         locale: source.locale,
         policyVersions: source.policyVersions,
       });

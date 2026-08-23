@@ -185,6 +185,7 @@ describe("Context Compiler", () => {
     });
     const payload = compiler.renderPermittedPayload({
       compilerVersion: saved!.compilerVersion,
+      generationStage: "decision",
       integrity: saved!.integrity,
       locale: saved!.locale,
       policyVersions: saved!.policyVersions,
@@ -638,7 +639,9 @@ describe("Context Compiler", () => {
       ),
       userId,
     });
-    const capturedManifest = manifest;
+    const capturedManifest = manifest
+      ? { ...manifest, generationStage: "decision" as const }
+      : undefined;
     if (!capturedManifest) {
       throw new Error("The test manifest was not captured.");
     }
@@ -655,6 +658,12 @@ describe("Context Compiler", () => {
     expect(payload.instructions).toMatch(
       /Listen and understand by default[\s\S]*immediate real-world support[\s\S]*Distinguish user facts[\s\S]*Canonical Persona[\s\S]*code-switching[\s\S]*daily_session=/,
     );
+    expect(() =>
+      compiler.renderPermittedPayload({
+        ...capturedManifest,
+        generationStage: "action_finalization",
+      }),
+    ).toThrow(PromptArtifactResolutionError);
     expect(() =>
       compiler.renderPermittedPayload({
         ...capturedManifest,

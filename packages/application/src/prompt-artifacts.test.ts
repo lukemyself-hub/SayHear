@@ -97,6 +97,24 @@ describe("prompt artifact resolution", () => {
     ).toThrow(PromptArtifactResolutionError);
   });
 
+  it("fails closed when a locale pack belongs to a different language", () => {
+    expect(() =>
+      resolvePromptArtifacts({
+        locale: "en-US",
+        policyVersions: {
+          ...supportedVersions,
+          localePolicyVersion: CHINESE_LOCALE_PACK_VERSION,
+        },
+      }),
+    ).toThrow(PromptArtifactResolutionError);
+    expect(() =>
+      resolvePromptArtifacts({
+        locale: "zh-CN",
+        policyVersions: supportedVersions,
+      }),
+    ).toThrow(PromptArtifactResolutionError);
+  });
+
   it("fails closed when the task instruction version cannot be resolved", () => {
     expect(() =>
       resolvePromptArtifacts({

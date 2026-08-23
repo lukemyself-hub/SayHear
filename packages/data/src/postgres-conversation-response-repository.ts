@@ -104,6 +104,7 @@ type DispatchRow = Readonly<{
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
+  generation_stage: "decision" | "action_finalization";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -1110,6 +1111,7 @@ export class PostgresConversationResponseRepository
             command.provider_policy_version,
             command.consent_policy_version,
             command.freshness_policy,
+            command.generation_stage,
             command.action_execution_status,
             command.action_receipt_sequence,
             frozen_receipt.admission_status AS action_receipt_admission,
@@ -1353,6 +1355,7 @@ export class PostgresConversationResponseRepository
             contentHmac: row.context_content_hmac,
             keyVersion: row.context_integrity_key_version,
           },
+          generationStage: row.generation_stage,
           locale: row.locale,
           policyVersions: row.context_policy_versions,
           rollingSummary: row.context_rolling_summary,

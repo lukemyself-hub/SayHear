@@ -21,6 +21,7 @@
 import {
   CHINESE_LOCALE_PACK_VERSION,
   ENGLISH_LOCALE_PACK_VERSION,
+  resolveConversationLocale,
 } from "./conversation-behavior";
 
 export {
@@ -81,19 +82,29 @@ const PERSONA_BEHAVIOR_ANCHORS_CONTENT: Readonly<Record<string, string>> = {
   ].join("\n"),
 };
 
-const LOCALE_PACK_CONTENT: Readonly<Record<string, (locale: string) => string>> =
-  {
-    [ENGLISH_LOCALE_PACK_VERSION]: (locale) =>
+type LocalePack = Readonly<{
+  language: "en" | "zh";
+  render: (locale: string) => string;
+}>;
+
+const LOCALE_PACK_CONTENT: Readonly<Record<string, LocalePack>> = {
+  [ENGLISH_LOCALE_PACK_VERSION]: {
+    language: "en",
+    render: (locale) =>
       [
         "English locale pack:",
         `Respond naturally in the user's locale (${locale}); mixed English/Chinese code-switching is natural speech, not an error to correct.`,
       ].join("\n"),
-    [CHINESE_LOCALE_PACK_VERSION]: (locale) =>
+  },
+  [CHINESE_LOCALE_PACK_VERSION]: {
+    language: "zh",
+    render: (locale) =>
       [
         "中文 locale pack：",
         `用自然、口语化的中文回应用户（用户 locale：${locale}）；中英夹杂的 code-switching 是自然的说话方式，不需要纠正或翻译。`,
       ].join("\n"),
-  };
+  },
+};
 
 const TASK_INSTRUCTION_CONTENT: Readonly<
   Record<GenerationCommandStage, Readonly<Record<string, string>>>
@@ -152,7 +163,10 @@ export function resolvePromptArtifacts(input: {
     policyVersions.personaBehaviorAnchorsVersion,
   );
   const localePackRenderer = LOCALE_PACK_CONTENT[policyVersions.localePolicyVersion];
-  if (!localePackRenderer) {
+  if (
+    !localePackRenderer ||
+    localePackRenderer.language !== resolveConversationLocale(input.locale)
+  ) {
     throw new PromptArtifactResolutionError(
       "locale pack",
       policyVersions.localePolicyVersion,
@@ -176,7 +190,7 @@ export function resolvePromptArtifacts(input: {
   }
   return {
     canonicalPersona,
-    localePack: localePackRenderer(input.locale),
+    localePack: localePackRenderer.render(input.locale),
     personaBehaviorAnchors,
     personaContractInvariant,
     taskInstruction: taskInstructionEntry[1],

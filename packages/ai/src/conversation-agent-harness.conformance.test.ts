@@ -76,6 +76,7 @@ const permittedRenderSource: CompiledContextRenderSource = Object.freeze({
     contentHmac: "0".repeat(64),
     keyVersion: "context-integrity:v1",
   } as const,
+  generationStage: "decision",
   locale: "en-US",
   policyVersions: {
     canonicalPersonaVersion: "canonical-persona:v1",
