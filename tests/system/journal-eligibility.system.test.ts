@@ -136,6 +136,8 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         journal_workflow_outcomes,
         dialogue_state_command_source_refs,
         dialogue_state_versions,
+        current_curiosity_stop_signals,
+        curiosity_stop_signals,
         current_dialogue_states,
         dialogue_state_commands,
         evidence_lineage,

@@ -16,6 +16,12 @@ import type {
 } from "@sayhear/domain";
 import type { CurrentDialogueState } from "./dialogue-state";
 import type { CurrentRollingSummary } from "./rolling-summary";
+import {
+  activeCuriosityStopSignal,
+  hasActiveCuriosityStopSignal,
+  renderCuriosityStopSignal,
+  type CurrentCuriosityStopSignal,
+} from "./curiosity-stop-signal";
 import type {
   ActionReferenceHandle,
   ActionReferenceTarget,
@@ -55,6 +61,7 @@ export type ContextSourceEvent = Readonly<{
 export type ContextSourceSnapshot = Readonly<{
   actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
   actionReferenceTargets?: readonly ActionReferenceTarget[];
+  curiosityStopSignal?: CurrentCuriosityStopSignal | null;
   dailySession: Readonly<{
     activityState: "active" | "finalized" | "quiescent";
     closurePolicyVersion: string;
@@ -93,6 +100,7 @@ export type CompiledContextSectionKey =
   | "locale_pack"
   | "daily_session"
   | "dialogue_state"
+  | "curiosity_stop_signal"
   | "rolling_summary"
   | "committed_raw_events"
   | "current_user_input"
@@ -300,6 +308,8 @@ export function createContextCompiler(dependencies: {
         policyVersions: source.policyVersions,
         promptArtifacts,
         rawEventTokenBudget: dependencies.rawEventTokenBudget,
+        curiosityStopSignal: source.curiosityStopSignal ?? null,
+        currentExchangeNo: source.dailySession.continuousExchangeNo,
         dialogueState,
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
@@ -394,6 +404,9 @@ export function createContextCompiler(dependencies: {
       const dialogueStateSection = source.sections.find(
         (section) => section.key === "dialogue_state",
       );
+      const stopSignalSection = source.sections.find(
+        (section) => section.key === "curiosity_stop_signal",
+      );
       if (
         currentInputs.length !== 1 ||
         !currentInput ||
@@ -401,7 +414,8 @@ export function createContextCompiler(dependencies: {
         !dailySessionReference ||
         rawEventBudget === null ||
         rawEventBudget === undefined ||
-        (dialogueStateSection && !dialogueStateSection.reference)
+        (dialogueStateSection && !dialogueStateSection.reference) ||
+        (stopSignalSection && !stopSignalSection.reference)
       ) {
         throw new CompiledContextIntegrityError();
       }
@@ -414,9 +428,12 @@ export function createContextCompiler(dependencies: {
         policyVersions: source.policyVersions,
         promptArtifacts,
         rawEventTokenBudget: rawEventBudget,
-        dialogueState: null,
+        curiosityStopSignal: null,
         ...(dialogueStateSection?.reference
           ? { dialogueStateContent: dialogueStateSection.reference }
+          : {}),
+        ...(stopSignalSection?.reference
+          ? { stopSignalContent: stopSignalSection.reference }
           : {}),
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
@@ -500,12 +517,14 @@ function estimateTokens(text: string): number {
 function createSections(input: {
   contentHmacSecret: string;
   currentInput: CompiledContextReferencedEvent;
+  currentExchangeNo?: number;
   dailySessionReference: string;
   history: readonly CompiledContextReferencedEvent[];
   locale: string;
   policyVersions: ContextPolicyVersions;
   promptArtifacts: ResolvedPromptArtifacts;
   rawEventTokenBudget: number;
+  curiosityStopSignal: CurrentCuriosityStopSignal | null;
   dialogueState?: CurrentDialogueState | null;
   dialogueStateContent?: string;
   rollingSummary: CurrentRollingSummary | null;
@@ -623,6 +642,7 @@ function createSections(input: {
           },
         ]
       : []),
+    ...renderCuriosityStopSignalSection(input),
     {
       budgetTokens: input.rawEventTokenBudget,
       content: input.history
@@ -683,6 +703,64 @@ function usableDialogueState(
     return null;
   }
   return projection;
+}
+
+/**
+ * The stop-signal section is present only when the deterministic projection
+ * holds an active suppression for the compiled exchange; an empty projection
+ * (or one whose blanket form died with a previous Continuous Exchange) is
+ * silently omitted. `stopSignalContent` replays the exact state frozen at
+ * compile time for the Provider Egress re-derivation.
+ */
+function renderCuriosityStopSignalSection(input: {
+  curiosityStopSignal: CurrentCuriosityStopSignal | null;
+  currentExchangeNo?: number;
+  stopSignalContent?: string;
+}): readonly Readonly<{
+  budgetTokens: null;
+  content: string;
+  key: "curiosity_stop_signal";
+  reference: string;
+  truncatable: false;
+}>[] {
+  if (input.stopSignalContent) {
+    return [
+      {
+        budgetTokens: null,
+        content: input.stopSignalContent,
+        key: "curiosity_stop_signal",
+        reference: input.stopSignalContent,
+        truncatable: false,
+      },
+    ];
+  }
+  const projection = input.curiosityStopSignal;
+  if (
+    !projection ||
+    input.currentExchangeNo === undefined ||
+    !hasActiveCuriosityStopSignal(
+      projection.content,
+      input.currentExchangeNo,
+    )
+  ) {
+    return [];
+  }
+  const content = renderCuriosityStopSignal({
+    active: activeCuriosityStopSignal(
+      projection.content,
+      input.currentExchangeNo,
+    ),
+    policyVersion: projection.policyVersion,
+  });
+  return [
+    {
+      budgetTokens: null,
+      content,
+      key: "curiosity_stop_signal",
+      reference: content,
+      truncatable: false,
+    },
+  ];
 }
 
 function renderDialogueState(state: CurrentDialogueState): string {
