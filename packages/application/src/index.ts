@@ -106,6 +106,17 @@ export {
   type ContextSourceSnapshot,
   type RenderedCompiledContextPayload,
 } from "./context-compiler";
+export {
+  ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
+  CANONICAL_PERSONA_VERSION,
+  CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
+  PERSONA_BEHAVIOR_ANCHORS_VERSION,
+  PERSONA_CONTRACT_INVARIANT_VERSION,
+  PromptArtifactResolutionError,
+  resolvePromptArtifacts,
+  type GenerationCommandStage,
+  type ResolvedPromptArtifacts,
+} from "./prompt-artifacts";
 export { hasContiguousCoverage, validateRollingSummaryContent, type CurrentRollingSummary, type RollingSummaryCommand, type RollingSummaryContent, type RollingSummarySource } from "./rolling-summary";
 export { createRollingSummaryService, type RollingSummaryModel, type RollingSummaryRepository, type RollingSummaryService } from "./rolling-summary-service";
 export {
