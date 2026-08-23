@@ -154,6 +154,10 @@ _Avoid_: Advice, Coaching
 为了继续理解而紧扣用户当前表达提出的问题；每轮最多一个，用户愿意继续时可跨轮追问，用户简短回应、回避、拒绝或转换话题后必须停止原方向。
 _Avoid_: Intake question, Question stack
 
+**DialogueState**:
+当前 Continuous Exchange 内、由已确认 Event 异步派生的非权威对话状态，包含 `current_topic`、`emotional_intensity`、`advice_explicitly_requested`、`current_request_requires_focus`、`close_intent` 与 `user_willing_to_elaborate` 六个语义字段；每个字段都带 source revision 与 confidence，证据不足时为 null。它只帮助当前对话理解和选择回应，不是 Safety Posture、Continuous Exchange End、Conversation Action 授权、Memory 或 Profile，也不能单独关闭交流或作出安全判断。
+_Avoid_: Model-decided closure, Safety Posture, Conversation Action authorization, Memory, Profile
+
 **Minimum High-Risk Response**:
 Core Flow 1A.1 从第一天成立的行为边界；识别到明确自伤、伤人或迫在眉睫的危险信号时，SayHear 暂停普通倾听、非安全必要的追问和建议，直接鼓励用户寻求现实中的即时支持，不诊断、不冒充治疗师，也不承诺绝对保密。
 _Avoid_: Therapy, Full Crisis Operations
