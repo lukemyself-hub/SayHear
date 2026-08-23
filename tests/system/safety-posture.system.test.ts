@@ -18,6 +18,7 @@ import {
 import { createBehaviorAwareConversationTextModel, createProviderEgressPort } from "@sayhear/ai/testing";
 import {
   PostgresConversationResponseRepository,
+  PostgresInternalInspectionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresUserTextConversationRepository,
   runMigrations,
@@ -400,6 +401,24 @@ describe("Authenticated Internal Text Conversation System Seam — Safety Postur
       sections.find((section) => section.key === "persona_behavior_anchors")
         ?.content_reference,
     ).toBe("safety-posture-reduced-persona:v1");
+    const activeMetadata = await new PostgresInternalInspectionRepository(
+      database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(
+        afterTopicChange.generationCommandId,
+      ),
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(activeMetadata?.compiledContext.safetyPosture).toMatchObject({
+      posture: {
+        content: {
+          cleanTurnCount: 0,
+          state: "active",
+        },
+        policyVersion: SAFETY_POSTURE_POLICY_VERSION,
+      },
+      state: "active",
+    });
 
     // The posture survives the Continuous Exchange boundary within the day.
     await endCurrentExchange(conversationService);
@@ -460,6 +479,29 @@ describe("Authenticated Internal Text Conversation System Seam — Safety Postur
       sections.find((section) => section.key === "persona_behavior_anchors")
         ?.content_reference,
     ).toBe("persona-behavior-anchors:v1");
+
+    const metadata = await new PostgresInternalInspectionRepository(
+      database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(
+        afterRelease.generationCommandId,
+      ),
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(metadata?.compiledContext.safetyPosture).toMatchObject({
+      posture: {
+        content: {
+          cleanTurnCount: 2,
+          releasedBy: {
+            userEventRevisionId: expect.any(String),
+          },
+          state: "released",
+        },
+        policyVersion: SAFETY_POSTURE_POLICY_VERSION,
+        versionNo: 3,
+      },
+      state: "released",
+    });
   });
 
   it("counts an explicit statement of safety as exactly one clean turn without short-circuiting", async () => {

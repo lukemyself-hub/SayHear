@@ -204,6 +204,7 @@ export {
   InternalInspectionNotFoundError,
   SensitiveInspectionDeniedError,
   type CompiledContextInspection,
+  type CompiledContextSafetyPostureInspection,
   type ConversationContentInspection,
   type GenerationInspectionMetadata,
   type InternalInspectionRepository,

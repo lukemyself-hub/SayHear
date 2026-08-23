@@ -11,6 +11,7 @@ import {
 type VisibleUserMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: string;
+  generationCommandId: string | null;
   locale: string;
   logicalDate?: string;
   revisionId: string;
@@ -96,6 +97,7 @@ export function TextConversation(props: {
     setError(null);
     let userCommitted = false;
     let currentTurnId: string | null = null;
+    let currentGenerationCommandId: string | null = null;
     let responseCommitted = false;
     let streamedAssistantText = "";
 
@@ -112,13 +114,16 @@ export function TextConversation(props: {
         if (result.type === "user_committed") {
           userCommitted = true;
           const committed = result as {
+            generationCommandId: string;
             message: VisibleUserMessage & { id: string };
             turnId: string;
           };
           currentTurnId = committed.turnId;
+          currentGenerationCommandId = committed.generationCommandId;
           const message = {
             actor: "user" as const,
             eventId: committed.message.id,
+            generationCommandId: null,
             locale: committed.message.locale,
             revisionId: committed.message.revisionId,
             sequence: committed.message.sequence,
@@ -164,6 +169,7 @@ export function TextConversation(props: {
                     message: {
                       actor: "assistant",
                       eventId: committed.eventId,
+                      generationCommandId: currentGenerationCommandId,
                       locale: submission.locale,
                       revisionId: committed.revisionId,
                       sequence: nextVisibleSequence(current),
@@ -246,6 +252,7 @@ export function TextConversation(props: {
     setSubmitting(true);
     setError(null);
     let retryTurnId: string | null = null;
+    let retryGenerationCommandId: string | null = null;
     let responseCommitted = false;
     let streamedAssistantText = "";
 
@@ -263,6 +270,11 @@ export function TextConversation(props: {
           retryTurnId =
             "turnId" in result && typeof result.turnId === "string"
               ? result.turnId
+              : null;
+          retryGenerationCommandId =
+            "generationCommandId" in result &&
+            typeof result.generationCommandId === "string"
+              ? result.generationCommandId
               : null;
         } else if (result.type === "assistant_delta") {
           const delta =
@@ -288,6 +300,7 @@ export function TextConversation(props: {
               message: {
                 actor: "assistant",
                 eventId: committed.eventId,
+                generationCommandId: retryGenerationCommandId,
                 locale: navigator.language,
                 revisionId: committed.revisionId,
                 sequence: nextVisibleSequence(current),
@@ -383,6 +396,15 @@ export function TextConversation(props: {
                   {item.message.actor === "user" ? "You" : "SayHear"}
                 </span>
                 <p>{item.message.text}</p>
+                {item.message.actor === "assistant" &&
+                item.message.generationCommandId ? (
+                  <a
+                    className="inspectionLink"
+                    href={`/internal/context-inspector?generation_command_id=${encodeURIComponent(item.message.generationCommandId)}`}
+                  >
+                    Inspect compiled Context
+                  </a>
+                ) : null}
               </article>
             ) : (
               <article
@@ -505,6 +527,7 @@ function appendActionStatus(
       message: {
         actor: "assistant",
         eventId: `action-status:${String(receipt.actionExecutionId ?? crypto.randomUUID())}`,
+        generationCommandId: null,
         locale,
         revisionId: `action-status:${String(receipt.actionExecutionId ?? crypto.randomUUID())}`,
         sequence: nextVisibleSequence(current),

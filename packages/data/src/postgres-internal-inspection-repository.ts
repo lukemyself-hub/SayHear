@@ -1,4 +1,5 @@
 import type {
+  CompiledContextDegradedReason,
   CompiledContextSection,
   ContextPolicyVersions,
   GenerationInspectionMetadata,
@@ -9,7 +10,12 @@ import {
   asCompiledContextId,
   asGenerationCommandId,
   asModelRunAttemptId,
+  validateSafetyPostureContent,
+  type CurrentSafetyPosture,
+  type SafetyPostureContent,
 } from "@sayhear/application";
+
+import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
@@ -20,8 +26,10 @@ type GenerationMetadataRow = Readonly<{
   command_status: string;
   completed_at: Date | null;
   context_compiler_version: string;
-  context_degraded_reason: "raw_event_budget_exceeded" | null;
+  context_degraded_reason: CompiledContextDegradedReason;
+  context_daily_session_id: string;
   context_dialogue_revision: string;
+  context_expected_data_epoch: string;
   context_id: string;
   context_integrity_algorithm: "hmac-sha256";
   context_integrity_key_version: string;
@@ -119,7 +127,12 @@ export class PostgresInternalInspectionRepository
       InternalInspectionRepository["findGenerationMetadata"]
     >[0],
   ): Promise<GenerationInspectionMetadata | null> {
-    const result = await this.pool.query<GenerationMetadataRow>(
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+      );
+      const result = await client.query<GenerationMetadataRow>(
       `
         SELECT
           command.generation_command_id,
@@ -133,8 +146,10 @@ export class PostgresInternalInspectionRepository
           command.recovery_status,
           command.recovery_checked_at,
           command.next_recovery_at,
+          command.expected_data_epoch AS context_expected_data_epoch,
           context.compiled_context_id AS context_id,
           context.compiler_version AS context_compiler_version,
+          turn.daily_session_id AS context_daily_session_id,
           context.dialogue_revision AS context_dialogue_revision,
           context.source_revision AS context_source_revision,
           context.locale AS context_locale,
@@ -223,6 +238,9 @@ export class PostgresInternalInspectionRepository
         FROM active_internal_owner owner
         INNER JOIN generation_commands command
           ON command.user_id = owner.user_id
+        INNER JOIN interaction_turns turn
+          ON turn.interaction_turn_id = command.interaction_turn_id
+          AND turn.user_id = command.user_id
         INNER JOIN compiled_contexts context
           ON context.compiled_context_id = command.compiled_context_id
           AND context.generation_command_id =
@@ -240,88 +258,118 @@ export class PostgresInternalInspectionRepository
         LIMIT 1
       `,
       [input.userId, input.generationCommandId],
-    );
-    const row = result.rows[0];
-    if (!row) {
-      return null;
-    }
-    return {
-      attemptStatus: row.attempt_status,
-      checkedAt: row.checked_at,
-      commandStatus: row.command_status,
-      compiledContext: {
-        compilerVersion: row.context_compiler_version,
-        degradedReason: row.context_degraded_reason,
-        dialogueRevision: Number(row.context_dialogue_revision),
-        id: asCompiledContextId(row.context_id),
-        integrity: {
-          algorithm: row.context_integrity_algorithm,
-          keyVersion: row.context_integrity_key_version,
-        },
-        locale: row.context_locale,
-        policyVersions: row.context_policy_versions,
-        referencedEvents: row.context_referenced_events.map((event) => ({
-          ...event,
-          revisionId: asConversationEventRevisionId(event.revisionId),
-        })),
-        sectionBudgets: row.context_section_budgets,
-        sections: row.context_sections.map(
-          ({ contentHmac: _contentHmac, ...section }) => section,
-        ),
+      );
+      const row = result.rows[0];
+      if (!row) {
+        await client.query("COMMIT");
+        return null;
+      }
+      const dialogueStateSectionCompiled = row.context_sections.some(
+        (section) => section.key === "dialogue_state",
+      );
+      const dialogueState = dialogueStateSectionCompiled
+        ? await loadDialogueStateForContext(client, {
+            dailySessionId: row.context_daily_session_id,
+            dialogueRevision: Number(row.context_dialogue_revision),
+            expectedDataEpoch: Number(row.context_expected_data_epoch),
+            sourceRevision: Number(row.context_source_revision),
+          })
+        : { dialogueState: null, failure: false };
+      const safetyPosture = await loadSafetyPostureForInspection(client, {
+        dailySessionId: row.context_daily_session_id,
+        expectedDataEpoch: Number(row.context_expected_data_epoch),
         sourceRevision: Number(row.context_source_revision),
-        totalTokens: Number(row.context_total_tokens),
-      },
-      completedAt: row.completed_at,
-      consentPolicyVersion: row.consent_policy_version,
-      conversationActionCatalogVersion:
-        row.conversation_action_catalog_version,
-      costMicros: optionalNumber(row.cost_micros),
-      dispatchLatencyMs: Number(row.dispatch_latency_ms),
-      dispatchedAt: row.dispatched_at,
-      disposition: row.disposition,
-      freshnessPolicy: row.freshness_policy,
-      generationCommandId: asGenerationCommandId(
-        row.generation_command_id,
-      ),
-      harnessPolicyVersion: row.harness_policy_version,
-      inputTokens: optionalNumber(row.input_tokens),
-      model: row.model,
-      modelRunAttemptId: asModelRunAttemptId(
-        row.model_run_attempt_id,
-      ),
-      outputTokens: optionalNumber(row.output_tokens),
-      provider: row.provider,
-      providerLatencyMs: optionalNumber(row.provider_latency_ms),
-      providerPolicyVersion: row.provider_policy_version,
-      providerRequestId: row.provider_request_id,
-      recovery: {
-        attempts: row.recovery_attempts.map((attempt) => ({
-          attemptNo: attempt.attemptNo,
-          completedAt: optionalDate(attempt.completedAt),
-          createdAt: new Date(attempt.createdAt),
-          errorCategory: attempt.errorCategory,
-          firstTokenAt: optionalDate(attempt.firstTokenAt),
-          id: asModelRunAttemptId(attempt.id),
-          providerCompletedAt: optionalDate(attempt.providerCompletedAt),
-          recoveryClaimedAt: optionalDate(attempt.recoveryClaimedAt),
-          recoveryStatus: attempt.recoveryStatus,
-          retryNotBefore: optionalDate(attempt.retryNotBefore),
-          retryOfModelRunAttemptId: attempt.retryOfModelRunAttemptId
-            ? asModelRunAttemptId(attempt.retryOfModelRunAttemptId)
-            : null,
-          startedAt: optionalDate(attempt.startedAt),
-          status: attempt.status,
-        })),
-        checkedAt: row.recovery_checked_at,
-        nextRecoveryAt: row.next_recovery_at,
-        policyVersion: row.recovery_policy_version,
-        status: row.recovery_status,
-      },
-      role: row.role,
-      sourceRevisionId: asConversationEventRevisionId(
-        row.input_revision_id,
-      ),
-    };
+        userId: input.userId,
+      });
+      await client.query("COMMIT");
+      return {
+        attemptStatus: row.attempt_status,
+        checkedAt: row.checked_at,
+        commandStatus: row.command_status,
+        compiledContext: {
+          compilerVersion: row.context_compiler_version,
+          degradedReason: row.context_degraded_reason,
+          dialogueState: dialogueState.dialogueState,
+          dialogueRevision: Number(row.context_dialogue_revision),
+          id: asCompiledContextId(row.context_id),
+          integrity: {
+            algorithm: row.context_integrity_algorithm,
+            keyVersion: row.context_integrity_key_version,
+          },
+          locale: row.context_locale,
+          policyVersions: row.context_policy_versions,
+          referencedEvents: row.context_referenced_events.map((event) => ({
+            ...event,
+            revisionId: asConversationEventRevisionId(event.revisionId),
+          })),
+          sectionBudgets: row.context_section_budgets,
+          sections: row.context_sections.map(
+            ({ contentHmac: _contentHmac, ...section }) => section,
+          ),
+          safetyPosture: {
+            posture: safetyPosture,
+            state: safetyPosture?.content.state ?? "default",
+          },
+          sourceRevision: Number(row.context_source_revision),
+          totalTokens: Number(row.context_total_tokens),
+        },
+        completedAt: row.completed_at,
+        consentPolicyVersion: row.consent_policy_version,
+        conversationActionCatalogVersion:
+          row.conversation_action_catalog_version,
+        costMicros: optionalNumber(row.cost_micros),
+        dispatchLatencyMs: Number(row.dispatch_latency_ms),
+        dispatchedAt: row.dispatched_at,
+        disposition: row.disposition,
+        freshnessPolicy: row.freshness_policy,
+        generationCommandId: asGenerationCommandId(
+          row.generation_command_id,
+        ),
+        harnessPolicyVersion: row.harness_policy_version,
+        inputTokens: optionalNumber(row.input_tokens),
+        model: row.model,
+        modelRunAttemptId: asModelRunAttemptId(
+          row.model_run_attempt_id,
+        ),
+        outputTokens: optionalNumber(row.output_tokens),
+        provider: row.provider,
+        providerLatencyMs: optionalNumber(row.provider_latency_ms),
+        providerPolicyVersion: row.provider_policy_version,
+        providerRequestId: row.provider_request_id,
+        recovery: {
+          attempts: row.recovery_attempts.map((attempt) => ({
+            attemptNo: attempt.attemptNo,
+            completedAt: optionalDate(attempt.completedAt),
+            createdAt: new Date(attempt.createdAt),
+            errorCategory: attempt.errorCategory,
+            firstTokenAt: optionalDate(attempt.firstTokenAt),
+            id: asModelRunAttemptId(attempt.id),
+            providerCompletedAt: optionalDate(attempt.providerCompletedAt),
+            recoveryClaimedAt: optionalDate(attempt.recoveryClaimedAt),
+            recoveryStatus: attempt.recoveryStatus,
+            retryNotBefore: optionalDate(attempt.retryNotBefore),
+            retryOfModelRunAttemptId: attempt.retryOfModelRunAttemptId
+              ? asModelRunAttemptId(attempt.retryOfModelRunAttemptId)
+              : null,
+            startedAt: optionalDate(attempt.startedAt),
+            status: attempt.status,
+          })),
+          checkedAt: row.recovery_checked_at,
+          nextRecoveryAt: row.next_recovery_at,
+          policyVersion: row.recovery_policy_version,
+          status: row.recovery_status,
+        },
+        role: row.role,
+        sourceRevisionId: asConversationEventRevisionId(
+          row.input_revision_id,
+        ),
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   public async inspectConversationContent(
@@ -441,6 +489,63 @@ export class PostgresInternalInspectionRepository
       client.release();
     }
   }
+}
+
+async function loadSafetyPostureForInspection(
+  client: PoolClient,
+  input: {
+    dailySessionId: string;
+    expectedDataEpoch: number;
+    sourceRevision: number;
+    userId: string;
+  },
+): Promise<CurrentSafetyPosture | null> {
+  const result = await client.query<{
+    content: SafetyPostureContent;
+    policy_version: string;
+    safety_posture_id: string;
+    source_revision: string;
+    version_no: string;
+  }>(
+    `
+      SELECT
+        version.content,
+        version.policy_version,
+        version.safety_posture_id,
+        version.source_revision,
+        version.version_no
+      FROM safety_postures version
+      INNER JOIN app_users owner
+        ON owner.user_id = version.user_id
+        AND owner.status = 'active'
+        AND owner.data_epoch = $4
+      WHERE version.daily_session_id = $1
+        AND version.user_id = $2
+        AND version.source_revision <= $3
+      ORDER BY version.source_revision DESC, version.version_no DESC
+      LIMIT 1
+    `,
+    [
+      input.dailySessionId,
+      input.userId,
+      input.sourceRevision,
+      input.expectedDataEpoch,
+    ],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  try {
+    validateSafetyPostureContent(row.content);
+  } catch {
+    return null;
+  }
+  return {
+    content: row.content,
+    id: row.safety_posture_id,
+    policyVersion: row.policy_version,
+    sourceRevision: Number(row.source_revision),
+    versionNo: Number(row.version_no),
+  };
 }
 
 function optionalNumber(value: string | null): number | null {

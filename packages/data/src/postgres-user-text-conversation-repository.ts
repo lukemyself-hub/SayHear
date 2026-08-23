@@ -343,6 +343,7 @@ export class PostgresUserTextConversationRepository
     const result = await this.pool.query<{
       actor: "user" | "assistant";
       conversation_event_id: string;
+      generation_command_id: string | null;
       locale: string;
       logical_date: string;
       revision_id: string;
@@ -353,6 +354,7 @@ export class PostgresUserTextConversationRepository
         SELECT
           event.actor,
           event.conversation_event_id,
+          event.generation_command_id,
           revision.locale,
           session.logical_date::text,
           revision.conversation_event_revision_id AS revision_id,
@@ -379,6 +381,9 @@ export class PostgresUserTextConversationRepository
     return result.rows.map((row) => ({
       actor: row.actor,
       eventId: asConversationEventId(row.conversation_event_id),
+      generationCommandId: row.generation_command_id
+        ? asGenerationCommandId(row.generation_command_id)
+        : null,
       locale: row.locale,
       logicalDate: row.logical_date,
       revisionId: asConversationEventRevisionId(row.revision_id),

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  asGenerationCommandId,
   asDailySessionId,
   asUserId,
   createConversationAgentHarness,
@@ -27,6 +28,7 @@ import {
 import { createRuntimeJournalRoleProviderRegistry } from "@sayhear/ai";
 import {
   PostgresConversationResponseRepository,
+  PostgresInternalInspectionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresJournalEligibilityRepository,
   PostgresJournalRepository,
@@ -465,10 +467,12 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     });
     const context = await database.pool.query<{
       degraded_reason: string | null;
+      generation_command_id: string;
       sections: Array<{ key: string; reference: string }>;
       compiled_context_id: string;
     }>(
-      `SELECT context.compiled_context_id, context.degraded_reason, context.sections
+      `SELECT command.generation_command_id, context.compiled_context_id,
+              context.degraded_reason, context.sections
        FROM compiled_contexts context
        INNER JOIN generation_commands command
          ON command.compiled_context_id = context.compiled_context_id
@@ -492,6 +496,47 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       [context.rows[0]!.compiled_context_id],
     );
     expect(referenced.rows.map((row) => row.sequence_no)).toEqual(["3"]);
+
+    const metadata = await new PostgresInternalInspectionRepository(
+      database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(
+        context.rows[0]!.generation_command_id,
+      ),
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(metadata?.compiledContext.dialogueState).toMatchObject({
+      content: {
+        advice_explicitly_requested: {
+          confidence: expect.any(Number),
+          sourceRevisionIds: expect.any(Array),
+        },
+        close_intent: {
+          confidence: expect.any(Number),
+          sourceRevisionIds: expect.any(Array),
+        },
+        current_request_requires_focus: {
+          confidence: expect.any(Number),
+          sourceRevisionIds: expect.any(Array),
+        },
+        current_topic: {
+          confidence: expect.any(Number),
+          sourceRevisionIds: expect.any(Array),
+        },
+        emotional_intensity: {
+          confidence: expect.any(Number),
+          sourceRevisionIds: expect.any(Array),
+        },
+        user_willing_to_elaborate: {
+          confidence: expect.any(Number),
+          sourceRevisionIds: expect.any(Array),
+        },
+      },
+      dialogueRevision: 2,
+      policyVersion: "dialogue-state:v2",
+      sourceRevision: 2,
+      status: "lagging",
+    });
   });
 
   it("fails closed to raw Events when DialogueState generation fails", async () => {
@@ -524,10 +569,12 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     });
     const context = await database.pool.query<{
       degraded_reason: string | null;
+      generation_command_id: string;
       sections: Array<{ key: string }>;
       compiled_context_id: string;
     }>(
-      `SELECT context.compiled_context_id, context.degraded_reason, context.sections
+      `SELECT command.generation_command_id, context.compiled_context_id,
+              context.degraded_reason, context.sections
        FROM compiled_contexts context
        INNER JOIN generation_commands command
          ON command.compiled_context_id = context.compiled_context_id
@@ -546,6 +593,18 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       [context.rows[0]!.compiled_context_id],
     );
     expect(referenced.rows.map((row) => row.sequence_no)).toEqual(["1", "2", "3"]);
+    const metadata = await new PostgresInternalInspectionRepository(
+      database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(
+        context.rows[0]!.generation_command_id,
+      ),
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    expect(metadata?.compiledContext).toMatchObject({
+      degradedReason: "dialogue_state_failed",
+      dialogueState: null,
+    });
   });
 
   it("invalidates a corrected source and refuses a late older projection", async () => {

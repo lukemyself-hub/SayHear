@@ -21,6 +21,20 @@ body {
   padding: 96px 0;
 }
 
+.inspectorShell {
+  width: min(1180px, calc(100% - 40px));
+}
+
+.internalNav {
+  margin-bottom: 2rem;
+}
+
+.internalNav a,
+.inspectionLink {
+  color: #625d54;
+  font-size: 0.86rem;
+}
+
 .eyebrow {
   color: #756f63;
   font-size: 0.78rem;
@@ -41,6 +55,205 @@ h1 {
   color: #625d54;
   font-size: 1.04rem;
   line-height: 1.6;
+}
+
+.inspectorLookup {
+  display: grid;
+  gap: 0.65rem;
+  margin: 2rem 0 1rem;
+}
+
+.inspectorLookup label {
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.inspectorLookupRow {
+  display: flex;
+  gap: 0.7rem;
+}
+
+.inspectorLookup input {
+  background: #fffdf9;
+  border: 1px solid #cfc7b9;
+  border-radius: 0.8rem;
+  color: #22211f;
+  flex: 1;
+  font: inherit;
+  min-width: 0;
+  padding: 0.8rem;
+}
+
+.inspectorLookup button {
+  background: #22211f;
+  border: 0;
+  border-radius: 999px;
+  color: #fffdf9;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.7rem 1.1rem;
+}
+
+.inspectorLookup button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.inspectorError {
+  color: #8f2d20;
+  line-height: 1.5;
+}
+
+.inspectorReport {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.inspectorSummary,
+.inspectorCard {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 20px;
+  padding: 1.35rem;
+}
+
+.inspectorSummary {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.inspectorCard {
+  display: grid;
+  gap: 1rem;
+}
+
+.inspectorCard h2 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.inspectorCard p,
+.inspectorHeading p {
+  color: #625d54;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.inspectorHeading {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.inspectorHeading strong {
+  color: #625d54;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.inspectorFact {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.inspectorFact dt {
+  color: #756f63;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspectorFact dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.inspectorFacts,
+.inspectorVersionGrid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.inspectorDegradation {
+  border: 1px solid;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.inspectorDegradation.isClean {
+  background: #e9f3e7;
+  border-color: #9dbe96;
+}
+
+.inspectorDegradation.isDegraded {
+  background: #f7e9e3;
+  border-color: #d1a08e;
+  color: #8f2d20;
+}
+
+.inspectorTableWrap {
+  overflow-x: auto;
+}
+
+.inspectorTable {
+  border-collapse: collapse;
+  min-width: 760px;
+  width: 100%;
+}
+
+.inspectorTable caption {
+  color: #756f63;
+  font-size: 0.8rem;
+  margin-bottom: 0.65rem;
+  text-align: left;
+}
+
+.inspectorTable th,
+.inspectorTable td {
+  border-bottom: 1px solid #e5dfd5;
+  padding: 0.65rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.inspectorTable th {
+  color: #625d54;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.inspectorTable td {
+  font-size: 0.88rem;
+}
+
+.inspectorTable code,
+.inspectorSummary code,
+.inspectorFact code {
+  overflow-wrap: anywhere;
+}
+
+.inspectorId {
+  display: inline-block;
+  margin: 0 0.35rem 0.2rem 0;
+}
+
+.inspectorMuted {
+  color: #756f63;
+}
+
+@media (max-width: 760px) {
+  .inspectorSummary,
+  .inspectorFacts,
+  .inspectorVersionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .gate {
