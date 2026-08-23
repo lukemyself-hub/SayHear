@@ -1,23 +1,34 @@
 /**
- * Run the #63 tiered checks over a captured transcripts file (the #61
+ * Run the #63/#77 tiered checks over a captured transcripts file (the #61
  * baseline format: { capturedAt, scenarios: [{ id, languageVariant, turns }] }).
  *
  *   pnpm exec tsx eval/scenario-pack-v2/check-transcripts.ts \
  *     eval/conversation-text-baseline/run/transcripts.json \
- *     eval/scenario-pack-v2/run/baseline-61-findings.json
+ *     eval/scenario-pack-v2/run/baseline-61-findings.json \
+ *     [eval/scenario-pack-v2/scenarios.json]
+ *
+ * The optional third argument joins the pack's #77 fixtures by scenario id:
+ * memory fixtures contribute the forbidden-mention tokens, stop-signal
+ * fixtures the release turns that close the suppression windows. Transcripts
+ * whose id has no pack entry (or no pack given) run with checker-v1 semantics
+ * for those parts — the frozen #61 run, for example, predates the fixtures.
  *
  * Output is a TieredReport. Every hard-gate hit and advisory candidate is a
  * candidate finding, not a verdict: confirm against the transcript and record
  * FP/FN in ledger.json (rubric §6).
  */
 import { readFile, writeFile } from "node:fs/promises";
-import { assembleReport } from "./tiered-checks";
+import {
+  assembleReport,
+  type ScenarioPack,
+  type ScenarioTurn,
+} from "./tiered-checks";
 
 async function main(): Promise<void> {
-  const [inputPath, outputPath] = process.argv.slice(2);
+  const [inputPath, outputPath, packPathArg] = process.argv.slice(2);
   if (!inputPath || !outputPath) {
     console.error(
-      "usage: tsx eval/scenario-pack-v2/check-transcripts.ts <transcripts.json> <out-findings.json>",
+      "usage: tsx eval/scenario-pack-v2/check-transcripts.ts <transcripts.json> <out-findings.json> [scenarios.json]",
     );
     process.exitCode = 1;
     return;
@@ -27,16 +38,42 @@ async function main(): Promise<void> {
     scenarios: {
       id: string;
       languageVariant: string;
-      turns: {
-        input: { locale: string; text: string };
-        assistantText: string;
-      }[];
+      turns: ScenarioTurn[];
     }[];
   };
+  const pack = packPathArg
+    ? (JSON.parse(await readFile(packPathArg, "utf8")) as ScenarioPack)
+    : null;
+  const packById = new Map(
+    (pack?.scenarios ?? []).map((entry) => [entry.id, entry]),
+  );
 
   const report = assembleReport({
     source: inputPath,
-    scenarios: transcripts.scenarios,
+    scenarios: transcripts.scenarios.map((scenario) => {
+      const fixtureEntry = packById.get(scenario.id);
+      return {
+        id: scenario.id,
+        languageVariant: scenario.languageVariant,
+        turns: scenario.turns,
+        ...(fixtureEntry?.memoryFixture
+          ? {
+              memoryFixture: {
+                forbiddenMentionTokens:
+                  fixtureEntry.memoryFixture.forbiddenMentionTokens,
+              },
+            }
+          : {}),
+        ...(fixtureEntry?.stopSignalExpectation
+          ? {
+              stopSignalExpectation: {
+                releasedAtTurn:
+                  fixtureEntry.stopSignalExpectation.releasedAtTurn,
+              },
+            }
+          : {}),
+      };
+    }),
   });
 
   await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
