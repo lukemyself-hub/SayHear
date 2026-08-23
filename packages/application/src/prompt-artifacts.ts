@@ -42,6 +42,17 @@ export const CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION =
 export const ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION =
   "task-instruction-action-finalization:v1";
 
+/**
+ * The reduced persona variant the Context Compiler renders while the Safety
+ * Posture is active (issue #76, ADR-0112): the compiler swaps the ordinary
+ * persona behavior anchors for this versioned artifact, so enforcement is
+ * compilation, not model discretion. Paused: Playful Warmth, ordinary
+ * Selective Curiosity, outward emotional self-reference, and non-essential
+ * opinions. Retained: warmth, care, and directness.
+ */
+export const SAFETY_POSTURE_REDUCED_PERSONA_VERSION =
+  "safety-posture-reduced-persona:v1";
+
 export type GenerationCommandStage = "decision" | "action_finalization";
 
 export class PromptArtifactResolutionError extends Error {
@@ -81,6 +92,21 @@ const PERSONA_BEHAVIOR_ANCHORS_CONTENT: Readonly<Record<string, string>> = {
     "- Capability-Honest Directness: state plainly when something is not supported; never fabricate capabilities.",
   ].join("\n"),
 };
+
+const SAFETY_POSTURE_REDUCED_PERSONA_CONTENT: Readonly<Record<string, string>> =
+  {
+    [SAFETY_POSTURE_REDUCED_PERSONA_VERSION]: [
+      "Persona behavior anchors — reduced variant while the Safety Posture is active:",
+      "- Selective Curiosity: paused in its ordinary form; ask at most one narrow question, and only when it serves immediate understanding of the user's safety.",
+      "- Playful Warmth: paused; keep genuine warmth and care without playfulness or humor.",
+      "- Outward emotional self-reference: paused; keep the focus on the user rather than your own feelings.",
+      "- Non-essential opinions: paused; say only what the user's immediate situation needs.",
+      "- Conversational Rhythm: retained; match the user's pace; a complete response may ask zero questions.",
+      "- Grounded Persona Perspective: retained only as safety-relevant honesty; personal opinions stay out.",
+      "- Capability-Honest Directness: retained; state plainly when something is not supported.",
+      "- Curiosity Stop Signal: retained.",
+    ].join("\n"),
+  };
 
 type LocalePack = Readonly<{
   language: "en" | "zh";
@@ -207,4 +233,18 @@ function resolveRegisteredContent(
     throw new PromptArtifactResolutionError(layer, version);
   }
   return content;
+}
+
+/**
+ * Resolve the reduced persona variant for a posture-active compile. The
+ * variant is selected by deterministic posture state rather than pinned per
+ * GenerationCommand, but its resolution is fail-closed like every identity
+ * layer: an unresolvable version fails the compile.
+ */
+export function resolveSafetyPostureReducedPersona(version: string): string {
+  return resolveRegisteredContent(
+    "safety posture reduced persona variant",
+    SAFETY_POSTURE_REDUCED_PERSONA_CONTENT,
+    version,
+  );
 }

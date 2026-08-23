@@ -230,3 +230,97 @@ describe("behavior-aware Conversation Text model", () => {
     expect(events.map((event) => event.type)).toEqual(["delta", "completed"]);
   });
 });
+
+describe("behavior-aware Conversation Text model — Safety Posture anchor", () => {
+  const postureInstructions =
+    "Instructions rendered by Context Compiler.\nSafety Posture (deterministic Daily-Session domain state; policy safety-posture:v1): ACTIVE (safety-posture:active)";
+
+  async function collectWithInstructions(
+    model: ReturnType<typeof createBehaviorAwareConversationTextModel>,
+    messages: readonly ConversationTextMessage[],
+    instructions: string,
+    locale = "en-US",
+  ) {
+    const events = [];
+    for await (const event of model.stream({
+      instructions,
+      locale,
+      messages: Object.freeze(messages),
+      model: "behavior-aware-test-model",
+    })) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  it("appends the deterministic anchor to an ordinary response on a posture-active turn", async () => {
+    const model = createBehaviorAwareConversationTextModel({
+      responder: () => ["I am glad you are here."],
+    });
+    const events = await collectWithInstructions(
+      model,
+      [{ revisionId, role: "user", text: "I slept a little better today." }],
+      postureInstructions,
+    );
+    const text = events
+      .filter((event) => event.type === "delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain("I am glad you are here.");
+    expect(text).toContain("988");
+    // The anchor reads as one appended sentence, never a second response.
+    expect(text.startsWith("I am glad you are here.")).toBe(true);
+  });
+
+  it("renders the zh anchor for a zh posture-active turn", async () => {
+    const model = createBehaviorAwareConversationTextModel({
+      responder: () => ["我在听。"],
+    });
+    const events = await collectWithInstructions(
+      model,
+      [{ revisionId, role: "user", text: "今天稍微好一点了。" }],
+      postureInstructions,
+      "zh-Hans-CN",
+    );
+    const text = events
+      .filter((event) => event.type === "delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain("我在听。");
+    expect(text).toContain("12356");
+  });
+
+  it("does not double-anchor the Minimum High-Risk Response on the activation turn", async () => {
+    const model = createBehaviorAwareConversationTextModel({
+      responder: () => ["must not be used"],
+    });
+    const events = await collectWithInstructions(
+      model,
+      [{ revisionId, role: "user", text: "I want to kill myself tonight." }],
+      postureInstructions,
+    );
+    const text = events
+      .filter((event) => event.type === "delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toBe(
+      renderMinimumHighRiskResponse({ kind: "self_harm", locale: "en-US" }),
+    );
+  });
+
+  it("never appends the anchor when the compiled posture is not active", async () => {
+    const model = createBehaviorAwareConversationTextModel({
+      responder: () => ["I hear that this mattered to you."],
+    });
+    const events = await collectWithInstructions(
+      model,
+      [{ revisionId, role: "user", text: "Nobody backed me up in the meeting." }],
+      "Instructions rendered by Context Compiler.",
+    );
+    const text = events
+      .filter((event) => event.type === "delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toBe("I hear that this mattered to you.");
+  });
+});

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 
 import {
   resolvePromptArtifacts,
+  resolveSafetyPostureReducedPersona,
+  SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
   type GenerationCommandStage,
   type ResolvedPromptArtifacts,
 } from "./prompt-artifacts";
@@ -22,6 +24,11 @@ import {
   renderCuriosityStopSignal,
   type CurrentCuriosityStopSignal,
 } from "./curiosity-stop-signal";
+import {
+  activeSafetyPosture,
+  renderSafetyPosture,
+  type CurrentSafetyPosture,
+} from "./safety-posture";
 import type {
   ActionReferenceHandle,
   ActionReferenceTarget,
@@ -78,6 +85,7 @@ export type ContextSourceSnapshot = Readonly<{
   policyVersions: ContextPolicyVersions;
   rollingSummary?: CurrentRollingSummary | null;
   rollingSummaryFailure?: boolean;
+  safetyPosture?: CurrentSafetyPosture | null;
   sourceRevision: number;
 }>;
 
@@ -95,6 +103,7 @@ export type CompiledContextSectionKey =
   | "persona_contract_invariant"
   | "canonical_persona"
   | "persona_behavior_anchors"
+  | "safety_posture"
   | "task_instruction"
   | "output_format"
   | "locale_pack"
@@ -312,6 +321,7 @@ export function createContextCompiler(dependencies: {
         currentExchangeNo: source.dailySession.continuousExchangeNo,
         dialogueState,
         rollingSummary: source.rollingSummary ?? null,
+        safetyPosture: source.safetyPosture ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
       });
       const sections = renderableSections.map(
@@ -407,6 +417,9 @@ export function createContextCompiler(dependencies: {
       const stopSignalSection = source.sections.find(
         (section) => section.key === "curiosity_stop_signal",
       );
+      const safetyPostureSection = source.sections.find(
+        (section) => section.key === "safety_posture",
+      );
       if (
         currentInputs.length !== 1 ||
         !currentInput ||
@@ -415,7 +428,8 @@ export function createContextCompiler(dependencies: {
         rawEventBudget === null ||
         rawEventBudget === undefined ||
         (dialogueStateSection && !dialogueStateSection.reference) ||
-        (stopSignalSection && !stopSignalSection.reference)
+        (stopSignalSection && !stopSignalSection.reference) ||
+        (safetyPostureSection && !safetyPostureSection.reference)
       ) {
         throw new CompiledContextIntegrityError();
       }
@@ -434,6 +448,9 @@ export function createContextCompiler(dependencies: {
           : {}),
         ...(stopSignalSection?.reference
           ? { stopSignalContent: stopSignalSection.reference }
+          : {}),
+        ...(safetyPostureSection?.reference
+          ? { safetyPostureContent: safetyPostureSection.reference }
           : {}),
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
@@ -528,8 +545,28 @@ function createSections(input: {
   dialogueState?: CurrentDialogueState | null;
   dialogueStateContent?: string;
   rollingSummary: CurrentRollingSummary | null;
+  safetyPosture?: CurrentSafetyPosture | null;
+  safetyPostureContent?: string;
   actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
+  // While the Safety Posture is active, enforcement is compilation: the
+  // ordinary behavior anchors are swapped for the versioned reduced variant,
+  // and the `safety_posture` section keeps the real-world support anchor on
+  // every posture-active turn (ADR-0112). `safetyPostureContent` replays the
+  // exact state frozen at compile time for the Provider Egress re-derivation.
+  const activePosture = activeSafetyPosture(
+    input.safetyPosture?.content ?? null,
+  );
+  const safetyPostureSectionContent =
+    input.safetyPostureContent ??
+    (activePosture !== null && input.safetyPosture
+      ? renderSafetyPosture({
+          content: activePosture,
+          locale: input.locale,
+          policyVersion: input.safetyPosture.policyVersion,
+        })
+      : undefined);
+  const reducedPersonaActive = safetyPostureSectionContent !== undefined;
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
     content: string;
@@ -594,11 +631,28 @@ function createSections(input: {
     },
     {
       budgetTokens: null,
-      content: input.promptArtifacts.personaBehaviorAnchors,
+      content: reducedPersonaActive
+        ? resolveSafetyPostureReducedPersona(
+            SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
+          )
+        : input.promptArtifacts.personaBehaviorAnchors,
       key: "persona_behavior_anchors",
-      reference: input.policyVersions.personaBehaviorAnchorsVersion,
+      reference: reducedPersonaActive
+        ? SAFETY_POSTURE_REDUCED_PERSONA_VERSION
+        : input.policyVersions.personaBehaviorAnchorsVersion,
       truncatable: false,
     },
+    ...(safetyPostureSectionContent === undefined
+      ? []
+      : [
+          {
+            budgetTokens: null,
+            content: safetyPostureSectionContent,
+            key: "safety_posture" as const,
+            reference: safetyPostureSectionContent,
+            truncatable: false,
+          },
+        ]),
     {
       budgetTokens: null,
       content: input.promptArtifacts.taskInstruction,

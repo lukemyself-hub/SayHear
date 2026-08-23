@@ -21,9 +21,17 @@ import {
   countFollowUpQuestions,
   CURIOSITY_STOP_SIGNAL_POLICY_VERSION,
   EMPTY_CURIOSITY_STOP_SIGNAL_CONTENT,
+  minimumHighRiskSafetyPostureDetector,
+  SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
+  SAFETY_POSTURE_POLICY_VERSION,
+  applySafetyPostureTurn,
   validateCuriosityStopSignalContent,
+  validateSafetyPostureContent,
   type CuriosityStopSignalContent,
   type CurrentCuriosityStopSignal,
+  type CurrentSafetyPosture,
+  type SafetyPostureContent,
+  type SafetyPostureDetector,
 } from "@sayhear/application";
 import {
   asCompiledContextId,
@@ -146,7 +154,15 @@ export class PostgresConversationResponseRepository
     ConversationResponseRepository,
     ProviderEgressRepository
 {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(
+    private readonly pool: Pool,
+    options: Readonly<{ safetyPostureDetector?: SafetyPostureDetector }> = {},
+  ) {
+    this.safetyPostureDetector =
+      options.safetyPostureDetector ?? minimumHighRiskSafetyPostureDetector;
+  }
+
+  private readonly safetyPostureDetector: SafetyPostureDetector;
 
   public async commitActionDecision(input: {
     completedAt: Date;
@@ -810,6 +826,10 @@ export class PostgresConversationResponseRepository
           sourceRevision: Number(row.source_revision),
         },
       );
+      const safetyPosture = await loadSafetyPostureForContext(client, {
+        dailySessionId: row.daily_session_id,
+        sourceRevision: Number(row.source_revision),
+      });
 
       await client.query("COMMIT");
       return {
@@ -894,6 +914,7 @@ export class PostgresConversationResponseRepository
                 modelConfigVersion: row.rolling_summary_model_config_version,
               },
         rollingSummaryFailure: row.rolling_summary_failed,
+        safetyPosture,
         sourceRevision: Number(row.source_revision),
       };
     } catch (error) {
@@ -1852,6 +1873,22 @@ export class PostgresConversationResponseRepository
           createdAt: input.completedAt,
         });
       }
+      // The Safety Posture turn transition (issue #76) runs on every
+      // committed response: activation on a detected signal, clean-turn
+      // counting, and K-release are all deterministic code inside the same
+      // atomic commit. Detector failure never aborts the response — it
+      // activates nothing, holds any active posture, and raises an alert.
+      await commitSafetyPostureTurnInTransaction(client, {
+        createdAt: input.completedAt,
+        dailySessionId: row.daily_session_id,
+        detector: this.safetyPostureDetector,
+        generationCommandId: input.generationCommandId,
+        currentUserText: row.input_text,
+        inputUserEventRevisionId: row.input_revision_id,
+        locale: row.locale,
+        sourceRevision: Number(row.source_revision) + 1,
+        userId: input.userId,
+      });
       await client.query("COMMIT");
       return {
         eventId: asConversationEventId(eventId),
@@ -2586,6 +2623,269 @@ async function loadCuriosityStopSignalForContext(
   return {
     content: row.content,
     id: row.curiosity_stop_signal_id,
+    policyVersion: row.policy_version,
+    sourceRevision: Number(row.source_revision),
+    versionNo: Number(row.version_no),
+  };
+}
+
+/**
+ * Apply the deterministic Safety Posture turn transition inside the Complete
+ * Assistant Response transaction (issue #76, ADR-0112). A SAVEPOINT keeps a
+ * posture-step failure from aborting the response itself: a failed detector
+ * activates no new posture, any active posture is held untouched, and an
+ * alert row is raised. The same holds for an unreadable previous projection.
+ */
+async function commitSafetyPostureTurnInTransaction(
+  client: PoolClient,
+  input: {
+    createdAt: Date;
+    currentUserText: string;
+    dailySessionId: string;
+    detector: SafetyPostureDetector;
+    generationCommandId: GenerationCommandId;
+    inputUserEventRevisionId: string;
+    locale: string;
+    sourceRevision: number;
+    userId: UserId;
+  },
+): Promise<void> {
+  await client.query("SAVEPOINT safety_posture_step");
+  try {
+    const previous = await client.query<{
+      content: SafetyPostureContent | null;
+      version_no: string;
+    }>(
+      `
+        SELECT version.content, version.version_no
+        FROM current_safety_postures current
+        INNER JOIN safety_postures version
+          ON version.safety_posture_id = current.safety_posture_id
+          AND version.user_id = current.user_id
+          AND version.daily_session_id = current.daily_session_id
+          AND version.source_revision = current.source_revision
+          AND version.version_no = current.version_no
+        WHERE current.daily_session_id = $1
+          AND current.user_id = $2
+        FOR UPDATE OF current, version
+      `,
+      [input.dailySessionId, input.userId],
+    );
+    const previousRow = previous.rows[0];
+    let previousContent: SafetyPostureContent | null = null;
+    if (previousRow?.content !== undefined && previousRow.content !== null) {
+      try {
+        validateSafetyPostureContent(previousRow.content);
+        previousContent = previousRow.content;
+      } catch {
+        // An unreadable prior projection must not reset an active posture:
+        // hold the pointer as-is, change nothing, and raise an alert.
+        await client.query("ROLLBACK TO SAVEPOINT safety_posture_step");
+        await insertSafetyPostureAlert(client, {
+          createdAt: input.createdAt,
+          dailySessionId: input.dailySessionId,
+          generationCommandId: input.generationCommandId,
+          reason: "invalid_previous_projection",
+          userId: input.userId,
+        });
+        return;
+      }
+    }
+
+    let detected: ReturnType<SafetyPostureDetector>;
+    try {
+      detected = input.detector({
+        locale: input.locale,
+        text: input.currentUserText,
+      });
+    } catch {
+      // A failed detector activates nothing and holds any active posture;
+      // the turn-local prompt-layer Minimum High-Risk Response remains the
+      // fallback path (ADR-0112).
+      await client.query("ROLLBACK TO SAVEPOINT safety_posture_step");
+      await insertSafetyPostureAlert(client, {
+        createdAt: input.createdAt,
+        dailySessionId: input.dailySessionId,
+        generationCommandId: input.generationCommandId,
+        reason: "detector_failure",
+        userId: input.userId,
+      });
+      return;
+    }
+
+    const applied = applySafetyPostureTurn({
+      cleanTurnsToRelease: SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
+      content: previousContent,
+      currentUserEventRevisionId: asConversationEventRevisionId(
+        input.inputUserEventRevisionId,
+      ),
+      detected,
+    });
+    if (!applied) {
+      await client.query("RELEASE SAVEPOINT safety_posture_step");
+      return;
+    }
+    validateSafetyPostureContent(applied);
+
+    const versionNo = previousRow ? Number(previousRow.version_no) + 1 : 1;
+    const postureId = createUuidV7(input.createdAt);
+    await client.query(
+      `
+        INSERT INTO safety_postures (
+          safety_posture_id,
+          user_id,
+          daily_session_id,
+          version_no,
+          source_revision,
+          policy_version,
+          content,
+          committed_generation_command_id,
+          created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+      `,
+      [
+        postureId,
+        input.userId,
+        input.dailySessionId,
+        versionNo,
+        input.sourceRevision,
+        SAFETY_POSTURE_POLICY_VERSION,
+        JSON.stringify(applied),
+        input.generationCommandId,
+        input.createdAt,
+      ],
+    );
+    await client.query(
+      `
+        INSERT INTO current_safety_postures (
+          daily_session_id,
+          safety_posture_id,
+          user_id,
+          source_revision,
+          version_no,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (daily_session_id) DO UPDATE SET
+          safety_posture_id = EXCLUDED.safety_posture_id,
+          user_id = EXCLUDED.user_id,
+          source_revision = EXCLUDED.source_revision,
+          version_no = EXCLUDED.version_no,
+          updated_at = EXCLUDED.updated_at
+      `,
+      [
+        input.dailySessionId,
+        postureId,
+        input.userId,
+        input.sourceRevision,
+        versionNo,
+        input.createdAt,
+      ],
+    );
+    await client.query("RELEASE SAVEPOINT safety_posture_step");
+  } catch {
+    // The transition (or its writes) failed after earlier steps: undo only
+    // the posture work, never the Assistant Response commit, and hold
+    // whatever posture state the session already had.
+    await client.query("ROLLBACK TO SAVEPOINT safety_posture_step");
+    await insertSafetyPostureAlert(client, {
+      createdAt: input.createdAt,
+      dailySessionId: input.dailySessionId,
+      generationCommandId: input.generationCommandId,
+      reason: "commit_failure",
+      userId: input.userId,
+    });
+  }
+}
+
+async function insertSafetyPostureAlert(
+  client: PoolClient,
+  input: {
+    createdAt: Date;
+    dailySessionId: string;
+    generationCommandId: GenerationCommandId;
+    reason: "detector_failure" | "invalid_previous_projection" | "commit_failure";
+    userId: UserId;
+  },
+): Promise<void> {
+  await client.query(
+    `
+      INSERT INTO safety_posture_alerts (
+        safety_posture_alert_id,
+        user_id,
+        daily_session_id,
+        generation_command_id,
+        policy_version,
+        reason,
+        occurred_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `,
+    [
+      createUuidV7(input.createdAt),
+      input.userId,
+      input.dailySessionId,
+      input.generationCommandId,
+      SAFETY_POSTURE_POLICY_VERSION,
+      input.reason,
+      input.createdAt,
+    ],
+  );
+}
+
+/**
+ * Read the current Safety Posture projection for Context compilation. The
+ * posture is keyed by Daily Session, so it survives Continuous Exchange
+ * boundaries within the day and a next-day session simply has no row. A
+ * missing projection degrades silently to null (the prompt-layer Minimum
+ * High-Risk Response remains the per-turn fallback), a projection newer than
+ * the frozen compile source is never used, and structurally invalid content
+ * never reaches compilation.
+ */
+async function loadSafetyPostureForContext(
+  client: PoolClient,
+  input: {
+    dailySessionId: string;
+    sourceRevision: number;
+  },
+): Promise<CurrentSafetyPosture | null> {
+  const result = await client.query<{
+    safety_posture_id: string;
+    content: SafetyPostureContent;
+    policy_version: string;
+    source_revision: string;
+    version_no: string;
+  }>(
+    `
+      SELECT
+        version.safety_posture_id,
+        version.content,
+        version.policy_version,
+        version.source_revision,
+        version.version_no
+      FROM current_safety_postures current
+      INNER JOIN safety_postures version
+        ON version.safety_posture_id = current.safety_posture_id
+        AND version.user_id = current.user_id
+        AND version.daily_session_id = current.daily_session_id
+        AND version.source_revision = current.source_revision
+        AND version.version_no = current.version_no
+      WHERE current.daily_session_id = $1
+    `,
+    [input.dailySessionId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  if (Number(row.source_revision) > input.sourceRevision) return null;
+  try {
+    validateSafetyPostureContent(row.content);
+  } catch {
+    return null;
+  }
+  return {
+    content: row.content,
+    id: row.safety_posture_id,
     policyVersion: row.policy_version,
     sourceRevision: Number(row.source_revision),
     versionNo: Number(row.version_no),

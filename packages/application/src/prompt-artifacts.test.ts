@@ -10,6 +10,8 @@ import {
   PERSONA_CONTRACT_INVARIANT_VERSION,
   PromptArtifactResolutionError,
   resolvePromptArtifacts,
+  resolveSafetyPostureReducedPersona,
+  SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
 } from "./prompt-artifacts";
 
 const supportedVersions = {
@@ -163,6 +165,35 @@ describe("prompt artifact resolution", () => {
         locale: "en-US",
         policyVersions: supportedVersions,
       }),
+    ).toThrow(PromptArtifactResolutionError);
+  });
+});
+
+describe("safety posture reduced persona variant", () => {
+  it("resolves the reduced variant from its registered version", () => {
+    const reduced = resolveSafetyPostureReducedPersona(
+      SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
+    );
+    // Exactly the paused set of ADR-0112.
+    for (const paused of [
+      "Playful Warmth",
+      "Selective Curiosity",
+      "emotional self-reference",
+      "Non-essential opinions",
+    ]) {
+      expect(reduced).toContain(paused);
+    }
+    // And exactly the retained trio.
+    for (const retained of ["warmth", "care", "directness"]) {
+      expect(reduced.toLowerCase()).toContain(retained);
+    }
+    // The ordinary anchors the posture pauses are not compiled verbatim.
+    expect(reduced).not.toContain("keep ordinary conversation warm and lively");
+  });
+
+  it("fails closed when the reduced variant version cannot be resolved", () => {
+    expect(() =>
+      resolveSafetyPostureReducedPersona("safety-posture-reduced-persona:vMissing"),
     ).toThrow(PromptArtifactResolutionError);
   });
 });

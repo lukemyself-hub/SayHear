@@ -813,3 +813,208 @@ describe("Context Compiler identity-layer fail-closed resolution", () => {
     expect(saved()).toBe(false);
   });
 });
+
+describe("Context Compiler Safety Posture enforcement", () => {
+  const userId = asUserId("01984477-59a9-7d20-9d97-e588769566e0");
+  const inputRevisionId = asConversationEventRevisionId(
+    "01984477-59a9-7d20-9d97-e588769566e1",
+  );
+
+  function createSnapshotWithPosture(
+    safetyPosture: ContextSourceSnapshot["safetyPosture"],
+    locale = "en-US",
+  ): ContextSourceSnapshot {
+    return {
+      dailySession: {
+        activityState: "active",
+        closurePolicyVersion: "daily-session-inactivity:v1",
+        continuousExchangeNo: 2,
+        id: asDailySessionId("01984477-59a9-7d20-9d97-e588769566e2"),
+      },
+      dialogueRevision: 1,
+      events: [
+        {
+          actor: "user",
+          locale,
+          revisionId: inputRevisionId,
+          sequence: 1,
+          text: "I want to kill myself tonight.",
+        },
+      ],
+      generationStage: "decision",
+      inputRevisionId,
+      locale,
+      policyVersions: {
+        canonicalPersonaVersion: "canonical-persona:v1",
+        localePolicyVersion:
+          locale === "zh-CN" ? "locale-pack-zh:v1" : "locale-pack-en:v1",
+        outputFormatVersion: "conversation-output:v1",
+        personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+        personaContractInvariantVersion: "persona-contract-invariant:v1",
+        productPolicyVersion: "product-policy:v1",
+        relationshipPolicyVersion: "relationship-boundary:v1",
+        safetyPolicyVersion: "minimum-high-risk-response:v1",
+        taskInstructionVersion: "task-instruction-decision:v1",
+      },
+      safetyPosture,
+      sourceRevision: 2,
+    };
+  }
+
+  function activePosture(
+    cleanTurnCount = 0,
+  ): NonNullable<ContextSourceSnapshot["safetyPosture"]> {
+    return {
+      content: {
+        cleanTurnCount,
+        evidence: {
+          activatedUserEventRevisionId: asConversationEventRevisionId(
+            "01984477-59a9-7d20-9d97-e588769566e3",
+          ),
+          lastTurnUserEventRevisionId: asConversationEventRevisionId(
+            "01984477-59a9-7d20-9d97-e588769566e3",
+          ),
+        },
+        kind: "self_harm",
+        releasedBy: null,
+        state: "active",
+      },
+      id: "01984477-59a9-7d20-9d97-e588769566e4",
+      policyVersion: "safety-posture:v1",
+      sourceRevision: 1,
+      versionNo: 1,
+    };
+  }
+
+  function createCompilerCapturing(
+    snapshot: ContextSourceSnapshot,
+  ): Readonly<{
+    compiler: ReturnType<typeof createContextCompiler>;
+    savedInput: () =>
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+  }> {
+    let savedInput:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-23T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "safety-posture-context-secret",
+      rawEventTokenBudget: 4_000,
+      repository: {
+        async loadContextSource() {
+          return snapshot;
+        },
+        async saveCompiledContext(input) {
+          savedInput = input;
+          return {
+            degradedReason: input.degradedReason,
+            dialogueRevision: input.dialogueRevision,
+            id: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566e5"),
+            locale: input.locale,
+            referencedRevisionIds: input.referencedEvents.map(
+              (event) => event.revisionId,
+            ),
+            sourceRevision: input.sourceRevision,
+            statistics: {
+              rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+              selectedEventCount: input.referencedEvents.length,
+              totalTokens: input.totalTokens,
+            },
+          };
+        },
+      } satisfies ContextCompilerRepository,
+    });
+    return { compiler, savedInput: () => savedInput };
+  }
+
+  const compileInput = {
+    generationCommandId: asGenerationCommandId(
+      "01984477-59a9-7d20-9d97-e588769566e6",
+    ),
+    interactionTurnId: asInteractionTurnId("01984477-59a9-7d20-9d97-e588769566e7"),
+    userId,
+  };
+
+  it("compiles the reduced persona variant and the anchor section while the posture is active", async () => {
+    const { compiler, savedInput } = createCompilerCapturing(
+      createSnapshotWithPosture(activePosture()),
+    );
+    await compiler.compile(compileInput);
+    const saved = savedInput()!;
+    const anchors = saved.sections.find(
+      (section) => section.key === "persona_behavior_anchors",
+    );
+    expect(anchors?.reference).toBe("safety-posture-reduced-persona:v1");
+    const posture = saved.sections.find(
+      (section) => section.key === "safety_posture",
+    );
+    expect(posture?.reference).toContain("safety-posture:active");
+    expect(posture?.reference).toContain("988");
+    // The posture section sits directly after the reduced anchors.
+    expect(posture?.ordinal).toBe((anchors?.ordinal ?? 0) + 1);
+  });
+
+  it("keeps ordinary persona and omits the posture section while default or released", async () => {
+    for (const safetyPosture of [
+      null,
+      {
+        ...activePosture(2),
+        content: {
+          ...activePosture(2).content,
+          releasedBy: {
+            userEventRevisionId: asConversationEventRevisionId(
+              "01984477-59a9-7d20-9d97-e588769566e8",
+            ),
+          },
+          state: "released" as const,
+        },
+      },
+    ]) {
+      const { compiler, savedInput } = createCompilerCapturing(
+        createSnapshotWithPosture(safetyPosture),
+      );
+      await compiler.compile(compileInput);
+      const saved = savedInput()!;
+      expect(
+        saved.sections.find((section) => section.key === "safety_posture"),
+      ).toBeUndefined();
+      expect(
+        saved.sections.find(
+          (section) => section.key === "persona_behavior_anchors",
+        )?.reference,
+      ).toBe("persona-behavior-anchors:v1");
+    }
+  });
+
+  it("renders the zh anchor from the same whitelist and replays the frozen posture exactly at egress", async () => {
+    const { compiler, savedInput } = createCompilerCapturing(
+      createSnapshotWithPosture(activePosture(1), "zh-CN"),
+    );
+    await compiler.compile(compileInput);
+    const saved = savedInput()!;
+    const posture = saved.sections.find(
+      (section) => section.key === "safety_posture",
+    );
+    expect(posture?.reference).toContain("12356");
+    expect(posture?.reference).toContain("400-161-9995");
+    // The Provider Egress re-derivation replays the frozen posture state —
+    // including the reduced variant swap — without any re-read of state.
+    const payload = compiler.renderPermittedPayload({
+      compilerVersion: saved.compilerVersion,
+      generationStage: "decision",
+      integrity: saved.integrity,
+      locale: saved.locale,
+      policyVersions: saved.policyVersions,
+      referencedEvents: saved.referencedEvents,
+      sections: saved.sections,
+      totalTokens: saved.totalTokens,
+    });
+    expect(payload.instructions).toContain("safety-posture:active");
+    expect(payload.instructions).toContain("12356");
+    expect(payload.instructions).toContain(
+      "Persona behavior anchors — reduced variant",
+    );
+  });
+});
