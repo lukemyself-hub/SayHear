@@ -3,7 +3,8 @@
 ## TL;DR
 
 - 测试覆盖领域不变量、集成、端到端、Replay、隐私与故障注入。
-- Internal Core 按 Foundation、1A.1–1A.4、1B.1–1B.2 顺序交付。
+- Internal Core 按 Foundation、1A.1、1A.2、1A.2P、1A.3a、1A.3b、1A.4、1B.1–1B.2
+  顺序交付（ADR-0113）。
 - Definition of Done 同时覆盖产品闭环、领域正确性、可靠性、Voice、隐私和 AI 质量。
 - Redis、Python Worker、Temporal、专用向量库和微服务只在量化触发条件满足后升级。
 
@@ -229,7 +230,7 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | 半年后再次去东京 | 默认新 Episode；不能仅凭地点或主题相同 merge |
 | 两次东京行程都可能匹配当前表达 | Candidate 保持 `unresolved`；不 merge，也不为补 Episode 主动追问 |
 | Episode Candidate 未解析或 Builder 失败 | Understanding Response、Journal 与基础 Memory Claim 继续，不形成硬依赖 |
-| 1A.3 Self Entity migration 或 External Account provisioning 重试 | 同一 User 仍只有一个 active Self Entity 与一个 binding |
+| 1A.3a Self Entity migration 或 External Account provisioning 重试 | 同一 User 仍只有一个 active Self Entity 与一个 binding |
 | 用户说“我和小王是同事” | “我”确定性绑定 Self Entity；小王绑定独立人物 Entity；关系进入 Relationship Memory Claim |
 | 尝试把 Self Entity 与普通人物 Entity merge / split | 领域约束拒绝；不改变 Account–Self Entity binding |
 | 另一用户提到当前用户本人 | 创建或解析为对方 user scope 内的私人 Entity；不跨用户绑定到 Self Entity |
@@ -310,7 +311,7 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | 1A.1 已显示部分 text 后崩溃 | Turn 标记 `interrupted`；无 Assistant Event；显式 Retry |
 | 模型完成但 Assistant revision 提交前崩溃 | `result_unknown` 后收敛为 `interrupted`；不猜测正文 |
 | Provider timeout 后重试成功，旧结果晚到 | 两个 attempt 可审计，只有一个 authoritative result |
-| Model config 在同一 turn 中途切换 | 1A.1–1A.3 与技术重试保持冻结 config；1A.4 只有零可见输出且当前 Policy 已授权时可创建一次 fallback attempt，其他切换拒绝 |
+| Model config 在同一 turn 中途切换 | 1A.1–1A.3b 与技术重试保持冻结 config；1A.4 只有零可见输出且当前 Policy 已授权时可创建一次 fallback attempt，其他切换拒绝 |
 | 两个 runtime 并发尝试同一 Continuous Exchange handover | binding 唯一键只允许一个事务取得接管权；冲突方不 dispatch 第二次 fallback |
 | fallback 接管后进程重启或创建下一 Turn | 从持久 exchange binding 冻结同一 fallback config 与 Policy；不切回 Champion，不从最新 attempt 猜测 |
 | Journal 生成时新增 turn | 旧 Draft 可审计但不能发布；新 revision 创建新 command |
@@ -322,7 +323,7 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | Future granular deletion 清除 Entity 的一条非唯一 Evidence | 保留稳定 Entity ID，只从剩余 Evidence 重建投影 |
 | Future granular deletion 清除被历史 Version 引用的 source | 正文/ciphertext 物理 purge，仅留无正文 envelope |
 | 1A.2 Full Purge 与 Journal 并发 | 在途结果被 fencing，内容不复活 |
-| 1A.3 Full Purge 与 Reflection / Memory 并发 | 在途结果被 fencing，Claim 与 Profile 不复活 |
+| 1A.3a / 1A.3b Full Purge 与 Memory / Reflection 并发 | 在途结果被 fencing，Claim 与 Profile 不复活 |
 | Source 已读取到内存，随后删除先于 Provider dispatch | Egress claim 失败，Provider 收不到正文 |
 | Egress 已标记 dispatched，随后删除 | 记录 Provider disposition，尽力 cancel，删除停在 retention_pending |
 | 1B.1 Workflow 服务超过音频到期时间不可用 | 到期后不可读取，兜底策略最终删除 |
@@ -482,44 +483,74 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 1A.2 的主闭环是 Evidence 完整、可自动交付的同日第三人称 Journal，并同时验证用户
 对 current Journal 发起的受限 Regeneration 仍复用相同事实、验证与发布边界。Entity、
 Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由临时文本推断伪造稳定
-实体；跨日人物连续性和“与过去记忆的联系”由 1A.3 验收。
+实体；跨日人物连续性和“与过去记忆的联系”由 1A.3a 验收。
 
-### Core Flow 1A.3：Entity 与长期 Memory
+### Core Flow 1A.2P：Persona & Safety
 
-- Entity / EntityVersion / EntityMention / bilingual alias；
-- Episode / EpisodeVersion；
-- Open Loop / OpenLoopVersion；
-- Proactive Follow-up State / Version；
-- Reflection / Claim logical ID 与 immutable Version ID；
-- `sh.*` semantic namespace registry；
-- Internal Candidate Review Tool、Predicate Change Proposal、terminal Candidate
-  7 天内容期限与无正文 audit envelope；
-- Entity / Reflection / Memory role Champion config；
-- fast memory candidate；
-- Daily / Weekly ReflectionVersion；
-- Web 开发者工具中的只读 Reflection Inspector；
-- Weekly Consolidation；
-- Memory Claim / ClaimVersion / localized projection；
-- Relationship Resolver Hint 与人物卡片 projection；
-- LLM based Profile Projection、版本化 Profile Prompt、Claim lineage 与
-  manual / weekly / trust-boundary refresh；
-- Embedding 与 pgvector retrieval；
-- Memory retrieval 与后续对话召回；
-- Memory Correction、Memory Forget Request 与 Memory Source Explanation，以及
-  对应的 Conversation ActionDefinition / typed handler；
-- Full Purge 扩展到 Entity、Episode、Open Loop、Proactive Follow-up State、
-  Reflection、Memory、Profile、Embedding 与相关索引。
+ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0112 中
+不依赖 memory 的全部编译输入，冻结新基线后才进入 1A.3a。
+
+- 三块式 persona artifact（Persona Contract Invariant / Canonical Persona /
+  operational behavior anchors）与 canonical Persona、locale pack 第一版
+  实内容，每层独立版本化；
+- 按 GenerationCommand 阶段区分的 task instruction；
+- Safety Posture：Daily Session 确定性状态、版本化检测、K=2 干净 turn 自动
+  解除与姿态激活期的 reduced persona 变体（ADR-0112）；
+- session 级 Curiosity Stop Signal 停止投影与 proactive-follow-up 使用投影；
+- DialogueState 六语义字段 v2 干净替换：旧字段不保留读路径，不回填、不批量
+  重写历史输出（ADR-0111）；
+- 安全资源 whitelist 统一为单一版本化常量，生产锚点渲染与行为契约硬门禁同源；
+- 行为契约分层检查器与 scenario pack fixture 按新姿态规则更新，作为本段及
+  后续策略版本变更的发布证据通道；
+- Internal Portal 只读 Context Inspector：sections、budget、degradation
+  reason、DialogueState evidence 与 Safety Posture 状态；检索候选面板待
+  1A.3a 扩展；
+- 上线为 CompiledContext 内版本 pin 的直接切换，回滚即重新 pin 旧版本；
+  不引入 feature flag 或双跑。
 
 退出条件：
 
-- Entity / Episode / Claim / Reflection 的历史 revision 可精确读取；
-- Episode 100% 有明确现实事件 User Evidence；0 个 Episode 由 Conversation、
-  Daily Session、一般话题、地点词或情绪自动创建；跨 Session 续接只在 anchor
-  唯一时发生，unresolved Candidate 不阻止 Journal 或基础 Memory；
-- 每个 User 在进入 1A.3 后恰好拥有一个 active Self Entity；migration /
+- 行为契约三项发布证据全部满足，且盲评子集上「生命力」或「温暖关心」至少
+  一个维度的中位数严格优于 #61 冻结基线；不满足则继续迭代，不合入
+  （ADR-0113）；
+- persona / locale 版本解析失败时编译 fail closed，身份层不缺席上线；
+- Safety Posture 激活后跨 Continuous Exchange 存活、当日结束失效；连续
+  2 个干净 turn 自动解除，显式安全声明计为一个干净 turn，新信号重置计数；
+  检测失败不激活新姿态、保持已有姿态并告警；
+- Curiosity Stop Signal 停止投影只在用户重提或提供新实质内容时解除；
+- 硬门禁（追问限额、安全 turn 锚点与 whitelist 数字、CJK / ASCII 标点卫生）
+  全 locale 100% 通过；
+- 六字段 DialogueState 每字段带 evidence 与 confidence；历史
+  GenerationCommand 保留原版本标签；
+- #61 thin-persona 冻结运行永久保留为改革前基线；本段合入后的冻结运行成为
+  1A.3a 对比的 incumbent 基线。
+
+### Core Flow 1A.3a：Memory & Recall
+
+- Entity / EntityVersion / EntityMention / bilingual alias；
+- Memory Claim / ClaimVersion / localized projection；
+- Relationship Resolver Hint 与人物卡片 projection；
+- `sh.*` semantic namespace registry 初始集合；
+- fast memory candidate；
+- Entity / Memory role Champion config；
+- Embedding 与 pgvector retrieval；
+- Memory retrieval 与后续对话召回；版本化预算 v1（Person Portrait ≤3、
+  检索 ≤2、memory 类合计 ≤5）与逐条 Correction / Forget / contested /
+  dormant fence（ADR-0111）；
+- Person Portrait 编译与 retrieval manifest；检索失败按降级原因继续对话，
+  空 Portrait 静默省略，不编造；
+- “只引用注入证据” grounding guard（#62 召回越界对策）；
+- Memory Correction、Memory Forget Request 与 Memory Source Explanation，以及
+  对应的 Conversation ActionDefinition / typed handler；
+- Context Inspector 扩展检索候选与选择 / 拒绝原因面板；
+- Full Purge 扩展到 Entity、Memory、Embedding 与相关索引。
+
+退出条件：
+
+- Entity / Claim 的历史 revision 可精确读取；
+- 每个 User 在进入 1A.3a 后恰好拥有一个 active Self Entity；migration /
   provisioning 幂等，Self Entity 不参与 merge / split，第一人称引用可确定性绑定；
-- 所有 Claim / ReflectionStatement Evidence 都能展开到 final / corrected
-  User Event Revision；
+- 所有 Claim Evidence 都能展开到 final / corrected User Event Revision；
 - Entity label 变化不改变 ID，同名不自动合并，跨语言 alias 可以解析为同一 Entity；
 - 人物关系 100% 由有效 User Evidence 支撑并保存为具有时间有效性的 Objective
   Memory Claim；每种可独立成立的关系拥有一个 logical Claim，同一关系的状态变化
@@ -564,17 +595,11 @@ Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由�
   模型工具或被相近 Action 替代；
 - `needs_review` 不使整篇 Journal 下架；受影响 Statement 暂停 Entity / Recall
   使用，并只在版本化新 Evidence、用户纠正或用户查看时幂等重检；
-- Entity 身份变化立即使受影响 Claim 退出 Recall / Profile；只有新的
+- Entity 身份变化立即使受影响 Claim 退出 Recall；只有新的
   ClaimVersion 通过 Entity 与 Evidence 复核后恢复，merge 不机械累加 confidence；
 - 高置信度 Claim 100% 有有效 Evidence，用户生活事实 0% 由 Assistant /
   System Event 支撑；
-- Reflection 提出的 Candidate 100% 继承底层 Evidence ID；
-- Entity、Claim、Reflection 的 logical ID 与 Version ID 不混用；
-- Reflection Inspector 100% 能区分 Daily / Weekly 与 current / non-current
-  ReflectionVersion，展开 Statement 到底层 User Evidence，并追踪 Candidate
-  disposition 及其经有效 ClaimVersion 对 Profile Projection 的影响；Inspector
-  0 个 Reflection、Candidate、Claim 或 Profile 写入口，Phase 1 不建设独立的
-  用户式 Reflection 页面；
+- Entity、Claim 的 logical ID 与 Version ID 不混用；
 - 一条通过准入校验的直接、明确 User Evidence 可以创建
   `objective + confirmed` Claim，0 个重复次数门槛；模型推断只能创建
   `impression + inferred`，0 个 `observed` Claim 或 Qualifier；
@@ -590,6 +615,53 @@ Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由�
 - Rejected Memory Candidate 100% 记录 reason 与 disposition policy version；
   0 个 Candidate 因 Registry 更新、重复抽取、时间或 confidence 自动复活，
   0 个相同 Evidence 与语义目标通过重复 Candidate 绕过 rejection；
+- 新旧 Claim 值 100% 先按 Registry scope、时间语义与 cardinality 路由；明确
+  变化和 Correction 创建新 ClaimVersion，允许并存的值不冲突；真正无法消解的
+  互斥值 100% 进入 `contested + review_due` 并退出 Recall / Embedding，
+  0 个冲突仅凭新旧顺序或 confidence 自动决胜；
+- Objective Memory 0% 因未提及时长降低 confidence；AI Impression 100% 按
+  Registry review policy 复核，缺少 fresh Evidence 时通过新 ClaimVersion
+  进入 dormant 并退出所有主动使用，恢复必须重新满足跨 Session admission；
+- Objective Memory 与 AI Impression 使用不同召回语言；
+- 从第一条可召回 Claim 起，Correction、whole-Claim / Qualifier-level Forget、
+  Memory Forget Reversal 与 Source Explanation 即时成立；
+- 跨日召回准确、克制，不因同名或低置信度推断制造错误连续性；召回只引用
+  注入证据，memory fixture 场景中漏召回与越界引用都是缺陷（行为契约跨日
+  记忆判据转正）；
+- Full Purge 演练覆盖 Entity、Memory 与 Embedding 数据面，旧 Claim、
+  Embedding 或 Workflow 结果不能复活。
+
+### Core Flow 1A.3b：Continuation & Reflection
+
+- Episode / EpisodeVersion；
+- Open Loop / OpenLoopVersion；
+- Proactive Follow-up State / Version；
+- Reflection logical ID 与 immutable ReflectionVersion；
+- Daily / Weekly ReflectionVersion 与 Weekly Consolidation；
+- Web 开发者工具中的只读 Reflection Inspector；
+- Predicate Registry 治理：Internal Candidate Review Tool、Predicate Change
+  Proposal、terminal Candidate 7 天内容期限与无正文 audit envelope；
+- Reflection role Champion config；
+- LLM based Profile Projection、版本化 Profile Prompt、Claim lineage 与
+  manual / weekly / trust-boundary refresh；
+- Full Purge 扩展到 Episode、Open Loop、Proactive Follow-up State、
+  Reflection、Profile 与相关索引。
+
+退出条件：
+
+- Episode / Reflection 的历史 revision 可精确读取；
+- Episode 100% 有明确现实事件 User Evidence；0 个 Episode 由 Conversation、
+  Daily Session、一般话题、地点词或情绪自动创建；跨 Session 续接只在 anchor
+  唯一时发生，unresolved Candidate 不阻止 Journal 或基础 Memory；
+- 所有 ReflectionStatement Evidence 都能展开到 final / corrected
+  User Event Revision；
+- Reflection 提出的 Candidate 100% 继承底层 Evidence ID；
+- Entity、Claim、Reflection 的 logical ID 与 Version ID 不混用；
+- Reflection Inspector 100% 能区分 Daily / Weekly 与 current / non-current
+  ReflectionVersion，展开 Statement 到底层 User Evidence，并追踪 Candidate
+  disposition 及其经有效 ClaimVersion 对 Profile Projection 的影响；Inspector
+  0 个 Reflection、Candidate、Claim 或 Profile 写入口，Phase 1 不建设独立的
+  用户式 Reflection 页面；
 - `ambiguous / unmapped` Candidate 100% 由版本化确定性 policy 判断是否
   Predicate Review Eligible；LLM 0% 批准 eligibility、Predicate Entry 或
   Registry release，人工批准后的 Candidate 100% 重新通过正常 mapping 与 admission；
@@ -618,13 +690,6 @@ Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由�
 - rejected Proposal 100% 不含 subject `user_id`、Evidence、具体 value、原话或
   Entity；reviewer principal 只作治理审计；
   Full Purge 100% 清除 Candidate link，0% 通过 Proposal 恢复用户内容；
-- 新旧 Claim 值 100% 先按 Registry scope、时间语义与 cardinality 路由；明确
-  变化和 Correction 创建新 ClaimVersion，允许并存的值不冲突；真正无法消解的
-  互斥值 100% 进入 `contested + review_due` 并退出 Recall / Profile /
-  Embedding，0 个冲突仅凭新旧顺序或 confidence 自动决胜；
-- Objective Memory 0% 因未提及时长降低 confidence；AI Impression 100% 按
-  Registry review policy 复核，缺少 fresh Evidence 时通过新 ClaimVersion
-  进入 dormant 并退出所有主动使用，恢复必须重新满足跨 Session admission；
 - Open Loop 100% 有 direct User Evidence 与有限 `expires_at`，0 个普通话题、
   情绪或 Assistant follow-up intent 创建 Loop；closed / expired Loop 0% 进入
   Context、Profile、通知或任务型输出；
@@ -633,9 +698,6 @@ Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由�
 - 每个 `daily_session_id + continuous_exchange_no` 最多一个 Proactive Follow-up；
   直接任务、紧急 / 高风险状态和无合格 target 时 0 个强制追问；用户停止信号
   100% 创建 target-level suppression，只有用户重提或新相关 Evidence 才解除；
-- Objective Memory 与 AI Impression 使用不同召回语言；
-- 从第一条可召回 Claim 起，Correction、whole-Claim / Qualifier-level Forget、
-  Memory Forget Reversal 与 Source Explanation 即时成立；
 - Profile eligible set 100% 只含当前有效、active、未被 Forget 且 EntityVersion
   有效的 ClaimVersion；Candidate、`contested`、`review_due`、`dormant`、
   Open Loop 与 Reflection 原文 0% 进入 Profile；100% active sensitive Claim
@@ -656,9 +718,8 @@ Episode 与长期 Memory 尚未出现，不阻止 Journal 发布，也不能由�
 - Correction、Forget、`contested`、`dormant`、Entity 失效或删除 100% 在读取路径
   立即阻止旧 Profile 展示，并自动触发绕过普通间隔的安全重建；重建失败时 0 个含
   失效内容的旧 Bio 回退展示；
-- 跨日召回准确、克制，不因同名或低置信度推断制造错误连续性；
-- Full Purge 演练覆盖全部 1A.3 数据面，旧 Claim、Embedding 或 Workflow
-  结果不能复活。
+- Full Purge 演练覆盖全部 1A.3 数据面（含 Episode、Open Loop、Reflection、
+  Profile），旧 Claim、Embedding 或 Workflow 结果不能复活。
 
 ### Core Flow 1A.4：Replay
 
@@ -855,9 +916,9 @@ Talk
 - Replay 无正式写入权限；
 - 1A.2 Internal Owner Full Purge 有 active-system receipt，并传播到
   Conversation、Evidence、Summary、DialogueState、Journal 与全部当期派生层；
-- 1A.3、1A.4、1B.1 和 1B.2 分别把 Full Purge 覆盖扩展到 Open Loop /
-  Proactive Follow-up State / 长期 Memory、Replay、音频 / transcript 与
-  delivery 数据；
+- 1A.3a、1A.3b、1A.4、1B.1 和 1B.2 分别把 Full Purge 覆盖扩展到 Entity /
+  长期 Memory / Embedding、Episode / Open Loop / Proactive Follow-up State /
+  Reflection / Profile、Replay、音频 / transcript 与 delivery 数据；
 - 最小 purge marker 能阻止 Internal Core 旧备份未经重新应用删除状态就恢复上线；
 - Internal Core 不提供单条 Conversation / Journal 删除，也不对外声称
   `fully_expired`；完整 Account Deletion 与备份恢复演练按 External MVP Gate 验收。

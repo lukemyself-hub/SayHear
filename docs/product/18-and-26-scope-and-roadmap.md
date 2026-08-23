@@ -4,7 +4,8 @@
 
 - Phase 1 是单 Internal Owner Account 的 Internal Core，先验证 Agent Core。
 - Phase 2 是首次面向真实外部用户的 Web-only External MVP。
-- Internal Core 依次交付 Text、Journal、Entity/Memory、Replay，再进入 Realtime Voice。
+- Internal Core 依次交付 Text、Journal、Persona & Safety、Entity/Memory（两段）、
+  Replay，再进入 Realtime Voice（ADR-0113）。
 - 正式 iOS 在 Web 初步验证核心产品价值后再引入。
 
 ## Status
@@ -38,8 +39,9 @@ Internal Core 仅供内部自用，由 Core Flow 1A 和 1B 构成。Phase 1 默�
   明确显示失败并允许重试；
 - 内部数据的隐私、删除与审计基础。
 
-Internal Core 不建设临时 Push-to-Talk 产品路径。先用 Text 完成 Journal、Entity、
-Episode、Reflection、长期 Memory、未来召回和 Replay，再直接进入 Realtime Voice；
+Internal Core 不建设临时 Push-to-Talk 产品路径。先用 Text 完成 Journal、
+Persona 与安全基线、Entity、Episode、Reflection、长期 Memory、未来召回和
+Replay，再直接进入 Realtime Voice；
 Realtime 不可用时保留 Text 作为明确降级路径。
 
 Internal Core 不等于 External MVP，也不验证外部需求、留存、付费或消费者 UI。

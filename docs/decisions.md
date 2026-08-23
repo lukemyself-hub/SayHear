@@ -81,6 +81,7 @@ Accepted
 - [`0108`](adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md)：Canonical Persona 以慈悲陪伴建立体验，但不建立需要维护的关系身份
 - [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除（已被 0112 取代）
 - [`0112`](adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)：Persona 安全姿态按 Daily Session 存活，连续干净 turn 自动解除
+- [`0113`](adr/0113-persona-and-safety-precedes-memory-recall.md)：1A.2P Persona & Safety 先于 Memory & Recall 交付，原 1A.3 拆为 1A.3a / 1A.3b，后续编号不变
 
 ### 行为评测
 

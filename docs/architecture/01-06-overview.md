@@ -62,7 +62,8 @@ Proposed
 - 正式实时媒体层用 LiveKit Cloud Agents，Vercel 不承担常驻音频 Worker；
 - 1A.1 只使用一个配置化的 Conversation Text Champion 和一个 Provider adapter；
   1A.2 随 Journal 引入 Role-based Model Registry 和首个受限 Conversation Action
-  （Journal Regeneration），1A.3 增加 Entity / Memory roles，1A.4 再通过显式 Replay
+  （Journal Regeneration），1A.3a 增加 Entity / Memory roles、1A.3b 增加
+  Reflection role，1A.4 再通过显式 Replay
   开放多 Provider、Challenger 与已验证 fallback，不自动 Shadow 私人对话；
 - 1A.1 所有模型调用经过模块化单体内部唯一的 Provider Egress Port；
   独立 Replay / Voice 运行时出现前再按信任边界抽离 Provider Egress Gateway；
@@ -86,8 +87,9 @@ Proposed
   才算 Core Flow 1B 正式完成；
 - 删除能力随实际数据面分阶段扩展：Foundation / 1A.1 只建立 owner、epoch、
   Egress、日志和备份窗口等第一天隐私边界；1A.2 开始提供 operator-only
-  Internal Owner Full Purge，1A.3、1A.4、1B.1 和 1B.2 依次覆盖长期 Memory、
-  Replay、音频 / transcript 与 delivery 数据；消费者 Account Deletion、完整
+  Internal Owner Full Purge，1A.3a、1A.3b、1A.4、1B.1 和 1B.2 依次覆盖
+  Entity / 长期 Memory、Episode / Reflection / Profile、Replay、音频 /
+  transcript 与 delivery 数据；消费者 Account Deletion、完整
   ledger 和备份防复活演练属于 External MVP 门槛；
 - 内部音频 72 小时后不可访问，应用目标在随后 15 分钟内物理删除，
   4-day S3 Lifecycle 只作独立兜底而非精确删除承诺；
@@ -143,8 +145,9 @@ Journal 与 Memory 的长期价值后再引入。
 - 多模型 Replay；
 - 内部诊断与评估。
 
-Core Flow 1A 按 1A.1 Text Foundation、1A.2 Journal、1A.3 Entity 与长期
-Memory、1A.4 Replay 交付。只有这些核心价值链路完成后才进入 1B，不使用临时
+Core Flow 1A 按 1A.1 Text Foundation、1A.2 Journal、1A.2P Persona & Safety、
+1A.3a Memory & Recall、1A.3b Continuation & Reflection、1A.4 Replay 交付
+（ADR-0113）。只有这些核心价值链路完成后才进入 1B，不使用临时
 Push-to-Talk 作为过渡产品。
 
 #### Core Flow 1B.1：Realtime Transport Baseline
