@@ -821,7 +821,7 @@ describe("Context Compiler Safety Posture enforcement", () => {
   );
 
   function createSnapshotWithPosture(
-    safetyPosture: ContextSourceSnapshot["safetyPosture"],
+    safetyPosture: NonNullable<ContextSourceSnapshot["safetyPosture"]> | null,
     locale = "en-US",
   ): ContextSourceSnapshot {
     return {
