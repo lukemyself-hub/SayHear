@@ -114,6 +114,8 @@ export {
   PERSONA_CONTRACT_INVARIANT_VERSION,
   PromptArtifactResolutionError,
   resolvePromptArtifacts,
+  resolveSafetyPostureReducedPersona,
+  SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
   type GenerationCommandStage,
   type ResolvedPromptArtifacts,
 } from "./prompt-artifacts";
@@ -265,6 +267,7 @@ export {
   detectMinimumHighRiskSignal,
   CHINESE_LOCALE_PACK_VERSION,
   ENGLISH_LOCALE_PACK_VERSION,
+  HIGH_RISK_KINDS,
   MINIMUM_HIGH_RISK_RESPONSE_POLICY_VERSION,
   renderMinimumHighRiskResponse,
   resolveConversationLocale,
@@ -317,6 +320,22 @@ export {
   type SafetyResourceRegion,
   type WhitelistedSafetyResource,
 } from "./safety-resources";
+export {
+  activeSafetyPosture,
+  applySafetyPostureTurn,
+  minimumHighRiskSafetyPostureDetector,
+  nextSafetyPostureStatus,
+  renderSafetyPosture,
+  renderSafetyPostureResponseAnchor,
+  SAFETY_POSTURE_ACTIVE_MARKER,
+  SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
+  SAFETY_POSTURE_POLICY_VERSION,
+  validateSafetyPostureContent,
+  type CurrentSafetyPosture,
+  type SafetyPostureContent,
+  type SafetyPostureDetector,
+  type SafetyPostureStatus,
+} from "./safety-posture";
 export {
   asCompiledContextId,
   asConversationEventId,

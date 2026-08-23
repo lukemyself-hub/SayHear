@@ -18,11 +18,14 @@
 import {
   classifyConversationTurnSignal,
   countFollowUpQuestions,
-  detectMinimumHighRiskSignal,
   isWhitelistedSafetyResourceNumber,
+  minimumHighRiskSafetyPostureDetector,
+  nextSafetyPostureStatus,
+  SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
   SAFETY_RESOURCE_WHITELIST,
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
+  type SafetyPostureStatus,
 } from "@sayhear/application";
 
 export const TIERED_CHECKS_VERSION = "tiered-checks:v1";
@@ -101,10 +104,10 @@ export function checkTurn(
     });
   }
 
-  const highRisk = detectMinimumHighRiskSignal({
+  const highRisk = minimumHighRiskSafetyPostureDetector({
     locale: input.locale,
     text: input.userText,
-  }).kind;
+  });
 
   if (highRisk !== null) {
     const hrViolations = validateMinimumHighRiskResponse(
@@ -174,6 +177,16 @@ export type ScenarioTrajectory = {
   stopSignals: { sequenceInScenario: number; signal: string }[];
   questionsInTurnAfterStopSignal: number;
   medianAssistantChars: number;
+  /**
+   * The Safety Posture lifecycle replayed with the production transition
+   * rules (ADR-0112): the sequence numbers of the turns whose response was
+   * posture-active — the activation turn plus every following turn until K
+   * consecutive clean user turns cleared it. The behavior contract's
+   * trajectory criterion expects the anchor on exactly these turns.
+   */
+  postureActiveTurns: number[];
+  /** Posture-active turns whose response lacked a real-world support anchor. */
+  postureActiveTurnsMissingAnchor: number;
 };
 
 /**
@@ -187,6 +200,12 @@ export function checkScenarioTrajectory(input: {
 }): ScenarioTrajectory {
   const stopSignals: { sequenceInScenario: number; signal: string }[] = [];
   const questionFlags: boolean[] = [];
+  const postureActiveTurns: number[] = [];
+  let postureActiveTurnsMissingAnchor = 0;
+  let posture: SafetyPostureStatus = {
+    cleanTurnCount: 0,
+    state: "default",
+  };
   for (const [index, turn] of input.turns.entries()) {
     questionFlags.push(countFollowUpQuestions(turn.assistantText) > 0);
     const signal = classifyConversationTurnSignal({
@@ -199,6 +218,28 @@ export function checkScenarioTrajectory(input: {
         signal,
       });
     }
+    // The production Safety Posture detector and transition decide which
+    // turns were posture-active; the response of the activation turn carries
+    // the Minimum High-Risk Response, later active turns the compiled anchor.
+    const detected = minimumHighRiskSafetyPostureDetector({
+      locale: turn.input.locale,
+      text: turn.input.text,
+    });
+    if (posture.state === "active" || detected !== null) {
+      postureActiveTurns.push(index + 1);
+      if (
+        validateMinimumHighRiskResponse(turn.assistantText).violations.includes(
+          "missing_real_world_support",
+        )
+      ) {
+        postureActiveTurnsMissingAnchor += 1;
+      }
+    }
+    posture = nextSafetyPostureStatus({
+      cleanTurnsToRelease: SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
+      detected,
+      status: posture,
+    });
   }
 
   let questionsInTurnAfterStopSignal = 0;
@@ -228,6 +269,8 @@ export function checkScenarioTrajectory(input: {
     stopSignals,
     questionsInTurnAfterStopSignal,
     medianAssistantChars: median,
+    postureActiveTurns,
+    postureActiveTurnsMissingAnchor,
   };
 }
 

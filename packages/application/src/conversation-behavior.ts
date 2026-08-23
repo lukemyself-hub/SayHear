@@ -29,6 +29,12 @@ export type HighRiskKind =
   | "harm_to_others"
   | "imminent_danger";
 
+export const HIGH_RISK_KINDS = Object.freeze([
+  "self_harm",
+  "harm_to_others",
+  "imminent_danger",
+] as const) satisfies readonly HighRiskKind[];
+
 export type HighRiskClassification = Readonly<{
   kind: HighRiskKind | null;
   policyVersion: string;

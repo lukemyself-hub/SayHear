@@ -3,6 +3,8 @@ import {
   classifyConversationTurnSignal,
   detectMinimumHighRiskSignal,
   renderMinimumHighRiskResponse,
+  renderSafetyPostureResponseAnchor,
+  SAFETY_POSTURE_ACTIVE_MARKER,
   type ConversationTextMessage,
   type ConversationTextModel,
   type ConversationTurnSignal,
@@ -161,7 +163,15 @@ export function createBehaviorAwareConversationTextModel(input: {
           type: "tool_call",
         };
       }
-      const chunks =
+      // The deterministic Champion reflects the compiled Safety Posture the
+      // way it reads the frozen Action Reference Handles: while the compiled
+      // instructions mark the posture active (issue #76), every ordinary
+      // response keeps the real-world support anchor. The Minimum High-Risk
+      // Response already carries the anchor on its own activation turn.
+      const postureActive = request.instructions.includes(
+        SAFETY_POSTURE_ACTIVE_MARKER,
+      );
+      const responderChunks =
         selection.kind === "minimum_high_risk"
           ? [selection.text]
           : input.responder({
@@ -173,6 +183,13 @@ export function createBehaviorAwareConversationTextModel(input: {
               signal,
               text: currentMessage?.text ?? "",
             });
+      const chunks =
+        postureActive && selection.kind !== "minimum_high_risk"
+          ? [
+              ...responderChunks,
+              renderSafetyPostureResponseAnchor({ locale: request.locale }),
+            ]
+          : responderChunks;
 
       yield* streamDeterministicDeltas(
         request,
