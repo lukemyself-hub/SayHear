@@ -6,6 +6,7 @@ import {
   type ConversationTextMessage,
   type ConversationTextModel,
   type ConversationTurnSignal,
+  type CuriosityStopSignalProposal,
 } from "@sayhear/application";
 
 import { streamDeterministicDeltas } from "./deterministic-stream";
@@ -74,6 +75,19 @@ export function createBehaviorAwareConversationTextModel(input: {
   failAfterCompletion?: boolean;
   failAfterChunks?: number;
   /**
+   * Deterministic scripting seam for the Curiosity Stop Signal proposal
+   * channel (issue #74): when it returns proposals for the current user
+   * message, the model emits one provider-native `curiosity_stop_signal`
+   * tool call before its deltas. System tests drive suppression / release
+   * turns statefully without a live provider; the Egress Port normalizes the
+   * call and only deterministic code commits it.
+   */
+  stopSignalProposals?: (turn: {
+    locale: string;
+    signal: ConversationTurnSignal;
+    text: string;
+  }) => readonly CuriosityStopSignalProposal[] | null;
+  /**
    * When set, the model emits one provider-native `tool_call` event before any
    * delta. Fault-injection seam for the Harness fail-closed contract
    * (issue #24 AC8): a tool_call against an empty Conversation Action Catalog
@@ -131,6 +145,22 @@ export function createBehaviorAwareConversationTextModel(input: {
         locale: request.locale,
         ...(currentMessage ? { message: currentMessage } : {}),
       });
+      const signal =
+        selection.kind === "understanding" ? selection.signal : "engaged";
+      const scriptedProposals = input.stopSignalProposals?.({
+        locale: request.locale,
+        signal,
+        text: currentMessage?.text ?? "",
+      });
+      if (scriptedProposals && scriptedProposals.length > 0) {
+        yield {
+          rawArguments: JSON.stringify({
+            proposals: scriptedProposals.map(serializeProposal),
+          }),
+          rawFunctionName: "curiosity_stop_signal",
+          type: "tool_call",
+        };
+      }
       const chunks =
         selection.kind === "minimum_high_risk"
           ? [selection.text]
@@ -140,7 +170,7 @@ export function createBehaviorAwareConversationTextModel(input: {
                 text: message.text,
               })),
               locale: request.locale,
-              signal: selection.signal,
+              signal,
               text: currentMessage?.text ?? "",
             });
 
@@ -166,6 +196,26 @@ export function createBehaviorAwareConversationTextModel(input: {
       }
     },
   };
+}
+
+function serializeProposal(
+  proposal: CuriosityStopSignalProposal,
+): Record<string, string> {
+  if (proposal.kind === "suppress_direction") {
+    return {
+      direction: proposal.direction,
+      kind: "suppress_direction",
+      signal_kind: proposal.signalKind,
+    };
+  }
+  if (proposal.kind === "release_direction") {
+    return {
+      direction: proposal.direction,
+      kind: "release_direction",
+      release_reason: proposal.releaseReason,
+    };
+  }
+  return { kind: proposal.kind };
 }
 
 function findRegenerationHandle(instructions: string): string | null {

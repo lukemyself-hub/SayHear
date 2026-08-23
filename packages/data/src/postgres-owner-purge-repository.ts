@@ -634,6 +634,17 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         [userId],
       );
       await client.query(
+        `DELETE FROM current_curiosity_stop_signals
+        WHERE daily_session_id IN (
+          SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
+        )`,
+        [userId],
+      );
+      await client.query(
+        `DELETE FROM curiosity_stop_signals WHERE user_id = $1`,
+        [userId],
+      );
+      await client.query(
         `DELETE FROM current_dialogue_states
          WHERE daily_session_id IN (
            SELECT daily_session_id FROM daily_sessions WHERE user_id = $1

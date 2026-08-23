@@ -11,9 +11,19 @@ import type {
   CurrentRollingSummary,
   ConversationResponseRepository,
   ConversationTextChampion,
+  CuriosityStopSignalProposal,
   ProviderDispatchErrorCategory,
   ProviderEgressClaim,
   ProviderEgressRepository,
+} from "@sayhear/application";
+import {
+  applyCuriosityStopSignalProposals,
+  countFollowUpQuestions,
+  CURIOSITY_STOP_SIGNAL_POLICY_VERSION,
+  EMPTY_CURIOSITY_STOP_SIGNAL_CONTENT,
+  validateCuriosityStopSignalContent,
+  type CuriosityStopSignalContent,
+  type CurrentCuriosityStopSignal,
 } from "@sayhear/application";
 import {
   asCompiledContextId,
@@ -784,6 +794,13 @@ export class PostgresConversationResponseRepository
         expectedDataEpoch: Number(row.expected_data_epoch),
         sourceRevision: Number(row.source_revision),
       });
+      const curiosityStopSignal = await loadCuriosityStopSignalForContext(
+        client,
+        {
+          dailySessionId: row.daily_session_id,
+          sourceRevision: Number(row.source_revision),
+        },
+      );
 
       await client.query("COMMIT");
       return {
@@ -815,6 +832,7 @@ export class PostgresConversationResponseRepository
               ],
             }
           : {}),
+        curiosityStopSignal,
         dailySession: {
           activityState: row.activity_state,
           closurePolicyVersion: row.closure_policy_version,
@@ -1462,6 +1480,7 @@ export class PostgresConversationResponseRepository
     generationCommandId: GenerationCommandId;
     metadata: CompleteResponseMetadata;
     modelRunAttemptId: ModelRunAttemptId;
+    stopSignalProposals?: readonly CuriosityStopSignalProposal[];
     text: string;
     userId: UserId;
   }): ReturnType<ConversationResponseRepository["commitCompleteResponse"]> {
@@ -1473,13 +1492,16 @@ export class PostgresConversationResponseRepository
         daily_session_id: string;
         data_epoch: string;
         expected_data_epoch: string;
+        current_continuous_exchange_no: string;
         freshness_policy: string;
         input_revision_id: string;
+        input_sequence_no: string;
         interaction_turn_id: string;
         locale: string;
         next_event_sequence_no: string;
         provider_policy_status: string;
         source_active: boolean;
+        source_revision: string;
         user_status: string;
       }>(
         `
@@ -1502,6 +1524,9 @@ export class PostgresConversationResponseRepository
             turn.interaction_turn_id,
             turn.daily_session_id,
             session.next_event_sequence_no,
+            session.source_revision,
+            session.current_continuous_exchange_no,
+            input_event.sequence_no AS input_sequence_no,
             (
               input_event.lifecycle_status = 'active'
               AND input_event.current_revision_id = command.input_revision_id
@@ -1783,6 +1808,21 @@ export class PostgresConversationResponseRepository
         throw new Error(
           "The inactivity evaluation was not scheduled with the Assistant Event.",
         );
+      }
+      if (input.stopSignalProposals && input.stopSignalProposals.length > 0) {
+        await commitCuriosityStopSignalProposalsInTransaction(client, {
+          currentExchangeNo: Number(row.current_continuous_exchange_no),
+          dailySessionId: row.daily_session_id,
+          generationCommandId: input.generationCommandId,
+          inputSequenceNo: Number(row.input_sequence_no),
+          inputUserEventRevisionId: row.input_revision_id,
+          // The session source_revision bump above already ran in this
+          // transaction; the projection version records the post-bump value.
+          sourceRevision: Number(row.source_revision) + 1,
+          proposals: input.stopSignalProposals,
+          userId: input.userId,
+          createdAt: input.completedAt,
+        });
       }
       await client.query("COMMIT");
       return {
@@ -2301,6 +2341,225 @@ async function contextReferencesAreCurrentForCommand(
         generationCommandId,
       )
     : false;
+}
+
+/**
+ * Deterministically commit model stop-signal proposals inside the same
+ * serializable transaction as the Complete Assistant Response (issue #74).
+ * The evidence envelope is derived from the locked rows here — never from the
+ * model — and semantic rejections (no preceding question, duplicates,
+ * capacity) leave no row at all.
+ */
+async function commitCuriosityStopSignalProposalsInTransaction(
+  client: PoolClient,
+  input: {
+    createdAt: Date;
+    currentExchangeNo: number;
+    dailySessionId: string;
+    generationCommandId: GenerationCommandId;
+    inputSequenceNo: number;
+    inputUserEventRevisionId: string;
+    proposals: readonly CuriosityStopSignalProposal[];
+    sourceRevision: number;
+    userId: UserId;
+  },
+): Promise<void> {
+  const previous = await client.query<{
+    content: CuriosityStopSignalContent | null;
+    version_no: string;
+  }>(
+    `
+      SELECT version.content, version.version_no
+      FROM current_curiosity_stop_signals current
+      INNER JOIN curiosity_stop_signals version
+        ON version.curiosity_stop_signal_id = current.curiosity_stop_signal_id
+        AND version.user_id = current.user_id
+        AND version.daily_session_id = current.daily_session_id
+        AND version.source_revision = current.source_revision
+        AND version.version_no = current.version_no
+      WHERE current.daily_session_id = $1
+        AND current.user_id = $2
+      FOR UPDATE OF current, version
+    `,
+    [input.dailySessionId, input.userId],
+  );
+  const previousRow = previous.rows[0];
+  // The projection degrades silently, never aborts the Complete Assistant
+  // Response: a corrupt or unreadable prior version resets to empty (no
+  // suppression carried), and the conversation continues (SPEC #70 safety /
+  // DialogueState degrade discipline). The content was validated at write time
+  // and constrained by the DB CHECK, so this is a defensive degrade path.
+  let previousContent = EMPTY_CURIOSITY_STOP_SIGNAL_CONTENT;
+  if (previousRow?.content !== undefined && previousRow.content !== null) {
+    try {
+      validateCuriosityStopSignalContent(previousRow.content);
+      previousContent = previousRow.content;
+    } catch {
+      previousContent = EMPTY_CURIOSITY_STOP_SIGNAL_CONTENT;
+    }
+  }
+
+  const question = await client.query<{
+    canonical_text: string;
+    revision_id: string;
+  }>(
+    `
+      SELECT
+        revision.conversation_event_revision_id AS revision_id,
+        revision.canonical_text
+      FROM conversation_events event
+      INNER JOIN conversation_event_revisions revision
+        ON revision.conversation_event_revision_id = event.current_revision_id
+        AND revision.user_id = event.user_id
+      WHERE event.daily_session_id = $1
+        AND event.user_id = $2
+        AND event.actor = 'assistant'
+        AND event.sequence_no < $3
+        AND event.lifecycle_status = 'active'
+        AND EXISTS (
+          SELECT 1 FROM generation_commands command
+          WHERE command.generation_command_id = event.generation_command_id
+            AND command.user_id = event.user_id
+            AND command.status = 'succeeded'
+            AND command.authoritative_result_id = event.current_revision_id
+        )
+      ORDER BY event.sequence_no DESC
+      LIMIT 1
+    `,
+    [input.dailySessionId, input.userId, input.inputSequenceNo],
+  );
+  const questionRow = question.rows[0];
+  const precedingAssistantQuestion = questionRow
+    ? {
+        containsQuestion:
+          countFollowUpQuestions(questionRow.canonical_text) > 0,
+        revisionId: asConversationEventRevisionId(questionRow.revision_id),
+      }
+    : null;
+
+  const applied = applyCuriosityStopSignalProposals({
+    content: previousContent,
+    currentExchangeNo: input.currentExchangeNo,
+    currentUserEventRevisionId: asConversationEventRevisionId(
+      input.inputUserEventRevisionId,
+    ),
+    precedingAssistantQuestion,
+    proposals: input.proposals,
+  });
+  if (!applied.committedAny) return;
+  validateCuriosityStopSignalContent(applied.content);
+
+  const versionNo = previousRow ? Number(previousRow.version_no) + 1 : 1;
+  const projectionId = createUuidV7(input.createdAt);
+  await client.query(
+    `
+      INSERT INTO curiosity_stop_signals (
+        curiosity_stop_signal_id,
+        user_id,
+        daily_session_id,
+        version_no,
+        source_revision,
+        policy_version,
+        content,
+        committed_generation_command_id,
+        created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+    `,
+    [
+      projectionId,
+      input.userId,
+      input.dailySessionId,
+      versionNo,
+      input.sourceRevision,
+      CURIOSITY_STOP_SIGNAL_POLICY_VERSION,
+      JSON.stringify(applied.content),
+      input.generationCommandId,
+      input.createdAt,
+    ],
+  );
+  await client.query(
+    `
+      INSERT INTO current_curiosity_stop_signals (
+        daily_session_id,
+        curiosity_stop_signal_id,
+        user_id,
+        source_revision,
+        version_no,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (daily_session_id) DO UPDATE SET
+        curiosity_stop_signal_id = EXCLUDED.curiosity_stop_signal_id,
+        user_id = EXCLUDED.user_id,
+        source_revision = EXCLUDED.source_revision,
+        version_no = EXCLUDED.version_no,
+        updated_at = EXCLUDED.updated_at
+    `,
+    [
+      input.dailySessionId,
+      projectionId,
+      input.userId,
+      input.sourceRevision,
+      versionNo,
+      input.createdAt,
+    ],
+  );
+}
+
+/**
+ * Read the current stop-signal projection for Context compilation. A missing
+ * or structurally invalid projection degrades silently to null — the
+ * conversation continues; a projection newer than the frozen compile source
+ * is never used (same staleness discipline as DialogueState).
+ */
+async function loadCuriosityStopSignalForContext(
+  client: PoolClient,
+  input: {
+    dailySessionId: string;
+    sourceRevision: number;
+  },
+): Promise<CurrentCuriosityStopSignal | null> {
+  const result = await client.query<{
+    curiosity_stop_signal_id: string;
+    content: CuriosityStopSignalContent;
+    policy_version: string;
+    source_revision: string;
+    version_no: string;
+  }>(
+    `
+      SELECT
+        version.curiosity_stop_signal_id,
+        version.content,
+        version.policy_version,
+        version.source_revision,
+        version.version_no
+      FROM current_curiosity_stop_signals current
+      INNER JOIN curiosity_stop_signals version
+        ON version.curiosity_stop_signal_id = current.curiosity_stop_signal_id
+        AND version.user_id = current.user_id
+        AND version.daily_session_id = current.daily_session_id
+        AND version.source_revision = current.source_revision
+        AND version.version_no = current.version_no
+      WHERE current.daily_session_id = $1
+    `,
+    [input.dailySessionId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  if (Number(row.source_revision) > input.sourceRevision) return null;
+  try {
+    validateCuriosityStopSignalContent(row.content);
+  } catch {
+    return null;
+  }
+  return {
+    content: row.content,
+    id: row.curiosity_stop_signal_id,
+    policyVersion: row.policy_version,
+    sourceRevision: Number(row.source_revision),
+    versionNo: Number(row.version_no),
+  };
 }
 
 async function loadContextReferencedEvents(

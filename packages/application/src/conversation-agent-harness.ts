@@ -33,6 +33,11 @@ import type {
 } from "./conversation-action-gateway";
 import type { ConversationActionProposal } from "./conversation-action-catalog";
 import {
+  CURIOSITY_STOP_SIGNAL_FUNCTION,
+  CURIOSITY_STOP_SIGNAL_MAX_PROPOSALS_PER_TURN,
+  type CuriosityStopSignalProposal,
+} from "./curiosity-stop-signal";
+import {
   ProviderDispatchError,
   type ProviderDispatchErrorCategory,
   type ProviderEgressPort,
@@ -186,6 +191,7 @@ export function createConversationAgentHarness(dependencies: {
     let completeText = "";
     let completion: CompleteResponseMetadata | null = null;
     let pendingActionProposal: ConversationActionProposal | null = null;
+    const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
     try {
       if (!validateConversationActionCatalog(command.catalog).valid) {
@@ -200,10 +206,16 @@ export function createConversationAgentHarness(dependencies: {
         functions:
           command.harnessPolicy.toolsDisabled === true
             ? []
-            : actionFunctionsForCatalog(
-                command.catalog,
-                command.actionReferenceHandles,
-              ),
+            : [
+                ...actionFunctionsForCatalog(
+                  command.catalog,
+                  command.actionReferenceHandles,
+                ),
+                // The stop-signal proposal function is a behavior-proposal
+                // channel, not a Conversation Action; commits stay
+                // deterministic (issue #74).
+                CURIOSITY_STOP_SIGNAL_FUNCTION,
+              ],
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
         userId: command.userId,
@@ -224,6 +236,7 @@ export function createConversationAgentHarness(dependencies: {
         } else if (event.type === "action_proposal") {
           if (
             actionSeen ||
+            stopSignalProposals.length > 0 ||
             completion !== null ||
             command.harnessPolicy.toolsDisabled === true ||
             !dependencies.actionGateway ||
@@ -242,6 +255,18 @@ export function createConversationAgentHarness(dependencies: {
             throw new ProviderDispatchError("invalid_response");
           }
           pendingActionProposal = proposal;
+        } else if (event.type === "stop_signal_proposal") {
+          if (
+            actionSeen ||
+            pendingActionProposal !== null ||
+            completion !== null ||
+            command.harnessPolicy.toolsDisabled === true ||
+            stopSignalProposals.length + event.proposals.length >
+              CURIOSITY_STOP_SIGNAL_MAX_PROPOSALS_PER_TURN
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          stopSignalProposals.push(...event.proposals);
         } else {
           if (pendingActionProposal && event.type !== "completed") {
             throw new ProviderDispatchError("invalid_response");
@@ -280,6 +305,9 @@ export function createConversationAgentHarness(dependencies: {
         generationCommandId: command.generationCommandId,
         metadata: completion,
         modelRunAttemptId: command.modelRunAttemptId,
+        ...(stopSignalProposals.length > 0
+          ? { stopSignalProposals }
+          : {}),
         text: completeText,
         userId: command.userId,
       });

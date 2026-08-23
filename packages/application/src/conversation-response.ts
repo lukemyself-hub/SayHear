@@ -20,6 +20,7 @@ import type {
 import type { ConversationActionReceipt } from "./conversation-action-gateway";
 import type { ConversationActionGateway } from "./conversation-action-gateway";
 import type { ConversationAgentHarness } from "./conversation-agent-harness";
+import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
 import { type ProviderDispatchErrorCategory } from "./conversation-model";
 import type {
   ConversationRetryTurn,
@@ -134,6 +135,12 @@ export type ConversationResponseRepository = Readonly<{
     generationCommandId: GenerationCommandId;
     metadata: CompleteResponseMetadata;
     modelRunAttemptId: ModelRunAttemptId;
+    /**
+     * Curiosity Stop Signal proposals (issue #74) collected during this
+     * Decision. They are model proposals only — the repository commits them
+     * through deterministic code inside the same atomic response commit.
+     */
+    stopSignalProposals?: readonly CuriosityStopSignalProposal[];
     text: string;
     userId: UserId;
   }): Promise<

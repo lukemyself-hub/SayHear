@@ -1,5 +1,6 @@
 import {
   CompiledContextIntegrityError,
+  normalizeCuriosityStopSignalCall,
   normalizeProviderActionProposal,
   ProviderDispatchError,
   type ContextCompiler,
@@ -94,6 +95,24 @@ export function createProviderEgressPort(dependencies: {
           }
         } else if (event.type === "tool_call") {
           if (
+            event.rawFunctionName === "curiosity_stop_signal" &&
+            input.toolsDisabled !== true &&
+            input.requestEventRevisionId
+          ) {
+            // A stop-signal selection is a behavior proposal, not a
+            // Conversation Action: normalize it to its own event kind here so
+            // only deterministic code downstream can commit it (issue #74).
+            const normalized = normalizeCuriosityStopSignalCall({
+              rawArguments: event.rawArguments,
+            });
+            if ("invalid" in normalized) {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            yield {
+              proposals: normalized.proposals,
+              type: "stop_signal_proposal",
+            };
+          } else if (
             input.functions &&
             input.functions.length > 0 &&
             input.requestEventRevisionId
