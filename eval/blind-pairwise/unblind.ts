@@ -1,24 +1,18 @@
 /**
- * Unblind a scored pairwise run and evaluate the merge-gate statistics
- * (issue #79; behavior contract §三/§八).
+ * Unblind a scored pairwise run and evaluate its merge-gate statistics.
  *
- * Enforces score-before-unblind structurally: the run directory must already
- * contain a complete scores.json — every paired turn scored on all six taste
- * dimensions (integers 1–5) and every scenario carrying exactly one best
- * pick — or the unblinding refuses to run. If a conclusions file is supplied,
- * every quoted fragment is reverse-checked against the raw response of the
- * system the conclusion attributes it to, and any mismatch fails the run
- * (the #62 revision-record lesson, mechanized).
- *
- * Usage:
- *   tsx eval/blind-pairwise/unblind.ts --dir eval/blind-pairwise/run-79 \
- *     [--conclusions eval/blind-pairwise/run-79/conclusions.json]
+ * v1 is retained for the historical #79 six-dimension result. v2 is the
+ * lower-fatigue protocol: one A / tie / B choice per comparable turn and one
+ * holistic A / tie / B choice per scenario. Scenario-level choices are the
+ * primary evidence unit; turn-level choices make disagreements inspectable.
  */
 
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  BLIND_PAIRWISE_PROTOCOL_V1,
+  BLIND_PAIRWISE_PROTOCOL_V2,
   DIMENSION_NAMES,
   isRecord,
   median,
@@ -26,6 +20,8 @@ import {
   TASTE_DIMENSIONS,
   type Conclusion,
   type PairScenario,
+  type PairwiseChoice,
+  type PairwiseScoresFile,
   type PairsFile,
   type ScoredScenario,
   type ScoresFile,
@@ -71,18 +67,58 @@ async function readJson(file: string): Promise<unknown> {
   return JSON.parse(await readFile(file, "utf8")) as unknown;
 }
 
-function validateScores(
-  scores: unknown,
+function validatePairs(value: unknown, file: string): PairsFile {
+  if (
+    !isRecord(value) ||
+    (value.protocol !== BLIND_PAIRWISE_PROTOCOL_V1 &&
+      value.protocol !== BLIND_PAIRWISE_PROTOCOL_V2) ||
+    typeof value.seed !== "number" ||
+    !Array.isArray(value.scenarios)
+  ) {
+    throw new Error(
+      `${file} must contain a supported protocol, numeric seed, and scenarios array.`,
+    );
+  }
+  return value as PairsFile;
+}
+
+function validateMapping(
   pairs: PairsFile,
-): ScoresFile {
+  sealed: SealedIdentitiesFile,
+): SealedIdentitiesFile["mapping"] {
+  if (sealed.protocol !== pairs.protocol || !isRecord(sealed.mapping)) {
+    throw new Error("sealed-identities.json does not match pairs.json.");
+  }
+  for (const scenario of pairs.scenarios) {
+    const assignment = sealed.mapping[scenario.scenarioId];
+    if (
+      !assignment ||
+      (assignment.A !== "baseline" && assignment.A !== "candidate") ||
+      (assignment.B !== "baseline" && assignment.B !== "candidate") ||
+      assignment.A === assignment.B
+    ) {
+      throw new Error(
+        `sealed-identities.json has no valid mapping for ${scenario.scenarioId}.`,
+      );
+    }
+  }
+  return sealed.mapping;
+}
+
+function isPairwiseChoice(value: unknown): value is PairwiseChoice {
+  return value === "A" || value === "tie" || value === "B";
+}
+
+function validateV1Scores(scores: unknown, pairs: PairsFile): ScoresFile {
   if (
     !isRecord(scores) ||
+    (scores.protocol !== undefined && scores.protocol !== BLIND_PAIRWISE_PROTOCOL_V1) ||
     typeof scores.scorer !== "string" ||
     typeof scores.scoredAt !== "string" ||
     !Array.isArray(scores.scenarios)
   ) {
     throw new Error(
-      "scores.json must carry scorer, scoredAt, and a scenarios array.",
+      "v1 scores.json must carry scorer, scoredAt, and a scenarios array.",
     );
   }
   const pairScenariosById = new Map(
@@ -92,12 +128,15 @@ function validateScores(
   for (const entry of scores.scenarios as unknown[]) {
     const scored = entry as ScoredScenario;
     if (!isRecord(entry) || typeof scored.scenarioId !== "string") {
-      throw new Error("Every scores.json scenario needs a scenarioId.");
+      throw new Error("Every v1 scores.json scenario needs a scenarioId.");
+    }
+    if (scoredById.has(scored.scenarioId)) {
+      throw new Error(`v1 scores.json duplicates ${scored.scenarioId}.`);
     }
     const pair = pairScenariosById.get(scored.scenarioId);
     if (!pair) {
       throw new Error(
-        `scores.json scores unknown scenario ${scored.scenarioId}.`,
+        `v1 scores.json scores unknown scenario ${scored.scenarioId}.`,
       );
     }
     if (scored.bestOf !== "A" && scored.bestOf !== "B") {
@@ -105,15 +144,23 @@ function validateScores(
         `Scenario ${scored.scenarioId} must pick exactly one best (A or B).`,
       );
     }
+    if (!Array.isArray(scored.turns)) {
+      throw new Error(`Scenario ${scored.scenarioId} is missing turns.`);
+    }
     const scoredTurns = new Set<number>();
-    for (const turnEntry of scored.turns ?? []) {
-      const turn = turnEntry as { A: unknown; B: unknown; sequenceInScenario: number };
+    for (const turnEntry of scored.turns) {
+      const turn = turnEntry as {
+        A: unknown;
+        B: unknown;
+        sequenceInScenario: number;
+      };
       if (
         !isRecord(turnEntry) ||
-        typeof turn.sequenceInScenario !== "number"
+        typeof turn.sequenceInScenario !== "number" ||
+        scoredTurns.has(turn.sequenceInScenario)
       ) {
         throw new Error(
-          `Scenario ${scored.scenarioId} has a malformed scored turn.`,
+          `Scenario ${scored.scenarioId} has a malformed or duplicate scored turn.`,
         );
       }
       for (const side of ["A", "B"] as const) {
@@ -137,7 +184,12 @@ function validateScores(
           }
         }
       }
-      if (!pair.turns.some((t) => t.sequenceInScenario === turn.sequenceInScenario)) {
+      if (
+        !pair.turns.some(
+          (pairTurn) =>
+            pairTurn.sequenceInScenario === turn.sequenceInScenario,
+        )
+      ) {
         throw new Error(
           `Scenario ${scored.scenarioId} turn ${turn.sequenceInScenario} is not a paired turn.`,
         );
@@ -147,7 +199,7 @@ function validateScores(
     for (const pairTurn of pair.turns) {
       if (!scoredTurns.has(pairTurn.sequenceInScenario)) {
         throw new Error(
-          `Scenario ${scored.scenarioId} turn ${pairTurn.sequenceInScenario} is unscored; unblinding refuses to run on a partial scoring (score before unblinding).`,
+          `Scenario ${scored.scenarioId} is partially scored; v1 unblinding refuses to continue.`,
         );
       }
     }
@@ -156,16 +208,108 @@ function validateScores(
   for (const scenario of pairs.scenarios) {
     if (!scoredById.has(scenario.scenarioId)) {
       throw new Error(
-        `Scenario ${scenario.scenarioId} is unscored; unblinding refuses to run on a partial scoring (score before unblinding).`,
+        `Scenario ${scenario.scenarioId} is unscored; v1 unblinding refuses to continue.`,
       );
     }
   }
   return scores as ScoresFile;
 }
 
+function validateV2Scores(
+  scores: unknown,
+  pairs: PairsFile,
+): PairwiseScoresFile {
+  if (
+    !isRecord(scores) ||
+    scores.protocol !== BLIND_PAIRWISE_PROTOCOL_V2 ||
+    typeof scores.scorer !== "string" ||
+    typeof scores.scoredAt !== "string" ||
+    !Array.isArray(scores.scenarios)
+  ) {
+    throw new Error(
+      "v2 scores.json must carry protocol, scorer, scoredAt, and a scenarios array.",
+    );
+  }
+  const pairScenariosById = new Map(
+    pairs.scenarios.map((scenario) => [scenario.scenarioId, scenario]),
+  );
+  const scoredById = new Map<string, PairwiseScoresFile["scenarios"][number]>();
+  for (const entry of scores.scenarios as unknown[]) {
+    if (!isRecord(entry) || typeof entry.scenarioId !== "string") {
+      throw new Error("Every v2 scores.json scenario needs a scenarioId.");
+    }
+    const scored = entry as PairwiseScoresFile["scenarios"][number];
+    if (scoredById.has(scored.scenarioId)) {
+      throw new Error(`v2 scores.json duplicates ${scored.scenarioId}.`);
+    }
+    const pair = pairScenariosById.get(scored.scenarioId);
+    if (!pair) {
+      throw new Error(
+        `v2 scores.json scores unknown scenario ${scored.scenarioId}.`,
+      );
+    }
+    if (!isPairwiseChoice(scored.overallChoice)) {
+      throw new Error(
+        `Scenario ${scored.scenarioId} must choose A, tie, or B overall.`,
+      );
+    }
+    if (!Array.isArray(scored.turns)) {
+      throw new Error(`Scenario ${scored.scenarioId} is missing turns.`);
+    }
+    const scoredTurns = new Set<number>();
+    for (const turnEntry of scored.turns) {
+      if (
+        !isRecord(turnEntry) ||
+        typeof turnEntry.sequenceInScenario !== "number" ||
+        !isPairwiseChoice(turnEntry.choice) ||
+        scoredTurns.has(turnEntry.sequenceInScenario)
+      ) {
+        throw new Error(
+          `Scenario ${scored.scenarioId} has a malformed or duplicate v2 scored turn.`,
+        );
+      }
+      if (
+        !pair.turns.some(
+          (pairTurn) =>
+            pairTurn.sequenceInScenario === turnEntry.sequenceInScenario,
+        )
+      ) {
+        throw new Error(
+          `Scenario ${scored.scenarioId} turn ${turnEntry.sequenceInScenario} is not a paired turn.`,
+        );
+      }
+      scoredTurns.add(turnEntry.sequenceInScenario);
+    }
+    for (const pairTurn of pair.turns) {
+      if (!scoredTurns.has(pairTurn.sequenceInScenario)) {
+        throw new Error(
+          `Scenario ${scored.scenarioId} is partially scored; v2 unblinding refuses to continue.`,
+        );
+      }
+    }
+    scoredById.set(scored.scenarioId, scored);
+  }
+  for (const scenario of pairs.scenarios) {
+    if (!scoredById.has(scenario.scenarioId)) {
+      throw new Error(
+        `Scenario ${scenario.scenarioId} is unscored; v2 unblinding refuses to continue.`,
+      );
+    }
+  }
+  return scores as PairwiseScoresFile;
+}
+
 type DimensionSummary = Readonly<
   Record<TasteDimension, { baseline: number; candidate: number }>
 >;
+
+function emptyDimensionBuckets(): Record<TasteDimension, number[]> {
+  const buckets = {} as Record<TasteDimension, number[]>;
+  for (const dimension of TASTE_DIMENSIONS) {
+    buckets[dimension] = [];
+  }
+  return buckets;
+}
 
 function mediansBy(
   scenarios: readonly PairScenario[],
@@ -183,8 +327,6 @@ function mediansBy(
       (entry) => entry.scenarioId === scenario.scenarioId,
     );
     if (!scored) continue;
-    // Side attribution flows through the sealed mapping at aggregation time
-    // only; the medians below stay per-identity from here on.
     const baselineSide =
       mapping[scenario.scenarioId]!.A === "baseline" ? "A" : "B";
     for (const turn of scored.turns) {
@@ -198,7 +340,10 @@ function mediansBy(
       }
     }
   }
-  const summary = {} as Record<TasteDimension, { baseline: number; candidate: number }>;
+  const summary = {} as Record<
+    TasteDimension,
+    { baseline: number; candidate: number }
+  >;
   for (const dimension of TASTE_DIMENSIONS) {
     summary[dimension] = {
       baseline: median(values.baseline[dimension]),
@@ -208,39 +353,142 @@ function mediansBy(
   return summary;
 }
 
-function emptyDimensionBuckets(): Record<TasteDimension, number[]> {
-  const buckets = {} as Record<TasteDimension, number[]>;
-  for (const dimension of TASTE_DIMENSIONS) {
-    buckets[dimension] = [];
-  }
-  return buckets;
+type ChoiceCounts = Readonly<{
+  baseline: number;
+  tie: number;
+  candidate: number;
+  comparisons: number;
+  candidateNet: number;
+}>;
+
+function emptyChoiceCounts(): {
+  baseline: number;
+  tie: number;
+  candidate: number;
+} {
+  return { baseline: 0, tie: 0, candidate: 0 };
 }
 
-async function main(): Promise<void> {
-  const { conclusionsFile, dir } = parseArguments();
-  const pairs = (await readJson(path.join(dir, "pairs.json"))) as PairsFile;
-  const sealed = (await readJson(
-    path.join(dir, "sealed-identities.json"),
-  )) as SealedIdentitiesFile;
-  const scores = validateScores(
-    await readJson(path.join(dir, "scores.json")),
-    pairs,
-  );
-  if (pairs.protocol !== "blind-pairwise:v1") {
-    throw new Error("Unexpected pairs.json protocol version.");
-  }
-  const mapping = sealed.mapping;
+function choiceIdentity(
+  choice: PairwiseChoice,
+  assignment: { A: SystemIdentity; B: SystemIdentity },
+): SystemIdentity | "tie" {
+  if (choice === "tie") return "tie";
+  return assignment[choice];
+}
 
+function choiceSummary(
+  scenarios: readonly PairScenario[],
+  scores: PairwiseScoresFile,
+  mapping: SealedIdentitiesFile["mapping"],
+  filter: (scenario: PairScenario) => boolean,
+  level: "turns" | "scenarios",
+): ChoiceCounts {
+  const counts = emptyChoiceCounts();
+  for (const scenario of scenarios) {
+    if (!filter(scenario)) continue;
+    const scored = scores.scenarios.find(
+      (entry) => entry.scenarioId === scenario.scenarioId,
+    );
+    if (!scored) continue;
+    const choices =
+      level === "turns"
+        ? scored.turns.map((turn) => turn.choice)
+        : [scored.overallChoice];
+    for (const choice of choices) {
+      const winner = choiceIdentity(choice, mapping[scenario.scenarioId]!);
+      if (winner === "baseline") counts.baseline += 1;
+      if (winner === "candidate") counts.candidate += 1;
+      if (winner === "tie") counts.tie += 1;
+    }
+  }
+  return {
+    ...counts,
+    comparisons: counts.baseline + counts.tie + counts.candidate,
+    candidateNet: counts.candidate - counts.baseline,
+  };
+}
+
+type ReverseCheck =
+  | { conclusionsChecked: number; failures: readonly string[] }
+  | { conclusionsChecked: 0; note: "no conclusions file supplied" };
+
+async function reverseCheckConclusions(
+  conclusionsFile: string | null,
+  pairs: PairsFile,
+  mapping: SealedIdentitiesFile["mapping"],
+): Promise<ReverseCheck> {
+  if (!conclusionsFile) {
+    return { conclusionsChecked: 0, note: "no conclusions file supplied" };
+  }
+  const conclusions = (await readJson(conclusionsFile)) as {
+    conclusions: readonly Conclusion[];
+  };
+  if (!isRecord(conclusions) || !Array.isArray(conclusions.conclusions)) {
+    throw new Error("conclusions.json must carry a conclusions array.");
+  }
+  const failures: string[] = [];
+  for (const conclusion of conclusions.conclusions) {
+    const scenario = pairs.scenarios.find(
+      (entry) => entry.scenarioId === conclusion.scenarioId,
+    );
+    const turn = scenario?.turns.find(
+      (entry) => entry.sequenceInScenario === conclusion.sequenceInScenario,
+    );
+    if (!scenario || !turn) {
+      failures.push(
+        `${conclusion.scenarioId} t${conclusion.sequenceInScenario}: no such paired turn`,
+      );
+      continue;
+    }
+    const side =
+      mapping[conclusion.scenarioId]!.A === conclusion.attributedTo ? "A" : "B";
+    const response = side === "A" ? turn.responseA : turn.responseB;
+    if (!response.includes(conclusion.quote.trim())) {
+      failures.push(
+        `${conclusion.scenarioId} t${conclusion.sequenceInScenario} (attributed ${conclusion.attributedTo}): quote not found in that system's response — ${JSON.stringify(conclusion.quote)}`,
+      );
+    }
+  }
+  return { conclusionsChecked: conclusions.conclusions.length, failures };
+}
+
+function buildV1Results(
+  pairs: PairsFile,
+  scores: ScoresFile,
+  mapping: SealedIdentitiesFile["mapping"],
+  reverseCheck: ReverseCheck,
+) {
   const overall = mediansBy(pairs.scenarios, scores, mapping, () => true);
   const perLocale = {
-    code_switch: mediansBy(pairs.scenarios, scores, mapping, (s) => s.languageVariant === "code_switch"),
-    en: mediansBy(pairs.scenarios, scores, mapping, (s) => s.languageVariant === "en"),
-    zh: mediansBy(pairs.scenarios, scores, mapping, (s) => s.languageVariant === "zh"),
+    code_switch: mediansBy(
+      pairs.scenarios,
+      scores,
+      mapping,
+      (scenario) => scenario.languageVariant === "code_switch",
+    ),
+    en: mediansBy(
+      pairs.scenarios,
+      scores,
+      mapping,
+      (scenario) => scenario.languageVariant === "en",
+    ),
+    zh: mediansBy(
+      pairs.scenarios,
+      scores,
+      mapping,
+      (scenario) => scenario.languageVariant === "zh",
+    ),
   };
   const protectedSummaries = Object.fromEntries(
     PROTECTED_CATEGORIES.map((category) => [
       category,
-      mediansBy(pairs.scenarios, scores, mapping, (s) => s.category === category),
+      mediansBy(
+        pairs.scenarios,
+        scores,
+        mapping,
+        (scenario) => scenario.category === category,
+      ),
     ]),
   );
 
@@ -254,8 +502,7 @@ async function main(): Promise<void> {
       scored.bestOf === "A"
         ? mapping[scenario.scenarioId]!.A
         : mapping[scenario.scenarioId]!.B;
-    if (winnerIdentity === "baseline") bestCounts.baseline += 1;
-    if (winnerIdentity === "candidate") bestCounts.candidate += 1;
+    bestCounts[winnerIdentity] += 1;
   }
 
   const strictBetter = TASTE_DIMENSIONS.filter(
@@ -274,54 +521,13 @@ async function main(): Promise<void> {
     }
   }
 
-  let reverseCheck:
-    | { conclusionsChecked: number; failures: readonly string[] }
-    | { conclusionsChecked: 0; note: "no conclusions file supplied" } = {
-    conclusionsChecked: 0,
-    note: "no conclusions file supplied",
-  };
-  if (conclusionsFile) {
-    const conclusions = (await readJson(conclusionsFile)) as {
-      conclusions: readonly Conclusion[];
-    };
-    if (!isRecord(conclusions) || !Array.isArray(conclusions.conclusions)) {
-      throw new Error("conclusions.json must carry a conclusions array.");
-    }
-    const failures: string[] = [];
-    for (const conclusion of conclusions.conclusions) {
-      const scenario = pairs.scenarios.find(
-        (s) => s.scenarioId === conclusion.scenarioId,
-      );
-      const turn = scenario?.turns.find(
-        (t) => t.sequenceInScenario === conclusion.sequenceInScenario,
-      );
-      if (!scenario || !turn) {
-        failures.push(
-          `${conclusion.scenarioId} t${conclusion.sequenceInScenario}: no such paired turn`,
-        );
-        continue;
-      }
-      const side =
-        mapping[conclusion.scenarioId]!.A === conclusion.attributedTo
-          ? "A"
-          : "B";
-      const response = side === "A" ? turn.responseA : turn.responseB;
-      if (!response.includes(conclusion.quote.trim())) {
-        failures.push(
-          `${conclusion.scenarioId} t${conclusion.sequenceInScenario} (attributed ${conclusion.attributedTo}): quote not found in that system's response — ${JSON.stringify(conclusion.quote)}`,
-        );
-      }
-    }
-    reverseCheck = { conclusionsChecked: conclusions.conclusions.length, failures };
-  }
-
-  const results = {
-    protocol: "blind-pairwise:v1",
+  return {
+    protocol: BLIND_PAIRWISE_PROTOCOL_V1,
     unblindedAt: new Date().toISOString(),
     seed: pairs.seed,
     scorer: scores.scorer,
     scoredAt: scores.scoredAt,
-    mapping: sealed.mapping,
+    mapping,
     medians: {
       overall,
       perLocale,
@@ -344,6 +550,165 @@ async function main(): Promise<void> {
     },
     reverseCheck,
   };
+}
+
+function buildV2Results(
+  pairs: PairsFile,
+  scores: PairwiseScoresFile,
+  mapping: SealedIdentitiesFile["mapping"],
+  reverseCheck: ReverseCheck,
+) {
+  const locales = ["en", "zh", "code_switch"] as const;
+  const overall = {
+    turns: choiceSummary(pairs.scenarios, scores, mapping, () => true, "turns"),
+    scenarios: choiceSummary(
+      pairs.scenarios,
+      scores,
+      mapping,
+      () => true,
+      "scenarios",
+    ),
+  };
+  const perLocale = Object.fromEntries(
+    locales.map((locale) => [
+      locale,
+      {
+        turns: choiceSummary(
+          pairs.scenarios,
+          scores,
+          mapping,
+          (scenario) => scenario.languageVariant === locale,
+          "turns",
+        ),
+        scenarios: choiceSummary(
+          pairs.scenarios,
+          scores,
+          mapping,
+          (scenario) => scenario.languageVariant === locale,
+          "scenarios",
+        ),
+      },
+    ]),
+  );
+  const protectedCategories = Object.fromEntries(
+    PROTECTED_CATEGORIES.map((category) => [
+      category,
+      {
+        sampledScenarios: pairs.scenarios.filter(
+          (scenario) => scenario.category === category,
+        ).length,
+        turns: choiceSummary(
+          pairs.scenarios,
+          scores,
+          mapping,
+          (scenario) => scenario.category === category,
+          "turns",
+        ),
+        scenarios: choiceSummary(
+          pairs.scenarios,
+          scores,
+          mapping,
+          (scenario) => scenario.category === category,
+          "scenarios",
+        ),
+      },
+    ]),
+  );
+
+  const localeRegressions = locales.flatMap((locale) => {
+    const summary = perLocale[locale].scenarios;
+    return summary.candidateNet < 0
+      ? [`${locale}: candidate net ${summary.candidateNet} < 0`]
+      : [];
+  });
+  const protectedRegressions = Object.entries(protectedCategories).flatMap(
+    ([category, summary]) => {
+      if (summary.sampledScenarios === 0) {
+        return [`${category}: no sampled scenario`];
+      }
+      return summary.scenarios.candidateNet < 0
+        ? [`${category}: candidate net ${summary.scenarios.candidateNet} < 0`]
+        : [];
+    },
+  );
+  const requiredCoverage = pairs.sampling
+    ? Object.keys(pairs.sampling.protectedCoverage)
+    : PROTECTED_CATEGORIES;
+  for (const category of requiredCoverage) {
+    if (!pairs.scenarios.some((scenario) => scenario.category === category)) {
+      protectedRegressions.push(`${category}: required protected coverage missing`);
+    }
+  }
+
+  return {
+    protocol: BLIND_PAIRWISE_PROTOCOL_V2,
+    unblindedAt: new Date().toISOString(),
+    seed: pairs.seed,
+    sample: pairs.sampling ?? null,
+    scorer: scores.scorer,
+    scoredAt: scores.scoredAt,
+    mapping,
+    pairwise: {
+      overall,
+      perLocale,
+      protectedCategories,
+    },
+    gate: {
+      candidateStrictlyPreferredOverall: {
+        passed: overall.scenarios.candidateNet > 0,
+        unit: "scenario overall choice",
+        summary: overall.scenarios,
+        rule: "candidate scenario-level wins must exceed baseline wins; ties are neutral",
+      },
+      localeNoRegression:
+        localeRegressions.length === 0
+          ? { passed: true, unit: "scenario overall choice" }
+          : {
+              passed: false,
+              unit: "scenario overall choice",
+              regressions: localeRegressions,
+            },
+      protectedCategoryNoRegression:
+        protectedRegressions.length === 0
+          ? { passed: true, unit: "scenario overall choice" }
+          : {
+              passed: false,
+              unit: "scenario overall choice",
+              regressions: protectedRegressions,
+            },
+    },
+    reverseCheck,
+  };
+}
+
+async function main(): Promise<void> {
+  const { conclusionsFile, dir } = parseArguments();
+  const pairs = validatePairs(
+    await readJson(path.join(dir, "pairs.json")),
+    path.join(dir, "pairs.json"),
+  );
+  const sealed = (await readJson(
+    path.join(dir, "sealed-identities.json"),
+  )) as SealedIdentitiesFile;
+  const mapping = validateMapping(pairs, sealed);
+  const scores =
+    pairs.protocol === BLIND_PAIRWISE_PROTOCOL_V1
+      ? validateV1Scores(await readJson(path.join(dir, "scores.json")), pairs)
+      : validateV2Scores(await readJson(path.join(dir, "scores.json")), pairs);
+  const reverseCheck = await reverseCheckConclusions(
+    conclusionsFile,
+    pairs,
+    mapping,
+  );
+  const results =
+    pairs.protocol === BLIND_PAIRWISE_PROTOCOL_V1
+      ? buildV1Results(pairs, scores as ScoresFile, mapping, reverseCheck)
+      : buildV2Results(
+          pairs,
+          scores as PairwiseScoresFile,
+          mapping,
+          reverseCheck,
+        );
 
   await writeFile(
     path.join(dir, "results.json"),
@@ -351,9 +716,18 @@ async function main(): Promise<void> {
     "utf8",
   );
   console.log(`[pairwise] unblinded ${pairs.scenarios.length} scenarios`);
-  console.log(
-    `[pairwise] scenario best — baseline ${bestCounts.baseline} / candidate ${bestCounts.candidate}`,
-  );
+  if (pairs.protocol === BLIND_PAIRWISE_PROTOCOL_V1) {
+    const scenarioBest = (results as ReturnType<typeof buildV1Results>).scenarioBest;
+    console.log(
+      `[pairwise] scenario best — baseline ${scenarioBest.baseline} / candidate ${scenarioBest.candidate}`,
+    );
+  } else {
+    const scenarioSummary =
+      (results as ReturnType<typeof buildV2Results>).pairwise.overall.scenarios;
+    console.log(
+      `[pairwise] scenario overall — baseline ${scenarioSummary.baseline} / tie ${scenarioSummary.tie} / candidate ${scenarioSummary.candidate}`,
+    );
+  }
   console.log(`[pairwise] gate: ${JSON.stringify(results.gate)}`);
   if ("failures" in reverseCheck && reverseCheck.failures.length > 0) {
     console.error("[pairwise] reverse-check failures:");

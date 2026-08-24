@@ -17,21 +17,28 @@
  *     --baseline eval/conversation-text-baseline/run/transcripts.json \
  *     --candidate eval/incumbent-baseline/run/transcripts.json \
  *     --scenarios eval/scenario-pack-v2/scenarios.json \
- *     --out eval/blind-pairwise/run-79
+ *     --out eval/blind-pairwise/run-next --sample --sample-seed 79
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  BLIND_PAIRWISE_PROTOCOL_VERSION,
+  BLIND_PAIRWISE_PROTOCOL_V1,
+  BLIND_PAIRWISE_PROTOCOL_V2,
   identityAssignmentForScenario,
   isRecord,
+  PAIRWISE_SAMPLE_PROTECTED_CATEGORIES,
   PAIRWISE_EXCLUDED_CATEGORIES,
+  SAMPLE_LANGUAGE_VARIANTS,
+  STRATIFIED_SAMPLE_QUOTAS,
+  mulberry32,
   type PairScenario,
   type PairTurn,
   type PairsFile,
+  type PairwiseSampling,
   type SealedIdentitiesFile,
+  type SampleLanguageVariant,
   type SystemIdentity,
 } from "./protocol";
 
@@ -64,6 +71,8 @@ function parseArguments(): {
   baselineFile: string;
   candidateFile: string;
   outDir: string;
+  sample: boolean;
+  sampleSeed: number;
   scenariosFile: string;
   seed: number;
 } {
@@ -72,6 +81,8 @@ function parseArguments(): {
     baselineFile: "",
     candidateFile: "",
     outDir: "",
+    sample: false,
+    sampleSeed: 0,
     scenariosFile: "",
     seed: 79,
   };
@@ -86,6 +97,10 @@ function parseArguments(): {
       resolved.scenariosFile = required(arguments_, ++index, "--scenarios");
     } else if (argument === "--out") {
       resolved.outDir = required(arguments_, ++index, "--out");
+    } else if (argument === "--sample") {
+      resolved.sample = true;
+    } else if (argument === "--sample-seed") {
+      resolved.sampleSeed = Number(required(arguments_, ++index, "--sample-seed"));
     } else if (argument === "--seed") {
       resolved.seed = Number(required(arguments_, ++index, "--seed"));
     } else {
@@ -97,9 +112,10 @@ function parseArguments(): {
       throw new Error(`${name} is required.`);
     }
   }
-  if (!Number.isInteger(resolved.seed)) {
-    throw new Error("--seed must be an integer.");
+  if (!Number.isInteger(resolved.seed) || !Number.isInteger(resolved.sampleSeed)) {
+    throw new Error("--seed and --sample-seed must be integers.");
   }
+  if (!resolved.sampleSeed) resolved.sampleSeed = resolved.seed;
   return resolved;
 }
 
@@ -115,6 +131,95 @@ function required(
   return value;
 }
 
+function shuffled<T>(values: readonly T[], seed: number): T[] {
+  const random = mulberry32(seed);
+  return values
+    .map((value, index) => ({ value, index, key: random() }))
+    .sort((left, right) => left.key - right.key || left.index - right.index)
+    .map(({ value }) => value);
+}
+
+function languageCounts(
+  scenarios: readonly PairScenario[],
+): Record<SampleLanguageVariant, number> {
+  const counts = { en: 0, zh: 0, code_switch: 0 };
+  for (const scenario of scenarios) {
+    if (!SAMPLE_LANGUAGE_VARIANTS.includes(scenario.languageVariant as SampleLanguageVariant)) {
+      throw new Error(
+        `v2 sampling does not support language variant ${scenario.languageVariant}.`,
+      );
+    }
+    counts[scenario.languageVariant as SampleLanguageVariant] += 1;
+  }
+  return counts;
+}
+
+function selectStratifiedSample(
+  scenarios: readonly PairScenario[],
+  sampleSeed: number,
+): { scenarios: PairScenario[]; sampling: PairwiseSampling; selectedIds: ReadonlySet<string> } {
+  const shuffledScenarios = shuffled(scenarios, sampleSeed);
+  const selectedIds = new Set<string>();
+  const selectedCounts = { en: 0, zh: 0, code_switch: 0 };
+  const protectedCoverage: Record<string, string> = {};
+
+  for (const category of PAIRWISE_SAMPLE_PROTECTED_CATEGORIES) {
+    const selected = shuffledScenarios.find(
+      (scenario) =>
+        scenario.category === category &&
+        !selectedIds.has(scenario.scenarioId) &&
+        selectedCounts[scenario.languageVariant as SampleLanguageVariant] <
+          STRATIFIED_SAMPLE_QUOTAS[scenario.languageVariant as SampleLanguageVariant],
+    );
+    if (!selected) {
+      throw new Error(
+        `Cannot satisfy protected-category coverage for ${category} within the v2 language quotas.`,
+      );
+    }
+    selectedIds.add(selected.scenarioId);
+    selectedCounts[selected.languageVariant as SampleLanguageVariant] += 1;
+    protectedCoverage[category] = selected.scenarioId;
+  }
+
+  for (const languageVariant of SAMPLE_LANGUAGE_VARIANTS) {
+    const remaining = STRATIFIED_SAMPLE_QUOTAS[languageVariant] - selectedCounts[languageVariant];
+    if (remaining < 0) {
+      throw new Error(`Protected coverage exceeded the ${languageVariant} sample quota.`);
+    }
+    const candidates = shuffledScenarios.filter(
+      (scenario) =>
+        scenario.languageVariant === languageVariant &&
+        !selectedIds.has(scenario.scenarioId),
+    );
+    if (candidates.length < remaining) {
+      throw new Error(
+        `Not enough comparable ${languageVariant} scenarios for the v2 quota: need ${remaining}, found ${candidates.length}.`,
+      );
+    }
+    for (const scenario of candidates.slice(0, remaining)) {
+      selectedIds.add(scenario.scenarioId);
+      selectedCounts[languageVariant] += 1;
+    }
+  }
+
+  const selectedScenarios = shuffledScenarios.filter((scenario) =>
+    selectedIds.has(scenario.scenarioId),
+  );
+  const eligibleCounts = languageCounts(scenarios);
+  return {
+    scenarios: selectedScenarios,
+    selectedIds,
+    sampling: {
+      strategy: "stratified-random-v1",
+      sampleSeed,
+      quotas: STRATIFIED_SAMPLE_QUOTAS,
+      eligibleCounts,
+      selectedCounts,
+      protectedCoverage,
+    },
+  };
+}
+
 async function readJson(file: string): Promise<unknown> {
   return JSON.parse(await readFile(file, "utf8")) as unknown;
 }
@@ -127,8 +232,15 @@ function asTranscripts(value: unknown, label: string): TranscriptsFile {
 }
 
 async function main(): Promise<void> {
-  const { baselineFile, candidateFile, outDir, scenariosFile, seed } =
-    parseArguments();
+  const {
+    baselineFile,
+    candidateFile,
+    outDir,
+    sample,
+    sampleSeed,
+    scenariosFile,
+    seed,
+  } = parseArguments();
   const baseline = asTranscripts(
     await readJson(baselineFile),
     baselineFile,
@@ -229,19 +341,37 @@ async function main(): Promise<void> {
     });
   }
 
+  let sampling: PairwiseSampling | undefined;
+  let outputScenarios = pairScenarios;
+  if (sample) {
+    const selected = selectStratifiedSample(pairScenarios, sampleSeed || seed);
+    sampling = selected.sampling;
+    outputScenarios = selected.scenarios;
+    const selectedIds = selected.selectedIds;
+    for (const scenario of pairScenarios) {
+      if (!selectedIds.has(scenario.scenarioId)) {
+        excludedScenarios.push({
+          id: scenario.scenarioId,
+          reason: "not selected by the v2 stratified random sample",
+        });
+      }
+    }
+  }
+
   const generatedAt = new Date().toISOString();
   const pairs: PairsFile = {
-    protocol: BLIND_PAIRWISE_PROTOCOL_VERSION,
+    protocol: sample ? BLIND_PAIRWISE_PROTOCOL_V2 : BLIND_PAIRWISE_PROTOCOL_V1,
     seed,
     generatedAt,
     baselineSource: path.relative(process.cwd(), baselineFile),
     candidateSource: path.relative(process.cwd(), candidateFile),
-    scenarios: pairScenarios,
+    scenarios: outputScenarios,
+    ...(sampling ? { sampling } : {}),
     excludedScenarios,
     excludedTurns,
   };
   const sealed: SealedIdentitiesFile = {
-    protocol: BLIND_PAIRWISE_PROTOCOL_VERSION,
+    protocol: pairs.protocol,
     seed,
     generatedAt,
     mapping,
@@ -259,13 +389,19 @@ async function main(): Promise<void> {
     "utf8",
   );
   const turnCount = pairScenarios.reduce(
-    (total, scenario) => total + scenario.turns.length,
+    (total, scenario) =>
+      total + (outputScenarios.includes(scenario) ? scenario.turns.length : 0),
     0,
   );
   console.log(
-    `[pairwise] ${pairScenarios.length} paired scenarios, ${turnCount} comparable turns; ` +
+    `[pairwise] ${outputScenarios.length} paired scenarios, ${turnCount} comparable turns; ` +
       `${excludedScenarios.length} scenarios and ${excludedTurns.length} turns excluded`,
   );
+  if (sampling) {
+    console.log(
+      `[pairwise] v2 sample ${JSON.stringify(sampling.selectedCounts)} from ${JSON.stringify(sampling.eligibleCounts)} (seed ${sampling.sampleSeed})`,
+    );
+  }
   console.log(
     `[pairwise] wrote pairs.json (blinded) and sealed-identities.json to ${path.relative(process.cwd(), outDir)}`,
   );
