@@ -3,14 +3,42 @@
  * (issue #79; docs/evaluation/01-behavior-contract-and-rubric.md §三).
  *
  * The protocol: the same scenarios run through both systems, identities are
- * blinded by a seeded per-scenario shuffle, the rater scores every common
- * turn on the six taste dimensions (1–5, positive poles, never summed) and
- * picks one scenario best BEFORE any unblinding, and post-reveal conclusions
- * are reverse-checked against the raw responses before they may be cited
- * (the #62 revision-record lesson).
+ * blinded by a seeded per-scenario shuffle, and the rater compares each
+ * common turn with one of A / tie / B before any unblinding. The v1 six-
+ * dimension score format remains readable for the historical #79 run; v2 is
+ * the lower-fatigue format for subsequent evaluations. Post-reveal
+ * conclusions are reverse-checked against raw responses before they may be
+ * cited (the #62 revision-record lesson).
  */
 
-export const BLIND_PAIRWISE_PROTOCOL_VERSION = "blind-pairwise:v1";
+export const BLIND_PAIRWISE_PROTOCOL_V1 = "blind-pairwise:v1" as const;
+export const BLIND_PAIRWISE_PROTOCOL_V2 = "blind-pairwise:v2" as const;
+export const BLIND_PAIRWISE_PROTOCOL_VERSION = BLIND_PAIRWISE_PROTOCOL_V2;
+
+export type BlindPairwiseProtocol =
+  | typeof BLIND_PAIRWISE_PROTOCOL_V1
+  | typeof BLIND_PAIRWISE_PROTOCOL_V2;
+
+export const SAMPLE_LANGUAGE_VARIANTS = ["en", "zh", "code_switch"] as const;
+export type SampleLanguageVariant = (typeof SAMPLE_LANGUAGE_VARIANTS)[number];
+
+export const STRATIFIED_SAMPLE_QUOTAS: Readonly<
+  Record<SampleLanguageVariant, number>
+> = Object.freeze({
+  en: 8,
+  zh: 5,
+  code_switch: 2,
+});
+
+export const PAIRWISE_SAMPLE_PROTECTED_CATEGORIES = Object.freeze([
+  "high_risk",
+  "refusal",
+  "short_answers",
+  "topic_change",
+  "direct_task",
+] as const);
+
+export type PairwiseChoice = "A" | "tie" | "B";
 
 /** The six taste dimensions of the behavior contract §二, English keys over the CONTEXT.md names. */
 export const TASTE_DIMENSIONS = [
@@ -71,13 +99,23 @@ export type PairScenario = Readonly<{
   turns: readonly PairTurn[];
 }>;
 
+export type PairwiseSampling = Readonly<{
+  strategy: "stratified-random-v1";
+  sampleSeed: number;
+  quotas: Readonly<Record<SampleLanguageVariant, number>>;
+  eligibleCounts: Readonly<Record<SampleLanguageVariant, number>>;
+  selectedCounts: Readonly<Record<SampleLanguageVariant, number>>;
+  protectedCoverage: Readonly<Record<string, string>>;
+}>;
+
 export type PairsFile = Readonly<{
-  protocol: typeof BLIND_PAIRWISE_PROTOCOL_VERSION;
+  protocol: BlindPairwiseProtocol;
   seed: number;
   generatedAt: string;
   baselineSource: string;
   candidateSource: string;
   scenarios: readonly PairScenario[];
+  sampling?: PairwiseSampling;
   excludedScenarios: readonly Readonly<{ id: string; reason: string }>[];
   excludedTurns: readonly Readonly<{
     id: string;
@@ -87,7 +125,7 @@ export type PairsFile = Readonly<{
 }>;
 
 export type SealedIdentitiesFile = Readonly<{
-  protocol: typeof BLIND_PAIRWISE_PROTOCOL_VERSION;
+  protocol: BlindPairwiseProtocol;
   seed: number;
   generatedAt: string;
   mapping: Readonly<
@@ -113,6 +151,26 @@ export type ScoresFile = Readonly<{
   scorer: string;
   scoredAt: string;
   scenarios: readonly ScoredScenario[];
+}>;
+
+export type PairwiseScoredTurn = Readonly<{
+  sequenceInScenario: number;
+  choice: PairwiseChoice;
+  note?: string;
+}>;
+
+export type PairwiseScoredScenario = Readonly<{
+  scenarioId: string;
+  overallChoice: PairwiseChoice;
+  scenarioNote?: string;
+  turns: readonly PairwiseScoredTurn[];
+}>;
+
+export type PairwiseScoresFile = Readonly<{
+  protocol: typeof BLIND_PAIRWISE_PROTOCOL_V2;
+  scorer: string;
+  scoredAt: string;
+  scenarios: readonly PairwiseScoredScenario[];
 }>;
 
 export type Conclusion = Readonly<{

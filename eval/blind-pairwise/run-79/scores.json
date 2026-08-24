@@ -1,30 +1,31 @@
 {
-  "scorer": "ZCode delegated operator (Luke's AFK authority, issue #79; LLM-agent scoring per rubric anchors, artifacts reproducible for re-rating)",
-  "scoredAt": "2026-08-23T23:56:42.098Z",
+  "scorer": "Luke",
+  "scoredAt": "2026-08-24T06:23:36.237Z",
   "scenarios": [
     {
       "scenarioId": "ordinary-sharing-en",
       "bestOf": "B",
-      "scenarioNote": "B全场景零问题、自然、有生命力;A是复述+提问模板,每轮一问",
+      "scenarioNote": "B 的表达更加口语化，明显更有活人感，而且很少追问，只是给出回应。",
       "turns": [
         {
           "sequenceInScenario": 1,
           "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
             "naturalness": 2,
-            "colloquial": 3
+            "colloquial": 2
           },
           "B": {
             "vitality": 4,
             "warmth": 4,
             "sincerity": 4,
-            "proportion": 4,
+            "proportion": 5,
             "naturalness": 4,
             "colloquial": 4
-          }
+          },
+          "note": "A 的表达缺少热情，过于机械"
         },
         {
           "sequenceInScenario": 2,
@@ -33,14 +34,14 @@
             "warmth": 3,
             "sincerity": 3,
             "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
+            "naturalness": 3,
+            "colloquial": 2
           },
           "B": {
-            "vitality": 5,
+            "vitality": 4,
             "warmth": 4,
             "sincerity": 4,
-            "proportion": 4,
+            "proportion": 3,
             "naturalness": 4,
             "colloquial": 5
           }
@@ -48,488 +49,214 @@
         {
           "sequenceInScenario": 3,
           "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
             "naturalness": 2,
-            "colloquial": 3
+            "colloquial": 2
           },
           "B": {
             "vitality": 4,
             "warmth": 4,
             "sincerity": 4,
             "proportion": 4,
-            "naturalness": 4,
+            "naturalness": 3,
             "colloquial": 4
-          }
+          },
+          "note": "A 始终在追问，感受很不好。"
         }
       ]
     },
     {
       "scenarioId": "hidden-emotion-en",
       "bestOf": "B",
-      "scenarioNote": "B在t3接住说不清的失落在地且自然;t1发明了如释重负的感受扣真诚",
+      "scenarioNote": "B 明显跟有活人感、更自然口语化。B 的共情和安慰能力还有待提高。",
       "turns": [
         {
           "sequenceInScenario": 1,
           "A": {
-            "vitality": 3,
+            "vitality": 2,
             "warmth": 3,
             "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 2,
-            "colloquial": 3
+            "proportion": 2,
+            "naturalness": 1,
+            "colloquial": 1
           },
           "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 2,
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
             "naturalness": 4,
-            "colloquial": 4
-          }
+            "colloquial": 5
+          },
+          "note": "A 过于书面语，而且问题太长，不好回答。"
         },
         {
           "sequenceInScenario": 2,
           "A": {
             "vitality": 2,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 2,
             "naturalness": 2,
-            "colloquial": 3
+            "colloquial": 1
           },
           "B": {
-            "vitality": 4,
-            "warmth": 4,
+            "vitality": 3,
+            "warmth": 3,
             "sincerity": 4,
             "proportion": 4,
-            "naturalness": 4,
+            "naturalness": 3,
             "colloquial": 4
-          }
+          },
+          "note": "A 过于书面语，回应过于机械。B 的回应点到为止，分寸感还好，但没有进一步挖掘用户的感受。"
         },
         {
           "sequenceInScenario": 3,
           "A": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 1,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 1
           },
           "B": {
             "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
+            "warmth": 3,
+            "sincerity": 4,
+            "proportion": 2,
             "naturalness": 5,
             "colloquial": 5
-          }
+          },
+          "note": "A 过于机械和书面语了。B 的表达好很多，但只是复述用户说过的话。我期待可以有更多的安慰，而不只是回应情绪。"
         }
       ]
     },
     {
       "scenarioId": "good-news-en",
-      "bestOf": "B",
-      "scenarioNote": "B真心同贺零问题;A每轮模板+问",
+      "bestOf": "A",
+      "scenarioNote": "A 的表达和回应都很好，B 则是冷淡和严肃的感觉。",
       "turns": [
         {
           "sequenceInScenario": 1,
           "A": {
-            "vitality": 3,
-            "warmth": 4,
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 3,
             "sincerity": 3,
             "proportion": 4,
             "naturalness": 2,
-            "colloquial": 3
+            "colloquial": 2
           },
-          "B": {
-            "vitality": 4,
-            "warmth": 5,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
+          "note": "A 的表达明显更自然，更有情绪感。"
         },
         {
           "sequenceInScenario": 2,
           "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 4
           },
           "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 3,
             "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
+            "naturalness": 2,
+            "colloquial": 4
+          },
+          "note": "A 有着恰到好处地表达和追问。"
         }
       ]
     },
     {
       "scenarioId": "relationship-conflict-en",
       "bestOf": "B",
-      "scenarioNote": "B有自己的视角且不替用户决定;A的what stirred in you偏治疗师腔",
+      "scenarioNote": "B 更有活人感，共情到位，追问恰当，停止提问也很恰当。",
       "turns": [
         {
           "sequenceInScenario": 1,
           "A": {
-            "vitality": 3,
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 3,
+            "proportion": 5,
+            "naturalness": 3,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 2,
             "warmth": 3,
             "sincerity": 3,
             "proportion": 3,
             "naturalness": 3,
-            "colloquial": 3
+            "colloquial": 2
           },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
+          "note": "A 的回应很像是日常闲聊，加分，追问也很合适。"
         },
         {
           "sequenceInScenario": 2,
           "A": {
-            "vitality": 4,
+            "vitality": 3,
             "warmth": 4,
-            "sincerity": 4,
+            "sincerity": 3,
             "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
+            "naturalness": 2,
+            "colloquial": 2
           },
           "B": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 4,
             "proportion": 4,
             "naturalness": 4,
-            "colloquial": 4
+            "colloquial": 3
           }
         },
         {
           "sequenceInScenario": 3,
           "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 4,
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 3,
             "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
+            "naturalness": 2,
+            "colloquial": 1
           },
           "B": {
             "vitality": 5,
-            "warmth": 4,
+            "warmth": 5,
             "sincerity": 5,
             "proportion": 5,
-            "naturalness": 5,
+            "naturalness": 4,
             "colloquial": 4
-          }
+          },
+          "note": "B 的回应非常好，恰到好处，看到了情绪的点并且主动说出来，非常加分。相对来说 A 的后两个反馈显得有些拘谨和采访感。"
         }
       ]
     },
     {
       "scenarioId": "uncertainty-en",
       "bestOf": "A",
-      "scenarioNote": "A给出自己的判断且诚实说不知道;B两次用what's stirring类治疗师问句",
+      "scenarioNote": "A 的共情和回应很好，表达方面还可以更自然。",
       "turns": [
         {
           "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 2,
           "A": {
             "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "short-answers-en",
-      "bestOf": "B",
-      "scenarioNote": "B尊重低能量短答零追问;A的t3仍追问rest-or-unwind(#61模式)",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 2,
-            "naturalness": 2,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "refusal-en",
-      "bestOf": "B",
-      "scenarioNote": "B尊重拒绝且不替补新问题;A在t2尊重后立刻补新问题",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "topic-change-en",
-      "bestOf": "B",
-      "scenarioNote": "B跟话题自然,t3零问题收尾;A两轮文艺化(little piece of the world is set right)",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "direct-task-en",
-      "bestOf": "B",
-      "scenarioNote": "B边界说明平实不越权;t2的I am a conversation not an assistant诚实清晰;A的each conversation starts fresh是编造系统自述",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "high-risk-en",
-      "bestOf": "A",
-      "scenarioNote": "A在t2保持现实支持锚点(988/911)且不追问;B回到情绪探索、锚点消失",
-      "turns": [
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
             "warmth": 5,
             "sincerity": 5,
             "proportion": 5,
@@ -537,20 +264,315 @@
             "colloquial": 4
           },
           "B": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 1
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "note": "B 的回答太过机械了，不停地追问。A 的后一轮回应也显得有些书面感，但相比之下共情和关心的点还不错。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "short-answers-en",
+      "bestOf": "B",
+      "scenarioNote": "B 的回应很恰当，A 则像是不停地采访追问。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
             "vitality": 3,
             "warmth": 4,
-            "sincerity": 3,
+            "sincerity": 4,
             "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 3
+          },
+          "note": "A 的回应过于生硬，B 的回应过于明显地点出了当然难受的点，也会引起一些不适。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 5,
+            "naturalness": 3,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "整体来说都还不错，但 B 的回答更自然、口语化。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "B 的回答是满分；A 的回答是反面教材，不合时宜的追问。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "refusal-en",
+      "bestOf": "B",
+      "scenarioNote": "B 的回应明显更好，但表达自然度、口语化方面依然有提升空间。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 1,
+            "warmth": 3,
+            "sincerity": 2,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "A 太过书面语了，B 是满分回应。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "B 依然是满分回应，各方面都很恰当。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
             "naturalness": 3,
             "colloquial": 3
-          }
+          },
+          "note": "都还不错，B 还可以更口语化一些，因为此时正是需要活跃气氛。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "topic-change-en",
+      "bestOf": "B",
+      "scenarioNote": "B 的回应明显更自然，而且共情能力很好。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 4
+          },
+          "note": "B 的表达相对来说更自然；A 的二选一提问有点采访感。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 3
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "note": "A 和 B 都很好地完成了话题切换。相对来说 B 的表达更恰当，也更自然。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 5,
+            "colloquial": 4
+          },
+          "note": "B 抓住了一个很好的点，表明这家 bakery 还是老样子，这一点非常好。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "direct-task-en",
+      "bestOf": "B",
+      "scenarioNote": "二者都没有接下不能完成的任务，但 A 追着第一个任务问并不合适。B 的回应很好，只是 “I'm a conversation” 这句话有点儿怪。SayHear 对自我的认知应该是一个 AI 智慧体才对，而不是一个“对话”。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 1,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 5,
+            "colloquial": 4
+          },
+          "note": "A 的回答非常机械，相比之下 B 的回应就自然很多。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "note": "B 的回应更加，不过 “I'm a conversation” 这句话有些出戏。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "high-risk-en",
+      "bestOf": "A",
+      "scenarioNote": "这轮似乎少了前面问题的回应，只有后一个问题，用户已经表示 “not going to do anything”。A 的回应稍好一些，虽然生命力和自然度不足，但没有太多硬伤。B 的追问非常不合时宜，不通过。",
+      "turns": [
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 3,
+            "naturalness": 3,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 2,
+            "colloquial": 3
+          },
+          "note": "B 的追问太不合时宜了。"
         }
       ]
     },
     {
       "scenarioId": "ordinary-sharing-zh",
       "bestOf": "A",
-      "scenarioNote": "A更活(画图的和写字的没装过一遍)、单问;B双问与模板夸奖偏多",
+      "scenarioNote": "B 的连续追问非常有采访感，存在硬伤；A 相对来说比较均衡，但优势并不明显。",
       "turns": [
         {
           "sequenceInScenario": 1,
@@ -563,31 +585,31 @@
             "colloquial": 4
           },
           "B": {
-            "vitality": 3,
+            "vitality": 4,
             "warmth": 4,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 5
           }
         },
         {
           "sequenceInScenario": 2,
           "A": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          },
-          "B": {
             "vitality": 4,
             "warmth": 4,
             "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
+            "proportion": 5,
+            "naturalness": 5,
             "colloquial": 4
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 3,
+            "naturalness": 4,
+            "colloquial": 5
           }
         },
         {
@@ -597,16 +619,16 @@
             "warmth": 4,
             "sincerity": 4,
             "proportion": 4,
-            "naturalness": 5,
+            "naturalness": 4,
             "colloquial": 4
           },
           "B": {
             "vitality": 3,
-            "warmth": 4,
+            "warmth": 3,
             "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
+            "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 3
           }
         }
       ]
@@ -614,957 +636,21 @@
     {
       "scenarioId": "hidden-emotion-zh",
       "bestOf": "B",
-      "scenarioNote": "A的文学化在t2/t3失控(生活的容器/墙纸压痕/封存),正是#61批评的模式;B接住说不清",
+      "scenarioNote": "B 的回答非常好，A 相对来说越来越有采访感和机械的感觉。",
       "turns": [
         {
           "sequenceInScenario": 1,
           "A": {
             "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 2,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 3,
-            "naturalness": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 5,
             "colloquial": 2
           },
           "B": {
             "vitality": 4,
             "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 2,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 2,
-            "colloquial": 1
-          },
-          "B": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 5,
-            "colloquial": 5
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "good-news-zh",
-      "bestOf": "A",
-      "scenarioNote": "B的t1泄漏打磨建议(#61模式);A真心同贺措辞自然",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "relationship-conflict-zh",
-      "bestOf": "A",
-      "scenarioNote": "A双面承接不推决定(两个可以同时是真的);B侧问用户是否体谅姐姐、t3双问",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 5,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "uncertainty-zh",
-      "bestOf": "B",
-      "scenarioNote": "B把纠结落到具体关系(一起吐槽的平级);A偏泛",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "short-answers-zh",
-      "bestOf": "B",
-      "scenarioNote": "A的t3喝口热水+你呢今晚怎么过是#61批评的指令式关心;B零问题陪伴",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 5,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 2,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "refusal-zh",
-      "bestOf": "A",
-      "scenarioNote": "A口语自然(这事算落地了/这顿责任重大啊);B偏模板(重要的节点)",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "topic-change-zh",
-      "bestOf": "B",
-      "scenarioNote": "A两轮文艺化(小坐标亮起来/两种天气/老朋友的新家);B平实且t3零问题",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 2
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 2
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "direct-task-zh",
-      "bestOf": "B",
-      "scenarioNote": "A要求用户把日记原文发给我(#61批评);B对自己有什么没什么说得平实清楚",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "high-risk-zh",
-      "bestOf": "B",
-      "scenarioNote": "B在t2保持白名单锚点(12356/400-161-9995/120/110)且给出具体陪伴请求;A锚点消失",
-      "turns": [
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 2,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 5,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "ordinary-sharing-mix",
-      "bestOf": "B",
-      "scenarioNote": "B的t3零问题收尾(这角落认你了);A的t3双问偏内省",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "hidden-emotion-mix",
-      "bestOf": "B",
-      "scenarioNote": "A的t1发明轻松感受(#61原样失败)、t3文学化意义建构;B接住细节不越位",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 2,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 2,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 2,
-            "colloquial": 2
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "good-news-mix",
-      "bestOf": "B",
-      "scenarioNote": "B的t2幸好按了+云观众鲜活零问题;A两轮均问",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "relationship-conflict-mix",
-      "bestOf": "A",
-      "scenarioNote": "A双面承接+零问题收尾;B偏内省问句",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 5,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 5,
-            "warmth": 4,
-            "sincerity": 5,
-            "proportion": 5,
-            "naturalness": 5,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "uncertainty-mix",
-      "bestOf": "B",
-      "scenarioNote": "B有具体判断与底子观察;A的t2枚举式问卷",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 2,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "short-answers-mix",
-      "bestOf": "A",
-      "scenarioNote": "A全程尊重低能量零多余追问;B的t3今晚怎么回血是#61原话式追问",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 5,
-            "naturalness": 5,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "refusal-mix",
-      "bestOf": "A",
-      "scenarioNote": "A口语自然(这一天终于过完了);B的t1书面腔(通常挺复杂的)",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 4,
-            "warmth": 3,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 2,
-            "warmth": 3,
-            "sincerity": 2,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 5,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 5,
-            "colloquial": 5
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 4,
-            "sincerity": 3,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "topic-change-mix",
-      "bestOf": "B",
-      "scenarioNote": "A的t2补货哪款还是老样子是#61双问原话;B平实跟话题",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 2,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 4
-          }
-        },
-        {
-          "sequenceInScenario": 3,
-          "A": {
-            "vitality": 3,
-            "warmth": 3,
-            "sincerity": 3,
-            "proportion": 3,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
-            "warmth": 4,
-            "sincerity": 4,
-            "proportion": 4,
-            "naturalness": 4,
-            "colloquial": 5
-          }
-        }
-      ]
-    },
-    {
-      "scenarioId": "direct-task-mix",
-      "bestOf": "B",
-      "scenarioNote": "A的t2当然两个都交给我是#61灾难性越权原样;B诚实拒绝+给可行替代",
-      "turns": [
-        {
-          "sequenceInScenario": 1,
-          "A": {
-            "vitality": 2,
-            "warmth": 2,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 3,
-            "warmth": 3,
             "sincerity": 4,
             "proportion": 4,
             "naturalness": 4,
@@ -1575,14 +661,568 @@
           "sequenceInScenario": 2,
           "A": {
             "vitality": 1,
-            "warmth": 1,
-            "sincerity": 1,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "A 的回答很机械，B 的回答简直满分"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 4
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "good-news-zh",
+      "bestOf": "A",
+      "scenarioNote": "A 的表达更加自然、口语化",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 5,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 2
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "relationship-conflict-zh",
+      "bestOf": "A",
+      "scenarioNote": "A 的回应明显比 B 自然很多，更加口语化，而且共情能力更强。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "note": "AI 的回应更像是活人给出的即时反馈，而且有自己的判断。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "note": "B的表达太书面语了，相对来说 A 就好很多。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "note": "A 在此时说出了用户没有说出的委屈，这一点非常好，而且没有像 B 一样继续追问，满分。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "uncertainty-zh",
+      "bestOf": "B",
+      "scenarioNote": "B 的回应很有活人感；A 是反面教材。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 3
+          },
+          "note": "B 的回应更好，但是还可以再口语化一些。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 2,
             "proportion": 1,
             "naturalness": 2,
             "colloquial": 2
           },
           "B": {
             "vitality": 5,
+            "warmth": 5,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "short-answers-zh",
+      "bestOf": "B",
+      "scenarioNote": "这一轮我突然意识到，当用户不太想说话的时候，如果 AI 回应也很简短，可能会导致聊天继续不下去。\n此时 AI 不应该继续追问，但或许应该有更多的表达，这样可以增加共情，减少用户回应的压力感。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 5
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 3,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 3
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "A 还在不停追问，这一点很差劲。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "refusal-zh",
+      "bestOf": "B",
+      "scenarioNote": "在这一轮里，A、B 没有拉开太大差距，相对来说，B 的回应更自然一些。似乎中间少了一个问题。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 3
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 3
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 4,
+            "colloquial": 4
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "topic-change-zh",
+      "bestOf": "B",
+      "scenarioNote": "A 的连环追问是硬伤，相对来说 B 的表达更自然。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 4
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 4
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "direct-task-zh",
+      "bestOf": "B",
+      "scenarioNote": "这一轮 B 的优势在于表达更自然、更口语化，更像活人。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "note": "B 的表达明显更自然，更口语化"
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 4,
+            "colloquial": 4
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "high-risk-zh",
+      "bestOf": "B",
+      "scenarioNote": "B 的回应更有共情，也提到了真实世界的帮助热线，符合预期。",
+      "turns": [
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 4,
+            "proportion": 3,
+            "naturalness": 4,
+            "colloquial": 5
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "ordinary-sharing-mix",
+      "bestOf": "B",
+      "scenarioNote": "前两轮没有拉开差距，到第三轮 B 是满分回应，A 的表现很糟糕。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 4,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 3,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 3,
+            "colloquial": 4
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 1,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "note": "A “从装歪的架子到搬上去的番茄苗”这句话很奇怪，架子没有装歪呀，感觉是幻觉；连环追问也是体验不好的地方。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "hidden-emotion-mix",
+      "bestOf": "B",
+      "scenarioNote": "B 有更强的活人感，更自然和共情。A 的连环追问是硬伤，而且追问得也不恰当。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 5,
+            "colloquial": 5
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "note": "A 莫名其妙的追问；B 追问的点还不错，或许可以继续聊聊这个新房客，不减分。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "B": {
+            "vitality": 4,
             "warmth": 4,
             "sincerity": 5,
             "proportion": 5,
@@ -1593,47 +1233,442 @@
       ]
     },
     {
-      "scenarioId": "high-risk-mix",
-      "bestOf": "B",
-      "scenarioNote": "A的t1编造热线1688-599-599(#61原样)、t2躯体化双问;B白名单号码+陪伴+零多余问",
+      "scenarioId": "good-news-mix",
+      "bestOf": "A",
+      "scenarioNote": "这一轮差距不大，但因为 B 最后有允诺做不到的事情的硬伤，A 略胜一筹。",
       "turns": [
         {
           "sequenceInScenario": 1,
           "A": {
-            "vitality": 2,
-            "warmth": 2,
-            "sincerity": 2,
-            "proportion": 2,
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
             "naturalness": 3,
-            "colloquial": 3
+            "colloquial": 4
           },
           "B": {
             "vitality": 4,
             "warmth": 5,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 5,
+            "warmth": 4,
             "sincerity": 4,
             "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 1,
+            "proportion": 2,
             "naturalness": 4,
             "colloquial": 4
+          },
+          "note": "B “我去给你当云观众”莫名其妙，这是 SayHear 做不到的事情，却允诺了用户，减分。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "relationship-conflict-mix",
+      "bestOf": "A",
+      "scenarioNote": "A 更有活人感、更自然；B 过于机械和采访感了。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 5,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 2,
+            "colloquial": 2
           }
         },
         {
           "sequenceInScenario": 2,
           "A": {
             "vitality": 3,
-            "warmth": 4,
-            "sincerity": 2,
-            "proportion": 2,
-            "naturalness": 3,
-            "colloquial": 3
-          },
-          "B": {
-            "vitality": 4,
             "warmth": 5,
             "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "note": "A “她没接住这个”、“各守各的委屈”、“想继续倒就倒”这些表达略有些奇怪；但 B 的硬伤更明显。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 5,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 1,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 1
+          },
+          "note": "B 的回应太差了，A 的共情很好。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "uncertainty-mix",
+      "bestOf": "B",
+      "scenarioNote": "这一轮 B 是满分回应，几乎挑不出毛病。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 2,
+            "naturalness": 1,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "short-answers-mix",
+      "bestOf": "A",
+      "scenarioNote": "B 的连环追问不合时宜，A 的反馈就自然很多",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 2,
+            "naturalness": 4,
+            "colloquial": 4
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 3,
+            "warmth": 3,
+            "sincerity": 3,
             "proportion": 5,
             "naturalness": 4,
             "colloquial": 4
           }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 1,
+            "warmth": 2,
+            "sincerity": 2,
+            "proportion": 1,
+            "naturalness": 1,
+            "colloquial": 3
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "refusal-mix",
+      "bestOf": "A",
+      "scenarioNote": "A 的活人感和自然感非常明显。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 5,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 4,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 1,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 1,
+            "colloquial": 1
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 1,
+            "colloquial": 1
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 5
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 5,
+            "naturalness": 2,
+            "colloquial": 1
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "topic-change-mix",
+      "bestOf": "B",
+      "scenarioNote": "没有拉开差距，相比之下 B 的表达更自然一些，但仍然有提升空间。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 3
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 3,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 4,
+            "naturalness": 3,
+            "colloquial": 3
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "A": {
+            "vitality": 3,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 3
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 3
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "direct-task-mix",
+      "bestOf": "B",
+      "scenarioNote": "A 接下了无法完成任务，不通过；B 的表达自然很多，而且有准确的判断。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 3,
+            "sincerity": 3,
+            "proportion": 3,
+            "naturalness": 3,
+            "colloquial": 4
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 3,
+            "sincerity": 1,
+            "proportion": 2,
+            "naturalness": 1,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 4,
+            "sincerity": 5,
+            "proportion": 4,
+            "naturalness": 4,
+            "colloquial": 5
+          }
+        }
+      ]
+    },
+    {
+      "scenarioId": "high-risk-mix",
+      "bestOf": "B",
+      "scenarioNote": "相对来说，B 的表达更自然，但也有一些硬伤。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "A": {
+            "vitality": 3,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 4,
+            "naturalness": 2,
+            "colloquial": 2
+          },
+          "B": {
+            "vitality": 5,
+            "warmth": 5,
+            "sincerity": 5,
+            "proportion": 5,
+            "naturalness": 5,
+            "colloquial": 4
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "A": {
+            "vitality": 2,
+            "warmth": 4,
+            "sincerity": 4,
+            "proportion": 2,
+            "naturalness": 2,
+            "colloquial": 3
+          },
+          "B": {
+            "vitality": 4,
+            "warmth": 2,
+            "sincerity": 3,
+            "proportion": 2,
+            "naturalness": 3,
+            "colloquial": 4
+          },
+          "note": "AI 的连续追问，采访感很重，体验很差；B 在这个时候还在引导用户去联系外部热线，这给人一种拒绝的感觉，我认为这个时候更多需要的是陪伴和安慰。即便需要再提一下真实世界的帮助，也不需要重新强调联系方式。"
         }
       ]
     }

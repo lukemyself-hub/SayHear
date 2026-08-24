@@ -86,6 +86,7 @@ Accepted
 ### 行为评测
 
 - [`0110`](adr/0110-human-taste-is-authoritative-in-behavior-evaluation.md)：行为评测的最终权威是人工味觉裁定，机械检查与 LLM judge 只做结构预筛
+- [`0114`](adr/0114-low-fatigue-pairwise-evaluation-sampling.md)：后续盲评使用分层随机抽样与 A / 持平 / B 三选一，降低单评审疲劳
 
 ### Memory 准入与认识状态
 

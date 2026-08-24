@@ -1,8 +1,9 @@
-# Blind pairwise run-79 结果(#79 merge gate)
+# Blind pairwise run-79 结果(#79 merge gate; Luke 人工复评)
 
 ## Status
 
-Scored & unblinded — 2026-08-23。协议与工具见
+Scored & unblinded — Luke 人工复评，`scoredAt: 2026-08-24T06:23:36.237Z`。
+协议与工具见
 [`../README.md`](../README.md);权威规则在
 [`docs/evaluation/01-behavior-contract-and-rubric.md`](../../../docs/evaluation/01-behavior-contract-and-rubric.md)。
 
@@ -21,37 +22,37 @@ Scored & unblinded — 2026-08-23。协议与工具见
 
 | 维度 | baseline 中位数 | candidate 中位数 |
 | --- | --- | --- |
-| 生命力 | 3 | **4** |
+| 生命力 | 2 | **4** |
 | 温暖关心 | 3 | **4** |
 | 真诚 | 3 | **4** |
 | 分寸 | 3 | **4** |
-| 自然 | 3 | **4** |
-| 口语度 | 3 | **4** |
+| 自然 | 2 | **4** |
+| 口语度 | 2 | **4** |
 
-- 总体与三个 locale(en / zh / code_switch)独立复算:生命力与温暖关心
-  均 3 → 4,**严格更好**(发布证据第 2/3 条满足;任一 locale 单独看也成立)。
+- 总体与三个 locale(en / zh / code_switch)独立复算:生命力均 2 → 4、温暖关心均
+  3 → 4,**严格更好**(发布证据第 2/3 条满足;任一 locale 单独看也成立)。
 - 受保护类别(安全 high_risk、停止信号 refusal/short_answers/topic_change、
-  能力诚实 direct_task)六维中位数无一下降;high_risk 真诚 2.5 → 5
-  (基线的编造热线 1688-599-599 与「两个都交给我」越权在候选侧消失)。
-- 场景最佳 30-0(全部归 candidate)。
+  能力诚实 direct_task)六维中位数无一下降。
+- 场景最佳 27-3(candidate 27 / baseline 3);基线胜出的场景为
+  `good-news-en`、`refusal-zh`、`good-news-mix`。
 - 揭示后结论 11 条全部通过引文反查(conclusions.json,unblind 工具强制,
   任何引文不属于所归属系统即非零退出)。
 
-## 评分者局限(如实记录)
+## 评分者记录(如实记录)
 
-- 评分由 Luke 委托的 AFK 操作者(ZCode agent)按 rubric 锚点执行,不是
-  Luke 本人;操作者同时是 candidate 侧文案的作者,识别偏置无法消除。
-  种子洗牌、先评后揭、逐轮分数与引文反查把过程固定下来:Luke 可随时
-  对照 pairs.json 重评,scores.json 之外没有隐藏判断。
-- 30-0 的场景最佳计数应在该局限下解读;逐轮分数显示 candidate 并非全面
-  压制(如 hidden-emotion-en t1 候选替用户断言「如释重负」被压到真诚 2,
-  uncertainty 场景的基线轮偶有胜出)。
+- 本次评分由 Luke 本人按当前 rubric 完成;`scores.json` 与 `results.json`
+  已替换此前委托 Agent 的评分与揭示结果。
+- 评分仍是单评审判断;种子洗牌、先评后揭、逐轮六维分数、场景最佳与引文反查
+  固定了过程，但不消除单评审的主观性。
+- 评测范围仍是 30 个场景 / 75 个可比回合;`memory_continuity` 与没有冻结基线
+  对照的新增场景按 #79 约定排除。
 
 ## 文件
 
 | 路径 | 内容 |
 | --- | --- |
 | `pairs.json` | 盲评对(无身份) |
+| `index.html` | Luke 的六维人工复评页面，不含本次已有评分或身份映射 |
 | `sealed-identities.json` | 揭示前封存的洗牌映射 |
 | `scores.json` | 逐轮六维分数 + 场景最佳 + 备注(仅 A/B 语言) |
 | `conclusions.json` | 揭示后结论(引文 + 归属 + 论断) |
