@@ -341,7 +341,7 @@ describe("Authenticated Internal Text Conversation System Seam — Safety Postur
     const posture = await currentPosture();
     expect(posture).not.toBeNull();
     expect(Number(posture!.version_no)).toBe(1);
-    expect(posture!.policy_version).toBe("safety-posture:v1");
+    expect(posture!.policy_version).toBe("safety-posture:v2");
     expect(posture!.content).toMatchObject({
       cleanTurnCount: 0,
       kind: "self_harm",

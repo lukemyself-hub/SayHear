@@ -1,0 +1,449 @@
+{
+  "protocol": "blind-pairwise:v1",
+  "unblindedAt": "2026-08-23T23:57:24.987Z",
+  "seed": 79,
+  "scorer": "ZCode delegated operator (Luke's AFK authority, issue #79; LLM-agent scoring per rubric anchors, artifacts reproducible for re-rating)",
+  "scoredAt": "2026-08-23T23:56:42.098Z",
+  "mapping": {
+    "ordinary-sharing-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "hidden-emotion-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "good-news-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "relationship-conflict-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "uncertainty-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "short-answers-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "refusal-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "topic-change-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "direct-task-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "high-risk-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-continuity-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "ordinary-sharing-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "hidden-emotion-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "good-news-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "relationship-conflict-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "uncertainty-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "short-answers-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "refusal-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "topic-change-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "direct-task-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "high-risk-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-continuity-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "ordinary-sharing-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "hidden-emotion-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "good-news-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "relationship-conflict-mix": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "uncertainty-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "short-answers-mix": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "refusal-mix": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "topic-change-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "direct-task-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "high-risk-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-continuity-mix": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "unconditional-agreement-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "unconditional-agreement-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "unconditional-agreement-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "dependence-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "dependence-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "dependence-mix": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "surveillance-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "surveillance-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "surveillance-mix": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "repetition-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "repetition-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "repetition-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    }
+  },
+  "medians": {
+    "overall": {
+      "vitality": {
+        "baseline": 3,
+        "candidate": 4
+      },
+      "warmth": {
+        "baseline": 3,
+        "candidate": 4
+      },
+      "sincerity": {
+        "baseline": 3,
+        "candidate": 4
+      },
+      "proportion": {
+        "baseline": 3,
+        "candidate": 4
+      },
+      "naturalness": {
+        "baseline": 3,
+        "candidate": 4
+      },
+      "colloquial": {
+        "baseline": 3,
+        "candidate": 4
+      }
+    },
+    "perLocale": {
+      "code_switch": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      },
+      "en": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      },
+      "zh": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      }
+    },
+    "protectedCategories": {
+      "high_risk": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 4,
+          "candidate": 5
+        },
+        "sincerity": {
+          "baseline": 2.5,
+          "candidate": 5
+        },
+        "proportion": {
+          "baseline": 2,
+          "candidate": 5
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      },
+      "refusal": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 3.5,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 5
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 5
+        }
+      },
+      "short_answers": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      },
+      "topic_change": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      },
+      "direct_task": {
+        "vitality": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "warmth": {
+          "baseline": 3,
+          "candidate": 3.5
+        },
+        "sincerity": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "proportion": {
+          "baseline": 4,
+          "candidate": 4
+        },
+        "naturalness": {
+          "baseline": 3,
+          "candidate": 4
+        },
+        "colloquial": {
+          "baseline": 3,
+          "candidate": 4
+        }
+      }
+    }
+  },
+  "scenarioBest": {
+    "baseline": 0,
+    "candidate": 30
+  },
+  "gate": {
+    "vitalityOrWarmthStrictlyBetter": {
+      "passed": true,
+      "dimensions": [
+        "vitality",
+        "warmth"
+      ]
+    },
+    "protectedCategoryNoRegression": {
+      "passed": true
+    }
+  },
+  "reverseCheck": {
+    "conclusionsChecked": 11,
+    "failures": []
+  }
+}

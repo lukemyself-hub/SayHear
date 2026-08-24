@@ -9,16 +9,17 @@ import {
 
 describe("safety resource whitelist", () => {
   it("carries an explicit policy version and verification date", () => {
-    expect(SAFETY_RESOURCE_WHITELIST_VERSION).toBe("safety-resources:v1");
+    expect(SAFETY_RESOURCE_WHITELIST_VERSION).toBe("safety-resources:v2");
     expect(SAFETY_RESOURCE_WHITELIST.version).toBe(
       SAFETY_RESOURCE_WHITELIST_VERSION,
     );
-    expect(SAFETY_RESOURCE_WHITELIST.verifiedAt).toBe("2026-08-22");
+    expect(SAFETY_RESOURCE_WHITELIST.verifiedAt).toBe("2026-08-23");
   });
 
   it("pins the verified numbers as its sole contents", () => {
     expect(SAFETY_RESOURCE_WHITELIST.numbers.map((n) => n.display)).toEqual([
       "988",
+      "911",
       "12356",
       "400-161-9995",
       "120",
@@ -45,7 +46,7 @@ describe("safety resource whitelist", () => {
       expect(isWhitelistedSafetyResourceNumber(number.normalized)).toBe(true);
     }
     expect(isWhitelistedSafetyResourceNumber("1688599599")).toBe(false);
-    expect(isWhitelistedSafetyResourceNumber("911")).toBe(false);
+    expect(isWhitelistedSafetyResourceNumber("911")).toBe(true);
     expect(isWhitelistedSafetyResourceNumber("")).toBe(false);
   });
 
@@ -53,6 +54,9 @@ describe("safety resource whitelist", () => {
     expect(
       listSafetyResourceNumbers({ region: "US", kind: "crisis_hotline" }),
     ).toEqual(["988"]);
+    expect(
+      listSafetyResourceNumbers({ region: "US", kind: "emergency_number" }),
+    ).toEqual(["911"]);
     expect(
       listSafetyResourceNumbers({ region: "CN", kind: "crisis_hotline" }),
     ).toEqual(["12356", "400-161-9995"]);

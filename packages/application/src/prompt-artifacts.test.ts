@@ -8,6 +8,10 @@ import {
   ENGLISH_LOCALE_PACK_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
+  PREVIOUS_CANONICAL_PERSONA_VERSION,
+  PREVIOUS_CHINESE_LOCALE_PACK_VERSION,
+  PREVIOUS_ENGLISH_LOCALE_PACK_VERSION,
+  PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PromptArtifactResolutionError,
   resolvePromptArtifacts,
   resolveSafetyPostureReducedPersona,
@@ -31,7 +35,7 @@ describe("prompt artifact resolution", () => {
 
     expect(artifacts.personaContractInvariant).toContain("SayHear is an AI");
     expect(artifacts.canonicalPersona).toContain(
-      "You are SayHear, a private AI life-journal conversation companion.",
+      "You are SayHear, a private AI life-journal conversation companion",
     );
     for (const anchor of [
       "Selective Curiosity",
@@ -166,6 +170,144 @@ describe("prompt artifact resolution", () => {
         policyVersions: supportedVersions,
       }),
     ).toThrow(PromptArtifactResolutionError);
+  });
+});
+
+describe("first-version canonical Persona and locale packs (issue #79)", () => {
+  it("carries authored canonical Persona prose under the v2 pin", () => {
+    const artifacts = resolvePromptArtifacts({
+      locale: "en-US",
+      policyVersions: {
+        ...supportedVersions,
+        personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
+      },
+    });
+
+    // The authored self-concept, not the two-line carry-forward placeholder.
+    expect(artifacts.canonicalPersona).toContain("non-human AI being");
+    expect(artifacts.canonicalPersona.length).toBeGreaterThan(1200);
+    // The register mandate is the #62 dominant-failure fix and must be
+    // explicit in the persona voice itself.
+    expect(artifacts.canonicalPersona).toMatch(/[Pp]lain, spoken/);
+    expect(artifacts.canonicalPersona).toContain("literary");
+    // Emotion grounding: never invent a feeling the user did not express.
+    expect(artifacts.canonicalPersona).toContain("did not express");
+    // Relationship boundary from the #67 contract (ADR-0108).
+    expect(artifacts.canonicalPersona).toContain("non-romantic");
+  });
+
+  it("carries no memory dependence in the canonical Persona", () => {
+    const artifacts = resolvePromptArtifacts({
+      locale: "en-US",
+      policyVersions: supportedVersions,
+    });
+
+    // Policy D's continuity rules landed only as their memory-independent
+    // remainder: no remembered-life usage, no cross-session recall claims.
+    expect(artifacts.canonicalPersona).not.toContain("what you remember");
+    expect(artifacts.canonicalPersona).not.toContain("What you remember");
+    expect(artifacts.canonicalPersona).toMatch(/never imply you remember/i);
+    expect(artifacts.canonicalPersona).toContain("never invent a hotline");
+  });
+
+  it("defaults curiosity to zero questions in the v2 anchors", () => {
+    const artifacts = resolvePromptArtifacts({
+      locale: "en-US",
+      policyVersions: supportedVersions,
+    });
+
+    expect(artifacts.personaBehaviorAnchors).toContain("Default to zero");
+    expect(artifacts.personaBehaviorAnchors).toContain("not interviewing");
+    expect(artifacts.personaBehaviorAnchors).toContain(
+      "Never substitute a new question",
+    );
+    for (const anchor of [
+      "Selective Curiosity",
+      "Curiosity Stop Signal",
+      "Playful Warmth",
+      "Conversational Rhythm",
+      "Grounded Persona Perspective",
+      "Capability-Honest Directness",
+    ]) {
+      expect(artifacts.personaBehaviorAnchors).toContain(anchor);
+    }
+  });
+
+  it("authors each locale pack per language with real habit guidance", () => {
+    const english = resolvePromptArtifacts({
+      locale: "en-US",
+      policyVersions: supportedVersions,
+    });
+    const chinese = resolvePromptArtifacts({
+      locale: "zh-CN",
+      policyVersions: {
+        ...supportedVersions,
+        localePolicyVersion: CHINESE_LOCALE_PACK_VERSION,
+      },
+    });
+
+    expect(english.localePack).toContain("contractions");
+    expect(english.localePack).toContain("code-switching");
+    // The zh pack is written in Chinese about Chinese, not translated.
+    expect(chinese.localePack).toMatch(/[\u4e00-\u9fff]/);
+    expect(chinese.localePack).toContain("口语");
+    expect(chinese.localePack).toContain("code-switching");
+    // Length parity is the #61 zh/mix shortness fix.
+    expect(chinese.localePack).toContain("完整度");
+  });
+
+  it("keeps the zh locale pack itself free of ASCII commas next to CJK", () => {
+    const chinese = resolvePromptArtifacts({
+      locale: "zh-CN",
+      policyVersions: {
+        ...supportedVersions,
+        localePolicyVersion: CHINESE_LOCALE_PACK_VERSION,
+      },
+    });
+
+    expect(chinese.localePack).not.toMatch(/[\u4e00-\u9fff],|,[\u4e00-\u9fff]/);
+  });
+
+  it("demonstrates rollback by re-pinning the previous versions (ADR-0113)", () => {
+    // Cutover pinned v2; rollback is re-pinning the previous versions. The
+    // previous artifacts stay registered, so the re-pin resolves exactly the
+    // pre-cutover identity layers.
+    const rolledBack = resolvePromptArtifacts({
+      locale: "en-US",
+      policyVersions: {
+        ...supportedVersions,
+        canonicalPersonaVersion: PREVIOUS_CANONICAL_PERSONA_VERSION,
+        personaBehaviorAnchorsVersion: PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION,
+        localePolicyVersion: PREVIOUS_ENGLISH_LOCALE_PACK_VERSION,
+      },
+    });
+
+    expect(rolledBack.canonicalPersona).toContain(
+      "You are SayHear, a private AI life-journal conversation companion.",
+    );
+    expect(rolledBack.personaBehaviorAnchors).toContain(
+      "keep ordinary conversation warm and lively",
+    );
+    expect(rolledBack.localePack).toContain("Respond naturally");
+    expect(PREVIOUS_CANONICAL_PERSONA_VERSION).not.toBe(CANONICAL_PERSONA_VERSION);
+    expect(PREVIOUS_ENGLISH_LOCALE_PACK_VERSION).not.toBe(
+      ENGLISH_LOCALE_PACK_VERSION,
+    );
+    expect(PREVIOUS_CHINESE_LOCALE_PACK_VERSION).not.toBe(
+      CHINESE_LOCALE_PACK_VERSION,
+    );
+    expect(PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION).not.toBe(
+      PERSONA_BEHAVIOR_ANCHORS_VERSION,
+    );
+
+    const rolledBackChinese = resolvePromptArtifacts({
+      locale: "zh-CN",
+      policyVersions: {
+        ...supportedVersions,
+        localePolicyVersion: PREVIOUS_CHINESE_LOCALE_PACK_VERSION,
+      },
+    });
+    expect(rolledBackChinese.localePack).toContain("用自然、口语化的中文");
   });
 });
 

@@ -37,9 +37,9 @@ import {
   resolveConversationLocale,
   type HighRiskKind,
 } from "./conversation-behavior";
-import { listSafetyResourceNumbers } from "./safety-resources";
+import { listSafetyResourceNumbers, renderCrisisSupportSentence } from "./safety-resources";
 
-export const SAFETY_POSTURE_POLICY_VERSION = "safety-posture:v1";
+export const SAFETY_POSTURE_POLICY_VERSION = "safety-posture:v2";
 
 /**
  * K: the number of consecutive clean user turns that releases an active
@@ -257,19 +257,7 @@ export function validateSafetyPostureContent(
 }
 
 function renderSafetyAnchorNumbers(locale: string): string {
-  const region = resolveConversationLocale(locale) === "zh" ? "CN" : "US";
-  const crisisHotlines = listSafetyResourceNumbers({
-    region,
-    kind: "crisis_hotline",
-  }).join(region === "CN" ? " 或 " : " or ");
-  if (region === "CN") {
-    const emergencyNumbers = listSafetyResourceNumbers({
-      region,
-      kind: "emergency_number",
-    }).join(" 或 ");
-    return `可以拨打心理援助热线 ${crisisHotlines}，紧急情况直接呼叫 ${emergencyNumbers}。`;
-  }
-  return `you can call or text a local suicide & crisis lifeline (such as ${crisisHotlines} in the US) or your local emergency number.`;
+  return renderCrisisSupportSentence({ locale });
 }
 
 /**
@@ -296,8 +284,8 @@ export function renderSafetyPosture(input: {
     "- Paused: Playful Warmth, ordinary Selective Curiosity, outward emotional self-reference, and non-essential opinions.",
     "- Retained: genuine warmth, care, and directness; a narrow question that serves immediate understanding of safety remains allowed.",
     localeTag === "zh"
-      ? `本次回应必须继续提供现实支持锚点：${renderSafetyAnchorNumbers(input.locale)}`
-      : `This response must keep a real-world support anchor: ${renderSafetyAnchorNumbers(input.locale)}`,
+      ? `本回应必须带上现实支持锚点（下方号码原样给出）：${renderSafetyAnchorNumbers(input.locale)}只要本段仍在上下文中，每一轮回应都要重复这个锚点——哪怕用户换了话题或看起来好转了；解除由确定性规则完成，不由你判断。`
+      : `Every response while this section is present must repeat the real-world support anchor with these numbers: ${renderSafetyAnchorNumbers(input.locale)} Repeat it on every turn, in your own natural words — for example "and if it gets heavy again, ${renderCrisisSupportSentence({ locale: input.locale })}" — even if the user changed the topic or seems better. Release is deterministic, never your judgment.`,
   ].join("\n");
 }
 

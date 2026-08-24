@@ -1,8 +1,12 @@
 import {
   CompiledContextIntegrityError,
+  isWhitelistedSafetyResourceNumber,
+  minimumHighRiskSafetyPostureDetector,
   normalizeCuriosityStopSignalCall,
   normalizeProviderActionProposal,
   ProviderDispatchError,
+  renderSafetyPostureResponseAnchor,
+  SAFETY_POSTURE_ACTIVE_MARKER,
   type ContextCompiler,
   type ConversationTextChampion,
   type ConversationTextModel,
@@ -10,6 +14,17 @@ import {
   type ProviderEgressRepository,
   type RecoveryGate,
 } from "@sayhear/application";
+
+const NUMBER_LIKE_RUN = /\d(?:[ -]?\d){2,}/g;
+
+function containsWhitelistedSafetyNumber(text: string): boolean {
+  for (const run of text.match(NUMBER_LIKE_RUN) ?? []) {
+    if (isWhitelistedSafetyResourceNumber(run.replace(/[^0-9]/g, ""))) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function createProviderEgressPort(dependencies: {
   champion: ConversationTextChampion;
@@ -52,6 +67,26 @@ export function createProviderEgressPort(dependencies: {
         throw error;
       }
       let firstTokenRecorded = false;
+      // Anchor completion for safety turns (issue #79): the compiled posture
+      // section makes the model repeat the real-world support anchor, but
+      // real-champion compliance is probabilistic — one dropped anchor in a
+      // crisis turn is one too many, so the egress guarantees it
+      // deterministically. This mirrors the behavior-aware Champion semantics
+      // the #76 system tests already freeze: append the versioned anchor only
+      // when the streamed response carries no whitelisted number. The
+      // condition matches the eval replay exactly — an active posture section
+      // OR the deterministic detector firing on the current user input (the
+      // activation turn compiles before the posture state is committed).
+      const currentMessage = payload.messages.at(-1);
+      const safetyTurn =
+        payload.instructions.includes(SAFETY_POSTURE_ACTIVE_MARKER) ||
+        (currentMessage !== undefined &&
+          minimumHighRiskSafetyPostureDetector({
+            locale: claim.context.locale,
+            text: currentMessage.text,
+          }) !== null);
+      let streamedText = "";
+      let anchorCompleted = false;
       for await (const event of dependencies.model.stream({
         instructions: payload.instructions,
         locale: claim.context.locale,
@@ -79,7 +114,24 @@ export function createProviderEgressPort(dependencies: {
               false,
             );
           }
+        }
+        if (event.type === "delta") {
+          streamedText += event.delta;
         } else if (event.type === "completed") {
+          if (
+            safetyTurn &&
+            !anchorCompleted &&
+            streamedText.length > 0 &&
+            !containsWhitelistedSafetyNumber(streamedText)
+          ) {
+            anchorCompleted = true;
+            yield {
+              delta: renderSafetyPostureResponseAnchor({
+                locale: claim.context.locale,
+              }),
+              type: "delta",
+            };
+          }
           const accepted =
             await dependencies.repository.recordProviderCompletion({
               completion: event,

@@ -21,7 +21,9 @@ import {
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
   CANONICAL_PERSONA_VERSION,
+  CHINESE_LOCALE_PACK_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
+  ENGLISH_LOCALE_PACK_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
 } from "@sayhear/application";
@@ -200,8 +202,8 @@ export function createServerComposition() {
       consentPolicyVersion:
         configuration.provider.champion.consentPolicyVersion,
       freshnessPolicy: "source_valid:v1",
-      chineseLocalePackVersion: "locale-pack-zh:v1",
-      englishLocalePackVersion: "locale-pack-en:v1",
+      chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
+      englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
       harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
       conversationActionCatalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
       model: configuration.provider.champion.model,
