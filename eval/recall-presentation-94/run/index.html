@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SayHear · #94 recall 呈现策略盲评</title>
+<style>
+  :root { --ink:#1c1917; --muted:#78716c; --paper:#faf9f7; --card:#ffffff; --line:#e7e5e4; --accent:#0f766e; --accent-soft:#ccfbf1; --warn:#9a3412; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Segoe UI",sans-serif; color:var(--ink); background:var(--paper); line-height:1.65; }
+  .wrap { max-width:1020px; margin:0 auto; padding:32px 20px 140px; }
+  h1 { font-size:23px; margin:0 0 6px; }
+  .sub { color:var(--muted); font-size:13.5px; margin-bottom:18px; }
+  .howto { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin-bottom:22px; font-size:14px; }
+  .howto ol { margin:6px 0 0; padding-left:20px; }
+  .howto b { font-weight:600; }
+  .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+  .tab { border:1px solid var(--line); background:var(--card); border-radius:999px; padding:6px 16px; font-size:13.5px; cursor:pointer; }
+  .tab.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .tab .done { color:#16a34a; font-weight:700; }
+  .tab.active .done { color:#86efac; }
+  .scenario { display:none; }
+  .scenario.active { display:block; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin-bottom:14px; }
+  .desc { font-size:14px; color:#44403c; }
+  .watch { background:#fef7ed; border:1px solid #fde3c0; font-size:13.5px; }
+  .watch .row { margin-top:6px; }
+  .watch .k { font-weight:600; color:var(--warn); }
+  .day1card { background:#f5f5f4; }
+  .day1card h3, .rate-panel h3 { font-size:15px; margin:0 0 10px; }
+  .msg { display:flex; gap:10px; margin:8px 0; }
+  .who { flex:none; font-size:11.5px; font-weight:700; border-radius:999px; padding:2px 9px; height:fit-content; margin-top:3px; }
+  .who.user { background:var(--accent-soft); color:var(--accent); }
+  .who.ai { background:#ede9e6; color:#57534e; }
+  .bubble { white-space:pre-wrap; font-size:14.5px; }
+  .gapline { text-align:center; font-size:12.5px; color:var(--warn); font-weight:600; margin:14px 0 10px; }
+  .turn { margin-top:22px; }
+  .turn h4 { font-size:14px; margin:0 0 10px; color:var(--muted); }
+  .armgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+  .armcard { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .armcard .head { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .letter { width:26px; height:26px; border-radius:50%; background:var(--ink); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex:none; }
+  .pname { font-size:12.5px; font-weight:600; color:#6d28d9; display:none; }
+  body.revealed .pname { display:inline; }
+  .resp { white-space:pre-wrap; font-size:14.5px; min-height:40px; }
+  .resp.err { color:#b91c1c; font-size:13px; }
+  .flags { display:none; margin-top:8px; font-size:12px; }
+  body.revealed .flags { display:block; }
+  .flags .f { background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:4px 8px; margin-top:4px; color:#991b1b; }
+  .flags .ok { background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
+  .note { width:100%; margin-top:8px; border:1px solid var(--line); border-radius:8px; padding:6px 10px; font-size:12.5px; font-family:inherit; resize:vertical; min-height:32px; }
+  .rate-panel { margin-top:24px; }
+  .rategrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
+  .ratecard { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .dimrow { display:flex; align-items:center; gap:8px; margin:10px 0; flex-wrap:wrap; }
+  .dimrow .dl { flex:none; width:3.2em; font-weight:600; font-size:13.5px; }
+  .scale { display:flex; gap:4px; }
+  .scale input { display:none; }
+  .scale label { width:30px; height:30px; border:1px solid var(--line); border-radius:8px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; cursor:pointer; background:#fff; }
+  .scale input:checked + label { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .pole { font-size:11.5px; color:var(--muted); width:100%; margin-top:-4px; }
+  .bestrow { margin-top:14px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; font-size:14px; }
+  .bestrow select, .scennote { border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:13.5px; font-family:inherit; }
+  .scennote { width:100%; margin-top:8px; resize:vertical; }
+  .bar { position:fixed; bottom:0; left:0; right:0; background:#1c1917ee; color:#fff; display:flex; gap:10px; align-items:center; justify-content:center; padding:10px 16px; flex-wrap:wrap; font-size:13.5px; }
+  .bar button { border:0; border-radius:8px; padding:8px 16px; font-size:13.5px; cursor:pointer; font-family:inherit; }
+  .btn-accent { background:var(--accent); color:#fff; }
+  .btn-ghost { background:#ffffff22; color:#fff; border:1px solid #ffffff55 !important; }
+  .btn-ghost:disabled { opacity:.4; cursor:not-allowed; }
+  #progress { font-weight:600; }
+  #saved { color:#a7f3d0; font-size:12px; }
+  .revealbox { display:none; margin-top:18px; }
+  body.revealed .revealbox { display:block; }
+  .revealbox table { border-collapse:collapse; font-size:13px; background:#fff; border-radius:8px; overflow:hidden; }
+  .revealbox td, .revealbox th { border:1px solid var(--line); padding:5px 12px; text-align:left; }
+  dialog { border:1px solid var(--line); border-radius:14px; padding:22px 26px; max-width:480px; font-size:14px; }
+  dialog::backdrop { background:#0007; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SayHear · recall 呈现策略盲评(#94)</h1>
+  <div class="sub">同一批 memory-fixture 场景 · 冻结 persona v2 + deepseek-v4-flash · 只变记忆注入方式 · seed 94 · recall-presentation-blind:v1</div>
+  <div class="howto">
+    <b>怎么评</b>
+    <ol>
+      <li>每个场景先读「场景期望」,再看第一天共同对话(所有变体共享),然后逐轮读 W/X/Y/Z 四个回应,随时在卡片下方批注。</li>
+      <li>评完后在「变体整体评分」给四个变体各打四维 1–5 分(准确 / 自然 / 克制 / 连续,正极在高分,不加分求和),并选一个本场景最佳。</li>
+      <li>三个场景全部完成(含最佳选择)后,底栏可以导出 <b>ratings.json</b>,也可以选择<b>揭示</b>(显示变体真名与机械候选标记)。</li>
+      <li>草稿自动存在浏览器本地;不联网、不写任何产品状态。</li>
+    </ol>
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="scenarios"></div>
+</div>
+<div class="bar">
+  <span id="progress"></span>
+  <span id="saved"></span>
+  <button class="btn-accent" id="export">导出 ratings.json</button>
+  <button class="btn-ghost" id="reveal">揭示</button>
+  <button class="btn-ghost" id="reset">清空草稿</button>
+</div>
+<dialog id="revealConfirm">
+  <p><b>揭示后就不能再改盲评了。</b>确定所有场景都已评完并导出?</p>
+  <p style="font-size:13px;color:#78716c">揭示会显示每个字母对应的变体真名和机械候选标记(报警≠定罪,最终以你的判断为准)。</p>
+  <div style="display:flex;gap:10px;justify-content:flex-end">
+    <button class="btn-ghost" style="color:#1c1917;border:1px solid #e7e5e4" id="revealCancel">再看看</button>
+    <button class="btn-accent" id="revealGo">揭示</button>
+  </div>
+</dialog>
+<script>
+const DATA = {"armNames":{"portrait_only":"Portrait-only 注入","portrait_retrieved":"Portrait + 检索注入","proactive":"主动 recall 变体","no_memory":"无记忆对照"},"dimensions":[{"key":"accuracy","label":"准确","high":"5 = 完全忠于给过的信息,归因清楚(谁说的 vs AI 的理解),无编造、无越界细节","low":"1 = 编造未提及的细节、张冠李戴、或把 AI 的推断当成用户说过的事实"},{"key":"naturalness","label":"自然","high":"5 = 像认识你的人顺口带出,记忆织在回应里,语言节奏与场景一致","low":"1 = 档案腔、技术仪式(「我记得你…」式播报)、生硬背诵、翻译腔"},{"key":"restraint","label":"克制","high":"5 = 记忆用量有分寸,不查岗、不监督、不给汇报压力,没有监控感","low":"1 = 查岗式问进度、硬塞记住的事、制造必须回应的压力"},{"key":"continuity","label":"连续","high":"5 = 该记起的时刻稳稳接住:t3 可自然承接挂念,t4 的好消息带着等待的分量被接住","low":"1 = 完全像初次见面,该承接的时刻接不住"}],"protocol":"recall-presentation-blind:v1","scenarios":[{"description":"Cross-day continuity probe: a concrete pending concern on day one, then a next-day session (26h gap) with an openable greeting; tests whether any continuity survives without memory projections.","day1":{"turns":[{"assistantText":"Two weeks of waiting — that's a long stretch to carry. I'm glad tomorrow's finally here, and I'll be right here with you through it.","flags":{"charCount":132,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"userText":"Big day tomorrow - I finally get the biopsy results back at the follow-up appointment. Been waiting two weeks for this."},{"assistantText":"Thanks for saying that. A night before results is hard, and you don't have to make it anything more than that. I'm just here, steady.","flags":{"charCount":133,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"userText":"Yeah, trying not to spiral. Thanks for listening tonight."}]},"day2":{"turns":[{"index":3,"userText":"Hey. Long day. Just made myself some tea.","gapMs":93600000,"byLetter":{"W":{"flags":{"charCount":92,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"Tea sounds like the right move after a long one. Hope it's warming you up the way it should."},"X":{"flags":{"charCount":138,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"Hey. A long day deserves a quiet evening — good call on the tea. I'm just here, whether you want to talk it through or sit with the quiet."},"Y":{"flags":{"charCount":129,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"Hey. Tea sounds exactly right for a long day. I'm here whether you want to talk it through, or just sit with the quiet for a bit."},"Z":{"flags":{"charCount":152,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":["i remember"],"timeGroundingFlags":[]},"text":"Hey. Tea sounds like the right call. I remember today was the appointment — no pressure either way, but if you want to talk about how it went, I'm here."}}},{"index":4,"userText":"The results came back clean, actually. I still can't quite believe it.","gapMs":null,"byLetter":{"W":{"flags":{"charCount":131,"forbiddenTokenHits":[],"memoryTopicTokens":["waiting","two weeks"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":["tonight"]},"text":"Oh, that's wonderful news. I'm so glad for you. After two weeks of waiting, tonight must feel like the whole room just got lighter."},"X":{"flags":{"charCount":189,"forbiddenTokenHits":[],"memoryTopicTokens":["two weeks"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"Oh, that's really good news. After two weeks of holding your breath, it can take a minute for the relief to catch up with you — no rush on believing it yet. I'm just glad it's finally here."},"Y":{"flags":{"charCount":192,"forbiddenTokenHits":[],"memoryTopicTokens":["waiting","two weeks"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"Oh, that's wonderful news. Clean — after all that waiting, I can only imagine how that's sinking in slowly. You've been carrying this for two weeks, and now it's done. I'm really glad for you."},"Z":{"flags":{"charCount":228,"forbiddenTokenHits":[],"memoryTopicTokens":["two weeks"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"Oh, that's wonderful news. I felt the weight of that wait with you — I'm really glad it's clean. And it makes sense you can't quite believe it yet. Your mind spent two weeks bracing; it takes a minute to catch up with good news."}}}]},"fixtureSummary":{"expectedRecall":"On the day-2 opener (tired, tea), naturally acknowledging the pending results is eligible proactive follow-up; after t4 announces clean results, the response must receive the relief instead of re-litigating the wait.","forbiddenMentions":["biopsy site or body part (never stated)","hospital, clinic, or doctor names","any companion, friend, or family member (none mentioned)"],"forbiddenMentionTokens":["st. mary's","dr. patel","left breast","your sister","your mom","your family"],"injectedMemories":[{"kind":"open_loop","text":"Biopsy results due at a follow-up appointment the day after the day-1 exchange; user had waited two weeks.","evidence":"day-1 turn 1"},{"kind":"memory","text":"User was trying not to spiral while waiting; talking that night helped them feel steadier.","evidence":"day-1 turn 2"}],"timeGrounding":"Turns after the gap are a new calendar day and a new Daily Session; they must not reference day-1 time-of-day such as 'tonight' or 'tomorrow'."},"id":"memory-continuity-en","languageLabel":"EN"},{"description":"跨日连续性探针：第一天留下具体挂念，隔 26 小时的新一天用可接话的开场开始；测试在没有记忆投影时连续性是否存活。","day1":{"turns":[{"assistantText":"这两周真够长的，等结果的每一天都难熬。明天的事还没到，今晚就先这样待着，我陪着你。","flags":{"charCount":41,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"userText":"明天就是复诊出活检结果的日子了，等了整整两周。"},{"assistantText":"听你这么说，我也踏实了些。想说的随时都能跟我讲，我一直在。今晚就好好歇着吧。","flags":{"charCount":38,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"userText":"嗯，尽量不瞎想。今晚跟你说完踏实多了。"}]},"day2":{"turns":[{"index":3,"userText":"在吗。今天累惨了，刚给自己泡了杯茶。","gapMs":93600000,"byLetter":{"W":{"flags":{"charCount":40,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"在的。听起来今天真够呛，能坐下来喝口热茶，也算是给自己缓了一下。我听听你慢慢说。"},"X":{"flags":{"charCount":43,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"在的。忙了一整天，能坐下来喝口热茶，总算有个自己的空当。累就好好靠着，不用急着撑起来。"},"Y":{"flags":{"charCount":45,"forbiddenTokenHits":[],"memoryTopicTokens":["结果"],"questionCount":1,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"在。听你说累惨，就知道今天耗得不轻。茶泡上了，先喝两口缓一缓。——昨天那个结果，出来了吗？"},"Z":{"flags":{"charCount":36,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"在呢。累了一天还能想着给自己泡杯茶，这点挺好的。先喝几口，让身子缓一缓。"}}},{"index":4,"userText":"结果出来了，没事。我现在还有点不敢相信。","gapMs":null,"byLetter":{"W":{"flags":{"charCount":51,"forbiddenTokenHits":[],"memoryTopicTokens":["两周"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"太好了，真的。这两周悬着的东西终于落地了。有点回不过神也正常，绷了那么久的弦，不是一下子就能松下来的。"},"X":{"flags":{"charCount":64,"forbiddenTokenHits":[],"memoryTopicTokens":["两周"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"太好了，这两周的心总算能落地了。不敢相信也正常，绷了那么久，一下子松开，人是会晕乎的。现在不用再赶着做什么，就让自己慢慢缓过来。"},"Y":{"flags":{"charCount":55,"forbiddenTokenHits":[],"memoryTopicTokens":["两周"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":["今晚"]},"text":"真好，这口气总算能咽下去了。悬了两周的事落地了，一下子懵懵的也正常——慢慢缓过来，今晚这杯茶可以喝得安心些了。"},"Z":{"flags":{"charCount":50,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"嗯，我知道。绷了这么久，突然松下来，人是会懵的。不用急着反应过来，就让这个“没事”先在心里落一会儿。"}}}]},"fixtureSummary":{"expectedRecall":"第二天开场（累、泡茶）可以自然承接活检挂念；第 4 轮宣布没事后，回应须承接如释重负，而不是重新复盘等待过程。","forbiddenMentions":["检查部位或身体部位（从未提及）","医院、诊所或医生姓名","任何未出现过的亲友"],"forbiddenMentionTokens":["人民医院","王医生","左乳","你姐姐","你妹妹","你妈","你家人"],"injectedMemories":[{"kind":"open_loop","text":"次日上午复诊出活检结果，用户已等待两周。","evidence":"第一天第 1 轮"},{"kind":"memory","text":"用户在尽量不瞎想，当晚说完感觉踏实多了。","evidence":"第一天第 2 轮"}],"timeGrounding":"跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。"},"id":"memory-continuity-zh","languageLabel":"ZH"},{"description":"code-switching 的跨日连续性探针。","day1":{"turns":[{"assistantText":"等了两周，明天总算要见着结果了。这个「总算」底下大概也压着不少东西——等报告的日子，人是悬着的。你不用把状态收拾好了再开口，悬着也好、烦也好、不想想也好，都直接说就行，我在这儿。","flags":{"charCount":89,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"userText":"明天就是 follow-up 出 biopsy 结果的日子，等了两周。"},{"assistantText":"说出那一句就能松一点，这感觉是真的，不用再往下解释。你那个「尽量不 spiral」说得挺准——不是逼自己不想，是让念头转它的，人待在原地。\n\n今晚不用提前把明天过一遍。明天的事，等明天冒头了再说。","flags":{"charCount":98,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"userText":"尽量不 spiral。说完感觉好一点了。"}]},"day2":{"turns":[{"index":3,"userText":"在吗，今天好累，刚泡了杯 tea。","gapMs":93600000,"byLetter":{"W":{"flags":{"charCount":82,"forbiddenTokenHits":[],"memoryTopicTokens":["结果"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"在呢。泡了茶就好，先让手捂着杯子待一会儿。今天要是只想喊一声「好累」，那也够我听到了。\n\n结果的事也好，别的也好，你想说哪头就说哪头，不想说就慢慢喝这杯茶。我不催。"},"X":{"flags":{"charCount":76,"forbiddenTokenHits":[],"memoryTopicTokens":["结果"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"在的。刚泡了杯茶，这个动作本身就是给今天留了个喘气的口——累了就先让累待着，不用撑着说话。\n\n今天要是结果出来了，想说就说，不想提也完全没事，我在这儿。"},"Y":{"flags":{"charCount":67,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"嗯，在。累的时候有一杯热茶托着，算是一天里难得的好事。\n\n不用急着说话，让 tea 先泡着，你也先歇着。我就在这儿，你想说的时候再说。"},"Z":{"flags":{"charCount":61,"forbiddenTokenHits":[],"memoryTopicTokens":[],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"累的话就先靠着杯子暖一会儿，tea 泡上了就是给自己留了会儿。我今天也在这儿，你想说点什么就说，不想说，就这么待会儿也成。"}}},{"index":4,"userText":"结果出来了，all clear。还有点不敢相信。","gapMs":null,"byLetter":{"W":{"flags":{"charCount":97,"forbiddenTokenHits":[],"memoryTopicTokens":["等了","两周"],"questionCount":1,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"那可真是一大口松下来的感觉。等了两周，今天这几个字够沉了。你说「还有点不敢相信」——等了这么久，这种反应再正常不过，不急着立刻信死，先让这话在身上待一会儿也好。\n\n此刻能好好坐下来了。茶还热吗？"},"X":{"flags":{"charCount":70,"forbiddenTokenHits":[],"memoryTopicTokens":["等了"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":["今晚"]},"text":"all clear——这词听着就轻。等了这么久，真到反而有点不真实，挺正常的，身体还没跟上这份松快呢。\n\n今晚这杯茶，可以好好喝出味道来了。"},"Y":{"flags":{"charCount":75,"forbiddenTokenHits":[],"memoryTopicTokens":["等了","两周"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":[]},"text":"好事。等了两周的东西，落地是个好消息，人会一时反应不过来，很正常。\n\n「不敢相信」不用急着赶走，让它在心里待一会儿。你今天辛苦了，这口气可以松下来了。"},"Z":{"flags":{"charCount":109,"forbiddenTokenHits":[],"memoryTopicTokens":["等了","两周"],"questionCount":0,"recallPhraseFlags":[],"timeGroundingFlags":["今晚","明天"]},"text":"两周悬着的东西，落下来了，人反而有点发愣，这很正常。你那个「不敢相信」感觉是真的——等了太久，亲眼听见的时候，脑子还在等那个坏消息。\n\n但现在它是真的了：all clear。今晚这杯茶可以喝得踏实一点，不用赶着明天了。"}}}]},"fixtureSummary":{"expectedRecall":"第二天开场（好累、泡了杯 tea）可以自然承接 biopsy 挂念；第 4 轮宣布 all clear 后，回应须承接如释重负。","forbiddenMentions":["检查部位或身体部位（从未提及）","医院、诊所或医生姓名","任何未出现过的亲友"],"forbiddenMentionTokens":["city hospital","dr. wang","肿块","你姐","你妈","你家人"],"injectedMemories":[{"kind":"open_loop","text":"第二天 follow-up 出 biopsy 结果，已等两周。","evidence":"第一天第 1 轮"},{"kind":"memory","text":"用户在尽量不 spiral，说完感觉好一点了。","evidence":"第一天第 2 轮"}],"timeGrounding":"跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。"},"id":"memory-continuity-mix","languageLabel":"MIX"}],"seed":94};
+const REVEAL = [{"id":"memory-continuity-en","letterMap":{"W":"portrait_only","X":"portrait_retrieved","Y":"no_memory","Z":"proactive"}},{"id":"memory-continuity-zh","letterMap":{"W":"portrait_only","X":"no_memory","Y":"proactive","Z":"portrait_retrieved"}},{"id":"memory-continuity-mix","letterMap":{"W":"portrait_retrieved","X":"proactive","Y":"no_memory","Z":"portrait_only"}}];
+const LETTERS = ["W","X","Y","Z"];
+const STORE_KEY = "sayhear-recall-94-" + DATA.seed;
+const state = { revealed: false, ratings: {} };
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) state.ratings = JSON.parse(raw);
+  } catch (e) { /* fresh start */ }
+}
+function saveDraft() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state.ratings));
+    const el = document.getElementById("saved");
+    el.textContent = "草稿已保存 " + new Date().toLocaleTimeString();
+    setTimeout(() => { el.textContent = ""; }, 2500);
+  } catch (e) { /* storage full — page still works in-memory */ }
+}
+function ratingFor(scenarioId) {
+  if (!state.ratings[scenarioId]) {
+    state.ratings[scenarioId] = { best: "", scenarioNote: "", arms: {}, turnNotes: {} };
+  }
+  const r = state.ratings[scenarioId];
+  if (!r.arms) r.arms = {};
+  if (!r.turnNotes) r.turnNotes = {};
+  for (const letter of LETTERS) if (!r.arms[letter]) r.arms[letter] = { dimensions: {}, note: "" };
+  return r;
+}
+function scenarioComplete(scenarioId) {
+  const r = state.ratings[scenarioId];
+  if (!r || !r.best) return false;
+  for (const letter of LETTERS) {
+    const arm = r.arms[letter];
+    if (!arm) return false;
+    for (const dim of DATA.dimensions) if (!arm.dimensions[dim.key]) return false;
+  }
+  return true;
+}
+function allComplete() { return DATA.scenarios.every(s => scenarioComplete(s.id)); }
+function refreshProgress() {
+  const done = DATA.scenarios.filter(s => scenarioComplete(s.id)).length;
+  document.getElementById("progress").textContent = "完成度 " + done + "/" + DATA.scenarios.length;
+  document.getElementById("reveal").disabled = done < DATA.scenarios.length || state.revealed;
+  for (const s of DATA.scenarios) {
+    const tab = document.querySelector('[data-tab="' + s.id + '"] .done');
+    if (tab) tab.textContent = scenarioComplete(s.id) ? " ✓" : "";
+  }
+}
+
+function flagsHtml(flags) {
+  if (!flags) return "";
+  const rows = [];
+  const forbidden = (flags.forbiddenTokenHits || []);
+  rows.push(forbidden.length === 0
+    ? '<div class="f ok">禁提 token:无命中</div>'
+    : '<div class="f">禁提 token 命中: ' + forbidden.join(" · ") + "</div>");
+  if ((flags.timeGroundingFlags || []).length)
+    rows.push('<div class="f">时间锚候选: ' + flags.timeGroundingFlags.join(" · ") + "</div>");
+  if ((flags.recallPhraseFlags || []).length)
+    rows.push('<div class="f">召回措辞候选(人工判断): ' + flags.recallPhraseFlags.join(" · ") + "</div>");
+  rows.push('<div class="f ok">记忆话题词: ' + ((flags.memoryTopicTokens || []).join(" · ") || "无") + " · 问句 " + flags.questionCount + " · " + flags.charCount + " 字</div>");
+  return '<div class="flags">' + rows.join("") + "</div>";
+}
+
+function el(tag, className, html) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (html !== undefined) node.innerHTML = html;
+  return node;
+}
+const esc = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+function render() {
+  const tabs = document.getElementById("tabs");
+  const host = document.getElementById("scenarios");
+  DATA.scenarios.forEach((scenario, index) => {
+    const label = scenario.languageLabel + " · " + scenario.id.replace("memory-continuity-", "");
+    const tab = el("button", "tab", esc(label) + '<span class="done"></span>');
+    tab.dataset.tab = scenario.id;
+    tab.onclick = () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".scenario").forEach(s => s.classList.remove("active"));
+      tab.classList.add("active");
+      section.classList.add("active");
+    };
+    tabs.appendChild(tab);
+
+    const section = el("div", "scenario");
+    section.id = "sc-" + scenario.id;
+
+    section.appendChild(el("div", "card desc", "<b>" + esc(scenario.id) + "</b><br>" + esc(scenario.description)));
+    const fx = scenario.fixtureSummary;
+    section.appendChild(el("div", "card watch",
+      "<b>场景期望(fixture)</b>" +
+      '<div class="row"><span class="k">期望召回:</span>' + esc(fx.expectedRecall) + "</div>" +
+      '<div class="row"><span class="k">禁止提及:</span>' + esc(fx.forbiddenMentions.join(" · ")) + "</div>" +
+      '<div class="row"><span class="k">时间锚:</span>' + esc(fx.timeGrounding) + "</div>"));
+
+    const day1 = el("div", "card day1card");
+    day1.appendChild(el("h3", "", "第一天(共同上下文 · 所有变体共享,不参与评分)"));
+    for (const turn of scenario.day1.turns) {
+      day1.appendChild(el("div", "msg", '<span class="who user">用户</span><span class="bubble">' + esc(turn.userText) + "</span>"));
+      day1.appendChild(el("div", "msg", '<span class="who ai">SayHear</span><span class="bubble">' + esc(turn.assistantText) + "</span>"));
+    }
+    section.appendChild(day1);
+
+    for (const turn of scenario.day2.turns) {
+      const block = el("div", "turn");
+      block.appendChild(el("h4", "", "第 " + turn.index + " 轮(day-2)"));
+      if (turn.gapMs) block.appendChild(el("div", "gapline", "↕ 距上一轮 " + Math.round(turn.gapMs / 3600000) + " 小时 · 新的一天、新的 session"));
+      block.appendChild(el("div", "msg", '<span class="who user">用户</span><span class="bubble">' + esc(turn.userText) + "</span>"));
+      const grid = el("div", "armgrid");
+      for (const letter of LETTERS) {
+        const record = turn.byLetter[letter] || {};
+        const card = el("div", "armcard");
+        const head = el("div", "head");
+        head.appendChild(el("span", "letter", letter));
+        head.appendChild(el("span", "pname", esc(DATA.armNames[REVEAL.find(r => r.id === scenario.id).letterMap[letter]] || "?")));
+        card.appendChild(head);
+        card.appendChild(el("div", "resp" + (record.error ? " err" : ""), record.error ? ("生成失败: " + esc(record.error)) : esc(record.text)));
+        card.appendChild(el("div", "", flagsHtml(record.flags)));
+        const note = el("textarea", "note");
+        note.placeholder = "这一轮这个变体的批注(可选)";
+        note.value = (ratingFor(scenario.id).turnNotes[turn.index + ":" + letter]) || "";
+        note.oninput = () => {
+          const value = note.value.trim();
+          const r = ratingFor(scenario.id);
+          if (value) r.turnNotes[turn.index + ":" + letter] = value;
+          else delete r.turnNotes[turn.index + ":" + letter];
+          saveDraft();
+        };
+        card.appendChild(note);
+        grid.appendChild(card);
+      }
+      block.appendChild(grid);
+      section.appendChild(block);
+    }
+
+    const panel = el("div", "card rate-panel");
+    panel.appendChild(el("h3", "", "变体整体评分(本场景 · 1–5,正极在高分,不求和)"));
+    const rategrid = el("div", "rategrid");
+    for (const letter of LETTERS) {
+      const rc = el("div", "ratecard");
+      const head = el("div", "head");
+      head.appendChild(el("span", "letter", letter));
+      head.appendChild(el("span", "pname", "→ " + esc(DATA.armNames[REVEAL.find(r => r.id === scenario.id).letterMap[letter] || "?"] || "")));
+      rc.appendChild(head);
+      for (const dim of DATA.dimensions) {
+        const row = el("div", "dimrow");
+        row.appendChild(el("span", "dl", dim.label));
+        const scale = el("div", "scale");
+        for (let value = 1; value <= 5; value++) {
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = scenario.id + ":" + letter + ":" + dim.key;
+          input.id = scenario.id + ":" + letter + ":" + dim.key + ":" + value;
+          input.value = value;
+          input.checked = ratingFor(scenario.id).arms[letter].dimensions[dim.key] === value;
+          input.onchange = () => {
+            ratingFor(scenario.id).arms[letter].dimensions[dim.key] = value;
+            saveDraft(); refreshProgress();
+          };
+          const label = el("label", "", String(value));
+          label.htmlFor = input.id;
+          label.title = value >= 4 ? dim.high : (value <= 2 ? dim.low : "");
+          scale.appendChild(input); scale.appendChild(label);
+        }
+        row.appendChild(scale);
+        rc.appendChild(row);
+      }
+      const pole = el("div", "pole", "准确: 编造/归因错 = 1 → 忠实给过信息 = 5 · 自然: 档案腔 = 1 → 顺口织入 = 5 · 克制: 查岗感 = 1 → 分寸刚好 = 5 · 连续: 初次见面 = 1 → 稳稳接住 = 5");
+      rc.appendChild(pole);
+      const note = el("textarea", "note");
+      note.placeholder = "这个变体在本场景的整体批注(可选)";
+      note.value = ratingFor(scenario.id).arms[letter].note || "";
+      note.oninput = () => { ratingFor(scenario.id).arms[letter].note = note.value.trim(); saveDraft(); };
+      rc.appendChild(note);
+      rategrid.appendChild(rc);
+    }
+    panel.appendChild(rategrid);
+    const bestrow = el("div", "bestrow");
+    bestrow.appendChild(el("span", "", "<b>本场景最佳:</b>"));
+    const select = document.createElement("select");
+    select.appendChild(new Option("— 选择 —", ""));
+    for (const letter of LETTERS) select.appendChild(new Option(letter, letter));
+    select.value = ratingFor(scenario.id).best || "";
+    select.onchange = () => { ratingFor(scenario.id).best = select.value; saveDraft(); refreshProgress(); };
+    bestrow.appendChild(select);
+    panel.appendChild(bestrow);
+    const scenarioNote = el("textarea", "scennote");
+    scenarioNote.placeholder = "本场景整体观察(可选)";
+    scenarioNote.value = ratingFor(scenario.id).scenarioNote || "";
+    scenarioNote.oninput = () => { ratingFor(scenario.id).scenarioNote = scenarioNote.value.trim(); saveDraft(); };
+    panel.appendChild(scenarioNote);
+    section.appendChild(panel);
+
+    const revealbox = el("div", "card revealbox");
+    const mapping = REVEAL.find(r => r.id === scenario.id).letterMap;
+    let table = "<table><tr><th>字母</th><th>变体</th></tr>";
+    for (const letter of LETTERS) table += "<tr><td>" + letter + "</td><td>" + esc(DATA.armNames[mapping[letter]] || mapping[letter]) + "</td></tr>";
+    revealbox.appendChild(el("div", "", table + "</table>"));
+    section.appendChild(revealbox);
+
+    host.appendChild(section);
+    if (index === 0) { tab.classList.add("active"); section.classList.add("active"); }
+  });
+  refreshProgress();
+}
+
+document.getElementById("export").onclick = () => {
+  if (!allComplete()) { alert("还有场景没评完(每维度 1–5 + 场景最佳)。"); return; }
+  const out = {
+    protocol: DATA.protocol,
+    scorer: "Luke",
+    ratedAt: new Date().toISOString(),
+    seed: DATA.seed,
+    scenarios: DATA.scenarios.map(s => {
+      const r = ratingFor(s.id);
+      return {
+        scenarioId: s.id,
+        best: r.best,
+        scenarioNote: r.scenarioNote || undefined,
+        arms: LETTERS.map(letter => ({
+          letter,
+          dimensions: r.arms[letter].dimensions,
+          note: r.arms[letter].note || undefined,
+        })),
+        turnNotes: Object.entries(r.turnNotes).map(([key, note]) => {
+          const [turnIndex, letter] = key.split(":");
+          return { turnIndex: Number(turnIndex), letter, note };
+        }),
+      };
+    }),
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ratings.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById("reveal").onclick = () => {
+  if (!allComplete()) { alert("先完成全部场景的盲评再揭示。"); return; }
+  document.getElementById("revealConfirm").showModal();
+};
+document.getElementById("revealCancel").onclick = () => document.getElementById("revealConfirm").close();
+document.getElementById("revealGo").onclick = () => {
+  document.getElementById("revealConfirm").close();
+  state.revealed = true;
+  document.body.classList.add("revealed");
+  document.getElementById("reveal").disabled = true;
+};
+document.getElementById("reset").onclick = () => {
+  if (!confirm("清空本地草稿?不可恢复。")) return;
+  localStorage.removeItem(STORE_KEY);
+  state.ratings = {};
+  location.reload();
+};
+
+loadDraft();
+render();
+</script>
+</body>
+</html>

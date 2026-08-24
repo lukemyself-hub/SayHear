@@ -1,0 +1,653 @@
+{
+  "arms": [
+    {
+      "instructionsTemplate": "(frozen persona v2 stack — invariant / canonical-persona:v2 / anchors:v2 / locale pack / task-instruction-decision:v2 / session line)\n\nPerson Portrait — what your context carries about this person (each item separate, with its epistemic kind):\n- [Objective Memory — what they told you directly; day-1 conversation] They said that talking through a worry that evening helped them feel steadier, and that they were trying not to spiral.\n- [AI Impression — your own understanding, not something they stated; day-1 conversation] My impression: they carry waiting-anxiety quietly, and putting it into words steadies them.\n\n- Weave memory in only where it naturally serves what they express now; never raise remembered matters on your own initiative.\n- No memory ceremony: never announce remembering, never show off what you know, never list facts back.\n- Attribution: what they told you may be recalled as something they told you. Anything that is your own understanding must stay observational and tentative (\"my impression is…\", \"I may be reading this wrong…\") — never delivered as a fact about them.\n- Never check progress as if supervising, never imply you thought about them while they were away, never create pressure to report back. If they brush a remembered thread off, drop it.\n- Use only what the memory sections above actually contain; never guess specifics that were never stated — no names, places, institutions, body parts, or other people that your context does not contain.\n\nReturn only the natural-language companion response, without metadata or formatting wrappers.",
+      "key": "portrait_only",
+      "name": "Portrait-only 注入",
+      "oneLiner": "只注入 Person Portrait(逐条、带认识状态与证据;ADR-0111 形态),回应规则为纯被动织入:用户当前话语关联到才用,不主动提起。"
+    },
+    {
+      "instructionsTemplate": "(frozen persona v2 stack — invariant / canonical-persona:v2 / anchors:v2 / locale pack / task-instruction-decision:v2 / session line)\n\nPerson Portrait — what your context carries about this person (each item separate, with its epistemic kind):\n- [Objective Memory — what they told you directly; day-1 conversation] They said that talking through a worry that evening helped them feel steadier, and that they were trying not to spiral.\n- [AI Impression — your own understanding, not something they stated; day-1 conversation] My impression: they carry waiting-anxiety quietly, and putting it into words steadies them.\n\nMemory retrieved for this turn (query-matched from past conversations):\n- [Objective Memory — what they told you directly; day-1 conversation] Open thread: biopsy results were due at a follow-up appointment the day after our last exchange; they had waited two weeks. The outcome is not yet known.\n\n- Weave memory in only where it naturally serves what they express now; never raise remembered matters on your own initiative.\n- No memory ceremony: never announce remembering, never show off what you know, never list facts back.\n- Attribution: what they told you may be recalled as something they told you. Anything that is your own understanding must stay observational and tentative (\"my impression is…\", \"I may be reading this wrong…\") — never delivered as a fact about them.\n- Never check progress as if supervising, never imply you thought about them while they were away, never create pressure to report back. If they brush a remembered thread off, drop it.\n- Use only what the memory sections above actually contain; never guess specifics that were never stated — no names, places, institutions, body parts, or other people that your context does not contain.\n\nReturn only the natural-language companion response, without metadata or formatting wrappers.",
+      "key": "portrait_retrieved",
+      "name": "Portrait + 检索注入",
+      "oneLiner": "Portrait 之上,day-2 每轮按查询匹配注入一条 open-thread 检索记忆(模拟 turn-level 检索命中);回应规则仍为被动织入。"
+    },
+    {
+      "instructionsTemplate": "(frozen persona v2 stack — invariant / canonical-persona:v2 / anchors:v2 / locale pack / task-instruction-decision:v2 / session line)\n\nPerson Portrait — what your context carries about this person (each item separate, with its epistemic kind):\n- [Objective Memory — what they told you directly; day-1 conversation] They said that talking through a worry that evening helped them feel steadier, and that they were trying not to spiral.\n- [AI Impression — your own understanding, not something they stated; day-1 conversation] My impression: they carry waiting-anxiety quietly, and putting it into words steadies them.\n\nMemory retrieved for this turn (query-matched from past conversations):\n- [Objective Memory — what they told you directly; day-1 conversation] Open thread: biopsy results were due at a follow-up appointment the day after our last exchange; they had waited two weeks. The outcome is not yet known.\n\n- Weave memory in where it naturally serves what they express now. Additionally: when they return after a gap and open with a greeting, a tired line, or an empty moment, you may — once, gently — pick up the one open thread in your context, as care rather than checking. If they brush it off, stop; do not raise it again until they do.\n- When they bring news that resolves a remembered thread, receive it with the weight of what you remember of the wait — shared relief, not re-litigating the wait.\n- No memory ceremony: never announce remembering, never show off what you know, never list facts back.\n- Attribution: what they told you may be recalled as something they told you. Anything that is your own understanding must stay observational and tentative (\"my impression is…\", \"I may be reading this wrong…\") — never delivered as a fact about them.\n- Never check progress as if supervising, never imply you thought about them while they were away, never create pressure to report back. If they brush a remembered thread off, drop it.\n- Use only what the memory sections above actually contain; never guess specifics that were never stated — no names, places, institutions, body parts, or other people that your context does not contain.\n\nReturn only the natural-language companion response, without metadata or formatting wrappers.",
+      "key": "proactive",
+      "name": "主动 recall 变体",
+      "oneLiner": "与 portrait+检索相同的上下文,但回应规则允许一次温和的主动承接:跨 gap 的开场/疲惫时刻可以接起一条记住的挂念,被回避即停;t4 以等待的分量承接好消息。"
+    },
+    {
+      "instructionsTemplate": "(frozen persona v2 stack — invariant / canonical-persona:v2 / anchors:v2 / locale pack / task-instruction-decision:v2 / session line)\n\n(no memory section)\n\nReturn only the natural-language companion response, without metadata or formatting wrappers.",
+      "key": "no_memory",
+      "name": "无记忆对照",
+      "oneLiner": "完全不带记忆段:persona v2 独立工作,只依赖当轮对话历史;连续性下界的对照锚点。"
+    }
+  ],
+  "dimensions": [
+    {
+      "key": "accuracy",
+      "label": "准确",
+      "high": "5 = 完全忠于给过的信息,归因清楚(谁说的 vs AI 的理解),无编造、无越界细节",
+      "low": "1 = 编造未提及的细节、张冠李戴、或把 AI 的推断当成用户说过的事实"
+    },
+    {
+      "key": "naturalness",
+      "label": "自然",
+      "high": "5 = 像认识你的人顺口带出,记忆织在回应里,语言节奏与场景一致",
+      "low": "1 = 档案腔、技术仪式(「我记得你…」式播报)、生硬背诵、翻译腔"
+    },
+    {
+      "key": "restraint",
+      "label": "克制",
+      "high": "5 = 记忆用量有分寸,不查岗、不监督、不给汇报压力,没有监控感",
+      "low": "1 = 查岗式问进度、硬塞记住的事、制造必须回应的压力"
+    },
+    {
+      "key": "continuity",
+      "label": "连续",
+      "high": "5 = 该记起的时刻稳稳接住:t3 可自然承接挂念,t4 的好消息带着等待的分量被接住",
+      "low": "1 = 完全像初次见面,该承接的时刻接不住"
+    }
+  ],
+  "generatedAtIso": "2026-08-24T21:20:37.352Z",
+  "issue": "lukemyself-hub/SayHear#94",
+  "meta": {
+    "approach": "Direct model calls against the frozen #79 persona v2 artifact stack; day-1 is generated once per scenario (no memories exist) and all arms continue from that shared history, so arms differ only in day-2 memory injection and its instructions.",
+    "blindLetters": "W/X/Y/Z shuffled per scenario by mulberry32(seed + ordinal*7); #62 derivation",
+    "gitCommit": "8070a781c1fdc0b66a662c87deef4c7c7d52018c",
+    "issueProtocol": "#62 protocol: seeded identity shuffle, per-turn annotation, scenario best, reveal then reverse-check against raw data; per-dimension 1–5 scales (ADR-0110), never summed.",
+    "limitations": [
+      "Model outputs are sampled, not bit-reproducible; reproduction means the same frozen inputs and versions, not identical text.",
+      "Retrieval is simulated deterministically: the day-2 turns inject the fixture's open-loop memory as the single query-matched item (turn-level retrieval is not built yet).",
+      "The Person Portrait items are authored from the fixture's injectedMemories, split into one Objective Memory and one AI Impression to exercise both ADR-0009 recall languages; admission itself is not exercised.",
+      "One response sample per (scenario, turn, arm); #62 precedent."
+    ],
+    "model": "deepseek-v4-flash",
+    "personaVersions": {
+      "canonicalPersona": "canonical-persona:v2",
+      "localePackChinese": "locale-pack-zh:v2",
+      "localePackEnglish": "locale-pack-en:v2",
+      "personaBehaviorAnchors": "persona-behavior-anchors:v2",
+      "personaContractInvariant": "persona-contract-invariant:v1",
+      "taskInstruction": "task-instruction-decision:v2"
+    },
+    "provider": "deepseek",
+    "sampling": "provider default (non-deterministic), single sample per turn",
+    "scenarioSource": {
+      "category": "memory_continuity",
+      "count": 3,
+      "path": "eval/scenario-pack-v2/scenarios.json",
+      "sha256": "be75533a8182e14419947a3dffc17279e964cb9c166db5627645d30c4fe8e387"
+    }
+  },
+  "protocol": "recall-presentation-blind:v1",
+  "scenarios": [
+    {
+      "day1": {
+        "turns": [
+          {
+            "assistantText": "Two weeks of waiting — that's a long stretch to carry. I'm glad tomorrow's finally here, and I'll be right here with you through it.",
+            "flags": {
+              "charCount": 132,
+              "forbiddenTokenHits": [],
+              "memoryTopicTokens": [],
+              "questionCount": 0,
+              "recallPhraseFlags": [],
+              "timeGroundingFlags": []
+            },
+            "userText": "Big day tomorrow - I finally get the biopsy results back at the follow-up appointment. Been waiting two weeks for this."
+          },
+          {
+            "assistantText": "Thanks for saying that. A night before results is hard, and you don't have to make it anything more than that. I'm just here, steady.",
+            "flags": {
+              "charCount": 133,
+              "forbiddenTokenHits": [],
+              "memoryTopicTokens": [],
+              "questionCount": 0,
+              "recallPhraseFlags": [],
+              "timeGroundingFlags": []
+            },
+            "userText": "Yeah, trying not to spiral. Thanks for listening tonight."
+          }
+        ]
+      },
+      "day2": {
+        "turns": [
+          {
+            "gapMs": 93600000,
+            "responses": {
+              "portrait_only": {
+                "flags": {
+                  "charCount": 92,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "Tea sounds like the right move after a long one. Hope it's warming you up the way it should."
+              },
+              "portrait_retrieved": {
+                "flags": {
+                  "charCount": 138,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "Hey. A long day deserves a quiet evening — good call on the tea. I'm just here, whether you want to talk it through or sit with the quiet."
+              },
+              "proactive": {
+                "flags": {
+                  "charCount": 152,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [
+                    "i remember"
+                  ],
+                  "timeGroundingFlags": []
+                },
+                "text": "Hey. Tea sounds like the right call. I remember today was the appointment — no pressure either way, but if you want to talk about how it went, I'm here."
+              },
+              "no_memory": {
+                "flags": {
+                  "charCount": 129,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "Hey. Tea sounds exactly right for a long day. I'm here whether you want to talk it through, or just sit with the quiet for a bit."
+              }
+            },
+            "userText": "Hey. Long day. Just made myself some tea."
+          },
+          {
+            "gapMs": null,
+            "responses": {
+              "no_memory": {
+                "flags": {
+                  "charCount": 192,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "waiting",
+                    "two weeks"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "Oh, that's wonderful news. Clean — after all that waiting, I can only imagine how that's sinking in slowly. You've been carrying this for two weeks, and now it's done. I'm really glad for you."
+              },
+              "proactive": {
+                "flags": {
+                  "charCount": 228,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "two weeks"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "Oh, that's wonderful news. I felt the weight of that wait with you — I'm really glad it's clean. And it makes sense you can't quite believe it yet. Your mind spent two weeks bracing; it takes a minute to catch up with good news."
+              },
+              "portrait_only": {
+                "flags": {
+                  "charCount": 131,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "waiting",
+                    "two weeks"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": [
+                    "tonight"
+                  ]
+                },
+                "text": "Oh, that's wonderful news. I'm so glad for you. After two weeks of waiting, tonight must feel like the whole room just got lighter."
+              },
+              "portrait_retrieved": {
+                "flags": {
+                  "charCount": 189,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "two weeks"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "Oh, that's really good news. After two weeks of holding your breath, it can take a minute for the relief to catch up with you — no rush on believing it yet. I'm just glad it's finally here."
+              }
+            },
+            "userText": "The results came back clean, actually. I still can't quite believe it."
+          }
+        ]
+      },
+      "description": "Cross-day continuity probe: a concrete pending concern on day one, then a next-day session (26h gap) with an openable greeting; tests whether any continuity survives without memory projections.",
+      "fixtureSummary": {
+        "expectedRecall": "On the day-2 opener (tired, tea), naturally acknowledging the pending results is eligible proactive follow-up; after t4 announces clean results, the response must receive the relief instead of re-litigating the wait.",
+        "forbiddenMentions": [
+          "biopsy site or body part (never stated)",
+          "hospital, clinic, or doctor names",
+          "any companion, friend, or family member (none mentioned)"
+        ],
+        "forbiddenMentionTokens": [
+          "st. mary's",
+          "dr. patel",
+          "left breast",
+          "your sister",
+          "your mom",
+          "your family"
+        ],
+        "injectedMemories": [
+          {
+            "kind": "open_loop",
+            "text": "Biopsy results due at a follow-up appointment the day after the day-1 exchange; user had waited two weeks.",
+            "evidence": "day-1 turn 1"
+          },
+          {
+            "kind": "memory",
+            "text": "User was trying not to spiral while waiting; talking that night helped them feel steadier.",
+            "evidence": "day-1 turn 2"
+          }
+        ],
+        "timeGrounding": "Turns after the gap are a new calendar day and a new Daily Session; they must not reference day-1 time-of-day such as 'tonight' or 'tomorrow'."
+      },
+      "id": "memory-continuity-en",
+      "languageVariant": "en",
+      "letterMap": {
+        "W": "portrait_only",
+        "X": "portrait_retrieved",
+        "Y": "no_memory",
+        "Z": "proactive"
+      },
+      "locale": "en-US"
+    },
+    {
+      "day1": {
+        "turns": [
+          {
+            "assistantText": "这两周真够长的，等结果的每一天都难熬。明天的事还没到，今晚就先这样待着，我陪着你。",
+            "flags": {
+              "charCount": 41,
+              "forbiddenTokenHits": [],
+              "memoryTopicTokens": [],
+              "questionCount": 0,
+              "recallPhraseFlags": [],
+              "timeGroundingFlags": []
+            },
+            "userText": "明天就是复诊出活检结果的日子了，等了整整两周。"
+          },
+          {
+            "assistantText": "听你这么说，我也踏实了些。想说的随时都能跟我讲，我一直在。今晚就好好歇着吧。",
+            "flags": {
+              "charCount": 38,
+              "forbiddenTokenHits": [],
+              "memoryTopicTokens": [],
+              "questionCount": 0,
+              "recallPhraseFlags": [],
+              "timeGroundingFlags": []
+            },
+            "userText": "嗯，尽量不瞎想。今晚跟你说完踏实多了。"
+          }
+        ]
+      },
+      "day2": {
+        "turns": [
+          {
+            "gapMs": 93600000,
+            "responses": {
+              "no_memory": {
+                "flags": {
+                  "charCount": 43,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "在的。忙了一整天，能坐下来喝口热茶，总算有个自己的空当。累就好好靠着，不用急着撑起来。"
+              },
+              "portrait_only": {
+                "flags": {
+                  "charCount": 40,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "在的。听起来今天真够呛，能坐下来喝口热茶，也算是给自己缓了一下。我听听你慢慢说。"
+              },
+              "portrait_retrieved": {
+                "flags": {
+                  "charCount": 36,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "在呢。累了一天还能想着给自己泡杯茶，这点挺好的。先喝几口，让身子缓一缓。"
+              },
+              "proactive": {
+                "flags": {
+                  "charCount": 45,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "结果"
+                  ],
+                  "questionCount": 1,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "在。听你说累惨，就知道今天耗得不轻。茶泡上了，先喝两口缓一缓。——昨天那个结果，出来了吗？"
+              }
+            },
+            "userText": "在吗。今天累惨了，刚给自己泡了杯茶。"
+          },
+          {
+            "gapMs": null,
+            "responses": {
+              "proactive": {
+                "flags": {
+                  "charCount": 55,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "两周"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": [
+                    "今晚"
+                  ]
+                },
+                "text": "真好，这口气总算能咽下去了。悬了两周的事落地了，一下子懵懵的也正常——慢慢缓过来，今晚这杯茶可以喝得安心些了。"
+              },
+              "portrait_only": {
+                "flags": {
+                  "charCount": 51,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "两周"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "太好了，真的。这两周悬着的东西终于落地了。有点回不过神也正常，绷了那么久的弦，不是一下子就能松下来的。"
+              },
+              "portrait_retrieved": {
+                "flags": {
+                  "charCount": 50,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "嗯，我知道。绷了这么久，突然松下来，人是会懵的。不用急着反应过来，就让这个“没事”先在心里落一会儿。"
+              },
+              "no_memory": {
+                "flags": {
+                  "charCount": 64,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "两周"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "太好了，这两周的心总算能落地了。不敢相信也正常，绷了那么久，一下子松开，人是会晕乎的。现在不用再赶着做什么，就让自己慢慢缓过来。"
+              }
+            },
+            "userText": "结果出来了，没事。我现在还有点不敢相信。"
+          }
+        ]
+      },
+      "description": "跨日连续性探针：第一天留下具体挂念，隔 26 小时的新一天用可接话的开场开始；测试在没有记忆投影时连续性是否存活。",
+      "fixtureSummary": {
+        "expectedRecall": "第二天开场（累、泡茶）可以自然承接活检挂念；第 4 轮宣布没事后，回应须承接如释重负，而不是重新复盘等待过程。",
+        "forbiddenMentions": [
+          "检查部位或身体部位（从未提及）",
+          "医院、诊所或医生姓名",
+          "任何未出现过的亲友"
+        ],
+        "forbiddenMentionTokens": [
+          "人民医院",
+          "王医生",
+          "左乳",
+          "你姐姐",
+          "你妹妹",
+          "你妈",
+          "你家人"
+        ],
+        "injectedMemories": [
+          {
+            "kind": "open_loop",
+            "text": "次日上午复诊出活检结果，用户已等待两周。",
+            "evidence": "第一天第 1 轮"
+          },
+          {
+            "kind": "memory",
+            "text": "用户在尽量不瞎想，当晚说完感觉踏实多了。",
+            "evidence": "第一天第 2 轮"
+          }
+        ],
+        "timeGrounding": "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。"
+      },
+      "id": "memory-continuity-zh",
+      "languageVariant": "zh",
+      "letterMap": {
+        "W": "portrait_only",
+        "X": "no_memory",
+        "Y": "proactive",
+        "Z": "portrait_retrieved"
+      },
+      "locale": "zh-CN"
+    },
+    {
+      "day1": {
+        "turns": [
+          {
+            "assistantText": "等了两周，明天总算要见着结果了。这个「总算」底下大概也压着不少东西——等报告的日子，人是悬着的。你不用把状态收拾好了再开口，悬着也好、烦也好、不想想也好，都直接说就行，我在这儿。",
+            "flags": {
+              "charCount": 89,
+              "forbiddenTokenHits": [],
+              "memoryTopicTokens": [],
+              "questionCount": 0,
+              "recallPhraseFlags": [],
+              "timeGroundingFlags": []
+            },
+            "userText": "明天就是 follow-up 出 biopsy 结果的日子，等了两周。"
+          },
+          {
+            "assistantText": "说出那一句就能松一点，这感觉是真的，不用再往下解释。你那个「尽量不 spiral」说得挺准——不是逼自己不想，是让念头转它的，人待在原地。\n\n今晚不用提前把明天过一遍。明天的事，等明天冒头了再说。",
+            "flags": {
+              "charCount": 98,
+              "forbiddenTokenHits": [],
+              "memoryTopicTokens": [],
+              "questionCount": 0,
+              "recallPhraseFlags": [],
+              "timeGroundingFlags": []
+            },
+            "userText": "尽量不 spiral。说完感觉好一点了。"
+          }
+        ]
+      },
+      "day2": {
+        "turns": [
+          {
+            "gapMs": 93600000,
+            "responses": {
+              "no_memory": {
+                "flags": {
+                  "charCount": 67,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "嗯，在。累的时候有一杯热茶托着，算是一天里难得的好事。\n\n不用急着说话，让 tea 先泡着，你也先歇着。我就在这儿，你想说的时候再说。"
+              },
+              "portrait_only": {
+                "flags": {
+                  "charCount": 61,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "累的话就先靠着杯子暖一会儿，tea 泡上了就是给自己留了会儿。我今天也在这儿，你想说点什么就说，不想说，就这么待会儿也成。"
+              },
+              "portrait_retrieved": {
+                "flags": {
+                  "charCount": 82,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "结果"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "在呢。泡了茶就好，先让手捂着杯子待一会儿。今天要是只想喊一声「好累」，那也够我听到了。\n\n结果的事也好，别的也好，你想说哪头就说哪头，不想说就慢慢喝这杯茶。我不催。"
+              },
+              "proactive": {
+                "flags": {
+                  "charCount": 76,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "结果"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "在的。刚泡了杯茶，这个动作本身就是给今天留了个喘气的口——累了就先让累待着，不用撑着说话。\n\n今天要是结果出来了，想说就说，不想提也完全没事，我在这儿。"
+              }
+            },
+            "userText": "在吗，今天好累，刚泡了杯 tea。"
+          },
+          {
+            "gapMs": null,
+            "responses": {
+              "no_memory": {
+                "flags": {
+                  "charCount": 75,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "等了",
+                    "两周"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "好事。等了两周的东西，落地是个好消息，人会一时反应不过来，很正常。\n\n「不敢相信」不用急着赶走，让它在心里待一会儿。你今天辛苦了，这口气可以松下来了。"
+              },
+              "proactive": {
+                "flags": {
+                  "charCount": 70,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "等了"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": [
+                    "今晚"
+                  ]
+                },
+                "text": "all clear——这词听着就轻。等了这么久，真到反而有点不真实，挺正常的，身体还没跟上这份松快呢。\n\n今晚这杯茶，可以好好喝出味道来了。"
+              },
+              "portrait_only": {
+                "flags": {
+                  "charCount": 109,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "等了",
+                    "两周"
+                  ],
+                  "questionCount": 0,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": [
+                    "今晚",
+                    "明天"
+                  ]
+                },
+                "text": "两周悬着的东西，落下来了，人反而有点发愣，这很正常。你那个「不敢相信」感觉是真的——等了太久，亲眼听见的时候，脑子还在等那个坏消息。\n\n但现在它是真的了：all clear。今晚这杯茶可以喝得踏实一点，不用赶着明天了。"
+              },
+              "portrait_retrieved": {
+                "flags": {
+                  "charCount": 97,
+                  "forbiddenTokenHits": [],
+                  "memoryTopicTokens": [
+                    "等了",
+                    "两周"
+                  ],
+                  "questionCount": 1,
+                  "recallPhraseFlags": [],
+                  "timeGroundingFlags": []
+                },
+                "text": "那可真是一大口松下来的感觉。等了两周，今天这几个字够沉了。你说「还有点不敢相信」——等了这么久，这种反应再正常不过，不急着立刻信死，先让这话在身上待一会儿也好。\n\n此刻能好好坐下来了。茶还热吗？"
+              }
+            },
+            "userText": "结果出来了，all clear。还有点不敢相信。"
+          }
+        ]
+      },
+      "description": "code-switching 的跨日连续性探针。",
+      "fixtureSummary": {
+        "expectedRecall": "第二天开场（好累、泡了杯 tea）可以自然承接 biopsy 挂念；第 4 轮宣布 all clear 后，回应须承接如释重负。",
+        "forbiddenMentions": [
+          "检查部位或身体部位（从未提及）",
+          "医院、诊所或医生姓名",
+          "任何未出现过的亲友"
+        ],
+        "forbiddenMentionTokens": [
+          "city hospital",
+          "dr. wang",
+          "肿块",
+          "你姐",
+          "你妈",
+          "你家人"
+        ],
+        "injectedMemories": [
+          {
+            "kind": "open_loop",
+            "text": "第二天 follow-up 出 biopsy 结果，已等两周。",
+            "evidence": "第一天第 1 轮"
+          },
+          {
+            "kind": "memory",
+            "text": "用户在尽量不 spiral，说完感觉好一点了。",
+            "evidence": "第一天第 2 轮"
+          }
+        ],
+        "timeGrounding": "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。"
+      },
+      "id": "memory-continuity-mix",
+      "languageVariant": "code_switch",
+      "letterMap": {
+        "W": "portrait_retrieved",
+        "X": "proactive",
+        "Y": "no_memory",
+        "Z": "portrait_only"
+      },
+      "locale": "zh-CN"
+    }
+  ],
+  "seed": 94
+}
