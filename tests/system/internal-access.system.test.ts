@@ -9,6 +9,8 @@ import { createInternalAccessHandler } from "../../apps/web/src/internal-access-
 import {
   asGenerationCommandId,
   asUserId,
+  CANONICAL_PERSONA_VERSION,
+  CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   createContextCompiler,
   createContinuousExchangeService,
   createConversationAgentHarness,
@@ -17,7 +19,9 @@ import {
   createInternalOwnerAccessService,
   createUserTextConversationService,
   EMPTY_CONVERSATION_ACTION_CATALOG,
+  ENGLISH_LOCALE_PACK_VERSION,
   INITIAL_CONVERSATION_HARNESS_POLICY,
+  PERSONA_BEHAVIOR_ANCHORS_VERSION,
   ProviderDispatchError,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
@@ -74,7 +78,7 @@ const testGenerationPolicy = Object.freeze({
   personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
   personaContractInvariantVersion: "persona-contract-invariant:v1",
   productPolicyVersion: "product-policy:v1",
-  taskInstructionVersion: "task-instruction-decision:v1",
+  taskInstructionVersion: CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   provider: "openai" as const,
   providerPolicyVersion: "openai-conversation-text:v1",
   relationshipPolicyVersion: "relationship-boundary:v1",
@@ -756,7 +760,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       model_config_version: "conversation-text-champion:v1",
       output_format_version: testGenerationPolicy.outputFormatVersion,
       persona_version: null,
-      prompt_version: "task-instruction-decision:v1",
+      prompt_version: CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
       turn_status: "settled",
       user_events: "1",
     });
@@ -991,10 +995,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         },
         locale: "en-US",
         policyVersions: {
-          localePolicyVersion: testGenerationPolicy.englishLocalePackVersion,
+          localePolicyVersion: ENGLISH_LOCALE_PACK_VERSION,
           outputFormatVersion: "conversation-output:v1",
-          canonicalPersonaVersion: "canonical-persona:v1",
-          personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+          canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
+          personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
           personaContractInvariantVersion: "persona-contract-invariant:v1",
           productPolicyVersion: testGenerationPolicy.productPolicyVersion,
           relationshipPolicyVersion:
@@ -1033,17 +1037,17 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           }),
           expect.objectContaining({
             key: "canonical_persona",
-            reference: "canonical-persona:v1",
+            reference: CANONICAL_PERSONA_VERSION,
             truncatable: false,
           }),
           expect.objectContaining({
             key: "persona_behavior_anchors",
-            reference: "persona-behavior-anchors:v1",
+            reference: PERSONA_BEHAVIOR_ANCHORS_VERSION,
             truncatable: false,
           }),
           expect.objectContaining({
             key: "task_instruction",
-            reference: "task-instruction-decision:v1",
+            reference: CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
             truncatable: false,
           }),
           expect.objectContaining({

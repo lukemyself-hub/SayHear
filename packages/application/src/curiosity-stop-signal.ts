@@ -30,7 +30,7 @@ import type { ConversationEventRevisionId } from "@sayhear/domain";
 
 import type { ConversationFunctionDefinition } from "./conversation-action-catalog";
 
-export const CURIOSITY_STOP_SIGNAL_POLICY_VERSION = "curiosity-stop-signal:v1";
+export const CURIOSITY_STOP_SIGNAL_POLICY_VERSION = "curiosity-stop-signal:v2";
 
 export const CURIOSITY_STOP_SIGNAL_MAX_PROPOSALS_PER_TURN = 4;
 export const CURIOSITY_STOP_SIGNAL_MAX_ACTIVE_DIRECTIONS = 8;
@@ -559,8 +559,9 @@ export function renderCuriosityStopSignal(input: {
 export const CURIOSITY_STOP_SIGNAL_FUNCTION: ConversationFunctionDefinition =
   Object.freeze({
     description:
-      "Propose changes to the Curiosity Stop Signal projection when the user avoids, refuses, or changes away from a question direction, asks you to stop asking questions, or later re-opens a stopped topic / offers new substantive content / explicitly invites questions again. Proposals are committed only by deterministic code; a preceding assistant question is required to suppress a direction.",
+      "Propose changes to the Curiosity Stop Signal projection when the user avoids, refuses, or changes away from a question direction, asks you to stop asking questions, or later re-opens a stopped topic / offers new substantive content / explicitly invites questions again. Calling this function never replaces your user-facing reply: always include your complete natural-language response text in the same response, and add the call alongside it. Proposals are committed only by deterministic code; a preceding assistant question is required to suppress a direction.",
     name: "curiosity_stop_signal",
+    visibleReplyRequired: true,
     parameters: Object.freeze({
       additionalProperties: false,
       properties: Object.freeze({

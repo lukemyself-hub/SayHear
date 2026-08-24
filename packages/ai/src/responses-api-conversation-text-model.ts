@@ -44,14 +44,16 @@ export function createResponsesApiConversationTextModel(input: {
             stream: true,
             ...(request.functions && request.functions.length > 0
               ? {
+                  // The Responses API carries function tools flat (name,
+                  // description, parameters directly on the tool object);
+                  // the nested chat-completions `function` wrapper is
+                  // rejected with HTTP 400 by both OpenAI and DeepSeek.
                   tool_choice: "auto",
                   tools: request.functions.map((definition) => ({
-                    function: {
-                      description: definition.description,
-                      name: definition.name,
-                      parameters: definition.parameters,
-                      strict: definition.strict,
-                    },
+                    description: definition.description,
+                    name: definition.name,
+                    parameters: definition.parameters,
+                    strict: definition.strict,
                     type: "function",
                   })),
                 }
@@ -87,12 +89,31 @@ export function createResponsesApiConversationTextModel(input: {
         let functionCallEmitted = false;
         let functionCallStarted = false;
         let functionCallOutputItemDone = false;
+        // A call to a `visibleReplyRequired` function is buffered until the
+        // stream ends: if the Provider answered with the call alone (DeepSeek's
+        // reasoning champion leaves the message inside reasoning), the adapter
+        // continues the tool loop once below so the decision still carries
+        // user-visible text; otherwise the call is surfaced at stream end,
+        // after any text, which keeps the harness's text-before-proposal
+        // ordering intact.
+        let callIdForContinuation: string | null = null;
+        let textEmitted = false;
+        const visibleReplyFunctions = new Set(
+          (request.functions ?? [])
+            .filter((definition) => definition.visibleReplyRequired === true)
+            .map((definition) => definition.name),
+        );
+        let pendingBufferedCall: {
+          rawArguments: string;
+          rawFunctionName: string;
+        } | null = null;
         for await (const event of parseServerSentEvents(response.body)) {
           if (event.type === "response.output_text.delta") {
             const delta = event.delta;
             if (typeof delta !== "string") {
               throw new ProviderDispatchError("invalid_response");
             }
+            textEmitted = true;
             yield { delta, type: "delta" };
           } else if (event.type === "response.output_item.added") {
             const item = isRecord(event.item) ? event.item : null;
@@ -106,6 +127,11 @@ export function createResponsesApiConversationTextModel(input: {
               }
               functionCallStarted = true;
               functionName = item.name;
+              if (typeof item.call_id === "string") {
+                callIdForContinuation = item.call_id;
+              } else if (typeof item.id === "string") {
+                callIdForContinuation = item.id;
+              }
               if (typeof item.arguments === "string") {
                 functionArguments = item.arguments;
               }
@@ -125,11 +151,18 @@ export function createResponsesApiConversationTextModel(input: {
             }
             functionArguments = event.arguments;
             functionCallEmitted = true;
-            yield {
-              rawArguments: functionArguments,
-              rawFunctionName: functionName,
-              type: "tool_call",
-            };
+            if (visibleReplyFunctions.has(functionName)) {
+              pendingBufferedCall = {
+                rawArguments: functionArguments,
+                rawFunctionName: functionName,
+              };
+            } else {
+              yield {
+                rawArguments: functionArguments,
+                rawFunctionName: functionName,
+                type: "tool_call",
+              };
+            }
           } else if (event.type === "response.output_item.done") {
             const item = isRecord(event.item) ? event.item : null;
             if (item && item.type === "function_call") {
@@ -141,17 +174,27 @@ export function createResponsesApiConversationTextModel(input: {
               }
               functionCallOutputItemDone = true;
               if (!functionCallStarted) functionCallStarted = true;
+              if (typeof item.call_id === "string") {
+                callIdForContinuation = item.call_id;
+              }
               const argumentsValue = item.arguments;
               if (functionCallEmitted) continue;
               if (typeof argumentsValue !== "string") {
                 throw new ProviderDispatchError("invalid_response");
               }
               functionCallEmitted = true;
-              yield {
-                rawArguments: argumentsValue,
-                rawFunctionName: item.name,
-                type: "tool_call",
-              };
+              if (visibleReplyFunctions.has(item.name)) {
+                pendingBufferedCall = {
+                  rawArguments: argumentsValue,
+                  rawFunctionName: item.name,
+                };
+              } else {
+                yield {
+                  rawArguments: argumentsValue,
+                  rawFunctionName: item.name,
+                  type: "tool_call",
+                };
+              }
             }
           } else if (event.type === "response.completed") {
             const completedResponse = event.response;
@@ -162,21 +205,61 @@ export function createResponsesApiConversationTextModel(input: {
               ? completedResponse.usage
               : null;
             completed = true;
+
+            // Call-only answer for a visibleReplyRequired function: finish
+            // the tool loop with one function_call_output round trip so the
+            // user still receives a visible reply, then surface the buffered
+            // call and a single merged completed event. One ModelRunAttempt
+            // stays one logical generation with summed usage.
+            let finalUsage = usage;
+            let providerRequestId =
+              response.headers.get("x-request-id") ??
+              (typeof completedResponse.id === "string"
+                ? completedResponse.id
+                : null) ??
+              null;
+            if (pendingBufferedCall && !textEmitted) {
+              const continuation = await dispatchContinuation({
+                apiKey: input.apiKey,
+                baseUrl,
+                dispatchSignal,
+                fetchImplementation,
+                functionName: pendingBufferedCall.rawFunctionName,
+                rawArguments: pendingBufferedCall.rawArguments,
+                callId: callIdForContinuation,
+                instructions: request.instructions,
+                messages: request.messages,
+                model: request.model,
+              });
+              for await (const delta of continuation.deltas) {
+                textEmitted = true;
+                yield { delta, type: "delta" };
+              }
+              if (continuation.usage) {
+                finalUsage = {
+                  input_tokens:
+                    (asOptionalNumber(usage?.input_tokens) ?? 0) +
+                    (asOptionalNumber(continuation.usage.input_tokens) ?? 0),
+                  output_tokens:
+                    (asOptionalNumber(usage?.output_tokens) ?? 0) +
+                    (asOptionalNumber(continuation.usage.output_tokens) ?? 0),
+                };
+              }
+              providerRequestId = continuation.providerRequestId ?? providerRequestId;
+            }
+            if (pendingBufferedCall) {
+              yield { ...pendingBufferedCall, type: "tool_call" };
+            }
             yield {
               costMicros: null,
               finishReason: "completed",
-              inputTokens: asOptionalNumber(usage?.input_tokens),
+              inputTokens: asOptionalNumber(finalUsage?.input_tokens),
               modelSnapshot:
                 typeof completedResponse.model === "string"
                   ? completedResponse.model
                   : request.model,
-              outputTokens: asOptionalNumber(usage?.output_tokens),
-              providerRequestId:
-                response.headers.get("x-request-id") ??
-                (typeof completedResponse.id === "string"
-                  ? completedResponse.id
-                  : null) ??
-                null,
+              outputTokens: asOptionalNumber(finalUsage?.output_tokens),
+              providerRequestId,
               type: "completed",
             };
           } else if (
@@ -205,6 +288,104 @@ export function createResponsesApiConversationTextModel(input: {
         );
       }
     },
+  };
+}
+
+/**
+ * One bounded continuation round trip after a call-only response: the original
+ * messages plus the function call and its recorded output, with tools omitted
+ * so the Provider must answer with the visible reply.
+ */
+async function dispatchContinuation(input: {
+  apiKey: string;
+  baseUrl: string;
+  dispatchSignal: AbortSignal;
+  fetchImplementation: typeof fetch;
+  functionName: string;
+  rawArguments: string;
+  callId: string | null;
+  instructions: string;
+  messages: readonly Readonly<{
+    role: "user" | "assistant";
+    text: string;
+  }>[];
+  model: string;
+}): Promise<{
+  deltas: string[];
+  providerRequestId: string | null;
+  usage: Record<string, unknown> | null;
+}> {
+  const callId = input.callId ?? "call_continuation";
+  const response = await input.fetchImplementation(`${input.baseUrl}/responses`, {
+    body: JSON.stringify({
+      input: [
+        ...input.messages.map((message) => ({
+          content: message.text,
+          role: message.role,
+        })),
+        {
+          arguments: input.rawArguments,
+          call_id: callId,
+          name: input.functionName,
+          type: "function_call",
+        },
+        { call_id: callId, output: "recorded", type: "function_call_output" },
+      ],
+      instructions: input.instructions,
+      model: input.model,
+      store: false,
+      stream: true,
+    }),
+    headers: {
+      authorization: `Bearer ${input.apiKey}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+    signal: input.dispatchSignal,
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new ProviderDispatchError(
+      categoryForStatus(response.status),
+      `Provider returned HTTP ${response.status}.`,
+    );
+  }
+  if (!response.body) {
+    throw new ProviderDispatchError("invalid_response");
+  }
+  const deltas: string[] = [];
+  let usage: Record<string, unknown> | null = null;
+  let sawCompleted = false;
+  for await (const event of parseServerSentEvents(response.body)) {
+    if (event.type === "response.output_text.delta") {
+      if (typeof event.delta !== "string") {
+        throw new ProviderDispatchError("invalid_response");
+      }
+      deltas.push(event.delta);
+    } else if (event.type === "response.completed") {
+      const completedResponse = event.response;
+      if (!isRecord(completedResponse)) {
+        throw new ProviderDispatchError("invalid_response");
+      }
+      sawCompleted = true;
+      usage = isRecord(completedResponse.usage)
+        ? completedResponse.usage
+        : null;
+    } else if (
+      event.type === "error" ||
+      event.type === "response.failed" ||
+      event.type === "response.incomplete"
+    ) {
+      throw new ProviderDispatchError("invalid_response");
+    }
+  }
+  if (!sawCompleted) {
+    throw new ProviderDispatchError("invalid_response");
+  }
+  return {
+    deltas,
+    providerRequestId: response.headers.get("x-request-id"),
+    usage,
   };
 }
 

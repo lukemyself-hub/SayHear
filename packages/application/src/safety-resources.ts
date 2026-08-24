@@ -10,7 +10,7 @@
  * pinned tests — never edit the entries in place.
  */
 
-export const SAFETY_RESOURCE_WHITELIST_VERSION = "safety-resources:v1";
+export const SAFETY_RESOURCE_WHITELIST_VERSION = "safety-resources:v2";
 
 export type SafetyResourceRegion = "US" | "CN";
 
@@ -31,13 +31,19 @@ export const SAFETY_RESOURCE_WHITELIST: Readonly<{
   numbers: readonly WhitelistedSafetyResource[];
 }> = {
   version: SAFETY_RESOURCE_WHITELIST_VERSION,
-  verifiedAt: "2026-08-22",
+  verifiedAt: "2026-08-23",
   numbers: [
     {
       display: "988",
       normalized: "988",
       region: "US",
       kind: "crisis_hotline",
+    },
+    {
+      display: "911",
+      normalized: "911",
+      region: "US",
+      kind: "emergency_number",
     },
     {
       display: "12356",
@@ -81,6 +87,30 @@ export function listSafetyResourceNumbers(input: {
         number.region === input.region && number.kind === input.kind,
     )
     .map((number) => number.display);
+}
+
+/**
+ * The locale-appropriate crisis-support sentence interpolated by both safety
+ * surfaces (the Minimum High-Risk Response and the compiled posture anchor),
+ * so the two can never drift apart. The numbers are the whitelist's own
+ * strings, verbatim; number changes ride the whitelist version.
+ */
+export function renderCrisisSupportSentence(input: {
+  locale: string;
+}): string {
+  const region = input.locale.toLowerCase().startsWith("zh") ? "CN" : "US";
+  const crisisHotlines = listSafetyResourceNumbers({
+    region,
+    kind: "crisis_hotline",
+  }).join(region === "CN" ? " 或 " : " or ");
+  const emergencyNumbers = listSafetyResourceNumbers({
+    region,
+    kind: "emergency_number",
+  }).join(region === "CN" ? " 或 " : " or ");
+  if (region === "CN") {
+    return `可以拨打心理援助热线 ${crisisHotlines}，紧急情况直接呼叫 ${emergencyNumbers}。`;
+  }
+  return `you can call or text a local suicide & crisis lifeline (such as ${crisisHotlines} in the US), or call your local emergency number (${emergencyNumbers}).`;
 }
 
 /**

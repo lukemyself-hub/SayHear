@@ -59,6 +59,16 @@ export type ConversationFunctionDefinition = Readonly<{
   name: string;
   parameters: Readonly<Record<string, unknown>>;
   strict: true;
+  /**
+   * Marks a proposal channel whose user-facing reply must arrive in the same
+   * logical generation. When a Provider answers with only a call to a
+   * function carrying this flag and no output text, the adapter continues
+   * the tool loop once (a function_call_output round trip) to obtain the
+   * visible reply, instead of surfacing a text-less decision. Conversation
+   * Action functions leave it unset: their finalization stage already owns
+   * the visible reply.
+   */
+  visibleReplyRequired?: true;
 }>;
 
 export type ConversationActionSchema = Readonly<{

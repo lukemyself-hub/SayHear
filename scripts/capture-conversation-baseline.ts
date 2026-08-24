@@ -7,7 +7,9 @@ import path from "node:path";
 import {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
   CANONICAL_PERSONA_VERSION,
+  CHINESE_LOCALE_PACK_VERSION,
   countFollowUpQuestions,
+  ENGLISH_LOCALE_PACK_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   createConversationActionGateway,
   createConversationAgentHarness,
@@ -288,6 +290,11 @@ const SCENARIO_RESET_TABLES = `
     conversation_action_receipts,
     conversation_action_executions,
     conversation_action_handles,
+    current_curiosity_stop_signals,
+    curiosity_stop_signals,
+    current_safety_postures,
+    safety_postures,
+    safety_posture_alerts,
     current_rolling_summaries,
     rolling_summary_versions,
     rolling_summary_command_source_refs,
@@ -358,8 +365,8 @@ async function main(): Promise<void> {
   const generationPolicy: GenerationPolicy = {
     consentPolicyVersion: champion.consentPolicyVersion,
     freshnessPolicy: "source_valid:v1" as const,
-    chineseLocalePackVersion: "locale-pack-zh:v1",
-    englishLocalePackVersion: "locale-pack-en:v1",
+    chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
+    englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
     harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
     conversationActionCatalogVersion:
       JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,

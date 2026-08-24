@@ -2,6 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
   asGenerationCommandId,
+  CANONICAL_PERSONA_VERSION,
+  CHINESE_LOCALE_PACK_VERSION,
   classifyConversationTurnSignal,
   countFollowUpQuestions,
   createContextCompiler,
@@ -10,6 +12,10 @@ import {
   createUserTextConversationService,
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
+  PERSONA_BEHAVIOR_ANCHORS_VERSION,
+  PREVIOUS_CANONICAL_PERSONA_VERSION,
+  PREVIOUS_CHINESE_LOCALE_PACK_VERSION,
+  PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
@@ -567,6 +573,63 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
     const rawEvents = sectionsByKey.get("committed_raw_events");
     expect(rawEvents?.budgetTokens).toBe(4000);
     expect(rawEvents?.selectedTokens).toBeLessThanOrEqual(4000);
+  });
+
+  it("cuts over to the authored v2 identity pins and demonstrates rollback by re-pinning (issue #79)", async () => {
+    async function manifestReferencesForTurn(
+      caseName: string,
+      policyOverrides: Partial<GenerationPolicy>,
+    ): Promise<Readonly<Record<string, string>>> {
+      const { service } = createService(() => ["听到了。"], policyOverrides);
+      const events = await submit(service, {
+        clientEventId: `cutover-${caseName}-event`,
+        clientTurnId: `cutover-${caseName}-turn`,
+        locale: "zh-CN",
+        text: "今天的 review 让我有点失落。",
+      });
+      expect(events.at(-1)?.type).toBe("assistant_committed");
+      const manifest = await database.pool.query<{
+        sections: readonly Readonly<{ key: string; reference: string }>[];
+      }>(
+        `SELECT context.sections
+         FROM compiled_contexts context
+         INNER JOIN generation_commands command
+           ON command.compiled_context_id = context.compiled_context_id
+         WHERE command.generation_command_id = $1`,
+        [String(events[0]?.generationCommandId)],
+      );
+      const references: Record<string, string> = {};
+      for (const section of manifest.rows[0]?.sections ?? []) {
+        references[section.key] = section.reference;
+      }
+      return references;
+    }
+
+    // Cutover: the authored v2 persona, anchors, and locale pack compile and
+    // are recorded as the manifest section references.
+    const cutover = await manifestReferencesForTurn("v2", {
+      canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
+      chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
+      personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
+    });
+    expect(cutover.canonical_persona).toBe(CANONICAL_PERSONA_VERSION);
+    expect(cutover.persona_behavior_anchors).toBe(
+      PERSONA_BEHAVIOR_ANCHORS_VERSION,
+    );
+    expect(cutover.locale_pack).toBe(CHINESE_LOCALE_PACK_VERSION);
+
+    // Rollback is re-pinning the previous versions: the same seam compiles
+    // the pre-cutover identity layers again (ADR-0113).
+    const rolledBack = await manifestReferencesForTurn("rollback", {
+      canonicalPersonaVersion: PREVIOUS_CANONICAL_PERSONA_VERSION,
+      chineseLocalePackVersion: PREVIOUS_CHINESE_LOCALE_PACK_VERSION,
+      personaBehaviorAnchorsVersion: PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION,
+    });
+    expect(rolledBack.canonical_persona).toBe(PREVIOUS_CANONICAL_PERSONA_VERSION);
+    expect(rolledBack.persona_behavior_anchors).toBe(
+      PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION,
+    );
+    expect(rolledBack.locale_pack).toBe(PREVIOUS_CHINESE_LOCALE_PACK_VERSION);
   });
 
   it("fails the compile closed and ships no Assistant Response when a persona or locale version cannot be resolved", async () => {

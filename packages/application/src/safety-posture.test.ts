@@ -34,7 +34,7 @@ const USER_REVISION_D = asConversationEventRevisionId(
 
 describe("safety posture policy constants", () => {
   it("pins the versioned lifecycle identity and the K parameter", () => {
-    expect(SAFETY_POSTURE_POLICY_VERSION).toBe("safety-posture:v1");
+    expect(SAFETY_POSTURE_POLICY_VERSION).toBe("safety-posture:v2");
     expect(SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE).toBe(2);
   });
 

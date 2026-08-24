@@ -10,7 +10,7 @@
  * ./safety-resources — the single source shared with the eval hard gate.
  */
 
-import { listSafetyResourceNumbers } from "./safety-resources";
+import { renderCrisisSupportSentence } from "./safety-resources";
 
 export const MINIMUM_HIGH_RISK_RESPONSE_POLICY_VERSION =
   "minimum-high-risk-response:v1";
@@ -19,10 +19,14 @@ export const MINIMUM_HIGH_RISK_RESPONSE_POLICY_VERSION =
  * The independent version identities of the English and Chinese locale packs
  * (ADR-0072). They are versioned separately rather than collapsed into one
  * shared locale-policy identity, and the pack applicable to a turn is recorded
- * on its generation metadata.
+ * on its generation metadata. The v2 packs are the authored first content of
+ * issue #79; the v1 identities remain exported as the PREVIOUS_* constants a
+ * rollback re-pins.
  */
-export const ENGLISH_LOCALE_PACK_VERSION = "locale-pack-en:v1";
-export const CHINESE_LOCALE_PACK_VERSION = "locale-pack-zh:v1";
+export const ENGLISH_LOCALE_PACK_VERSION = "locale-pack-en:v2";
+export const CHINESE_LOCALE_PACK_VERSION = "locale-pack-zh:v2";
+export const PREVIOUS_ENGLISH_LOCALE_PACK_VERSION = "locale-pack-en:v1";
+export const PREVIOUS_CHINESE_LOCALE_PACK_VERSION = "locale-pack-zh:v1";
 
 export type HighRiskKind =
   | "self_harm"
@@ -386,29 +390,16 @@ export function renderMinimumHighRiskResponse(input: {
 }): string {
   const locale = resolveConversationLocale(input.locale);
   if (locale === "zh") {
-    const crisisHotlines = listSafetyResourceNumbers({
-      region: "CN",
-      kind: "crisis_hotline",
-    }).join(" 或 ");
-    const emergencyNumbers = listSafetyResourceNumbers({
-      region: "CN",
-      kind: "emergency_number",
-    }).join(" 或 ");
     return (
       "谢谢你愿意告诉我——你现在是否安全，是我此刻最关心的。" +
-      `请立刻联系危机热线或急救服务：可以拨打心理援助热线 ${crisisHotlines}，` +
-      `紧急情况直接呼叫 ${emergencyNumbers}。` +
+      `请立刻联系危机热线或急救服务：${renderCrisisSupportSentence({ locale: input.locale })}` +
       "你现在身边有可以陪伴、保证你安全的人吗，或者你能马上联系到这样的人吗？"
     );
   }
-  const crisisHotlines = listSafetyResourceNumbers({
-    region: "US",
-    kind: "crisis_hotline",
-  }).join(" or ");
   return (
     "Thank you for telling me — whether you are safe right now matters most to me. " +
-    "Please reach out to a crisis line or emergency services right away: you can call or text a " +
-    `local suicide & crisis lifeline (such as ${crisisHotlines} in the US) or your local emergency number. ` +
+    "Please reach out to a crisis line or emergency services right away: " +
+    `${renderCrisisSupportSentence({ locale: input.locale })} ` +
     "Are you with someone who can keep you safe right now, or able to reach someone?"
   );
 }
