@@ -3,6 +3,10 @@ status: accepted
 date: 2026-08-22
 ---
 
+> **Amended by [ADR-0115](0115-memory-recall-starts-with-structured-lexical-retrieval.md)**
+> on the initial 1A.3a retrieval mechanism. Memory & Recall starts with PostgreSQL
+> structured-lexical retrieval; Embedding and pgvector become evidence-triggered follow-up work.
+
 # Persona and Safety precedes Memory Recall in delivery order
 
 Issue #65 asks what staged route turns the resolved Persona (#67), behavior (#63), Context-engineering and safety (#64) decisions into executable SPECs. Implementation stands at Core Flow 1A.2 plus the private-data release gate, with a thin one-line persona, no Safety Posture, and a pre-0111 DialogueState projection; the architecture ladder's next stages were 1A.3 (Entity and long-term Memory) and 1A.4 (Replay).

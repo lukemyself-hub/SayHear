@@ -381,12 +381,14 @@ memory_forget_requests
 memory_forget_evidence_exclusions
 memory_forget_reversals
 claim_localized_projections
+claim_retrieval_projections
 claim_evidence_links
 relationship_resolver_hints
 profile_projections
 profile_projection_versions
 profile_projection_claim_links
 retrieval_runs
+retrieval_run_candidates
 ```
 
 `memory_candidates` 是有独立 ID、短期保留的非权威提案：
@@ -676,6 +678,89 @@ claim_localized_projections
 ```
 
 同一 `claim_version_id + locale` 只有一个 current projection。
+
+向量检索使用独立、可重建的 Claim retrieval projection，不直接索引 Evidence、
+Candidate 或叙事产物：
+
+```text
+claim_retrieval_projections
+  id
+  user_id
+  claim_version_id
+  locale
+  view_direction              # self / forward / inverse / symmetric
+  retrieval_text
+  lexical_terms               # deterministic text[] for zh / en / code-switching
+  english_search              # generated pg_catalog.english tsvector
+  projection_policy_version
+  status                      # active / stale / deleted
+  created_at
+  content_purged_at
+```
+
+`retrieval_text` 从 ClaimVersion 的 Predicate、typed value、必要 Entity label 与时间
+表达确定性生成，不复制底层 User Event 正文。Objective / Impression、时间状态与关系
+观察方向必须保留在结构化 metadata；同一 Relationship ClaimVersion 可以按 locale
+生成多个观察方向，但检索结果最终去重到同一 `claim_version_id`。
+
+`lexical_terms` 由同一版本化 projection policy 从 stable Entity label、已验证 alias、
+Predicate Registry lexical alias、typed value 与时间表达生成；query construction
+使用同一 policy，不能让模型现场补同义词。它使用 PostgreSQL `text[]` GIN overlap，
+作为中文、英文和 code-switching 的可解释精确 term path。`english_search` 只对英文
+retrieval text 使用显式 `pg_catalog.english` configuration 生成，并通过 GIN 支持
+英文词形匹配。首版不启用 `pg_trgm`；alias 拼写容错只有在生产 locale、extension
+可用性与 fixture 阈值经过验证后才重新评估。
+
+只有被 `memory_claims.current_version_id` 指向、可召回且通过全部 Evidence、Entity、
+Correction、Forget、contested、dormant 与删除 fence 的 ClaimVersion 才能产生 active
+retrieval projection。MemoryCandidate、EvidenceItem 原文、JournalStatement、
+Reflection、ProfileProjection 与 PersonPortrait 不进入 Memory vector index。
+Entity label / alias、canonical key 与时间范围使用 structured / lexical path，不依赖
+向量完成精确匹配。同日 raw Event 继续由当前 Session Context 消费，不写入长期索引。
+
+每次 Context memory query 保存无正文的 retrieval 运行与候选决策：
+
+```text
+retrieval_runs
+  id
+  user_id
+  daily_session_id
+  source_event_revision_id
+  compiled_context_id             # nullable until compile commit
+  retrieval_policy_version
+  query_construction_policy_version
+  projection_policy_version
+  query_source_refs
+  normalized_query_terms
+  deadline_ms                    # policy snapshot; initial value 200
+  status                          # running / completed / degraded / failed
+  degraded_reason_codes
+  duration_ms
+  deadline_exceeded_stage
+  started_at
+  completed_at
+
+retrieval_run_candidates
+  id
+  retrieval_run_id
+  claim_version_id
+  retrieval_projection_id
+  retrieval_lane
+  matched_fields
+  matched_terms
+  trust_fence_results
+  rank_components
+  final_rank
+  selected_section
+  selection_reason_codes
+  rejection_reason_codes
+  created_at
+```
+
+`retrieval_runs` 与 candidate rows 不保存 User Event 正文、Evidence quote 或完整
+retrieval text；只保存 typed reference、normalized term、结构化 reason code、必要
+keyed HMAC 和非正文 timing。它们随 CompiledContext retention、source deletion 与
+Full Purge 处理，不能成为另一份长期用户画像。
 
 `relationship_resolver_hints` 是可删除、可重建的解析投影，不是关系真源：
 

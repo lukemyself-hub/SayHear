@@ -141,6 +141,24 @@ safety
 `enabled_roles` 只声明能力匹配候选；是否允许 fallback 由人工发布的 Model Routing
 Policy 按 role 显式决定，默认 `disabled`。
 
+1A.3a 的 Entity / Memory role 边界如下：
+
+- `memory.extract` 是每个 final / corrected User Event 的快速路径主调用；一次结构化
+  输出可以提出 Evidence locator、EntityMention 与 MemoryCandidate，但不能创建
+  Claim 或决定长期准入；
+- `entity.resolve` 只在确定性 Self Entity、稳定 ID、已验证 alias 与
+  Relationship Resolver Hint 仍不能唯一解析 Mention 时调用；它只在当前 user scope
+  的有界候选中提出匹配，validator 无法唯一确认时保持 unresolved；
+- `memory.consolidate` 在 Daily / Weekly 慢速路径读取有效 Evidence、Candidate 与
+  current ClaimVersion，提出版本化 diff；确定性 validator 负责 Predicate、Evidence、
+  Entity、敏感信息、Correction、Forget 与 lifecycle fence；
+- `embedding` 只为已通过准入且当前可召回的 projection 生成可重建向量，不接收
+  Candidate，也不决定内容是否值得长期记住。
+
+四个 role 分别冻结 Champion、Provider、model、Prompt / Schema 与 policy version；
+前三个结构化 role 可以在首版选中同一底层模型，但配置与评测保持独立。1A.3a 不为
+这些 role 开启自动 fallback；`embedding` 继续遵守向量空间默认禁止 fallback 的规则。
+
 ### 15.4 首轮评估矩阵
 
 截至 2026-07-24 的起始候选：
