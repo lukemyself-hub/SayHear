@@ -533,17 +533,36 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - `sh.*` semantic namespace registry 初始集合；
 - fast memory candidate；
 - Entity / Memory role Champion config；
-- Embedding 与 pgvector retrieval；
+- PostgreSQL Structured-Lexical Retrieval Baseline；不激活 Embedding Champion、
+  不安装 pgvector，也不创建 vector column（ADR-0115）；
 - Memory retrieval 与后续对话召回；版本化预算 v1（Person Portrait ≤3、
   检索 ≤2、memory 类合计 ≤5）与逐条 Correction / Forget / contested /
   dormant fence（ADR-0111）；
-- Person Portrait 编译与 retrieval manifest；检索失败按降级原因继续对话，
+- Person Portrait 编译与 retrieval manifest；检索失败按降级原因继续对话，本轮不注入
+  或复用上一轮 Memory，
   空 Portrait 静默省略，不编造；
+- Person Portrait 每轮从长期 person-describing Predicate 按当前话题相关性、理解价值、
+  跨情境稳定性与 Evidence 强度选择；Objective 与 active Impression 不设固定先后，
+  kind 只改变 framing。敏感推断、临时情绪、一次性事件和短期安排 0 条进入 Portrait；
+- retrieval lane 故障矩阵：未启用 lane 不影响健康状态，正常空结果不算故障，任一
+  已启用 lane 报错或超时都会使整轮 Memory fail closed，不能交付其他 lane 的部分结果；
+- 200ms 共享 retrieval deadline：覆盖 query construction、全部 lane、排序和 fence，
+  request path 不重试；注入阶段分别验证边界内成功、超时 fail closed 与耗时记录；
+- query-retrieved Memory 每轮最多 2 条且 AI Impression 最多 1 条；只有通过
+  lane-specific precision cutoff 的候选才可注入，0 次为填满预算降低门槛；
 - “只引用注入证据” grounding guard（#62 召回越界对策）；
 - Memory Correction、Memory Forget Request 与 Memory Source Explanation，以及
   对应的 Conversation ActionDefinition / typed handler；
 - Context Inspector 扩展检索候选与选择 / 拒绝原因面板；
-- Full Purge 扩展到 Entity、Memory、Embedding 与相关索引。
+- 首版不设 Shadow Mode：合格 Memory 直接注入，Inspector 展示实际注入 item 与同一
+  retrieval run 的候选决策，不维护“已选择但未注入”的第二套状态；
+- 显式 Replay 以相同冻结输入生成 Memory-on 与 Memory-off 两个非权威候选，不写
+  产品状态、不进入生产回复；盲评只显示 A / 持平 / B，由 Internal Owner 判断哪边
+  更像真正了解用户的朋友（ADR-0110 / ADR-0114）；
+- Memory 专用 `blind-pairwise:v2` 使用独立 15 场景分层样本与 8 English / 5 中文 /
+  2 code-switch 配额，强制覆盖 Objective、Portrait / Impression、人物关系与时间变化、
+  Correction / Forget fence；不增加六维逐项评分（ADR-0114）；
+- Full Purge 扩展到 Entity、Memory、retrieval projection 与相关索引。
 
 退出条件：
 
@@ -617,19 +636,32 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
   0 个相同 Evidence 与语义目标通过重复 Candidate 绕过 rejection；
 - 新旧 Claim 值 100% 先按 Registry scope、时间语义与 cardinality 路由；明确
   变化和 Correction 创建新 ClaimVersion，允许并存的值不冲突；真正无法消解的
-  互斥值 100% 进入 `contested + review_due` 并退出 Recall / Embedding，
+  互斥值 100% 进入 `contested + review_due` 并退出 Recall 与 retrieval projection，
   0 个冲突仅凭新旧顺序或 confidence 自动决胜；
 - Objective Memory 0% 因未提及时长降低 confidence；AI Impression 100% 按
   Registry review policy 复核，缺少 fresh Evidence 时通过新 ClaimVersion
   进入 dormant 并退出所有主动使用，恢复必须重新满足跨 Session admission；
 - Objective Memory 与 AI Impression 使用不同召回语言；
+- Person Portrait 的 Objective 与 active Impression 使用同一组 topic-aware 选择维度，
+  0 次因 kind 直接改变名次；无合格或相关项时 section 为空，不用无关画像填满三条；
+- 相关 Person Portrait 可以被自然、主动地表达，0 次强制添加来源声明或仪式化 hedge；
+  但 0 个 AI Impression 被表述为用户自述或已核验事实，0 个无 Evidence 全局人格、
+  临时状态永久化、诊断式或敏感身份标签通过 behavior contract（ADR-0116）；
 - 从第一条可召回 Claim 起，Correction、whole-Claim / Qualifier-level Forget、
   Memory Forget Reversal 与 Source Explanation 即时成立；
+- 同轮显式 Correction / Forget / Reversal 100% 先提交 Trust-Control 变化，再执行
+  Memory retrieval；提交失败或 target 实质歧义时，本轮 Memory 全部 fail closed，
+  回复不得声称操作成功，普通 extraction、Journal 复核和 Profile rebuild 仍异步；
 - 跨日召回准确、克制，不因同名或低置信度推断制造错误连续性；召回只引用
   注入证据，memory fixture 场景中漏召回与越界引用都是缺陷（行为契约跨日
   记忆判据转正）；
-- Full Purge 演练覆盖 Entity、Memory 与 Embedding 数据面，旧 Claim、
-  Embedding 或 Workflow 结果不能复活。
+- 错误 Entity、已 Correction / Forget 的内容和无 Evidence 人格判断在确定性契约
+  门禁中均为 0；Memory-on 相对 Memory-off 的体验提升只由盲评人工裁定，自动检查
+  与 LLM judge 不替代“被理解感”和自然度判断；
+- Memory 专用盲评中 Memory-on 场景整体净偏好严格为正，各语言和抽中的 Memory
+  类别均不得净回退；持平不计入任一方，信任门禁不能被偏好胜场抵消；
+- Full Purge 演练覆盖 Entity、Memory 与 retrieval projection 数据面，旧 Claim、
+  projection 或 Workflow 结果不能复活。
 
 ### Core Flow 1A.3b：Continuation & Reflection
 

@@ -281,7 +281,7 @@ Bio 的普通重写由受频率限制的用户手动刷新与每周自动刷新�
 _Avoid_: Daily Profile regeneration, Bio approval workflow, Stale Bio fallback
 
 **Person Portrait**:
-每轮对话 Context 固定注入的、严格限量的“用户是怎样的人”选集；由版本化选择策略从当前有效、描述用户本身的 Objective Memory 与 active AI Impression 中逐条选出，每条携带 claim 版本、Evidence 与对应认识类型的召回措辞，并逐条适用 Correction、Forget、contested 与 dormant fence。证据不足时该选集为空，不编造画像；叙事版 Profile 不进入对话 Context。
+每轮对话 Context 都会编译、但条目会随当前话题重新选择的严格限量“用户是怎样的人”选集；版本化策略从当前有效、适合长期影响理解与交流的 Objective Memory 与 active AI Impression 中，先按话题相关性，再按理解价值、跨情境稳定性与 Evidence 强度逐条选择，不设 Objective-first 规则。每条携带 claim 版本、Evidence 与对应认识类型；相关观察可以被 AI 用自然、朋友式语言主动表达，不强制来源前缀或仪式化保留语。条目逐条适用 Correction、Forget、contested 与 dormant fence；没有合格或相关内容时选集为空，不编造画像。敏感推断、临时情绪、一次性事件和短期安排不进入 Person Portrait；叙事版 Profile 不进入对话 Context。
 _Avoid_: Profile injection, Narrative bio, Second source of truth
 
 **Memory Claim**:
@@ -323,6 +323,10 @@ _Avoid_: Prohibited topic, Sensitive topic filter
 **Sensitive Interpretive Impression**:
 敏感领域中只描述某项经历对用户的意义、影响、支持或压力来源、交流偏好的 AI Impression；它不能把用户未直接明确陈述的诊断、身份或风险归类写成长期 Memory。
 _Avoid_: Sensitive classification, Diagnosis, Identity inference
+
+**Memory Candidate**:
+SayHear 从 User Evidence 提出的、尚待 Entity、Predicate、Evidence policy、冲突与用户控制边界校验的非权威长期记忆提案；快速或慢速路径都可以创建它，但通过准入前不能作为 Memory Claim、Recall、Person Portrait、Profile 或 Embedding 使用。
+_Avoid_: Draft Memory, Memory Claim
 
 **Rejected Memory Candidate**:
 被长期 Memory 准入明确否决的非权威提案；它不因 Registry 更新、重复抽取、时间经过或模型 confidence 自动转为 Claim，也不表示底层 Evidence 已被删除。

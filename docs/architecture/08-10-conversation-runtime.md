@@ -299,6 +299,14 @@ Receipt，工具关闭后才能生成。它可以准确说明请求已接受、�
 全部完成。异步完成不会自行产生第二个 Agent tool loop 或用户消息，除非该 Action
 另有明确 delivery policy。
 
+显式 Memory Correction、Memory Forget Request 与 Memory Forget Reversal 是同轮
+回复前的同步 Trust-Control 步骤。目标唯一时，必须先原子提交新的 ClaimVersion、
+fence 与 terminal Receipt，再构建本轮 Memory query；retrieval 只能读取提交后的
+current Claim 状态。Action 提交失败时不能声称控制已经生效，本轮三个 Memory section
+全部 fail closed。目标仍有实质歧义时不改变 Claim，按规则澄清一次，并同样关闭本轮
+Memory，避免在澄清回复中再次注入可能正被纠正或遗忘的内容。普通 Memory extraction、
+consolidation 与 Profile rebuild 仍走异步路径，不阻塞当前回复。
+
 同一个 User Event 包含两个或以上可以独立接受、拒绝或执行的 Action 时，属于
 Compound Conversation Request。一个 Action 为维护 Memory、Journal 与 Profile
 一致性而产生的多个确定性下游影响不属于复合请求。
@@ -366,7 +374,7 @@ Context Compiler 是正式应用服务，不是散落在 API handler 中的字�
 4. 当前 Session 滚动摘要（1A.2+）；
 5. 最近 committed raw Events（1A.1 起）；
 6. 当前会话状态与语气（1A.2+），语义字段与确定性投影的拆分见下文；
-7. Person Portrait：固定注入的“用户是怎样的人”选集（1A.3a+，ADR-0111）；
+7. Person Portrait：每轮按当前话题选择的“用户是怎样的人”选集（1A.3a+，ADR-0111）；
 8. 相关 Objective Memory（1A.3a+）；
 9. 少量相关且未过期的 AI Impression（1A.3a+）；
 10. 必要的 Open Loop（1A.3b+）；
@@ -379,12 +387,61 @@ Open Loop，让 Assistant 在本轮主动询问进展，不要求 utterance 已�
 没有新 User Event 时，Open Loop 不得单独创建 GenerationCommand、消息或通知；
 它也不能触发任务型输出。过期或关闭的 Loop fail closed。
 
-Person Portrait（1A.3a+，ADR-0111）是每轮固定注入的“用户是怎样的人”选集：由
-版本化选择策略从当前有效、描述用户本身的 Objective Memory 与 active AI
-Impression 中逐条选出，每条携带 `claim_version_id + evidence_id` 与对应认识类型的
-召回措辞，并逐条适用 Correction、Forget、contested 与 dormant fence。叙事版
-Profile Projection 不进入对话 Context，Profile 只作为用户可见产物存在；早期合格
-条目不足时该 section 为空，不编造画像。
+Person Portrait（1A.3a+，ADR-0111）是每轮重新选择的“用户是怎样的人”选集。版本化
+selector 只接收适合长期影响理解与交流的 person-describing Predicate，例如性格特质、
+理念价值观、交流偏好、长期角色与重要关系；敏感推断、临时情绪、一次性事件和短期
+安排不进入 Portrait，只能在符合普通准入与相关性门槛时走 query retrieval。
+
+selector 先比较与当前话题的相关性，再比较对理解用户的重要性、跨情境稳定性与
+Evidence 强度。当前有效的 Objective Memory 与 active AI Impression 平等参与这些
+排序，不设 Objective-first 规则；`kind + epistemic_status` 只决定召回措辞，不直接
+决定名次。同级再以最新有效 Evidence 和 stable ID 打破平局。每条携带
+`claim_version_id + evidence_id`，并逐条适用 Correction、Forget、contested 与
+dormant fence。叙事版 Profile Projection 不进入对话 Context，Profile 只作为用户
+可见产物存在；没有合格或相关条目时该 section 为空，不编造画像。
+
+Person Portrait 不只是隐藏提示。当前 User Event 与 selected trait / value 明确呼应且
+表达该观察能增加理解或共情时，Conversation Model 可以主动用自然、朋友式语言连接，
+例如“这听上去就很像你，会更在意……”。AI Impression 不要求每次添加来源前缀或
+仪式化 hedge；`kind + epistemic_status` 仍通过 recall projection 禁止把推断升级成
+用户自述或已核验事实。无 Evidence 的全局人格判断、临时状态永久化、诊断式或敏感
+身份标签仍被 behavior contract 拒绝。用户质疑时再进入 Source Explanation、
+Correction 或 Forget，不在普通对话里强制展示认识论账本（ADR-0116）。
+
+1A.3a 的 Memory 不合并为叙事段落。Context Compiler 使用三个独立 section key：
+
+```text
+person_portrait
+objective_memory
+ai_impression
+```
+
+三个 section 共享原子 `MemoryContextItem`：
+
+```text
+context_memory_ref                # CompiledContext-scoped opaque reference
+rendered_text
+claim_id
+claim_version_id
+kind
+epistemic_status
+temporal_status
+valid_from
+valid_to
+entity_version_ids
+evidence_ids
+recall_framing_policy_version
+selection_source                  # person_portrait / query_retrieval
+```
+
+Objective Memory 与 AI Impression 不能合并为同一 item 或一句叙事。Prompt 读取
+`rendered_text + context_memory_ref + kind-specific framing`，不默认读取 Evidence
+原文；稳定 Claim、Entity 与 Evidence ID 保存在 manifest。用户要求 Memory Source
+Explanation 时，应用服务再按权限读取仍有效的 User Event Revision。
+
+三个 section 按 `claim_version_id` 全局去重。同一 Claim 同时被 Person Portrait 与
+query retrieval 选中时只保留在 `person_portrait`，retrieval manifest 仍记录 query
+命中；它只占一次 memory-class 总预算。空 section 省略，不生成占位文本。
 
 1A.1 只使用 DailySession / InteractionTurn 上的确定性领域状态，例如
 `activity_state`、revision 和 closure policy；它不持久化或消费模型生成的
@@ -457,6 +514,34 @@ content_hmac
 created_at
 ```
 
+1A.3a 的 `retrieval_manifest` 至少包含：
+
+```text
+retrieval_run_id
+retrieval_policy_version
+query_construction_policy_version
+projection_policy_version
+query_sources[]                    # source kind + revision refs
+normalized_query_terms[]
+candidates[]                       # Claim / projection refs only
+  retrieval_lane
+  matched_fields
+  matched_terms
+  trust_fence_results
+  rank_components
+  final_rank
+  selected_section
+  selection_reason_codes
+  rejection_reason_codes
+section_budget_vs_actual
+timings
+degraded_reasons[]
+```
+
+Manifest 不复制 User Event、Evidence quote 或完整 retrieval text；它保存稳定引用、
+结构化 reason code、必要 keyed HMAC 与非正文指标，并随 CompiledContext lineage、
+retention 和删除传播处理。
+
 Context Compiler 在受控 application boundary 内读取源数据，把引用清单以及必要的
 加密 rendered payload 写入 `compiled_contexts`，向 Turn、Workflow 和 Replay
 调用方只返回 `compiled_context_id + revisions + non-sensitive stats`。
@@ -485,6 +570,11 @@ reason、检索候选及选中 / 淘汰理由、DialogueState 各字段的证据
 Person Portrait 条目及 claim 版本、Safety Posture 当前状态与干净 turn 计数。
 它不是第二写入口，也不出现在用户界面。
 
+1A.3a 扩展 Inspector，逐条展示三个 Memory section、`context_memory_ref`、Claim /
+Entity / Evidence version、query source、lane、matched fields / terms、trust fence、
+rank components、selection / rejection reason、预算与 timing。Evidence 原文只通过
+既有受权限控制的 source 展开路径读取，Inspector manifest 本身不保存副本。
+
 ### 9.3 Token Budget
 
 每层有独立预算和截断策略：
@@ -493,7 +583,8 @@ Person Portrait 条目及 claim 版本、Safety Posture 当前状态与干净 tu
 - 1A.1 按 sequence 从新到旧选择预算内的 committed raw Events；超出预算时在
   CompiledContext 记录 `raw_event_budget_exceeded`，不静默生成临时摘要；
 - 从 1A.2 开始，最近原始 turn 优先于陈旧摘要；
-- Objective Memory 优先于低置信度 Impression；
+- Objective Memory 与 active AI Impression 按各自 selector 排序，并始终使用不同的
+  epistemic framing；kind 本身不覆盖相关性、长期重要性、稳定性或 Evidence 门槛；
 - Entity label 按当前 locale 投影，但 Context manifest 保留稳定 `entity_id`；
 - 人物卡片由 Entity、选中的 Relationship ClaimVersion 与 localized projection
   在 Context Compiler 中合并渲染；Relationship Resolver Hint 只用于候选解析，
@@ -604,39 +695,87 @@ Safety Posture（ADR-0112）是 DailySession 上的确定性让位状态，不�
 
 ### 10.1 初期检索
 
-使用 PostgreSQL + pgvector：
+1A.3a 使用 PostgreSQL `Structured-Lexical Retrieval Baseline`（ADR-0115）：
 
 - 最近 turns；
 - Daily Session summary（1A.2+）；
-- structured filters；
-- stable entity ID / Claim canonical key；
-- localized Entity label / alias；
+- 第一优先级：stable Entity ID、Claim canonical key、Predicate、typed value、时间范围
+  与 Claim kind 的 structured exact matching；
+- 第二优先级：projection policy 生成的 `lexical_terms text[]` 与 query terms 的
+  GIN overlap，覆盖中文、英文和 code-switching；
+- 第三优先级：`pg_catalog.english` generated `tsvector` + GIN，通过
+  `plainto_tsquery` 处理英文词形变化；
+- localized Entity label / verified alias；
 - validated Relationship Resolver Hint；
-- 时间范围；
-- semantic vector；
-- 必要时 lexical query。
+- localized Claim retrieval projection 的 lexical query。
+
+初期不激活 Embedding Champion、不安装 pgvector、不创建 vector column，也不实现
+生产 Embedding adapter。retrieval manifest、版本化预算、逐条 trust fence 与
+Context Inspector 仍完整记录 baseline 的命中、淘汰、漏召回和错误召回。只有
+ADR-0115 的证据条件满足后才增加 semantic vector 路径。
+
+初期不启用 `pg_trgm`。它只作为未来 alias typo tolerance 的候选，必须先验证生产
+PostgreSQL version、locale、extension availability 与 fixture-calibrated threshold；
+任何模糊匹配都不能绕过 Entity / Claim trust fence。
 
 ### 10.2 查询构建
 
-不只用用户最后一句话。
+1A.3a 不增加 pre-retrieval LLM。Context Compiler 从已提交、可验证的当前输入与
+投影确定性构建多路 query：
 
-查询可以来自：
+- 当前 final / corrected User Event 的文本；
+- 当前 Continuous Exchange 中最近两个 final / corrected User Event，用于保留代词、
+  省略表达和紧邻话题；
+- 上述 User Event 中可以通过 Self Entity、stable Entity ID、当前 label、已验证 alias
+  或 Relationship Resolver Hint 唯一解析的 Entity；
+- 最新 source-valid DialogueState 的 `current_topic`；State 落后、失败或 evidence
+  已失效时不使用该字段；
+- 用户明确表达的日期、时间范围与“以前 / 最近 / 上次”等时间词；
+- 当前 Predicate Registry version 已发布的 lexical alias。
 
-- 当前 utterance；
-- 当前话题；
-- 最近数轮中的 EntityMention 和 Episode；
-- Dialogue State；
-- 当前日期和历史时间表达；
-- current Version 为 open、尚未过期，且适合在当前用户发起的对话中使用的
-  Open Loop。
+Assistant Event 不能作为用户生活事实的 query source，避免模型自己的旧回答反向
+强化 Recall。1A.3a 尚未交付 Episode 与 Open Loop，它们不进入初始 query source；
+1A.3b 只能在各自 current Version 仍有效且通过主动使用 policy 时再增加对应输入。
 
-多路结果进行去重和 rerank。
+各路 query 单独记录 source kind 与 source revision，结果按 `claim_version_id` 去重并
+rerank。没有足够 query signal 时返回零条 query-retrieved Memory；Person Portrait
+仍按独立的 topic-aware 版本化选择策略编译。retrieval manifest 必须区分 query
+construction 无信号、候选为空与候选被 precision fence 全部淘汰，不能把三者都
+记录成普通 miss。
+
+三条 baseline retrieval lane 不归一化成一个跨 lane 总分。排序先按
+`structured_exact > lexical_term_overlap > english_fts`；English FTS 的
+`ts_rank_cd` 只在本 lane 内排序，不能越过更可靠的 structured / exact lexical
+结果。所有 lane 在排序前都重新检查 current Version、Evidence、Entity、Correction、
+Forget、contested、dormant 与删除 fence。
+
+本轮 query plan 先确定需要执行的 lane。未被 query plan 启用的 lane 不参与健康判断；
+lane 正常执行但返回零条候选属于有效空结果，不是故障。只要任一已启用 lane 报错或
+超时，整个 retrieval run 标记为 degraded，本轮三个 Memory section 全部 fail closed，
+不能使用其他 lane 的部分结果。
+
+1A.3a 使用版本化的 200ms 共享 retrieval deadline，覆盖 query construction、全部
+已启用 lane、去重、排序和 trust fence，不给每条 lane 单独重新计时。request path
+内不重试；deadline 到期立即按整轮 Memory fail closed 继续生成回复，并记录
+`retrieval_deadline_exceeded`、实际耗时与触发阶段。后续可以根据生产 P95 调整版本化
+数值，但不能改成无界等待。
 
 ### 10.3 精度策略
 
 错误召回比漏召回更伤害信任，因此：
 
 - 高 precision 优先；
+- 1A.3a 不调用 LLM、cross-encoder 或 RRF reranker。先执行全部 trust fence，再按
+  `structured_exact > lexical_term_overlap > english_fts` 分 lane 确定性排序；
+- lane 内排序依次比较 Entity match、Predicate match、temporal fit、lexical
+  coverage、Objective / Impression trust kind、recency tie-break 与 stable ID；
+  recency 只在其他条件相同时打破平局，不能覆盖旧事实或降低 Objective Memory
+  confidence；
+- canonical key 精确命中，或 Entity + Predicate 同时命中，可以通过相关性门槛；
+  唯一且已解析的 Entity alias 可以形成 structured anchor；只有普通 lexical term
+  时至少命中两个独立 term，只匹配宽泛 topic、情绪词或常见单词时拒绝；
+- AI Impression 至少需要 Entity、Predicate、时间或多个 lexical term 中的两个
+  独立相关信号，每轮 query-retrieved Memory 最多选择一条 Impression；
 - 低置信度内容不主动说“我记得”；
 - Impression 的注入数量严格限制；
 - Objective Memory 与 AI Impression 使用不同的 recall projection policy；
@@ -650,9 +789,25 @@ Safety Posture（ADR-0112）是 DailySession 上的确定性让位状态，不�
   Profile 反向生成来源；
 - Memory Source Explanation 通过正常对话交付，不要求专门的引用 UI；
   Evidence 无法展开到有效 User Event Revision 时必须 fail closed，明确说明无法核实；
-- 检索失败时自然继续对话，不强行展示记忆。
+- 检索失败时自然继续对话，但本轮 Memory fail closed：`person_portrait`、
+  `objective_memory` 与 `ai_impression` 都不注入，也不复用上一轮 CompiledContext
+  的 Memory 缓存；任一已启用 retrieval lane 报错或超时即视为整轮失败，正常空结果
+  与未启用 lane 除外；Inspector、retrieval manifest 与内部告警照常记录故障。只有
+  线上故障与体验数据证明“受限缓存复用”的收益大于额外复杂度后，才用新 ADR
+  重新讨论。
 
-### 10.4 向量版本
+query-retrieved Memory 沿用 ADR-0111 的每轮两条上限，但这是 ceiling，不是 quota。
+只有一条合格就注入一条，没有合格项就注入零条，不能降低门槛填满预算。retrieval
+manifest 为每个候选保存 lane、命中字段、排序字段、最终名次，以及 trust fence、
+相关性门槛和预算的 selection / rejection reason。
+
+1A.3a 首版不设 Shadow Mode。通过全部准入、相关性和 trust fence 的 selected Memory
+直接进入 CompiledContext；Inspector 展示实际注入的 item 及同一 retrieval run 的
+候选、选择和拒绝原因。runtime 不维护“已选择但未注入”的第二套 rollout 状态。
+
+### 10.4 后续向量版本
+
+以下是证据触发 Embedding 后必须遵守的合同，不属于初始 1A.3a 实现范围。
 
 每个 Embedding 保存：
 
@@ -661,14 +816,23 @@ provider
 model
 dimension
 embedding_policy_version
-source_type
-source_id
-source_version_id
+source_type                 # claim_retrieval_projection
+source_id                   # claim_retrieval_projection_id
+source_version_id           # claim_version_id
 created_at
 ```
 
-Embedding 必须能从 PostgreSQL 中的当前有效 Version 重建；旧 Version 被
-supersede、retract 或 purge 后，其向量立即停止检索。
+Embedding 只读取当前可召回 ClaimVersion 的 `claim_retrieval_projection`，不读取
+MemoryCandidate、Evidence 原文、Journal、Reflection、Profile 或 Person Portrait。
+每个支持的 locale 分别生成 projection；Relationship Claim 可以生成多个观察方向，
+但候选最终按 `claim_version_id` 去重。Evidence ID 只保留在 retrieval metadata 中，
+不把底层 User Event 正文复制进 embedding 输入。
+
+Embedding 必须能从 PostgreSQL 中的当前有效 Version 重建；旧 Version 被 supersede、
+contested、retract、dormant、Forget 或 purge 后，查询路径立即通过 current-Version
+与 eligibility fence 排除旧向量，物理删除或重建可以异步完成。Provider、model、
+dimension 或 projection policy 变化时发布新的 `embedding_policy_version` 并全量
+重建；不同 policy version 的向量不能混合检索。
 
 ## References
 

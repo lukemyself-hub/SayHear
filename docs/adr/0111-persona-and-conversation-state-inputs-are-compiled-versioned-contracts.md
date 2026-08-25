@@ -15,4 +15,14 @@ Issue #64 asks which modules and versioned contracts own stable personality, cur
 
 **Cross-day continuity** is carried by retrieval plus a new standing Person Portrait: a strictly capped, itemized selection of person-describing eligible Claims (Objective Memory plus active AI Impression) compiled into every conversation context, each item carrying its claim version, evidence, and epistemic-kind recall framing, with correction, Forget, contested, and dormant fences applied per item at compile time. The Profile narrative is not compiled into conversation context: it fuses user-stated facts and AI impressions into untraceable confident prose (violating ADR-0009 recall framing), is wholly unavailable during trust-boundary rebuilds, and would become a second source of truth. Profile remains a user-facing artifact only; the knowledge data model (§7.11) is clarified accordingly.
 
+Person Portrait is standing as a context section, not as three permanently pinned Claims. Its
+versioned selector runs for each turn over durable person-describing predicates — especially
+personality traits, values, communication preferences, long-lived roles and important
+relationships — and ranks current-topic relevance first, then conversational importance,
+cross-context stability and Evidence strength. Objective Memory and active AI Impression compete
+on those qualities without a blanket Objective-first rule; epistemic kind changes recall framing,
+not rank. Sensitive inferences, temporary emotion, one-off events and short-term arrangements are
+ineligible for Portrait and may only use the ordinary topic-retrieval path when eligible and
+relevant.
+
 Initial versioned budgets: Person Portrait ≤3 items (≤2 of them AI Impressions), query-retrieved memory ≤2 items, total memory-class injection ≤5 per turn, raw Events 4000 tokens; Rolling Summary thresholds unchanged (12 events / 3,000 tokens). All are versioned defaults to be tuned from retrieval-manifest metrics. Degradation: retrieval failure continues the conversation without memory (recorded as degraded reason); an empty Portrait is silently omitted, never fabricated; a failed safety detector activates no new posture while holding any active one and alerting, with the prompt-layer Minimum High-Risk Response as fallback. A read-only Context Inspector in the Internal Portal (Reflection Inspector pattern) exposes sections, budget versus actual, degradation reasons, retrieval candidates with selection and rejection reasons, DialogueState evidence, Portrait items, and Safety Posture status.

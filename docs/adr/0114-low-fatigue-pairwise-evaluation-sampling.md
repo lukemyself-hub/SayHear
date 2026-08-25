@@ -33,3 +33,15 @@ date: 2026-08-23
   把所有场景重新扩成 1–5 评分。
 - 这只改变评测记录方式，不改变 ADR-0061 的开发者判断框架，也不把人工偏好变成
   运行时自动 Gate；ADR-0110 关于人工味觉最终权威的结论继续有效。
+
+## Memory-specific extension
+
+Core Flow 1A.3a 使用独立的 15 场景 Memory 分层样本，不依赖整体行为样本碰巧抽中
+Memory turn。它沿用 `blind-pairwise:v2` 的 8 English / 5 中文 / 2 code-switch 配额、
+A / 持平 / B 记录方式与相同通过门槛，并强制覆盖 Objective Memory、Person Portrait /
+AI Impression、人物关系与时间变化、Correction / Forget 后旧内容不再使用，以及三种
+语言形态。一个场景可以覆盖多个类别，不能为了凑配额增加人工评分动作。
+
+Memory-on 的场景整体净偏好必须严格为正，每个语言变体不得净回退，抽中的上述 Memory
+类别不得出现净回退。错误 Entity、Correction / Forget fence 越界和无 Evidence 人格
+判断不交给偏好抵消，仍由全量确定性契约作为零容忍发布门禁。

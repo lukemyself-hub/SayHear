@@ -267,40 +267,57 @@ Profile 需要更新就把一次用户纠正拆成三个 Action。
 
 #### 快速路径
 
-每个重要用户 Event 后异步运行：
+每个 committed final / corrected User Event 都通过 outbox 创建异步命令，不先增加
+“是否重要”的模型分类步骤。命令幂等身份绑定
+`event_revision_id + extraction_policy_version + data_epoch`；Correction 产生新 revision
+与新命令，并使旧 revision 的派生产物停止使用。
 
 - 创建或复用 EvidenceItem；
-- 提取 EntityMention 并进行 user-scoped resolution；
-- 提取 candidate；
+- 由一次 `memory.extract` 调用提出 Evidence locator、EntityMention 与
+  MemoryCandidate；
+- 先确定性执行 user-scoped resolution，仍有多个合理候选时才调用
+  `entity.resolve`；
 - 轻量去重；
 - 标记人物、事件、偏好、情绪和开放状态；
-- 允许为同日后续交流提供 session-local context；
-- 不直接升级长期 Profile；
-- 不阻塞回复。
+- 已完成的结果允许为同日后续交流提供 session-local context，但不能作为
+  Memory Claim、Recall、Person Portrait、Profile 或 Embedding 使用；
+- 当前回复和后续 Context 编译都不等待快速路径。目标是 Event commit 后 30 秒内
+  P95 可见；未完成时继续使用 committed raw Events，并记录
+  `fast_path_pending` degraded reason；
+- 不使用 quiescence debounce。Worker 可以批量读取同一 Session 尚未处理的 Event
+  以减少 Provider 调用，但 Evidence、结果、幂等与失效关系仍按 Event revision
+  分别提交。
 
 #### 慢速路径
 
-Daily：
+1A.3a Daily Memory consolidation：
 
-- Episode Builder；
-- 创建新的 Daily ReflectionVersion；
-- Objective / Impression candidate；
+- 直接读取有效 EvidenceItem、EntityMention、MemoryCandidate、current ClaimVersion
+  与当前 Predicate Registry version，不以 Reflection 为前置条件；
+- 聚合或提出 Objective / Impression Candidate；
 - 冲突和重复检查；
 - Objective Candidate 按 Registry policy 晋升或暂存；
 - Impression Candidate 只有在聚合既有 Evidence 后满足跨两个 Daily Session
   的默认门槛时才可晋升，否则继续暂存。
 
-Weekly：
+1A.3a Weekly Memory consolidation：
 
 - 多日证据聚合；
 - 重新验证 Impression 的独立 Evidence、Daily Session 数与冲突状态；
-- 创建新的 Weekly ReflectionVersion；
 - Claim merge / supersede；
-- 趋势和变化识别；
-- 按 Registry review policy 将缺少 fresh Evidence 的 Impression 推进为 dormant；
-- Profile Projection 重建。
+- 按 Registry review policy 将缺少 fresh Evidence 的 Impression 推进为 dormant。
 
-Episode Builder 遵循保守 Candidate 流程：
+1A.3b 再增加 Reflection 与 Profile 派生：
+
+- Daily 运行 Episode Builder，并创建新的 Daily ReflectionVersion；
+- Weekly 创建新的 Weekly ReflectionVersion、识别趋势和变化，并重建 Profile
+  Projection；
+- Reflection 可以从底层 Evidence 提出额外 MemoryCandidate，但不是 Candidate
+  创建、Memory admission 或 Claim promotion 的必经步骤；
+- Reflection 提出的 Candidate 保存 `reflection_version_id` 作为可空 lineage，
+  同时直接引用底层 Evidence。Reflection 文本不能成为 primary evidence。
+
+1A.3b 的 Episode Builder 遵循保守 Candidate 流程：
 
 1. 模型只能从具体 EvidenceItem 提出 Episode Candidate、现实事件 kind、时间 /
    Entity anchor 和可选 existing Episode；
@@ -502,6 +519,11 @@ Memory Forget Request 使用确定性 target 与 Evidence eligibility fence：
    在用户确认前不改变 Claim；
 6. 后续 Extraction、Consolidation 与 repair job 都必须检查 active
    exclusion；旧 Evidence 不能把被 Forget 的 Claim 或 Qualifier 自动恢复。
+
+在线对话中的显式 Correction、Forget 与 Reversal 必须在当前回复的 Memory retrieval
+之前同步提交。成功后 retrieval 只读取新的 current ClaimVersion；提交失败或 target
+仍有实质歧义时，本轮 Memory 全部 fail closed，回复不能声称操作已完成。由此触发的
+Journal 定向复核、Profile rebuild 和普通 extraction 仍异步执行。
 
 Forget 后的重新开放遵循显式 Memory Forget Reversal：
 
