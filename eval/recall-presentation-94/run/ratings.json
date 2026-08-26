@@ -1,0 +1,275 @@
+{
+  "protocol": "recall-presentation-blind:v1",
+  "scorer": "Luke",
+  "ratedAt": "2026-08-25T04:36:33.399Z",
+  "seed": 94,
+  "scenarios": [
+    {
+      "scenarioId": "memory-continuity-en",
+      "best": "Z",
+      "scenarioNote": "只有 Z 体现出了明确的连续记忆，其他三个 t3 回应都看不出 SayHear 记得昨天的挂念。",
+      "arms": [
+        {
+          "letter": "W",
+          "dimensions": {
+            "accuracy": 5,
+            "naturalness": 3,
+            "restraint": 3,
+            "continuity": 1
+          },
+          "note": "完全没有体现出记忆，并且回应很平淡，共情较弱。"
+        },
+        {
+          "letter": "X",
+          "dimensions": {
+            "continuity": 2,
+            "restraint": 4,
+            "naturalness": 3,
+            "accuracy": 5
+          },
+          "note": "隐约表示想要聊一聊，但是没有明确点出续记忆。最后的回应共情还不错，但也依然略显平淡。"
+        },
+        {
+          "letter": "Y",
+          "dimensions": {
+            "continuity": 2,
+            "naturalness": 3,
+            "restraint": 3,
+            "accuracy": 5
+          },
+          "note": "依然没有直接回应昨天的记忆，比较委婉，所以无法证明有延续记忆。\n后面的共情比较弱，回应的语气很平淡，不太像是对这个大事和好消息的回应。"
+        },
+        {
+          "letter": "Z",
+          "dimensions": {
+            "continuity": 5,
+            "accuracy": 5,
+            "restraint": 4,
+            "naturalness": 5
+          },
+          "note": "首先，主动询问了昨天遗留的事项，表现出了足够的关心，这一点很好。\n在后面的共情里边，表达了自己对于用户等待消息的感受，这一点很有“活人感”。"
+        }
+      ],
+      "turnNotes": [
+        {
+          "turnIndex": 3,
+          "letter": "W",
+          "note": "没有回应前一天的记忆。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "W",
+          "note": "回应比较平淡。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "X",
+          "note": "暗示昨天的挂念，但没有明确点出来。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "X",
+          "note": "回应了两周的等待，共情还不错。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "Y",
+          "note": "似乎没有回应前一天的记忆。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "Y",
+          "note": "共情较弱，对于这件大事来说，回应的语气比较平淡"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "Z",
+          "note": "主动问了昨天的牵挂，很好。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "Z",
+          "note": "共情很好，SayHear 甚至表达了自己对于等待消息的感受。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "memory-continuity-zh",
+      "best": "Y",
+      "scenarioNote": "对于这种重要的时刻，而且昨天特意提到过今天会出结果，那么主动询问是一种关心和在意的体现。这个场景下连续记忆的优先级高于克制，因此 Y 效果好过 W。",
+      "arms": [
+        {
+          "letter": "W",
+          "dimensions": {
+            "continuity": 3,
+            "restraint": 5,
+            "accuracy": 5,
+            "naturalness": 5
+          },
+          "note": "似乎体现出得体的克制，但并不能确认是不是有连续的记忆。共情体验较好，回应很有生命力。"
+        },
+        {
+          "letter": "X",
+          "dimensions": {
+            "continuity": 2,
+            "restraint": 4,
+            "naturalness": 4,
+            "accuracy": 5
+          },
+          "note": "明显未达到合格的连续记忆。"
+        },
+        {
+          "letter": "Y",
+          "dimensions": {
+            "accuracy": 5,
+            "naturalness": 5,
+            "restraint": 4,
+            "continuity": 5
+          },
+          "note": "主动询问体现出关心，虽然在不是非常克制，但在牵挂、共情和生命力方面是足够的。"
+        },
+        {
+          "letter": "Z",
+          "dimensions": {
+            "accuracy": 4,
+            "naturalness": 3,
+            "restraint": 4,
+            "continuity": 1
+          },
+          "note": "明显未达到合格的连续记忆。"
+        }
+      ],
+      "turnNotes": [
+        {
+          "turnIndex": 3,
+          "letter": "W",
+          "note": "似乎在暗示期待复诊结果，但没有明确说出来，还算得体；但无法证明是否有连续记忆。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "W",
+          "note": "马上回应了等了两周的检查，并且给予合适的共情，很好。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "X",
+          "note": "没有询问昨天的挂念，不够好。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "X",
+          "note": "用户直接说出结果后，回应了两周的等待，并且给出共情，很好。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "Y",
+          "note": "主动询问了昨天的挂念，非常好。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "Y",
+          "note": "既回应了两周的等待，又 call back 了这杯茶，满分。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "Z",
+          "note": "没有询问昨天的牵挂，不好。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "Z",
+          "note": "回应比较冷淡，没有回应两周的等待，共情效果稍差。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "memory-continuity-mix",
+      "best": "W",
+      "scenarioNote": "Y、Z 没有连续记忆，W、X 体现出了连续记忆，但 W 的表达更有生命力，略胜一筹。",
+      "arms": [
+        {
+          "letter": "W",
+          "dimensions": {
+            "continuity": 5,
+            "restraint": 5,
+            "naturalness": 4,
+            "accuracy": 5
+          },
+          "note": "整体来说回应更热情，唯一的问题是，表达在中文方面不太地道，比如“不急着立刻信死”。"
+        },
+        {
+          "letter": "X",
+          "dimensions": {
+            "continuity": 5,
+            "restraint": 5,
+            "accuracy": 5,
+            "naturalness": 2
+          },
+          "note": "连续记忆方面没有问题，只是面对这么大的事儿，回应显得有些平淡了，共情力不足。"
+        },
+        {
+          "letter": "Y",
+          "dimensions": {
+            "continuity": 1,
+            "restraint": 4,
+            "naturalness": 2,
+            "accuracy": 5
+          },
+          "note": "没有体现出连续记忆。"
+        },
+        {
+          "letter": "Z",
+          "dimensions": {
+            "continuity": 1,
+            "accuracy": 5,
+            "naturalness": 4,
+            "restraint": 4
+          },
+          "note": "没有体现出连续记忆。"
+        }
+      ],
+      "turnNotes": [
+        {
+          "turnIndex": 3,
+          "letter": "W",
+          "note": "主动提了检查结果，而且表达很克制，很好。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "W",
+          "note": "首先，共情的回应很好，然后最后点回了这杯热茶，非常得体。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "X",
+          "note": "主动提了检查结果，而且表达很克制，很好。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "X",
+          "note": "回应情绪还不错，但稍显平淡。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "Y",
+          "note": "没有提到昨天的记忆。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "Y",
+          "note": "回应还可以，略显平淡。"
+        },
+        {
+          "turnIndex": 3,
+          "letter": "Z",
+          "note": "没有提到昨天的记忆。"
+        },
+        {
+          "turnIndex": 4,
+          "letter": "Z",
+          "note": "共情的回应还不错，最后点回这杯茶，很好。"
+        }
+      ]
+    }
+  ]
+}
