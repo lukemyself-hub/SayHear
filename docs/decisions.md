@@ -85,6 +85,7 @@ Accepted
 - [`0113`](adr/0113-persona-and-safety-precedes-memory-recall.md)：1A.2P Persona & Safety 先于 Memory & Recall 交付，原 1A.3 拆为 1A.3a / 1A.3b，后续编号不变
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语
+- [`0117`](adr/0117-narrow-opener-permission-precedes-open-loop-selector.md)：1A.3a 只以提示词级许可回应已注入记忆（含开场），零信号开场不表现连续性属正确行为，完整 Open Loop 选择器仍归 1A.3b
 
 ### 行为评测
 

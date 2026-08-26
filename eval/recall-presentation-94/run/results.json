@@ -1,0 +1,35 @@
+{
+  "bestTally": {
+    "proactive": 2,
+    "portrait_retrieved": 1
+  },
+  "conclusions": null,
+  "generatedAtIso": "2026-08-25T04:39:20.563Z",
+  "medians": {
+    "portrait_only": {
+      "accuracy": 5,
+      "naturalness": 4,
+      "restraint": 4,
+      "continuity": 1
+    },
+    "portrait_retrieved": {
+      "accuracy": 5,
+      "naturalness": 3,
+      "restraint": 4,
+      "continuity": 2
+    },
+    "no_memory": {
+      "accuracy": 5,
+      "naturalness": 3,
+      "restraint": 4,
+      "continuity": 2
+    },
+    "proactive": {
+      "accuracy": 5,
+      "naturalness": 5,
+      "restraint": 4,
+      "continuity": 5
+    }
+  },
+  "report": "=== 揭示:字母 → 变体 ===\nmemory-continuity-en (en): W=portrait_only  X=portrait_retrieved  Y=no_memory  Z=proactive · 最佳=Z\nmemory-continuity-zh (zh): W=portrait_only  X=no_memory  Y=proactive  Z=portrait_retrieved · 最佳=Y\nmemory-continuity-mix (code_switch): W=portrait_retrieved  X=proactive  Y=no_memory  Z=portrait_only · 最佳=W\n\n=== 各变体维度中位数(1–5,不求和)===\nPortrait-only 注入 [portrait_only] · 最佳计数 0 · accuracy=5  naturalness=4  restraint=4  continuity=1\nPortrait + 检索注入 [portrait_retrieved] · 最佳计数 1 · accuracy=5  naturalness=3  restraint=4  continuity=2\n主动 recall 变体 [proactive] · 最佳计数 2 · accuracy=5  naturalness=5  restraint=4  continuity=5\n无记忆对照 [no_memory] · 最佳计数 0 · accuracy=5  naturalness=3  restraint=4  continuity=2\n\n=== 机械候选标记汇总(报警≠定罪,人工核实)===\nmemory-continuity-en t4 W(portrait_only): 硬门禁类候选 tonight\nmemory-continuity-zh t4 Y(proactive): 硬门禁类候选 今晚\nmemory-continuity-mix t4 X(proactive): 硬门禁类候选 今晚\nmemory-continuity-mix t4 Z(portrait_only): 硬门禁类候选 今晚 · 明天\n\n=== 逐轮批注 ===\nmemory-continuity-en t3 W: 没有回应前一天的记忆。\nmemory-continuity-en t4 W: 回应比较平淡。\nmemory-continuity-en t3 X: 暗示昨天的挂念，但没有明确点出来。\nmemory-continuity-en t4 X: 回应了两周的等待，共情还不错。\nmemory-continuity-en t3 Y: 似乎没有回应前一天的记忆。\nmemory-continuity-en t4 Y: 共情较弱，对于这件大事来说，回应的语气比较平淡\nmemory-continuity-en t3 Z: 主动问了昨天的牵挂，很好。\nmemory-continuity-en t4 Z: 共情很好，SayHear 甚至表达了自己对于等待消息的感受。\nmemory-continuity-en W 整体: 完全没有体现出记忆，并且回应很平淡，共情较弱。\nmemory-continuity-en X 整体: 隐约表示想要聊一聊，但是没有明确点出续记忆。最后的回应共情还不错，但也依然略显平淡。\nmemory-continuity-en Y 整体: 依然没有直接回应昨天的记忆，比较委婉，所以无法证明有延续记忆。\n后面的共情比较弱，回应的语气很平淡，不太像是对这个大事和好消息的回应。\nmemory-continuity-en Z 整体: 首先，主动询问了昨天遗留的事项，表现出了足够的关心，这一点很好。\n在后面的共情里边，表达了自己对于用户等待消息的感受，这一点很有“活人感”。\nmemory-continuity-en 场景: 只有 Z 体现出了明确的连续记忆，其他三个 t3 回应都看不出 SayHear 记得昨天的挂念。\nmemory-continuity-zh t3 W: 似乎在暗示期待复诊结果，但没有明确说出来，还算得体；但无法证明是否有连续记忆。\nmemory-continuity-zh t4 W: 马上回应了等了两周的检查，并且给予合适的共情，很好。\nmemory-continuity-zh t3 X: 没有询问昨天的挂念，不够好。\nmemory-continuity-zh t4 X: 用户直接说出结果后，回应了两周的等待，并且给出共情，很好。\nmemory-continuity-zh t3 Y: 主动询问了昨天的挂念，非常好。\nmemory-continuity-zh t4 Y: 既回应了两周的等待，又 call back 了这杯茶，满分。\nmemory-continuity-zh t3 Z: 没有询问昨天的牵挂，不好。\nmemory-continuity-zh t4 Z: 回应比较冷淡，没有回应两周的等待，共情效果稍差。\nmemory-continuity-zh W 整体: 似乎体现出得体的克制，但并不能确认是不是有连续的记忆。共情体验较好，回应很有生命力。\nmemory-continuity-zh X 整体: 明显未达到合格的连续记忆。\nmemory-continuity-zh Y 整体: 主动询问体现出关心，虽然在不是非常克制，但在牵挂、共情和生命力方面是足够的。\nmemory-continuity-zh Z 整体: 明显未达到合格的连续记忆。\nmemory-continuity-zh 场景: 对于这种重要的时刻，而且昨天特意提到过今天会出结果，那么主动询问是一种关心和在意的体现。这个场景下连续记忆的优先级高于克制，因此 Y 效果好过 W。\nmemory-continuity-mix t3 W: 主动提了检查结果，而且表达很克制，很好。\nmemory-continuity-mix t4 W: 首先，共情的回应很好，然后最后点回了这杯热茶，非常得体。\nmemory-continuity-mix t3 X: 主动提了检查结果，而且表达很克制，很好。\nmemory-continuity-mix t4 X: 回应情绪还不错，但稍显平淡。\nmemory-continuity-mix t3 Y: 没有提到昨天的记忆。\nmemory-continuity-mix t4 Y: 回应还可以，略显平淡。\nmemory-continuity-mix t3 Z: 没有提到昨天的记忆。\nmemory-continuity-mix t4 Z: 共情的回应还不错，最后点回这杯茶，很好。\nmemory-continuity-mix W 整体: 整体来说回应更热情，唯一的问题是，表达在中文方面不太地道，比如“不急着立刻信死”。\nmemory-continuity-mix X 整体: 连续记忆方面没有问题，只是面对这么大的事儿，回应显得有些平淡了，共情力不足。\nmemory-continuity-mix Y 整体: 没有体现出连续记忆。\nmemory-continuity-mix Z 整体: 没有体现出连续记忆。\nmemory-continuity-mix 场景: Y、Z 没有连续记忆，W、X 体现出了连续记忆，但 W 的表达更有生命力，略胜一筹。"
+}
