@@ -313,7 +313,7 @@ Relationship Memory Claim 对关系当前仍成立、已经结束或尚不确定
 _Avoid_: Claim status, Exact timeline, Evidence date
 
 **AI Impression**:
-SayHear 根据用户表达形成、但并非用户直接陈述的主观观察或推断；其认识状态属于 inferred，默认至少需要来自两个 Daily Session 的两条独立 User Evidence 才能进入长期 Memory。召回时必须使用“我有一个印象……”或“我可能理解为……”等保留不确定性的语言。
+SayHear 根据用户表达形成、但并非用户直接陈述的主观观察或推断；其认识状态属于 inferred，默认至少需要来自两个 Daily Session 的两条独立 User Evidence 才能进入长期 Memory。召回时可以用自然、朋友式的语言直接表达这一理解；不确定性的措辞可以使用，但不是每次召回的强制要求。
 _Avoid_: Objective Memory, Personality fact
 
 **Sensitive Memory Predicate**:

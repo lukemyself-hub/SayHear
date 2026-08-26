@@ -14,6 +14,8 @@ Accepted
 
 ## 14. 长期记忆系统
 
+召回语言与召回呈现体验的规则分布在 §14.1B（Objective Memory 与 AI Impression 的两类召回语言）与 §14.2（Profile 展现方式，含 14.2.4 Open Loop）；§14.3 是用户权限，不是召回体验章节。历史上部分 ticket 引用的"§14.3 召回体验"系锚点笔误。
+
 ### 14.1 两层 User Profile
 
 ### A. Objective Memory
