@@ -1076,8 +1076,12 @@ Talk
 2. Daily Session `quiescent` 的无活动时长；
 3. External MVP 的正式 Auth Provider；
 4. field-level envelope encryption 的实施阶段；
-5. 正式用户音频处理临时对象的最大技术存活时间；
-6. 既有 Entity resolution 边界内，自动复用、创建和进入人工复核的具体置信度阈值。
+5. 正式用户音频处理临时对象的最大技术存活时间。
+
+Entity resolution v1 的自动复用、创建与人工复核边界已在 #97 决定：绑定由唯一
+auto-bind 阈值 `t_auto` 在 `entity.resolve` 闸门处控制（夹具定标的版本化 policy
+参数），新建 unresolved Entity 由具名新引入的分类决定而非分数，澄清由语义影响
+门控，Internal Core v1 不设人工复核队列。详见 SPEC。
 
 ## References
 
