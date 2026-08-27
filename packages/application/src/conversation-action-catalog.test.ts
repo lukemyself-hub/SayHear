@@ -1,9 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
+  JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  REGENERATE_JOURNAL_ACTION_DEFINITION,
+  actionFunctionsForCatalog,
+  normalizeProviderActionProposal,
+  validateConversationActionCatalog,
 } from "./conversation-action-catalog";
+import type {
+  ConversationActionDefinition,
+} from "./conversation-action-catalog";
+import type { ConversationEventRevisionId } from "@sayhear/domain";
+import { asConversationEventRevisionId } from "@sayhear/domain";
+
+const requestEventRevisionId: ConversationEventRevisionId =
+  asConversationEventRevisionId("01984477-1f9a-7d25-9d97-e588769566c1");
 
 describe("Conversation Action Catalog (issue #24 AC5)", () => {
   it("publishes an immutable empty initial Catalog", () => {
@@ -59,3 +73,183 @@ function extractedOperationLikeKeys(keys: readonly string[]): string[] {
     .filter((key) => forbiddenPatterns.some((pattern) => pattern.test(key)))
     .sort();
 }
+
+describe("Conversation Action Catalog v2 foundation (issue #109)", () => {
+  const secondDefinition: ConversationActionDefinition = {
+    actionKind: "prefactor_probe",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "exact_head",
+    confirmationPolicy: "none",
+    effectClass: "test_only_effect",
+    executionMode: "synchronous",
+    functionDescription: "Probe that a second definition coexists with the Journal one.",
+    handlerBinding: "test.prefactor-probe.v1",
+    idempotencyScope: "decision_command_action_target",
+    inputSchema: Object.freeze({
+      additionalProperties: false as const,
+      properties: Object.freeze({
+        probeHandle: Object.freeze({ minLength: 1, type: "string" }),
+      }),
+      required: Object.freeze(["probeHandle"]),
+      type: "object" as const,
+    }),
+    ratePolicy: Object.freeze({ maxInFlightPerTarget: null, name: "none" }),
+    schemaVersion: "prefactor-probe:v1",
+    targetContract: Object.freeze({
+      handleArgument: "probeHandle",
+      handleKind: "journal",
+      versioned: true,
+    }),
+    trustClass: "user_private_test_probe",
+  };
+
+  it("validates a Catalog carrying two coexisting Definitions", () => {
+    const catalog = {
+      definitions: [
+        REGENERATE_JOURNAL_ACTION_DEFINITION,
+        secondDefinition,
+      ],
+      version: "conversation-action-catalog:test-two-definitions:v1",
+    };
+    expect(validateConversationActionCatalog(catalog)).toEqual({ valid: true });
+  });
+
+  it("still validates the published Journal and empty Catalogs unchanged", () => {
+    expect(
+      validateConversationActionCatalog(JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG),
+    ).toEqual({ valid: true });
+    expect(
+      validateConversationActionCatalog(EMPTY_CONVERSATION_ACTION_CATALOG),
+    ).toEqual({ valid: true });
+  });
+
+  it("keeps rejecting duplicate kinds, missing safety policies, and broken schemas", () => {
+    const duplicated = {
+      definitions: [REGENERATE_JOURNAL_ACTION_DEFINITION, REGENERATE_JOURNAL_ACTION_DEFINITION],
+      version: "conversation-action-catalog:test-duplicated:v1",
+    };
+    expect(validateConversationActionCatalog(duplicated)).toEqual({
+      valid: false,
+      reason: "duplicate_action_kind",
+    });
+    // Runtime-invalid fixtures are cast: the type system refuses to express
+    // them, which is exactly the fail-closed posture under test.
+    const unsafeConfirmation = {
+      ...secondDefinition,
+      confirmationPolicy: "explicit_user_confirm",
+    } as unknown as ConversationActionDefinition;
+    expect(
+      validateConversationActionCatalog({
+        definitions: [REGENERATE_JOURNAL_ACTION_DEFINITION, unsafeConfirmation],
+        version: "conversation-action-catalog:test-unsafe:v1",
+      }).valid,
+    ).toBe(false);
+    const schemaFree = {
+      definitions: [
+        {
+          ...secondDefinition,
+          inputSchema: { ...secondDefinition.inputSchema, additionalProperties: true },
+        },
+      ],
+      version: "conversation-action-catalog:test-open-schema:v1",
+    } as unknown as Parameters<typeof validateConversationActionCatalog>[0];
+    expect(schemaFree.definitions[0]?.inputSchema.additionalProperties).toBe(true);
+    expect(validateConversationActionCatalog(schemaFree).valid).toBe(false);
+  });
+
+  it("generates one Function per eligible Definition from the Definition itself", () => {
+    const handles = [
+      {
+        actionKinds: ["regenerate_journal"],
+        handle: "shh-handle-journal",
+        targetKind: "journal" as const,
+      },
+      {
+        actionKinds: ["prefactor_probe"],
+        handle: "shh-handle-probe",
+        targetKind: "journal" as const,
+      },
+    ];
+    const catalog = {
+      definitions: [REGENERATE_JOURNAL_ACTION_DEFINITION, secondDefinition],
+      version: "conversation-action-catalog:test-two-definitions:v1",
+    };
+    const functions = actionFunctionsForCatalog(catalog, handles);
+    expect(functions.map((fn) => fn.name)).toEqual([
+      "regenerate_journal",
+      "prefactor_probe",
+    ]);
+    expect(functions[1]).toEqual({
+      description: secondDefinition.functionDescription,
+      name: "prefactor_probe",
+      parameters: secondDefinition.inputSchema,
+      strict: true,
+    });
+    expect(functions[0]?.description).toBe(
+      REGENERATE_JOURNAL_ACTION_DEFINITION.functionDescription,
+    );
+  });
+
+  it("normalizes proposals against any Definition in the frozen set", () => {
+    const normalized = normalizeProviderActionProposal({
+      definitions: [REGENERATE_JOURNAL_ACTION_DEFINITION, secondDefinition],
+      rawArguments: JSON.stringify({ probeHandle: "shh-handle-probe" }),
+      rawFunctionName: "prefactor_probe",
+      requestEventRevisionId,
+    });
+    expect(normalized.type).toBe("normalized");
+    if (normalized.type !== "normalized") return;
+    expect(normalized.proposal).toEqual({
+      actionKind: "prefactor_probe",
+      arguments: { probeHandle: "shh-handle-probe" },
+      requestEventRevisionId,
+      schemaVersion: "prefactor-probe:v1",
+    });
+
+    const regen = normalizeProviderActionProposal({
+      definitions: [REGENERATE_JOURNAL_ACTION_DEFINITION],
+      rawArguments: '{"guidance":"clearer","journalHandle":"shh-handle"}',
+      rawFunctionName: "regenerate_journal",
+      requestEventRevisionId,
+    });
+    expect(regen.type).toBe("normalized");
+    if (regen.type !== "normalized") return;
+    expect(regen.proposal.schemaVersion).toBe("regenerate-journal:v1");
+  });
+
+  it("rejects arguments that violate the selected Definition's schema", () => {
+    expect(
+      normalizeProviderActionProposal({
+        definitions: [secondDefinition],
+        rawArguments: '{"probeHandle":"h","extra":"no"}',
+        rawFunctionName: "prefactor_probe",
+        requestEventRevisionId,
+      }).type,
+    ).toBe("invalid");
+    expect(
+      normalizeProviderActionProposal({
+        definitions: [secondDefinition],
+        rawArguments: "{}",
+        rawFunctionName: "prefactor_probe",
+        requestEventRevisionId,
+      }).type,
+    ).toBe("invalid");
+    expect(
+      normalizeProviderActionProposal({
+        definitions: [secondDefinition],
+        rawArguments: '{"probeHandle":""}',
+        rawFunctionName: "prefactor_probe",
+        requestEventRevisionId,
+      }).type,
+    ).toBe("invalid");
+  });
+
+  it("bumps the Harness policy version while preserving one state-changing Action", () => {
+    expect(Object.isFrozen(CATALOG_V2_CONVERSATION_HARNESS_POLICY)).toBe(true);
+    expect(CATALOG_V2_CONVERSATION_HARNESS_POLICY.version).toBe(
+      "conversation-harness:v3",
+    );
+    expect(CATALOG_V2_CONVERSATION_HARNESS_POLICY.maxStateChangingActions).toBe(1);
+    expect(CATALOG_V2_CONVERSATION_HARNESS_POLICY.maxDecisionStages).toBe(1);
+  });
+});

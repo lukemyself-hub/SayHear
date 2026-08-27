@@ -40,15 +40,53 @@ export type ConversationActionReceipt = Readonly<{
   }>;
 }>;
 
-export type PreparedConversationAction = Readonly<{
-  actionKind: "regenerate_journal";
-  dailySessionId: string;
-  expectedDataEpoch: number;
-  guidance: string | null;
-  generationPolicyVersion: string;
-  sourceRevision: number;
-  targetVersionId: string;
-}>;
+/**
+ * The prepared action a Handler derives from the verified context and typed
+ * input (ADR-0098). The `mode` discriminant mirrors the Definition's
+ * executionMode:
+ *
+ * - `durable_workflow` — the repository creates an idempotent workflow command
+ *   / outbox entry inside the admission transaction (regenerate_journal).
+ * - `in_transaction` — `commit` performs this Action's authoritative domain
+ *   writes during that same admission transaction through the transaction-
+ *   scoped executor; any throw rolls the whole admission back, so no partial
+ *   effect can survive while a reply claims success (ADR-0099).
+ */
+export type PreparedConversationAction =
+  | Readonly<{
+      actionKind: "regenerate_journal";
+      dailySessionId: string;
+      expectedDataEpoch: number;
+      guidance: string | null;
+      generationPolicyVersion: string;
+      mode: "durable_workflow";
+      sourceRevision: number;
+      targetVersionId: string;
+    }>
+  | Readonly<{
+      actionKind: string;
+      commit(input: {
+        actionExecutionId: string;
+        executor: ConversationActionTransactionExecutor;
+      }): Promise<void>;
+      dailySessionId: string;
+      expectedDataEpoch: number;
+      mode: "in_transaction";
+      sourceRevision: number;
+      targetVersionId: string;
+    }>;
+
+/**
+ * Transaction-scoped write surface handed to a synchronous in-transaction
+ * handler's `commit`. Statements issued here join the single admission
+ * transaction (ADR-0099).
+ */
+export interface ConversationActionTransactionExecutor {
+  query(
+    statement: string,
+    values?: readonly unknown[],
+  ): Promise<{ rowCount: number | null }>;
+}
 
 export type JournalRegenerationWorkflowCommand = Readonly<{
   actionExecutionId: string;
@@ -85,7 +123,7 @@ export type ConversationActionFinalizationCommand = Readonly<{
 }>;
 
 export type ConversationActionHandler = Readonly<{
-  actionKind: "regenerate_journal";
+  actionKind: string;
   prepare(input: {
     definition: ConversationActionDefinition;
     proposal: ConversationActionProposal;
@@ -151,9 +189,16 @@ export type ConversationActionGateway = Readonly<{
 }>;
 
 export function createConversationActionGateway(input: {
-  handler: ConversationActionHandler;
+  /**
+   * One typed handler per enabled action kind (ADR-0098). A proposal whose
+   * Definition has no bound handler fails closed.
+   */
+  handlers: readonly ConversationActionHandler[];
   repository: ConversationActionGatewayRepository;
 }): ConversationActionGateway {
+  const handlersByKind = new Map(
+    input.handlers.map((handler) => [handler.actionKind, handler]),
+  );
   return {
     async admit(request) {
       await input.repository.purgeExpiredGuidance?.(new Date());
@@ -177,7 +222,7 @@ export function createConversationActionGateway(input: {
         : null;
       const schemaVersion = proposal?.schemaVersion ?? "unknown";
       const idempotencyKey = proposal
-        ? createIdempotencyKey(request.context, proposal)
+        ? createIdempotencyKey(request.context, proposal, definition)
         : null;
 
       if (idempotencyKey) {
@@ -219,7 +264,7 @@ export function createConversationActionGateway(input: {
 
       const target = await input.repository.resolveHandle({
         context: request.context,
-        handle: proposal.arguments.journalHandle,
+        handle: readTargetHandleArgument(proposal, definition)!,
       });
       if (!target || !target.actionKinds.includes(proposal.actionKind)) {
         return input.repository.commitNonAccepted({
@@ -271,10 +316,13 @@ export function createConversationActionGateway(input: {
           schemaVersion,
         });
       }
-      if (await input.repository.hasInFlightTarget({
-        targetId: target.targetId,
-        userId: request.context.userId,
-      })) {
+      if (
+        definition.ratePolicy.maxInFlightPerTarget !== null &&
+        (await input.repository.hasInFlightTarget({
+          targetId: target.targetId,
+          userId: request.context.userId,
+        }))
+      ) {
         return input.repository.commitNonAccepted({
           admission: "rejected",
           catalogVersion: request.catalog.version,
@@ -290,12 +338,19 @@ export function createConversationActionGateway(input: {
         catalogVersion: request.catalog.version,
         context: request.context,
         definition,
-        prepare: () =>
-          input.handler.prepare({
+        prepare: () => {
+          const handler = handlersByKind.get(definition.actionKind);
+          if (!handler) {
+            throw new Error(
+              `No Conversation Action Handler is bound for kind "${definition.actionKind}".`,
+            );
+          }
+          return handler.prepare({
             definition,
             proposal,
             target,
-          }),
+          });
+        },
         proposal,
       });
     },
@@ -320,7 +375,9 @@ export function createJournalRegenerationActionHandler(input: {
   return {
     actionKind: "regenerate_journal",
     prepare({ proposal, target }) {
-      const guidance = proposal.arguments.guidance?.trim() ?? "";
+      const rawGuidance = proposal.arguments.guidance;
+      const guidance =
+        typeof rawGuidance === "string" ? rawGuidance.trim() : "";
       if (guidance.length > maxGuidanceLength) {
         throw new Error("Regeneration Guidance exceeds its bounded length.");
       }
@@ -330,6 +387,7 @@ export function createJournalRegenerationActionHandler(input: {
         expectedDataEpoch: target.expectedDataEpoch,
         guidance: guidance || null,
         generationPolicyVersion: input.generationPolicyVersion,
+        mode: "durable_workflow",
         sourceRevision: target.sourceRevision,
         targetVersionId: target.targetVersionId,
       };
@@ -340,13 +398,28 @@ export function createJournalRegenerationActionHandler(input: {
 function createIdempotencyKey(
   context: ConversationActionGatewayContext,
   proposal: ConversationActionProposal,
+  definition: ConversationActionDefinition | null,
 ): string {
   return [
     context.decisionCommandId,
     context.requestEventRevisionId,
     proposal.actionKind,
-    proposal.arguments.journalHandle,
+    readTargetHandleArgument(proposal, definition) ?? "none",
   ].join(":");
+}
+
+/**
+ * Reads the target reference handle under the Definition's declared
+ * `targetContract.handleArgument` property (ADR-0096). Returns null when the
+ * proposal carries anything other than a non-empty string there.
+ */
+function readTargetHandleArgument(
+  proposal: ConversationActionProposal,
+  definition: ConversationActionDefinition | null,
+): string | null {
+  if (!definition) return null;
+  const value = proposal.arguments[definition.targetContract.handleArgument];
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function validateProposal(
@@ -354,25 +427,46 @@ function validateProposal(
   definition: ConversationActionDefinition,
   requestEventRevisionId: ConversationActionGatewayContext["requestEventRevisionId"],
 ): { valid: true } | { valid: false; reason: string } {
-  if (proposal.actionKind !== "regenerate_journal") {
-    return { valid: false, reason: "unsupported_action" };
-  }
   if (proposal.requestEventRevisionId !== requestEventRevisionId) {
     return { valid: false, reason: "request_revision_mismatch" };
   }
   if (
     !proposal.arguments ||
-    Object.keys(proposal.arguments).some(
-      (key) => key !== "journalHandle" && key !== "guidance",
-    ) ||
-    typeof proposal.arguments.journalHandle !== "string" ||
-    proposal.arguments.journalHandle.length === 0 ||
-    (proposal.arguments.guidance !== undefined &&
-      (typeof proposal.arguments.guidance !== "string" ||
-        proposal.arguments.guidance.length >
-          Number(definition.inputSchema.properties.guidance?.maxLength ?? 1_000)))
+    Object.keys(proposal.arguments).some((key) => !(key in definition.inputSchema.properties))
   ) {
     return { valid: false, reason: "malformed_arguments" };
+  }
+  for (const [key, schema] of Object.entries(definition.inputSchema.properties)) {
+    const value = proposal.arguments[key];
+    if (value === undefined) continue;
+    if (schema.type === "string") {
+      if (typeof value !== "string") {
+        return { valid: false, reason: "malformed_arguments" };
+      }
+      const minLength = schema.minLength;
+      if (typeof minLength === "number" && value.length < minLength) {
+        return { valid: false, reason: "malformed_arguments" };
+      }
+      const maxLength = schema.maxLength;
+      if (typeof maxLength === "number" && value.length > maxLength) {
+        return { valid: false, reason: "malformed_arguments" };
+      }
+    }
+  }
+  for (const requiredKey of definition.inputSchema.required) {
+    const schema = definition.inputSchema.properties[requiredKey];
+    const value = proposal.arguments[requiredKey];
+    if (schema?.type === "string") {
+      if (
+        typeof value !== "string" ||
+        value.length < ((schema.minLength as number | undefined) ?? 0) ||
+        (typeof schema.maxLength === "number" && value.length > schema.maxLength)
+      ) {
+        return { valid: false, reason: "malformed_arguments" };
+      }
+    } else if (value === undefined) {
+      return { valid: false, reason: "malformed_arguments" };
+    }
   }
   return { valid: true };
 }

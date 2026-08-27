@@ -127,18 +127,22 @@ describe("Journal regeneration Action Gateway", () => {
   it("accepts a current-head request and passes bounded guidance to the typed handler", async () => {
     let preparedGuidance: string | null = null;
     const gateway = createConversationActionGateway({
-      handler: {
-        ...createJournalRegenerationActionHandler({
-          generationPolicyVersion: "journal-generation:v2",
-        }),
-        prepare(input) {
-          const prepared = createJournalRegenerationActionHandler({
+      handlers: [
+        {
+          ...createJournalRegenerationActionHandler({
             generationPolicyVersion: "journal-generation:v2",
-          }).prepare(input);
-          preparedGuidance = prepared.guidance;
-          return prepared;
+          }),
+          prepare(input) {
+            const prepared = createJournalRegenerationActionHandler({
+              generationPolicyVersion: "journal-generation:v2",
+            }).prepare(input);
+            if (prepared.mode === "durable_workflow") {
+              preparedGuidance = prepared.guidance;
+            }
+            return prepared;
+          },
         },
-      },
+      ],
       repository: repository(),
     });
 
@@ -156,9 +160,11 @@ describe("Journal regeneration Action Gateway", () => {
     let accepted = false;
     const base = repository({ currentVersionId: "journal-version-2" });
     const gateway = createConversationActionGateway({
-      handler: createJournalRegenerationActionHandler({
-        generationPolicyVersion: "journal-generation:v2",
-      }),
+      handlers: [
+        createJournalRegenerationActionHandler({
+          generationPolicyVersion: "journal-generation:v2",
+        }),
+      ],
       repository: {
         ...base,
         async commitAccepted(input) {
@@ -184,9 +190,11 @@ describe("Journal regeneration Action Gateway", () => {
 
   it("rejects a second in-flight regeneration without queueing it", async () => {
     const gateway = createConversationActionGateway({
-      handler: createJournalRegenerationActionHandler({
-        generationPolicyVersion: "journal-generation:v2",
-      }),
+      handlers: [
+        createJournalRegenerationActionHandler({
+          generationPolicyVersion: "journal-generation:v2",
+        }),
+      ],
       repository: repository({ inFlight: true }),
     });
 

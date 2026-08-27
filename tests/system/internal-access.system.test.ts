@@ -261,7 +261,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
   }
@@ -301,7 +301,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const service = createInternalOwnerAccessService({
@@ -478,7 +478,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const payload = {
@@ -640,7 +640,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
 
@@ -1081,7 +1081,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       disposition: "completed",
       freshnessPolicy: "source_valid:v1",
       generationCommandId,
-      harnessPolicyVersion: "conversation-harness:v2",
+      harnessPolicyVersion: "conversation-harness:v3",
       inputTokens: expect.any(Number),
       model: "gpt-5.4",
       modelRunAttemptId,
@@ -1345,7 +1345,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const responseRepository = new PostgresConversationResponseRepository(
@@ -1767,7 +1767,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const responseRepository = new PostgresConversationResponseRepository(
@@ -2550,7 +2550,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const submit = async (
@@ -3119,7 +3119,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const submit = async (payload: {
@@ -3321,7 +3321,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const firstResponse = await fetch(
@@ -4779,7 +4779,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
     const dailySessionId = "01984477-59a9-7d20-9d97-e588769566a3";

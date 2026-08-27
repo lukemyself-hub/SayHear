@@ -8,6 +8,7 @@ import type {
 
 import type { CompiledContextRenderSource } from "./context-compiler";
 import type {
+  ConversationActionDefinition,
   ConversationActionProposal,
   ConversationFunctionDefinition,
 } from "./conversation-action-catalog";
@@ -95,7 +96,19 @@ export type ProviderEgressStreamEvent =
 export type ProviderEgressPort = Readonly<{
   stream(input: {
     compiledContextId: CompiledContextId;
+    /**
+     * The complete model-facing Function set this Decision offers, owned by
+     * the Harness (Catalog Functions plus the deterministic behavior-proposal
+     * channels such as the curiosity stop signal).
+     */
     functions?: readonly ConversationFunctionDefinition[];
+    /**
+     * The Catalog Definitions eligible for this Decision (ADR-0095); the
+     * normalization space for any Catalog Action selection. Offered Functions
+     * and accepted Definitions derive from the same frozen Decision inputs,
+     * but only Definitions gate acceptance.
+     */
+    definitions?: readonly ConversationActionDefinition[];
     generationCommandId: GenerationCommandId;
     modelRunAttemptId: ModelRunAttemptId;
     userId: UserId;

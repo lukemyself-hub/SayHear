@@ -132,7 +132,7 @@ describe("Journal regeneration Action admission system seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T00:00:00.000Z"),
+      validUntil: new Date("2027-08-27T00:00:00.000Z"),
       verifiedAt: new Date("2026-08-13T00:00:00.000Z"),
     });
   });
@@ -245,9 +245,11 @@ describe("Journal regeneration Action admission system seam", () => {
       "action-payload-test-secret",
     );
     const gateway = createConversationActionGateway({
-      handler: createJournalRegenerationActionHandler({
-        generationPolicyVersion: "journal-generation:v2",
-      }),
+      handlers: [
+        createJournalRegenerationActionHandler({
+          generationPolicyVersion: "journal-generation:v2",
+        }),
+      ],
       repository: actionRepository,
     });
     const request = {
