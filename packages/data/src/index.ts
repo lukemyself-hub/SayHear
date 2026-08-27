@@ -13,6 +13,7 @@ export { PostgresJournalEligibilityRepository } from "./postgres-journal-eligibi
 export { PostgresJournalRepository } from "./postgres-journal-repository";
 export { PostgresEvidenceRepository } from "./postgres-evidence-repository";
 export { PostgresEntityRepository } from "./postgres-entity-repository";
+export { PostgresMemoryClaimRepository } from "./postgres-memory-claim-repository";
 export {
   PostgresPredicateRegistryRepository,
   SensitivePredicateError,

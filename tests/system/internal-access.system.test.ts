@@ -174,6 +174,14 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     await database.pool.query(`
       TRUNCATE TABLE
         entity_mention_candidates,
+        memory_forget_reversals,
+        memory_forget_evidence_exclusions,
+        memory_forget_requests,
+        memory_candidate_evidence_links,
+        memory_candidates,
+        claim_evidence_links,
+        memory_claim_versions,
+        memory_claims,
         entity_mentions,
         entity_labels,
         user_self_entities,
@@ -568,32 +576,45 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       interaction_turns: "1",
       user_events: "1",
     });
-    // Journal, Memory, Replay, Voice and other future verticals still do not
-    // exist as tables. The 1A.2 Journal/Evidence and durability foundations
-    // DO exist now, and the 1A.3a Entity identity substrate exists (#110),
-    // so the scope guard matches future-vertical prefixes only.
-    const outOfScopeRelations = await database.pool.query<{ table_name: string }>(
-      `
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = current_schema()
-          AND table_name ILIKE ANY(ARRAY[
-            'episode%',
-            'reflection%',
-            'memory%',
-            'profile%',
-            'open_loop%',
-            'replay%',
-            'voice%',
-            'audio%',
-            'transcript%',
-            'delivery%',
-            'summary%'
-          ])
-        ORDER BY table_name
-      `,
-    );
-    expect(outOfScopeRelations.rows).toEqual([]);
+    // Journal, Replay, Voice and other future verticals still do not exist as
+    // tables. The 1A.2 foundations DO exist now, and the 1A.3a substrates
+    // exist (#110 Entity identity, #112 Memory Claim admission), so the scope
+    // guard subtracts those known substrate tables before matching future
+    // vertical prefixes.
+    const memoryClaimSubstrate = new Set([
+      "memory_claims",
+      "memory_claim_versions",
+      "claim_evidence_links",
+      "memory_candidates",
+      "memory_candidate_evidence_links",
+      "memory_forget_requests",
+      "memory_forget_evidence_exclusions",
+      "memory_forget_reversals",
+    ]);
+    const outOfScopeRelations = (
+      await database.pool.query<{ table_name: string }>(
+        `
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = current_schema()
+            AND table_name ILIKE ANY(ARRAY[
+              'episode%',
+              'reflection%',
+              'memory%',
+              'profile%',
+              'open_loop%',
+              'replay%',
+              'voice%',
+              'audio%',
+              'transcript%',
+              'delivery%',
+              'summary%'
+            ])
+          ORDER BY table_name
+        `,
+      )
+    ).rows.filter((row) => !memoryClaimSubstrate.has(row.table_name));
+    expect(outOfScopeRelations).toEqual([]);
     // The Entity tables exist as the 1A.3a substrate, but mention resolution
     // is driven by the memory fast path (#113), not the conversation turn
     // seam: an ordinary conversation must not write any Entity-domain rows.

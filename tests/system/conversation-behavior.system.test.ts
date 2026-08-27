@@ -104,6 +104,14 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
     await database.pool.query(`
       TRUNCATE TABLE
         entity_mention_candidates,
+        memory_forget_reversals,
+        memory_forget_evidence_exclusions,
+        memory_forget_requests,
+        memory_candidate_evidence_links,
+        memory_candidates,
+        claim_evidence_links,
+        memory_claim_versions,
+        memory_claims,
         entity_mentions,
         entity_labels,
         user_self_entities,
@@ -689,34 +697,46 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       text: "A completing 1A.1 conversation.",
     });
 
-    // Journal, Memory, Replay, Voice and other future verticals still do not
-    // exist as tables. The 1A.2 Journal/Evidence and durability foundations
-    // DO exist now, and the 1A.3a Entity identity substrate exists (#110),
-    // but an
-    // in-flight active conversation must not create any eligibility rows —
-    // eligibility fires only after a deterministic Continuous Exchange End.
-    const outOfScopeTables = await database.pool.query<{ table_name: string }>(
-      `
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = current_schema()
-          AND table_name ILIKE ANY(ARRAY[
-            'episode%',
-            'reflection%',
-            'memory%',
-            'profile%',
-            'open_loop%',
-            'replay%',
-            'voice%',
-            'audio%',
-            'transcript%',
-            'delivery%',
-            'summary%'
-          ])
-        ORDER BY table_name
-      `,
-    );
-    expect(outOfScopeTables.rows).toEqual([]);
+    // Journal, Replay, Voice and other future verticals still do not exist as
+    // tables. The 1A.2 Journal/Evidence and durability foundations DO exist,
+    // and the 1A.3a substrates exist (#110 Entity identity, #112 Memory Claim
+    // admission) — but an in-flight active conversation must not create any
+    // eligibility rows — eligibility fires only after a deterministic
+    // Continuous Exchange End.
+    const memoryClaimSubstrate = new Set([
+      "memory_claims",
+      "memory_claim_versions",
+      "claim_evidence_links",
+      "memory_candidates",
+      "memory_candidate_evidence_links",
+      "memory_forget_requests",
+      "memory_forget_evidence_exclusions",
+      "memory_forget_reversals",
+    ]);
+    const outOfScopeTables = (
+      await database.pool.query<{ table_name: string }>(
+        `
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = current_schema()
+            AND table_name ILIKE ANY(ARRAY[
+              'episode%',
+              'reflection%',
+              'memory%',
+              'profile%',
+              'open_loop%',
+              'replay%',
+              'voice%',
+              'audio%',
+              'transcript%',
+              'delivery%',
+              'summary%'
+            ])
+          ORDER BY table_name
+        `,
+      )
+    ).rows.filter((row) => !memoryClaimSubstrate.has(row.table_name));
+    expect(outOfScopeTables).toEqual([]);
 
     // The Entity tables exist as the 1A.3a substrate, but mention resolution
     // is driven by the memory fast path (#113), not the conversation turn
