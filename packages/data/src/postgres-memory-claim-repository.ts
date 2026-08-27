@@ -4,13 +4,20 @@ import {
   asMemoryCandidateId,
   asMemoryClaimId,
   asMemoryClaimVersionId,
+  asMemoryClaimVersionQualifierId,
   asMemoryForgetEvidenceExclusionId,
   asMemoryForgetRequestId,
   asMemoryForgetReversalId,
+  asRelationshipResolverHintId,
   asDailySessionId,
+  planRelationshipResolverHints,
   type MemoryCandidateId,
   type MemoryClaimId,
   type MemoryClaimVersionId,
+  type ProposedQualifier,
+  type RelationshipResolverHintPlanRow,
+  type RelationshipResolverHintRecord,
+  type ResolverHintLocale,
   type UserId,
 } from "@sayhear/application";
 import type { Pool, PoolClient } from "pg";
@@ -22,14 +29,17 @@ import {
 import { createUuidV7 } from "./uuid-v7";
 import type {
   AdmissibleEvidence,
+  AdmittedQualifier,
   CandidateDispositionPlan,
   ClaimAdmissionPlan,
   ClaimTypedValue,
+  ClaimVersionQualifierRecord,
   MemoryCandidateProposal,
   MemoryCandidateRecord,
   MemoryClaimRecord,
   MemoryClaimVersionRecord,
   MemoryClaimRepository,
+  RelationshipHintProjectionInputs,
   TemporalBounds,
 } from "@sayhear/application";
 
@@ -78,6 +88,7 @@ export type CandidateRow = {
   predecessor_candidate_id: string | null;
   successor_trigger: MemoryCandidateRecord["successorTrigger"];
   material_change_reason_codes: string[] | null;
+  proposed_qualifiers: unknown;
   created_at: Date;
 };
 
@@ -126,6 +137,60 @@ function toTypedValue(raw: unknown): ClaimTypedValue {
   return String(raw ?? "");
 }
 
+function toProposedQualifiers(raw: unknown): ProposedQualifier[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    const record = item as {
+      axisId?: unknown;
+      roleSide?: unknown;
+      typedValue?: unknown;
+      evidenceItemIds?: unknown;
+    };
+    return {
+      axisId: String(record.axisId ?? ""),
+      roleSide: record.roleSide === "object" ? ("object" as const) : ("subject" as const),
+      typedValue: toTypedValue(record.typedValue),
+      evidenceItemIds: Array.isArray(record.evidenceItemIds)
+        ? record.evidenceItemIds.map((id) => String(id))
+        : [],
+    };
+  });
+}
+
+function toQualifierRecords(
+  rows: {
+    memory_claim_version_qualifier_id: string;
+    memory_claim_version_id: string;
+    axis_id: string;
+    role_side: "canonical_subject" | "counterpart";
+    typed_value: unknown;
+    evidence_item_ids: string[] | null;
+    created_at: Date;
+  }[],
+): ClaimVersionQualifierRecord[] {
+  return rows.map((row) => ({
+    memoryClaimVersionQualifierId: asMemoryClaimVersionQualifierId(
+      row.memory_claim_version_qualifier_id,
+    ),
+    memoryClaimVersionId: asMemoryClaimVersionId(row.memory_claim_version_id),
+    axisId: row.axis_id,
+    roleSide: row.role_side,
+    typedValue: toTypedValue(row.typed_value),
+    evidenceItemIds: (row.evidence_item_ids ?? []).map((id) => String(id)),
+    createdAt: row.created_at,
+  }));
+}
+
+const QUALIFIER_COLUMNS = `memory_claim_version_qualifier_id, memory_claim_version_id,
+  axis_id, role_side, typed_value,
+  ARRAY(
+    SELECT evidence_item_id FROM memory_claim_version_qualifier_evidence
+    WHERE memory_claim_version_qualifier_evidence.memory_claim_version_qualifier_id
+      = memory_claim_version_qualifiers.memory_claim_version_qualifier_id
+    ORDER BY evidence_item_id
+  ) AS evidence_item_ids,
+  created_at`;
+
 export function rowToCandidate(row: CandidateRow): MemoryCandidateRecord {
   return {
     memoryCandidateId: asMemoryCandidateId(row.memory_candidate_id),
@@ -169,6 +234,7 @@ export function rowToCandidate(row: CandidateRow): MemoryCandidateRecord {
       : null,
     successorTrigger: row.successor_trigger,
     materialChangeReasonCodes: row.material_change_reason_codes,
+    proposedQualifiers: toProposedQualifiers(row.proposed_qualifiers),
     createdAt: row.created_at,
   };
 }
@@ -232,7 +298,7 @@ export const CANDIDATE_COLUMNS = `memory_candidate_id, user_id, candidate_kind, 
   registry_release_due_at, disposition_reason_code, disposition_policy_version,
   decided_at, terminal_effective_at, terminal_content_expires_at,
   reproposal_policy, predecessor_candidate_id, successor_trigger,
-  material_change_reason_codes, created_at`;
+  material_change_reason_codes, proposed_qualifiers, created_at`;
 
 const VERSION_INSERT_COLUMNS = `memory_claim_version_id, memory_claim_id, user_id,
   revision, kind, epistemic_status, status, subject_entity_version_id,
@@ -626,6 +692,7 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     plan: ClaimAdmissionPlan;
     evidenceItemIds: readonly string[];
     lineage: MemoryCandidateProposal["lineage"];
+    relationshipHints: RelationshipHintProjectionInputs | null;
     now: Date;
   }): Promise<{
     memoryClaimId: MemoryClaimId;
@@ -636,6 +703,156 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     return this.withTransaction((client) =>
       executeClaimAdmissionPlanWithin(client, input),
     );
+  }
+
+  // ── #115: qualifiers + resolver hints ─────────────────────────────────────
+
+  public async findCurrentPrimaryLabels(
+    userId: UserId,
+    entityIds: readonly string[],
+  ): Promise<Record<string, { zh: string | null; en: string | null }>> {
+    return findCurrentPrimaryLabelsWithin(this.pool, userId, entityIds);
+  }
+
+  public async listClaimVersionQualifiers(
+    userId: UserId,
+    versionId: MemoryClaimVersionId,
+  ): Promise<ClaimVersionQualifierRecord[]> {
+    const result = await this.pool.query(
+      `SELECT ${QUALIFIER_COLUMNS}
+       FROM memory_claim_version_qualifiers
+       WHERE user_id = $1 AND memory_claim_version_id = $2
+       ORDER BY axis_id, role_side`,
+      [userId, versionId],
+    );
+    return toQualifierRecords(result.rows);
+  }
+
+  public async listClaimQualifiers(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<ClaimVersionQualifierRecord[]> {
+    const result = await this.pool.query(
+      `SELECT q.memory_claim_version_qualifier_id, q.memory_claim_version_id,
+              q.axis_id, q.role_side, q.typed_value,
+              ARRAY(
+                SELECT evidence_item_id FROM memory_claim_version_qualifier_evidence
+                WHERE memory_claim_version_qualifier_evidence.memory_claim_version_qualifier_id
+                  = q.memory_claim_version_qualifier_id
+                ORDER BY evidence_item_id
+              ) AS evidence_item_ids,
+              q.created_at
+       FROM memory_claim_version_qualifiers q
+       JOIN memory_claim_versions v
+         ON v.memory_claim_version_id = q.memory_claim_version_id
+       WHERE q.user_id = $1 AND v.memory_claim_id = $2
+       ORDER BY v.revision, q.axis_id, q.role_side`,
+      [userId, claimId],
+    );
+    return toQualifierRecords(result.rows);
+  }
+
+  private static readonly HINT_COLUMNS = `relationship_resolver_hint_id,
+    memory_claim_id, memory_claim_version_id, resolved_entity_id,
+    context_entity_id, view_direction, locale, temporal_form, role_side,
+    role_axis_id, role_term, role_source, phrase, rebuilt_at`;
+
+  private static rowToHint(
+    row: {
+      relationship_resolver_hint_id: string;
+      memory_claim_id: string;
+      memory_claim_version_id: string;
+      resolved_entity_id: string;
+      context_entity_id: string;
+      view_direction: "forward" | "inverse" | "symmetric";
+      locale: string;
+      temporal_form: "current" | "former";
+      role_side: "canonical_subject" | "counterpart";
+      role_axis_id: string | null;
+      role_term: string;
+      role_source: "qualifier" | "neutral_fallback" | "predicate_label";
+      phrase: string | null;
+      rebuilt_at: Date;
+    },
+  ): RelationshipResolverHintRecord {
+    return {
+      relationshipResolverHintId: asRelationshipResolverHintId(
+        row.relationship_resolver_hint_id,
+      ),
+      memoryClaimId: asMemoryClaimId(row.memory_claim_id),
+      memoryClaimVersionId: asMemoryClaimVersionId(row.memory_claim_version_id),
+      resolvedEntityId: row.resolved_entity_id,
+      contextEntityId: row.context_entity_id,
+      viewDirection: row.view_direction,
+      locale: row.locale as ResolverHintLocale,
+      temporalForm: row.temporal_form,
+      roleSide: row.role_side,
+      roleAxisId: row.role_axis_id,
+      roleTerm: row.role_term,
+      roleSource: row.role_source,
+      phrase: row.phrase,
+      rebuiltAt: row.rebuilt_at,
+    };
+  }
+
+  public async listRelationshipResolverHints(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<RelationshipResolverHintRecord[]> {
+    const result = await this.pool.query(
+      `SELECT ${PostgresMemoryClaimRepository.HINT_COLUMNS}
+       FROM relationship_resolver_hints
+       WHERE user_id = $1 AND memory_claim_id = $2
+       ORDER BY locale, resolved_entity_id, role_axis_id NULLS LAST`,
+      [userId, claimId],
+    );
+    return result.rows.map((row) => PostgresMemoryClaimRepository.rowToHint(row));
+  }
+
+  public async listResolverHintsForEntity(
+    userId: UserId,
+    entityId: string,
+    locale: ResolverHintLocale,
+  ): Promise<RelationshipResolverHintRecord[]> {
+    const result = await this.pool.query(
+      `SELECT ${PostgresMemoryClaimRepository.HINT_COLUMNS}
+       FROM relationship_resolver_hints
+       WHERE user_id = $1 AND resolved_entity_id = $2 AND locale = $3
+       ORDER BY role_axis_id NULLS LAST`,
+      [userId, entityId, locale],
+    );
+    return result.rows.map((row) => PostgresMemoryClaimRepository.rowToHint(row));
+  }
+
+  /** #115: active relationship claims, for the full hint rebuild CLI. */
+  public async listRelationshipClaims(): Promise<
+    { memoryClaimId: MemoryClaimId; predicateId: string }[]
+  > {
+    const result = await this.pool.query<{
+      memory_claim_id: string;
+      predicate_id: string;
+    }>(
+      `SELECT memory_claim_id, predicate_id FROM memory_claims
+       WHERE deleted_at IS NULL AND content_purged_at IS NULL
+         AND predicate_id LIKE 'sh.relationship.%'
+       ORDER BY memory_claim_id`,
+    );
+    return result.rows.map((row) => ({
+      memoryClaimId: asMemoryClaimId(row.memory_claim_id),
+      predicateId: row.predicate_id,
+    }));
+  }
+
+  public async executeHintRebuildPlan(input: {
+    userId: UserId;
+    claimId: MemoryClaimId;
+    hints: RelationshipHintProjectionInputs;
+    now: Date;
+  }): Promise<{ rebuiltRows: number }> {
+    return this.withTransaction(async (client) => {
+      const rebuilt = await rebuildRelationshipResolverHintsWithin(client, input);
+      return { rebuiltRows: rebuilt.length };
+    });
   }
 
   public async executeDormancyPlan(input: {
@@ -892,6 +1109,7 @@ export async function executeClaimAdmissionPlanWithin(
     plan: ClaimAdmissionPlan;
     evidenceItemIds: readonly string[];
     lineage: MemoryCandidateProposal["lineage"];
+    relationshipHints?: RelationshipHintProjectionInputs | null;
     now: Date;
   },
 ): Promise<{
@@ -1050,6 +1268,27 @@ export async function executeClaimAdmissionPlanWithin(
         "support",
         input.now,
       );
+
+      // #115: relationship qualifiers ride the new version; the Resolver Hint
+      // projection is rebuilt in the same transaction so it always derives
+      // from exactly one version — the new current one (ADR-0027 / ADR-0031).
+      if (plan.qualifiers.length > 0) {
+        await insertClaimVersionQualifiersWithin(client, {
+          userId: input.userId,
+          versionId,
+          qualifiers: plan.qualifiers,
+          createdBy: "admission",
+          now: input.now,
+        });
+      }
+      if (input.relationshipHints && plan.action === "promote") {
+        await rebuildRelationshipResolverHintsWithin(client, {
+          userId: input.userId,
+          claimId,
+          hints: input.relationshipHints,
+          now: input.now,
+        });
+      }
 
       return { memoryClaimId: claimId, memoryClaimVersionId: versionId, revision, createdClaim };
 }
@@ -1215,13 +1454,14 @@ export async function insertMemoryCandidateWithin(
        predicate_resolution_status, proposed_concept, mapping_confidence,
        proposed_object_value, proposed_scope_key, proposed_temporal_status,
        proposed_valid_from, proposed_valid_from_precision, proposed_valid_to,
-       proposed_valid_to_precision, source_reflection_version_id,
+       proposed_valid_to_precision, proposed_qualifiers,
+       source_reflection_version_id,
        generation_command_id, authoritative_model_attempt_id, model_version,
        prompt_version, extraction_policy_version, status, review_eligible_at,
        review_due_at, created_at
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-       $14::jsonb, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
-       $26, $27, $28, $29, $30)
+       $14::jsonb, $15, $16, $17, $18, $19, $20, $21::jsonb, $22, $23, $24,
+       $25, $26, $27, $28, $29, $30, $31)
      RETURNING memory_candidate_id`,
     [
       createUuidV7(now),
@@ -1244,6 +1484,7 @@ export async function insertMemoryCandidateWithin(
       proposal.temporal.validFromPrecision,
       proposal.temporal.validTo,
       proposal.temporal.validToPrecision,
+      JSON.stringify(proposal.qualifiers),
       proposal.lineage.sourceReflectionVersionId,
       proposal.lineage.generationCommandId,
       proposal.lineage.authoritativeModelAttemptId,
@@ -1346,4 +1587,265 @@ export async function findTerminalGovernanceBlockWithin(
   );
   const row = result.rows[0];
   return row ? { dispositionReasonCode: row.disposition_reason_code } : null;
+}
+
+// ── #115: Relationship Qualifiers + Resolver Hint projection helpers ────────
+
+/** Write one version's admitted qualifiers and their evidence links. */
+export async function insertClaimVersionQualifiersWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    versionId: MemoryClaimVersionId;
+    qualifiers: readonly AdmittedQualifier[];
+    createdBy: string;
+    now: Date;
+  },
+): Promise<void> {
+  for (const qualifier of input.qualifiers) {
+    const qualifierId = asMemoryClaimVersionQualifierId(
+      createUuidV7(input.now),
+    );
+    await client.query(
+      `INSERT INTO memory_claim_version_qualifiers (
+         memory_claim_version_qualifier_id, memory_claim_version_id, user_id,
+         axis_id, role_side, typed_value, created_by, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+      [
+        qualifierId,
+        input.versionId,
+        input.userId,
+        qualifier.axisId,
+        qualifier.roleSide,
+        JSON.stringify(qualifier.typedValue),
+        input.createdBy,
+        input.now,
+      ],
+    );
+    for (const evidenceItemId of qualifier.evidenceItemIds) {
+      await client.query(
+        `INSERT INTO memory_claim_version_qualifier_evidence (
+           memory_claim_version_qualifier_evidence_id,
+           memory_claim_version_qualifier_id, user_id, evidence_item_id, created_at
+         ) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT DO NOTHING`,
+        [
+          asClaimEvidenceLinkId(createUuidV7(input.now)),
+          qualifierId,
+          input.userId,
+          evidenceItemId,
+          input.now,
+        ],
+      );
+    }
+  }
+}
+
+export async function listClaimVersionQualifiersWithin(
+  client: PoolClient,
+  userId: UserId,
+  versionId: MemoryClaimVersionId,
+): Promise<ClaimVersionQualifierRecord[]> {
+  const result = await client.query(
+    `SELECT ${QUALIFIER_COLUMNS}
+     FROM memory_claim_version_qualifiers
+     WHERE user_id = $1 AND memory_claim_version_id = $2
+     ORDER BY axis_id, role_side`,
+    [userId, versionId],
+  );
+  return toQualifierRecords(result.rows);
+}
+
+export async function listClaimQualifiersWithin(
+  client: PoolClient,
+  userId: UserId,
+  claimId: MemoryClaimId,
+): Promise<ClaimVersionQualifierRecord[]> {
+  const result = await client.query(
+    `SELECT q.memory_claim_version_qualifier_id, q.memory_claim_version_id,
+            q.axis_id, q.role_side, q.typed_value,
+            ARRAY(
+              SELECT evidence_item_id FROM memory_claim_version_qualifier_evidence
+              WHERE memory_claim_version_qualifier_evidence.memory_claim_version_qualifier_id
+                = q.memory_claim_version_qualifier_id
+              ORDER BY evidence_item_id
+            ) AS evidence_item_ids,
+            q.created_at
+     FROM memory_claim_version_qualifiers q
+     JOIN memory_claim_versions v
+       ON v.memory_claim_version_id = q.memory_claim_version_id
+     WHERE q.user_id = $1 AND v.memory_claim_id = $2
+     ORDER BY v.revision, q.axis_id, q.role_side`,
+    [userId, claimId],
+  );
+  return toQualifierRecords(result.rows);
+}
+
+/** Current primary Entity labels per locale for hint phrase rendering. */
+export async function findCurrentPrimaryLabelsWithin(
+  client: Pool | PoolClient,
+  userId: UserId,
+  entityIds: readonly string[],
+): Promise<Record<string, { zh: string | null; en: string | null }>> {
+  const labels: Record<string, { zh: string | null; en: string | null }> = {};
+  for (const entityId of entityIds) {
+    labels[entityId] = { zh: null, en: null };
+  }
+  if (entityIds.length === 0) return labels;
+  const result = await client.query<{
+    entity_id: string;
+    locale: string;
+    label: string;
+  }>(
+    `SELECT entity_id, locale, label FROM entity_labels
+     WHERE user_id = $1
+       AND entity_id = ANY($2::uuid[])
+       AND label_kind = 'primary' AND is_current AND content_purged_at IS NULL
+       AND (locale ILIKE 'zh%' OR locale ILIKE 'en%')`,
+    [userId, [...entityIds]],
+  );
+  for (const row of result.rows) {
+    const entry = labels[row.entity_id] ?? { zh: null, en: null };
+    // Conversation locale tags (zh-CN / en-US) fold onto the registry's two
+    // hint locales by prefix.
+    if (row.locale.toLowerCase().startsWith("zh")) entry.zh = row.label;
+    if (row.locale.toLowerCase().startsWith("en")) entry.en = row.label;
+    labels[row.entity_id] = entry;
+  }
+  return labels;
+}
+
+async function insertResolverHintRowsWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    rows: readonly RelationshipResolverHintPlanRow[];
+    now: Date;
+  },
+): Promise<number> {
+  for (const row of input.rows) {
+    await client.query(
+      `INSERT INTO relationship_resolver_hints (
+         relationship_resolver_hint_id, user_id, memory_claim_id,
+         memory_claim_version_id, resolved_entity_id, context_entity_id,
+         view_direction, locale, temporal_form, role_side, role_axis_id,
+         role_term, role_source, phrase, rebuilt_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+      [
+        asRelationshipResolverHintId(createUuidV7(input.now)),
+        input.userId,
+        row.memoryClaimId,
+        row.memoryClaimVersionId,
+        row.resolvedEntityId,
+        row.contextEntityId,
+        row.viewDirection,
+        row.locale,
+        row.temporalForm,
+        row.roleSide,
+        row.roleAxisId,
+        row.roleTerm,
+        row.roleSource,
+        row.phrase,
+        input.now,
+      ],
+    );
+  }
+  return input.rows.length;
+}
+
+/**
+ * Rebuild one claim's Resolver Hint projection from its CURRENT version
+ * (delete + reinsert, ADR-0027). No-op when the claim has no current version.
+ */
+export async function rebuildRelationshipResolverHintsWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    claimId: MemoryClaimId;
+    hints: RelationshipHintProjectionInputs;
+    now: Date;
+  },
+): Promise<readonly RelationshipResolverHintPlanRow[]> {
+  const claimRow = await client.query<{
+    subject_entity_id: string;
+    object_entity_id: string | null;
+    predicate_id: string;
+    current_version_id: string | null;
+  }>(
+    `SELECT subject_entity_id, object_entity_id, predicate_id, current_version_id
+     FROM memory_claims WHERE user_id = $1 AND memory_claim_id = $2`,
+    [input.userId, input.claimId],
+  );
+  const claim = claimRow.rows[0];
+  if (!claim?.current_version_id || !claim.object_entity_id) {
+    await client.query(
+      `DELETE FROM relationship_resolver_hints
+       WHERE user_id = $1 AND memory_claim_id = $2`,
+      [input.userId, input.claimId],
+    );
+    return [];
+  }
+  const versionRow = await client.query<{
+    memory_claim_version_id: string;
+    temporal_status: TemporalBounds["temporalStatus"];
+    valid_from: Date | null;
+    valid_from_precision: TemporalBounds["validFromPrecision"];
+    valid_to: Date | null;
+    valid_to_precision: TemporalBounds["validToPrecision"];
+  }>(
+    `SELECT memory_claim_version_id, temporal_status, valid_from,
+            valid_from_precision, valid_to, valid_to_precision
+     FROM memory_claim_versions
+     WHERE user_id = $1 AND memory_claim_version_id = $2`,
+    [input.userId, claim.current_version_id],
+  );
+  const version = versionRow.rows[0];
+  if (!version) {
+    throw new Error(
+      `Claim ${input.claimId} points at missing version ${claim.current_version_id}.`,
+    );
+  }
+  const labels = await findCurrentPrimaryLabelsWithin(client, input.userId, [
+    claim.subject_entity_id,
+    claim.object_entity_id,
+  ]);
+  const qualifiers = await listClaimVersionQualifiersWithin(
+    client,
+    input.userId,
+    asMemoryClaimVersionId(claim.current_version_id),
+  );
+  const rows = planRelationshipResolverHints({
+    entry: input.hints.entry,
+    projections: input.hints.projections,
+    localizations: input.hints.localizations,
+    claim: {
+      memoryClaimId: input.claimId,
+      predicateId: claim.predicate_id,
+      subjectEntityId: claim.subject_entity_id,
+      objectEntityId: claim.object_entity_id,
+    },
+    currentVersion: {
+      memoryClaimVersionId: asMemoryClaimVersionId(claim.current_version_id),
+      temporal: {
+        temporalStatus: version.temporal_status,
+        validFrom: version.valid_from,
+        validFromPrecision: version.valid_from_precision,
+        validTo: version.valid_to,
+        validToPrecision: version.valid_to_precision,
+      },
+    },
+    qualifiers,
+    labels,
+  });
+  await client.query(
+    `DELETE FROM relationship_resolver_hints
+     WHERE user_id = $1 AND memory_claim_id = $2`,
+    [input.userId, input.claimId],
+  );
+  await insertResolverHintRowsWithin(client, {
+    userId: input.userId,
+    rows,
+    now: input.now,
+  });
+  return rows;
 }

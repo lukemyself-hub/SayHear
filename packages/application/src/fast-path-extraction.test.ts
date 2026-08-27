@@ -226,13 +226,14 @@ describe("memory.extract proposal validation", () => {
         {
           basis: "directly_stated",
           candidateKind: "objective",
-          predicateId: "sh.relationship.parent_of",
+          predicateId: "sh.place.residence",
           proposedConcept: null,
-          typedValue: "妈妈",
+          typedValue: "上海",
           scopeKey: "",
           subjectMentionIndex: null,
           objectMentionIndex: 0,
           evidenceLocatorKeys: ["0:7"],
+          qualifiers: [],
           temporal: {
             temporalStatus: "current",
             validFrom: null,
@@ -306,6 +307,114 @@ describe("memory.extract proposal validation", () => {
         source,
       ),
     ).toThrow(InvalidMemoryExtractProposalError);
+  });
+
+  it("rejects a relationship candidate that carries a typed value (#115)", () => {
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              predicateId: "sh.relationship.parent_of",
+              typedValue: "妈妈",
+            },
+          ],
+        }),
+        source,
+        {
+          isRelationshipPredicate: (id) => id === "sh.relationship.parent_of",
+        },
+      ),
+    ).toThrow(/qualifiers, not typed values/);
+  });
+
+  it("accepts an empty typed value for a relationship candidate (#115)", () => {
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              predicateId: "sh.relationship.parent_of",
+              typedValue: "",
+            },
+          ],
+        }),
+        source,
+        {
+          isRelationshipPredicate: (id) => id === "sh.relationship.parent_of",
+        },
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects a qualifier citing an unknown evidence locator (#115)", () => {
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              qualifiers: [
+                {
+                  axisId: "kinship_term",
+                  roleSide: "object",
+                  typedValue: "妈妈",
+                  evidenceLocatorKeys: ["9:12"],
+                },
+              ],
+            },
+          ],
+        }),
+        source,
+      ),
+    ).toThrow(/unknown evidence locator/);
+  });
+
+  it("rejects a qualifier without evidence locators (#115)", () => {
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              qualifiers: [
+                {
+                  axisId: "kinship_term",
+                  roleSide: "object",
+                  typedValue: "妈妈",
+                  evidenceLocatorKeys: [],
+                },
+              ],
+            },
+          ],
+        }),
+        source,
+      ),
+    ).toThrow(/at least one evidence locator/);
+  });
+
+  it("rejects duplicate qualifier axis and side in one candidate (#115)", () => {
+    const qualifier = {
+      axisId: "kinship_term",
+      roleSide: "object" as const,
+      typedValue: "妈妈",
+      evidenceLocatorKeys: ["0:7"],
+    };
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              qualifiers: [qualifier, { ...qualifier }],
+            },
+          ],
+        }),
+        source,
+      ),
+    ).toThrow(/duplicate qualifier/);
   });
 });
 

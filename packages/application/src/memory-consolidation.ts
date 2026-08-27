@@ -456,6 +456,7 @@ export function planAggregateProposal(input: {
         validToPrecision: proposalFromModel.temporal.validToPrecision,
       },
       evidenceItemIds: input.eligibleEvidence.map((item) => item.evidenceItemId),
+      qualifiers: [],
       lineage: {
         extractionPolicyVersion: MEMORY_ADMISSION_POLICY_VERSION,
         generationCommandId: input.lineage.modelAttemptId,

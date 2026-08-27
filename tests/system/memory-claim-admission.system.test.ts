@@ -193,6 +193,9 @@ describe("Memory Claim admission system seam", () => {
     clockNowMs = BASE_TIME;
     await database.pool.query(`
       TRUNCATE TABLE
+        relationship_resolver_hints,
+        memory_claim_version_qualifier_evidence,
+        memory_claim_version_qualifiers,
         memory_consolidation_diffs,
         memory_consolidation_runs,
         memory_forget_reversals,
@@ -304,6 +307,7 @@ describe("Memory Claim admission system seam", () => {
         validTo: null,
         validToPrecision: "unknown" as const,
       },
+      qualifiers: [],
       evidenceItemIds: input.evidenceItemIds,
       lineage: {
         extractionPolicyVersion: "memory-extract-test:v1",
@@ -634,6 +638,7 @@ describe("Memory Claim admission system seam", () => {
       objectEntityId: null,
       objectEntityMentionId: null,
       scopeKey: "",
+      qualifiers: [],
       temporal: {
         temporalStatus: "current",
         validFrom: null,
@@ -713,6 +718,7 @@ describe("Memory Claim admission system seam", () => {
       objectEntityId: null,
       objectEntityMentionId: null,
       scopeKey: "",
+      qualifiers: [],
       temporal: {
         temporalStatus: "current",
         validFrom: null,

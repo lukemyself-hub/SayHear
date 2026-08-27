@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   asMemoryClaimId,
   asMemoryClaimVersionId,
+  asMemoryClaimVersionQualifierId,
   asUserId,
 } from "@sayhear/domain";
 
@@ -31,6 +32,7 @@ import {
   TERMINAL_CONTENT_EXPIRY_DAYS,
   type AdmissibleEvidence,
   type ClaimAdmissionPlan,
+  type ClaimVersionQualifierRecord,
   type MemoryClaimVersionRecord,
   type RegistryEntryLookup,
 } from "./types";
@@ -82,6 +84,8 @@ function baseProposal(input: {
   objectEntityMentionId?: string | null;
   scopeKey?: string;
   evidenceItemIds?: readonly string[];
+  qualifiers?: Parameters<typeof planClaimAdmission>[0]["proposal"]["qualifiers"];
+  temporal?: Parameters<typeof planClaimAdmission>[0]["proposal"]["temporal"];
 }): Parameters<typeof planClaimAdmission>[0]["proposal"] {
   return {
     userId: USER,
@@ -99,7 +103,7 @@ function baseProposal(input: {
     objectEntityId: input.objectEntityId ?? null,
     objectEntityMentionId: input.objectEntityMentionId ?? null,
     scopeKey: input.scopeKey ?? "",
-    temporal: {
+    temporal: input.temporal ?? {
       temporalStatus: "current",
       validFrom: null,
       validFromPrecision: "unknown",
@@ -107,6 +111,7 @@ function baseProposal(input: {
       validToPrecision: "unknown",
     },
     evidenceItemIds: input.evidenceItemIds ?? ["e1", "e2"],
+    qualifiers: input.qualifiers ?? [],
     lineage: {
       extractionPolicyVersion: "extraction-test",
       generationCommandId: null,
@@ -962,5 +967,480 @@ describe("review deadlines", () => {
   it("applies the 30-day predicate review deadline and the 90-day registry wait", () => {
     expect(predicateReviewDeadline(NOW)).toEqual(addDays(NOW, NEEDS_PREDICATE_REVIEW_DEADLINE_DAYS));
     expect(registryReleaseDeadline(NOW)).toEqual(addDays(NOW, REGISTRY_RELEASE_WAIT_DAYS));
+  });
+});
+
+// ── #115: Relationship Memory Claims — canonical identity, Qualifiers, time ──
+
+const RELATIVE_OF = PREDICATE_IDS.relativeOf;
+const FRIEND_OF = PREDICATE_IDS.friendOf;
+const PARENT_OF = PREDICATE_IDS.parentOf;
+const LILY = "01984477-31e1-7595-92c6-0688a0a00003";
+const LILY_VERSION = "01984477-31e1-7595-92c6-0688a0b00003";
+
+const BOTH_PARTIES = Object.freeze({
+  ...SELF_BINDING,
+  [LILY]: { entityVersionId: LILY_VERSION, status: "active", entityKindId: "sh.entity.person" },
+});
+
+function relationshipVersion(
+  overrides: Partial<MemoryClaimVersionRecord> = {},
+): MemoryClaimVersionRecord {
+  return currentVersion({
+    typedValue: "",
+    subjectEntityVersionId: SELF_VERSION,
+    objectEntityVersionId: LILY_VERSION,
+    ...overrides,
+  });
+}
+
+function qualifierRecord(input: {
+  axisId: string;
+  roleSide: "canonical_subject" | "counterpart";
+  typedValue: string | readonly string[];
+  evidenceItemIds: readonly string[];
+}): ClaimVersionQualifierRecord {
+  return {
+    memoryClaimVersionQualifierId: asMemoryClaimVersionQualifierId(
+      "01984477-31e1-7595-92c6-0688a0d00001",
+    ),
+    memoryClaimVersionId: CURRENT_VERSION_ID,
+    axisId: input.axisId,
+    roleSide: input.roleSide,
+    typedValue: input.typedValue,
+    evidenceItemIds: input.evidenceItemIds,
+    createdAt: NOW,
+  };
+}
+
+describe("relationship admission (#115: ADR-0027 / 0029 / 0030 / 0033 / 0036)", () => {
+  it("admits the first statement with a qualifier whose side resolves canonically", () => {
+    // SELF sorts before LILY, so the symmetric pair's canonical subject is SELF
+    // and the candidate's object side (LILY, 姑姑) resolves to `counterpart`.
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "object", typedValue: "姑姑", evidenceItemIds: ["e1"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote.qualifiers).toEqual([
+      { axisId: "kinship_term", roleSide: "counterpart", typedValue: "姑姑", evidenceItemIds: ["e1"] },
+    ]);
+  });
+
+  it("reinforces an unchanged relationship re-statement without a new version", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e9"],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion(),
+      currentVersionQualifiers: [
+        qualifierRecord({ axisId: "kinship_term", roleSide: "counterpart", typedValue: "姑姑", evidenceItemIds: ["e1"] }),
+      ],
+      evidence: [evidence({ id: "e9", session: SESSION_1, revision: "rev-9" })],
+      excludedEvidenceIds: [],
+    });
+    expect(plan).toMatchObject({
+      action: "reinforce_current",
+      attachToVersionId: CURRENT_VERSION_ID,
+      reasonCodes: ["same_value_reinforces_current"],
+    });
+  });
+
+  it("advances a new version when a direct statement ends the relationship", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e9"],
+        temporal: {
+          temporalStatus: "ended",
+          validFrom: null,
+          validFromPrecision: "unknown",
+          validTo: null,
+          validToPrecision: "unknown",
+        },
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion(),
+      evidence: [evidence({ id: "e9", session: SESSION_1, revision: "rev-9" })],
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote).toMatchObject({
+      claimAction: "new_version",
+      conflictResolution: "temporal_or_correction_supersede",
+      supersedesVersionId: CURRENT_VERSION_ID,
+    });
+    expect(promote.reasonCodes).toContain("relationship_state_change_advances_version");
+    expect(promote.temporal.temporalStatus).toBe("ended");
+  });
+
+  it("reuses the logical Claim when an ended relationship restarts (ADR-0036)", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e9"],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion({
+        temporal: {
+          temporalStatus: "ended",
+          validFrom: new Date("2024-01-01T00:00:00.000Z"),
+          validFromPrecision: "year",
+          validTo: new Date("2025-06-01T00:00:00.000Z"),
+          validToPrecision: "month",
+        },
+      }),
+      evidence: [evidence({ id: "e9", session: SESSION_1, revision: "rev-9" })],
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote).toMatchObject({
+      claimAction: "new_version",
+      conflictResolution: "claim_reuse_new_interval",
+      supersedesVersionId: CURRENT_VERSION_ID,
+    });
+    expect(promote.reasonCodes).toContain("relationship_restart_reuses_claim");
+    expect(promote.temporal.temporalStatus).toBe("current");
+  });
+
+  it("advances a version when a direct statement refines temporal precision, preserving it verbatim", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e9"],
+        temporal: {
+          temporalStatus: "current",
+          validFrom: new Date("2024-06-01T00:00:00.000Z"),
+          validFromPrecision: "month",
+          validTo: null,
+          validToPrecision: "unknown",
+        },
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion(),
+      evidence: [evidence({ id: "e9", session: SESSION_1, revision: "rev-9" })],
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote.reasonCodes).toContain("relationship_validity_refined_by_direct_statement");
+    expect(promote.temporal).toEqual({
+      temporalStatus: "current",
+      validFrom: new Date("2024-06-01T00:00:00.000Z"),
+      validFromPrecision: "month",
+      validTo: null,
+      validToPrecision: "unknown",
+    });
+  });
+
+  it("merges qualifier refinements: new side joins, carried qualifiers keep their evidence", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e9"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "subject", typedValue: "侄子", evidenceItemIds: ["e9"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion(),
+      currentVersionQualifiers: [
+        qualifierRecord({ axisId: "kinship_term", roleSide: "counterpart", typedValue: "姑姑", evidenceItemIds: ["e1"] }),
+      ],
+      evidence: [evidence({ id: "e9", session: SESSION_1, revision: "rev-9" })],
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote.reasonCodes).toContain("qualifier_refined_by_direct_statement");
+    expect(promote.qualifiers).toEqual([
+      // carried qualifier keeps its original evidence
+      { axisId: "kinship_term", roleSide: "counterpart", typedValue: "姑姑", evidenceItemIds: ["e1"] },
+      // new qualifier cites the new statement's evidence
+      { axisId: "kinship_term", roleSide: "canonical_subject", typedValue: "侄子", evidenceItemIds: ["e9"] },
+    ]);
+  });
+
+  it("does not advance a version when the proposed qualifier equals the current one", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e9"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "object", typedValue: "姑姑", evidenceItemIds: ["e9"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion(),
+      currentVersionQualifiers: [
+        qualifierRecord({ axisId: "kinship_term", roleSide: "counterpart", typedValue: "姑姑", evidenceItemIds: ["e1"] }),
+      ],
+      evidence: [evidence({ id: "e9", session: SESSION_1, revision: "rev-9" })],
+      excludedEvidenceIds: [],
+    });
+    expect(plan).toMatchObject({ action: "reinforce_current" });
+  });
+
+  it("normalizes enum qualifier spellings onto the closed-set value", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: FRIEND_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "stated_closeness", roleSide: "subject", typedValue: "闺蜜", evidenceItemIds: ["e1"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(FRIEND_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote.qualifiers).toEqual([
+      { axisId: "stated_closeness", roleSide: "canonical_subject", typedValue: "best", evidenceItemIds: ["e1"] },
+    ]);
+  });
+
+  it("rejects qualifiers that cite an axis the entry does not publish", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: FRIEND_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "subject", typedValue: "姑姑", evidenceItemIds: ["e1"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(FRIEND_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    expect(plan).toMatchObject({ action: "reject", reasonCode: "qualifier_invalid" });
+  });
+
+  it("rejects enum qualifier spellings outside the closed set", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: FRIEND_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "stated_closeness", roleSide: "subject", typedValue: "网友", evidenceItemIds: ["e1"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(FRIEND_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    expect(plan).toMatchObject({ action: "reject", reasonCode: "qualifier_invalid" });
+  });
+
+  it("rejects qualifiers whose evidence is empty or outside the candidate's evidence", () => {
+    const emptyEvidence = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "subject", typedValue: "亲戚", evidenceItemIds: [] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    expect(emptyEvidence).toMatchObject({ action: "reject", reasonCode: "qualifier_invalid" });
+
+    const foreignEvidence = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "subject", typedValue: "亲戚", evidenceItemIds: ["e404"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    expect(foreignEvidence).toMatchObject({ action: "reject", reasonCode: "qualifier_invalid" });
+  });
+
+  it("rejects qualifiers whose side the axis does not allow", () => {
+    const pinnedEntry = {
+      ...entryLookup.entryFor(RELATIVE_OF)!,
+      relationshipSemantics: {
+        ...entryLookup.entryFor(RELATIVE_OF)!.relationshipSemantics!,
+        qualifierAxes: [
+          {
+            axisId: "kinship_term",
+            appliesToRole: "canonical_subject" as const,
+            valueSchema: { kind: "text" as const, normalization: "nfc_trim_collapsed" as const },
+            cardinality: "single" as const,
+            evidencePolicyId: "evidence-policy.global-v1",
+            neutralFallbackZh: "亲戚",
+            neutralFallbackEn: "relative",
+          },
+        ],
+      },
+    };
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: LILY,
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "object", typedValue: "姑姑", evidenceItemIds: ["e1"] },
+        ],
+      }),
+      registryEntry: pinnedEntry,
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: BOTH_PARTIES,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    expect(plan).toMatchObject({ action: "reject", reasonCode: "qualifier_invalid" });
+  });
+
+  it("rejects qualifiers attached to a non-relationship candidate", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RESIDENCE,
+        typedValue: "上海",
+        evidenceItemIds: ["e1"],
+        qualifiers: [
+          { axisId: "kinship_term", roleSide: "subject", typedValue: "家", evidenceItemIds: ["e1"] },
+        ],
+      }),
+      registryEntry: entryLookup.entryFor(RESIDENCE),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: SELF_BINDING,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+    });
+    expect(plan).toMatchObject({ action: "reject", reasonCode: "qualifier_invalid" });
+  });
+
+  it("keeps directed canonical orientation in the identity: swapped roles are a different fact", () => {
+    // parent_of is directed: SELF as parent vs SELF as child are different
+    // canonical Claims. The registry's canonical roles (not mention order)
+    // decide which fact a phrasing denotes; the mapper owns that assignment.
+    const parentClaim = claimCanonicalKey({
+      predicateId: PARENT_OF,
+      subjectEntityId: SELF,
+      objectEntityId: LILY,
+      scopeKey: "",
+      relationshipDirection: "directed",
+    });
+    const childClaim = claimCanonicalKey({
+      predicateId: PARENT_OF,
+      subjectEntityId: LILY,
+      objectEntityId: SELF,
+      scopeKey: "",
+      relationshipDirection: "directed",
+    });
+    expect(parentClaim).not.toBe(childClaim);
   });
 });

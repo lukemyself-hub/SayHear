@@ -87,16 +87,31 @@ export type MemoryExtractTemporalProposal = Readonly<{
   validToPrecision: "exact" | "month" | "year" | "approximate" | "unknown";
 }>;
 
+/**
+ * One Relationship Qualifier assertion inside a candidate proposal (#115,
+ * ADR-0033). `roleSide` is candidate-relative — deterministic admission
+ * resolves it onto the canonical Claim side. The qualifier carries its own
+ * evidence locators; a qualifier without evidence never admits.
+ */
+export type MemoryExtractQualifierProposal = Readonly<{
+  axisId: string;
+  roleSide: "subject" | "object";
+  typedValue: string;
+  evidenceLocatorKeys: readonly string[];
+}>;
+
 export type MemoryExtractCandidateProposal = Readonly<{
   basis: "directly_stated" | "inferred";
   candidateKind: "objective" | "impression";
   predicateId: string | null;
   proposedConcept: string | null;
+  /** Relationship candidates carry "" — identity is the Entity pair; roles are qualifiers. */
   typedValue: string;
   scopeKey: string;
   subjectMentionIndex: number | null;
   objectMentionIndex: number | null;
   evidenceLocatorKeys: readonly string[];
+  qualifiers: readonly MemoryExtractQualifierProposal[];
   temporal: MemoryExtractTemporalProposal;
   itemClass: string | null;
   itemSummary: string | null;
@@ -436,10 +451,16 @@ function parseLocatorKey(
  * Validate one revision's proposal against its real source text. Throws
  * `InvalidMemoryExtractProposalError` on structural violations; unknown
  * predicates are not errors — they route to `needs_predicate_review`.
+ * Relationship candidates (#115) must carry an empty typed value — identity is
+ * the canonical Entity pair and roles ride as qualifiers — and non-empty
+ * values elsewhere; `isRelationshipPredicate` decides which rule applies.
  */
 export function validateMemoryExtractResult(
   result: MemoryExtractRevisionResult,
   source: Readonly<{ revisionId: string; text: string }>,
+  options: Readonly<{
+    isRelationshipPredicate?: (predicateId: string) => boolean;
+  }> = {},
 ): void {
   if (result.revisionId !== source.revisionId) {
     throw new InvalidMemoryExtractProposalError(
@@ -535,10 +556,18 @@ export function validateMemoryExtractResult(
         "candidate objectMentionIndex out of range.",
       );
     }
-    if (
-      typeof candidate.typedValue !== "string" ||
-      !candidate.typedValue.trim()
-    ) {
+    const isRelationship =
+      candidate.predicateId !== null &&
+      (options.isRelationshipPredicate?.(candidate.predicateId) ?? false);
+    const trimmedTypedValue =
+      typeof candidate.typedValue === "string" ? candidate.typedValue.trim() : "";
+    if (isRelationship && trimmedTypedValue !== "") {
+      // Relationship identity is the Entity pair; roles ride as qualifiers.
+      throw new InvalidMemoryExtractProposalError(
+        "relationship candidates carry roles as qualifiers, not typed values.",
+      );
+    }
+    if (!isRelationship && trimmedTypedValue === "") {
       throw new InvalidMemoryExtractProposalError("candidate typedValue empty.");
     }
     if (candidate.typedValue.length > 2_000) {
@@ -548,6 +577,46 @@ export function validateMemoryExtractResult(
     }
     if (candidate.scopeKey.length > 200) {
       throw new InvalidMemoryExtractProposalError("candidate scopeKey too long.");
+    }
+    const qualifierAxisSides = new Set<string>();
+    for (const qualifier of candidate.qualifiers) {
+      if (typeof qualifier.axisId !== "string" || !qualifier.axisId.trim()) {
+        throw new InvalidMemoryExtractProposalError("qualifier axisId empty.");
+      }
+      if (qualifier.axisId.length > 200) {
+        throw new InvalidMemoryExtractProposalError("qualifier axisId too long.");
+      }
+      if (!["subject", "object"].includes(qualifier.roleSide)) {
+        throw new InvalidMemoryExtractProposalError("invalid qualifier roleSide.");
+      }
+      if (
+        typeof qualifier.typedValue !== "string" ||
+        !qualifier.typedValue.trim() ||
+        qualifier.typedValue.length > 2_000
+      ) {
+        throw new InvalidMemoryExtractProposalError(
+          "invalid qualifier typedValue.",
+        );
+      }
+      if (qualifier.evidenceLocatorKeys.length === 0) {
+        throw new InvalidMemoryExtractProposalError(
+          "qualifier requires at least one evidence locator.",
+        );
+      }
+      for (const key of qualifier.evidenceLocatorKeys) {
+        if (!evidenceKeys.has(key)) {
+          throw new InvalidMemoryExtractProposalError(
+            "qualifier cites an unknown evidence locator.",
+          );
+        }
+      }
+      const sideKey = `${qualifier.axisId}\u0000${qualifier.roleSide}`;
+      if (qualifierAxisSides.has(sideKey)) {
+        throw new InvalidMemoryExtractProposalError(
+          "duplicate qualifier axis and side in one candidate.",
+        );
+      }
+      qualifierAxisSides.add(sideKey);
     }
   }
   for (const clarification of result.clarifications) {
@@ -1047,10 +1116,17 @@ async function extractOneRevision(input: {
     roleFallbackUsed: boolean;
   } = { ...input.lineage };
   try {
-    validateMemoryExtractResult(result, {
-      revisionId: revision.revisionId,
-      text: revision.text,
-    });
+    validateMemoryExtractResult(
+      result,
+      {
+        revisionId: revision.revisionId,
+        text: revision.text,
+      },
+      {
+        isRelationshipPredicate: (predicateId) =>
+          dependencies.registry.entryFor(predicateId)?.relationshipSemantics != null,
+      },
+    );
   } catch (error) {
     await recordFailure(dependencies, command, lineage, error);
     return "retryable_failed";
@@ -1265,6 +1341,14 @@ async function extractOneRevision(input: {
                 : null,
             validToPrecision: candidate.temporal.validToPrecision,
           },
+          qualifiers: candidate.qualifiers.map((qualifier) => ({
+            axisId: qualifier.axisId,
+            roleSide: qualifier.roleSide,
+            typedValue: qualifier.typedValue,
+            evidenceItemIds: qualifier.evidenceLocatorKeys
+              .map((key) => evidenceItemIdsByLocatorKey.get(key))
+              .filter((value): value is string => value !== undefined),
+          })),
           evidenceItemIds: candidate.evidenceLocatorKeys
             .map((key) => evidenceItemIdsByLocatorKey.get(key))
             .filter((value): value is string => value !== undefined),

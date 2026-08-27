@@ -173,6 +173,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        relationship_resolver_hints,
+        memory_claim_version_qualifier_evidence,
+        memory_claim_version_qualifiers,
         memory_consolidation_diffs,
         memory_consolidation_runs,
         fast_path_session_items,
@@ -590,6 +593,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     const memoryClaimSubstrate = new Set([
       "memory_claims",
       "memory_claim_versions",
+      "memory_claim_version_qualifiers",
+      "memory_claim_version_qualifier_evidence",
       "claim_evidence_links",
       "memory_candidates",
       "memory_candidate_evidence_links",

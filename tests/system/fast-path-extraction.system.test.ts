@@ -162,6 +162,7 @@ describe("Fast-path extraction workflow system seam", () => {
           subjectMentionIndex: null,
           objectMentionIndex: null,
           evidenceLocatorKeys: [`0:${revision.text.length}`],
+          qualifiers: [],
           temporal: {
             temporalStatus: "current" as const,
             validFrom: null,
@@ -317,6 +318,9 @@ describe("Fast-path extraction workflow system seam", () => {
     resolveScript = () => ({ verdict: "unclear", entityId: null, confidence: 0 });
     await database.pool.query(`
       TRUNCATE TABLE
+        relationship_resolver_hints,
+        memory_claim_version_qualifier_evidence,
+        memory_claim_version_qualifiers,
         memory_consolidation_diffs,
         memory_consolidation_runs,
         fast_path_session_items,
@@ -465,6 +469,7 @@ describe("Fast-path extraction workflow system seam", () => {
             subjectMentionIndex: null,
             objectMentionIndex: null,
             evidenceLocatorKeys: [`0:${revision.text.length}`],
+          qualifiers: [],
             temporal: {
               temporalStatus: "current" as const,
               validFrom: null,

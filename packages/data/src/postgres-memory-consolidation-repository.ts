@@ -20,6 +20,7 @@ import {
   type MemoryConsolidationRepository,
   type MemoryConsolidationRunStatus,
   type RegistryEntryLookup,
+  type RelationshipHintProjectionInputs,
   dedupeFingerprint,
   dateOrdinal,
   evidenceCutoff,
@@ -52,6 +53,7 @@ import {
   findTerminalGovernanceBlockWithin,
   insertCandidateEvidenceLinksWithin,
   insertMemoryCandidateWithin,
+  listClaimVersionQualifiersWithin,
   recordCandidateDispositionWithin,
   rowToVersion,
 } from "./postgres-memory-claim-repository";
@@ -1223,6 +1225,18 @@ async function admitCandidateWithin(
         existingClaim.memoryClaimId,
       )
     : [];
+  const currentVersionQualifiers =
+    existingClaim && currentVersion && registryEntry.relationshipSemantics
+      ? await listClaimVersionQualifiersWithin(
+          client,
+          asUserId(context.userId),
+          currentVersion.memoryClaimVersionId,
+        )
+      : [];
+  const relationshipHints = relationshipHintInputsForLookup(
+    context.registry,
+    registryEntry,
+  );
 
   const plan = planClaimAdmission({
     proposal: candidateRecordToProposal(candidate, evidenceItemIds),
@@ -1234,6 +1248,7 @@ async function admitCandidateWithin(
       ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey }
       : null,
     currentVersion,
+    currentVersionQualifiers,
     evidence,
     excludedEvidenceIds,
   });
@@ -1275,6 +1290,7 @@ async function admitCandidateWithin(
         promptVersion: candidate.promptVersion,
         sourceReflectionVersionId: candidate.sourceReflectionVersionId,
       },
+      relationshipHints,
       now: context.now,
     });
     await transitionCandidateWithin(client, context.userId, candidateId, [
@@ -1446,6 +1462,7 @@ function candidateRecordToProposal(
     objectEntityMentionId: null,
     scopeKey: candidate.proposedScopeKey ?? "",
     temporal: candidate.temporal,
+    qualifiers: candidate.proposedQualifiers,
     evidenceItemIds,
     lineage: {
       extractionPolicyVersion: candidate.extractionPolicyVersion,
@@ -1455,6 +1472,27 @@ function candidateRecordToProposal(
       promptVersion: candidate.promptVersion,
       sourceReflectionVersionId: candidate.sourceReflectionVersionId,
     },
+  };
+}
+
+/**
+ * Registry material for Resolver Hint projection (ADR-0027), or null when the
+ * entry is not a relationship, publishes no hint projections, or the lookup
+ * does not expose the localized projection material.
+ */
+function relationshipHintInputsForLookup(
+  registry: RegistryEntryLookup,
+  entry: NonNullable<ReturnType<RegistryEntryLookup["entryFor"]>>,
+): RelationshipHintProjectionInputs | null {
+  if (!entry.relationshipSemantics) return null;
+  if (!entry.temporalSemantics.resolverHintProjections) return null;
+  if (!registry.relationshipProjectionsFor || !registry.predicateLocalizationsFor) {
+    return null;
+  }
+  return {
+    entry,
+    projections: registry.relationshipProjectionsFor(entry.predicateId),
+    localizations: registry.predicateLocalizationsFor(entry.predicateId),
   };
 }
 
@@ -1668,6 +1706,7 @@ async function runSweeperWithin(
        proposed_scope_key = NULL,
        proposed_valid_from = NULL,
        proposed_valid_to = NULL,
+       proposed_qualifiers = NULL,
        content_purged_at = $3
      WHERE user_id = $1
        AND status IN ('rejected', 'stale')

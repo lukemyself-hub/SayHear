@@ -165,6 +165,16 @@ export function createServerComposition() {
       );
     },
     registryVersion: () => predicateRegistrySnapshot.registryVersion,
+    relationshipProjectionsFor(predicateId: string) {
+      return predicateRegistrySnapshot.relationshipProjections.filter(
+        (projection) => projection.predicateId === predicateId,
+      );
+    },
+    predicateLocalizationsFor(predicateId: string) {
+      return predicateRegistrySnapshot.localizations.filter(
+        (localization) => localization.predicateId === predicateId,
+      );
+    },
   };
   const memoryExtractConfiguration =
     journalRoleRegistry.configuration("memory.extract");
