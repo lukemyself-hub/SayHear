@@ -267,16 +267,12 @@ export function resolveQualifierProposals(input: {
   return resolved;
 }
 
-function asQualifierValueArray(value: ClaimTypedValue): readonly string[] {
-  return typeof value === "string" ? [value] : value;
-}
-
 function qualifierValuesEqual(a: ClaimTypedValue, b: ClaimTypedValue): boolean {
   if (typeof a === "string" && typeof b === "string") {
     return a.normalize("NFC").trim() === b.normalize("NFC").trim();
   }
-  const setA = canonicalValueSet(asQualifierValueArray(a));
-  const setB = canonicalValueSet(asQualifierValueArray(b));
+  const setA = canonicalValueSet(asValueArray(a));
+  const setB = canonicalValueSet(asValueArray(b));
   return setA.length === setB.length && setA.every((value, index) => value === setB[index]);
 }
 
@@ -315,8 +311,8 @@ export function mergeRelationshipQualifiers(
         axisId: record.axisId,
         roleSide: record.roleSide,
         typedValue: canonicalValueSet([
-          ...asQualifierValueArray(record.typedValue),
-          ...asQualifierValueArray(replacement.typedValue),
+          ...asValueArray(record.typedValue),
+          ...asValueArray(replacement.typedValue),
         ]),
         evidenceItemIds: [
           ...new Set([...record.evidenceItemIds, ...replacement.evidenceItemIds]),

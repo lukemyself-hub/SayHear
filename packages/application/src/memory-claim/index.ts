@@ -21,6 +21,7 @@ export {
   CandidateEvidenceMissingError,
   CandidateNotAdmissibleError,
   createMemoryClaimService,
+  relationshipHintInputsFor,
   MemoryCandidateNotFoundError,
   MemoryClaimNotFoundError,
   SelfEntityMissingError,

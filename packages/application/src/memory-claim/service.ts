@@ -235,6 +235,7 @@ export type MemoryClaimRepository = Readonly<{
     reversalEvidenceId: string;
     claimKind: "objective" | "impression";
     retractedVersionId: MemoryClaimVersionId;
+    relationshipHints?: RelationshipHintProjectionInputs | null;
     now: Date;
   }): Promise<Readonly<{ claimVersionId: MemoryClaimVersionId }>>;
   /**
@@ -834,6 +835,7 @@ export function createMemoryClaimService(dependencies: {
         // Old Evidence stays unusable; the reversal event must be new words.
         return { outcome: "evidence_ineligible" };
       }
+      const reversalEntry = registry.entryFor(claim.predicateId);
       const executed = await repository.executeForgetReversalPlan({
         userId,
         claimId,
@@ -842,6 +844,9 @@ export function createMemoryClaimService(dependencies: {
         reversalEvidenceId,
         claimKind: currentVersion.kind,
         retractedVersionId: currentVersion.memoryClaimVersionId,
+        relationshipHints: reversalEntry
+          ? relationshipHintInputsFor(registry, reversalEntry)
+          : null,
         now,
       });
       return {
@@ -901,9 +906,10 @@ export function createMemoryClaimService(dependencies: {
 /**
  * Registry material for hint projection, or null when the entry is not a
  * relationship, publishes no hint projections, or the registry lookup does
- * not expose the projection material (narrow test doubles).
+ * not expose the projection material (narrow test doubles). Shared by the
+ * Memory Claim service and the consolidation run commit.
  */
-function relationshipHintInputsFor(
+export function relationshipHintInputsFor(
   registry: RegistryEntryLookup,
   entry: NonNullable<ReturnType<RegistryEntryLookup["entryFor"]>>,
 ): RelationshipHintProjectionInputs | null {

@@ -507,6 +507,7 @@ export {
 export {
   createMemoryClaimService,
   CandidateEvidenceMissingError,
+  relationshipHintInputsFor,
   CandidateNotAdmissibleError,
   MemoryCandidateNotFoundError,
   MemoryClaimNotFoundError,
@@ -575,7 +576,6 @@ export {
 } from "./memory-claim/index";
 export {
   planRelationshipResolverHints,
-  RELATIONSHIP_RESOLVER_HINT_PROJECTION_VERSION,
   RESOLVER_HINT_LOCALES,
   type RelationshipResolverHintPlanRow,
   type RelationshipResolverHintRecord,

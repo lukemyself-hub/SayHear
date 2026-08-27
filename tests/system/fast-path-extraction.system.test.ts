@@ -469,7 +469,7 @@ describe("Fast-path extraction workflow system seam", () => {
             subjectMentionIndex: null,
             objectMentionIndex: null,
             evidenceLocatorKeys: [`0:${revision.text.length}`],
-          qualifiers: [],
+            qualifiers: [],
             temporal: {
               temporalStatus: "current" as const,
               validFrom: null,

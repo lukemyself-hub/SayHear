@@ -276,6 +276,40 @@ describe("Relationship Memory Claims system seam (#115)", () => {
     return selfEntityIdCache;
   }
 
+  /** Fixture: one evidence item citing a real committed revision. */
+  async function seedEvidence(revisionId: string): Promise<string> {
+    const snapshotId = createTestUuidV7(clock());
+    const itemId = createTestUuidV7(clock());
+    await database.pool.query(
+      `INSERT INTO evidence_source_snapshots (
+         evidence_source_snapshot_id, user_id, daily_session_id, source_revision,
+         extraction_policy_version, command_id, attempt_id, champion_config_version,
+         champion_provider, champion_model, champion_snapshot,
+         champion_provider_policy_version, created_at
+       ) VALUES ($1, $2, (SELECT daily_session_id FROM conversation_events
+         WHERE conversation_event_id = (SELECT conversation_event_id
+           FROM conversation_event_revisions WHERE conversation_event_revision_id = $3)),
+         (SELECT sequence_no FROM conversation_events
+           WHERE conversation_event_id = (SELECT conversation_event_id
+             FROM conversation_event_revisions WHERE conversation_event_revision_id = $3)),
+         'evidence-extraction:v2', 'seed', 'seed', 'test', 'openai', 'test', 'test', 'test', $4)`,
+      [snapshotId, OWNER, revisionId, clock()],
+    );
+    await database.pool.query(
+      `INSERT INTO evidence_items (
+         evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id,
+         source_revision_id, source_actor, source_status, locator_type,
+         locator_key, extraction_policy_version, evidence_role, created_at
+       ) VALUES ($1, $2, $3,
+         (SELECT conversation_event_id FROM conversation_event_revisions
+           WHERE conversation_event_revision_id = $4),
+         $4, 'user', 'final', 'whole_revision', '', 'evidence-extraction:v2',
+         'factual_support', $5)`,
+      [itemId, OWNER, snapshotId, revisionId, clock()],
+    );
+    return itemId;
+  }
+
   function entrypointDependencies(
     workflowReceiptId: string,
   ): FastPathExtractionEntrypointDependencies {
@@ -1021,6 +1055,95 @@ describe("Relationship Memory Claims system seam (#115)", () => {
     for (const hint of inspection?.resolverHints ?? []) {
       expect(hint.resolvedEntityId).not.toBe(selfId);
       expect(hint.contextEntityId).not.toBe(selfId);
+    }
+  });
+
+  it("drops the projection on whole-Claim Forget and restores it on Reversal", async () => {
+    const selfId = await selfEntityId();
+    const text = "小林是我的朋友。";
+    const { revisionId: introRevision } = await submitExtractAndAdmit(text, {
+      mentions: [
+        namedMention(text, "小林", { newIntroduction: true }),
+        firstPersonMention(),
+      ],
+      candidates: [
+        {
+          basis: "directly_stated",
+          candidateKind: "objective",
+          predicateId: "sh.relationship.friend_of",
+          proposedConcept: null,
+          typedValue: "",
+          scopeKey: "",
+          subjectMentionIndex: null,
+          objectMentionIndex: 0,
+          evidenceLocatorKeys: [`0:${text.length}`],
+          qualifiers: [],
+          temporal: {
+            temporalStatus: "current",
+            validFrom: null,
+            validFromPrecision: "unknown",
+            validTo: null,
+            validToPrecision: "unknown",
+          },
+          itemClass: "person",
+          itemSummary: "friend relationship",
+        },
+      ],
+    });
+    const xiaolinId = await activateEntityByLabel("小林");
+    expect(await promoteParkedCandidate()).toMatchObject({ outcome: "promoted" });
+    const claimId = asMemoryClaimId(
+      await claimIdByPair(selfId, xiaolinId, "sh.relationship.friend_of"),
+    );
+    expect(
+      (await claimService.inspectClaim({ userId: OWNER, claimId }))?.resolverHints
+        .length,
+    ).toBeGreaterThan(0);
+
+    // Whole-Claim Forget fences the claim: the projection is deleted in the
+    // same transaction — no stale hint survives the fence.
+    const forgotten = await claimService.applyWholeClaimForget({
+      userId: OWNER,
+      claimId,
+      requestEventRevisionId: introRevision,
+    });
+    expect(forgotten).toMatchObject({ outcome: "applied" });
+    const afterForget = await claimService.inspectClaim({
+      userId: OWNER,
+      claimId,
+    });
+    expect(afterForget?.resolverHints).toEqual([]);
+    expect(afterForget?.versions.at(-1)).toMatchObject({ status: "retracted" });
+
+    // Explicit Reversal: the reversal event doubles as new Evidence and the
+    // projection rebuilds from the restored current version.
+    advanceHours(24);
+    submitCount += 1;
+    const reversalTurn = await conversationService.submit(OWNER, {
+      clientEventId: `rel-claim-event-${submitCount}`,
+      clientTurnId: `rel-claim-turn-${submitCount}`,
+      locale: "zh-CN",
+      text: "我还想继续做小林的朋友。",
+      timezone: "Asia/Shanghai",
+    });
+    const reversalEvidence = await seedEvidence(reversalTurn.message.revisionId);
+    const restored = await claimService.applyForgetReversal({
+      userId: OWNER,
+      claimId,
+      requestEventRevisionId: reversalTurn.message.revisionId,
+      reversalEvidenceId: reversalEvidence,
+    });
+    expect(restored).toMatchObject({ outcome: "restored" });
+    const afterReversal = await claimService.inspectClaim({
+      userId: OWNER,
+      claimId,
+    });
+    const hints = afterReversal?.resolverHints ?? [];
+    expect(hints.length).toBeGreaterThan(0);
+    const currentVersion = afterReversal?.versions.at(-1)!;
+    expect(currentVersion.status).toBe("active");
+    for (const hint of hints) {
+      expect(hint.memoryClaimVersionId).toBe(currentVersion.memoryClaimVersionId);
     }
   });
 

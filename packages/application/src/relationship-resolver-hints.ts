@@ -24,9 +24,6 @@ import type {
  * Hints never become identity, Evidence, or a second Context Memory.
  */
 
-export const RELATIONSHIP_RESOLVER_HINT_PROJECTION_VERSION =
-  "relationship-resolver-hint:v1";
-
 export const RESOLVER_HINT_LOCALES = ["en", "zh"] as const;
 export type ResolverHintLocale = (typeof RESOLVER_HINT_LOCALES)[number];
 

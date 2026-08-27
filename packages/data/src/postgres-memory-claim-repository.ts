@@ -714,42 +714,18 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     return findCurrentPrimaryLabelsWithin(this.pool, userId, entityIds);
   }
 
-  public async listClaimVersionQualifiers(
+  public listClaimVersionQualifiers(
     userId: UserId,
     versionId: MemoryClaimVersionId,
   ): Promise<ClaimVersionQualifierRecord[]> {
-    const result = await this.pool.query(
-      `SELECT ${QUALIFIER_COLUMNS}
-       FROM memory_claim_version_qualifiers
-       WHERE user_id = $1 AND memory_claim_version_id = $2
-       ORDER BY axis_id, role_side`,
-      [userId, versionId],
-    );
-    return toQualifierRecords(result.rows);
+    return listClaimVersionQualifiersWithin(this.pool, userId, versionId);
   }
 
-  public async listClaimQualifiers(
+  public listClaimQualifiers(
     userId: UserId,
     claimId: MemoryClaimId,
   ): Promise<ClaimVersionQualifierRecord[]> {
-    const result = await this.pool.query(
-      `SELECT q.memory_claim_version_qualifier_id, q.memory_claim_version_id,
-              q.axis_id, q.role_side, q.typed_value,
-              ARRAY(
-                SELECT evidence_item_id FROM memory_claim_version_qualifier_evidence
-                WHERE memory_claim_version_qualifier_evidence.memory_claim_version_qualifier_id
-                  = q.memory_claim_version_qualifier_id
-                ORDER BY evidence_item_id
-              ) AS evidence_item_ids,
-              q.created_at
-       FROM memory_claim_version_qualifiers q
-       JOIN memory_claim_versions v
-         ON v.memory_claim_version_id = q.memory_claim_version_id
-       WHERE q.user_id = $1 AND v.memory_claim_id = $2
-       ORDER BY v.revision, q.axis_id, q.role_side`,
-      [userId, claimId],
-    );
-    return toQualifierRecords(result.rows);
+    return listClaimQualifiersWithin(this.pool, userId, claimId);
   }
 
   private static readonly HINT_COLUMNS = `relationship_resolver_hint_id,
@@ -987,6 +963,15 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
         [input.userId, input.claimId, retractedVersionId, currentVersionId],
       );
 
+      // #115: a fenced claim stops projecting entirely — the Resolver Hint
+      // rows go with the fence (fail closed; non-relationship claims hold no
+      // rows, so the delete is unconditional).
+      await client.query(
+        `DELETE FROM relationship_resolver_hints
+         WHERE user_id = $1 AND memory_claim_id = $2`,
+        [input.userId, input.claimId],
+      );
+
       return {
         requestId,
         claimVersionId: retractedVersionId,
@@ -1003,6 +988,7 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     reversalEvidenceId: string;
     claimKind: "objective" | "impression";
     retractedVersionId: MemoryClaimVersionId;
+    relationshipHints?: RelationshipHintProjectionInputs | null;
     now: Date;
   }): Promise<{ claimVersionId: MemoryClaimVersionId }> {
     return this.withTransaction(async (client) => {
@@ -1090,6 +1076,18 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
            AND current_version_id IS NOT DISTINCT FROM $4`,
         [input.userId, input.claimId, versionId, input.retractedVersionId],
       );
+
+      // #115: the reversal event doubles as new Evidence, so the restored
+      // current version projects again; with narrow registry material the
+      // projection simply stays absent (fail closed) until the next advance.
+      if (input.relationshipHints) {
+        await rebuildRelationshipResolverHintsWithin(client, {
+          userId: input.userId,
+          claimId: input.claimId,
+          hints: input.relationshipHints,
+          now: input.now,
+        });
+      }
 
       return { claimVersionId: versionId };
     });
@@ -1642,7 +1640,7 @@ export async function insertClaimVersionQualifiersWithin(
 }
 
 export async function listClaimVersionQualifiersWithin(
-  client: PoolClient,
+  client: Pool | PoolClient,
   userId: UserId,
   versionId: MemoryClaimVersionId,
 ): Promise<ClaimVersionQualifierRecord[]> {
@@ -1657,7 +1655,7 @@ export async function listClaimVersionQualifiersWithin(
 }
 
 export async function listClaimQualifiersWithin(
-  client: PoolClient,
+  client: Pool | PoolClient,
   userId: UserId,
   claimId: MemoryClaimId,
 ): Promise<ClaimVersionQualifierRecord[]> {
@@ -1787,13 +1785,14 @@ export async function rebuildRelationshipResolverHintsWithin(
   }
   const versionRow = await client.query<{
     memory_claim_version_id: string;
+    status: MemoryClaimVersionRecord["status"];
     temporal_status: TemporalBounds["temporalStatus"];
     valid_from: Date | null;
     valid_from_precision: TemporalBounds["validFromPrecision"];
     valid_to: Date | null;
     valid_to_precision: TemporalBounds["validToPrecision"];
   }>(
-    `SELECT memory_claim_version_id, temporal_status, valid_from,
+    `SELECT memory_claim_version_id, status, temporal_status, valid_from,
             valid_from_precision, valid_to, valid_to_precision
      FROM memory_claim_versions
      WHERE user_id = $1 AND memory_claim_version_id = $2`,
@@ -1804,6 +1803,15 @@ export async function rebuildRelationshipResolverHintsWithin(
     throw new Error(
       `Claim ${input.claimId} points at missing version ${claim.current_version_id}.`,
     );
+  }
+  if (version.status === "retracted") {
+    // The Forget fence is claim state: a fenced claim projects nothing.
+    await client.query(
+      `DELETE FROM relationship_resolver_hints
+       WHERE user_id = $1 AND memory_claim_id = $2`,
+      [input.userId, input.claimId],
+    );
+    return [];
   }
   const labels = await findCurrentPrimaryLabelsWithin(client, input.userId, [
     claim.subject_entity_id,

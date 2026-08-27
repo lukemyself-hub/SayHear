@@ -20,8 +20,8 @@ import {
   type MemoryConsolidationRepository,
   type MemoryConsolidationRunStatus,
   type RegistryEntryLookup,
-  type RelationshipHintProjectionInputs,
   dedupeFingerprint,
+  relationshipHintInputsFor,
   dateOrdinal,
   evidenceCutoff,
   type CommitConsolidationRunResult,
@@ -1233,7 +1233,7 @@ async function admitCandidateWithin(
           currentVersion.memoryClaimVersionId,
         )
       : [];
-  const relationshipHints = relationshipHintInputsForLookup(
+  const relationshipHints = relationshipHintInputsFor(
     context.registry,
     registryEntry,
   );
@@ -1475,26 +1475,6 @@ function candidateRecordToProposal(
   };
 }
 
-/**
- * Registry material for Resolver Hint projection (ADR-0027), or null when the
- * entry is not a relationship, publishes no hint projections, or the lookup
- * does not expose the localized projection material.
- */
-function relationshipHintInputsForLookup(
-  registry: RegistryEntryLookup,
-  entry: NonNullable<ReturnType<RegistryEntryLookup["entryFor"]>>,
-): RelationshipHintProjectionInputs | null {
-  if (!entry.relationshipSemantics) return null;
-  if (!entry.temporalSemantics.resolverHintProjections) return null;
-  if (!registry.relationshipProjectionsFor || !registry.predicateLocalizationsFor) {
-    return null;
-  }
-  return {
-    entry,
-    projections: registry.relationshipProjectionsFor(entry.predicateId),
-    localizations: registry.predicateLocalizationsFor(entry.predicateId),
-  };
-}
 
 // ── Weekly deterministic passes ─────────────────────────────────────────────
 
