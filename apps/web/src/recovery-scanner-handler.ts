@@ -3,6 +3,7 @@ import type {
   ConversationResponseService,
   DialogueStateService,
   JournalEligibilityService,
+  MemoryConsolidationScanService,
   OutboxDispatcherService,
   OwnerFullPurgeService,
   RollingSummaryService,
@@ -17,6 +18,7 @@ export function createRecoveryScannerHandler(dependencies: {
   dialogueStateService?: DialogueStateService;
   rollingSummaryService?: RollingSummaryService;
   ownerPurgeService?: OwnerFullPurgeService;
+  memoryConsolidationService?: MemoryConsolidationScanService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -49,6 +51,13 @@ export function createRecoveryScannerHandler(dependencies: {
           now: new Date(),
         })
       : { retried: 0, remaining: 0 };
+    // Slow-path scheduling (issue #114): the scan only creates the idempotent
+    // due commands (daily / weekly consolidation + candidate sweeper); the
+    // dispatcher below runs them. Cron never decides consolidation due-ness
+    // itself — the domain layer computes it from the clock and timezone.
+    const consolidation = dependencies.memoryConsolidationService
+      ? await dependencies.memoryConsolidationService.scanPending()
+      : { daily: 0, weekly: 0, sweeper: 0, reArmed: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
@@ -58,6 +67,7 @@ export function createRecoveryScannerHandler(dependencies: {
       dialogueState,
       rollingSummary,
       purge,
+      consolidation,
       outbox,
     });
   };

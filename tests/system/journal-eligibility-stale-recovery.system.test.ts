@@ -112,6 +112,8 @@ describe("Journal eligibility stale-command recovery system seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        memory_consolidation_diffs,
+        memory_consolidation_runs,
         fast_path_session_items,
         entity_resolve_gate_outcomes,
         entity_clarification_proposals,
@@ -234,6 +236,7 @@ describe("Journal eligibility stale-command recovery system seam", () => {
         { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
         { role: "memory.extract", provider: "deterministic", model: "test", configVersion: "test:memory-extract", policyVersion: "memory-extraction:v1", promptFingerprint: "test:memory-extract" },
         { role: "entity.resolve", provider: "deterministic", model: "test", configVersion: "test:entity-resolve", policyVersion: "entity-resolve-gate:v1", promptFingerprint: "test:entity-resolve" },
+{ role: "memory.consolidate", provider: "openai", model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
       ],
     });
     const journalRepository = new PostgresJournalRepository(database.pool);

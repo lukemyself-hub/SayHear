@@ -52,6 +52,7 @@ const roles = [
   { role: "summary.compress" as const, provider: "openai" as const, model: "gpt-test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "memory.extract" as const, provider: "openai" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "entity.resolve" as const, provider: "openai" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
+    { role: "memory.consolidate" as const, provider: "openai" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
 ] as const;
 
 describe("Journal runtime role provider messages", () => {

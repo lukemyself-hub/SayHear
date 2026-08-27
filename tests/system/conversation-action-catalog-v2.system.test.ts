@@ -139,6 +139,8 @@ describe("Conversation Action Catalog v2 foundation system seam (issue #109)", (
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        memory_consolidation_diffs,
+        memory_consolidation_runs,
         fast_path_session_items,
         entity_resolve_gate_outcomes,
         entity_clarification_proposals,

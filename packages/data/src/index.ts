@@ -14,6 +14,7 @@ export { PostgresJournalRepository } from "./postgres-journal-repository";
 export { PostgresEvidenceRepository } from "./postgres-evidence-repository";
 export { PostgresEntityRepository } from "./postgres-entity-repository";
 export { PostgresMemoryClaimRepository } from "./postgres-memory-claim-repository";
+export { PostgresMemoryConsolidationRepository } from "./postgres-memory-consolidation-repository";
 export { PostgresFastPathExtractionRepository } from "./postgres-fast-path-extraction-repository";
 export {
   PostgresPredicateRegistryRepository,

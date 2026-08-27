@@ -163,7 +163,7 @@ export type EntityResolveGateProvider = Readonly<{
 // ── Versioned role configuration (ADR-0060 fallback discipline) ─────────────
 
 export type MemoryRoleConfiguration = Readonly<{
-  role: "memory.extract" | "entity.resolve";
+  role: "memory.extract" | "entity.resolve" | "memory.consolidate";
   configVersion: string;
   modelVersion: string;
   promptVersion: string;
