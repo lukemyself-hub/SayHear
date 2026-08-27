@@ -38,6 +38,7 @@ Accepted
 - [`0099`](adr/0099-conversation-actions-separate-admission-from-execution-state.md)：Conversation Action 分离受理状态与执行状态，并以不可变 Receipt 驱动当前投影
 - [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：当前 Agent Catalog 只允许无需二次确认的安全 Action
 - [`0101`](adr/0101-conversation-action-audit-does-not-duplicate-user-content.md)：Action 审计只保留最小 envelope，执行 payload 加密短存并及时清除
+- [`0118`](adr/0118-trust-action-targets-outside-frozen-context-resolve-at-admission.md)：Trust Action 对不在本轮冻结 Context 的目标，由 Admission 阶段确定性词面解析受理
 - [`0103`](adr/0103-journal-regeneration-accepts-bounded-user-guidance.md)：Journal regeneration 接受受限用户 guidance，但保留事实、版本与幂等边界
 - [`0111`](adr/0111-persona-and-conversation-state-inputs-are-compiled-versioned-contracts.md)：Persona 与对话状态输入由编译的版本化契约承载，Person Portrait 逐条注入，Profile 不进对话 Context
 
