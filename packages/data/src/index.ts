@@ -12,6 +12,7 @@ export { PostgresContinuousExchangeRepository } from "./postgres-continuous-exch
 export { PostgresJournalEligibilityRepository } from "./postgres-journal-eligibility-repository";
 export { PostgresJournalRepository } from "./postgres-journal-repository";
 export { PostgresEvidenceRepository } from "./postgres-evidence-repository";
+export { PostgresEntityRepository } from "./postgres-entity-repository";
 export { PostgresOutboxDispatcherRepository } from "./postgres-outbox-dispatcher-repository";
 export { PostgresInternalOwnerAccessRepository } from "./postgres-internal-owner-access-repository";
 export { PostgresInternalInspectionRepository } from "./postgres-internal-inspection-repository";

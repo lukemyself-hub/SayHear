@@ -103,6 +103,12 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        entity_mention_candidates,
+        entity_mentions,
+        entity_labels,
+        user_self_entities,
+        entity_versions,
+        entities,
         conversation_action_payloads,
         conversation_action_receipts,
         conversation_action_executions,
@@ -685,7 +691,8 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
 
     // Journal, Memory, Replay, Voice and other future verticals still do not
     // exist as tables. The 1A.2 Journal/Evidence and durability foundations
-    // DO exist now, but an
+    // DO exist now, and the 1A.3a Entity identity substrate exists (#110),
+    // but an
     // in-flight active conversation must not create any eligibility rows —
     // eligibility fires only after a deterministic Continuous Exchange End.
     const outOfScopeTables = await database.pool.query<{ table_name: string }>(
@@ -694,7 +701,6 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
         FROM information_schema.tables
         WHERE table_schema = current_schema()
           AND table_name ILIKE ANY(ARRAY[
-            'entit%',
             'episode%',
             'reflection%',
             'memory%',
@@ -711,6 +717,21 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
       `,
     );
     expect(outOfScopeTables.rows).toEqual([]);
+
+    // The Entity tables exist as the 1A.3a substrate, but mention resolution
+    // is driven by the memory fast path (#113), not the conversation turn
+    // seam: an ordinary conversation must not write any Entity-domain rows.
+    const entityDomainTotals = await database.pool.query<{ total: string }>(
+      `SELECT (
+         (SELECT count(*) FROM entities)
+         + (SELECT count(*) FROM entity_versions)
+         + (SELECT count(*) FROM entity_labels)
+         + (SELECT count(*) FROM entity_mentions)
+         + (SELECT count(*) FROM entity_mention_candidates)
+         + (SELECT count(*) FROM user_self_entities)
+       ) AS total`,
+    );
+    expect(entityDomainTotals.rows[0]).toEqual({ total: "0" });
 
     const eligibilityFoundationTotals = await database.pool.query<{
       commands: string;
