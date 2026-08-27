@@ -240,7 +240,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
         { role: "memory.extract", provider: "deterministic", model: "test", configVersion: "test:memory-extract", policyVersion: "memory-extraction:v1", promptFingerprint: "test:memory-extract" },
         { role: "entity.resolve", provider: "deterministic", model: "test", configVersion: "test:entity-resolve", policyVersion: "entity-resolve-gate:v1", promptFingerprint: "test:entity-resolve" },
-{ role: "memory.consolidate", provider: "openai", model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
+      { role: "memory.consolidate", provider: "openai", model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
       ],
     });
     // Use the deterministic evidence extractor (sentence-spanning) instead of a

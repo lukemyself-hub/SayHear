@@ -633,18 +633,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     revision: number;
     createdClaim: boolean;
   }> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const result = await executeClaimAdmissionPlanWithin(client, input);
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.withTransaction((client) =>
+      executeClaimAdmissionPlanWithin(client, input),
+    );
   }
 
   public async executeDormancyPlan(input: {
@@ -653,18 +644,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     currentVersion: MemoryClaimVersionRecord;
     now: Date;
   }): Promise<{ memoryClaimVersionId: MemoryClaimVersionId; revision: number }> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      const result = await executeDormancyPlanWithin(client, input);
-      await client.query("COMMIT");
-      return result;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.withTransaction((client) =>
+      executeDormancyPlanWithin(client, input),
+    );
   }
 
   public async executeWholeClaimForgetPlan(input: {

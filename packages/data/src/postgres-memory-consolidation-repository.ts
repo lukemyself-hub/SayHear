@@ -1,4 +1,5 @@
 import {
+  type AdmissionRejectionCode,
   MEMORY_ADMISSION_POLICY_VERSION,
   addDaysToDateString,
   asUserId,
@@ -24,9 +25,9 @@ import {
   evidenceCutoff,
   type CommitConsolidationRunResult,
   localDateAt,
-  predicateReviewDeadline,
   type QueueDueConsolidationResult,
   type MemoryConsolidateDiffProposal,
+  planAggregateProposal,
   planClaimAdmission,
   planImpressionDormancy,
   planRejectionDisposition,
@@ -93,6 +94,17 @@ const EVENT_TYPE_BY_KIND: Readonly<Record<MemoryConsolidationKind, string>> = {
   weekly: "weekly_consolidation_requested",
   sweeper: "memory_sweeper_requested",
 };
+
+// Versioned scan / execution bounds. Internal-Core scale keeps these far
+// above any real volume; they exist so one runaway scan cannot hold a
+// transaction open indefinitely.
+const MAX_DAILY_DATES_PER_SCAN = 400;
+const MAX_WEEKS_PER_SCAN = 520;
+const MAX_MODEL_INPUT_CANDIDATES = 500;
+const MAX_MODEL_INPUT_CLAIMS = 500;
+const MAX_DIFFS_PER_RUN = 500;
+const MAX_SWEEPER_ROWS_PER_PASS = 500;
+const WEEKLY_DIFF_INDEX_BASE = 10_000;
 
 function ordinalToAnchorDate(sourceRevision: string): string {
   const digits = sourceRevision.padStart(8, "0");
@@ -166,7 +178,7 @@ export class PostgresMemoryConsolidationRepository
                  AND run.status IN ('consolidated', 'stale_source')
              )
            ORDER BY logical_date
-           LIMIT 400`,
+           LIMIT ${MAX_DAILY_DATES_PER_SCAN}`,
           [user.user_id, today, input.policyVersion],
         );
         for (const row of dueDaily.rows) {
@@ -190,7 +202,7 @@ export class PostgresMemoryConsolidationRepository
         let scannedWeeks = 0;
         while (
           addDaysToDateString(week, 7) <= today &&
-          scannedWeeks < 520
+          scannedWeeks < MAX_WEEKS_PER_SCAN
         ) {
           const weekEnd = addDaysToDateString(week, 6);
           const due = await client.query<{ due: boolean }>(
@@ -545,6 +557,11 @@ async function readCommandWithin(
   if (!commandRow) return { outcome: "not_found" };
   const kind = KIND_BY_COMMAND_TYPE[commandRow.command_type]!;
   const anchorDate = ordinalToAnchorDate(commandRow.source_revision);
+  if (commandRow.policy_version !== input.policyVersion) {
+    // Commands from another policy version converge without executing; their
+    // run rows are keyed under their own version and never double-run.
+    return { outcome: "stale_source" };
+  }
 
   const owner = await client.query<{ status: string; data_epoch: string }>(
     `SELECT status, data_epoch::text FROM app_users WHERE user_id = $1`,
@@ -596,13 +613,7 @@ async function loadModelInputWithin(
   },
 ): Promise<MemoryConsolidationCommandContext["modelInput"]> {
   if (input.kind === "sweeper") {
-    return {
-      mode: "daily",
-      anchorDate: input.anchorDate,
-      registryVersion: input.registryVersion,
-      candidates: [],
-      claims: [],
-    };
+    return null;
   }
   const cutoff = evidenceCutoff(input.kind, input.anchorDate);
   const candidates = await client.query<{
@@ -643,7 +654,7 @@ async function loadModelInputWithin(
            AND item.source_status IN ('final', 'corrected')
        )
      ORDER BY candidate.created_at, candidate.memory_candidate_id
-     LIMIT 500`,
+     LIMIT ${MAX_MODEL_INPUT_CANDIDATES}`,
     [input.userId, cutoff],
   );
   const candidateIds = candidates.rows.map((row) => row.memory_candidate_id);
@@ -704,7 +715,7 @@ async function loadModelInputWithin(
        AND version.user_id = claim.user_id
      WHERE claim.user_id = $1 AND claim.deleted_at IS NULL
      ORDER BY claim.created_at, claim.memory_claim_id
-     LIMIT 500`,
+     LIMIT ${MAX_MODEL_INPUT_CLAIMS}`,
     [input.userId],
   );
   const candidateViews: ConsolidationCandidateView[] = candidates.rows.map(
@@ -956,20 +967,10 @@ async function executeDiffWithin(
     proposalFromModel = diff.proposal;
   }
 
-  // Aggregate proposals: the deterministic layer owns the subject binding —
-  // only non-relationship aggregates may be proposed without a candidate.
-  let aggregateProposal: MemoryCandidateProposal | null = null;
+  // Aggregate proposals: the pure application planner owns the subject
+  // binding, registry gate, and unmapped routing; this executor only
+  // persists what it planned behind the terminal fences.
   if (proposalFromModel !== null) {
-    const entry =
-      proposalFromModel.predicateId !== null
-        ? context.registry.entryFor(proposalFromModel.predicateId)
-        : null;
-    if (entry && entry.relationshipSemantics !== null) {
-      return record(
-        "skipped",
-        "relationship_aggregate_requires_candidate",
-      );
-    }
     const selfEntity = await findSelfEntityWithin(client, context.userId);
     if (!selfEntity) {
       return record("skipped", "self_entity_missing");
@@ -980,58 +981,26 @@ async function executeDiffWithin(
       proposalFromModel.evidenceItemIds,
       cutoff,
     );
-    if (eligibleEvidence.length === 0) {
-      return record("skipped", "evidence_outside_anchor_or_ineligible");
-    }
-    aggregateProposal = {
-      userId: asUserId(context.userId),
-      candidateKind: proposalFromModel.candidateKind,
-      basis: proposalFromModel.basis,
-      resolution:
-        proposalFromModel.predicateId !== null && entry
-          ? {
-              status: "mapped",
-              predicateId: proposalFromModel.predicateId,
-              registryVersion: context.registry.registryVersion(),
-              typedValue: proposalFromModel.typedValue,
-              mappingConfidence: null,
-            }
-          : {
-              status: "unmapped",
-              proposedConcept: proposalFromModel.proposedConcept ?? "",
-            },
-      subjectEntityId: selfEntity.entityId,
-      subjectEntityMentionId: null,
-      objectEntityId: null,
-      objectEntityMentionId: null,
-      scopeKey: proposalFromModel.scopeKey,
-      temporal: {
-        temporalStatus: proposalFromModel.temporal.temporalStatus,
-        validFrom:
-          proposalFromModel.temporal.validFrom !== null
-            ? new Date(proposalFromModel.temporal.validFrom)
-            : null,
-        validFromPrecision: proposalFromModel.temporal.validFromPrecision,
-        validTo:
-          proposalFromModel.temporal.validTo !== null
-            ? new Date(proposalFromModel.temporal.validTo)
-            : null,
-        validToPrecision: proposalFromModel.temporal.validToPrecision,
-      },
-      evidenceItemIds: eligibleEvidence.map((item) => item.evidenceItemId),
+    const planned = planAggregateProposal({
+      proposalFromModel,
+      registry: context.registry,
+      selfEntityId: selfEntity.entityId,
+      eligibleEvidence: eligibleEvidence.map(toAdmissibleEvidence),
       lineage: {
-        extractionPolicyVersion: MEMORY_ADMISSION_POLICY_VERSION,
-        generationCommandId: context.lineage.modelAttemptId,
-        authoritativeModelAttemptId: context.lineage.modelAttemptId,
+        modelAttemptId: context.lineage.modelAttemptId,
         modelVersion: context.lineage.consolidateModelVersion,
         promptVersion: context.lineage.consolidatePromptVersion,
-        sourceReflectionVersionId: null,
       },
-    };
+      userId: asUserId(context.userId),
+      now: context.now,
+    });
+    if (planned.outcome === "skip") {
+      return record("skipped", planned.reasonCode);
+    }
     const fingerprint = dedupeFingerprint({
       secret: context.dedupeFingerprintSecret,
       userId: asUserId(context.userId),
-      semanticTarget: semanticTargetOfProposal(aggregateProposal),
+      semanticTarget: semanticTargetOfProposal(planned.proposal),
       evidenceRevisionIds: eligibleEvidence.map((item) => item.sourceRevisionId),
       policyVersion: MEMORY_ADMISSION_POLICY_VERSION,
     });
@@ -1043,34 +1012,26 @@ async function executeDiffWithin(
     if (terminal) {
       return record("blocked_terminal", terminal.dispositionReasonCode);
     }
-    const mapped = aggregateProposal.resolution.status === "mapped";
     const insertedId = await insertMemoryCandidateWithin(client, {
-      proposal: aggregateProposal,
-      status: mapped ? "proposed" : "needs_predicate_review",
-      reviewDueAt: mapped ? null : predicateReviewDeadline(context.now),
+      proposal: planned.proposal,
+      status: planned.status,
+      reviewDueAt: planned.reviewDueAt,
       now: context.now,
     });
     await insertCandidateEvidenceLinksWithin(client, {
       userId: asUserId(context.userId),
       candidateId: asMemoryCandidateId(insertedId),
-      evidenceItemIds: aggregateProposal.evidenceItemIds,
+      evidenceItemIds: planned.proposal.evidenceItemIds,
       now: context.now,
     });
     candidateId = insertedId;
-    if (!mapped) {
+    if (planned.status === "needs_predicate_review") {
       return record(
         "recorded",
         "unmapped_concept_needs_predicate_review",
         insertedId,
       );
     }
-    const claimId = await admitCandidateWithin(
-      client,
-      context,
-      insertedId,
-      record,
-    );
-    return claimId;
   }
 
   // Candidate-bound diffs: deterministic re-validation, evidence attachment,
@@ -1078,30 +1039,6 @@ async function executeDiffWithin(
   const targetId = candidateId;
   if (targetId === null) {
     return record("skipped", "diff_requires_candidate");
-  }
-  const candidate = await loadCandidateForUpdateWithin(
-    client,
-    context.userId,
-    targetId,
-  );
-  if (!candidate) {
-    return record("skipped", "unknown_candidate", targetId);
-  }
-  if (
-    candidate.status === "rejected" ||
-    candidate.status === "stale" ||
-    candidate.status === "deleted"
-  ) {
-    return record("skipped", "candidate_terminal", targetId);
-  }
-  if (candidate.status === "accepted") {
-    return record("already_admitted", "converged_retry", targetId);
-  }
-  if (
-    candidate.status === "needs_predicate_review" ||
-    candidate.status === "awaiting_registry_release"
-  ) {
-    return record("skipped", "candidate_awaiting_governance", targetId);
   }
   if (diff.kind === "mark_review_due") {
     const claim = await client.query<{ memory_claim_id: string }>(
@@ -1113,23 +1050,6 @@ async function executeDiffWithin(
       return record("skipped", "unknown_claim", targetId, diff.claimId);
     }
   }
-  const attachIds = "evidenceItemIds" in diff ? diff.evidenceItemIds : [];
-  if (attachIds.length > 0) {
-    const eligible = await describeEligibleEvidenceWithin(
-      client,
-      context.userId,
-      attachIds,
-      cutoff,
-    );
-    if (eligible.length > 0) {
-      await insertCandidateEvidenceLinksWithin(client, {
-        userId: asUserId(context.userId),
-        candidateId: asMemoryCandidateId(targetId),
-        evidenceItemIds: eligible.map((item) => item.evidenceItemId),
-        now: context.now,
-      });
-    }
-  }
   return admitCandidateWithin(client, context, targetId, record, diff);
 }
 
@@ -1139,6 +1059,35 @@ type DiffRecordFn = (
   candidateId?: string | null,
   claimId?: string | null,
 ) => ConsolidationDiffOutcomeRecord;
+
+/**
+ * The single status gate over a locked candidate row: terminal candidates
+ * never re-enter admission, accepted ones converge idempotently, and
+ * governance-held ones wait for their human path.
+ */
+function candidateGateOutcome(
+  candidate: MemoryCandidateRecord,
+  record: DiffRecordFn,
+  claimIdOfDiff: string | null,
+): ConsolidationDiffOutcomeRecord | null {
+  if (
+    candidate.status === "rejected" ||
+    candidate.status === "stale" ||
+    candidate.status === "deleted"
+  ) {
+    return record("skipped", "candidate_terminal", candidate.memoryCandidateId, claimIdOfDiff);
+  }
+  if (candidate.status === "accepted") {
+    return record("already_admitted", "converged_retry", candidate.memoryCandidateId, claimIdOfDiff);
+  }
+  if (
+    candidate.status === "needs_predicate_review" ||
+    candidate.status === "awaiting_registry_release"
+  ) {
+    return record("skipped", "candidate_awaiting_governance", candidate.memoryCandidateId, claimIdOfDiff);
+  }
+  return null;
+}
 
 /**
  * The deterministic admission executor — the exact MemoryClaimService
@@ -1163,26 +1112,28 @@ async function admitCandidateWithin(
   if (!candidate) {
     return record("skipped", "unknown_candidate", candidateId, claimIdOfDiff);
   }
-  if (candidate.status === "accepted") {
-    return record("already_admitted", "converged_retry", candidateId, claimIdOfDiff);
+  const gated = candidateGateOutcome(candidate, record, claimIdOfDiff);
+  if (gated) {
+    return gated;
   }
-  if (
-    candidate.status === "rejected" ||
-    candidate.status === "stale" ||
-    candidate.status === "deleted"
-  ) {
-    return record("skipped", "candidate_terminal", candidateId, claimIdOfDiff);
-  }
-  if (
-    candidate.status === "needs_predicate_review" ||
-    candidate.status === "awaiting_registry_release"
-  ) {
-    return record(
-      "skipped",
-      "candidate_awaiting_governance",
-      candidateId,
-      claimIdOfDiff,
+  // Attach the diff-cited eligible evidence after the gate so terminal or
+  // governance-held candidates never accumulate proposal links.
+  if (diff && "evidenceItemIds" in diff && diff.evidenceItemIds.length > 0) {
+    const cutoff = evidenceCutoff(context.kind, context.anchorDate);
+    const eligible = await describeEligibleEvidenceWithin(
+      client,
+      context.userId,
+      diff.evidenceItemIds,
+      cutoff,
     );
+    if (eligible.length > 0) {
+      await insertCandidateEvidenceLinksWithin(client, {
+        userId: asUserId(context.userId),
+        candidateId: asMemoryCandidateId(candidateId),
+        evidenceItemIds: eligible.map((item) => item.evidenceItemId),
+        now: context.now,
+      });
+    }
   }
   if (candidate.resolutionStatus !== "mapped" || !candidate.predicateId) {
     const rejected = await rejectCandidateWithin(
@@ -1407,7 +1358,7 @@ async function rejectCandidateWithin(
   client: PoolClient,
   context: DiffExecutionContext,
   candidate: MemoryCandidateRecord,
-  reasonCode: string,
+  reasonCode: AdmissionRejectionCode,
 ): Promise<boolean> {
   const evidence = (
     await describeEligibleEvidenceWithin(
@@ -1424,7 +1375,7 @@ async function rejectCandidateWithin(
   if (evidence.length === 0) return false;
   const plan = planRejectionDisposition({
     userId: context.userId,
-    reasonCode: planRejectionCode(reasonCode),
+    reasonCode,
     now: context.now,
     semanticTarget: candidateSemanticTarget({
       resolutionStatus: candidate.resolutionStatus,
@@ -1445,30 +1396,6 @@ async function rejectCandidateWithin(
     plan,
     context.now,
   );
-}
-
-function planRejectionCode(
-  reasonCode: string,
-): Parameters<typeof planRejectionDisposition>[0]["reasonCode"] {
-  const allowed = [
-    "predicate_not_active",
-    "predicate_unmapped",
-    "registry_version_mismatch",
-    "claim_kind_not_allowed_by_registry",
-    "subject_kind_not_allowed",
-    "kind_basis_mismatch",
-    "typed_value_invalid",
-    "temporal_status_not_supported",
-    "evidence_missing",
-    "evidence_ineligible",
-    "relationship_object_missing",
-    "relationship_object_unbound",
-    "subject_not_self_entity",
-    "relationship_parties_identical",
-  ] as const;
-  return (allowed as readonly string[]).includes(reasonCode)
-    ? (reasonCode as (typeof allowed)[number])
-    : "typed_value_invalid";
 }
 
 function semanticTargetOfProposal(proposal: MemoryCandidateProposal): string {
@@ -1553,12 +1480,12 @@ async function runWeeklyDormancyPassWithin(
      WHERE claim.user_id = $1 AND claim.deleted_at IS NULL
        AND version.kind = 'impression' AND version.status = 'active'
      ORDER BY claim.memory_claim_id
-     LIMIT 500
+     LIMIT ${MAX_MODEL_INPUT_CLAIMS}
      FOR UPDATE OF claim`,
     [context.userId],
   );
   const outcomes: ConsolidationDiffOutcomeRecord[] = [];
-  let index = 10_000;
+  let index = WEEKLY_DIFF_INDEX_BASE;
   for (const row of actives.rows) {
     const version = rowToVersion(row);
     const latestValidEvidenceAt = await latestValidEvidenceAtForVersionWithin(
@@ -1643,7 +1570,7 @@ async function runSweeperWithin(
              AND registry_release_due_at <= $2)
        )
      ORDER BY memory_candidate_id
-     LIMIT 500
+     LIMIT ${MAX_SWEEPER_ROWS_PER_PASS}
      FOR UPDATE`,
     [context.userId, context.now],
   );

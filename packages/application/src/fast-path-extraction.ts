@@ -796,6 +796,14 @@ function sanitizeFastPathErrorCode(error: unknown): string {
   if (error instanceof InvalidMemoryExtractProposalError) {
     return "memory_extract_invalid_proposal";
   }
+  return classifyMemoryRoleError(error);
+}
+
+/**
+ * Shared transport-level classifier for memory-role failures (fast path and
+ * consolidation): one allowlisted error-code vocabulary for run rows.
+ */
+export function classifyMemoryRoleError(error: unknown): string {
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error);
   if (message.includes("timeout") || message.includes("timed out")) {

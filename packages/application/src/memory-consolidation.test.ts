@@ -5,7 +5,6 @@ import {
   addDaysToDateString,
   dateOrdinal,
   evidenceCutoff,
-  isConsolidationAnchorDue,
   validateConsolidateResult,
   weekStartDate,
   type ConsolidationCandidateView,
@@ -299,42 +298,4 @@ describe("anchor-date helpers", () => {
     expect(evidenceCutoff("sweeper", "2026-08-27")).toBe("2026-08-27");
   });
 
-  it("derives due-ness from the owner's local date", () => {
-    const now = new Date("2026-08-27T16:00:00.000Z");
-    // 16:00 UTC is already the next day in Shanghai (28th 00:00 local).
-    expect(
-      isConsolidationAnchorDue({
-        kind: "daily",
-        anchorDate: "2026-08-27",
-        now,
-        timezone: "Asia/Shanghai",
-      }),
-    ).toBe(true);
-    // …but still the same day in Los Angeles (09:00 local).
-    expect(
-      isConsolidationAnchorDue({
-        kind: "daily",
-        anchorDate: "2026-08-27",
-        now,
-        timezone: "America/Los_Angeles",
-      }),
-    ).toBe(false);
-    // A weekly anchor is due once the full week has elapsed locally.
-    expect(
-      isConsolidationAnchorDue({
-        kind: "weekly",
-        anchorDate: "2026-08-24",
-        now: new Date("2026-08-31T00:00:00.000Z"),
-        timezone: "UTC",
-      }),
-    ).toBe(true);
-    expect(
-      isConsolidationAnchorDue({
-        kind: "weekly",
-        anchorDate: "2026-08-24",
-        now: new Date("2026-08-30T23:59:59.999Z"),
-        timezone: "UTC",
-      }),
-    ).toBe(false);
-  });
 });

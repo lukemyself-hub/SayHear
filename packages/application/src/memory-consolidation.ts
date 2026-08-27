@@ -3,11 +3,18 @@ import { asWorkflowCommandId } from "@sayhear/domain";
 import { assertWorkflowSafe } from "./journal-eligibility";
 import {
   callWithRoleFallback,
+  classifyMemoryRoleError,
   type MemoryRoleConfiguration,
   type MemoryRoleInvocationConfiguration,
 } from "./fast-path-extraction";
-import { localDateAt } from "./user-text-conversation";
-import type { RegistryEntryLookup } from "./memory-claim/types";
+import {
+  MEMORY_ADMISSION_POLICY_VERSION,
+  predicateReviewDeadline,
+  type AdmissibleEvidence,
+  type MemoryCandidateProposal,
+  type RegistryEntryLookup,
+} from "./memory-claim";
+import type { UserId } from "@sayhear/domain";
 
 /**
  * Slow-path consolidation (SPEC #107 "Two-speed pipeline", issue #114,
@@ -143,7 +150,8 @@ export type MemoryConsolidationCommandContext = Readonly<{
   anchorDate: string;
   policyVersion: string;
   expectedDataEpoch: number;
-  modelInput: MemoryConsolidateModelInput;
+  /** Null for the sweeper — it never calls the model. */
+  modelInput: MemoryConsolidateModelInput | null;
 }>;
 
 // ── Shape validation (pure; throws on structural violations) ────────────────
@@ -353,21 +361,113 @@ export function evidenceCutoff(kind: MemoryConsolidationKind, anchorDate: string
   return kind === "weekly" ? addDaysToDateString(anchorDate, 6) : anchorDate;
 }
 
-/** Whether a run of `kind` for `anchorDate` is due at `now` in `timezone`. */
-export function isConsolidationAnchorDue(input: {
-  kind: MemoryConsolidationKind;
-  anchorDate: string;
+
+// ── Aggregate proposal planning (pure) ──────────────────────────────────────
+
+export type AggregateProposalPlan =
+  | Readonly<{
+      outcome: "planned";
+      proposal: MemoryCandidateProposal;
+      status: "proposed" | "needs_predicate_review";
+      reviewDueAt: Date | null;
+    }>
+  | Readonly<{ outcome: "skip"; reasonCode: string }>;
+
+/**
+ * Deterministic planner for a model `propose_new` aggregate (architecture
+ * 12.1 slow path): the model names the concept and the evidence; this layer
+ * owns the subject binding (Self Entity for non-relationship aggregates),
+ * the registry gate, the unmapped routing, and the review deadline. A
+ * predicate id the registry does not publish, an empty proposed concept, or
+ * a relationship target fails closed to a recorded skip — never to a
+ * near-contentless review candidate.
+ */
+export function planAggregateProposal(input: {
+  proposalFromModel: MemoryConsolidateDiffProposal;
+  registry: RegistryEntryLookup;
+  selfEntityId: string;
+  eligibleEvidence: readonly AdmissibleEvidence[];
+  lineage: Readonly<{
+    modelAttemptId: string | null;
+    modelVersion: string | null;
+    promptVersion: string | null;
+  }>;
+  userId: UserId;
   now: Date;
-  timezone: string;
-}): boolean {
-  const today = localDateAt(input.now, input.timezone);
-  if (input.kind === "daily") {
-    return input.anchorDate < today;
+}): AggregateProposalPlan {
+  const { proposalFromModel, registry } = input;
+  const entry =
+    proposalFromModel.predicateId !== null
+      ? registry.entryFor(proposalFromModel.predicateId)
+      : null;
+  if (proposalFromModel.predicateId !== null && !entry) {
+    return { outcome: "skip", reasonCode: "predicate_not_in_registry" };
   }
-  if (input.kind === "weekly") {
-    return addDaysToDateString(input.anchorDate, 7) <= today;
+  if (
+    proposalFromModel.predicateId === null &&
+    !(proposalFromModel.proposedConcept ?? "").trim()
+  ) {
+    return { outcome: "skip", reasonCode: "invalid_proposed_concept" };
   }
-  return input.anchorDate <= today;
+  if (entry && entry.relationshipSemantics !== null) {
+    return {
+      outcome: "skip",
+      reasonCode: "relationship_aggregate_requires_candidate",
+    };
+  }
+  if (input.eligibleEvidence.length === 0) {
+    return { outcome: "skip", reasonCode: "evidence_outside_anchor_or_ineligible" };
+  }
+  const mapped = proposalFromModel.predicateId !== null && entry !== null;
+  return {
+    outcome: "planned",
+    proposal: {
+      userId: input.userId,
+      candidateKind: proposalFromModel.candidateKind,
+      basis: proposalFromModel.basis,
+      resolution: mapped
+        ? {
+            status: "mapped",
+            predicateId: proposalFromModel.predicateId!,
+            registryVersion: registry.registryVersion(),
+            typedValue: proposalFromModel.typedValue,
+            mappingConfidence: null,
+          }
+        : {
+            status: "unmapped",
+            proposedConcept: proposalFromModel.proposedConcept ?? "",
+          },
+      subjectEntityId: input.selfEntityId,
+      subjectEntityMentionId: null,
+      objectEntityId: null,
+      objectEntityMentionId: null,
+      scopeKey: proposalFromModel.scopeKey,
+      temporal: {
+        temporalStatus: proposalFromModel.temporal.temporalStatus,
+        validFrom:
+          proposalFromModel.temporal.validFrom !== null
+            ? new Date(proposalFromModel.temporal.validFrom)
+            : null,
+        validFromPrecision: proposalFromModel.temporal.validFromPrecision,
+        validTo:
+          proposalFromModel.temporal.validTo !== null
+            ? new Date(proposalFromModel.temporal.validTo)
+            : null,
+        validToPrecision: proposalFromModel.temporal.validToPrecision,
+      },
+      evidenceItemIds: input.eligibleEvidence.map((item) => item.evidenceItemId),
+      lineage: {
+        extractionPolicyVersion: MEMORY_ADMISSION_POLICY_VERSION,
+        generationCommandId: input.lineage.modelAttemptId,
+        authoritativeModelAttemptId: input.lineage.modelAttemptId,
+        modelVersion: input.lineage.modelVersion,
+        promptVersion: input.lineage.promptVersion,
+        sourceReflectionVersionId: null,
+      },
+    },
+    status: mapped ? "proposed" : "needs_predicate_review",
+    reviewDueAt: mapped ? null : predicateReviewDeadline(input.now),
+  };
 }
 
 // ── Repository port ─────────────────────────────────────────────────────────
@@ -512,19 +612,7 @@ function sanitizeConsolidationErrorCode(error: unknown): string {
   if (error instanceof InvalidMemoryConsolidateProposalError) {
     return "memory_consolidate_invalid_proposal";
   }
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error);
-  if (message.includes("timeout") || message.includes("timed out")) {
-    return "provider_timeout";
-  }
-  if (message.includes("429") || message.includes("rate")) {
-    return "provider_rate_limited";
-  }
-  if (/\b5\d\d\b/.test(message)) return "provider_server_error";
-  if (message.includes("network") || message.includes("econn")) {
-    return "network_error";
-  }
-  return "unknown_error";
+  return classifyMemoryRoleError(error);
 }
 
 /**
@@ -591,23 +679,24 @@ export async function runMemoryConsolidation(input: {
   };
 
   let diffs: readonly MemoryConsolidateDiff[] = [];
-  if (command.kind === "daily" || command.kind === "weekly") {
+  if (
+    (command.kind === "daily" || command.kind === "weekly") &&
+    command.modelInput !== null
+  ) {
     const hasModelWork =
       command.modelInput.candidates.length > 0 ||
       command.modelInput.claims.some(
         (claim) => claim.kind === "impression" && claim.status === "active",
       );
     if (hasModelWork) {
+      const modelInput = command.modelInput;
       try {
         const attempted = await callWithRoleFallback(
           (invocation) =>
-            dependencies.memoryConsolidate.consolidate(
-              command.modelInput,
-              invocation,
-            ),
+            dependencies.memoryConsolidate.consolidate(modelInput, invocation),
           dependencies.memoryConsolidateConfiguration,
         );
-        validateConsolidateResult(attempted.result, command.modelInput);
+        validateConsolidateResult(attempted.result, modelInput);
         diffs = attempted.result.diffs;
         lineage.roleFallbackUsed = attempted.roleFallbackUsed;
       } catch (error) {

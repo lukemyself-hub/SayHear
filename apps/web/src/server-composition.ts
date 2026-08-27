@@ -156,6 +156,16 @@ export function createServerComposition() {
   const fastPathExtractionRepository =
     new PostgresFastPathExtractionRepository(pool);
   const predicateRegistrySnapshot = loadPredicateRegistrySnapshot(1);
+  const predicateRegistryLookup = {
+    entryFor(predicateId: string) {
+      return (
+        predicateRegistrySnapshot.entries.find(
+          (entry) => entry.predicateId === predicateId,
+        ) ?? null
+      );
+    },
+    registryVersion: () => predicateRegistrySnapshot.registryVersion,
+  };
   const memoryExtractConfiguration =
     journalRoleRegistry.configuration("memory.extract");
   const entityResolveConfiguration =
@@ -189,16 +199,7 @@ export function createServerComposition() {
       entityRepository,
       memoryExtract: journalRoleRegistry.memoryExtractor,
       entityResolve: journalRoleRegistry.entityResolver,
-      registry: {
-        entryFor(predicateId) {
-          return (
-            predicateRegistrySnapshot.entries.find(
-              (entry) => entry.predicateId === predicateId,
-            ) ?? null
-          );
-        },
-        registryVersion: () => predicateRegistrySnapshot.registryVersion,
-      },
+      registry: predicateRegistryLookup,
       policy: {
         version: policy.policyVersion,
         visibilityTargetMs: policy.visibilityTargetMs,
@@ -263,16 +264,7 @@ export function createServerComposition() {
         // Champion is published. A failed role fails loudly.
         fallback: { mode: "disabled" },
       },
-      registry: {
-        entryFor(predicateId) {
-          return (
-            predicateRegistrySnapshot.entries.find(
-              (entry) => entry.predicateId === predicateId,
-            ) ?? null
-          );
-        },
-        registryVersion: () => predicateRegistrySnapshot.registryVersion,
-      },
+      registry: predicateRegistryLookup,
       policy: { version: MEMORY_CONSOLIDATION_POLICY_VERSION },
       dedupeFingerprintSecret: configuration.contextHmacSecret,
       workflowReceiptId,
