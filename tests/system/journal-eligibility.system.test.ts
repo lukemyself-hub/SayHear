@@ -117,6 +117,10 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        fast_path_session_items,
+        entity_resolve_gate_outcomes,
+        entity_clarification_proposals,
+        fast_path_extraction_runs,
         entity_mention_candidates,
         memory_forget_reversals,
         memory_forget_evidence_exclusions,
@@ -232,6 +236,8 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         { role: "journal.validate", provider: "deterministic", model: "test", configVersion: "test:validate", policyVersion: "journal-validator:v2", promptFingerprint: "test:validate" },
         { role: "dialogue.state", provider: "deterministic", model: "test", configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v2", promptFingerprint: "dialogue-state-prompt:v2" },
         { role: "summary.compress", provider: "deterministic", model: "test", configVersion: "test:summary", policyVersion: "rolling-summary:v1", promptFingerprint: "test:summary" },
+        { role: "memory.extract", provider: "deterministic", model: "test", configVersion: "test:memory-extract", policyVersion: "memory-extraction:v1", promptFingerprint: "test:memory-extract" },
+        { role: "entity.resolve", provider: "deterministic", model: "test", configVersion: "test:entity-resolve", policyVersion: "entity-resolve-gate:v1", promptFingerprint: "test:entity-resolve" },
       ],
     });
     // Use the deterministic evidence extractor (sentence-spanning) instead of a

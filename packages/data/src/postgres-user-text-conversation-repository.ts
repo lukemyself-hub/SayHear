@@ -85,13 +85,13 @@ export class PostgresUserTextConversationRepository
 {
   public constructor(private readonly pool: Pool) {}
 
-  public async correctUserEvent(input: { eventId: import("@sayhear/domain").ConversationEventId; locale: string; now: Date; text: string; userId: UserId }): Promise<{ dailySessionId: import("@sayhear/domain").DailySessionId } | null> {
+  public async correctUserEvent(input: { eventId: import("@sayhear/domain").ConversationEventId; locale: string; now: Date; text: string; userId: UserId; fastPathExtractionPolicyVersion: string | null }): Promise<{ dailySessionId: import("@sayhear/domain").DailySessionId } | null> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const event = await client.query<{ conversation_event_id: string; daily_session_id: string; revision: number }>(
+      const event = await client.query<{ conversation_event_id: string; daily_session_id: string; revision: number; current_revision_id: string | null; data_epoch: string }>(
         `SELECT event.conversation_event_id, event.daily_session_id,
-            revision.revision
+            revision.revision, event.current_revision_id, owner.data_epoch::text
          FROM conversation_events event
          INNER JOIN conversation_event_revisions revision
            ON revision.conversation_event_revision_id = event.current_revision_id
@@ -120,6 +120,25 @@ export class PostgresUserTextConversationRepository
         [revisionId, row.conversation_event_id, input.userId],
       );
       if (updated.rowCount !== 1) throw new Error("The User Event correction compare-and-set failed.");
+      // Fast path (issue #113): a correction produces a new revision and a new
+      // command, and retires the old revision's derivatives in the same
+      // transaction — old extraction outputs stop serving session-local
+      // context immediately.
+      if (row.current_revision_id !== null) {
+        await retireFastPathDerivatives(client, {
+          userId: input.userId,
+          retiredRevisionId: row.current_revision_id,
+          now: input.now,
+        });
+      }
+      await insertFastPathExtractionCommand(client, {
+        userId: input.userId,
+        revisionId,
+        revisionOrdinal: row.revision + 1,
+        policyVersion: input.fastPathExtractionPolicyVersion,
+        dataEpoch: row.data_epoch,
+        now: input.now,
+      });
       await client.query("COMMIT");
       return { dailySessionId: asDailySessionId(row.daily_session_id) };
     } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
@@ -1218,6 +1237,17 @@ export class PostgresUserTextConversationRepository
       now: input.now,
       userId: input.userId,
     });
+    // Fast path (issue #113): the committed final User Event revision carries
+    // exactly one idempotent extraction command + outbox row in this same
+    // transaction; the current reply never waits on it.
+    await insertFastPathExtractionCommand(client, {
+      userId: input.userId,
+      revisionId,
+      revisionOrdinal: 1,
+      policyVersion: input.fastPathExtractionPolicyVersion,
+      dataEpoch: ownerRow.data_epoch,
+      now: input.now,
+    });
     await client.query("COMMIT");
 
     return {
@@ -1617,4 +1647,120 @@ async function delayWithJitter(attempt: number): Promise<void> {
   const maximumDelayMs = 10 * 2 ** (attempt - 1);
   const delayMs = Math.floor(Math.random() * maximumDelayMs);
   await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+// ── Fast-path extraction command helpers (issue #113) ──────────────────────
+
+/**
+ * Create the idempotent fast-path extraction WorkflowCommand + outbox row for
+ * one committed final / corrected User Event revision, inside the caller's
+ * transaction. The stable unique key
+ * (fast_path_extraction, conversation_event_revision, revision ordinal, policy
+ * version) absorbs replays; `null` policy (the switch is off) creates nothing.
+ */
+async function insertFastPathExtractionCommand(
+  client: PoolClient,
+  input: {
+    userId: string;
+    revisionId: string;
+    revisionOrdinal: number;
+    policyVersion: string | null;
+    dataEpoch: string;
+    now: Date;
+  },
+): Promise<void> {
+  if (input.policyVersion === null) return;
+  const policy = await client.query(
+    `SELECT 1 FROM fast_path_extraction_policies WHERE policy_version = $1`,
+    [input.policyVersion],
+  );
+  if (policy.rowCount !== 1) {
+    throw new Error("Fast path extraction policy is unavailable or has drifted.");
+  }
+  const commandId = createUuidV7(input.now);
+  await client.query(
+    `INSERT INTO workflow_commands (
+       workflow_command_id, command_type, subject_type, subject_id,
+       source_revision, policy_version, expected_data_epoch, status, created_at
+     ) VALUES ($1, 'fast_path_extraction', 'conversation_event_revision', $2,
+       $3, $4, $5, 'created', $6)
+     ON CONFLICT DO NOTHING`,
+    [
+      commandId,
+      input.revisionId,
+      input.revisionOrdinal,
+      input.policyVersion,
+      input.dataEpoch,
+      input.now,
+    ],
+  );
+  const command = await client.query<{ workflow_command_id: string }>(
+    `SELECT workflow_command_id FROM workflow_commands
+     WHERE command_type = 'fast_path_extraction'
+       AND subject_type = 'conversation_event_revision'
+       AND subject_id = $1 AND source_revision = $2 AND policy_version = $3`,
+    [input.revisionId, input.revisionOrdinal, input.policyVersion],
+  );
+  await client.query(
+    `INSERT INTO outbox_events (
+       outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
+       aggregate_revision, aggregate_data_epoch, aggregate_coverage,
+       event_type, status, next_attempt_at, attempt_count,
+       payload, created_at
+     ) VALUES ($1, $2, 'conversation_event_revision', $3, $4, $5, 0,
+       'fast_path_extraction_requested', 'pending', $6, 0, $7, $6)
+     ON CONFLICT DO NOTHING`,
+    [
+      createUuidV7(input.now),
+      command.rows[0]!.workflow_command_id,
+      input.revisionId,
+      input.revisionOrdinal,
+      Number(input.dataEpoch),
+      input.now,
+      JSON.stringify({
+        policyVersion: input.policyVersion,
+        expectedDataEpoch: Number(input.dataEpoch),
+      }),
+    ],
+  );
+}
+
+/**
+ * Retire the superseded revision's fast-path derivatives (runs, session
+ * items, and candidates citing its evidence) — corrections produce new
+ * revisions and new commands, and the old revision's derivatives stop
+ * serving (SPEC story 28 / architecture 12.1).
+ */
+async function retireFastPathDerivatives(
+  client: PoolClient,
+  input: { userId: string; retiredRevisionId: string; now: Date },
+): Promise<void> {
+  await client.query(
+    `UPDATE fast_path_extraction_runs
+     SET status = 'retired', retired_at = $1, updated_at = $1
+     WHERE user_id = $2 AND event_revision_id = $3
+       AND status = 'extracted'`,
+    [input.now, input.userId, input.retiredRevisionId],
+  );
+  await client.query(
+    `UPDATE fast_path_session_items
+     SET retired_at = $1
+     WHERE user_id = $2 AND event_revision_id = $3 AND retired_at IS NULL`,
+    [input.now, input.userId, input.retiredRevisionId],
+  );
+  await client.query(
+    `UPDATE memory_candidates candidate
+     SET status = 'deleted',
+         disposition_reason_code = 'source_revision_superseded'
+     WHERE candidate.user_id = $1
+       AND candidate.status IN ('proposed', 'needs_entity_resolution', 'needs_predicate_review')
+       AND EXISTS (
+         SELECT 1 FROM memory_candidate_evidence_links link
+         JOIN evidence_items item ON item.evidence_item_id = link.evidence_item_id
+         WHERE link.memory_candidate_id = candidate.memory_candidate_id
+           AND link.user_id = $1
+           AND item.source_revision_id = $2
+       )`,
+    [input.userId, input.retiredRevisionId],
+  );
 }

@@ -25,12 +25,16 @@ import {
   CHINESE_LOCALE_PACK_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   ENGLISH_LOCALE_PACK_VERSION,
+  FAST_PATH_EXTRACTION_POLICY_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
+  loadPredicateRegistrySnapshot,
+  type FastPathExtractionEntrypointDependencies,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
   createRuntimeJournalRoleProviderRegistry,
+  type JournalRoleConfiguration,
 } from "@sayhear/ai";
 import {
   createPostgresPool,
@@ -42,6 +46,7 @@ import {
   PostgresJournalEligibilityRepository,
   PostgresEvidenceRepository,
   PostgresEntityRepository,
+  PostgresFastPathExtractionRepository,
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresOwnerPurgeRepository,
@@ -100,17 +105,23 @@ export function createServerComposition() {
     new PostgresContinuousExchangeRepository(pool);
   const journalEligibilityRepository =
     new PostgresJournalEligibilityRepository(pool);
-  const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
-    adapter: configuration.provider.adapter === "deterministic"
-      ? { type: "deterministic" }
-      : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
-    roles: [
+  const roles: readonly JournalRoleConfiguration[] = [
       { role: "evidence.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:evidence`, policyVersion: "evidence-extraction:v2", promptFingerprint: "evidence-extract:spans:v2" },
       { role: "journal.draft", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-draft`, policyVersion: "journal-generation:v2", promptFingerprint: "journal-draft:evidence-only:v2" },
       { role: "journal.validate", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:journal-validate`, policyVersion: "journal-validator:v3", promptFingerprint: "journal-validate:diagnostic:v3" },
       { role: "dialogue.state", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: "dialogue-state-model:v1", policyVersion: "dialogue-state:v2", promptFingerprint: "dialogue-state-prompt:v2" },
       { role: "summary.compress", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:summary`, policyVersion: "rolling-summary:v1", promptFingerprint: "rolling-summary:neutral-structured:v1" },
-    ],
+      // Memory roles (issue #113): their own Champion configs, independently
+      // versioned, fallback disabled until a fallback Champion is explicitly
+      // published per ADR-0060 / ADR-0061.
+      { role: "memory.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:memory-extract`, policyVersion: "memory-extraction:v1", promptFingerprint: "memory-extract:propose:v1" },
+      { role: "entity.resolve", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:entity-resolve`, policyVersion: "entity-resolve-gate:v1", promptFingerprint: "entity-resolve:gate:v1" },
+  ];
+  const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
+    adapter: configuration.provider.adapter === "deterministic"
+      ? { type: "deterministic" }
+      : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
+    roles,
   });
   const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
   const evidenceRepository = new PostgresEvidenceRepository(pool, journalRoleRegistry.evidenceExtractor);
@@ -129,10 +140,95 @@ export function createServerComposition() {
     writesEnabled: configuration.writeSwitches.evidenceExtractionEnabled,
   });
   const journalRepository = new PostgresJournalRepository(pool);
+  const entityRepository = new PostgresEntityRepository(pool);
   const entityService = createEntityService({
-    repository: new PostgresEntityRepository(pool),
+    repository: entityRepository,
     clock: configuration.clock,
   });
+  const fastPathExtractionRepository =
+    new PostgresFastPathExtractionRepository(pool);
+  const predicateRegistrySnapshot = loadPredicateRegistrySnapshot(1);
+  const memoryExtractConfiguration =
+    journalRoleRegistry.configuration("memory.extract");
+  const entityResolveConfiguration =
+    journalRoleRegistry.configuration("entity.resolve");
+  const fastPathPolicyPromise = fastPathExtractionRepository.loadPolicy(
+    FAST_PATH_EXTRACTION_POLICY_VERSION,
+  );
+  const fastPathExtractionService = {
+    async resolvePolicyForStep() {
+      const policy = await fastPathPolicyPromise;
+      if (!policy) {
+        throw new Error("Fast path extraction policy is unavailable or has drifted.");
+      }
+      return {
+        policyVersion: policy.version,
+        visibilityTargetMs: policy.visibilityTargetMs,
+        maxBatchRevisions: policy.maxBatchRevisions,
+        tAuto: policy.tAuto,
+        maxCandidates: policy.maxCandidates,
+      };
+    },
+  };
+  const fastPathExtractionEntrypointDependencies = async (
+    workflowReceiptId: string,
+  ): Promise<FastPathExtractionEntrypointDependencies> => {
+    const policy = await fastPathExtractionService.resolvePolicyForStep();
+    return {
+      clock: configuration.clock,
+      repository: fastPathExtractionRepository,
+      entityService,
+      entityRepository,
+      memoryExtract: journalRoleRegistry.memoryExtractor,
+      entityResolve: journalRoleRegistry.entityResolver,
+      registry: {
+        entryFor(predicateId) {
+          return (
+            predicateRegistrySnapshot.entries.find(
+              (entry) => entry.predicateId === predicateId,
+            ) ?? null
+          );
+        },
+        registryVersion: () => predicateRegistrySnapshot.registryVersion,
+      },
+      policy: {
+        version: policy.policyVersion,
+        visibilityTargetMs: policy.visibilityTargetMs,
+        maxBatchRevisions: policy.maxBatchRevisions,
+        tAuto: policy.tAuto,
+        maxCandidates: policy.maxCandidates,
+      },
+      memoryExtractConfiguration: {
+        role: "memory.extract",
+        configVersion: memoryExtractConfiguration.configVersion,
+        modelVersion: memoryExtractConfiguration.model,
+        promptVersion: memoryExtractConfiguration.promptFingerprint,
+        // ADR-0060: explicit per-role fallback only; disabled until a fallback
+        // Champion is published. A failed role fails loudly.
+        fallback: { mode: "disabled" },
+      },
+      entityResolveConfiguration: {
+        role: "entity.resolve",
+        configVersion: entityResolveConfiguration.configVersion,
+        modelVersion: entityResolveConfiguration.model,
+        promptVersion: entityResolveConfiguration.promptFingerprint,
+        fallback: { mode: "disabled" },
+      },
+      evidenceChampion: {
+        provider:
+          memoryExtractConfiguration.provider === "deterministic"
+            ? configuration.provider.champion.provider
+            : memoryExtractConfiguration.provider,
+        model: memoryExtractConfiguration.model,
+        configVersion: memoryExtractConfiguration.configVersion,
+        snapshot: memoryExtractConfiguration.promptFingerprint,
+        providerPolicyVersion:
+          configuration.provider.champion.providerPolicyVersion,
+      },
+      dedupeFingerprintSecret: configuration.contextHmacSecret,
+      workflowReceiptId,
+    };
+  };
   const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
   const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
   const journalService = createJournalService({
@@ -204,6 +300,10 @@ export function createServerComposition() {
     expectedBackupPolicyVersion: configuration.backupPolicyVersion,
     expectedConfigurationFingerprint:
       configuration.backupConfigurationFingerprint,
+    fastPathExtractionPolicyVersion:
+      configuration.writeSwitches.fastPathExtractionEnabled
+        ? FAST_PATH_EXTRACTION_POLICY_VERSION
+        : null,
     generationPolicy: {
       consentPolicyVersion:
         configuration.provider.champion.consentPolicyVersion,
@@ -358,6 +458,9 @@ export function createServerComposition() {
     }),
     conversationService,
     entityService,
+    fastPathExtractionRepository,
+    fastPathExtractionService,
+    fastPathExtractionEntrypointDependencies,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

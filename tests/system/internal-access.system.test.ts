@@ -173,6 +173,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        fast_path_session_items,
+        entity_resolve_gate_outcomes,
+        entity_clarification_proposals,
+        fast_path_extraction_runs,
         entity_mention_candidates,
         memory_forget_reversals,
         memory_forget_evidence_exclusions,
@@ -646,11 +650,14 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         (SELECT COUNT(*)::text FROM journals) AS journals
     `);
     expect(eligibilityFoundationTotals.rows[0]).toEqual({
-      commands: "0",
+      // The fast path (issue #113) creates exactly one idempotent extraction
+      // command + outbox row for the single committed User Event; no
+      // eligibility / journal machinery fires in this scenario.
+      commands: "1",
       date_outcomes: "0",
       evidence_snapshots: "0",
       journals: "0",
-      outbox: "0",
+      outbox: "1",
     });
     const openTransactions = await database.pool.query<{ count: string }>(`
       SELECT COUNT(*)::text AS count
@@ -1027,7 +1034,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       commandStatus: "succeeded",
       compiledContext: {
         compilerVersion: "context-compiler:v1",
-        degradedReason: null,
+        // The compile never waits on the fast path: the committed User Event's
+        // extraction command is still pending (issue #113).
+        degradedReason: "fast_path_pending",
         dialogueRevision: 1,
         id: expect.any(String),
         integrity: {

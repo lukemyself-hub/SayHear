@@ -285,7 +285,8 @@ export type WorkflowStarter = (input: {
     | "journal_eligibility_requested"
     | "rolling_summary_requested"
     | "owner_full_purge_requested"
-    | "journal_regeneration_requested";
+    | "journal_regeneration_requested"
+    | "fast_path_extraction_requested";
   actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId: DailySessionId | UserId;
@@ -354,7 +355,8 @@ export function createOutboxDispatcherService(dependencies: {
               | "journal_eligibility_requested"
               | "rolling_summary_requested"
               | "owner_full_purge_requested"
-              | "journal_regeneration_requested",
+              | "journal_regeneration_requested"
+              | "fast_path_extraction_requested",
             ...(typeof event.payload.actionExecutionId === "string"
               ? { actionExecutionId: event.payload.actionExecutionId }
               : {}),

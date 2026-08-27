@@ -80,6 +80,13 @@ export type ContextSourceSnapshot = Readonly<{
   dialogueStateFailure?: boolean;
   events: readonly ContextSourceEvent[];
   generationStage: GenerationCommandStage;
+  /**
+   * True when the current Daily Session has committed final / corrected User
+   * Event revisions carrying fast-path extraction commands whose runs have
+   * not completed (issue #113). The compile never waits; raw Events continue
+   * to serve and the manifest records `fast_path_pending`.
+   */
+  fastPathPending?: boolean;
   inputRevisionId: ConversationEventRevisionId;
   locale: string;
   policyVersions: ContextPolicyVersions;
@@ -94,6 +101,7 @@ export type CompiledContextDegradedReason =
   | "dialogue_state_failed"
   | "dialogue_state_lagging"
   | "rolling_summary_failed"
+  | "fast_path_pending"
   | null;
 
 export type CompiledContextSectionKey =
@@ -339,7 +347,9 @@ export function createContextCompiler(dependencies: {
             ? "rolling_summary_failed"
             : selectedHistory.length < historyNewestFirst.length
               ? "raw_event_budget_exceeded"
-              : null;
+              : source.fastPathPending === true
+                ? "fast_path_pending"
+                : null;
       const contentHmac = createManifestContentHmac(
         dependencies.contentHmacSecret,
         sections,

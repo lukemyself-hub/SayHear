@@ -87,11 +87,11 @@ describe("runtime safety configuration", () => {
       SAYHEAR_CONTEXT_HMAC_SECRET: "context", SAYHEAR_DEPLOYMENT: "test", SAYHEAR_PROVIDER_ADAPTER: "deterministic",
       SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
     };
-    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ evidenceExtractionEnabled: true, journalPublishEnabled: true });
+    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_EVIDENCE_EXTRACTION_ENABLED: "false" }).writeSwitches)
-      .toEqual({ evidenceExtractionEnabled: false, journalPublishEnabled: true });
+      .toEqual({ evidenceExtractionEnabled: false, fastPathExtractionEnabled: true, journalPublishEnabled: true });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false" }).writeSwitches)
-      .toEqual({ evidenceExtractionEnabled: true, journalPublishEnabled: false });
+      .toEqual({ evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: false });
   });
 
   it("requires the purge marker store to be a separate database from the business database", () => {

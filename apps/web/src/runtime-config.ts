@@ -262,6 +262,10 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_EVIDENCE_EXTRACTION_ENABLED",
     ),
+    fastPathExtractionEnabled: enabledSwitch(
+      environment,
+      "SAYHEAR_FAST_PATH_EXTRACTION_ENABLED",
+    ),
     journalPublishEnabled: enabledSwitch(
       environment,
       "SAYHEAR_JOURNAL_PUBLISH_ENABLED",

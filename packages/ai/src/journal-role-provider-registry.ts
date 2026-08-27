@@ -1,4 +1,5 @@
 import type {
+  EntityResolveGateProvider,
   EvidenceExtractionProvider,
   EvidenceRole,
   JournalDraft,
@@ -7,6 +8,9 @@ import type {
   JournalValidationProvider,
   DialogueStateContent,
   DialogueStateModel,
+  MemoryExtractProvider,
+  MemoryExtractRevisionResult,
+  MemoryRoleInvocationConfiguration,
   RollingSummaryModel,
 } from "@sayhear/application";
 import { normalizeJournalDiagnosticFindings, ProviderDispatchError, asConversationEventRevisionId } from "@sayhear/application";
@@ -17,7 +21,9 @@ export type JournalModelRole =
   | "journal.draft"
   | "journal.validate"
   | "dialogue.state"
-  | "summary.compress";
+  | "summary.compress"
+  | "memory.extract"
+  | "entity.resolve";
 export type JournalRoleConfiguration = Readonly<{
   role: JournalModelRole;
   provider: "openai" | "deepseek" | "deterministic";
@@ -36,20 +42,21 @@ export type JournalRoleProviderRegistry = Readonly<{
   validator: JournalValidationProvider;
   dialogueStateProjector: DialogueStateModel;
   summaryCompressor: RollingSummaryModel;
+  memoryExtractor: MemoryExtractProvider;
+  entityResolver: EntityResolveGateProvider;
   configuration(role: JournalModelRole): JournalRoleConfiguration;
 }>;
-
 /**
- * The sole provider-egress module for Journal roles. Its small interface keeps
- * role selection, prompt fingerprints, and source-text handling out of web,
- * workflow, and persistence callers.
+ * The sole provider-egress module for background roles. Its small interface
+ * keeps role selection, prompt fingerprints, and source-text handling out of
+ * web, workflow, and persistence callers.
  */
 export function createRuntimeJournalRoleProviderRegistry(input: {
   adapter: Adapter;
   roles: readonly JournalRoleConfiguration[];
 }): JournalRoleProviderRegistry {
   const configurations = new Map(input.roles.map((role) => [role.role, role]));
-  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state", "summary.compress"] as const) {
+  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state", "summary.compress", "memory.extract", "entity.resolve"] as const) {
     const configuration = configurations.get(role);
     if (!configuration || !configuration.model || !configuration.configVersion || !configuration.policyVersion || !configuration.promptFingerprint) {
       throw new Error(`Journal role ${role} requires complete versioned configuration.`);
@@ -63,19 +70,26 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       validator: deterministicJournalValidator,
       dialogueStateProjector: deterministicDialogueStateProjector,
       summaryCompressor: deterministicSummaryCompressor,
+      memoryExtractor: deterministicMemoryExtractor,
+      entityResolver: deterministicEntityResolver,
       configuration,
     };
   }
 
   const adapter = input.adapter;
   const model = createResponsesApiConversationTextModel(adapter);
-  const askJson = async (role: JournalModelRole, instructions: string, payload: unknown): Promise<unknown> => {
+  const askJson = async (
+    role: JournalModelRole,
+    instructions: string,
+    payload: unknown,
+    invocation?: MemoryRoleInvocationConfiguration,
+  ): Promise<unknown> => {
     let output = "";
     try {
       for await (const event of model.stream({
         instructions,
         locale: "en-US",
-        model: configuration(role).model,
+        model: invocation?.modelVersion ?? configuration(role).model,
         messages: [{
           revisionId: asConversationEventRevisionId("00000000-0000-7000-8000-000000000001"),
           role: "user",
@@ -128,6 +142,32 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
           .filter((locator): locator is { locatorType: "text_span"; locatorKey: string; role: EvidenceRole } => locator !== null);
         if (locators.length === 0) throw new Error("evidence.extract returned no valid spans.");
         return locators;
+      },
+    },
+    memoryExtractor: {
+      role: "memory.extract",
+      async extract(request, invocation) {
+        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. For each revision return only JSON: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
+        if (!Array.isArray(parsed)) throw new Error("memory.extract returned non-array output.");
+        return parsed as readonly MemoryExtractRevisionResult[];
+      },
+    },
+    entityResolver: {
+      role: "entity.resolve",
+      async resolve(request, invocation) {
+        const parsed = await askJson("entity.resolve", `You are SayHear entity.resolve, the single identity gate. Given a surface form and bounded candidate entities, return only JSON: {verdict:'match'|'no_match'|'unclear',entityId:string|null,confidence:number 0..1}. verdict=match with the entityId ONLY when the candidates clearly refer to the same real-world identity; otherwise no_match or unclear. Never select an id not in the candidate list.`, request, invocation);
+        if (
+          typeof parsed !== "object" || parsed === null ||
+          !["match", "no_match", "unclear"].includes(String((parsed as { verdict?: unknown }).verdict)) ||
+          typeof (parsed as { confidence?: unknown }).confidence !== "number"
+        ) {
+          throw new Error("entity.resolve returned invalid JSON.");
+        }
+        const record = parsed as { verdict: "match" | "no_match" | "unclear"; entityId: unknown; confidence: number };
+        if (record.verdict !== "match" || typeof record.entityId !== "string") {
+          return { verdict: record.verdict, entityId: null, confidence: record.confidence };
+        }
+        return { verdict: record.verdict, entityId: record.entityId, confidence: record.confidence };
       },
     },
     draft: {
@@ -296,3 +336,39 @@ function isDialogueStateContent(value: unknown): value is DialogueStateContent {
       Array.isArray((field as Record<string, unknown>).sourceRevisionIds);
   });
 }
+
+/**
+ * Deterministic memory.extract stand-in (test / offline environments): whole
+ * revision as one factual span, no mentions, no candidates, no
+ * clarifications. Behavioral scripting per Event revision happens at the
+ * application seam (the system tests inject scripted providers), keeping this
+ * adapter honest about its degenerate shape.
+ */
+const deterministicMemoryExtractor: MemoryExtractProvider = {
+  role: "memory.extract",
+  async extract({ revisions }, _invocation) {
+    return revisions.map((revision) => ({
+      revisionId: revision.revisionId,
+      evidence: [
+        {
+          locatorKey: `0:${revision.text.length}`,
+          role: "factual_support" as const,
+        },
+      ],
+      mentions: [],
+      candidates: [],
+      clarifications: [],
+    }));
+  },
+};
+
+/**
+ * Deterministic entity.resolve stand-in: always an honest `unclear` with a
+ * 0-confident verdict — the gate must never bind without a real judgment.
+ */
+const deterministicEntityResolver: EntityResolveGateProvider = {
+  role: "entity.resolve",
+  async resolve(_request, _invocation) {
+    return { verdict: "unclear", entityId: null, confidence: 0 };
+  },
+};

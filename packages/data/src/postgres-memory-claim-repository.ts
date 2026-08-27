@@ -324,62 +324,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     reviewDueAt: Date | null;
     now: Date;
   }): Promise<MemoryCandidateId> {
-    const { proposal, now } = input;
-    const mapped = proposal.resolution.status === "mapped";
-    return this.withTransaction(async (client) => {
-      const inserted = await client.query<{ memory_candidate_id: string }>(
-        `INSERT INTO memory_candidates (
-           memory_candidate_id, user_id, candidate_kind, basis,
-           subject_entity_id, subject_entity_mention_id, object_entity_id,
-           object_entity_mention_id, predicate_id, predicate_registry_version,
-           predicate_resolution_status, proposed_concept, mapping_confidence,
-           proposed_object_value, proposed_scope_key, proposed_temporal_status,
-           proposed_valid_from, proposed_valid_from_precision, proposed_valid_to,
-           proposed_valid_to_precision, source_reflection_version_id,
-           generation_command_id, authoritative_model_attempt_id, model_version,
-           prompt_version, extraction_policy_version, status, review_eligible_at,
-           review_due_at, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-           $14::jsonb, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
-           $26, $27, $28, $29, $30)
-         RETURNING memory_candidate_id`,
-        [
-          createUuidV7(now),
-          proposal.userId,
-          proposal.candidateKind,
-          proposal.basis,
-          proposal.subjectEntityId,
-          proposal.subjectEntityMentionId,
-          proposal.objectEntityId,
-          proposal.objectEntityMentionId,
-          mapped ? proposal.resolution.predicateId : null,
-          mapped ? proposal.resolution.registryVersion : null,
-          proposal.resolution.status,
-          mapped ? null : proposal.resolution.proposedConcept,
-          mapped ? proposal.resolution.mappingConfidence : null,
-          JSON.stringify(
-            mapped ? proposal.resolution.typedValue : "",
-          ),
-          proposal.scopeKey,
-          proposal.temporal.temporalStatus,
-          proposal.temporal.validFrom,
-          proposal.temporal.validFromPrecision,
-          proposal.temporal.validTo,
-          proposal.temporal.validToPrecision,
-          proposal.lineage.sourceReflectionVersionId,
-          proposal.lineage.generationCommandId,
-          proposal.lineage.authoritativeModelAttemptId,
-          proposal.lineage.modelVersion,
-          proposal.lineage.promptVersion,
-          proposal.lineage.extractionPolicyVersion,
-          input.status,
-          input.status === "needs_predicate_review" ? now : null,
-          input.reviewDueAt,
-          now,
-        ],
-      );
-      return asMemoryCandidateId(inserted.rows[0]!.memory_candidate_id);
-    });
+    return this.withTransaction((client) =>
+      insertMemoryCandidateWithin(client, input),
+    );
   }
 
   public async insertCandidateEvidenceLinks(input: {
@@ -389,24 +336,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     now: Date;
   }): Promise<void> {
     if (input.evidenceItemIds.length === 0) return;
-    await this.withTransaction(async (client) => {
-      for (const evidenceItemId of input.evidenceItemIds) {
-        await client.query(
-          `INSERT INTO memory_candidate_evidence_links (
-             memory_candidate_evidence_link_id, memory_candidate_id, user_id,
-             evidence_item_id, created_at
-           ) VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT DO NOTHING`,
-          [
-            asMemoryCandidateEvidenceLinkId(createUuidV7(input.now)),
-            input.candidateId,
-            input.userId,
-            evidenceItemId,
-            input.now,
-          ],
-        );
-      }
-    });
+    await this.withTransaction((client) =>
+      insertCandidateEvidenceLinksWithin(client, input),
+    );
   }
 
   public async recordCandidateDisposition(
@@ -1205,4 +1137,162 @@ async function insertClaimEvidenceLinks(
       ],
     );
   }
+}
+
+// ── Shared within-transaction writers (issue #113 fast path) ───────────────
+// The fast-path extraction commit must write Memory Candidates inside the
+// same authoritative transaction as its run row (AC #1: retries never
+// double-write memory). These exports carry the exact insert / fence
+// semantics the MemoryClaimService path uses; behavior must not drift.
+
+export async function insertMemoryCandidateWithin(
+  client: PoolClient,
+  input: {
+    proposal: MemoryCandidateProposal;
+    status: "proposed" | "needs_predicate_review";
+    reviewDueAt: Date | null;
+    now: Date;
+  },
+): Promise<MemoryCandidateId> {
+  const { proposal, now } = input;
+  const mapped = proposal.resolution.status === "mapped";
+  const inserted = await client.query<{ memory_candidate_id: string }>(
+    `INSERT INTO memory_candidates (
+       memory_candidate_id, user_id, candidate_kind, basis,
+       subject_entity_id, subject_entity_mention_id, object_entity_id,
+       object_entity_mention_id, predicate_id, predicate_registry_version,
+       predicate_resolution_status, proposed_concept, mapping_confidence,
+       proposed_object_value, proposed_scope_key, proposed_temporal_status,
+       proposed_valid_from, proposed_valid_from_precision, proposed_valid_to,
+       proposed_valid_to_precision, source_reflection_version_id,
+       generation_command_id, authoritative_model_attempt_id, model_version,
+       prompt_version, extraction_policy_version, status, review_eligible_at,
+       review_due_at, created_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+       $14::jsonb, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
+       $26, $27, $28, $29, $30)
+     RETURNING memory_candidate_id`,
+    [
+      createUuidV7(now),
+      proposal.userId,
+      proposal.candidateKind,
+      proposal.basis,
+      proposal.subjectEntityId,
+      proposal.subjectEntityMentionId,
+      proposal.objectEntityId,
+      proposal.objectEntityMentionId,
+      mapped ? proposal.resolution.predicateId : null,
+      mapped ? proposal.resolution.registryVersion : null,
+      proposal.resolution.status,
+      mapped ? null : proposal.resolution.proposedConcept,
+      mapped ? proposal.resolution.mappingConfidence : null,
+      JSON.stringify(mapped ? proposal.resolution.typedValue : ""),
+      proposal.scopeKey,
+      proposal.temporal.temporalStatus,
+      proposal.temporal.validFrom,
+      proposal.temporal.validFromPrecision,
+      proposal.temporal.validTo,
+      proposal.temporal.validToPrecision,
+      proposal.lineage.sourceReflectionVersionId,
+      proposal.lineage.generationCommandId,
+      proposal.lineage.authoritativeModelAttemptId,
+      proposal.lineage.modelVersion,
+      proposal.lineage.promptVersion,
+      proposal.lineage.extractionPolicyVersion,
+      input.status,
+      input.status === "needs_predicate_review" ? now : null,
+      input.reviewDueAt,
+      now,
+    ],
+  );
+  return asMemoryCandidateId(inserted.rows[0]!.memory_candidate_id);
+}
+
+export async function insertCandidateEvidenceLinksWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    candidateId: MemoryCandidateId;
+    evidenceItemIds: readonly string[];
+    now: Date;
+  },
+): Promise<void> {
+  for (const evidenceItemId of input.evidenceItemIds) {
+    await client.query(
+      `INSERT INTO memory_candidate_evidence_links (
+         memory_candidate_evidence_link_id, memory_candidate_id, user_id,
+         evidence_item_id, created_at
+       ) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT DO NOTHING`,
+      [
+        asMemoryCandidateEvidenceLinkId(createUuidV7(input.now)),
+        input.candidateId,
+        input.userId,
+        evidenceItemId,
+        input.now,
+      ],
+    );
+  }
+}
+
+export async function findTerminalCandidateByFingerprintWithin(
+  client: PoolClient,
+  userId: UserId,
+  fingerprint: string,
+): Promise<{ memoryCandidateId: MemoryCandidateId; dispositionReasonCode: string } | null> {
+  const result = await client.query<{
+    memory_candidate_id: string;
+    disposition_reason_code: string;
+  }>(
+    `SELECT memory_candidate_id, disposition_reason_code FROM memory_candidates
+     WHERE user_id = $1 AND dedupe_fingerprint = $2
+       AND status IN ('rejected', 'stale')`,
+    [userId, fingerprint],
+  );
+  const row = result.rows[0];
+  return row
+    ? {
+        memoryCandidateId: asMemoryCandidateId(row.memory_candidate_id),
+        dispositionReasonCode: row.disposition_reason_code,
+      }
+    : null;
+}
+
+export async function findTerminalGovernanceBlockWithin(
+  client: PoolClient,
+  userId: UserId,
+  semanticTarget: {
+    predicateId: string;
+    proposedConcept: string;
+    subjectEntityId: string | null;
+    objectEntityId: string | null;
+    scopeKey: string;
+    objectValueJson: string;
+  },
+): Promise<{ dispositionReasonCode: string } | null> {
+  const result = await client.query<{ disposition_reason_code: string }>(
+    `SELECT disposition_reason_code FROM memory_candidates
+     WHERE user_id = $1
+       AND status IN ('rejected', 'stale')
+       AND reproposal_policy IN ('explicit_reconsideration_only', 'blocked_while_policy_active')
+       AND COALESCE(predicate_id, '') = $2
+       AND COALESCE(proposed_concept, '') = $3
+       AND COALESCE(subject_entity_id::text, '') = $4
+       AND COALESCE(object_entity_id::text, '') = $5
+       AND proposed_scope_key = $6
+       AND proposed_object_value::text = $7::text
+     ORDER BY decided_at DESC
+     LIMIT 1`,
+    [
+      userId,
+      semanticTarget.predicateId,
+      semanticTarget.proposedConcept,
+      semanticTarget.subjectEntityId,
+      semanticTarget.objectEntityId,
+      semanticTarget.scopeKey,
+      semanticTarget.objectValueJson,
+    ],
+  );
+  const row = result.rows[0];
+  return row ? { dispositionReasonCode: row.disposition_reason_code } : null;
 }

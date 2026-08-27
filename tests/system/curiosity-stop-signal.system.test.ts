@@ -98,6 +98,10 @@ describe("Authenticated Internal Text Conversation System Seam — Curiosity Sto
     clockNowMs = BASE_TIME_MS;
     await database.pool.query(`
       TRUNCATE TABLE
+        fast_path_session_items,
+        entity_resolve_gate_outcomes,
+        entity_clarification_proposals,
+        fast_path_extraction_runs,
         entity_mention_candidates,
         memory_forget_reversals,
         memory_forget_evidence_exclusions,
