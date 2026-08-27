@@ -522,8 +522,10 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
   全 locale 100% 通过；
 - 六字段 DialogueState 每字段带 evidence 与 confidence；历史
   GenerationCommand 保留原版本标签；
-- #61 thin-persona 冻结运行永久保留为改革前基线；本段合入后的冻结运行成为
-  1A.3a 对比的 incumbent 基线。
+- #61 thin-persona 冻结运行永久保留为改革前基线；本段合入后的冻结运行为 1A.2P
+  incumbent 基线，永久归档。1A.3a 盲评的对比对象是该基线之外同一份冻结输入去掉
+  Memory 区段生成的 Memory-off Replay 孪生（#99），使净偏好严格归因到记忆本身；
+  incumbent 只作跨阶段连续性参照。
 
 ### Core Flow 1A.3a：Memory & Recall
 
@@ -532,6 +534,8 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - Relationship Resolver Hint 与人物卡片 projection；
 - `sh.*` semantic namespace registry 初始集合；
 - fast memory candidate；
+- Memory 从上线起向前形成：不对既有历史对话做回填或批量重推导，受控回填留作
+  线上 pipeline 稳定运行后单独评审的后续决定（#99）；
 - Entity / Memory role Champion config；
 - PostgreSQL Structured-Lexical Retrieval Baseline；不激活 Embedding Champion、
   不安装 pgvector，也不创建 vector column（ADR-0115）；
@@ -949,8 +953,10 @@ Talk
 - 1A.2 Internal Owner Full Purge 有 active-system receipt，并传播到
   Conversation、Evidence、Summary、DialogueState、Journal 与全部当期派生层；
 - 1A.3a、1A.3b、1A.4、1B.1 和 1B.2 分别把 Full Purge 覆盖扩展到 Entity /
-  长期 Memory / Embedding、Episode / Open Loop / Proactive Follow-up State /
+  长期 Memory、Episode / Open Loop / Proactive Follow-up State /
   Reflection / Profile、Replay、音频 / transcript 与 delivery 数据；
+  按 ADR-0115，1A.3a 不产生任何 Embedding 数据面，向量派生物在证据触发引入的
+  阶段并入该阶段的扩展覆盖；
 - 最小 purge marker 能阻止 Internal Core 旧备份未经重新应用删除状态就恢复上线；
 - Internal Core 不提供单条 Conversation / Journal 删除，也不对外声称
   `fully_expired`；完整 Account Deletion 与备份恢复演练按 External MVP Gate 验收。
