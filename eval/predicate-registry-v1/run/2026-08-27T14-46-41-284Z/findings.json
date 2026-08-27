@@ -1,0 +1,1142 @@
+{
+  "replayKind": "predicate-registry-frozen-model-replay",
+  "generatedAt": "2026-08-27T14:46:41.343Z",
+  "mapper": "deterministic",
+  "registryVersion": 1,
+  "registryFingerprint": "3b841ca3257f98a28c8179df92f34bd047b2fa26744a3a90118df3e2914733d2",
+  "humanReview": {
+    "required": true,
+    "reviewer": "luke",
+    "reviewedAt": "2026-08-27 07:47 PDT",
+    "verdict": "approved",
+    "notes": null
+  },
+  "totals": {
+    "passed": 187,
+    "failed": 0
+  },
+  "findings": [
+    {
+      "id": "FWD[0] sh.relationship.partner_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[1] sh.relationship.partner_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[2] sh.relationship.partner_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[3] sh.relationship.partner_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[4] sh.relationship.partner_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[5] sh.relationship.partner_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[6] sh.relationship.parent_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[7] sh.relationship.parent_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[8] sh.relationship.parent_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[9] sh.relationship.parent_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[10] sh.relationship.parent_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[11] sh.relationship.parent_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[12] sh.relationship.sibling_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[13] sh.relationship.sibling_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[14] sh.relationship.sibling_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[15] sh.relationship.sibling_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[16] sh.relationship.sibling_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[17] sh.relationship.sibling_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[18] sh.relationship.friend_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[19] sh.relationship.friend_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[20] sh.relationship.friend_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[21] sh.relationship.friend_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[22] sh.relationship.friend_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[23] sh.relationship.friend_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[24] sh.relationship.colleague_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[25] sh.relationship.colleague_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[26] sh.relationship.colleague_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[27] sh.relationship.colleague_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[28] sh.relationship.colleague_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[29] sh.relationship.colleague_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[30] sh.relationship.manager_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[31] sh.relationship.manager_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[32] sh.relationship.manager_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[33] sh.relationship.manager_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[34] sh.relationship.manager_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[35] sh.relationship.manager_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[36] sh.relationship.relative_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[37] sh.relationship.relative_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[38] sh.relationship.relative_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[39] sh.relationship.relative_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[40] sh.relationship.relative_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[41] sh.relationship.relative_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[42] sh.relationship.in_law_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[43] sh.relationship.in_law_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[44] sh.relationship.in_law_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[45] sh.relationship.in_law_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[46] sh.relationship.in_law_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[47] sh.relationship.in_law_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[48] sh.relationship.teacher_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[49] sh.relationship.teacher_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[50] sh.relationship.teacher_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[51] sh.relationship.teacher_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[52] sh.relationship.teacher_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[53] sh.relationship.teacher_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[54] sh.relationship.roommate_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[55] sh.relationship.roommate_of",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[56] sh.relationship.roommate_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[57] sh.relationship.roommate_of",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[58] sh.relationship.roommate_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[59] sh.relationship.roommate_of",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[60] sh.work.employer",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[61] sh.work.employer",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[62] sh.work.employer",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[63] sh.work.employer",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[64] sh.work.employer",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[65] sh.work.employer",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[66] sh.work.role_title",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[67] sh.work.role_title",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[68] sh.work.role_title",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[69] sh.work.role_title",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[70] sh.work.role_title",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[71] sh.work.role_title",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[72] sh.project.participation",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[73] sh.project.participation",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[74] sh.project.participation",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[75] sh.project.participation",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[76] sh.project.participation",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[77] sh.project.participation",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[78] sh.place.residence",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[79] sh.place.residence",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[80] sh.place.residence",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[81] sh.place.residence",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[82] sh.place.residence",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[83] sh.place.residence",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[84] sh.place.hometown",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[85] sh.place.hometown",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[86] sh.place.hometown",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[87] sh.place.hometown",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[88] sh.place.hometown",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[89] sh.place.hometown",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[90] sh.place.workplace",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[91] sh.place.workplace",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[92] sh.place.workplace",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[93] sh.place.workplace",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[94] sh.place.workplace",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[95] sh.place.workplace",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[96] sh.plan.life_change",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[97] sh.plan.life_change",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[98] sh.plan.life_change",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[99] sh.plan.life_change",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[100] sh.plan.life_change",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[101] sh.plan.life_change",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[102] sh.life.career_stage",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[103] sh.life.career_stage",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[104] sh.life.career_stage",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[105] sh.life.career_stage",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[106] sh.life.career_stage",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[107] sh.life.career_stage",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[108] sh.life.family_stage",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[109] sh.life.family_stage",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[110] sh.life.family_stage",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[111] sh.life.family_stage",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[112] sh.life.family_stage",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[113] sh.life.family_stage",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[114] sh.preference.relationship_horizon",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[115] sh.preference.relationship_horizon",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[116] sh.preference.relationship_horizon",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[117] sh.preference.relationship_horizon",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[118] sh.preference.relationship_horizon",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[119] sh.preference.relationship_horizon",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[120] sh.preference.business_travel",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[121] sh.preference.business_travel",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[122] sh.preference.business_travel",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[123] sh.preference.business_travel",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[124] sh.preference.business_travel",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[125] sh.preference.business_travel",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[126] sh.communication.stated_style",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[127] sh.communication.stated_style",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[128] sh.communication.stated_style",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[129] sh.communication.stated_style",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[130] sh.communication.stated_style",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[131] sh.communication.stated_style",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[132] sh.value.core_priorities",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[133] sh.value.core_priorities",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[134] sh.value.core_priorities",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[135] sh.value.core_priorities",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[136] sh.value.core_priorities",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[137] sh.value.core_priorities",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[138] sh.decision.consideration_style",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[139] sh.decision.consideration_style",
+      "mode": "zh",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[140] sh.decision.consideration_style",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[141] sh.decision.consideration_style",
+      "mode": "en",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[142] sh.decision.consideration_style",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "FWD[143] sh.decision.consideration_style",
+      "mode": "cs",
+      "gate": "forward",
+      "status": "pass"
+    },
+    {
+      "id": "REV[0] confusable_separation",
+      "mode": "zh",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[1] confusable_separation",
+      "mode": "zh",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[2] confusable_separation",
+      "mode": "en",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[3] confusable_separation",
+      "mode": "en",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[4] confusable_separation",
+      "mode": "cs",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[5] confusable_separation",
+      "mode": "cs",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[6] confusable_separation",
+      "mode": "zh",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[7] confusable_separation",
+      "mode": "zh",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[8] confusable_separation",
+      "mode": "zh",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[9] confusable_separation",
+      "mode": "en",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[10] confusable_separation",
+      "mode": "en",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[11] confusable_separation",
+      "mode": "cs",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[12] confusable_separation",
+      "mode": "cs",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[13] confusable_separation",
+      "mode": "zh",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[14] confusable_separation",
+      "mode": "en",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[15] confusable_separation",
+      "mode": "cs",
+      "gate": "confusable_separation",
+      "status": "pass"
+    },
+    {
+      "id": "REV[16] closure_language_no_claim",
+      "mode": "zh",
+      "gate": "closure_language_no_claim",
+      "status": "pass"
+    },
+    {
+      "id": "REV[17] closure_language_no_claim",
+      "mode": "zh",
+      "gate": "closure_language_no_claim",
+      "status": "pass"
+    },
+    {
+      "id": "REV[18] closure_language_no_claim",
+      "mode": "en",
+      "gate": "closure_language_no_claim",
+      "status": "pass"
+    },
+    {
+      "id": "REV[19] closure_language_no_claim",
+      "mode": "en",
+      "gate": "closure_language_no_claim",
+      "status": "pass"
+    },
+    {
+      "id": "REV[20] closure_language_no_claim",
+      "mode": "cs",
+      "gate": "closure_language_no_claim",
+      "status": "pass"
+    },
+    {
+      "id": "REV[21] closure_language_no_claim",
+      "mode": "cs",
+      "gate": "closure_language_no_claim",
+      "status": "pass"
+    },
+    {
+      "id": "REV[22] deferred_concept_unmapped_with_proposal",
+      "mode": "zh",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[23] deferred_concept_unmapped_with_proposal",
+      "mode": "zh",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[24] deferred_concept_unmapped_with_proposal",
+      "mode": "zh",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[25] deferred_concept_unmapped_with_proposal",
+      "mode": "zh",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[26] deferred_concept_unmapped_with_proposal",
+      "mode": "zh",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[27] deferred_concept_unmapped_with_proposal",
+      "mode": "en",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[28] deferred_concept_unmapped_with_proposal",
+      "mode": "en",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[29] deferred_concept_unmapped_with_proposal",
+      "mode": "en",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[30] deferred_concept_unmapped_with_proposal",
+      "mode": "cs",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[31] deferred_concept_unmapped_with_proposal",
+      "mode": "cs",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[32] deferred_concept_unmapped_with_proposal",
+      "mode": "cs",
+      "gate": "deferred_concept_unmapped_with_proposal",
+      "status": "pass"
+    },
+    {
+      "id": "REV[33] unknown_concept_unmapped",
+      "mode": "zh",
+      "gate": "unknown_concept_unmapped",
+      "status": "pass"
+    },
+    {
+      "id": "REV[34] unknown_concept_unmapped",
+      "mode": "zh",
+      "gate": "unknown_concept_unmapped",
+      "status": "pass"
+    },
+    {
+      "id": "REV[35] unknown_concept_unmapped",
+      "mode": "en",
+      "gate": "unknown_concept_unmapped",
+      "status": "pass"
+    },
+    {
+      "id": "REV[36] unknown_concept_unmapped",
+      "mode": "en",
+      "gate": "unknown_concept_unmapped",
+      "status": "pass"
+    },
+    {
+      "id": "REV[37] unknown_concept_unmapped",
+      "mode": "cs",
+      "gate": "unknown_concept_unmapped",
+      "status": "pass"
+    },
+    {
+      "id": "REV[38] unknown_concept_unmapped",
+      "mode": "cs",
+      "gate": "unknown_concept_unmapped",
+      "status": "pass"
+    },
+    {
+      "id": "REV[39] illegal_value_fail_closed",
+      "mode": "zh",
+      "gate": "illegal_value_fail_closed",
+      "status": "pass"
+    },
+    {
+      "id": "REV[40] illegal_value_fail_closed",
+      "mode": "en",
+      "gate": "illegal_value_fail_closed",
+      "status": "pass"
+    },
+    {
+      "id": "REV[41] illegal_value_fail_closed",
+      "mode": "cs",
+      "gate": "illegal_value_fail_closed",
+      "status": "pass"
+    },
+    {
+      "id": "old-version-replay-identity",
+      "mode": "-",
+      "gate": "replay determinism",
+      "status": "pass"
+    }
+  ]
+}
