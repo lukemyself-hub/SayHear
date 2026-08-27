@@ -401,3 +401,38 @@ export {
   type UserId,
   type WorkflowCommandId,
 } from "@sayhear/domain";
+export {
+  canonicalRelationshipKey,
+  mapUtterance,
+  mapUtteranceCodeSwitch,
+  validateMappingProposal,
+  type MappingInput,
+  type MappingOutcome,
+  type MappingProposalInput,
+  type ProposalValidationResult,
+} from "./predicate-registry/index";
+export {
+  buildLegacyRegistryOverlay,
+  loadPredicateRegistrySnapshot,
+  normalizeTypedValue,
+  PREDICATE_IDS,
+  PREDICATE_REGISTRY_VERSIONS,
+  predicateRegistryFingerprint,
+} from "./predicate-registry/index";
+export type {
+  ClaimKind,
+  EnumValueSpec,
+  LexicalSurface,
+  ObjectValueSchema,
+  PredicateLocalization,
+  PredicateRegistryEntry,
+  PredicateRegistrySnapshot,
+  QualifierAxisSchema,
+  RelationshipProjectionLocalization,
+  RelationshipProjectionView,
+  RelationshipSemantics,
+  ScopeSchema,
+  SensitivityClass,
+  TemporalSemantics,
+  ValueCardinality,
+} from "./predicate-registry/index";

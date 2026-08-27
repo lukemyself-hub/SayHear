@@ -14,6 +14,7 @@
     "db:migrate": "tsx packages/data/src/cli/migrate.ts",
     "db:provision-owner": "tsx packages/data/src/cli/provision-internal-owner.ts",
     "db:ensure-self-entity": "tsx packages/data/src/cli/ensure-self-entity.ts",
+    "db:sync-predicate-registry": "tsx packages/data/src/cli/sync-predicate-registry.ts",
     "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
     "test": "vitest run",
     "test:system": "vitest run tests/system",
