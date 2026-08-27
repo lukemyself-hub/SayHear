@@ -15,15 +15,19 @@ import {
   TERMINAL_CONTENT_EXPIRY_DAYS,
   type AdmissionRejectionCode,
   type AdmissibleEvidence,
+  type AdmittedQualifier,
   type CandidateDispositionPlan,
+  type CandidateRelativeRoleSide,
   type ClaimAdmissionPlan,
   type ClaimTypedValue,
+  type ClaimVersionQualifierRecord,
   type ImpressionDormancyPlan,
   type MaterialChangeEvaluation,
   type MaterialChangeReasonCode,
   type MemoryCandidateRecord,
   type MemoryClaimVersionRecord,
   type MemoryCandidateProposal,
+  type QualifierRoleSide,
   type ReproposalPolicy,
   type TemporalBounds,
 } from "./types";
@@ -47,6 +51,11 @@ export type ClaimAdmissionInput = Readonly<{
   >;
   existingClaim: Readonly<{ memoryClaimId: string; canonicalKey: string }> | null;
   currentVersion: MemoryClaimVersionRecord | null;
+  /**
+   * The current version's stored Relationship Qualifiers (ADR-0033); the
+   * baseline a directly-stated qualifier refinement merges against.
+   */
+  currentVersionQualifiers?: readonly ClaimVersionQualifierRecord[];
   evidence: readonly AdmissibleEvidence[];
   /** Evidence currently inside an applied whole-Claim Forget exclusion. */
   excludedEvidenceIds: readonly string[];
@@ -125,6 +134,228 @@ function validateTypedValue(
     );
   }
   return typeof value === "string" && value.trim().length > 0;
+}
+
+// ── Relationship Qualifiers (ADR-0033, #115) ─────────────────────────────────
+
+const QUALIFIER_TEXT_MAX_LENGTH = 2_000;
+
+/**
+ * Canonical side of a candidate-relative qualifier side (ADR-0032): directed
+ * predicates always face the registry's canonical direction; symmetric
+ * predicates resolve through the same sorted Entity-pair order that builds the
+ * canonical key, so mention order never changes where a role lands.
+ */
+export function resolveQualifierRoleSide(input: {
+  direction: "directed" | "symmetric";
+  subjectEntityId: string;
+  objectEntityId: string;
+  roleSide: CandidateRelativeRoleSide;
+}): QualifierRoleSide {
+  if (input.direction === "directed") {
+    return input.roleSide === "subject" ? "canonical_subject" : "counterpart";
+  }
+  const subjectIsCanonicalSubject =
+    [input.subjectEntityId, input.objectEntityId].sort()[0] ===
+    input.subjectEntityId;
+  if (input.roleSide === "subject") {
+    return subjectIsCanonicalSubject ? "canonical_subject" : "counterpart";
+  }
+  return subjectIsCanonicalSubject ? "counterpart" : "canonical_subject";
+}
+
+/**
+ * Normalize one qualifier value against its axis schema. Text axes fold NFC +
+ * trim; enum axes are closed sets — surface spellings resolve to the canonical
+ * value id and unknown spellings fail closed (never coerced). Returns null for
+ * any invalid input.
+ */
+function canonicalQualifierValue(
+  axis: { valueSchema: PredicateRegistryEntry["objectValueSchema"]; cardinality: "single" | "multiple" },
+  value: ClaimTypedValue,
+): ClaimTypedValue | null {
+  const schema = axis.valueSchema;
+  if (schema.kind === "text") {
+    if (typeof value !== "string") return null;
+    const normalized = value.normalize("NFC").trim();
+    if (!normalized || normalized.length > QUALIFIER_TEXT_MAX_LENGTH) return null;
+    return normalized;
+  }
+  if (schema.kind === "enum") {
+    const normalizeOne = (raw: string): string | null => {
+      const needle = raw.normalize("NFC").trim();
+      const lowered = needle.toLowerCase();
+      for (const spec of schema.values) {
+        if (spec.value === needle) return spec.value;
+        if (
+          spec.zh.some((surface) => surface.normalize("NFC").trim() === needle)
+        ) {
+          return spec.value;
+        }
+        if (
+          spec.en.some(
+            (surface) => surface.normalize("NFC").trim().toLowerCase() === lowered,
+          )
+        ) {
+          return spec.value;
+        }
+      }
+      return null;
+    };
+    if (axis.cardinality === "single") {
+      return typeof value === "string" ? normalizeOne(value) : null;
+    }
+    if (!Array.isArray(value) || value.length === 0) return null;
+    const resolved: string[] = [];
+    for (const raw of value) {
+      const one = normalizeOne(raw);
+      if (one === null) return null;
+      resolved.push(one);
+    }
+    return canonicalValueSet(resolved);
+  }
+  // Sentiment axes carry no relationship qualifier in v1; fail closed.
+  return null;
+}
+
+/**
+ * Deterministic qualifier validation (ADR-0033 / AC 14): every qualifier must
+ * name a published axis, land on a side the axis allows, carry a schema-valid
+ * value, and cite at least one of the candidate's own Evidence items. Returns
+ * null instead of throwing — the caller rejects with `qualifier_invalid`.
+ */
+export function resolveQualifierProposals(input: {
+  entry: PredicateRegistryEntry;
+  proposal: MemoryCandidateProposal;
+}): readonly AdmittedQualifier[] | null {
+  const semantics = input.entry.relationshipSemantics;
+  if (!semantics) return null;
+  const { proposal } = input;
+  if (proposal.qualifiers.length === 0) return [];
+  if (!proposal.subjectEntityId || !proposal.objectEntityId) return null;
+  const candidateEvidence = new Set(proposal.evidenceItemIds);
+  const seen = new Set<string>();
+  const resolved: AdmittedQualifier[] = [];
+  for (const qualifier of proposal.qualifiers) {
+    const axis = semantics.qualifierAxes.find(
+      (candidate) => candidate.axisId === qualifier.axisId,
+    );
+    if (!axis) return null;
+    const roleSide = resolveQualifierRoleSide({
+      direction: semantics.direction,
+      subjectEntityId: proposal.subjectEntityId,
+      objectEntityId: proposal.objectEntityId,
+      roleSide: qualifier.roleSide,
+    });
+    if (axis.appliesToRole !== "either" && axis.appliesToRole !== roleSide) {
+      return null;
+    }
+    const typedValue = canonicalQualifierValue(axis, qualifier.typedValue);
+    if (typedValue === null) return null;
+    const evidenceItemIds = [...new Set(qualifier.evidenceItemIds)];
+    if (
+      evidenceItemIds.length === 0 ||
+      evidenceItemIds.some((id) => !candidateEvidence.has(id))
+    ) {
+      return null;
+    }
+    const key = `${axis.axisId}\u0000${roleSide}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    resolved.push({ axisId: axis.axisId, roleSide, typedValue, evidenceItemIds });
+  }
+  return resolved;
+}
+
+function qualifierValuesEqual(a: ClaimTypedValue, b: ClaimTypedValue): boolean {
+  if (typeof a === "string" && typeof b === "string") {
+    return a.normalize("NFC").trim() === b.normalize("NFC").trim();
+  }
+  const setA = canonicalValueSet(asValueArray(a));
+  const setB = canonicalValueSet(asValueArray(b));
+  return setA.length === setB.length && setA.every((value, index) => value === setB[index]);
+}
+
+/**
+ * Merge a directly-stated qualifier refinement onto the current version's
+ * qualifiers (ADR-0033): carried qualifiers keep their original Evidence,
+ * single-cardinality axes replace, multiple-cardinality axes coexist, and new
+ * (axis, side) pairs append. Absence of a proposal never retracts a carried
+ * qualifier — retraction is a user control, not extraction silence.
+ */
+export function mergeRelationshipQualifiers(
+  entry: PredicateRegistryEntry,
+  current: readonly ClaimVersionQualifierRecord[],
+  proposed: readonly AdmittedQualifier[],
+): readonly AdmittedQualifier[] {
+  const semantics = entry.relationshipSemantics;
+  if (!semantics) return [];
+  const merged: AdmittedQualifier[] = current.map((record) => {
+    const replacement = proposed.find(
+      (candidate) =>
+        candidate.axisId === record.axisId && candidate.roleSide === record.roleSide,
+    );
+    if (!replacement) {
+      return {
+        axisId: record.axisId,
+        roleSide: record.roleSide,
+        typedValue: record.typedValue,
+        evidenceItemIds: [...record.evidenceItemIds],
+      };
+    }
+    const axis = semantics.qualifierAxes.find(
+      (candidate) => candidate.axisId === record.axisId,
+    );
+    if (axis?.cardinality === "multiple") {
+      return {
+        axisId: record.axisId,
+        roleSide: record.roleSide,
+        typedValue: canonicalValueSet([
+          ...asValueArray(record.typedValue),
+          ...asValueArray(replacement.typedValue),
+        ]),
+        evidenceItemIds: [
+          ...new Set([...record.evidenceItemIds, ...replacement.evidenceItemIds]),
+        ],
+      };
+    }
+    return { ...replacement };
+  });
+  for (const qualifier of proposed) {
+    const carried = current.some(
+      (record) =>
+        record.axisId === qualifier.axisId && record.roleSide === qualifier.roleSide,
+    );
+    if (!carried) {
+      merged.push(qualifier);
+    }
+  }
+  return merged;
+}
+
+function relationshipQualifiersChanged(
+  merged: readonly AdmittedQualifier[],
+  current: readonly ClaimVersionQualifierRecord[],
+): boolean {
+  if (merged.length !== current.length) return true;
+  return merged.some((qualifier) => {
+    const record = current.find(
+      (candidate) =>
+        candidate.axisId === qualifier.axisId &&
+        candidate.roleSide === qualifier.roleSide,
+    );
+    if (!record) return true;
+    return !qualifierValuesEqual(qualifier.typedValue, record.typedValue);
+  });
+}
+
+function temporalBoundsDiffer(a: TemporalBounds, b: TemporalBounds): boolean {
+  return (
+    (a.validFrom?.getTime() ?? null) !== (b.validFrom?.getTime() ?? null) ||
+    a.validFromPrecision !== b.validFromPrecision ||
+    (a.validTo?.getTime() ?? null) !== (b.validTo?.getTime() ?? null) ||
+    a.validToPrecision !== b.validToPrecision
+  );
 }
 
 /**
@@ -270,6 +501,23 @@ export function planClaimAdmission(input: ClaimAdmissionInput): ClaimAdmissionPl
     }
   }
 
+  // Qualifier validation runs after entity binding so the canonical side can
+  // resolve; an unbound party still parks before this point (needs_entity_resolution).
+  let admittedQualifiers: readonly AdmittedQualifier[] = [];
+  if (registryEntry.relationshipSemantics !== null) {
+    if (proposal.qualifiers.length > 0) {
+      const resolved = resolveQualifierProposals({ entry: registryEntry, proposal });
+      if (!resolved) {
+        return { action: "reject", reasonCode: "qualifier_invalid" };
+      }
+      admittedQualifiers = resolved;
+    }
+  } else if (proposal.qualifiers.length > 0) {
+    // Qualifiers exist only on relationship claims (ADR-0033); anywhere else
+    // they are a malformed proposal.
+    return { action: "reject", reasonCode: "qualifier_invalid" };
+  }
+
   if (statedKind === "impression") {
     const floor = impressionEvidenceFloor(registryEntry);
     if (!meetsImpressionFloor(input.evidence, floor)) {
@@ -283,7 +531,13 @@ export function planClaimAdmission(input: ClaimAdmissionInput): ClaimAdmissionPl
     }
   }
 
-  return routeAgainstCurrentVersion(input, registryEntry, statedKind, typedValue);
+  return routeAgainstCurrentVersion(
+    input,
+    registryEntry,
+    statedKind,
+    typedValue,
+    admittedQualifiers,
+  );
 }
 
 function routeAgainstCurrentVersion(
@@ -291,6 +545,7 @@ function routeAgainstCurrentVersion(
   registryEntry: PredicateRegistryEntry,
   statedKind: "objective" | "impression",
   typedValue: ClaimTypedValue,
+  admittedQualifiers: readonly AdmittedQualifier[],
 ): ClaimAdmissionPlan {
   const { proposal, currentVersion } = input;
   const relationshipDirection =
@@ -326,6 +581,7 @@ function routeAgainstCurrentVersion(
       scopeKey: proposal.scopeKey,
       typedValue,
       temporal,
+      qualifiers: admittedQualifiers,
       supersedesVersionId: null,
       reasonCodes: [],
     };
@@ -347,6 +603,55 @@ function routeAgainstCurrentVersion(
       supersedesVersionId: currentVersion.memoryClaimVersionId,
       reasonCodes: ["direct_statement_resolves_contest"],
     });
+  }
+
+  // Relationship state machine (ADR-0027 / 0029 / 0030 / 0033 / 0036): the
+  // typed value of a relationship is always empty, so a directly-stated
+  // temporal state change, validity refinement, or qualifier refinement is
+  // the version-advance signal — each appends an immutable ClaimVersion on the
+  // SAME logical Claim (canonical identity is Entity pair + Predicate only).
+  if (
+    registryEntry.relationshipSemantics !== null &&
+    statedKind === "objective" &&
+    proposal.basis === "directly_stated" &&
+    currentVersion.kind === "objective"
+  ) {
+    const currentQualifiers = input.currentVersionQualifiers ?? [];
+    const mergedQualifiers = mergeRelationshipQualifiers(
+      registryEntry,
+      currentQualifiers,
+      admittedQualifiers,
+    );
+    const statusChanged =
+      proposal.temporal.temporalStatus !== currentVersion.temporal.temporalStatus;
+    const boundsChanged = temporalBoundsDiffer(proposal.temporal, currentVersion.temporal);
+    const qualifiersChanged = relationshipQualifiersChanged(
+      mergedQualifiers,
+      currentQualifiers,
+    );
+    if (statusChanged || boundsChanged || qualifiersChanged) {
+      const restarted =
+        currentVersion.temporal.temporalStatus === "ended" &&
+        proposal.temporal.temporalStatus === "current";
+      return promotePlan(input, registryEntry, statedKind, typedValue, canonicalKey, {
+        conflictResolution: restarted
+          ? "claim_reuse_new_interval"
+          : "temporal_or_correction_supersede",
+        supersedesVersionId: currentVersion.memoryClaimVersionId,
+        reasonCodes: [
+          ...(statusChanged
+            ? [
+                restarted
+                  ? "relationship_restart_reuses_claim"
+                  : "relationship_state_change_advances_version",
+              ]
+            : []),
+          ...(boundsChanged ? ["relationship_validity_refined_by_direct_statement"] : []),
+          ...(qualifiersChanged ? ["qualifier_refined_by_direct_statement"] : []),
+        ],
+        qualifiers: mergedQualifiers,
+      });
+    }
   }
 
   const equal = valuesEqual(registryEntry, typedValue, currentVersion.typedValue);
@@ -454,6 +759,7 @@ function routeAgainstCurrentVersion(
       objectEntityVersionId,
       typedValue,
       temporal,
+      qualifiers: [],
       supersedesVersionId: currentVersion.memoryClaimVersionId,
       reasonCodes: ["mutually_exclusive_inferred_values"],
     };
@@ -479,9 +785,11 @@ function promotePlan(
       | "dormancy_requalified"
       | "temporal_or_correction_supersede"
       | "value_coexist"
-      | "direct_statement_reactivates";
+      | "direct_statement_reactivates"
+      | "claim_reuse_new_interval";
     supersedesVersionId: MemoryClaimVersionId | null;
     reasonCodes: readonly string[];
+    qualifiers?: readonly AdmittedQualifier[];
   },
 ): ClaimAdmissionPlan {
   const { proposal } = input;
@@ -512,6 +820,7 @@ function promotePlan(
           : typedValue
         : typedValue,
     temporal: proposal.temporal,
+    qualifiers: overrides.qualifiers ?? [],
     supersedesVersionId: overrides.supersedesVersionId,
     reasonCodes: overrides.reasonCodes,
   };

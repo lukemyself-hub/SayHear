@@ -73,6 +73,12 @@ export type MemoryForgetEvidenceExclusionId = string & {
 export type MemoryForgetReversalId = string & {
   readonly [memoryForgetReversalIdBrand]: "MemoryForgetReversalId";
 };
+export type MemoryClaimVersionQualifierId = string & {
+  readonly [memoryClaimVersionQualifierIdBrand]: "MemoryClaimVersionQualifierId";
+};
+export type RelationshipResolverHintId = string & {
+  readonly [relationshipResolverHintIdBrand]: "RelationshipResolverHintId";
+};
 declare const memoryClaimIdBrand: unique symbol;
 declare const memoryClaimVersionIdBrand: unique symbol;
 declare const claimEvidenceLinkIdBrand: unique symbol;
@@ -81,6 +87,8 @@ declare const memoryCandidateEvidenceLinkIdBrand: unique symbol;
 declare const memoryForgetRequestIdBrand: unique symbol;
 declare const memoryForgetEvidenceExclusionIdBrand: unique symbol;
 declare const memoryForgetReversalIdBrand: unique symbol;
+declare const memoryClaimVersionQualifierIdBrand: unique symbol;
+declare const relationshipResolverHintIdBrand: unique symbol;
 
 const uuidV7Pattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -174,6 +182,24 @@ export function asMemoryCandidateEvidenceLinkId(
 
 export function asMemoryForgetRequestId(value: string): MemoryForgetRequestId {
   return asOpaqueUuidV7(value, "MemoryForgetRequestId") as MemoryForgetRequestId;
+}
+
+export function asMemoryClaimVersionQualifierId(
+  value: string,
+): MemoryClaimVersionQualifierId {
+  return asOpaqueUuidV7(
+    value,
+    "MemoryClaimVersionQualifierId",
+  ) as MemoryClaimVersionQualifierId;
+}
+
+export function asRelationshipResolverHintId(
+  value: string,
+): RelationshipResolverHintId {
+  return asOpaqueUuidV7(
+    value,
+    "RelationshipResolverHintId",
+  ) as RelationshipResolverHintId;
 }
 
 export function asMemoryForgetEvidenceExclusionId(

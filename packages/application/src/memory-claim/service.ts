@@ -25,12 +25,16 @@ import {
   type AdmissibleEvidence,
   type CandidateDispositionPlan,
   type ClaimAdmissionPlan,
+  type ClaimVersionQualifierRecord,
   type MemoryCandidateProposal,
   type MemoryCandidateRecord,
   type MemoryClaimRecord,
   type MemoryClaimVersionRecord,
   type RegistryEntryLookup,
+  type RelationshipHintProjectionInputs,
 } from "./types";
+import type { RelationshipResolverHintRecord } from "../relationship-resolver-hints";
+import type { ResolverHintLocale } from "../relationship-resolver-hints";
 
 /**
  * Memory Claim service (SPEC #107 "Claims and admission"): the write-side
@@ -145,6 +149,28 @@ export type MemoryClaimRepository = Readonly<{
     claimId: MemoryClaimId,
   ): Promise<readonly MemoryClaimVersionRecord[]>;
   listClaimEvidenceItemIds(userId: UserId, claimId: MemoryClaimId): Promise<readonly string[]>;
+  // #115: Relationship Qualifiers and Resolver Hint projection reads
+  findCurrentPrimaryLabels(
+    userId: UserId,
+    entityIds: readonly string[],
+  ): Promise<Readonly<Record<string, Readonly<{ zh: string | null; en: string | null }>>>>;
+  listClaimVersionQualifiers(
+    userId: UserId,
+    versionId: MemoryClaimVersionId,
+  ): Promise<readonly ClaimVersionQualifierRecord[]>;
+  listClaimQualifiers(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<readonly ClaimVersionQualifierRecord[]>;
+  listRelationshipResolverHints(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<readonly RelationshipResolverHintRecord[]>;
+  listResolverHintsForEntity(
+    userId: UserId,
+    entityId: string,
+    locale: ResolverHintLocale,
+  ): Promise<readonly RelationshipResolverHintRecord[]>;
   listActiveExcludedEvidenceIds(userId: UserId, claimId: MemoryClaimId): Promise<readonly string[]>;
   findAppliedWholeClaimForget(
     userId: UserId,
@@ -177,6 +203,7 @@ export type MemoryClaimRepository = Readonly<{
     plan: ClaimAdmissionPlan;
     evidenceItemIds: readonly string[];
     lineage: MemoryCandidateProposal["lineage"];
+    relationshipHints: RelationshipHintProjectionInputs | null;
     now: Date;
   }): Promise<Readonly<{
     memoryClaimId: MemoryClaimId;
@@ -208,8 +235,20 @@ export type MemoryClaimRepository = Readonly<{
     reversalEvidenceId: string;
     claimKind: "objective" | "impression";
     retractedVersionId: MemoryClaimVersionId;
+    relationshipHints?: RelationshipHintProjectionInputs | null;
     now: Date;
   }): Promise<Readonly<{ claimVersionId: MemoryClaimVersionId }>>;
+  /**
+   * #115: rebuild the claim's Resolver Hint rows from its CURRENT version
+   * inside one transaction (delete + reinsert; ADR-0027 rebuildable
+   * projection). No-op for non-relationship claims.
+   */
+  executeHintRebuildPlan(input: {
+    userId: UserId;
+    claimId: MemoryClaimId;
+    hints: RelationshipHintProjectionInputs;
+    now: Date;
+  }): Promise<Readonly<{ rebuiltRows: number }>>;
 }>;
 
 export type RecordCandidateOutcome =
@@ -330,10 +369,20 @@ export type MemoryClaimService = Readonly<{
     Readonly<{
       claim: MemoryClaimRecord;
       versions: readonly MemoryClaimVersionRecord[];
+      qualifiers: readonly ClaimVersionQualifierRecord[];
+      resolverHints: readonly RelationshipResolverHintRecord[];
       evidenceItemIds: readonly string[];
       activeForget: Readonly<{ requestId: string }> | null;
     }> | null
   >;
+  /**
+   * #115: rebuild the Resolver Hint projection of one claim from its CURRENT
+   * version (ADR-0027). Returns 0 rows for non-relationship claims.
+   */
+  rebuildRelationshipResolverHints(input: {
+    userId: UserId;
+    claimId: MemoryClaimId;
+  }): Promise<Readonly<{ rebuiltRows: number }>>;
 }>;
 
 export function createMemoryClaimService(dependencies: {
@@ -555,9 +604,17 @@ export function createMemoryClaimService(dependencies: {
       const excludedEvidenceIds = existingClaim
         ? await repository.listActiveExcludedEvidenceIds(userId, existingClaim.memoryClaimId)
         : [];
+      const currentVersionQualifiers =
+        existingClaim && currentVersion && registryEntry.relationshipSemantics
+          ? await repository.listClaimVersionQualifiers(
+              userId,
+              currentVersion.memoryClaimVersionId,
+            )
+          : [];
+      const relationshipHints = relationshipHintInputsFor(registry, registryEntry);
 
       const plan = planClaimAdmission({
-        proposal: candidateRecordToProposal(candidate),
+        proposal: candidateRecordToProposal(candidate, evidenceItemIds),
         registryEntry,
         registryVersion: registry.registryVersion(),
         selfEntityId: selfEntity.entityId,
@@ -566,6 +623,7 @@ export function createMemoryClaimService(dependencies: {
           ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey }
           : null,
         currentVersion,
+        currentVersionQualifiers,
         evidence,
         excludedEvidenceIds,
       });
@@ -581,6 +639,7 @@ export function createMemoryClaimService(dependencies: {
           plan,
           evidenceItemIds,
           lineage: candidateRecordToLineage(candidate),
+          relationshipHints,
           now,
         });
         await repository.transitionCandidate({
@@ -776,6 +835,7 @@ export function createMemoryClaimService(dependencies: {
         // Old Evidence stays unusable; the reversal event must be new words.
         return { outcome: "evidence_ineligible" };
       }
+      const reversalEntry = registry.entryFor(claim.predicateId);
       const executed = await repository.executeForgetReversalPlan({
         userId,
         claimId,
@@ -784,6 +844,9 @@ export function createMemoryClaimService(dependencies: {
         reversalEvidenceId,
         claimKind: currentVersion.kind,
         retractedVersionId: currentVersion.memoryClaimVersionId,
+        relationshipHints: reversalEntry
+          ? relationshipHintInputsFor(registry, reversalEntry)
+          : null,
         now,
       });
       return {
@@ -798,17 +861,74 @@ export function createMemoryClaimService(dependencies: {
       if (!claim) {
         return null;
       }
-      const [versions, evidenceItemIds, activeForget] = await Promise.all([
-        repository.listClaimVersions(userId, claimId),
-        repository.listClaimEvidenceItemIds(userId, claimId),
-        repository.findAppliedWholeClaimForget(userId, claimId),
-      ]);
-      return { claim, versions, evidenceItemIds, activeForget };
+      const [versions, evidenceItemIds, activeForget, qualifiers, resolverHints] =
+        await Promise.all([
+          repository.listClaimVersions(userId, claimId),
+          repository.listClaimEvidenceItemIds(userId, claimId),
+          repository.findAppliedWholeClaimForget(userId, claimId),
+          repository.listClaimQualifiers(userId, claimId),
+          repository.listRelationshipResolverHints(userId, claimId),
+        ]);
+      return {
+        claim,
+        versions,
+        qualifiers,
+        resolverHints,
+        evidenceItemIds,
+        activeForget,
+      };
+    },
+
+    async rebuildRelationshipResolverHints({ userId, claimId }) {
+      const claim = await repository.loadClaim(userId, claimId);
+      if (!claim) {
+        throw new MemoryClaimNotFoundError(claimId);
+      }
+      const entry = registry.entryFor(claim.predicateId);
+      if (!entry || !entry.relationshipSemantics) {
+        return { rebuiltRows: 0 };
+      }
+      const hints = relationshipHintInputsFor(registry, entry);
+      if (!hints) {
+        return { rebuiltRows: 0 };
+      }
+      const executed = await repository.executeHintRebuildPlan({
+        userId,
+        claimId,
+        hints,
+        now: clock(),
+      });
+      return { rebuiltRows: executed.rebuiltRows };
     },
   };
 }
 
-function candidateRecordToProposal(candidate: MemoryCandidateRecord): MemoryCandidateProposal {
+/**
+ * Registry material for hint projection, or null when the entry is not a
+ * relationship, publishes no hint projections, or the registry lookup does
+ * not expose the projection material (narrow test doubles). Shared by the
+ * Memory Claim service and the consolidation run commit.
+ */
+export function relationshipHintInputsFor(
+  registry: RegistryEntryLookup,
+  entry: NonNullable<ReturnType<RegistryEntryLookup["entryFor"]>>,
+): RelationshipHintProjectionInputs | null {
+  if (!entry.relationshipSemantics) return null;
+  if (!entry.temporalSemantics.resolverHintProjections) return null;
+  if (!registry.relationshipProjectionsFor || !registry.predicateLocalizationsFor) {
+    return null;
+  }
+  return {
+    entry,
+    projections: registry.relationshipProjectionsFor(entry.predicateId),
+    localizations: registry.predicateLocalizationsFor(entry.predicateId),
+  };
+}
+
+function candidateRecordToProposal(
+  candidate: MemoryCandidateRecord,
+  evidenceItemIds: readonly string[],
+): MemoryCandidateProposal {
   return {
     userId: candidate.userId,
     candidateKind: candidate.candidateKind,
@@ -832,7 +952,8 @@ function candidateRecordToProposal(candidate: MemoryCandidateRecord): MemoryCand
     objectEntityMentionId: null,
     scopeKey: candidate.proposedScopeKey,
     temporal: candidate.temporal,
-    evidenceItemIds: [],
+    qualifiers: candidate.proposedQualifiers,
+    evidenceItemIds,
     lineage: candidateRecordToLineage(candidate),
   };
 }

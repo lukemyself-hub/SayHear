@@ -3,10 +3,16 @@ import type {
   MemoryCandidateId,
   MemoryClaimId,
   MemoryClaimVersionId,
+  MemoryClaimVersionQualifierId,
   UserId,
 } from "@sayhear/domain";
 
-import type { ClaimKind, PredicateRegistryEntry } from "../predicate-registry/types";
+import type {
+  ClaimKind,
+  PredicateLocalization,
+  PredicateRegistryEntry,
+  RelationshipProjectionLocalization,
+} from "../predicate-registry/types";
 
 /**
  * Memory Claim domain types (SPEC #107 "Claims and admission", architecture
@@ -94,6 +100,48 @@ export type SuccessorTrigger =
 
 export type ClaimTypedValue = string | readonly string[];
 
+/**
+ * Relationship Qualifier role vocabulary (ADR-0033). Qualifier proposals name
+ * the candidate-relative side (`subject` / `object`); deterministic admission
+ * resolves it onto the canonical Claim side — for directed predicates the
+ * registry's canonical direction, for symmetric predicates the sorted
+ * Entity-pair order that also builds the canonical key. Qualifiers never enter
+ * Predicate IDs, Claim identity, or Entity labels.
+ */
+export type CandidateRelativeRoleSide = "subject" | "object";
+export type QualifierRoleSide = "canonical_subject" | "counterpart";
+
+/**
+ * One qualifier assertion inside a MemoryCandidate proposal (ADR-0033). It
+ * carries its own direct User Evidence — a qualifier without its own evidence
+ * never admits.
+ */
+export type ProposedQualifier = Readonly<{
+  axisId: string;
+  roleSide: CandidateRelativeRoleSide;
+  typedValue: ClaimTypedValue;
+  evidenceItemIds: readonly string[];
+}>;
+
+/** Deterministically validated qualifier bound into a ClaimVersion. */
+export type AdmittedQualifier = Readonly<{
+  axisId: string;
+  roleSide: QualifierRoleSide;
+  typedValue: ClaimTypedValue;
+  evidenceItemIds: readonly string[];
+}>;
+
+/** Immutable qualifier assertion stored on one ClaimVersion. */
+export type ClaimVersionQualifierRecord = Readonly<{
+  memoryClaimVersionQualifierId: MemoryClaimVersionQualifierId;
+  memoryClaimVersionId: MemoryClaimVersionId;
+  axisId: string;
+  roleSide: QualifierRoleSide;
+  typedValue: ClaimTypedValue;
+  evidenceItemIds: readonly string[];
+  createdAt: Date;
+}>;
+
 export type TemporalBounds = Readonly<{
   temporalStatus: TemporalStatus;
   validFrom: Date | null;
@@ -150,6 +198,8 @@ export type MemoryCandidateProposal = Readonly<{
   scopeKey: string;
   temporal: TemporalBounds;
   evidenceItemIds: readonly string[];
+  /** Relationship Qualifier assertions (ADR-0033); empty for non-relationships. */
+  qualifiers: readonly ProposedQualifier[];
   lineage: CandidateLineage;
 }>;
 
@@ -168,6 +218,7 @@ export type MemoryCandidateRecord = Readonly<{
   proposedObjectValue: ClaimTypedValue;
   proposedScopeKey: string;
   temporal: TemporalBounds;
+  proposedQualifiers: readonly ProposedQualifier[];
   extractionPolicyVersion: string;
   /** Runtime lineage carried onto promoted ClaimVersions (ADR-0074). */
   generationCommandId: string | null;
@@ -256,6 +307,12 @@ export type ClaimAdmissionPlan =
       scopeKey: string;
       typedValue: ClaimTypedValue;
       temporal: TemporalBounds;
+      /**
+       * Qualifier assertions on the new version (ADR-0033): the merged current
+       * qualifier set (carried qualifiers keep their original Evidence).
+       * Non-relationship plans always carry the empty set.
+       */
+      qualifiers: readonly AdmittedQualifier[];
       supersedesVersionId: MemoryClaimVersionId | null;
       reasonCodes: readonly string[];
     }>
@@ -271,6 +328,7 @@ export type ClaimAdmissionPlan =
       objectEntityVersionId: string | null;
       typedValue: ClaimTypedValue;
       temporal: TemporalBounds;
+      qualifiers: readonly AdmittedQualifier[];
       supersedesVersionId: MemoryClaimVersionId | null;
       reasonCodes: readonly string[];
     }>
@@ -319,7 +377,8 @@ export type AdmissionRejectionCode =
   | "relationship_object_missing"
   | "relationship_object_unbound"
   | "subject_not_self_entity"
-  | "relationship_parties_identical";
+  | "relationship_parties_identical"
+  | "qualifier_invalid";
 
 /**
  * Deterministic disposition write for a terminal candidate. `stale`
@@ -356,8 +415,31 @@ export type ImpressionDormancyPlan = Readonly<{
   latestQualifyingEvidenceAt: Date | null;
 }>;
 
+/**
+ * Registry material needed to project Relationship Resolver Hints for one
+ * relationship entry (ADR-0027). Callers derive it from their registry
+ * snapshot; claim writes thread it into the transactional executors so hints
+ * rebuild in the same transaction as the version advance.
+ */
+export type RelationshipHintProjectionInputs = Readonly<{
+  entry: PredicateRegistryEntry;
+  projections: readonly RelationshipProjectionLocalization[];
+  localizations: readonly PredicateLocalization[];
+}>;
+
 /** Registry entry lookup the admission layer depends on. */
 export type RegistryEntryLookup = Readonly<{
   entryFor(predicateId: string): PredicateRegistryEntry | null;
   registryVersion(): number;
+  /**
+   * #115: published relationship projection templates + predicate labels for
+   * Resolver Hint planning. Optional so narrow test doubles stay valid; hint
+   * projection is disabled when either is absent.
+   */
+  relationshipProjectionsFor?(
+    predicateId: string,
+  ): readonly RelationshipProjectionLocalization[];
+  predicateLocalizationsFor?(
+    predicateId: string,
+  ): readonly PredicateLocalization[];
 }>;

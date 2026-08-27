@@ -74,6 +74,9 @@ describe("Journal regeneration Action admission system seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        relationship_resolver_hints,
+        memory_claim_version_qualifier_evidence,
+        memory_claim_version_qualifiers,
         memory_consolidation_diffs,
         memory_consolidation_runs,
         fast_path_session_items,

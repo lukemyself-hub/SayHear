@@ -220,8 +220,9 @@ describe("validateConsolidateResult", () => {
           {
             kind: "propose_new",
             candidateId: null,
+            // deliberately invalid model output; the validator must reject it
             proposal: {
-              basis: "guessed",
+              basis: "guessed" as unknown as "directly_stated",
               candidateKind: "impression",
               predicateId: null,
               proposedConcept: "something",
@@ -258,8 +259,8 @@ describe("validateConsolidateResult", () => {
               proposedConcept: "something",
               typedValue: "x",
               scopeKey: "",
-              temporal: {
-                temporalStatus: "sometimes",
+                temporal: {
+                temporalStatus: "sometimes" as unknown as "current",
                 validFrom: null,
                 validFromPrecision: "unknown",
                 validTo: null,

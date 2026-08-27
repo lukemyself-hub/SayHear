@@ -21,6 +21,7 @@ import {
   type MemoryConsolidationRunStatus,
   type RegistryEntryLookup,
   dedupeFingerprint,
+  relationshipHintInputsFor,
   dateOrdinal,
   evidenceCutoff,
   type CommitConsolidationRunResult,
@@ -52,6 +53,7 @@ import {
   findTerminalGovernanceBlockWithin,
   insertCandidateEvidenceLinksWithin,
   insertMemoryCandidateWithin,
+  listClaimVersionQualifiersWithin,
   recordCandidateDispositionWithin,
   rowToVersion,
 } from "./postgres-memory-claim-repository";
@@ -1223,6 +1225,18 @@ async function admitCandidateWithin(
         existingClaim.memoryClaimId,
       )
     : [];
+  const currentVersionQualifiers =
+    existingClaim && currentVersion && registryEntry.relationshipSemantics
+      ? await listClaimVersionQualifiersWithin(
+          client,
+          asUserId(context.userId),
+          currentVersion.memoryClaimVersionId,
+        )
+      : [];
+  const relationshipHints = relationshipHintInputsFor(
+    context.registry,
+    registryEntry,
+  );
 
   const plan = planClaimAdmission({
     proposal: candidateRecordToProposal(candidate, evidenceItemIds),
@@ -1234,6 +1248,7 @@ async function admitCandidateWithin(
       ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey }
       : null,
     currentVersion,
+    currentVersionQualifiers,
     evidence,
     excludedEvidenceIds,
   });
@@ -1275,6 +1290,7 @@ async function admitCandidateWithin(
         promptVersion: candidate.promptVersion,
         sourceReflectionVersionId: candidate.sourceReflectionVersionId,
       },
+      relationshipHints,
       now: context.now,
     });
     await transitionCandidateWithin(client, context.userId, candidateId, [
@@ -1446,6 +1462,7 @@ function candidateRecordToProposal(
     objectEntityMentionId: null,
     scopeKey: candidate.proposedScopeKey ?? "",
     temporal: candidate.temporal,
+    qualifiers: candidate.proposedQualifiers,
     evidenceItemIds,
     lineage: {
       extractionPolicyVersion: candidate.extractionPolicyVersion,
@@ -1457,6 +1474,7 @@ function candidateRecordToProposal(
     },
   };
 }
+
 
 // ── Weekly deterministic passes ─────────────────────────────────────────────
 
@@ -1668,6 +1686,7 @@ async function runSweeperWithin(
        proposed_scope_key = NULL,
        proposed_valid_from = NULL,
        proposed_valid_to = NULL,
+       proposed_qualifiers = NULL,
        content_purged_at = $3
      WHERE user_id = $1
        AND status IN ('rejected', 'stale')
