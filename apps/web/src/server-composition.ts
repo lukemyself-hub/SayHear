@@ -9,6 +9,7 @@ import {
   createConversationResponseService,
   createJournalEligibilityService,
   createDialogueStateService,
+  createEntityService,
   createEvidenceService,
   createJournalService,
   createOwnerFullPurgeService,
@@ -40,6 +41,7 @@ import {
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
   PostgresEvidenceRepository,
+  PostgresEntityRepository,
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresOwnerPurgeRepository,
@@ -127,6 +129,10 @@ export function createServerComposition() {
     writesEnabled: configuration.writeSwitches.evidenceExtractionEnabled,
   });
   const journalRepository = new PostgresJournalRepository(pool);
+  const entityService = createEntityService({
+    repository: new PostgresEntityRepository(pool),
+    clock: configuration.clock,
+  });
   const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
   const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
   const journalService = createJournalService({
@@ -351,6 +357,7 @@ export function createServerComposition() {
       repository: continuousExchangeRepository,
     }),
     conversationService,
+    entityService,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

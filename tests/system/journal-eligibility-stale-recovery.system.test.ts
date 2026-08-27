@@ -112,6 +112,12 @@ describe("Journal eligibility stale-command recovery system seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        entity_mention_candidates,
+        entity_mentions,
+        entity_labels,
+        user_self_entities,
+        entity_versions,
+        entities,
         owner_purge_receipts,
         owner_purge_orders,
         conversation_action_payloads,

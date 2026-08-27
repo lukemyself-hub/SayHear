@@ -100,6 +100,12 @@ describe("Authenticated Internal Text Conversation System Seam — Safety Postur
     clockNowMs = BASE_TIME_MS;
     await database.pool.query(`
       TRUNCATE TABLE
+        entity_mention_candidates,
+        entity_mentions,
+        entity_labels,
+        user_self_entities,
+        entity_versions,
+        entities,
         safety_posture_alerts,
         current_safety_postures,
         safety_postures,
