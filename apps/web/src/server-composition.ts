@@ -19,7 +19,7 @@ import {
   createUserTextConversationService,
   type JournalEligibilityRepository,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
-  ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+  CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   CANONICAL_PERSONA_VERSION,
   CHINESE_LOCALE_PACK_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
@@ -204,7 +204,7 @@ export function createServerComposition() {
       freshnessPolicy: "source_valid:v1",
       chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
       englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
-      harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
+      harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
       conversationActionCatalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
@@ -261,9 +261,11 @@ export function createServerComposition() {
     repository: responseRepository,
   });
   const actionGateway = createConversationActionGateway({
-    handler: createJournalRegenerationActionHandler({
-      generationPolicyVersion: draftConfiguration.policyVersion,
-    }),
+    handlers: [
+      createJournalRegenerationActionHandler({
+        generationPolicyVersion: draftConfiguration.policyVersion,
+      }),
+    ],
     repository: actionRepository,
   });
   const conversationAgentHarness = createConversationAgentHarness({
@@ -340,7 +342,7 @@ export function createServerComposition() {
       contextCompiler,
       conversationService,
       harness: conversationAgentHarness,
-      harnessPolicy: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+      harnessPolicy: CATALOG_V2_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
       recoveryGate,
     }),

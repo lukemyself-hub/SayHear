@@ -179,7 +179,7 @@ describe("Journal eligibility stale-command recovery system seam", () => {
       pitrRetentionDays: 7,
       snapshotRetentionDays: 30,
       status: "verified",
-      validUntil: new Date("2026-08-27T16:00:00.000Z"),
+      validUntil: new Date("2027-08-27T16:00:00.000Z"),
       verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
     });
   });

@@ -79,33 +79,48 @@ export type ConversationActionSchema = Readonly<{
 }>;
 
 /**
- * A single capability descriptor in the Catalog. The full capability metadata
- * (input schema, target/effect/trust class, confirmation, execution mode,
- * idempotency, consistency, rate, receipt, availability, handler binding) is
- * populated when #25 publishes the first Definition. Issue #24 only freezes the
- * Catalog seam and the empty initial instance, so this type carries the kind and
- * schema version identity a Decision Command must record.
+ * A single capability descriptor in the Catalog (ADR-0098). The descriptor
+ * carries only the cross-cutting contracts the Gateway, Harness, permission
+ * checks, observability, and Receipt need; domain state machines stay in typed
+ * handlers.
+ *
+ * Since issue #109 a Catalog may carry multiple coexisting Definitions, and an
+ * execution mode of `"synchronous"` commits its effect inside the admission
+ * transaction instead of creating a durable workflow command. Open string
+ * unions for capability identities keep new Definitions publishable without
+ * editing this module; publication checks still fail closed below.
  */
 export type ConversationActionDefinition = Readonly<{
   actionKind: ConversationActionKind;
   availabilityPolicy: "authenticated_owner";
-  consistencyPolicy: "exact_head";
+  consistencyPolicy: string;
   confirmationPolicy: "none";
-  effectClass: "derived_artifact_regeneration";
-  executionMode: "async";
-  handlerBinding: "journal.regeneration.v1";
-  idempotencyScope: "decision_command_action_target";
+  effectClass: string;
+  /**
+   * `"async"` creates an idempotent durable workflow command / outbox entry in
+   * the admission transaction; `"synchronous"` commits the handler's domain
+   * effect inside that same transaction and finishes with a terminal
+   * Completion Receipt (ADR-0099).
+   */
+  executionMode: "async" | "synchronous";
+  /** Model-facing Function description; generation is Definition-driven. */
+  functionDescription: string;
+  handlerBinding: string;
+  idempotencyScope: string;
   inputSchema: ConversationActionSchema;
   ratePolicy: Readonly<{
-    maxInFlightPerTarget: 1;
-    name: "journal_regeneration:v1";
+    /** Positive integer cap on in-flight executions, or null for uncapped. */
+    maxInFlightPerTarget: number | null;
+    name: string;
   }>;
   schemaVersion: string;
   targetContract: Readonly<{
-    handleKind: "journal";
+    /** The required inputSchema property carrying the opaque reference handle. */
+    handleArgument: string;
+    handleKind: string;
     versioned: true;
   }>;
-  trustClass: "user_private_derived_artifact";
+  trustClass: string;
 }>;
 
 /**
@@ -119,20 +134,17 @@ export type ConversationActionCatalog = Readonly<{
 }>;
 
 /**
- * The provider-independent normalized Action selection. The Provider Adapter
- * must produce this from a native function / strict-structured-output selection
- * before the application seam (issue #24 AC6). With an empty Catalog no valid
- * `actionKind` exists, so the type is uninhabited and the Harness must fail
- * closed rather than accept or invent an Action (AC8).
+ * The provider-independent normalized Action selection (ADR-0095). The Provider
+ * Adapter must produce this from a native function / strict-structured-output
+ * selection before the application seam. Arguments are validated against the
+ * selected Definition's inputSchema; the target reference handle arrives under
+ * the Definition's `targetContract.handleArgument` property.
  */
 export type ConversationActionProposal = Readonly<{
-  actionKind: "regenerate_journal";
-  arguments: Readonly<{
-    guidance?: string;
-    journalHandle: string;
-  }>;
+  actionKind: ConversationActionKind;
+  arguments: Readonly<Record<string, unknown>>;
   requestEventRevisionId: ConversationEventRevisionId;
-  schemaVersion: "regenerate-journal:v1";
+  schemaVersion: string;
 }>;
 
 export type ConversationActionGatewayContext = Readonly<{
@@ -192,6 +204,19 @@ export const ACTION_ENABLED_CONVERSATION_HARNESS_POLICY: ConversationHarnessPoli
     maxStateChangingActions: 1,
   });
 
+/**
+ * The policy for Catalog v2 execution (issue #109): multiple coexisting
+ * Definitions and the synchronous in-transaction mode are eligible, while the
+ * bounded one-state-changing-Action-per-Decision limit is unchanged (ADR-0093).
+ * Rollback re-pins conversation-harness:v2.
+ */
+export const CATALOG_V2_CONVERSATION_HARNESS_POLICY: ConversationHarnessPolicy =
+  Object.freeze({
+    version: "conversation-harness:v3",
+    maxDecisionStages: 1,
+    maxStateChangingActions: 1,
+  });
+
 export const REGENERATE_JOURNAL_ACTION_DEFINITION: ConversationActionDefinition =
   Object.freeze({
     actionKind: "regenerate_journal",
@@ -200,6 +225,8 @@ export const REGENERATE_JOURNAL_ACTION_DEFINITION: ConversationActionDefinition 
     confirmationPolicy: "none",
     effectClass: "derived_artifact_regeneration",
     executionMode: "async",
+    functionDescription:
+      "Regenerate the current Journal using the same evidence. Optional guidance may improve emphasis, clarity, or organization but cannot change facts.",
     handlerBinding: "journal.regeneration.v1",
     idempotencyScope: "decision_command_action_target",
     inputSchema: Object.freeze({
@@ -218,13 +245,14 @@ export const REGENERATE_JOURNAL_ACTION_DEFINITION: ConversationActionDefinition 
       type: "object",
     }),
     ratePolicy: Object.freeze({
-      maxInFlightPerTarget: 1,
+      maxInFlightPerTarget: 1 as const,
       name: "journal_regeneration:v1",
     }),
     schemaVersion: "regenerate-journal:v1",
     targetContract: Object.freeze({
+      handleArgument: "journalHandle",
       handleKind: "journal",
-      versioned: true,
+      versioned: true as const,
     }),
     trustClass: "user_private_derived_artifact",
   });
@@ -235,127 +263,191 @@ export const JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG: ConversationActio
     version: "conversation-action-catalog:journal-regeneration:v1",
   });
 
+/**
+ * The Definitions eligible for this Decision: each Definition carries at least
+ * one ActionReferenceHandle for its kind in the frozen CompiledContext. A
+ * Definition without a minted handle exposes no Function this turn.
+ */
+export function actionDefinitionsForCatalog(
+  catalog: ConversationActionCatalog,
+  handles: readonly ActionReferenceHandle[] = [],
+): readonly ConversationActionDefinition[] {
+  if (!validateConversationActionCatalog(catalog).valid) return [];
+  return catalog.definitions.filter((definition) =>
+    handles.some((handle) => handle.actionKinds.includes(definition.actionKind)),
+  );
+}
+
+/**
+ * Definition-driven model-facing Function generation (ADR-0095): one Function
+ * per eligible Definition, named by its action kind and described by its own
+ * `functionDescription`.
+ */
+export function conversationFunctionsForActionDefinitions(
+  definitions: readonly ConversationActionDefinition[],
+): readonly ConversationFunctionDefinition[] {
+  return definitions.map((definition) => ({
+    description: definition.functionDescription,
+    name: definition.actionKind,
+    parameters: definition.inputSchema,
+    strict: true,
+  }));
+}
+
 export function actionFunctionsForCatalog(
   catalog: ConversationActionCatalog,
   handles: readonly ActionReferenceHandle[] = [],
 ): readonly ConversationFunctionDefinition[] {
-  if (!validateConversationActionCatalog(catalog).valid) return [];
-  return catalog.definitions.flatMap((definition) => {
-    if (definition.actionKind !== "regenerate_journal") return [];
-    const handlesForAction = handles.filter((handle) =>
-      handle.actionKinds.includes(definition.actionKind),
-    );
-    if (handlesForAction.length === 0) return [];
-    return [
-      {
-        description:
-          "Regenerate the current Journal using the same evidence. Optional guidance may improve emphasis, clarity, or organization but cannot change facts.",
-        name: definition.actionKind,
-        parameters: definition.inputSchema,
-        strict: true,
-      },
-    ];
-  });
+  return conversationFunctionsForActionDefinitions(
+    actionDefinitionsForCatalog(catalog, handles),
+  );
 }
 
+function stringArgumentMatchesSchema(
+  value: unknown,
+  schema: Readonly<Record<string, unknown>>,
+): boolean {
+  if (typeof value !== "string") return false;
+  const minLength = schema.minLength;
+  if (typeof minLength === "number" && value.length < minLength) return false;
+  const maxLength = schema.maxLength;
+  if (typeof maxLength === "number" && value.length > maxLength) return false;
+  return true;
+}
+
+/**
+ * Normalizes a provider Function selection into the provider-independent
+ * `ConversationActionProposal` union against the frozen Definition set the
+ * Decision Command offered (ADR-0095). Unknown names and Schema-violating
+ * arguments fail closed as `{ type: "invalid" }`.
+ */
 export function normalizeProviderActionProposal(input: {
   rawArguments: string;
   rawFunctionName: string;
   requestEventRevisionId: ConversationEventRevisionId;
-  functions: readonly ConversationFunctionDefinition[];
+  definitions: readonly ConversationActionDefinition[];
 }):
   | Readonly<{
       proposal: ConversationActionProposal;
       type: "normalized";
     }>
   | Readonly<{ type: "invalid" }> {
-  const definition = input.functions.find(
-    (candidate) => candidate.name === input.rawFunctionName,
+  const definition = input.definitions.find(
+    (candidate) => candidate.actionKind === input.rawFunctionName,
   );
-  if (!definition || definition.strict !== true) return { type: "invalid" };
+  if (!definition) return { type: "invalid" };
   let parsed: unknown;
   try {
     parsed = JSON.parse(input.rawArguments);
   } catch {
     return { type: "invalid" };
   }
-  if (!isRecord(parsed) || typeof parsed.journalHandle !== "string") {
-    return { type: "invalid" };
+  if (!isRecord(parsed)) return { type: "invalid" };
+  const schemaProperties = definition.inputSchema.properties;
+  for (const key of Object.keys(parsed)) {
+    if (!(key in schemaProperties)) return { type: "invalid" };
+    if (
+      schemaProperties[key]?.type === "string" &&
+      !stringArgumentMatchesSchema(parsed[key], schemaProperties[key]!)
+    ) {
+      return { type: "invalid" };
+    }
   }
-  if (
-    Object.keys(parsed).some(
-      (key) => key !== "journalHandle" && key !== "guidance",
-    ) ||
-    parsed.journalHandle.length === 0
-  ) {
-    return { type: "invalid" };
-  }
-  if (
-    parsed.guidance !== undefined &&
-    (typeof parsed.guidance !== "string" ||
-      parsed.guidance.length >
-        Number(
-          REGENERATE_JOURNAL_ACTION_DEFINITION.inputSchema.properties.guidance
-            ?.maxLength ?? 1_000,
-        ))
-  ) {
-    return { type: "invalid" };
+  for (const requiredKey of definition.inputSchema.required) {
+    const requiredSchema = schemaProperties[requiredKey];
+    if (
+      !(requiredKey in parsed) ||
+      (requiredSchema?.type === "string" &&
+        !stringArgumentMatchesSchema(parsed[requiredKey], requiredSchema!))
+    ) {
+      return { type: "invalid" };
+    }
   }
   return {
     proposal: {
-      actionKind: "regenerate_journal",
-      arguments: {
-        journalHandle: parsed.journalHandle,
-        ...(parsed.guidance === undefined ? {} : { guidance: parsed.guidance }),
-      },
+      actionKind: definition.actionKind,
+      arguments: { ...parsed },
       requestEventRevisionId: input.requestEventRevisionId,
-      schemaVersion: "regenerate-journal:v1",
+      schemaVersion: definition.schemaVersion,
     },
     type: "normalized",
   };
 }
 
+/**
+ * Catalog publication check (ADR-0091 / ADR-0098 / ADR-0100). Any number of
+ * coexisting Definitions validates when every one satisfies the cross-cutting
+ * contract: owner-only availability, no secondary confirmation, a bounded
+ * execution mode, a safe closed object schema whose required target-handle
+ * property is declared by `targetContract.handleArgument`, and non-empty
+ * capability identities. Anything else fails closed.
+ */
 export function validateConversationActionCatalog(
   catalog: ConversationActionCatalog,
 ): { valid: true } | { valid: false; reason: string } {
   if (!catalog.version || !Array.isArray(catalog.definitions)) {
     return { valid: false, reason: "invalid_catalog" };
   }
-  if (catalog.definitions.length > 1) {
-    return { valid: false, reason: "multiple_action_definitions" };
-  }
   const seen = new Set<string>();
   for (const definition of catalog.definitions) {
+    if (typeof definition?.actionKind !== "string" || definition.actionKind.length === 0) {
+      return { valid: false, reason: "invalid_definition_contract" };
+    }
     if (seen.has(definition.actionKind)) {
       return { valid: false, reason: "duplicate_action_kind" };
     }
     seen.add(definition.actionKind);
-    const propertyNames = Object.keys(definition.inputSchema.properties).sort();
+    const schema = definition.inputSchema;
+    const propertyNames: readonly string[] = Object.keys(
+      schema?.properties ?? {},
+    );
+    const requiredKeys: readonly string[] = schema?.required ?? [];
+    const handleArgument =
+      typeof definition.targetContract?.handleArgument === "string"
+        ? definition.targetContract.handleArgument
+        : null;
+    const handleSchema = handleArgument ? schema.properties[handleArgument] : undefined;
+    const minHandleLength = handleSchema?.minLength;
     if (
-      definition.actionKind !== "regenerate_journal" ||
       definition.availabilityPolicy !== "authenticated_owner" ||
-      definition.consistencyPolicy !== "exact_head" ||
-      definition.effectClass !== "derived_artifact_regeneration" ||
-      definition.trustClass !== "user_private_derived_artifact" ||
       definition.confirmationPolicy !== "none" ||
-      definition.executionMode !== "async" ||
-      definition.handlerBinding !== "journal.regeneration.v1" ||
-      definition.idempotencyScope !== "decision_command_action_target" ||
-      definition.targetContract.versioned !== true ||
-      definition.targetContract.handleKind !== "journal" ||
-      definition.ratePolicy.maxInFlightPerTarget !== 1 ||
-      definition.ratePolicy.name !== "journal_regeneration:v1" ||
-      definition.inputSchema.type !== "object" ||
-      definition.inputSchema.additionalProperties !== false ||
-      definition.inputSchema.required.length !== 1 ||
-      definition.inputSchema.required[0] !== "journalHandle" ||
-      propertyNames.length !== 2 ||
-      propertyNames[0] !== "guidance" ||
-      propertyNames[1] !== "journalHandle" ||
-      definition.inputSchema.properties.journalHandle?.type !== "string" ||
-      definition.inputSchema.properties.journalHandle?.minLength !== 1 ||
-      definition.inputSchema.properties.guidance?.type !== "string" ||
-      definition.inputSchema.properties.guidance?.maxLength !== 1_000
+      (definition.executionMode !== "async" &&
+        definition.executionMode !== "synchronous") ||
+      typeof definition.consistencyPolicy !== "string" ||
+      definition.consistencyPolicy.length === 0 ||
+      typeof definition.effectClass !== "string" ||
+      definition.effectClass.length === 0 ||
+      typeof definition.trustClass !== "string" ||
+      definition.trustClass.length === 0 ||
+      typeof definition.handlerBinding !== "string" ||
+      definition.handlerBinding.length === 0 ||
+      typeof definition.idempotencyScope !== "string" ||
+      definition.idempotencyScope.length === 0 ||
+      typeof definition.functionDescription !== "string" ||
+      definition.functionDescription.length === 0 ||
+      typeof definition.schemaVersion !== "string" ||
+      definition.schemaVersion.length === 0 ||
+      typeof definition.ratePolicy?.name !== "string" ||
+      definition.ratePolicy.name.length === 0 ||
+      !(
+        definition.ratePolicy.maxInFlightPerTarget === null ||
+        (Number.isSafeInteger(definition.ratePolicy.maxInFlightPerTarget) &&
+          definition.ratePolicy.maxInFlightPerTarget > 0)
+      ) ||
+      definition.targetContract?.versioned !== true ||
+      typeof definition.targetContract.handleKind !== "string" ||
+      definition.targetContract.handleKind.length === 0 ||
+      handleArgument === null ||
+      handleSchema === undefined ||
+      handleSchema.type !== "string" ||
+      typeof minHandleLength !== "number" ||
+      minHandleLength < 1 ||
+      !requiredKeys.includes(handleArgument) ||
+      schema.type !== "object" ||
+      schema.additionalProperties !== false ||
+      propertyNames.length === 0 ||
+      new Set(requiredKeys).size !== requiredKeys.length ||
+      requiredKeys.some((key) => !propertyNames.includes(key))
     ) {
       return { valid: false, reason: "invalid_definition_contract" };
     }

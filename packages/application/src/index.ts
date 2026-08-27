@@ -161,11 +161,14 @@ export {
 } from "./conversation-model";
 export {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+  CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   REGENERATE_JOURNAL_ACTION_DEFINITION,
+  actionDefinitionsForCatalog,
   actionFunctionsForCatalog,
+  conversationFunctionsForActionDefinitions,
   normalizeProviderActionProposal,
   validateConversationActionCatalog,
   type ActionReferenceHandle,
@@ -190,6 +193,7 @@ export {
   type ConversationActionGatewayRepository,
   type ConversationActionHandler,
   type ConversationActionReceipt,
+  type ConversationActionTransactionExecutor,
   type JournalRegenerationExecutionOutcome,
   type JournalRegenerationWorkflowCommand,
   type PreparedConversationAction,

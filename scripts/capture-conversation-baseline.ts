@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+  CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   CANONICAL_PERSONA_VERSION,
   CHINESE_LOCALE_PACK_VERSION,
   countFollowUpQuestions,
@@ -367,7 +367,7 @@ async function main(): Promise<void> {
     freshnessPolicy: "source_valid:v1" as const,
     chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
     englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
-    harnessPolicyVersion: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY.version,
+    harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
     conversationActionCatalogVersion:
       JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
     model: champion.model,
@@ -462,9 +462,11 @@ async function main(): Promise<void> {
       repository: responseRepository,
     });
     const actionGateway = createConversationActionGateway({
-      handler: createJournalRegenerationActionHandler({
-        generationPolicyVersion: "journal-generation:v2",
-      }),
+      handlers: [
+        createJournalRegenerationActionHandler({
+          generationPolicyVersion: "journal-generation:v2",
+        }),
+      ],
       repository: actionRepository,
     });
     const harness = createConversationAgentHarness({
@@ -481,7 +483,7 @@ async function main(): Promise<void> {
       contextCompiler,
       conversationService,
       harness,
-      harnessPolicy: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+      harnessPolicy: CATALOG_V2_CONVERSATION_HARNESS_POLICY,
       repository: responseRepository,
     });
     const handler = createConversationResponseHandler({
@@ -607,7 +609,7 @@ async function main(): Promise<void> {
       },
       contextCompiler: contextCompilerSettings,
       generationPolicy,
-      harnessPolicy: ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
+      harnessPolicy: CATALOG_V2_CONVERSATION_HARNESS_POLICY,
       inactivityPolicy,
       providerTransport: {
         baseUrl: providerTransport.baseUrl,

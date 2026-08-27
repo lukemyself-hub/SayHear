@@ -165,12 +165,12 @@ export function createProviderEgressPort(dependencies: {
               type: "stop_signal_proposal",
             };
           } else if (
-            input.functions &&
-            input.functions.length > 0 &&
+            input.definitions &&
+            input.definitions.length > 0 &&
             input.requestEventRevisionId
           ) {
             const normalized = normalizeProviderActionProposal({
-              functions: input.functions,
+              definitions: input.definitions,
               rawArguments: event.rawArguments,
               rawFunctionName: event.rawFunctionName,
               requestEventRevisionId: input.requestEventRevisionId,

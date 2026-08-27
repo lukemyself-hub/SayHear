@@ -23,7 +23,8 @@ import type {
   ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
 import {
-  actionFunctionsForCatalog,
+  actionDefinitionsForCatalog,
+  conversationFunctionsForActionDefinitions,
   validateConversationActionCatalog,
 } from "./conversation-action-catalog";
 import type { ConversationActionGateway } from "./conversation-action-gateway";
@@ -198,22 +199,31 @@ export function createConversationAgentHarness(dependencies: {
         throw new ProviderDispatchError("invalid_response");
       }
       let actionSeen = false;
+      // The Eligible Definition set is the normalization space for any Catalog
+      // Action selection (ADR-0095); the offered Function list derives from the
+      // same frozen inputs. The stop-signal proposal function is a
+      // behavior-proposal channel, not a Conversation Action; commits stay
+      // deterministic (issue #74).
+      const eligibleDefinitions =
+        command.harnessPolicy.toolsDisabled === true
+          ? []
+          : actionDefinitionsForCatalog(
+              command.catalog,
+              command.actionReferenceHandles,
+            );
       for await (const event of dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
         ...(command.requestEventRevisionId
           ? { requestEventRevisionId: command.requestEventRevisionId }
           : {}),
+        definitions: eligibleDefinitions,
         functions:
           command.harnessPolicy.toolsDisabled === true
             ? []
             : [
-                ...actionFunctionsForCatalog(
-                  command.catalog,
-                  command.actionReferenceHandles,
+                ...conversationFunctionsForActionDefinitions(
+                  eligibleDefinitions,
                 ),
-                // The stop-signal proposal function is a behavior-proposal
-                // channel, not a Conversation Action; commits stay
-                // deterministic (issue #74).
                 CURIOSITY_STOP_SIGNAL_FUNCTION,
               ],
         generationCommandId: command.generationCommandId,

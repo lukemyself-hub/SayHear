@@ -222,7 +222,11 @@ export class PostgresJournalRegenerationActionRepository
     proposal: ConversationActionProposal | null;
     schemaVersion: string;
   }): Promise<ConversationActionReceipt> {
-    const idempotencyKey = createIdempotencyKey(input.context, input.proposal);
+    const idempotencyKey = createIdempotencyKey(
+      input.context,
+      input.proposal,
+      input.definition,
+    );
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -284,7 +288,11 @@ export class PostgresJournalRegenerationActionRepository
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt> {
-    const idempotencyKey = createIdempotencyKey(input.context, input.proposal);
+    const idempotencyKey = createIdempotencyKey(
+      input.context,
+      input.proposal,
+      input.definition,
+    );
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -293,7 +301,13 @@ export class PostgresJournalRegenerationActionRepository
         await client.query("COMMIT");
         return existing;
       }
-      const handle = await selectHandle(client, input.context, input.proposal.arguments.journalHandle);
+      const handle = await selectHandle(
+        client,
+        input.context,
+        // The Gateway has already validated the required handle argument;
+        // an empty fallback simply selects nothing and fails closed below.
+        readTargetHandle(input.proposal, input.definition) ?? "",
+      );
       const existingAfterHandleLock = await findReceipt(
         client,
         input.context.userId,
@@ -322,31 +336,44 @@ export class PostgresJournalRegenerationActionRepository
         await client.query("COMMIT");
         return receipt;
       }
-      const inFlight = await client.query(
-        `
-          SELECT 1 FROM conversation_action_executions
-          WHERE user_id = $1 AND target_id = $2
-            AND execution_status IN ('pending', 'running')
-          LIMIT 1
-        `,
-        [input.context.userId, handle.target_id],
-      );
-      if (inFlight.rowCount === 1) {
-        const receipt = await insertNonAcceptedInTransaction(client, {
-          actionExecutionId: createUuidV7(new Date()),
-          context: input.context,
-          catalogVersion: input.catalogVersion,
-          definition: input.definition,
-          disposition: "rate_limited_in_flight",
-          idempotencyKey,
-          proposal: input.proposal,
-          admission: "rejected",
-        });
-        await client.query("COMMIT");
-        return receipt;
+      if (input.definition.ratePolicy.maxInFlightPerTarget !== null) {
+        const inFlight = await client.query(
+          `
+            SELECT 1 FROM conversation_action_executions
+            WHERE user_id = $1 AND target_id = $2
+              AND execution_status IN ('pending', 'running')
+            LIMIT 1
+          `,
+          [input.context.userId, handle.target_id],
+        );
+        if (inFlight.rowCount === 1) {
+          const receipt = await insertNonAcceptedInTransaction(client, {
+            actionExecutionId: createUuidV7(new Date()),
+            context: input.context,
+            catalogVersion: input.catalogVersion,
+            definition: input.definition,
+            disposition: "rate_limited_in_flight",
+            idempotencyKey,
+            proposal: input.proposal,
+            admission: "rejected",
+          });
+          await client.query("COMMIT");
+          return receipt;
+        }
       }
 
       const prepared = input.prepare();
+      // A Handler bound to one executionMode must never produce the other's
+      // prepared shape; the Catalog publication check and this runtime guard
+      // together fail closed on binding drift (ADR-0098).
+      if (
+        (input.definition.executionMode === "synchronous") !==
+        (prepared.mode === "in_transaction")
+      ) {
+        throw new Error(
+          "Prepared Action execution mode does not match its Definition.",
+        );
+      }
       if (
         prepared.dailySessionId !== handle.daily_session_id ||
         prepared.sourceRevision !== Number(handle.source_revision) ||
@@ -356,158 +383,258 @@ export class PostgresJournalRegenerationActionRepository
       }
       const now = new Date();
       const actionExecutionId = createUuidV7(now);
-      const workflowCommandId = createUuidV7(now);
-      const generationCommandId = createUuidV7(now);
       const finalizationCommandId = createUuidV7(now);
       const finalizationAttemptId = createUuidV7(now);
-      const guidanceCiphertext = prepared.guidance
-        ? encrypt(prepared.guidance, this.payloadKey)
-        : null;
-      await client.query(
-        `
-          INSERT INTO conversation_action_executions (
-            action_execution_id, user_id, decision_command_id,
-            request_event_revision_id, action_kind, schema_version,
-            catalog_version, target_handle, target_kind, target_id,
-            target_version_id, daily_session_id, source_revision,
-            expected_data_epoch, idempotency_key, admission_status,
-            execution_status, disposition, created_at
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-            $14, $15, 'accepted', 'pending', NULL, $16)
-        `,
-        [
+      if (prepared.mode === "durable_workflow") {
+        const workflowCommandId = createUuidV7(now);
+        const generationCommandId = createUuidV7(now);
+        const guidanceCiphertext = prepared.guidance
+          ? encrypt(prepared.guidance, this.payloadKey)
+          : null;
+        await this.insertExecutionRow(client, {
           actionExecutionId,
-          input.context.userId,
-          input.context.decisionCommandId,
-          input.context.requestEventRevisionId,
-          input.definition.actionKind,
-          input.definition.schemaVersion,
-          input.catalogVersion,
-          input.proposal.arguments.journalHandle,
-          handle.target_kind,
-          handle.target_id,
-          handle.target_version_id,
-          prepared.dailySessionId,
-          prepared.sourceRevision,
-          prepared.expectedDataEpoch,
+          catalogVersion: input.catalogVersion,
+          context: input.context,
+          disposition: null,
+          definition: input.definition,
+          expectedDataEpoch: prepared.expectedDataEpoch,
           idempotencyKey,
           now,
-        ],
-      );
-      const admissionReceipt = await insertReceipt(client, {
+          sourceRevision: prepared.sourceRevision,
+          dailySessionId: prepared.dailySessionId,
+          target: handle,
+          executionStatus: "pending",
+        });
+        const admissionReceipt = await insertReceipt(client, {
+          actionExecutionId,
+          actionKind: input.definition.actionKind,
+          admission: "accepted",
+          catalogVersion: input.catalogVersion,
+          disposition: null,
+          execution: "pending",
+          schemaVersion: input.definition.schemaVersion,
+        });
+        await client.query(
+          `
+            INSERT INTO workflow_commands (
+              workflow_command_id, command_type, subject_type, subject_id,
+              source_revision, policy_version, expected_data_epoch, action_execution_id,
+              status, created_at
+            )
+            VALUES ($1, 'journal_regeneration', 'daily_session', $2, $3, $4, $5, $6, 'created', $7)
+          `,
+          [
+            workflowCommandId,
+            prepared.dailySessionId,
+            prepared.sourceRevision,
+            prepared.generationPolicyVersion,
+            prepared.expectedDataEpoch,
+            actionExecutionId,
+            now,
+          ],
+        );
+        await client.query(
+          `
+            INSERT INTO journal_generation_commands (
+              generation_command_id, user_id, daily_session_id, source_revision,
+              generation_policy_version, expected_data_epoch, created_at,
+              generation_kind, action_execution_id, guidance_ciphertext,
+              guidance_expires_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'regeneration', $8, $9, $10)
+          `,
+          [
+            generationCommandId,
+            input.context.userId,
+            prepared.dailySessionId,
+            prepared.sourceRevision,
+            prepared.generationPolicyVersion,
+            prepared.expectedDataEpoch,
+            now,
+            actionExecutionId,
+            guidanceCiphertext,
+            new Date(now.getTime() + 24 * 60 * 60 * 1_000),
+          ],
+        );
+        await client.query(
+          `
+            INSERT INTO outbox_events (
+              outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
+              aggregate_revision, event_type, status, next_attempt_at,
+              attempt_count, payload, created_at
+            )
+            VALUES ($1, $2, 'daily_session', $3, $4,
+              'journal_regeneration_requested', 'pending', $5, 0, $6::jsonb, $5)
+          `,
+          [
+            createUuidV7(now),
+            workflowCommandId,
+            prepared.dailySessionId,
+            prepared.sourceRevision,
+            now,
+            JSON.stringify({
+              actionExecutionId,
+              eventType: "journal_regeneration_requested",
+              expectedDataEpoch: prepared.expectedDataEpoch,
+              policyVersion: prepared.generationPolicyVersion,
+              sourceRevision: prepared.sourceRevision,
+              status: "pending",
+              subjectId: prepared.dailySessionId,
+              workflowCommandId,
+            }),
+          ],
+        );
+        if (guidanceCiphertext) {
+          await client.query(
+            `
+              INSERT INTO conversation_action_payloads (
+                action_execution_id, payload_schema_version, ciphertext,
+                expires_at
+              ) VALUES ($1, $2, $3, $4)
+            `,
+            [actionExecutionId, input.definition.schemaVersion, guidanceCiphertext, new Date(now.getTime() + 24 * 60 * 60 * 1_000)],
+          );
+          await client.query(
+            "DELETE FROM conversation_action_payloads WHERE action_execution_id = $1",
+            [actionExecutionId],
+          );
+        }
+        await createActionFinalizationCommand(client, {
+          actionExecutionId,
+          decisionCommandId: input.context.decisionCommandId,
+          finalizationCommandId,
+          finalizationAttemptId,
+          now,
+          receipt: admissionReceipt,
+          userId: input.context.userId,
+        });
+        const receipt = await findReceipt(client, input.context.userId, idempotencyKey);
+        if (!receipt) throw new Error("The accepted Action Receipt was not committed.");
+        await client.query("COMMIT");
+        return receipt;
+      }
+
+      // Synchronous in-transaction mode (issue #109): the domain effect, the
+      // Admission Receipt, and the terminal Completion Receipt commit as one
+      // atomic unit; a handler failure rolls everything back so no partial
+      // effect can survive while a reply claims success (ADR-0099). The
+      // execution row is written already terminal, matching the receipt
+      // sequence that exists by the end of this transaction.
+      await this.insertExecutionRow(client, {
+        actionExecutionId,
+        catalogVersion: input.catalogVersion,
+        context: input.context,
+        disposition: "committed_in_transaction",
+        definition: input.definition,
+        expectedDataEpoch: prepared.expectedDataEpoch,
+        idempotencyKey,
+        now,
+        sourceRevision: prepared.sourceRevision,
+        dailySessionId: prepared.dailySessionId,
+        target: handle,
+        executionStatus: "succeeded",
+      });
+      await insertReceipt(client, {
         actionExecutionId,
         actionKind: input.definition.actionKind,
         admission: "accepted",
         catalogVersion: input.catalogVersion,
         disposition: null,
-        execution: "pending",
+        execution: "running",
         schemaVersion: input.definition.schemaVersion,
       });
-      await client.query(
-        `
-          INSERT INTO workflow_commands (
-            workflow_command_id, command_type, subject_type, subject_id,
-            source_revision, policy_version, expected_data_epoch, action_execution_id,
-            status, created_at
-          )
-          VALUES ($1, 'journal_regeneration', 'daily_session', $2, $3, $4, $5, $6, 'created', $7)
-        `,
-        [
-          workflowCommandId,
-          prepared.dailySessionId,
-          prepared.sourceRevision,
-          prepared.generationPolicyVersion,
-          prepared.expectedDataEpoch,
-          actionExecutionId,
-          now,
-        ],
-      );
-      await client.query(
-        `
-          INSERT INTO journal_generation_commands (
-            generation_command_id, user_id, daily_session_id, source_revision,
-            generation_policy_version, expected_data_epoch, created_at,
-            generation_kind, action_execution_id, guidance_ciphertext,
-            guidance_expires_at
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, 'regeneration', $8, $9, $10)
-        `,
-        [
-          generationCommandId,
-          input.context.userId,
-          prepared.dailySessionId,
-          prepared.sourceRevision,
-          prepared.generationPolicyVersion,
-          prepared.expectedDataEpoch,
-          now,
-          actionExecutionId,
-          guidanceCiphertext,
-          new Date(now.getTime() + 24 * 60 * 60 * 1_000),
-        ],
-      );
-      await client.query(
-        `
-          INSERT INTO outbox_events (
-            outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
-            aggregate_revision, event_type, status, next_attempt_at,
-            attempt_count, payload, created_at
-          )
-          VALUES ($1, $2, 'daily_session', $3, $4,
-            'journal_regeneration_requested', 'pending', $5, 0, $6::jsonb, $5)
-        `,
-        [
-          createUuidV7(now),
-          workflowCommandId,
-          prepared.dailySessionId,
-          prepared.sourceRevision,
-          now,
-          JSON.stringify({
-            actionExecutionId,
-            eventType: "journal_regeneration_requested",
-            expectedDataEpoch: prepared.expectedDataEpoch,
-            policyVersion: prepared.generationPolicyVersion,
-            sourceRevision: prepared.sourceRevision,
-            status: "pending",
-            subjectId: prepared.dailySessionId,
-            workflowCommandId,
-          }),
-        ],
-      );
-      if (guidanceCiphertext) {
-        await client.query(
-          `
-            INSERT INTO conversation_action_payloads (
-              action_execution_id, payload_schema_version, ciphertext,
-              expires_at
-            ) VALUES ($1, $2, $3, $4)
-          `,
-          [actionExecutionId, input.definition.schemaVersion, guidanceCiphertext, new Date(now.getTime() + 24 * 60 * 60 * 1_000)],
-        );
-        await client.query(
-          "DELETE FROM conversation_action_payloads WHERE action_execution_id = $1",
-          [actionExecutionId],
-        );
-      }
+      await prepared.commit({
+        actionExecutionId,
+        executor: client,
+      });
+      const terminalSequence = await insertExecutionReceipt(client, {
+        actionExecutionId,
+        receiptKey: "execution:succeeded",
+        execution: "succeeded",
+        disposition: "committed_in_transaction",
+      });
       await createActionFinalizationCommand(client, {
         actionExecutionId,
         decisionCommandId: input.context.decisionCommandId,
         finalizationCommandId,
         finalizationAttemptId,
         now,
-        receipt: admissionReceipt,
+        receipt: {
+          admission: "accepted",
+          receiptSequence: terminalSequence,
+          execution: "succeeded",
+        },
         userId: input.context.userId,
       });
-      const receipt = await findReceipt(client, input.context.userId, idempotencyKey);
-      if (!receipt) throw new Error("The accepted Action Receipt was not committed.");
+      const committedReceipt = await findReceipt(
+        client,
+        input.context.userId,
+        idempotencyKey,
+      );
+      if (!committedReceipt) {
+        throw new Error("The accepted Action Receipt was not committed.");
+      }
       await client.query("COMMIT");
-      return receipt;
+      return committedReceipt;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  private async insertExecutionRow(
+    client: PoolClient,
+    input: {
+      actionExecutionId: string;
+      catalogVersion: string;
+      context: ConversationActionGatewayContext;
+      dailySessionId: string;
+      definition: ConversationActionDefinition;
+      disposition: string | null;
+      expectedDataEpoch: number;
+      executionStatus: ConversationActionReceipt["execution"];
+      idempotencyKey: string;
+      now: Date;
+      sourceRevision: number;
+      target: HandleRow;
+    },
+  ): Promise<void> {
+    await client.query(
+      `
+        INSERT INTO conversation_action_executions (
+          action_execution_id, user_id, decision_command_id,
+          request_event_revision_id, action_kind, schema_version,
+          catalog_version, target_handle, target_kind, target_id,
+          target_version_id, daily_session_id, source_revision,
+          expected_data_epoch, idempotency_key, admission_status,
+          execution_status, disposition, created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+          $14, $15, 'accepted', $16, $17, $18)
+      `,
+      [
+        input.actionExecutionId,
+        input.context.userId,
+        input.context.decisionCommandId,
+        input.context.requestEventRevisionId,
+        input.definition.actionKind,
+        input.definition.schemaVersion,
+        input.catalogVersion,
+        input.target.handle,
+        input.target.target_kind,
+        input.target.target_id,
+        input.target.target_version_id,
+        input.dailySessionId,
+        input.sourceRevision,
+        input.expectedDataEpoch,
+        input.idempotencyKey,
+        input.executionStatus,
+        input.disposition,
+        input.now,
+      ],
+    );
   }
 
   public async readRegenerationWorkflowCommand(input: {
@@ -721,7 +848,16 @@ export class PostgresJournalRegenerationActionRepository
         AND attempt.attempt_no = 1
         AND attempt.status IN ('prepared', 'running')
        WHERE execution.admission_status = 'accepted'
-         AND execution.execution_status IN ('pending', 'running')
+         AND (
+           execution.execution_status IN ('pending', 'running')
+           OR (
+             -- Synchronous in-transaction commits are terminal at admission
+             -- time; their pending finalization must still be recovered when a
+             -- crash lands between the atomic commit and the visible reply.
+             execution.execution_status = 'succeeded'
+             AND execution.disposition = 'committed_in_transaction'
+           )
+         )
        ORDER BY command.created_at, command.generation_command_id
        LIMIT $1`,
       [input.limit],
@@ -755,7 +891,11 @@ async function createActionFinalizationCommand(
     finalizationAttemptId: string;
     finalizationCommandId: string;
     now: Date;
-    receipt: ConversationActionReceipt;
+    receipt: Readonly<{
+      admission: ConversationActionReceipt["admission"];
+      execution: ConversationActionReceipt["execution"];
+      receiptSequence: number;
+    }>;
     userId: UserId;
   },
 ): Promise<void> {
@@ -943,6 +1083,11 @@ async function insertReceipt(
   return { ...input, receiptSequence: 1 };
 }
 
+/**
+ * Appends an execution-sourced Receipt with the next sequence for the
+ * (locked) ActionExecution and returns the sequence it committed, so callers
+ * freezing later state never guess it.
+ */
 async function insertExecutionReceipt(
   client: PoolClient,
   input: {
@@ -951,23 +1096,31 @@ async function insertExecutionReceipt(
     execution: ConversationActionReceipt["execution"];
     disposition: string;
   },
-): Promise<void> {
+): Promise<number> {
+  // The caller holds the ActionExecution lock (its own admission transaction,
+  // claimRegenerationExecution, or recordRegenerationExecution), so the
+  // max-sequence read and the insert cannot interleave with another allocator.
+  const next = await client.query<{ next_sequence: number }>(
+    `SELECT COALESCE(MAX(receipt.receipt_sequence), 0) + 1 AS next_sequence
+     FROM conversation_action_receipts receipt
+     WHERE receipt.action_execution_id = $1`,
+    [input.actionExecutionId],
+  );
+  const receiptSequence = next.rows[0]!.next_sequence;
   await client.query(
     `INSERT INTO conversation_action_receipts (
        action_receipt_id, action_execution_id, receipt_sequence, receipt_key,
        admission_status, execution_status, disposition, created_at
      )
      SELECT $1, execution.action_execution_id,
-       COALESCE(MAX(receipt.receipt_sequence), 0) + 1, $2,
+       $6, $2,
        execution.admission_status, $3, $4, CURRENT_TIMESTAMP
      FROM conversation_action_executions execution
-     LEFT JOIN conversation_action_receipts receipt
-       ON receipt.action_execution_id = execution.action_execution_id
      WHERE execution.action_execution_id = $5
-     GROUP BY execution.action_execution_id, execution.admission_status
      ON CONFLICT (action_execution_id, receipt_key) DO NOTHING`,
-    [createUuidV7(new Date()), input.receiptKey, input.execution, input.disposition, input.actionExecutionId],
+    [createUuidV7(new Date()), input.receiptKey, input.execution, input.disposition, input.actionExecutionId, receiptSequence],
   );
+  return receiptSequence;
 }
 
 async function insertNonAcceptedInTransaction(
@@ -1023,13 +1176,28 @@ async function insertNonAcceptedInTransaction(
 function createIdempotencyKey(
   context: ConversationActionGatewayContext,
   proposal: ConversationActionProposal | null,
+  definition?: ConversationActionDefinition | null,
 ): string {
   return [
     context.decisionCommandId,
     context.requestEventRevisionId,
     proposal?.actionKind ?? "unsupported",
-    proposal?.arguments.journalHandle ?? "none",
+    proposal && definition
+      ? readTargetHandle(proposal, definition) ?? "none"
+      : "none",
   ].join(":");
+}
+
+/**
+ * Reads the target reference handle from the argument the Definition declares
+ * as its `targetContract.handleArgument` (ADR-0096).
+ */
+function readTargetHandle(
+  proposal: ConversationActionProposal,
+  definition: ConversationActionDefinition,
+): string | null {
+  const value = proposal.arguments[definition.targetContract.handleArgument];
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function encrypt(value: string, key: Buffer): Buffer {
