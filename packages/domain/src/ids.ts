@@ -49,6 +49,38 @@ export type EvidenceItemId = string & {
 export type EntityId = string & {
   readonly [entityIdBrand]: "EntityId";
 };
+export type MemoryClaimId = string & {
+  readonly [memoryClaimIdBrand]: "MemoryClaimId";
+};
+export type MemoryClaimVersionId = string & {
+  readonly [memoryClaimVersionIdBrand]: "MemoryClaimVersionId";
+};
+export type ClaimEvidenceLinkId = string & {
+  readonly [claimEvidenceLinkIdBrand]: "ClaimEvidenceLinkId";
+};
+export type MemoryCandidateId = string & {
+  readonly [memoryCandidateIdBrand]: "MemoryCandidateId";
+};
+export type MemoryCandidateEvidenceLinkId = string & {
+  readonly [memoryCandidateEvidenceLinkIdBrand]: "MemoryCandidateEvidenceLinkId";
+};
+export type MemoryForgetRequestId = string & {
+  readonly [memoryForgetRequestIdBrand]: "MemoryForgetRequestId";
+};
+export type MemoryForgetEvidenceExclusionId = string & {
+  readonly [memoryForgetEvidenceExclusionIdBrand]: "MemoryForgetEvidenceExclusionId";
+};
+export type MemoryForgetReversalId = string & {
+  readonly [memoryForgetReversalIdBrand]: "MemoryForgetReversalId";
+};
+declare const memoryClaimIdBrand: unique symbol;
+declare const memoryClaimVersionIdBrand: unique symbol;
+declare const claimEvidenceLinkIdBrand: unique symbol;
+declare const memoryCandidateIdBrand: unique symbol;
+declare const memoryCandidateEvidenceLinkIdBrand: unique symbol;
+declare const memoryForgetRequestIdBrand: unique symbol;
+declare const memoryForgetEvidenceExclusionIdBrand: unique symbol;
+declare const memoryForgetReversalIdBrand: unique symbol;
 
 const uuidV7Pattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -113,6 +145,53 @@ export function asEvidenceItemId(value: string): EvidenceItemId {
 
 export function asEntityId(value: string): EntityId {
   return asOpaqueUuidV7(value, "EntityId") as EntityId;
+}
+
+export function asMemoryClaimId(value: string): MemoryClaimId {
+  return asOpaqueUuidV7(value, "MemoryClaimId") as MemoryClaimId;
+}
+
+export function asMemoryClaimVersionId(value: string): MemoryClaimVersionId {
+  return asOpaqueUuidV7(value, "MemoryClaimVersionId") as MemoryClaimVersionId;
+}
+
+export function asClaimEvidenceLinkId(value: string): ClaimEvidenceLinkId {
+  return asOpaqueUuidV7(value, "ClaimEvidenceLinkId") as ClaimEvidenceLinkId;
+}
+
+export function asMemoryCandidateId(value: string): MemoryCandidateId {
+  return asOpaqueUuidV7(value, "MemoryCandidateId") as MemoryCandidateId;
+}
+
+export function asMemoryCandidateEvidenceLinkId(
+  value: string,
+): MemoryCandidateEvidenceLinkId {
+  return asOpaqueUuidV7(
+    value,
+    "MemoryCandidateEvidenceLinkId",
+  ) as MemoryCandidateEvidenceLinkId;
+}
+
+export function asMemoryForgetRequestId(value: string): MemoryForgetRequestId {
+  return asOpaqueUuidV7(value, "MemoryForgetRequestId") as MemoryForgetRequestId;
+}
+
+export function asMemoryForgetEvidenceExclusionId(
+  value: string,
+): MemoryForgetEvidenceExclusionId {
+  return asOpaqueUuidV7(
+    value,
+    "MemoryForgetEvidenceExclusionId",
+  ) as MemoryForgetEvidenceExclusionId;
+}
+
+export function asMemoryForgetReversalId(
+  value: string,
+): MemoryForgetReversalId {
+  return asOpaqueUuidV7(
+    value,
+    "MemoryForgetReversalId",
+  ) as MemoryForgetReversalId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {
