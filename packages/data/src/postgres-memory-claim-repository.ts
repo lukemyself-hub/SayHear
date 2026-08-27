@@ -41,7 +41,7 @@ import type {
  * terminal disposition, epistemic combinations).
  */
 
-type CandidateRow = {
+export type CandidateRow = {
   memory_candidate_id: string;
   user_id: string;
   candidate_kind: "objective" | "impression";
@@ -94,7 +94,7 @@ type ClaimRow = {
   deleted_at: Date | null;
 };
 
-type ClaimVersionRow = {
+export type ClaimVersionRow = {
   memory_claim_version_id: string;
   memory_claim_id: string;
   revision: number;
@@ -126,7 +126,7 @@ function toTypedValue(raw: unknown): ClaimTypedValue {
   return String(raw ?? "");
 }
 
-function rowToCandidate(row: CandidateRow): MemoryCandidateRecord {
+export function rowToCandidate(row: CandidateRow): MemoryCandidateRecord {
   return {
     memoryCandidateId: asMemoryCandidateId(row.memory_candidate_id),
     userId: row.user_id as UserId,
@@ -190,7 +190,7 @@ function rowToClaim(row: ClaimRow): MemoryClaimRecord {
   };
 }
 
-function rowToVersion(row: ClaimVersionRow): MemoryClaimVersionRecord {
+export function rowToVersion(row: ClaimVersionRow): MemoryClaimVersionRecord {
   return {
     memoryClaimVersionId: asMemoryClaimVersionId(row.memory_claim_version_id),
     memoryClaimId: asMemoryClaimId(row.memory_claim_id),
@@ -221,7 +221,7 @@ function rowToVersion(row: ClaimVersionRow): MemoryClaimVersionRecord {
   };
 }
 
-const CANDIDATE_COLUMNS = `memory_candidate_id, user_id, candidate_kind, basis,
+export const CANDIDATE_COLUMNS = `memory_candidate_id, user_id, candidate_kind, basis,
   subject_entity_id, object_entity_id, predicate_id, predicate_registry_version,
   predicate_resolution_status, proposed_concept, mapping_confidence,
   proposed_object_value, proposed_scope_key, proposed_temporal_status,
@@ -241,7 +241,7 @@ const VERSION_INSERT_COLUMNS = `memory_claim_version_id, memory_claim_id, user_i
   last_observed_at, supersedes_version_id, created_by, model_version,
   prompt_version, predicate_registry_version, created_at`;
 
-const VERSION_COLUMNS = `memory_claim_version_id, memory_claim_id, revision, kind,
+export const VERSION_COLUMNS = `memory_claim_version_id, memory_claim_id, revision, kind,
   epistemic_status, status, subject_entity_version_id, object_entity_version_id,
   typed_value, confidence, temporal_status, valid_from, valid_from_precision,
   valid_to, valid_to_precision, last_observed_at, supersedes_version_id,
@@ -347,37 +347,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     plan: CandidateDispositionPlan,
     decidedAt: Date,
   ): Promise<boolean> {
-    return this.withTransaction(async (client) => {
-      const result = await client.query<{ memory_candidate_id: string }>(
-        `UPDATE memory_candidates SET
-           status = $3,
-           disposition_reason_code = $4,
-           disposition_policy_version = $5,
-           reproposal_policy = $6,
-           decided_at = $7,
-           terminal_effective_at = $8,
-           terminal_content_expires_at = $9,
-           dedupe_fingerprint = $10,
-           dedupe_fingerprint_key_version = $11
-         WHERE user_id = $1 AND memory_candidate_id = $2
-           AND status NOT IN ('rejected', 'stale', 'deleted')
-         RETURNING memory_candidate_id`,
-        [
-          userId,
-          candidateId,
-          plan.status,
-          plan.dispositionReasonCode,
-          plan.dispositionPolicyVersion,
-          plan.reproposalPolicy,
-          decidedAt,
-          plan.terminalEffectiveAt,
-          plan.terminalContentExpiresAt,
-          plan.dedupeFingerprint,
-          DEDUPE_FINGERPRINT_KEY_VERSION,
-        ],
-      );
-      return result.rows.length > 0;
-    });
+    return this.withTransaction((client) =>
+      recordCandidateDispositionWithin(client, userId, candidateId, plan, decidedAt),
+    );
   }
 
   public async transitionCandidate(input: {
@@ -661,159 +633,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     revision: number;
     createdClaim: boolean;
   }> {
-    return this.withTransaction(async (client) => {
-      const { plan } = input;
-
-      if (plan.action === "reinforce_current") {
-        const target = await client.query<ClaimVersionRow>(
-          `SELECT ${VERSION_COLUMNS} FROM memory_claim_versions
-           WHERE user_id = $1 AND memory_claim_version_id = $2`,
-          [input.userId, plan.attachToVersionId],
-        );
-        const version = target.rows[0];
-        if (!version) {
-          throw new Error(
-            `Reinforce target version ${plan.attachToVersionId} does not exist.`,
-          );
-        }
-        await insertClaimEvidenceLinks(
-          client,
-          input.userId,
-          plan.attachToVersionId,
-          input.evidenceItemIds,
-          plan.linkRole,
-          input.now,
-        );
-        return {
-          memoryClaimId: asMemoryClaimId(version.memory_claim_id),
-          memoryClaimVersionId: asMemoryClaimVersionId(version.memory_claim_version_id),
-          revision: version.revision,
-          createdClaim: false,
-        };
-      }
-
-      // promote / contested: insert (or reuse) the logical Claim, append the
-      // new immutable version, then CAS-move the current-version pointer.
-      if (plan.action !== "promote" && plan.action !== "contested") {
-        throw new Error(
-          `executeClaimAdmissionPlan only executes promote / contested / reinforce plans, got ${plan.action}.`,
-        );
-      }
-      let claimId: MemoryClaimId;
-      let createdClaim = false;
-      const candidate = await client.query<{ predicate_registry_version: number | null }>(
-        `SELECT predicate_registry_version FROM memory_candidates
-         WHERE user_id = $1 AND memory_candidate_id = $2`,
-        [input.userId, input.candidateId],
-      );
-      const registryVersion =
-        candidate.rows[0]?.predicate_registry_version ?? 1;
-
-      if (plan.claimAction === "create_claim") {
-        if (plan.action !== "promote") {
-          throw new Error("A contested version cannot create a new logical Claim.");
-        }
-        claimId = asMemoryClaimId(createUuidV7(input.now));
-        await client.query(
-          `INSERT INTO memory_claims (
-             memory_claim_id, user_id, canonical_key, subject_entity_id,
-             object_entity_id, predicate_id, scope_key, current_version_id, created_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8)`,
-          [
-            claimId,
-            input.userId,
-            plan.canonicalKey,
-            plan.subjectEntityId,
-            plan.objectEntityId,
-            plan.predicateId,
-            plan.scopeKey,
-            input.now,
-          ],
-        );
-        createdClaim = true;
-      } else {
-        const existing = await client.query<{ memory_claim_id: string }>(
-          `SELECT memory_claim_id FROM memory_claims
-           WHERE user_id = $1 AND canonical_key = $2`,
-          [input.userId, plan.canonicalKey],
-        );
-        const row = existing.rows[0];
-        if (!row) {
-          throw new Error(
-            `Claim reuse failed: no logical Claim for canonical key ${plan.canonicalKey}.`,
-          );
-        }
-        claimId = asMemoryClaimId(row.memory_claim_id);
-      }
-
-      const revisionRow = await client.query<{ next_revision: number }>(
-        `SELECT COALESCE(MAX(revision), 0) + 1 AS next_revision
-         FROM memory_claim_versions WHERE memory_claim_id = $1`,
-        [claimId],
-      );
-      const revision = revisionRow.rows[0]!.next_revision;
-      const versionId = asMemoryClaimVersionId(createUuidV7(input.now));
-
-      await client.query(
-        `INSERT INTO memory_claim_versions (
-           memory_claim_version_id, memory_claim_id, user_id,
-           revision, kind, epistemic_status, status, subject_entity_version_id,
-           object_entity_version_id, typed_value, confidence, temporal_status,
-           valid_from, valid_from_precision, valid_to, valid_to_precision,
-           last_observed_at, supersedes_version_id, created_by, model_version,
-           prompt_version, predicate_registry_version, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NULL, $11,
-           $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
-        [
-          versionId,
-          claimId,
-          input.userId,
-          revision,
-          plan.kind,
-          plan.epistemicStatus,
-          plan.versionStatus,
-          plan.subjectEntityVersionId,
-          plan.objectEntityVersionId,
-          JSON.stringify(plan.typedValue),
-          plan.temporal.temporalStatus,
-          plan.temporal.validFrom,
-          plan.temporal.validFromPrecision,
-          plan.temporal.validTo,
-          plan.temporal.validToPrecision,
-          input.now,
-          plan.supersedesVersionId,
-          "consolidation",
-          input.lineage.modelVersion,
-          input.lineage.promptVersion,
-          registryVersion,
-          input.now,
-        ],
-      );
-
-      const moved = await client.query<{ memory_claim_id: string }>(
-        `UPDATE memory_claims SET current_version_id = $3
-         WHERE user_id = $1 AND memory_claim_id = $2
-           AND current_version_id IS NOT DISTINCT FROM $4
-         RETURNING memory_claim_id`,
-        [input.userId, claimId, versionId, plan.supersedesVersionId],
-      );
-      if (moved.rows.length === 0) {
-        throw new Error(
-          `Admission CAS failed: claim ${claimId} pointer moved concurrently.`,
-        );
-      }
-
-      await insertClaimEvidenceLinks(
-        client,
-        input.userId,
-        versionId,
-        input.evidenceItemIds,
-        "support",
-        input.now,
-      );
-
-      return { memoryClaimId: claimId, memoryClaimVersionId: versionId, revision, createdClaim };
-    });
+    return this.withTransaction((client) =>
+      executeClaimAdmissionPlanWithin(client, input),
+    );
   }
 
   public async executeDormancyPlan(input: {
@@ -822,64 +644,9 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     currentVersion: MemoryClaimVersionRecord;
     now: Date;
   }): Promise<{ memoryClaimVersionId: MemoryClaimVersionId; revision: number }> {
-    return this.withTransaction(async (client) => {
-      const revisionRow = await client.query<{ next_revision: number }>(
-        `SELECT COALESCE(MAX(revision), 0) + 1 AS next_revision
-         FROM memory_claim_versions WHERE memory_claim_id = $1`,
-        [input.claimId],
-      );
-      const revision = revisionRow.rows[0]!.next_revision;
-      const versionId = asMemoryClaimVersionId(createUuidV7(input.now));
-      await client.query(
-        `INSERT INTO memory_claim_versions (
-           memory_claim_version_id, memory_claim_id, user_id,
-           revision, kind, epistemic_status, status, subject_entity_version_id,
-           object_entity_version_id, typed_value, confidence, temporal_status,
-           valid_from, valid_from_precision, valid_to, valid_to_precision,
-           last_observed_at, supersedes_version_id, created_by, model_version,
-           prompt_version, predicate_registry_version, created_at
-         ) VALUES ($1, $2, $3, $4, $5, 'inferred', 'dormant', $6, $7,
-           $8::jsonb, NULL, $9, $10, $11, $12, $13, $14, $15, 'dormancy_review',
-           NULL, NULL, $16, $17)`,
-        [
-          versionId,
-          input.claimId,
-          input.userId,
-          revision,
-          input.currentVersion.kind,
-          input.currentVersion.subjectEntityVersionId,
-          input.currentVersion.objectEntityVersionId,
-          JSON.stringify(input.currentVersion.typedValue),
-          input.currentVersion.temporal.temporalStatus,
-          input.currentVersion.temporal.validFrom,
-          input.currentVersion.temporal.validFromPrecision,
-          input.currentVersion.temporal.validTo,
-          input.currentVersion.temporal.validToPrecision,
-          input.now,
-          input.currentVersion.memoryClaimVersionId,
-          input.currentVersion.predicateRegistryVersion,
-          input.now,
-        ],
-      );
-      const moved = await client.query<{ memory_claim_id: string }>(
-        `UPDATE memory_claims SET current_version_id = $3
-         WHERE user_id = $1 AND memory_claim_id = $2
-           AND current_version_id IS NOT DISTINCT FROM $4
-         RETURNING memory_claim_id`,
-        [
-          input.userId,
-          input.claimId,
-          versionId,
-          input.currentVersion.memoryClaimVersionId,
-        ],
-      );
-      if (moved.rows.length === 0) {
-        throw new Error(
-          `Dormancy CAS failed: claim ${input.claimId} pointer moved concurrently.`,
-        );
-      }
-      return { memoryClaimVersionId: versionId, revision };
-    });
+    return this.withTransaction((client) =>
+      executeDormancyPlanWithin(client, input),
+    );
   }
 
   public async executeWholeClaimForgetPlan(input: {
@@ -1112,6 +879,250 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
   }
 }
 
+
+/**
+ * In-transaction executor for a promote / contested / reinforce admission
+ * plan (shared by the Memory Claim service and the consolidation run commit).
+ */
+export async function executeClaimAdmissionPlanWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    candidateId: MemoryCandidateId;
+    plan: ClaimAdmissionPlan;
+    evidenceItemIds: readonly string[];
+    lineage: MemoryCandidateProposal["lineage"];
+    now: Date;
+  },
+): Promise<{
+  memoryClaimId: MemoryClaimId;
+  memoryClaimVersionId: MemoryClaimVersionId;
+  revision: number;
+  createdClaim: boolean;
+}> {
+  const { plan } = input;
+
+
+      if (plan.action === "reinforce_current") {
+        const target = await client.query<ClaimVersionRow>(
+          `SELECT ${VERSION_COLUMNS} FROM memory_claim_versions
+           WHERE user_id = $1 AND memory_claim_version_id = $2`,
+          [input.userId, plan.attachToVersionId],
+        );
+        const version = target.rows[0];
+        if (!version) {
+          throw new Error(
+            `Reinforce target version ${plan.attachToVersionId} does not exist.`,
+          );
+        }
+        await insertClaimEvidenceLinks(
+          client,
+          input.userId,
+          plan.attachToVersionId,
+          input.evidenceItemIds,
+          plan.linkRole,
+          input.now,
+        );
+        return {
+          memoryClaimId: asMemoryClaimId(version.memory_claim_id),
+          memoryClaimVersionId: asMemoryClaimVersionId(version.memory_claim_version_id),
+          revision: version.revision,
+          createdClaim: false,
+        };
+      }
+
+      // promote / contested: insert (or reuse) the logical Claim, append the
+      // new immutable version, then CAS-move the current-version pointer.
+      if (plan.action !== "promote" && plan.action !== "contested") {
+        throw new Error(
+          `executeClaimAdmissionPlan only executes promote / contested / reinforce plans, got ${plan.action}.`,
+        );
+      }
+      let claimId: MemoryClaimId;
+      let createdClaim = false;
+      const candidate = await client.query<{ predicate_registry_version: number | null }>(
+        `SELECT predicate_registry_version FROM memory_candidates
+         WHERE user_id = $1 AND memory_candidate_id = $2`,
+        [input.userId, input.candidateId],
+      );
+      const registryVersion =
+        candidate.rows[0]?.predicate_registry_version ?? 1;
+
+      if (plan.claimAction === "create_claim") {
+        if (plan.action !== "promote") {
+          throw new Error("A contested version cannot create a new logical Claim.");
+        }
+        claimId = asMemoryClaimId(createUuidV7(input.now));
+        await client.query(
+          `INSERT INTO memory_claims (
+             memory_claim_id, user_id, canonical_key, subject_entity_id,
+             object_entity_id, predicate_id, scope_key, current_version_id, created_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8)`,
+          [
+            claimId,
+            input.userId,
+            plan.canonicalKey,
+            plan.subjectEntityId,
+            plan.objectEntityId,
+            plan.predicateId,
+            plan.scopeKey,
+            input.now,
+          ],
+        );
+        createdClaim = true;
+      } else {
+        const existing = await client.query<{ memory_claim_id: string }>(
+          `SELECT memory_claim_id FROM memory_claims
+           WHERE user_id = $1 AND canonical_key = $2`,
+          [input.userId, plan.canonicalKey],
+        );
+        const row = existing.rows[0];
+        if (!row) {
+          throw new Error(
+            `Claim reuse failed: no logical Claim for canonical key ${plan.canonicalKey}.`,
+          );
+        }
+        claimId = asMemoryClaimId(row.memory_claim_id);
+      }
+
+      const revisionRow = await client.query<{ next_revision: number }>(
+        `SELECT COALESCE(MAX(revision), 0) + 1 AS next_revision
+         FROM memory_claim_versions WHERE memory_claim_id = $1`,
+        [claimId],
+      );
+      const revision = revisionRow.rows[0]!.next_revision;
+      const versionId = asMemoryClaimVersionId(createUuidV7(input.now));
+
+      await client.query(
+        `INSERT INTO memory_claim_versions (
+           memory_claim_version_id, memory_claim_id, user_id,
+           revision, kind, epistemic_status, status, subject_entity_version_id,
+           object_entity_version_id, typed_value, confidence, temporal_status,
+           valid_from, valid_from_precision, valid_to, valid_to_precision,
+           last_observed_at, supersedes_version_id, created_by, model_version,
+           prompt_version, predicate_registry_version, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NULL, $11,
+           $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+        [
+          versionId,
+          claimId,
+          input.userId,
+          revision,
+          plan.kind,
+          plan.epistemicStatus,
+          plan.versionStatus,
+          plan.subjectEntityVersionId,
+          plan.objectEntityVersionId,
+          JSON.stringify(plan.typedValue),
+          plan.temporal.temporalStatus,
+          plan.temporal.validFrom,
+          plan.temporal.validFromPrecision,
+          plan.temporal.validTo,
+          plan.temporal.validToPrecision,
+          input.now,
+          plan.supersedesVersionId,
+          "consolidation",
+          input.lineage.modelVersion,
+          input.lineage.promptVersion,
+          registryVersion,
+          input.now,
+        ],
+      );
+
+      const moved = await client.query<{ memory_claim_id: string }>(
+        `UPDATE memory_claims SET current_version_id = $3
+         WHERE user_id = $1 AND memory_claim_id = $2
+           AND current_version_id IS NOT DISTINCT FROM $4
+         RETURNING memory_claim_id`,
+        [input.userId, claimId, versionId, plan.supersedesVersionId],
+      );
+      if (moved.rows.length === 0) {
+        throw new Error(
+          `Admission CAS failed: claim ${claimId} pointer moved concurrently.`,
+        );
+      }
+
+      await insertClaimEvidenceLinks(
+        client,
+        input.userId,
+        versionId,
+        input.evidenceItemIds,
+        "support",
+        input.now,
+      );
+
+      return { memoryClaimId: claimId, memoryClaimVersionId: versionId, revision, createdClaim };
+}
+
+
+/** In-transaction executor for the deterministic dormancy plan (ADR-0041). */
+export async function executeDormancyPlanWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    claimId: MemoryClaimId;
+    currentVersion: MemoryClaimVersionRecord;
+    now: Date;
+  },
+): Promise<{ memoryClaimVersionId: MemoryClaimVersionId; revision: number }> {
+      const revisionRow = await client.query<{ next_revision: number }>(
+        `SELECT COALESCE(MAX(revision), 0) + 1 AS next_revision
+         FROM memory_claim_versions WHERE memory_claim_id = $1`,
+        [input.claimId],
+      );
+      const revision = revisionRow.rows[0]!.next_revision;
+      const versionId = asMemoryClaimVersionId(createUuidV7(input.now));
+      await client.query(
+        `INSERT INTO memory_claim_versions (
+           memory_claim_version_id, memory_claim_id, user_id,
+           revision, kind, epistemic_status, status, subject_entity_version_id,
+           object_entity_version_id, typed_value, confidence, temporal_status,
+           valid_from, valid_from_precision, valid_to, valid_to_precision,
+           last_observed_at, supersedes_version_id, created_by, model_version,
+           prompt_version, predicate_registry_version, created_at
+         ) VALUES ($1, $2, $3, $4, $5, 'inferred', 'dormant', $6, $7,
+           $8::jsonb, NULL, $9, $10, $11, $12, $13, $14, $15, 'dormancy_review',
+           NULL, NULL, $16, $17)`,
+        [
+          versionId,
+          input.claimId,
+          input.userId,
+          revision,
+          input.currentVersion.kind,
+          input.currentVersion.subjectEntityVersionId,
+          input.currentVersion.objectEntityVersionId,
+          JSON.stringify(input.currentVersion.typedValue),
+          input.currentVersion.temporal.temporalStatus,
+          input.currentVersion.temporal.validFrom,
+          input.currentVersion.temporal.validFromPrecision,
+          input.currentVersion.temporal.validTo,
+          input.currentVersion.temporal.validToPrecision,
+          input.now,
+          input.currentVersion.memoryClaimVersionId,
+          input.currentVersion.predicateRegistryVersion,
+          input.now,
+        ],
+      );
+      const moved = await client.query<{ memory_claim_id: string }>(
+        `UPDATE memory_claims SET current_version_id = $3
+         WHERE user_id = $1 AND memory_claim_id = $2
+           AND current_version_id IS NOT DISTINCT FROM $4
+         RETURNING memory_claim_id`,
+        [
+          input.userId,
+          input.claimId,
+          versionId,
+          input.currentVersion.memoryClaimVersionId,
+        ],
+      );
+      if (moved.rows.length === 0) {
+        throw new Error(
+          `Dormancy CAS failed: claim ${input.claimId} pointer moved concurrently.`,
+        );
+      }
+      return { memoryClaimVersionId: versionId, revision };
+}
+
 async function insertClaimEvidenceLinks(
   client: PoolClient,
   userId: UserId,
@@ -1144,6 +1155,46 @@ async function insertClaimEvidenceLinks(
 // same authoritative transaction as its run row (AC #1: retries never
 // double-write memory). These exports carry the exact insert / fence
 // semantics the MemoryClaimService path uses; behavior must not drift.
+
+
+/** Guarded terminal disposition write, in-transaction (ADR-0046 / ADR-0051). */
+export async function recordCandidateDispositionWithin(
+  client: PoolClient,
+  userId: UserId,
+  candidateId: MemoryCandidateId,
+  plan: CandidateDispositionPlan,
+  decidedAt: Date,
+): Promise<boolean> {
+  const result = await client.query<{ memory_candidate_id: string }>(
+    `UPDATE memory_candidates SET
+       status = $3,
+       disposition_reason_code = $4,
+       disposition_policy_version = $5,
+       reproposal_policy = $6,
+       decided_at = $7,
+       terminal_effective_at = $8,
+       terminal_content_expires_at = $9,
+       dedupe_fingerprint = $10,
+       dedupe_fingerprint_key_version = $11
+     WHERE user_id = $1 AND memory_candidate_id = $2
+       AND status NOT IN ('rejected', 'stale', 'deleted')
+     RETURNING memory_candidate_id`,
+    [
+      userId,
+      candidateId,
+      plan.status,
+      plan.dispositionReasonCode,
+      plan.dispositionPolicyVersion,
+      plan.reproposalPolicy,
+      decidedAt,
+      plan.terminalEffectiveAt,
+      plan.terminalContentExpiresAt,
+      plan.dedupeFingerprint,
+      DEDUPE_FINGERPRINT_KEY_VERSION,
+    ],
+  );
+  return result.rows.length > 0;
+}
 
 export async function insertMemoryCandidateWithin(
   client: PoolClient,

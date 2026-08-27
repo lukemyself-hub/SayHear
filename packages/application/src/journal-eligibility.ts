@@ -286,7 +286,10 @@ export type WorkflowStarter = (input: {
     | "rolling_summary_requested"
     | "owner_full_purge_requested"
     | "journal_regeneration_requested"
-    | "fast_path_extraction_requested";
+    | "fast_path_extraction_requested"
+    | "daily_consolidation_requested"
+    | "weekly_consolidation_requested"
+    | "memory_sweeper_requested";
   actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId: DailySessionId | UserId;
@@ -433,6 +436,16 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "dailySessionId",
   "actionExecutionId",
   "outcome",
+  "counters",
+  "diffCount",
+  "promotedCount",
+  "reinforcedCount",
+  "contestedCount",
+  "rejectedCount",
+  "skippedCount",
+  "dormantCount",
+  "staledCount",
+  "purgedCount",
 ]);
 
 /**

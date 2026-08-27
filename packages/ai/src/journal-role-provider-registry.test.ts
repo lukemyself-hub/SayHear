@@ -17,6 +17,7 @@ describe("Journal role safeguards", () => {
     { role: "summary.compress" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "memory.extract" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
     { role: "entity.resolve" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
+    { role: "memory.consolidate" as const, provider: "deterministic" as const, model: "test", configVersion: "test", policyVersion: "test", promptFingerprint: "test" },
   ] as const;
   const registry = createRuntimeJournalRoleProviderRegistry({ adapter: { type: "deterministic" }, roles });
 

@@ -429,6 +429,8 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     clockNowMs = BASE_TIME.getTime();
     await database.pool.query(`
       TRUNCATE TABLE
+        memory_consolidation_diffs,
+        memory_consolidation_runs,
         fast_path_session_items,
         entity_resolve_gate_outcomes,
         entity_clarification_proposals,

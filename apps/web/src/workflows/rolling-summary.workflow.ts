@@ -8,6 +8,7 @@ import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
 import { dialogueStateWorkflow } from "./dialogue-state.workflow";
 import { ownerFullPurgeWorkflow } from "./owner-full-purge.workflow";
 import { fastPathExtractionWorkflow } from "./fast-path-extraction.workflow";
+import { memoryConsolidationWorkflow } from "./memory-consolidation.workflow";
 
 export async function journalRegenerationWorkflow(input: {
   workflowCommandId: string;
@@ -82,6 +83,12 @@ export function createWorkflowStarter(): WorkflowStarter {
       }]);
     } else if (input.eventType === "fast_path_extraction_requested") {
       run = await start(fastPathExtractionWorkflow, [workflowInput]);
+    } else if (
+      input.eventType === "daily_consolidation_requested" ||
+      input.eventType === "weekly_consolidation_requested" ||
+      input.eventType === "memory_sweeper_requested"
+    ) {
+      run = await start(memoryConsolidationWorkflow, [workflowInput]);
     } else {
       throw new Error(`Unsupported outbox event type: ${input.eventType}`);
     }

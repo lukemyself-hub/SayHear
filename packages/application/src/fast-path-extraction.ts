@@ -163,7 +163,7 @@ export type EntityResolveGateProvider = Readonly<{
 // ── Versioned role configuration (ADR-0060 fallback discipline) ─────────────
 
 export type MemoryRoleConfiguration = Readonly<{
-  role: "memory.extract" | "entity.resolve";
+  role: "memory.extract" | "entity.resolve" | "memory.consolidate";
   configVersion: string;
   modelVersion: string;
   promptVersion: string;
@@ -796,6 +796,14 @@ function sanitizeFastPathErrorCode(error: unknown): string {
   if (error instanceof InvalidMemoryExtractProposalError) {
     return "memory_extract_invalid_proposal";
   }
+  return classifyMemoryRoleError(error);
+}
+
+/**
+ * Shared transport-level classifier for memory-role failures (fast path and
+ * consolidation): one allowlisted error-code vocabulary for run rows.
+ */
+export function classifyMemoryRoleError(error: unknown): string {
   const message =
     error instanceof Error ? error.message.toLowerCase() : String(error);
   if (message.includes("timeout") || message.includes("timed out")) {

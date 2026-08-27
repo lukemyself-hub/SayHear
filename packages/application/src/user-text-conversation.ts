@@ -486,7 +486,8 @@ function validateKey<Key extends string>(value: string, name: string): Key {
   return value as Key;
 }
 
-function localDateAt(now: Date, timezone: string): string {
+/** The owner's local logical date (YYYY-MM-DD) at `now` under `timezone`. */
+export function localDateAt(now: Date, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     day: "2-digit",
     month: "2-digit",

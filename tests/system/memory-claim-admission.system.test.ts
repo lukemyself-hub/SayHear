@@ -193,6 +193,8 @@ describe("Memory Claim admission system seam", () => {
     clockNowMs = BASE_TIME;
     await database.pool.query(`
       TRUNCATE TABLE
+        memory_consolidation_diffs,
+        memory_consolidation_runs,
         memory_forget_reversals,
         memory_forget_evidence_exclusions,
         memory_forget_requests,

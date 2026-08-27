@@ -26,10 +26,13 @@ import {
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   ENGLISH_LOCALE_PACK_VERSION,
   FAST_PATH_EXTRACTION_POLICY_VERSION,
+  MEMORY_CONSOLIDATION_POLICY_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
   loadPredicateRegistrySnapshot,
+  createMemoryConsolidationScanService,
   type FastPathExtractionEntrypointDependencies,
+  type MemoryConsolidationEntrypointDependencies,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -47,6 +50,7 @@ import {
   PostgresEvidenceRepository,
   PostgresEntityRepository,
   PostgresFastPathExtractionRepository,
+  PostgresMemoryConsolidationRepository,
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresOwnerPurgeRepository,
@@ -116,6 +120,10 @@ export function createServerComposition() {
       // published per ADR-0060 / ADR-0061.
       { role: "memory.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:memory-extract`, policyVersion: "memory-extraction:v1", promptFingerprint: "memory-extract:propose:v1" },
       { role: "entity.resolve", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:entity-resolve`, policyVersion: "entity-resolve-gate:v1", promptFingerprint: "entity-resolve:gate:v1" },
+      // Slow-path role (issue #114): daily / weekly consolidation diffs get
+      // their own Champion config under the same ADR-0060 / ADR-0061
+      // discipline — no implicit cross-role fallback, failures land loudly.
+      { role: "memory.consolidate", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:memory-consolidate`, policyVersion: "memory-consolidation:v1", promptFingerprint: "memory-consolidate:diffs:v1" },
   ];
   const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
     adapter: configuration.provider.adapter === "deterministic"
@@ -148,6 +156,16 @@ export function createServerComposition() {
   const fastPathExtractionRepository =
     new PostgresFastPathExtractionRepository(pool);
   const predicateRegistrySnapshot = loadPredicateRegistrySnapshot(1);
+  const predicateRegistryLookup = {
+    entryFor(predicateId: string) {
+      return (
+        predicateRegistrySnapshot.entries.find(
+          (entry) => entry.predicateId === predicateId,
+        ) ?? null
+      );
+    },
+    registryVersion: () => predicateRegistrySnapshot.registryVersion,
+  };
   const memoryExtractConfiguration =
     journalRoleRegistry.configuration("memory.extract");
   const entityResolveConfiguration =
@@ -181,16 +199,7 @@ export function createServerComposition() {
       entityRepository,
       memoryExtract: journalRoleRegistry.memoryExtractor,
       entityResolve: journalRoleRegistry.entityResolver,
-      registry: {
-        entryFor(predicateId) {
-          return (
-            predicateRegistrySnapshot.entries.find(
-              (entry) => entry.predicateId === predicateId,
-            ) ?? null
-          );
-        },
-        registryVersion: () => predicateRegistrySnapshot.registryVersion,
-      },
+      registry: predicateRegistryLookup,
       policy: {
         version: policy.policyVersion,
         visibilityTargetMs: policy.visibilityTargetMs,
@@ -225,6 +234,38 @@ export function createServerComposition() {
         providerPolicyVersion:
           configuration.provider.champion.providerPolicyVersion,
       },
+      dedupeFingerprintSecret: configuration.contextHmacSecret,
+      workflowReceiptId,
+    };
+  };
+  const memoryConsolidationRepository =
+    new PostgresMemoryConsolidationRepository(pool);
+  const memoryConsolidateConfiguration =
+    journalRoleRegistry.configuration("memory.consolidate");
+  const memoryConsolidationService = createMemoryConsolidationScanService({
+    clock: configuration.clock,
+    policyVersion: MEMORY_CONSOLIDATION_POLICY_VERSION,
+    repository: memoryConsolidationRepository,
+    enabled: configuration.writeSwitches.memoryConsolidationEnabled,
+  });
+  const memoryConsolidationEntrypointDependencies = async (
+    workflowReceiptId: string,
+  ): Promise<MemoryConsolidationEntrypointDependencies> => {
+    return {
+      clock: configuration.clock,
+      repository: memoryConsolidationRepository,
+      memoryConsolidate: journalRoleRegistry.memoryConsolidator,
+      memoryConsolidateConfiguration: {
+        role: "memory.consolidate",
+        configVersion: memoryConsolidateConfiguration.configVersion,
+        modelVersion: memoryConsolidateConfiguration.model,
+        promptVersion: memoryConsolidateConfiguration.promptFingerprint,
+        // ADR-0060: explicit per-role fallback only; disabled until a fallback
+        // Champion is published. A failed role fails loudly.
+        fallback: { mode: "disabled" },
+      },
+      registry: predicateRegistryLookup,
+      policy: { version: MEMORY_CONSOLIDATION_POLICY_VERSION },
       dedupeFingerprintSecret: configuration.contextHmacSecret,
       workflowReceiptId,
     };
@@ -461,6 +502,9 @@ export function createServerComposition() {
     fastPathExtractionRepository,
     fastPathExtractionService,
     fastPathExtractionEntrypointDependencies,
+    memoryConsolidationRepository,
+    memoryConsolidationService,
+    memoryConsolidationEntrypointDependencies,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

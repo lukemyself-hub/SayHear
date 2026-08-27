@@ -8,6 +8,9 @@ import type {
   JournalValidationProvider,
   DialogueStateContent,
   DialogueStateModel,
+  MemoryConsolidateModelInput,
+  MemoryConsolidateProvider,
+  MemoryConsolidateResult,
   MemoryExtractProvider,
   MemoryExtractRevisionResult,
   MemoryRoleInvocationConfiguration,
@@ -23,7 +26,8 @@ export type JournalModelRole =
   | "dialogue.state"
   | "summary.compress"
   | "memory.extract"
-  | "entity.resolve";
+  | "entity.resolve"
+  | "memory.consolidate";
 export type JournalRoleConfiguration = Readonly<{
   role: JournalModelRole;
   provider: "openai" | "deepseek" | "deterministic";
@@ -44,6 +48,7 @@ export type JournalRoleProviderRegistry = Readonly<{
   summaryCompressor: RollingSummaryModel;
   memoryExtractor: MemoryExtractProvider;
   entityResolver: EntityResolveGateProvider;
+  memoryConsolidator: MemoryConsolidateProvider;
   configuration(role: JournalModelRole): JournalRoleConfiguration;
 }>;
 /**
@@ -56,7 +61,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
   roles: readonly JournalRoleConfiguration[];
 }): JournalRoleProviderRegistry {
   const configurations = new Map(input.roles.map((role) => [role.role, role]));
-  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state", "summary.compress", "memory.extract", "entity.resolve"] as const) {
+  for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state", "summary.compress", "memory.extract", "entity.resolve", "memory.consolidate"] as const) {
     const configuration = configurations.get(role);
     if (!configuration || !configuration.model || !configuration.configVersion || !configuration.policyVersion || !configuration.promptFingerprint) {
       throw new Error(`Journal role ${role} requires complete versioned configuration.`);
@@ -72,6 +77,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       summaryCompressor: deterministicSummaryCompressor,
       memoryExtractor: deterministicMemoryExtractor,
       entityResolver: deterministicEntityResolver,
+      memoryConsolidator: deterministicMemoryConsolidator,
       configuration,
     };
   }
@@ -168,6 +174,16 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
           return { verdict: record.verdict, entityId: null, confidence: record.confidence };
         }
         return { verdict: record.verdict, entityId: record.entityId, confidence: record.confidence };
+      },
+    },
+    memoryConsolidator: {
+      role: "memory.consolidate",
+      async consolidate(request, invocation) {
+        const parsed = await askJson("memory.consolidate", `You are SayHear memory.consolidate. You PROPOSE structured diffs; deterministic code commits. Given pending Memory Candidates (with evidence and session dates) and current Claims, return only JSON: {diffs:[{kind:'propose_new'|'reinforce_existing'|'supersede_existing'|'contest_existing'|'mark_review_due'|'no_change',candidateId:string|null,evidenceItemIds:[...],claimId?(mark_review_due only),proposal?(required when candidateId is null):{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},evidenceItemIds:[...]}}]}. Aggregate impressions only from evidence spanning at least two different Daily Sessions. Only user-stated content may be basis=directly_stated. Reference only the candidate, claim, and evidence ids in the input. Return {diffs:[]} when nothing qualifies.`, request, invocation);
+        if (typeof parsed !== "object" || parsed === null || !Array.isArray((parsed as { diffs?: unknown }).diffs)) {
+          throw new Error("memory.consolidate returned invalid JSON.");
+        }
+        return parsed as MemoryConsolidateResult;
       },
     },
     draft: {
@@ -370,5 +386,19 @@ const deterministicEntityResolver: EntityResolveGateProvider = {
   role: "entity.resolve",
   async resolve(_request, _invocation) {
     return { verdict: "unclear", entityId: null, confidence: 0 };
+  },
+};
+
+/**
+ * Deterministic memory.consolidate stand-in (test / offline environments):
+ * proposes no diffs at all — consolidation without a real judgment changes
+ * nothing (the deterministic dormancy and sweeper passes still run; they
+ * never depend on the model). Behavioral scripting happens at the
+ * application seam in system tests.
+ */
+const deterministicMemoryConsolidator: MemoryConsolidateProvider = {
+  role: "memory.consolidate",
+  async consolidate(_request: MemoryConsolidateModelInput, _invocation) {
+    return { diffs: [] };
   },
 };

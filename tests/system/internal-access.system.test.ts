@@ -173,6 +173,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        memory_consolidation_diffs,
+        memory_consolidation_runs,
         fast_path_session_items,
         entity_resolve_gate_outcomes,
         entity_clarification_proposals,
@@ -594,6 +596,9 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       "memory_forget_requests",
       "memory_forget_evidence_exclusions",
       "memory_forget_reversals",
+      "memory_consolidation_runs",
+      "memory_consolidation_diffs",
+      "memory_consolidation_policies",
     ]);
     const outOfScopeRelations = (
       await database.pool.query<{ table_name: string }>(
@@ -4084,6 +4089,12 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     );
     expect(scanned.status).toBe(200);
     expect(await scanned.json()).toEqual({
+      consolidation: {
+        daily: 0,
+        reArmed: 0,
+        sweeper: 0,
+        weekly: 0,
+      },
       eligibility: {
         commandsCreated: 0,
         evaluated: 0,
