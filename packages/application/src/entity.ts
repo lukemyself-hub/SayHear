@@ -6,11 +6,16 @@ import { asEntityId, asEvidenceItemId, asUserId } from "@sayhear/domain";
  * exact-match lane, the fuzzy-candidate lane that only produces diagnostics,
  * unresolved-Entity creation for named new introductions, and the single
  * idempotent Self Entity provisioning path shared by lazy-in-write and the
- * owner backoff. The `entity.resolve` LLM gate and Entity Clarification land
- * with the fast path (#113); merge / split / promotion land with #121.
+ * owner backoff. The `entity.resolve` LLM gate lands with the fast path
+ * (#113); merge / split / promotion land with #121.
+ *
+ * v2 (issue #113): the fuzzy-candidate lane adds homophone folding — a curated
+ * traditional→simplified character map and common surname homophone classes —
+ * so "我媽媽" and "妈妈" become candidates (never binds) for the
+ * fixture-calibrated `entity.resolve` gate.
  */
 
-export const ENTITY_RESOLVER_POLICY_VERSION = "entity-resolution:v1";
+export const ENTITY_RESOLVER_POLICY_VERSION = "entity-resolution:v2";
 
 export const ENTITY_KINDS = Object.freeze({
   person: "sh.entity.person",
@@ -367,6 +372,83 @@ export function normalizeEntityLabel(label: string): string {
 }
 
 /**
+ * v2 homophone folding key (issue #113): normalization plus a curated
+ * traditional→simplified character map and common surname homophone classes.
+ * Two forms with equal fold keys but different normalized forms are
+ * near-forms — candidates for the `entity.resolve` gate, never a bind. The
+ * table is deliberately small and versioned: production evidence extends it
+ * through a new policy version rather than silent growth.
+ */
+const TRADITIONAL_TO_SIMPLIFIED: Readonly<Record<string, string>> =
+  Object.freeze({
+    // Kinship terms (the dominant relative-mention fixtures).
+    媽: "妈", 爺: "爷", 嬸: "婶",
+    // Given-name characters common in personal names.
+    偉: "伟", 強: "强", 麗: "丽", 華: "华", 軍: "军", 靜: "静", 傑: "杰",
+    濤: "涛", 龍: "龙", 鳳: "凤", 蘭: "兰", 儀: "仪", 潔: "洁", 瑤: "瑶",
+    穎: "颖", 詩: "诗", 豔: "艳", 維: "维", 啟: "启", 賢: "贤", 誠: "诚",
+    樺: "桦", 鋒: "锋", 堯: "尧", 璿: "璇", 灝: "灏", 恆: "恒", 憲: "宪",
+    // Surnames.
+    陳: "陈", 劉: "刘", 黃: "黄", 張: "张", 吳: "吴", 趙: "赵", 孫: "孙",
+    馬: "马", 鄭: "郑", 謝: "谢", 許: "许", 韓: "韩", 馮: "冯", 鄧: "邓",
+    蔣: "蒋", 葉: "叶", 蘇: "苏", 呂: "吕", 盧: "卢", 鍾: "钟", 譚: "谭",
+    陸: "陆", 賈: "贾", 韋: "韦", 鄒: "邹", 賀: "贺", 顧: "顾", 龔: "龚",
+    萬: "万", 錢: "钱", 嚴: "严", 賴: "赖", 閻: "阎", 閆: "闫", 湯: "汤",
+    羅: "罗", 楊: "杨", 蕭: "萧", 範: "范", 歐陽: "欧阳",
+  });
+
+/**
+ * Common same-pinyin surname groups (Mandarin). Folding is generous on
+ * purpose: the fuzzy lane only creates candidates and the `entity.resolve`
+ * gate decides; missing a fold costs a candidate, an over-broad fold costs
+ * only a gate call.
+ */
+const HOMOPHONE_CLASSES: readonly (readonly string[])[] = Object.freeze([
+  Object.freeze(["张", "章"]),
+  Object.freeze(["于", "余", "俞"]),
+  Object.freeze(["付", "傅"]),
+  Object.freeze(["肖", "萧"]),
+  Object.freeze(["阎", "闫"]),
+  Object.freeze(["侯", "后"]),
+  Object.freeze(["谭", "谈"]),
+  Object.freeze(["龚", "弓"]),
+  Object.freeze(["贺", "何"]),
+  Object.freeze(["沈", "申"]),
+]);
+
+const HOMOPHONE_CLASS_BY_CHARACTER: Readonly<Record<string, number>> =
+  Object.freeze(
+    Object.fromEntries(
+      HOMOPHONE_CLASSES.flatMap((group, index) =>
+        group.map((character) => [character, index] as const),
+      ),
+    ),
+  );
+
+export function homophoneFoldKey(label: string): string {
+  const normalized = normalizeEntityLabel(label);
+  let folded = "";
+  for (const character of normalized) {
+    folded += TRADITIONAL_TO_SIMPLIFIED[character] ?? character;
+  }
+  // Multi-character keys in the T2S map (compound surnames) need a pass after
+  // the per-character fold.
+  for (const [traditional, simplified] of Object.entries(
+    TRADITIONAL_TO_SIMPLIFIED,
+  )) {
+    if (traditional.length > 1 && folded.includes(traditional)) {
+      folded = folded.replaceAll(traditional, simplified);
+    }
+  }
+  let classed = "";
+  for (const character of folded) {
+    const classIndex = HOMOPHONE_CLASS_BY_CHARACTER[character];
+    classed += classIndex === undefined ? character : `\u0000${classIndex}`;
+  }
+  return classed;
+}
+
+/**
  * The deterministic resolution planner. Lane order is strict and fixed:
  * first-person → Self Entity; a named mention of a form introduced earlier in
  * the same batch → that new Entity; flagged new introduction → new unresolved
@@ -526,24 +608,24 @@ export function planEntityMentionResolution(
 
 /**
  * Fuzzy-candidate lane: near-forms become diagnostics only — never a bind,
- * never an Entity. v1 covers code-point edit distance and containment;
- * homophone folding (pinyin / traditional–simplified) joins with the fixture
- * calibration of the `entity.resolve` gate in #113, raising the policy
- * version when it lands. Thresholds: distance <= 2 when the shorter form has
- * at least 4 characters, else <= 1; containment requires a shorter side of at
- * least 2 characters. Exact equality never reaches here (the exact lane
- * owns it).
+ * never an Entity. v2 covers code-point edit distance, containment, and
+ * homophone folding (traditional→simplified plus surname classes) for the
+ * `entity.resolve` gate calibrated in #113. Thresholds: distance <= 2 when the
+ * shorter form has at least 4 characters, else <= 1; containment requires a
+ * shorter side of at least 2 characters. Exact equality never reaches here
+ * (the exact lane owns it).
  */
 function nearFormCandidates(
   normalizedForm: string,
   labels: readonly EntityLabelIndexEntry[],
 ): readonly EntityMentionCandidateDiagnostic[] {
+  const foldedForm = homophoneFoldKey(normalizedForm);
   const byEntity = new Map<
     string,
     { matchedLabel: string; editDistance: number | null }
   >();
   for (const label of labels) {
-    const diagnostic = nearFormDiagnostic(normalizedForm, label);
+    const diagnostic = nearFormDiagnostic(normalizedForm, foldedForm, label);
     if (!diagnostic) continue;
     const existing = byEntity.get(label.entityId);
     if (
@@ -574,8 +656,17 @@ function nearFormCandidates(
 
 function nearFormDiagnostic(
   normalizedForm: string,
+  foldedForm: string,
   label: EntityLabelIndexEntry,
 ): { matchedLabel: string; editDistance: number | null } | null {
+  // Homophone folding (v2): fold-equal but not normalized-equal forms are
+  // near-forms — candidates for the gate, never a bind (ADR-0088).
+  if (
+    normalizedForm !== label.normalizedLabel &&
+    foldedForm === homophoneFoldKey(label.normalizedLabel)
+  ) {
+    return { matchedLabel: label.label, editDistance: null };
+  }
   const [shorter, longer] =
     normalizedForm.length <= label.normalizedLabel.length
       ? [normalizedForm, label.normalizedLabel]

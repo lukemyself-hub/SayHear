@@ -41,6 +41,8 @@ export type RecordUserTextTurnInput = Readonly<{
   clientTurnId: ClientTurnId;
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
+  /** Fast-path extraction switch + versioned policy (issue #113); null = off. */
+  fastPathExtractionPolicyVersion: string | null;
   generationPolicy: GenerationPolicy;
   inactivityPolicy: InactivityPolicy;
   locale: string;
@@ -183,7 +185,7 @@ export type RecordConversationRetryRepositoryResult =
     }>;
 
 export type UserTextConversationRepository = Readonly<{
-  correctUserEvent?(input: { eventId: ConversationEventId; locale: string; now: Date; text: string; userId: UserId }): Promise<{ dailySessionId: DailySessionId } | null>;
+  correctUserEvent?(input: { eventId: ConversationEventId; locale: string; now: Date; text: string; userId: UserId; fastPathExtractionPolicyVersion: string | null }): Promise<{ dailySessionId: DailySessionId } | null>;
   endContinuousExchangeExplicitly(input: {
     dailySessionId: DailySessionId;
     endedAt: Date;
@@ -287,6 +289,8 @@ export function createUserTextConversationService(dependencies: {
   clock: () => Date;
   expectedBackupPolicyVersion: string;
   expectedConfigurationFingerprint: string;
+  /** Fast-path extraction policy version; omitted / null keeps the switch off. */
+  fastPathExtractionPolicyVersion?: string | null;
   generationPolicy: GenerationPolicy;
   inactivityPolicy?: InactivityPolicy;
   recoveryGate?: RecoveryGate;
@@ -298,6 +302,8 @@ export function createUserTextConversationService(dependencies: {
       timeoutMs: 30 * 60 * 1_000,
       version: "continuous-exchange-inactivity:v1",
     });
+  const fastPathExtractionPolicyVersion =
+    dependencies.fastPathExtractionPolicyVersion ?? null;
   return {
     async correct(userId, rawInput) {
       await dependencies.recoveryGate?.requireOpen(userId);
@@ -308,7 +314,7 @@ export function createUserTextConversationService(dependencies: {
       let locale: string;
       try { locale = new Intl.Locale(rawInput.locale).toString(); } catch { throw new InvalidUserTextTurnError("locale must be a valid BCP-47 tag."); }
       if (!dependencies.repository.correctUserEvent) throw new InvalidUserTextTurnError("User Evidence correction is unavailable.");
-      const corrected = await dependencies.repository.correctUserEvent({ eventId, locale, now: dependencies.clock(), text, userId });
+      const corrected = await dependencies.repository.correctUserEvent({ eventId, locale, now: dependencies.clock(), text, userId, fastPathExtractionPolicyVersion });
       if (!corrected) throw new InvalidUserTextTurnError("The User Event cannot be corrected.");
       return corrected;
     },
@@ -389,6 +395,7 @@ export function createUserTextConversationService(dependencies: {
         expectedBackupPolicyVersion: dependencies.expectedBackupPolicyVersion,
         expectedConfigurationFingerprint:
           dependencies.expectedConfigurationFingerprint,
+        fastPathExtractionPolicyVersion,
         generationPolicy: dependencies.generationPolicy,
         inactivityPolicy,
         logicalDate: localDateAt(now, input.timezone),

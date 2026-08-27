@@ -4,6 +4,7 @@ import {
   EntityNotFoundError,
   EntityRevisionNotFoundError,
   planEntityMentionResolution,
+  planGateCommit,
   SelfEntityIntegrityError,
   type EntityLabelIndexEntry,
   type EntityMentionProposal,
@@ -15,7 +16,15 @@ import {
   type SelfEntityBinding,
 } from "@sayhear/application";
 import type { Pool, PoolClient } from "pg";
+import { lockActiveOwnerEpoch } from "./postgres-owner-epoch-fence";
 import { createUuidV7 } from "./uuid-v7";
+
+/** The entity.resolve gate referenced a mention that does not exist. */
+export class EntityMentionNotFoundError extends Error {
+  public constructor(mentionId: string) {
+    super(`EntityMention ${mentionId} does not exist for this user.`);
+  }
+}
 
 type MentionRow = {
   entity_mention_id: string;
@@ -118,6 +127,145 @@ export class PostgresEntityRepository implements EntityRepository {
       const results = await resolveMentionsWithin(client, input);
       await client.query("COMMIT");
       return results;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * The single `entity.resolve` LLM gate commit (issue #113, #97): binds the
+   * mention only when the selection is a recorded candidate, the verdict is
+   * match, and confidence ≥ t_auto — validated again in-transaction, because
+   * deterministic code (never the model response) commits. Idempotent per
+   * (mention, resolver policy, gate policy); replays return the existing
+   * binding. Every outcome, committed or not, lands in the audit table.
+   */
+  public async applyEntityResolveGateOutcome(input: {
+    userId: string;
+    mentionId: string;
+    selectedEntityId: string | null;
+    verdict: "match" | "no_match" | "unclear";
+    confidence: number;
+    tAuto: number;
+    candidateEntityIds: readonly string[];
+    gatePolicyVersion: string;
+    resolverPolicyVersion: string;
+    expectedDataEpoch: number;
+    now: Date;
+  }): Promise<{ applied: boolean; boundEntityId: string | null }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Authoritative write fence (architecture 13.4): lock the owner and
+      // verify the epoch the command froze before binding identity.
+      const epoch = await lockActiveOwnerEpoch(client, input.userId);
+      if (epoch === null || epoch !== input.expectedDataEpoch) {
+        await client.query("ROLLBACK");
+        throw new Error(
+          "entity.resolve gate commit was fenced by the owner epoch.",
+        );
+      }
+      const existing = await client.query<{
+        committed: boolean;
+        selected_entity_id: string | null;
+      }>(
+        `SELECT committed, selected_entity_id FROM entity_resolve_gate_outcomes
+         WHERE user_id = $1 AND entity_mention_id = $2
+           AND resolver_policy_version = $3 AND gate_policy_version = $4`,
+        [
+          input.userId,
+          input.mentionId,
+          input.resolverPolicyVersion,
+          input.gatePolicyVersion,
+        ],
+      );
+      if (existing.rows.length > 0) {
+        await client.query("COMMIT");
+        return {
+          applied: existing.rows[0]!.committed,
+          boundEntityId: existing.rows[0]!.selected_entity_id,
+        };
+      }
+      const mention = await client.query<{
+        entity_mention_id: string;
+        resolved_entity_id: string | null;
+        resolution_status: string;
+      }>(
+        `SELECT entity_mention_id, resolved_entity_id, resolution_status
+         FROM entity_mentions
+         WHERE user_id = $1 AND entity_mention_id = $2
+         AND resolver_policy_version = $3
+         FOR UPDATE`,
+        [input.userId, input.mentionId, input.resolverPolicyVersion],
+      );
+      const mentionRow = mention.rows[0];
+      if (!mentionRow) {
+        await client.query("ROLLBACK");
+        throw new EntityMentionNotFoundError(input.mentionId);
+      }
+      const candidates = await client.query<{ candidate_entity_id: string }>(
+        `SELECT candidate_entity_id FROM entity_mention_candidates
+         WHERE user_id = $1 AND entity_mention_id = $2`,
+        [input.userId, input.mentionId],
+      );
+      const candidateIds = candidates.rows.map((row) => row.candidate_entity_id);
+      if (candidateIds.length === 0) {
+        await client.query("ROLLBACK");
+        throw new Error(
+          "entity.resolve gate applied to a mention with no recorded candidates.",
+        );
+      }
+      const plan = planGateCommit({
+        tAuto: input.tAuto,
+        candidates: candidateIds.map((entityId) => ({ entityId })),
+        response: {
+          verdict: input.verdict,
+          entityId: input.selectedEntityId,
+          confidence: input.confidence,
+        },
+      });
+      if (plan.committed && plan.boundEntityId !== null) {
+        await client.query(
+          `UPDATE entity_mentions
+           SET resolved_entity_id = $1, resolution_status = 'resolved',
+               confidence = $2
+           WHERE user_id = $3 AND entity_mention_id = $4`,
+          [
+            plan.boundEntityId,
+            input.confidence,
+            input.userId,
+            input.mentionId,
+          ],
+        );
+      }
+      await client.query(
+        `INSERT INTO entity_resolve_gate_outcomes (
+           entity_resolve_gate_outcome_id, user_id, entity_mention_id,
+           gate_policy_version, resolver_policy_version, t_auto, verdict,
+           selected_entity_id, confidence, candidate_count, committed,
+           not_committed_reason, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+        [
+          createUuidV7(input.now),
+          input.userId,
+          input.mentionId,
+          input.gatePolicyVersion,
+          input.resolverPolicyVersion,
+          input.tAuto,
+          input.verdict,
+          plan.boundEntityId,
+          input.confidence,
+          candidateIds.length,
+          plan.committed,
+          plan.notCommittedReason,
+          input.now,
+        ],
+      );
+      await client.query("COMMIT");
+      return { applied: plan.committed, boundEntityId: plan.boundEntityId };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

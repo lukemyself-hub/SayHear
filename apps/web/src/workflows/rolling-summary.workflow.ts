@@ -7,6 +7,7 @@ import { createServerComposition } from "../server-composition";
 import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
 import { dialogueStateWorkflow } from "./dialogue-state.workflow";
 import { ownerFullPurgeWorkflow } from "./owner-full-purge.workflow";
+import { fastPathExtractionWorkflow } from "./fast-path-extraction.workflow";
 
 export async function journalRegenerationWorkflow(input: {
   workflowCommandId: string;
@@ -79,6 +80,8 @@ export function createWorkflowStarter(): WorkflowStarter {
         ...workflowInput,
         actionExecutionId: input.actionExecutionId,
       }]);
+    } else if (input.eventType === "fast_path_extraction_requested") {
+      run = await start(fastPathExtractionWorkflow, [workflowInput]);
     } else {
       throw new Error(`Unsupported outbox event type: ${input.eventType}`);
     }

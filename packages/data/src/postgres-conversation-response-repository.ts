@@ -52,6 +52,7 @@ import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
+import { FAST_PATH_PENDING_REVISIONS_SQL } from "./postgres-fast-path-extraction-repository";
 
 type ContextHeadRow = Readonly<{
   action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
@@ -830,6 +831,13 @@ export class PostgresConversationResponseRepository
         dailySessionId: row.daily_session_id,
         sourceRevision: Number(row.source_revision),
       });
+      // Issue #113: the compile never waits on the fast path; when the session
+      // carries committed extraction commands whose runs have not completed,
+      // the manifest records `fast_path_pending` and raw Events keep serving.
+      const fastPathPending = await client.query<{ pending: boolean }>(
+        `SELECT EXISTS (${FAST_PATH_PENDING_REVISIONS_SQL}) AS pending`,
+        [row.daily_session_id],
+      );
 
       await client.query("COMMIT");
       return {
@@ -878,6 +886,7 @@ export class PostgresConversationResponseRepository
           sequence: Number(event.sequence_no),
           text: event.text,
         })),
+        fastPathPending: fastPathPending.rows[0]?.pending === true,
         generationStage: row.generation_stage,
         inputRevisionId: asConversationEventRevisionId(row.input_revision_id),
         locale: row.locale,
