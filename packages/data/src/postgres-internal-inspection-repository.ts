@@ -4,6 +4,7 @@ import type {
   ContextPolicyVersions,
   GenerationInspectionMetadata,
   InternalInspectionRepository,
+  RetrievalCandidateInspection,
 } from "@sayhear/application";
 import {
   asConversationEventRevisionId,
@@ -12,6 +13,7 @@ import {
   asModelRunAttemptId,
   validateSafetyPostureContent,
   type CurrentSafetyPosture,
+  type MemorySectionKey,
   type SafetyPostureContent,
 } from "@sayhear/application";
 
@@ -43,6 +45,7 @@ type GenerationMetadataRow = Readonly<{
     selectionOrder: number | null;
     sequence: number;
   }>;
+  context_retrieval_manifest: GenerationInspectionMetadata["compiledContext"]["retrievalManifest"];
   context_section_budgets: { committedRawEvents: number };
   context_sections: CompiledContextSection[];
   context_source_revision: string;
@@ -156,6 +159,7 @@ export class PostgresInternalInspectionRepository
           context.policy_versions AS context_policy_versions,
           context.section_budgets AS context_section_budgets,
           context.sections AS context_sections,
+          context.retrieval_manifest AS context_retrieval_manifest,
           context.total_tokens AS context_total_tokens,
           context.degraded_reason AS context_degraded_reason,
           context.integrity_algorithm AS context_integrity_algorithm,
@@ -281,6 +285,14 @@ export class PostgresInternalInspectionRepository
         sourceRevision: Number(row.context_source_revision),
         userId: input.userId,
       });
+      const retrievalCandidates =
+        row.context_retrieval_manifest === null
+          ? []
+          : await loadRetrievalCandidates(client, {
+              retrievalRunId:
+                row.context_retrieval_manifest.retrieval_run_id,
+              userId: input.userId,
+            });
       await client.query("COMMIT");
       return {
         attemptStatus: row.attempt_status,
@@ -306,6 +318,7 @@ export class PostgresInternalInspectionRepository
           sections: row.context_sections.map(
             ({ contentHmac: _contentHmac, ...section }) => section,
           ),
+          retrievalManifest: row.context_retrieval_manifest,
           safetyPosture: {
             posture: safetyPosture,
             state: safetyPosture?.content.state ?? "default",
@@ -360,6 +373,7 @@ export class PostgresInternalInspectionRepository
           status: row.recovery_status,
         },
         role: row.role,
+        retrievalCandidates,
         sourceRevisionId: asConversationEventRevisionId(
           row.input_revision_id,
         ),
@@ -489,6 +503,68 @@ export class PostgresInternalInspectionRepository
       client.release();
     }
   }
+}
+
+type RetrievalCandidateRow = Readonly<{
+  claim_retrieval_projection_id: string;
+  final_rank: number | null;
+  matched_fields: readonly string[];
+  matched_terms: readonly string[];
+  memory_claim_version_id: string;
+  rank_components: RetrievalCandidateInspection["rankComponents"];
+  rejection_reason_codes: readonly string[];
+  retrieval_lane: RetrievalCandidateInspection["lane"];
+  selected_section: MemorySectionKey | null;
+  selection_reason_codes: readonly string[];
+  trust_fence_results: RetrievalCandidateInspection["trustFenceResults"];
+}>;
+
+/**
+ * #122: the retrieval panel's candidate funnel — the run-ledger rows joined
+ * by the manifest's pinned retrieval_run_id (the funnel and the manifest
+ * describe the same run by construction), read-only, with the recorded
+ * reasons verbatim. Ordered by final rank with unranked (fenced-out) rows
+ * last.
+ */
+async function loadRetrievalCandidates(
+  client: PoolClient,
+  input: { retrievalRunId: string; userId: string },
+): Promise<readonly RetrievalCandidateInspection[]> {
+  const result = await client.query<RetrievalCandidateRow>(
+    `
+      SELECT
+        candidate.claim_retrieval_projection_id::text,
+        candidate.final_rank,
+        candidate.matched_fields,
+        candidate.matched_terms,
+        candidate.memory_claim_version_id::text,
+        candidate.rank_components,
+        candidate.rejection_reason_codes,
+        candidate.retrieval_lane,
+        candidate.selected_section,
+        candidate.selection_reason_codes,
+        candidate.trust_fence_results
+      FROM retrieval_run_candidates candidate
+      WHERE candidate.user_id = $2
+        AND candidate.retrieval_run_id = $1
+      ORDER BY candidate.final_rank ASC NULLS LAST,
+        candidate.retrieval_lane
+    `,
+    [input.retrievalRunId, input.userId],
+  );
+  return result.rows.map((row) => ({
+    claimVersionId: row.memory_claim_version_id,
+    finalRank: row.final_rank === null ? null : Number(row.final_rank),
+    lane: row.retrieval_lane,
+    matchedFields: row.matched_fields,
+    matchedTerms: row.matched_terms,
+    rankComponents: row.rank_components,
+    rejectionReasonCodes: row.rejection_reason_codes,
+    retrievalProjectionId: row.claim_retrieval_projection_id,
+    selectedSection: row.selected_section,
+    selectionReasonCodes: row.selection_reason_codes,
+    trustFenceResults: row.trust_fence_results,
+  }));
 }
 
 async function loadSafetyPostureForInspection(

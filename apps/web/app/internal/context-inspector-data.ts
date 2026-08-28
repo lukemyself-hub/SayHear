@@ -1,6 +1,8 @@
 import type {
   CompiledContextSectionKey,
   ContextPolicyVersions,
+  RetrievalCandidateInspection,
+  RetrievalRunManifest,
 } from "@sayhear/application";
 
 export const DIALOGUE_STATE_FIELDS = [
@@ -72,6 +74,7 @@ export type ContextInspectorPayload = Readonly<{
       degradedReason: string | null;
       dialogueRevision: number;
       locale: string;
+      retrievalManifest: RetrievalRunManifest | null;
       sectionBudgets: Readonly<{ committedRawEvents: number }>;
       sections: readonly ContextInspectorSection[];
       sourceRevision: number;
@@ -81,7 +84,92 @@ export type ContextInspectorPayload = Readonly<{
   model: string;
   provider: string;
   providerPolicyVersion: string;
+  retrievalCandidates: readonly RetrievalCandidateInspection[];
 }>;
+
+export type ContextInspectorMemoryItem = Readonly<{
+  claimId: string;
+  claimVersionId: string;
+  contextMemoryRef: string;
+  epistemicStatus: string;
+  evidenceIds: readonly string[];
+  kind: string;
+  renderedText: string;
+  temporalStatus: string;
+  validFrom: string | null;
+  validTo: string | null;
+}>;
+
+export type ContextInspectorMemorySectionItems = Readonly<{
+  items: readonly ContextInspectorMemoryItem[];
+  sectionKey: CompiledContextSectionKey;
+}>;
+
+const MEMORY_ITEM_LINE =
+  /^- \[(shh-memory-\d+)\] (.*) — kind=(\S+) epistemic=(\S+) claim=(\S+) version=(\S+) evidence=(\S+) temporal=(\S+)(?: valid_from=(\S+))?(?: valid_to=(\S+))?$/;
+
+/**
+ * #122: parses the itemized memory section content — the exact text the model
+ * received, persisted verbatim as the section reference — back into its
+ * structured `MemoryContextItem` fields. The line format is deterministic per
+ * renderMemorySection; anything else (non-memory references, non-item lines)
+ * yields no items, so the panel can never fabricate an injection.
+ */
+export function parseMemorySectionItems(
+  reference: string,
+): readonly ContextInspectorMemoryItem[] {
+  const items: ContextInspectorMemoryItem[] = [];
+  for (const line of reference.split("\n")) {
+    const match = MEMORY_ITEM_LINE.exec(line.trimEnd());
+    if (!match) continue;
+    const [
+      ,
+      contextMemoryRef,
+      renderedText,
+      kind,
+      epistemicStatus,
+      claimId,
+      claimVersionId,
+      evidence,
+      temporalStatus,
+      validFrom,
+      validTo,
+    ] = match;
+    items.push({
+      claimId: claimId!,
+      claimVersionId: claimVersionId!,
+      contextMemoryRef: contextMemoryRef!,
+      epistemicStatus: epistemicStatus!,
+      evidenceIds:
+        evidence === "none" ? [] : evidence!.split(",").filter(Boolean),
+      kind: kind!,
+      renderedText: renderedText!,
+      temporalStatus: temporalStatus!,
+      validFrom: validFrom ?? null,
+      validTo: validTo ?? null,
+    });
+  }
+  return items;
+}
+
+const MEMORY_SECTION_KEYS_IN_COMPILER_ORDER: readonly CompiledContextSectionKey[] =
+  ["person_portrait", "objective_memory", "ai_impression"];
+
+/** Injected items per present memory section, in compiler section order. */
+export function memorySectionItemsFromSections(
+  sections: readonly ContextInspectorSection[],
+): readonly ContextInspectorMemorySectionItems[] {
+  return MEMORY_SECTION_KEYS_IN_COMPILER_ORDER.flatMap((sectionKey) => {
+    const section = sections.find((candidate) => candidate.key === sectionKey);
+    if (!section) return [];
+    return [
+      {
+        items: parseMemorySectionItems(section.reference),
+        sectionKey,
+      },
+    ];
+  });
+}
 
 export function sectionVersionLabel(
   section: ContextInspectorSection,

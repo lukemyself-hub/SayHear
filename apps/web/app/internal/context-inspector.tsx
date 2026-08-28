@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   DIALOGUE_STATE_FIELDS,
+  memorySectionItemsFromSections,
   sectionVersionLabel,
   type ContextInspectorContext,
   type ContextInspectorDialogueField,
@@ -300,7 +301,252 @@ function InspectionReport(props: { inspection: ContextInspectorPayload }) {
           <p className="inspectorMuted">No Safety Posture projection was active or recorded for this Context.</p>
         )}
       </section>
+
+      <RetrievalPanel inspection={props.inspection} />
     </div>
+  );
+}
+
+function RetrievalPanel(props: { inspection: ContextInspectorPayload }) {
+  const { compiledContext, retrievalCandidates } = props.inspection;
+  const manifest = compiledContext.retrievalManifest;
+  const memorySections = memorySectionItemsFromSections(
+    compiledContext.sections,
+  );
+  if (manifest === null) {
+    return (
+      <section className="inspectorCard">
+        <div className="inspectorHeading">
+          <div>
+            <h2>Memory retrieval</h2>
+            <p>
+              The injected memory items and the full retrieval run of this
+              turn. Read-only: the panel renders the recorded CompiledContext
+              and run ledger; it never recomputes or changes a selection.
+            </p>
+          </div>
+        </div>
+        <p className="inspectorMuted">
+          No retrieval run is linked to this compiled Context.
+        </p>
+      </section>
+    );
+  }
+
+  const runDegraded = manifest.degraded_reason_codes.length > 0;
+  const portraitDegraded =
+    manifest.portrait_degraded_reason_codes.length > 0;
+  const referenceOf = (sectionKey: string) =>
+    compiledContext.sections.find(
+      (section) => section.key === sectionKey,
+    )?.reference;
+
+  return (
+    <section className="inspectorCard">
+      <div className="inspectorHeading">
+        <div>
+          <h2>Memory retrieval</h2>
+          <p>
+            The injected memory items and the full retrieval run of this turn.
+            Read-only: the panel renders the recorded CompiledContext and run
+            ledger; it never recomputes or changes a selection.
+          </p>
+        </div>
+        <strong data-retrieval-state={runDegraded ? "degraded" : "completed"}>
+          {runDegraded ? "Degraded" : "Completed"}
+        </strong>
+      </div>
+      <h3>Injected memory items</h3>
+      {memorySections.length === 0 ? (
+        <p className="inspectorMuted">
+          No memory was injected this turn — the sections the model received
+          contain no memory item.
+        </p>
+      ) : (
+        memorySections.map((section) => (
+          <div className="inspectorTableWrap" key={section.sectionKey}>
+            <table className="inspectorTable">
+              <caption>
+                Injected items — <code>{section.sectionKey}</code>
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Ref</th>
+                  <th scope="col">Rendered text</th>
+                  <th scope="col">Kind</th>
+                  <th scope="col">Epistemic</th>
+                  <th scope="col">Claim / version</th>
+                  <th scope="col">Evidence</th>
+                  <th scope="col">Temporal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      Item lines could not be parsed from this section; the
+                      exact content the model received is shown verbatim:
+                      <pre>{referenceOf(section.sectionKey)}</pre>
+                    </td>
+                  </tr>
+                ) : (
+                  section.items.map((item) => (
+                    <tr key={item.contextMemoryRef}>
+                      <th scope="row">
+                        <code>{item.contextMemoryRef}</code>
+                      </th>
+                      <td>{item.renderedText}</td>
+                      <td>{item.kind}</td>
+                      <td>{item.epistemicStatus}</td>
+                      <td>
+                        <code className="inspectorId">{item.claimId}</code>
+                        <br />
+                        <code className="inspectorId">
+                          {item.claimVersionId}
+                        </code>
+                      </td>
+                      <td>
+                        {item.evidenceIds.length > 0
+                          ? `${item.evidenceIds.length} item(s)`
+                          : "none"}
+                      </td>
+                      <td>
+                        {item.temporalStatus}
+                        {item.validFrom ? ` from ${item.validFrom}` : ""}
+                        {item.validTo ? ` to ${item.validTo}` : ""}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ))
+      )}
+
+      <h3>Retrieval run</h3>
+      <dl className="inspectorFacts">
+        <InspectorFact label="Run">
+          <code>{manifest.retrieval_run_id}</code>
+        </InspectorFact>
+        <InspectorFact label="Deadline">
+          {manifest.duration_ms.toLocaleString()} ms of{" "}
+          {manifest.deadline_ms.toLocaleString()} ms
+          {manifest.deadline_exceeded_stage
+            ? ` (exceeded at ${manifest.deadline_exceeded_stage})`
+            : ""}
+        </InspectorFact>
+        <InspectorFact label="Phase timings">
+          {Object.entries(manifest.timings)
+            .map(([phase, ms]) => `${phase} ${ms} ms`)
+            .join(" · ") || "—"}
+        </InspectorFact>
+        <InspectorFact label="Funnel counts">
+          {manifest.candidate_count} candidates ·{" "}
+          {manifest.qualified_count} qualified ·{" "}
+          {manifest.fenced_out_count} fenced out
+        </InspectorFact>
+        <InspectorFact label="Query signal">
+          {manifest.zero_signal
+            ? "zero signal recorded (no matchable query signal)"
+            : "signals present"}
+        </InspectorFact>
+        <InspectorFact label="Portrait selection">
+          pool {manifest.portrait_selection.pool_count} · selected{" "}
+          {manifest.portrait_selection.selected_claim_version_ids.length}
+        </InspectorFact>
+        <InspectorFact label="Degradations">
+          {runDegraded ? manifest.degraded_reason_codes.join(", ") : "None"}
+          {portraitDegraded
+            ? `${runDegraded ? " · " : ""}portrait-only: ${manifest.portrait_degraded_reason_codes.join(", ")}`
+            : ""}
+        </InspectorFact>
+      </dl>
+      <div
+        className={`inspectorDegradation ${runDegraded || portraitDegraded ? "isDegraded" : "isClean"}`}
+        role="status"
+      >
+        {runDegraded
+          ? `Memory degraded: ${manifest.degraded_reason_codes.join(", ")}`
+          : portraitDegraded
+            ? `Person Portrait omitted this turn: ${manifest.portrait_degraded_reason_codes.join(", ")}`
+            : "The retrieval round completed without degradation."}
+      </div>
+
+      <h3>Candidate funnel</h3>
+      <div className="inspectorTableWrap">
+        <table className="inspectorTable">
+          <caption>
+            Every candidate of the run with its selection / rejection reasons
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Lane</th>
+              <th scope="col">Claim version</th>
+              <th scope="col">Matched</th>
+              <th scope="col">Rank fields</th>
+              <th scope="col">Fences</th>
+              <th scope="col">Outcome</th>
+              <th scope="col">Reasons</th>
+            </tr>
+          </thead>
+          <tbody>
+            {retrievalCandidates.length === 0 ? (
+              <tr>
+                <td colSpan={8}>No candidates were recorded for this run.</td>
+              </tr>
+            ) : (
+              retrievalCandidates.map((candidate) => {
+                const failedFences = candidate.trustFenceResults.filter(
+                  (fence) => !fence.passed,
+                );
+                const outcomeReasons = [
+                  ...candidate.selectionReasonCodes,
+                  ...candidate.rejectionReasonCodes,
+                ];
+                return (
+                  <tr key={candidate.retrievalProjectionId}>
+                    <th scope="row">{candidate.finalRank ?? "fenced"}</th>
+                    <td>
+                      <code>{candidate.lane}</code>
+                    </td>
+                    <td>
+                      <code className="inspectorId">
+                        {candidate.claimVersionId}
+                      </code>
+                    </td>
+                    <td>
+                      {candidate.matchedFields.join(", ") || "—"}
+                      {candidate.matchedTerms.length > 0
+                        ? ` (${candidate.matchedTerms.join(", ")})`
+                        : ""}
+                    </td>
+                    <td>
+                      {`entity ${candidate.rankComponents.entity_match} · predicate ${candidate.rankComponents.predicate_match} · temporal ${candidate.rankComponents.temporal_fit} · lexical ${candidate.rankComponents.lexical_coverage}`}
+                      {candidate.rankComponents.fts_rank !== null
+                        ? ` · fts ${candidate.rankComponents.fts_rank.toFixed(3)}`
+                        : ""}
+                    </td>
+                    <td>
+                      {failedFences.length === 0
+                        ? "all passed"
+                        : failedFences
+                            .map((fence) => fence.fence)
+                            .join(", ")}
+                    </td>
+                    <td>
+                      {candidate.selectedSection ?? "not selected"}
+                    </td>
+                    <td>{outcomeReasons.join(", ") || "—"}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
