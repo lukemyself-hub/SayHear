@@ -1,0 +1,2175 @@
+[
+  {
+    "queryId": "q-emp-zh",
+    "day": 3,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我在哪家公司上班来着？突然想不起来跟家里人怎么说的。",
+    "expectedClaimIds": [
+      "emp-blue"
+    ],
+    "expectedVersionIds": [
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "qualifiedVersionIds": [
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a05a7a-ea80-7fad-a39a-48af185d8103",
+        "01a0621e-7b80-7980-9f77-03b88dbc0e07",
+        "01a05fa1-4680-701d-a3ad-19917e2e8dd2"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-role-zh",
+    "day": 4,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我的岗位是什么来着？填表要用。",
+    "expectedClaimIds": [
+      "role-be"
+    ],
+    "expectedVersionIds": [
+      "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4"
+    ],
+    "qualifiedVersionIds": [
+      "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4",
+        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
+        "01a0621e-7b80-7980-9f77-03b88dbc0e07"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 6,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-family-single",
+    "day": 4,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我现在还是单身状态吧？",
+    "expectedClaimIds": [
+      "family-single"
+    ],
+    "expectedVersionIds": [
+      "01a0621e-7b80-7980-9f77-03b88dbc0e07"
+    ],
+    "qualifiedVersionIds": [
+      "01a0621e-7b80-7980-9f77-03b88dbc0e07",
+      "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a0621e-7b80-7980-9f77-03b88dbc0e07",
+        "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4",
+        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 6,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 2,
+      "lexical_term_overlap": 2,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-res-zh",
+    "day": 4,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我现在住在哪个城市来着？快递地址要填。",
+    "expectedClaimIds": [
+      "res-hz"
+    ],
+    "expectedVersionIds": [
+      "01a05a80-68c0-743f-a49f-28de5e80cdf2"
+    ],
+    "qualifiedVersionIds": [
+      "01a05a80-68c0-743f-a49f-28de5e80cdf2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a05a80-68c0-743f-a49f-28de5e80cdf2",
+        "01a069fe-7940-772c-be29-b0697899090d",
+        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 5,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-home-zh",
+    "day": 5,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我老家是四川的哪里来着？同事问我都没答上来。",
+    "expectedClaimIds": [
+      "home-mianyang"
+    ],
+    "expectedVersionIds": [
+      "01a05fa1-4680-701d-a3ad-19917e2e8dd2"
+    ],
+    "qualifiedVersionIds": [
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
+        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+        "01a06a03-f780-7065-b095-f663da1c4bed"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 11,
+      "lexical_term_overlap": 11,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-zhou-zh",
+    "day": 5,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "老周是我同事吧？他昨天说我什么来着？",
+    "expectedClaimIds": [
+      "rel-colleague-zhou"
+    ],
+    "expectedVersionIds": [
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1"
+    ],
+    "qualifiedVersionIds": [
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
+        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+        "01a06a03-f780-7065-b095-f663da1c4bed"
+      ],
+      "objective_memory": [
+        "01a064d2-9f00-7630-8ffe-cc390a7584d1"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 11,
+      "lexical_term_overlap": 11,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-zhe-zh",
+    "day": 5,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我室友阿哲怎么样了？火锅店那顿还挺香的。",
+    "expectedClaimIds": [
+      "rel-roommate-zhe"
+    ],
+    "expectedVersionIds": [
+      "01a06223-f9c0-780a-bbe2-98ea41746d87"
+    ],
+    "qualifiedVersionIds": [
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06223-f9c0-780a-bbe2-98ea41746d87",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06c76-3000-7654-997f-d224f86e9880",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+        "01a06c76-3000-7654-997f-d224f86e9880",
+        "01a06a03-f780-7065-b095-f663da1c4bed"
+      ],
+      "objective_memory": [
+        "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+        "01a06223-f9c0-780a-bbe2-98ea41746d87"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a06223-f9c0-780a-bbe2-98ea41746d87"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 8,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 12,
+      "lexical_term_overlap": 12,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-emp-mix",
+    "day": 5,
+    "session": 0,
+    "locale": "mix",
+    "phase": "main",
+    "text": "我上次说的入职的那家公司叫什么来着？",
+    "expectedClaimIds": [
+      "emp-blue"
+    ],
+    "expectedVersionIds": [
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "qualifiedVersionIds": [
+      "01a06223-f9c0-780a-bbe2-98ea41746d87",
+      "01a06c76-3000-7654-997f-d224f86e9880",
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a06c76-3000-7654-997f-d224f86e9880",
+        "01a06223-f9c0-780a-bbe2-98ea41746d87",
+        "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 6,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 3,
+      "lexical_term_overlap": 3,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-wang-zh",
+    "day": 5,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我同事小王最近怎么样？好几天没见了。",
+    "expectedClaimIds": [
+      "rel-colleague-wang"
+    ],
+    "expectedVersionIds": [
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "qualifiedVersionIds": [
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+        "01a06a03-f780-7065-b095-f663da1c4bed",
+        "01a0674a-55c0-7253-a896-e4c28e54b083"
+      ],
+      "objective_memory": [
+        "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 10,
+      "lexical_term_overlap": 10,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-wp-zh",
+    "day": 5,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我们办公室是在滨江哪个园区来着？",
+    "expectedClaimIds": [
+      "wp-binjiang"
+    ],
+    "expectedVersionIds": [
+      "01a06218-fd40-78a7-a4bb-d33ea174f204"
+    ],
+    "qualifiedVersionIds": [
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a06218-fd40-78a7-a4bb-d33ea174f204",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+        "01a06a03-f780-7065-b095-f663da1c4bed",
+        "01a0674a-55c0-7253-a896-e4c28e54b083"
+      ],
+      "objective_memory": [
+        "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+        "01a06218-fd40-78a7-a4bb-d33ea174f204"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a06218-fd40-78a7-a4bb-d33ea174f204"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 11,
+      "lexical_term_overlap": 11,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-career-zh",
+    "day": 6,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我现在的工作状态算在职吧？",
+    "expectedClaimIds": [
+      "career-employed"
+    ],
+    "expectedVersionIds": [
+      "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+    ],
+    "qualifiedVersionIds": [
+      "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
+        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
+        "01a069fe-7940-772c-be29-b0697899090d"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 6,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-lin-zh",
+    "day": 6,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我朋友小林最近怎么样？他上次推荐的东西还没试。",
+    "expectedClaimIds": [
+      "rel-friend-lin"
+    ],
+    "expectedVersionIds": [
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8"
+    ],
+    "qualifiedVersionIds": [
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
+        "01a06f32-90e0-76d8-af3c-e225c203af91",
+        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+      ],
+      "objective_memory": [
+        "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 13,
+      "lexical_term_overlap": 13,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-mike-en",
+    "day": 6,
+    "session": 1,
+    "locale": "en",
+    "phase": "main",
+    "text": "How is my friend Mike doing these days?",
+    "expectedClaimIds": [
+      "rel-friend-mike",
+      "rel-roommate-mike"
+    ],
+    "expectedVersionIds": [
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a06c76-3000-7654-997f-d224f86e9880"
+    ],
+    "qualifiedVersionIds": [
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a06c76-3000-7654-997f-d224f86e9880",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a0744b-3140-7960-aa3f-896713e297a1",
+        "01a06f32-90e0-76d8-af3c-e225c203af91",
+        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+      ],
+      "objective_memory": [
+        "01a06744-d780-7dae-8c96-bca414fc9737"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a06744-d780-7dae-8c96-bca414fc9737"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 10,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 14,
+      "lexical_term_overlap": 14,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-chen-zh",
+    "day": 6,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我领导老陈这周有什么安排来着？",
+    "expectedClaimIds": [
+      "rel-manager-chen"
+    ],
+    "expectedVersionIds": [
+      "01a069f8-fb00-7356-abf6-961ff983189f"
+    ],
+    "qualifiedVersionIds": [
+      "01a069f8-fb00-7356-abf6-961ff983189f",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a06c76-3000-7654-997f-d224f86e9880",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a0744b-3140-7960-aa3f-896713e297a1",
+        "01a06f32-90e0-76d8-af3c-e225c203af91",
+        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+      ],
+      "objective_memory": [
+        "01a069f8-fb00-7356-abf6-961ff983189f",
+        "01a06744-d780-7dae-8c96-bca414fc9737"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a069f8-fb00-7356-abf6-961ff983189f"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a06744-d780-7dae-8c96-bca414fc9737",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 15,
+      "lexical_term_overlap": 15,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-proj-zh",
+    "day": 6,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我最近在参与哪个项目来着？周报要写。",
+    "expectedClaimIds": [
+      "proj-nebula"
+    ],
+    "expectedVersionIds": [
+      "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+    ],
+    "qualifiedVersionIds": [
+      "01a069f8-fb00-7356-abf6-961ff983189f",
+      "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a069f8-fb00-7356-abf6-961ff983189f",
+        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
+        "01a069fe-7940-772c-be29-b0697899090d"
+      ],
+      "objective_memory": [
+        "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 8,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 2,
+      "lexical_term_overlap": 2,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-horizon-zh",
+    "day": 7,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我想要的是长期的关系来着，对吧？",
+    "expectedClaimIds": [
+      "horizon-long"
+    ],
+    "expectedVersionIds": [
+      "01a069fe-7940-772c-be29-b0697899090d"
+    ],
+    "qualifiedVersionIds": [
+      "01a069fe-7940-772c-be29-b0697899090d"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a069fe-7940-772c-be29-b0697899090d",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03",
+        "01a06f2a-5380-7492-849d-dcdfcb12acf5"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-fang-zh",
+    "day": 7,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我妹妹小芳是不是下周放假回家？",
+    "expectedClaimIds": [
+      "rel-sibling-fang"
+    ],
+    "expectedVersionIds": [
+      "01a06c70-b1c0-7f2d-9ac1-290d9b335060"
+    ],
+    "qualifiedVersionIds": [
+      "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
+      "01a069fe-7940-772c-be29-b0697899090d"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a069fe-7940-772c-be29-b0697899090d",
+        "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 2,
+      "lexical_term_overlap": 2,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-nana-zh",
+    "day": 7,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "娜娜是我好朋友来着，她新工作怎么样了？",
+    "expectedClaimIds": [
+      "rel-friend-nana"
+    ],
+    "expectedVersionIds": [
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+    ],
+    "qualifiedVersionIds": [
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
+      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+      "01a076cb-2560-7f60-9f1c-842d21c6f840",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+        "01a076cb-2560-7f60-9f1c-842d21c6f840",
+        "01a0744b-3140-7960-aa3f-896713e297a1"
+      ],
+      "objective_memory": [
+        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+        "01a06c70-b1c0-7f2d-9ac1-290d9b335060"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 16,
+      "lexical_term_overlap": 16,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-travel-zh",
+    "day": 7,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我是不是说过不太想出差来着？",
+    "expectedClaimIds": [
+      "travel-neg"
+    ],
+    "expectedVersionIds": [
+      "01a06f2a-5380-7492-849d-dcdfcb12acf5"
+    ],
+    "qualifiedVersionIds": [
+      "01a06f2a-5380-7492-849d-dcdfcb12acf5"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03",
+        "01a069fe-7940-772c-be29-b0697899090d"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-david-en",
+    "day": 7,
+    "session": 1,
+    "locale": "en",
+    "phase": "main",
+    "text": "Is my colleague David joining the offsite next month?",
+    "expectedClaimIds": [
+      "rel-colleague-david"
+    ],
+    "expectedVersionIds": [
+      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6"
+    ],
+    "qualifiedVersionIds": [
+      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a06f2a-5380-7492-849d-dcdfcb12acf5",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
+        "01a07977-0b80-7946-bf76-2e79aea2417d",
+        "01a07453-6ea0-7fdf-8990-8d8106b07f6d"
+      ],
+      "objective_memory": [
+        "01a0719c-8c00-747d-9e1b-f9fefd11e4d6"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 11,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 16,
+      "lexical_term_overlap": 16,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-wang-mix",
+    "day": 7,
+    "session": 1,
+    "locale": "mix",
+    "phase": "main",
+    "text": "同事小王还好吗，好久没聊了",
+    "expectedClaimIds": [
+      "rel-colleague-wang"
+    ],
+    "expectedVersionIds": [
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "qualifiedVersionIds": [
+      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07977-0b80-7946-bf76-2e79aea2417d",
+        "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+        "01a0744d-f060-7925-9800-9505ae3d8662"
+      ],
+      "objective_memory": [
+        "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+        "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 11,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 15,
+      "lexical_term_overlap": 15,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-res-suzhou",
+    "day": 8,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我们现在是不是已经定居苏州了？",
+    "expectedClaimIds": [
+      "res-suzhou"
+    ],
+    "expectedVersionIds": [
+      "01a07445-b300-72fa-9d01-584c44d84443"
+    ],
+    "qualifiedVersionIds": [
+      "01a07445-b300-72fa-9d01-584c44d84443"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07445-b300-72fa-9d01-584c44d84443",
+        "01a07be9-4400-73af-8b0c-516f65e69de8",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 7,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-style-zh",
+    "day": 8,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我说过我喜欢直接沟通来着，对吧？",
+    "expectedClaimIds": [
+      "imp-style"
+    ],
+    "expectedVersionIds": [
+      "01a07be9-4400-73af-8b0c-516f65e69de8"
+    ],
+    "qualifiedVersionIds": [
+      "01a07445-b300-72fa-9d01-584c44d84443",
+      "01a07be9-4400-73af-8b0c-516f65e69de8"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07be9-4400-73af-8b0c-516f65e69de8",
+        "01a07445-b300-72fa-9d01-584c44d84443",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 8,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 2,
+      "lexical_term_overlap": 2,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-yu-zh",
+    "day": 8,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我女朋友小雨这周末有什么安排来着？",
+    "expectedClaimIds": [
+      "rel-partner-yu"
+    ],
+    "expectedVersionIds": [
+      "01a076c2-e800-7100-939b-b6ace5a8c8ba"
+    ],
+    "qualifiedVersionIds": [
+      "01a076c2-e800-7100-939b-b6ace5a8c8ba",
+      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
+      "01a07979-caa0-7a18-9ef1-c92e6051c450",
+      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+      "01a076cb-2560-7f60-9f1c-842d21c6f840",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5",
+      "01a07be9-4400-73af-8b0c-516f65e69de8"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07be9-4400-73af-8b0c-516f65e69de8",
+        "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+        "01a07bf4-4080-7e1e-bf7e-aa1db8990083"
+      ],
+      "objective_memory": [
+        "01a076c2-e800-7100-939b-b6ace5a8c8ba"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a076c2-e800-7100-939b-b6ace5a8c8ba"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 11,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 21,
+      "lexical_term_overlap": 21,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-family-rel",
+    "day": 8,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我现在是不是恋爱中来着？",
+    "expectedClaimIds": [
+      "family-couple"
+    ],
+    "expectedVersionIds": [
+      "01a076cd-e480-7f39-9d06-7638ffb02b03"
+    ],
+    "qualifiedVersionIds": [
+      "01a076cd-e480-7f39-9d06-7638ffb02b03"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a076cd-e480-7f39-9d06-7638ffb02b03",
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
+        "01a07be9-4400-73af-8b0c-516f65e69de8"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 8,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-kai-zh",
+    "day": 8,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "阿凯是我朋友吧？他计划做得怎么样来着？",
+    "expectedClaimIds": [
+      "rel-friend-kai"
+    ],
+    "expectedVersionIds": [
+      "01a0744b-3140-7960-aa3f-896713e297a1"
+    ],
+    "qualifiedVersionIds": [
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
+      "01a07979-caa0-7a18-9ef1-c92e6051c450",
+      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+      "01a076cd-e480-7f39-9d06-7638ffb02b03",
+      "01a076cb-2560-7f60-9f1c-842d21c6f840",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a076cd-e480-7f39-9d06-7638ffb02b03",
+        "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+        "01a07bf4-4080-7e1e-bf7e-aa1db8990083"
+      ],
+      "objective_memory": [
+        "01a0744b-3140-7960-aa3f-896713e297a1"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a0744b-3140-7960-aa3f-896713e297a1"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 10,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 20,
+      "lexical_term_overlap": 20,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-hui-zh",
+    "day": 9,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "小惠是我同事来着？她今天怎么没来？",
+    "expectedClaimIds": [
+      "rel-colleague-hui"
+    ],
+    "expectedVersionIds": [
+      "01a07977-0b80-7946-bf76-2e79aea2417d"
+    ],
+    "qualifiedVersionIds": [
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+      "01a07e9d-6780-73df-bfeb-ed714827f772",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+        "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+        "01a07e9d-6780-73df-bfeb-ed714827f772"
+      ],
+      "objective_memory": [
+        "01a07977-0b80-7946-bf76-2e79aea2417d"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a07977-0b80-7946-bf76-2e79aea2417d"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 10,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 18,
+      "lexical_term_overlap": 18,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-wedding-zh",
+    "day": 9,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我们是不是在备婚来着？家里又来电话问了。",
+    "expectedClaimIds": [
+      "life-wedding"
+    ],
+    "expectedVersionIds": [
+      "01a07971-8d40-79cf-863b-d06039e723c1"
+    ],
+    "qualifiedVersionIds": [
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+      "01a07e9d-6780-73df-bfeb-ed714827f772",
+      "01a07971-8d40-79cf-863b-d06039e723c1",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+        "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+        "01a07e9d-6780-73df-bfeb-ed714827f772"
+      ],
+      "objective_memory": [
+        "01a07977-0b80-7946-bf76-2e79aea2417d"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": false,
+    "truePositives": [],
+    "falsePositives": [
+      {
+        "versionId": "01a07977-0b80-7946-bf76-2e79aea2417d",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 13,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 19,
+      "lexical_term_overlap": 19,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-role-senior",
+    "day": 9,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我现在岗位是什么来着？是不是升过了？",
+    "expectedClaimIds": [
+      "role-senior"
+    ],
+    "expectedVersionIds": [
+      "01a07bee-c240-7448-be10-0b1ef0a88633"
+    ],
+    "qualifiedVersionIds": [
+      "01a07bee-c240-7448-be10-0b1ef0a88633",
+      "01a07971-8d40-79cf-863b-d06039e723c1"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07bee-c240-7448-be10-0b1ef0a88633",
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
+        "01a07be9-4400-73af-8b0c-516f65e69de8"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 2,
+      "lexical_term_overlap": 2,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-consider-imp",
+    "day": 9,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "我遇到重大决定是不是习惯先列利弊清单？",
+    "expectedClaimIds": [
+      "imp-consider"
+    ],
+    "expectedVersionIds": [
+      "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+    ],
+    "qualifiedVersionIds": [
+      "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
+        "01a083be-4540-7a4e-a893-df94658dec55",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-elena-en",
+    "day": 9,
+    "session": 1,
+    "locale": "en",
+    "phase": "main",
+    "text": "When did my friend Elena say she would visit?",
+    "expectedClaimIds": [
+      "rel-friend-elena"
+    ],
+    "expectedVersionIds": [
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0"
+    ],
+    "qualifiedVersionIds": [
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
+      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
+      "01a07979-caa0-7a18-9ef1-c92e6051c450",
+      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+      "01a076cb-2560-7f60-9f1c-842d21c6f840",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5",
+      "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
+        "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+        "01a07bf4-4080-7e1e-bf7e-aa1db8990083"
+      ],
+      "objective_memory": [
+        "01a07bee-c240-7c39-8cf4-815caa9da9b0"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 13,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 20,
+      "lexical_term_overlap": 20,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-travel-postforget",
+    "day": 10,
+    "session": 0,
+    "locale": "zh",
+    "phase": "post_forget",
+    "text": "我之前是不是说过不喜欢出差？",
+    "expectedClaimIds": [],
+    "expectedVersionIds": [],
+    "qualifiedVersionIds": [],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a083be-4540-7a4e-a893-df94658dec55",
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": false,
+    "hitInjected": false,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 8,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 0,
+      "lexical_term_overlap": 0,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-lin-late",
+    "day": 10,
+    "session": 0,
+    "locale": "zh",
+    "phase": "main",
+    "text": "小林现在跟我当同事了，他最近怎么样？",
+    "expectedClaimIds": [
+      "rel-friend-lin",
+      "rel-colleague-lin"
+    ],
+    "expectedVersionIds": [
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a07e9d-6780-73df-bfeb-ed714827f772"
+    ],
+    "qualifiedVersionIds": [
+      "01a07e9d-6780-73df-bfeb-ed714827f772",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a0863b-7a40-7551-8947-e53bbf768576",
+      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
+      "01a083c6-82a0-703a-ade5-286c8e5af905",
+      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a0863b-7a40-7551-8947-e53bbf768576",
+        "01a083c6-82a0-703a-ade5-286c8e5af905",
+        "01a08117-dd60-70fe-8b20-68ab0ad0bed5"
+      ],
+      "objective_memory": [
+        "01a07e9d-6780-73df-bfeb-ed714827f772"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a07e9d-6780-73df-bfeb-ed714827f772"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 12,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 21,
+      "lexical_term_overlap": 21,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-david-post",
+    "day": 10,
+    "session": 0,
+    "locale": "en",
+    "phase": "main",
+    "text": "My colleague David left recently — how is he holding up?",
+    "expectedClaimIds": [
+      "rel-colleague-david-ended"
+    ],
+    "expectedVersionIds": [
+      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa"
+    ],
+    "qualifiedVersionIds": [
+      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
+      "01a07e9d-6780-73df-bfeb-ed714827f772",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a0863b-7a40-7551-8947-e53bbf768576",
+      "01a083c6-82a0-703a-ade5-286c8e5af905",
+      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a0863b-7a40-7551-8947-e53bbf768576",
+        "01a083c6-82a0-703a-ade5-286c8e5af905",
+        "01a08117-dd60-70fe-8b20-68ab0ad0bed5"
+      ],
+      "objective_memory": [
+        "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
+        "01a07e9d-6780-73df-bfeb-ed714827f772"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a07e9d-6780-73df-bfeb-ed714827f772",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 17,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 22,
+      "lexical_term_overlap": 22,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-core-imp",
+    "day": 10,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "你觉得对我来说，是不是家人的健康最重要、工作稳定排前面？",
+    "expectedClaimIds": [
+      "imp-core"
+    ],
+    "expectedVersionIds": [
+      "01a083be-4540-7a4e-a893-df94658dec55"
+    ],
+    "qualifiedVersionIds": [
+      "01a083be-4540-7a4e-a893-df94658dec55"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a083be-4540-7a4e-a893-df94658dec55",
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
+        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 9,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-zhe-post",
+    "day": 10,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "阿哲搬走以后，我们已经不是室友了吧？",
+    "expectedClaimIds": [
+      "rel-roommate-zhe-ended"
+    ],
+    "expectedVersionIds": [
+      "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+    ],
+    "qualifiedVersionIds": [
+      "01a0810a-21c0-73cd-8566-ec65a7093d7e",
+      "01a083c9-41c0-7047-b3a1-708a9d40030f",
+      "01a0797c-89c0-7108-bf2a-fd86c6e538fc",
+      "01a071a4-c960-7014-b9c0-b42096b0ad0c",
+      "01a06c76-3000-7654-997f-d224f86e9880",
+      "01a083be-4540-7a4e-a893-df94658dec55"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a083be-4540-7a4e-a893-df94658dec55",
+        "01a083c9-41c0-7047-b3a1-708a9d40030f",
+        "01a0797c-89c0-7108-bf2a-fd86c6e538fc"
+      ],
+      "objective_memory": [
+        "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+    ],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 12,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 6,
+      "lexical_term_overlap": 6,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-proj-postforget",
+    "day": 10,
+    "session": 1,
+    "locale": "zh",
+    "phase": "post_forget",
+    "text": "我最近在忙哪个项目来着？",
+    "expectedClaimIds": [],
+    "expectedVersionIds": [],
+    "qualifiedVersionIds": [
+      "01a0810a-21c0-73cd-8566-ec65a7093d7e",
+      "01a083c9-41c0-7047-b3a1-708a9d40030f",
+      "01a0797c-89c0-7108-bf2a-fd86c6e538fc",
+      "01a071a4-c960-7014-b9c0-b42096b0ad0c",
+      "01a06c76-3000-7654-997f-d224f86e9880"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a083c9-41c0-7047-b3a1-708a9d40030f",
+        "01a0797c-89c0-7108-bf2a-fd86c6e538fc",
+        "01a071a4-c960-7014-b9c0-b42096b0ad0c"
+      ],
+      "objective_memory": [
+        "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": false,
+    "hitInjected": false,
+    "truePositives": [],
+    "falsePositives": [
+      {
+        "versionId": "01a0810a-21c0-73cd-8566-ec65a7093d7e",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 13,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 5,
+      "lexical_term_overlap": 5,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-emp-en",
+    "day": 10,
+    "session": 1,
+    "locale": "en",
+    "phase": "main",
+    "text": "Which company do I work at again? Someone asked me today.",
+    "expectedClaimIds": [
+      "emp-blue"
+    ],
+    "expectedVersionIds": [
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "qualifiedVersionIds": [
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a05a7a-ea80-7fad-a39a-48af185d8103",
+        "01a083be-4540-7a4e-a893-df94658dec55",
+        "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+      ],
+      "objective_memory": [],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 15,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 1,
+      "lexical_term_overlap": 1,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-song-zh",
+    "day": 10,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "老宋是我朋友吧？",
+    "expectedClaimIds": [
+      "rel-friend-song"
+    ],
+    "expectedVersionIds": [
+      "01a08635-fc00-7178-a5ab-57eb871a692a"
+    ],
+    "qualifiedVersionIds": [
+      "01a08635-fc00-7178-a5ab-57eb871a692a",
+      "01a088e4-a140-7081-8336-7c3aef782964",
+      "01a08638-bb20-78a8-8ef7-0351775c761c",
+      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
+      "01a07979-caa0-7a18-9ef1-c92e6051c450",
+      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+      "01a076cb-2560-7f60-9f1c-842d21c6f840",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c",
+      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
+      "01a06755-5240-73c7-9161-55f7f5f6491b",
+      "01a0674f-d400-77e2-900d-570192ec0d3d",
+      "01a06744-d780-7dae-8c96-bca414fc9737",
+      "01a0622c-3720-7b18-b87d-4f65aec23349",
+      "01a05fac-4300-743b-ad0e-b3d50fda1816",
+      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
+      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
+      "01a05a85-e700-77cc-8e00-e66d8095ced5",
+      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a088e4-a140-7081-8336-7c3aef782964",
+        "01a08638-bb20-78a8-8ef7-0351775c761c",
+        "01a08635-fc00-7178-a5ab-57eb871a692a"
+      ],
+      "objective_memory": [
+        "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [],
+    "falsePositives": [
+      {
+        "versionId": "01a05a7a-ea80-7fad-a39a-48af185d8103",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 15,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 23,
+      "lexical_term_overlap": 23,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-he-zh",
+    "day": 10,
+    "session": 1,
+    "locale": "zh",
+    "phase": "main",
+    "text": "小何是我同事吗？",
+    "expectedClaimIds": [
+      "rel-colleague-he"
+    ],
+    "expectedVersionIds": [
+      "01a083c6-82a0-703a-ade5-286c8e5af905"
+    ],
+    "qualifiedVersionIds": [
+      "01a08635-fc00-7178-a5ab-57eb871a692a",
+      "01a083c6-82a0-703a-ade5-286c8e5af905",
+      "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
+      "01a088e7-6060-7227-83ec-b7076c379bfa",
+      "01a088e4-a140-7081-8336-7c3aef782964",
+      "01a0863b-7a40-7551-8947-e53bbf768576",
+      "01a08638-bb20-78a8-8ef7-0351775c761c",
+      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
+      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+      "01a07e9d-6780-73df-bfeb-ed714827f772",
+      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
+      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
+      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
+      "01a07979-caa0-7a18-9ef1-c92e6051c450",
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
+      "01a076cb-2560-7f60-9f1c-842d21c6f840",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a0744b-3140-7960-aa3f-896713e297a1",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a06f32-90e0-76d8-af3c-e225c203af91",
+      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
+      "01a06c81-2c80-7167-aa46-4619329da75c"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
+        "01a088e7-6060-7227-83ec-b7076c379bfa",
+        "01a088e4-a140-7081-8336-7c3aef782964"
+      ],
+      "objective_memory": [
+        "01a08635-fc00-7178-a5ab-57eb871a692a",
+        "01a083c6-82a0-703a-ade5-286c8e5af905"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": true,
+    "hitInjected": true,
+    "truePositives": [
+      "01a083c6-82a0-703a-ade5-286c8e5af905"
+    ],
+    "falsePositives": [
+      {
+        "versionId": "01a08635-fc00-7178-a5ab-57eb871a692a",
+        "classification": "planted_other"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 13,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 25,
+      "lexical_term_overlap": 25,
+      "english_fts": 0
+    }
+  },
+  {
+    "queryId": "q-consider-dormant",
+    "day": 45,
+    "session": 0,
+    "locale": "zh",
+    "phase": "post_dormancy",
+    "text": "好久没聊了，我遇到重大决定是不是爱列利弊清单来着？",
+    "expectedClaimIds": [],
+    "expectedVersionIds": [],
+    "qualifiedVersionIds": [
+      "01a083c6-82a0-703a-ade5-286c8e5af905",
+      "01a05fb1-c140-70ce-952c-43e39d521e02",
+      "01a08b6a-13a0-7a1d-8ffb-19ed88d6c0a3",
+      "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
+      "01a088e7-6060-7227-83ec-b7076c379bfa",
+      "01a0863b-7a40-7551-8947-e53bbf768576",
+      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
+      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
+      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
+      "01a07e9d-6780-73df-bfeb-ed714827f772",
+      "01a07977-0b80-7946-bf76-2e79aea2417d",
+      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
+      "01a0744d-f060-7925-9800-9505ae3d8662",
+      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
+      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
+      "01a06a03-f780-7065-b095-f663da1c4bed",
+      "01a0674a-55c0-7253-a896-e4c28e54b083",
+      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
+      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+      "01a06229-7800-76bf-ad54-10894183966a",
+      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
+      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
+      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+    ],
+    "injectedBySection": {
+      "person_portrait": [
+        "01a08b6a-13a0-7a1d-8ffb-19ed88d6c0a3",
+        "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
+        "01a088e7-6060-7227-83ec-b7076c379bfa"
+      ],
+      "objective_memory": [
+        "01a083c6-82a0-703a-ade5-286c8e5af905",
+        "01a05fb1-c140-70ce-952c-43e39d521e02"
+      ],
+      "ai_impression": []
+    },
+    "hitRetrieved": false,
+    "hitInjected": false,
+    "truePositives": [],
+    "falsePositives": [
+      {
+        "versionId": "01a083c6-82a0-703a-ade5-286c8e5af905",
+        "classification": "planted_other"
+      },
+      {
+        "versionId": "01a05fb1-c140-70ce-952c-43e39d521e02",
+        "classification": "distractor"
+      }
+    ],
+    "fenceLeak": false,
+    "budgetViolation": false,
+    "deadlineViolation": false,
+    "degraded": false,
+    "durationMs": 14,
+    "deadlineMs": 200,
+    "laneHitCounts": {
+      "structured_exact": 23,
+      "lexical_term_overlap": 23,
+      "english_fts": 0
+    }
+  }
+]
