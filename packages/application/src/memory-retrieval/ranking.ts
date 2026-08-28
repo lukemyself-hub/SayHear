@@ -35,7 +35,8 @@ export const FENCE_ORDER = [
 ] as const;
 
 export function evaluateTrustFences(input: {
-  claim: RetrievalCandidateClaimState;
+  /** Only the object binding is fence-relevant; #117 portrait pool members pass a partial claim. */
+  claim: Pick<RetrievalCandidateClaimState, "objectEntityId">;
   fenceState: CandidateFenceState;
 }): readonly TrustFenceResult[] {
   const state = input.fenceState;

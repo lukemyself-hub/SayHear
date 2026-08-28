@@ -3,7 +3,10 @@ import type { Pool } from "pg";
 import type {
   CandidateFenceState,
   MemoryRetrievalPolicy,
+  MemorySectionKey,
   MemoryRetrievalRepository,
+  MemoryVersionDetail,
+  MemoryVersionEvidence,
   RetrievalLane,
   RetrievalLaneRow,
   RetrievalQuerySourceRef,
@@ -479,6 +482,80 @@ export class PostgresMemoryRetrievalRepository
     }));
   }
 
+  public async loadPortraitCandidateVersions(input: {
+    userId: UserId;
+    predicateIds: readonly string[];
+    locale: "zh" | "en";
+  }): Promise<readonly MemoryVersionDetail[]> {
+    if (input.predicateIds.length === 0) return [];
+    const result = await this.pool.query<MemoryDetailRow>(
+      `SELECT ${MEMORY_DETAIL_COLUMNS}
+       ${MEMORY_DETAIL_TARGET_JOIN}
+        AND claim.predicate_id = ANY($2::text[])`,
+      [input.userId, input.predicateIds, input.locale],
+    );
+    return result.rows.map(toMemoryVersionDetail);
+  }
+
+  public async loadMemoryVersionDetails(input: {
+    userId: UserId;
+    versionIds: readonly string[];
+    locale: "zh" | "en";
+  }): Promise<readonly MemoryVersionDetail[]> {
+    if (input.versionIds.length === 0) return [];
+    const result = await this.pool.query<MemoryDetailRow>(
+      `SELECT ${MEMORY_DETAIL_COLUMNS}
+       ${MEMORY_DETAIL_TARGET_JOIN}
+        AND v.memory_claim_version_id = ANY($2::uuid[])`,
+      [input.userId, input.versionIds, input.locale],
+    );
+    return result.rows.map(toMemoryVersionDetail);
+  }
+
+  public async loadMemoryVersionEvidence(
+    userId: UserId,
+    versionIds: readonly string[],
+  ): Promise<readonly MemoryVersionEvidence[]> {
+    if (versionIds.length === 0) return [];
+    // The same validity rules the fence loader applies: active support /
+    // subjective-report links onto active Evidence, minus Forget exclusions.
+    const result = await this.pool.query<{
+      memory_claim_version_id: string;
+      evidence_ids: string[];
+      latest_evidence_at: Date | null;
+    }>(
+      `SELECT
+        l.memory_claim_version_id::text,
+        array_agg(e.evidence_item_id::text ORDER BY e.created_at, e.evidence_item_id) AS evidence_ids,
+        max(e.created_at) AS latest_evidence_at
+      FROM claim_evidence_links l
+      INNER JOIN evidence_items e
+        ON e.evidence_item_id = l.evidence_item_id
+       AND e.user_id = l.user_id
+      WHERE l.user_id = $1
+        AND l.memory_claim_version_id = ANY($2::uuid[])
+        AND l.status = 'active'
+        AND l.link_role IN ('support', 'subjective_report')
+        AND e.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM memory_forget_evidence_exclusions x
+          WHERE x.user_id = l.user_id
+            AND x.evidence_item_id = l.evidence_item_id
+            AND x.status = 'active'
+        )
+      GROUP BY l.memory_claim_version_id`,
+      [userId, versionIds],
+    );
+    return result.rows.map((row) => ({
+      versionId: row.memory_claim_version_id,
+      evidenceIds: row.evidence_ids ?? [],
+      latestEvidenceAt:
+        row.latest_evidence_at === null
+          ? null
+          : new Date(row.latest_evidence_at).toISOString(),
+    }));
+  }
+
   public async insertRetrievalRun(input: {
     retrievalRunId: string;
     userId: UserId;
@@ -567,6 +644,7 @@ export class PostgresMemoryRetrievalRepository
       trustFenceResults: readonly TrustFenceResult[];
       rankComponents: RankComponents;
       finalRank: number | null;
+      selectedSection: MemorySectionKey | null;
       selectionReasonCodes: readonly string[];
       rejectionReasonCodes: readonly string[];
     }[];
@@ -583,7 +661,7 @@ export class PostgresMemoryRetrievalRepository
         `($${base + 1}::uuid, $1, $2, $${base + 2}::uuid, $${base + 3}::uuid,` +
           ` $${base + 4}, $${base + 5}::jsonb, $${base + 6}::jsonb,` +
           ` $${base + 7}::jsonb, $${base + 8}::jsonb, $${base + 9},` +
-          ` NULL, $${base + 10}, $${base + 11}, $${base + 12})`,
+          ` $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13})`,
       );
       values.push(
         createUuidV7(input.now),
@@ -595,6 +673,7 @@ export class PostgresMemoryRetrievalRepository
         JSON.stringify(candidate.trustFenceResults),
         JSON.stringify(candidate.rankComponents),
         candidate.finalRank,
+        candidate.selectedSection,
         candidate.selectionReasonCodes,
         candidate.rejectionReasonCodes,
         input.now,
@@ -640,4 +719,81 @@ function toLaneRow(
 
 function iso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+// #117: memory-compilation hydration reads the locale-resolved projection of
+// current claim versions — the same structural prefilter the lanes apply;
+// trust fences re-check per candidate in the service layer.
+
+type MemoryDetailRow = {
+  memory_claim_id: string;
+  memory_claim_version_id: string;
+  predicate_id: string;
+  kind: "objective" | "impression";
+  epistemic_status: "confirmed" | "inferred" | "contested";
+  temporal_status: "current" | "ended" | "unknown";
+  valid_from: string | null;
+  valid_to: string | null;
+  subject_entity_id: string;
+  object_entity_id: string | null;
+  subject_entity_version_id: string | null;
+  object_entity_version_id: string | null;
+  retrieval_text: string;
+  lexical_terms: string[] | null;
+  last_observed_at: string;
+};
+
+const MEMORY_DETAIL_TARGET_JOIN = `
+  FROM memory_claims claim
+  INNER JOIN memory_claim_versions v
+    ON v.memory_claim_version_id = claim.current_version_id
+   AND v.user_id = claim.user_id
+   AND v.content_purged_at IS NULL
+  INNER JOIN claim_retrieval_projections proj
+    ON proj.memory_claim_version_id = v.memory_claim_version_id
+   AND proj.user_id = v.user_id
+   AND proj.status = 'active'
+   AND proj.content_purged_at IS NULL
+   AND proj.locale = $3::text
+  WHERE claim.user_id = $1
+    AND claim.deleted_at IS NULL
+    AND claim.content_purged_at IS NULL
+`;
+
+const MEMORY_DETAIL_COLUMNS = `
+  claim.memory_claim_id::text,
+  v.memory_claim_version_id::text,
+  claim.predicate_id,
+  v.kind,
+  v.epistemic_status,
+  v.temporal_status,
+  v.valid_from,
+  v.valid_to,
+  claim.subject_entity_id::text,
+  claim.object_entity_id::text,
+  v.subject_entity_version_id::text,
+  v.object_entity_version_id::text,
+  proj.retrieval_text,
+  proj.lexical_terms,
+  v.last_observed_at
+`;
+
+function toMemoryVersionDetail(row: MemoryDetailRow): MemoryVersionDetail {
+  return {
+    versionId: row.memory_claim_version_id,
+    claimId: row.memory_claim_id,
+    predicateId: row.predicate_id,
+    kind: row.kind,
+    epistemicStatus: row.epistemic_status,
+    temporalStatus: row.temporal_status,
+    validFrom: row.valid_from === null ? null : iso(row.valid_from),
+    validTo: row.valid_to === null ? null : iso(row.valid_to),
+    subjectEntityId: row.subject_entity_id,
+    objectEntityId: row.object_entity_id,
+    subjectEntityVersionId: row.subject_entity_version_id,
+    objectEntityVersionId: row.object_entity_version_id,
+    renderedText: row.retrieval_text,
+    lexicalTerms: row.lexical_terms ?? [],
+    lastObservedAt: iso(row.last_observed_at),
+  };
 }

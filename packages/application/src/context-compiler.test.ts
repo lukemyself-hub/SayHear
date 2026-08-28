@@ -1018,3 +1018,333 @@ describe("Context Compiler Safety Posture enforcement", () => {
     );
   });
 });
+
+describe("Context Compiler — memory sections (#117)", () => {
+  const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
+  const inputRevisionId = asConversationEventRevisionId(
+    "01984477-59a9-7d20-9d97-e588769566c1",
+  );
+
+  function snapshot(): ContextSourceSnapshot {
+    return {
+      dailySession: {
+        activityState: "active",
+        closurePolicyVersion: "daily-session-inactivity:v1",
+        continuousExchangeNo: 1,
+        id: asDailySessionId("01984477-59a9-7d20-9d97-e588769566c2"),
+      },
+      dialogueRevision: 1,
+      events: [
+        {
+          actor: "user",
+          locale: "zh-CN",
+          revisionId: inputRevisionId,
+          sequence: 1,
+          text: "我同事小王还好吗",
+        },
+      ],
+      generationStage: "decision",
+      inputRevisionId,
+      locale: "zh-CN",
+      policyVersions: {
+        canonicalPersonaVersion: "canonical-persona:v1",
+        localePolicyVersion: "locale-pack-zh:v1",
+        outputFormatVersion: "conversation-output:v1",
+        personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+        personaContractInvariantVersion: "persona-contract-invariant:v1",
+        productPolicyVersion: "product-policy:v1",
+        relationshipPolicyVersion: "relationship-boundary:v1",
+        safetyPolicyVersion: "minimum-high-risk-response:v1",
+        taskInstructionVersion: "task-instruction-decision:v1",
+      },
+      sourceRevision: 1,
+    };
+  }
+
+  function createCompilerWithMemory(
+    outcome: import("./memory-retrieval/types").MemoryRetrievalRunOutcome,
+  ) {
+    let saved:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-27T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "memory-sections-secret",
+      rawEventTokenBudget: 4_000,
+      repository: {
+        async loadContextSource() {
+          return snapshot();
+        },
+        async saveCompiledContext(input) {
+          saved = input;
+          return {
+            degradedReason: input.degradedReason,
+            dialogueRevision: input.dialogueRevision,
+            id: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c3"),
+            locale: input.locale,
+            referencedRevisionIds: input.referencedEvents.map(
+              (event) => event.revisionId,
+            ),
+            sourceRevision: input.sourceRevision,
+            statistics: {
+              rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+              selectedEventCount: input.referencedEvents.length,
+              totalTokens: input.totalTokens,
+            },
+          };
+        },
+      } satisfies ContextCompilerRepository,
+      memoryRetrieval: {
+        async run() {
+          return outcome;
+        },
+      },
+    });
+    return {
+      compiler,
+      saved: () => saved!,
+    };
+  }
+
+  function completedOutcomeWithItems(): import("./memory-retrieval/types").MemoryRetrievalRunOutcome {
+    return {
+      retrievalRunId: "retrieval-run-1",
+      status: "completed",
+      degradedReasonCodes: [],
+      manifest: {
+        retrieval_run_id: "retrieval-run-1",
+        retrieval_policy_version: "memory-retrieval:v1",
+        query_construction_policy_version: "memory-retrieval-query:v1",
+        projection_policy_version: "claim-retrieval-projection:v1",
+        deadline_ms: 200,
+        query_source_refs: [],
+        normalized_query_terms: {
+          lexical_terms: [],
+          resolved_entities: [],
+          predicate_candidates: [],
+          canonical_keys: [],
+          time_word_classes: [],
+          date_tokens: [],
+        },
+        lane_plan: [],
+        lane_hit_counts: {
+          structured_exact: 0,
+          lexical_term_overlap: 0,
+          english_fts: 0,
+        },
+        zero_signal: true,
+        candidate_count: 0,
+        qualified_count: 0,
+        fenced_out_count: 0,
+        selection_policy_versions: {
+          portrait_selection: "portrait-selection:v1",
+          memory_budgets: "memory-budgets:v1",
+          recall_framing: "recall-framing:v1",
+        },
+        section_budget_vs_actual: {
+          person_portrait: {
+            ceiling_items: 3,
+            ceiling_impressions: 2,
+            actual_items: 2,
+            actual_impressions: 1,
+          },
+          query_retrieved: {
+            ceiling_items: 2,
+            ceiling_impressions: 1,
+            actual_items: 1,
+            actual_impressions: 0,
+          },
+          memory_class_total: { ceiling_items: 5, actual_items: 3 },
+        },
+        portrait_selection: {
+          pool_count: 2,
+          selected_claim_version_ids: ["version-p1", "version-p2"],
+        },
+        portrait_degraded_reason_codes: [],
+        timings: {},
+        duration_ms: 5,
+        deadline_exceeded_stage: null,
+        degraded_reason_codes: [],
+      },
+      memorySections: {
+        person_portrait: [
+          {
+            contextMemoryRef: "shh-memory-1",
+            renderedText: "Luke：工作单位：Acme",
+            claimId: "claim-p1",
+            claimVersionId: "version-p1",
+            predicateId: "sh.work.employer",
+            kind: "objective",
+            epistemicStatus: "confirmed",
+            temporalStatus: "current",
+            validFrom: null,
+            validTo: null,
+            entityVersionIds: ["entity-version-self"],
+            evidenceIds: ["evidence-a"],
+            recallFramingPolicyVersion: "recall-framing:v1",
+            selectionSource: "person_portrait",
+          },
+          {
+            contextMemoryRef: "shh-memory-2",
+            renderedText: "Luke：核心价值观：家庭",
+            claimId: "claim-p2",
+            claimVersionId: "version-p2",
+            predicateId: "sh.value.core_priorities",
+            kind: "impression",
+            epistemicStatus: "inferred",
+            temporalStatus: "current",
+            validFrom: null,
+            validTo: null,
+            entityVersionIds: ["entity-version-self"],
+            evidenceIds: ["evidence-b", "evidence-c"],
+            recallFramingPolicyVersion: "recall-framing:v1",
+            selectionSource: "person_portrait",
+          },
+        ],
+        objective_memory: [
+          {
+            contextMemoryRef: "shh-memory-3",
+            renderedText: "Luke 与 小王 · 同事",
+            claimId: "claim-r1",
+            claimVersionId: "version-r1",
+            predicateId: "sh.relationship.colleague_of",
+            kind: "objective",
+            epistemicStatus: "confirmed",
+            temporalStatus: "current",
+            validFrom: null,
+            validTo: null,
+            entityVersionIds: ["entity-version-self", "entity-version-wang"],
+            evidenceIds: ["evidence-d"],
+            recallFramingPolicyVersion: "recall-framing:v1",
+            selectionSource: "query_retrieval",
+          },
+        ],
+        ai_impression: [],
+      },
+    };
+  }
+
+  it("compiles the three memory sections and replays them exactly at egress", async () => {
+    const { compiler, saved } = createCompilerWithMemory(
+      completedOutcomeWithItems(),
+    );
+    await compiler.compile({
+      generationCommandId: asGenerationCommandId(
+        "01984477-59a9-7d20-9d97-e588769566c4",
+      ),
+      interactionTurnId: asInteractionTurnId(
+        "01984477-59a9-7d20-9d97-e588769566c5",
+      ),
+      userId,
+    });
+    const input = saved();
+    const keys = input.sections.map((section) => section.key);
+    // Empty ai_impression is omitted; the two populated sections sit between
+    // the session-state sections and the raw Events.
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        "person_portrait",
+        "objective_memory",
+        "committed_raw_events",
+      ]),
+    );
+    expect(keys).not.toContain("ai_impression");
+    expect(keys.indexOf("person_portrait")).toBeLessThan(
+      keys.indexOf("committed_raw_events"),
+    );
+
+    // The egress re-derivation replays the frozen memory content from the
+    // section references and the integrity HMAC verifies.
+    const payload = compiler.renderPermittedPayload({
+      compilerVersion: input.compilerVersion,
+      generationStage: "decision",
+      integrity: input.integrity,
+      locale: input.locale,
+      policyVersions: input.policyVersions,
+      referencedEvents: input.referencedEvents,
+      sections: input.sections,
+      totalTokens: input.totalTokens,
+    });
+    expect(payload.instructions).toContain("person_portrait");
+    expect(payload.instructions).toContain("[shh-memory-1]");
+    expect(payload.instructions).toContain("Luke：工作单位：Acme");
+    expect(payload.instructions).toContain("claim=claim-p1");
+    expect(payload.instructions).toContain("version=version-p1");
+    expect(payload.instructions).toContain("evidence=evidence-b,evidence-c");
+    expect(payload.instructions).toContain("portrait-selection:v1");
+    expect(payload.instructions).toContain("memory-budgets:v1");
+    expect(payload.instructions).toContain("recall-framing:v1");
+    // Kind-specific framing rides every item line (objective vs impression).
+    expect(payload.instructions).toContain("措辞（objective）");
+    expect(payload.instructions).toContain("措辞（impression）");
+    expect(payload.instructions).toContain("objective_memory");
+  });
+
+  it("omits every memory section and records the degraded reason when the run degraded", async () => {
+    const degraded = {
+      ...completedOutcomeWithItems(),
+      status: "degraded" as const,
+      degradedReasonCodes: ["retrieval_lane_failed" as const],
+      memorySections: {
+        person_portrait: [],
+        objective_memory: [],
+        ai_impression: [],
+      },
+    };
+    const { compiler, saved } = createCompilerWithMemory(degraded);
+    await compiler.compile({
+      generationCommandId: asGenerationCommandId(
+        "01984477-59a9-7d20-9d97-e588769566c4",
+      ),
+      interactionTurnId: asInteractionTurnId(
+        "01984477-59a9-7d20-9d97-e588769566c5",
+      ),
+      userId,
+    });
+    const input = saved();
+    expect(input.degradedReason).toBe("memory_retrieval_failed");
+    const keys = input.sections.map((section) => section.key);
+    expect(keys).not.toContain("person_portrait");
+    expect(keys).not.toContain("objective_memory");
+    expect(keys).not.toContain("ai_impression");
+    // The prompt payload carries no memory content at all.
+    const payload = compiler.renderPermittedPayload({
+      compilerVersion: input.compilerVersion,
+      generationStage: "decision",
+      integrity: input.integrity,
+      locale: input.locale,
+      policyVersions: input.policyVersions,
+      referencedEvents: input.referencedEvents,
+      sections: input.sections,
+      totalTokens: input.totalTokens,
+    });
+    expect(payload.instructions).not.toContain("shh-memory-1");
+  });
+
+  it("omits memory sections entirely when a completed run selected nothing", async () => {
+    const empty = {
+      ...completedOutcomeWithItems(),
+      memorySections: {
+        person_portrait: [],
+        objective_memory: [],
+        ai_impression: [],
+      },
+    };
+    const { compiler, saved } = createCompilerWithMemory(empty);
+    await compiler.compile({
+      generationCommandId: asGenerationCommandId(
+        "01984477-59a9-7d20-9d97-e588769566c4",
+      ),
+      interactionTurnId: asInteractionTurnId(
+        "01984477-59a9-7d20-9d97-e588769566c5",
+      ),
+      userId,
+    });
+    const keys = saved()
+      .sections.map((section) => section.key);
+    expect(keys).not.toContain("person_portrait");
+    expect(keys).not.toContain("objective_memory");
+    expect(keys).not.toContain("ai_impression");
+  });
+});
