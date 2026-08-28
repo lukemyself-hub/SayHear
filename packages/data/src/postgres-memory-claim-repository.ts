@@ -10,7 +10,9 @@ import {
   asMemoryForgetReversalId,
   asRelationshipResolverHintId,
   asDailySessionId,
+  planClaimRetrievalProjections,
   planRelationshipResolverHints,
+  type RetrievalProjectionMaterial,
   type MemoryCandidateId,
   type MemoryClaimId,
   type MemoryClaimVersionId,
@@ -693,6 +695,7 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     evidenceItemIds: readonly string[];
     lineage: MemoryCandidateProposal["lineage"];
     relationshipHints: RelationshipHintProjectionInputs | null;
+    retrievalProjection?: RetrievalProjectionMaterial | null;
     now: Date;
   }): Promise<{
     memoryClaimId: MemoryClaimId;
@@ -971,6 +974,13 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
          WHERE user_id = $1 AND memory_claim_id = $2`,
         [input.userId, input.claimId],
       );
+      // #116: the retrieval projection goes with the same fence — forgotten
+      // content never reappears through retrieval.
+      await client.query(
+        `DELETE FROM claim_retrieval_projections
+         WHERE user_id = $1 AND memory_claim_id = $2`,
+        [input.userId, input.claimId],
+      );
 
       return {
         requestId,
@@ -989,6 +999,7 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
     claimKind: "objective" | "impression";
     retractedVersionId: MemoryClaimVersionId;
     relationshipHints?: RelationshipHintProjectionInputs | null;
+    retrievalProjection?: RetrievalProjectionMaterial | null;
     now: Date;
   }): Promise<{ claimVersionId: MemoryClaimVersionId }> {
     return this.withTransaction(async (client) => {
@@ -1088,6 +1099,17 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
           now: input.now,
         });
       }
+      // #116: the restored current version receives a fresh retrieval
+      // projection derived from the NEW ClaimVersion — never the old one.
+      await markClaimRetrievalProjectionsStaleWithin(client, input.userId, input.claimId);
+      if (input.retrievalProjection) {
+        await rebuildClaimRetrievalProjectionsWithin(client, {
+          userId: input.userId,
+          claimId: input.claimId,
+          material: input.retrievalProjection,
+          now: input.now,
+        });
+      }
 
       return { claimVersionId: versionId };
     });
@@ -1108,6 +1130,7 @@ export async function executeClaimAdmissionPlanWithin(
     evidenceItemIds: readonly string[];
     lineage: MemoryCandidateProposal["lineage"];
     relationshipHints?: RelationshipHintProjectionInputs | null;
+    retrievalProjection?: RetrievalProjectionMaterial | null;
     now: Date;
   },
 ): Promise<{
@@ -1288,6 +1311,20 @@ export async function executeClaimAdmissionPlanWithin(
         });
       }
 
+      // #116: the retrieval projection is write-through maintained with the
+      // version advance. The previous version's rows go stale unconditionally
+      // (a contested / superseded current version projects nothing); a fresh
+      // active projection is planned only for a promoted current version.
+      await markClaimRetrievalProjectionsStaleWithin(client, input.userId, claimId);
+      if (input.retrievalProjection && plan.action === "promote") {
+        await rebuildClaimRetrievalProjectionsWithin(client, {
+          userId: input.userId,
+          claimId,
+          material: input.retrievalProjection,
+          now: input.now,
+        });
+      }
+
       return { memoryClaimId: claimId, memoryClaimVersionId: versionId, revision, createdClaim };
 }
 
@@ -1357,6 +1394,9 @@ export async function executeDormancyPlanWithin(
           `Dormancy CAS failed: claim ${input.claimId} pointer moved concurrently.`,
         );
       }
+      // #116: a dormant current version is not recallable; its retrieval
+      // projection goes stale in the same transaction.
+      await markClaimRetrievalProjectionsStaleWithin(client, input.userId, input.claimId);
       return { memoryClaimVersionId: versionId, revision };
 }
 
@@ -1856,4 +1896,164 @@ export async function rebuildRelationshipResolverHintsWithin(
     now: input.now,
   });
   return rows;
+}
+
+// ── #116: claim retrieval projection maintenance (in-transaction) ──────────
+
+/**
+ * Mark the claim's active retrieval projections stale. Allowed by the
+ * projection freeze trigger as the only lifecycle transition.
+ */
+async function markClaimRetrievalProjectionsStaleWithin(
+  client: PoolClient,
+  userId: UserId,
+  claimId: MemoryClaimId,
+): Promise<void> {
+  await client.query(
+    `UPDATE claim_retrieval_projections SET status = 'stale'
+     WHERE user_id = $1 AND memory_claim_id = $2 AND status = 'active'`,
+    [userId, claimId],
+  );
+}
+
+/**
+ * Rebuild the claim's retrieval projections from its CURRENT version inside
+ * the caller's transaction (write-through with the version advance, same
+ * discipline as the Resolver Hint rebuild). No-op rows are skipped when the
+ * current version is not recallable; the query-time fences remain the
+ * authoritative recall gate either way.
+ */
+async function rebuildClaimRetrievalProjectionsWithin(
+  client: PoolClient,
+  input: {
+    userId: UserId;
+    claimId: MemoryClaimId;
+    material: RetrievalProjectionMaterial;
+    now: Date;
+  },
+): Promise<number> {
+  const claimRow = await client.query<{
+    predicate_id: string;
+    subject_entity_id: string;
+    object_entity_id: string | null;
+    current_version_id: string | null;
+    kind: "objective" | "impression";
+    typed_value: unknown;
+    temporal_status: TemporalBounds["temporalStatus"];
+    valid_from: Date | null;
+    valid_from_precision: TemporalBounds["validFromPrecision"];
+    valid_to: Date | null;
+    valid_to_precision: TemporalBounds["validToPrecision"];
+  }>(
+    `SELECT claim.predicate_id, claim.subject_entity_id, claim.object_entity_id,
+            claim.current_version_id, v.kind, v.typed_value, v.temporal_status,
+            v.valid_from, v.valid_from_precision, v.valid_to, v.valid_to_precision
+     FROM memory_claims claim
+     INNER JOIN memory_claim_versions v
+       ON v.memory_claim_version_id = claim.current_version_id
+      AND v.user_id = claim.user_id
+     WHERE claim.user_id = $1 AND claim.memory_claim_id = $2`,
+    [input.userId, input.claimId],
+  );
+  const claim = claimRow.rows[0];
+  if (!claim?.current_version_id) return 0;
+  if (claim.valid_from_precision === undefined) {
+    throw new Error("Claim version temporal precision missing.");
+  }
+  const labels = await currentRetrievalLabelsWithin(client, input.userId, [
+    claim.subject_entity_id,
+    claim.object_entity_id,
+  ]);
+  const rows = planClaimRetrievalProjections({
+    entry: input.material.entry,
+    localizations: input.material.localizations,
+    claim: {
+      memoryClaimId: input.claimId,
+      predicateId: claim.predicate_id,
+      subjectEntityId: claim.subject_entity_id,
+      objectEntityId: claim.object_entity_id,
+    },
+    version: {
+      memoryClaimVersionId: claim.current_version_id,
+      kind: claim.kind,
+      typedValue: toTypedValue(claim.typed_value),
+      temporal: {
+        temporalStatus: claim.temporal_status,
+        validFrom: claim.valid_from,
+        validFromPrecision: claim.valid_from_precision,
+        validTo: claim.valid_to,
+        validToPrecision: claim.valid_to_precision,
+      },
+    },
+    labels,
+  });
+  for (const row of rows) {
+    await client.query(
+      `INSERT INTO claim_retrieval_projections (
+         claim_retrieval_projection_id, user_id, memory_claim_id,
+         memory_claim_version_id, locale, view_direction, retrieval_text,
+         lexical_terms, projection_policy_version, status, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', $10)
+       ON CONFLICT (memory_claim_version_id, locale) DO NOTHING`,
+      [
+        createUuidV7(input.now),
+        input.userId,
+        input.claimId,
+        row.memoryClaimVersionId,
+        row.locale,
+        row.viewDirection,
+        row.retrievalText,
+        row.lexicalTerms,
+        row.projectionPolicyVersion,
+        input.now,
+      ],
+    );
+  }
+  return rows.length;
+}
+
+/** Current primary labels plus verified aliases per entity. */
+async function currentRetrievalLabelsWithin(
+  client: PoolClient,
+  userId: UserId,
+  entityIds: readonly (string | null)[],
+): Promise<Record<string, { zh: string | null; en: string | null; aliases: string[] }>> {
+  const ids = entityIds.filter((id): id is string => id !== null);
+  if (ids.length === 0) return {};
+  const rows = await client.query<{
+    entity_id: string;
+    label: string;
+    label_kind: "primary" | "alias";
+    locale: string;
+  }>(
+    `SELECT label.entity_id::text, label.label, label.label_kind, label.locale
+     FROM entity_labels label
+     WHERE label.user_id = $1
+       AND label.entity_id = ANY($2::uuid[])
+       AND label.is_current
+       AND label.content_purged_at IS NULL
+       AND (label.label_kind = 'primary' OR label.source_evidence_id IS NOT NULL)`,
+    [userId, ids],
+  );
+  const labels: Record<string, { zh: string | null; en: string | null; aliases: string[] }> =
+    {};
+  for (const id of ids) {
+    labels[id] = { zh: null, en: null, aliases: [] };
+  }
+  for (const row of rows.rows) {
+    const entry = labels[row.entity_id];
+    if (!entry) continue;
+    if (row.label_kind === "primary") {
+      if (row.locale === "zh") entry.zh ??= row.label;
+      else if (row.locale === "en") entry.en ??= row.label;
+    } else {
+      entry.aliases.push(row.label);
+    }
+  }
+  for (const entry of Object.values(labels)) {
+    entry.aliases = [...new Set(entry.aliases)].sort((a, b) =>
+      a.localeCompare(b, "en"),
+    );
+  }
+  return labels;
 }

@@ -22,6 +22,7 @@ import {
   type RegistryEntryLookup,
   dedupeFingerprint,
   relationshipHintInputsFor,
+  retrievalProjectionInputsFor,
   dateOrdinal,
   evidenceCutoff,
   type CommitConsolidationRunResult,
@@ -1291,6 +1292,10 @@ async function admitCandidateWithin(
         sourceReflectionVersionId: candidate.sourceReflectionVersionId,
       },
       relationshipHints,
+      retrievalProjection: retrievalProjectionInputsFor(
+        context.registry,
+        registryEntry,
+      ),
       now: context.now,
     });
     await transitionCandidateWithin(client, context.userId, candidateId, [

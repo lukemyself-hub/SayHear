@@ -458,6 +458,9 @@ describe("Relationship Memory Claims system seam (#115)", () => {
     selfEntityIdCache = null;
     await database.pool.query(`
       TRUNCATE TABLE
+        retrieval_run_candidates,
+        retrieval_runs,
+        claim_retrieval_projections,
         relationship_resolver_hints,
         memory_claim_version_qualifier_evidence,
         memory_claim_version_qualifiers,

@@ -22,6 +22,7 @@ export {
   CandidateNotAdmissibleError,
   createMemoryClaimService,
   relationshipHintInputsFor,
+  retrievalProjectionInputsFor,
   MemoryCandidateNotFoundError,
   MemoryClaimNotFoundError,
   SelfEntityMissingError,
