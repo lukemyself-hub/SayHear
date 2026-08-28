@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { loadPredicateRegistrySnapshot } from "../predicate-registry/index";
 import { createMemoryRetrievalService } from "./service";
+import type {
+  MemoryVersionDetail,
+  MemoryVersionEvidence,
+} from "./memory-compilation";
 import {
   MEMORY_RETRIEVAL_POLICY_VERSION,
   type CandidateFenceState,
@@ -29,6 +33,7 @@ const registryMaterial: RetrievalRegistryMaterial = {
 
 const BASE_TIME = Date.parse("2026-08-27T10:00:00.000Z");
 const COLLEAGUE_KEY = "v1|sh.relationship.colleague_of|entity-self+entity-wang|";
+const COLLEAGUE_OF = "sh.relationship.colleague_of";
 
 function laneRow(overrides: Partial<RetrievalLaneRow> = {}): RetrievalLaneRow {
   return {
@@ -91,6 +96,9 @@ function createHarness(options: {
   structuredRows?: readonly RetrievalLaneRow[];
   lexicalRows?: readonly RetrievalLaneRow[];
   englishRows?: readonly RetrievalLaneRow[];
+  portraitRows?: readonly MemoryVersionDetail[];
+  versionDetails?: readonly MemoryVersionDetail[];
+  versionEvidence?: readonly MemoryVersionEvidence[];
   fenceLoader?: (
     versionIds: readonly string[],
   ) => Promise<readonly CandidateFenceState[]>;
@@ -102,6 +110,9 @@ function createHarness(options: {
     loadFenceStates?: Error;
     insertCandidates?: Error;
     completeRun?: Error;
+    loadPortraitCandidates?: Error;
+    loadVersionDetails?: Error;
+    loadVersionEvidence?: Error;
   };
 } = {}) {
   const calls = {
@@ -109,7 +120,15 @@ function createHarness(options: {
     lexicalLanes: 0,
     englishLanes: 0,
     completedRuns: [] as string[],
-    insertedCandidates: [] as unknown[],
+    insertedCandidates: [] as (readonly Readonly<{
+      claimVersionId: string;
+      selectedSection: string | null;
+      finalRank: number | null;
+      selectionReasonCodes: readonly string[];
+      rejectionReasonCodes: readonly string[];
+    }>[])[],
+    portraitLoads: [] as { predicateIds: readonly string[]; locale: string }[],
+    detailLoads: [] as { versionIds: readonly string[]; locale: string }[],
   };
   const repository: MemoryRetrievalRepository = {
     async loadPolicy() {
@@ -143,6 +162,63 @@ function createHarness(options: {
       }
       if (options.fenceLoader) return options.fenceLoader(versionIds);
       return versionIds.map((versionId) => fenceState({ versionId }));
+    },
+    async loadPortraitCandidateVersions(input) {
+      calls.portraitLoads.push({
+        predicateIds: input.predicateIds,
+        locale: input.locale,
+      });
+      if (options.repositoryFaults?.loadPortraitCandidates) {
+        throw options.repositoryFaults.loadPortraitCandidates;
+      }
+      return options.portraitRows ?? [];
+    },
+    async loadMemoryVersionDetails(input) {
+      calls.detailLoads.push({
+        versionIds: input.versionIds,
+        locale: input.locale,
+      });
+      if (options.repositoryFaults?.loadVersionDetails) {
+        throw options.repositoryFaults.loadVersionDetails;
+      }
+      const provided = new Map(
+        (options.versionDetails ?? []).map((detail) => [
+          detail.versionId,
+          detail,
+        ]),
+      );
+      // Every requested version hydrates: uncovered ids get a synthesized
+      // colleague detail so pre-#117 harness shapes keep working.
+      return input.versionIds.map(
+        (versionId) =>
+          provided.get(versionId) ?? {
+            versionId,
+            claimId: `claim-${versionId}`,
+            predicateId: COLLEAGUE_OF,
+            kind: "objective",
+            epistemicStatus: "confirmed",
+            temporalStatus: "current",
+            validFrom: null,
+            validTo: null,
+            subjectEntityId: "entity-self",
+            objectEntityId: "entity-wang",
+            subjectEntityVersionId: "entity-version-self",
+            objectEntityVersionId: "entity-version-wang",
+            renderedText: "Luke 与 小王 · 同事",
+            lexicalTerms: [],
+            lastObservedAt: "2026-08-20T00:00:00.000Z",
+          },
+      );
+    },
+    async loadMemoryVersionEvidence(_userId, versionIds) {
+      if (options.repositoryFaults?.loadVersionEvidence) {
+        throw options.repositoryFaults.loadVersionEvidence;
+      }
+      return versionIds.map((versionId) => ({
+        versionId,
+        evidenceIds: ["evidence-1"],
+        latestEvidenceAt: "2026-08-20T00:00:00.000Z",
+      }));
     },
     async insertRetrievalRun() {},
     async completeRetrievalRun(input) {
@@ -183,6 +259,7 @@ function retrievalInput(overrides: Partial<MemoryRetrievalInput> = {}): MemoryRe
     currentTopic: null,
     dialogueRevision: 3,
     currentInputSequence: 5,
+    locale: "zh",
     ...overrides,
   };
 }
@@ -382,5 +459,188 @@ describe("createMemoryRetrievalService", () => {
     expect(outcome.status).toBe("degraded");
     expect(outcome.degradedReasonCodes).toContain("retrieval_policy_unavailable");
     expect(outcome.retrievalRunId).toBeNull();
+  });
+});
+
+describe("createMemoryRetrievalService — memory compilation (#117)", () => {
+  const PORTRAIT_DETAIL: MemoryVersionDetail = {
+    versionId: "version-portrait",
+    claimId: "claim-portrait",
+    predicateId: "sh.value.core_priorities",
+    kind: "impression",
+    epistemicStatus: "inferred",
+    temporalStatus: "current",
+    validFrom: null,
+    validTo: null,
+    subjectEntityId: "entity-self",
+    objectEntityId: null,
+    subjectEntityVersionId: "entity-version-self",
+    objectEntityVersionId: null,
+    renderedText: "Luke：核心价值观：家庭",
+    lexicalTerms: ["核心价值观", "家庭"],
+    lastObservedAt: "2026-08-20T00:00:00.000Z",
+  };
+
+  it("compiles portrait and retrieval sections, records selected_section, and pins strategy versions", async () => {
+    const { service, calls } = createHarness({
+      structuredRows: [laneRow()],
+      portraitRows: [PORTRAIT_DETAIL],
+      versionDetails: [
+        {
+          ...PORTRAIT_DETAIL,
+          versionId: "version-1",
+          claimId: "claim-1",
+          predicateId: "sh.work.employer",
+          kind: "objective",
+          epistemicStatus: "confirmed",
+          renderedText: "Luke：工作单位：Acme",
+        },
+      ],
+    });
+    const outcome = await service.run(retrievalInput({ locale: "en" }));
+
+    expect(outcome.status).toBe("completed");
+    expect(calls.portraitLoads[0]?.locale).toBe("en");
+    expect(outcome.memorySections.person_portrait).toHaveLength(1);
+    expect(outcome.memorySections.person_portrait[0]).toMatchObject({
+      claimVersionId: "version-portrait",
+      kind: "impression",
+      selectionSource: "person_portrait",
+    });
+    expect(outcome.memorySections.objective_memory).toHaveLength(1);
+    expect(outcome.memorySections.objective_memory[0]).toMatchObject({
+      claimVersionId: "version-1",
+      selectionSource: "query_retrieval",
+    });
+    expect(outcome.memorySections.ai_impression).toHaveLength(0);
+
+    const candidates = calls.insertedCandidates[0]!;
+    expect(candidates[0]!.selectedSection).toBe("objective_memory");
+    expect(candidates[0]!.selectionReasonCodes).toContain(
+      "selected_query_retrieval",
+    );
+
+    expect(outcome.manifest.selection_policy_versions).toEqual({
+      portrait_selection: "portrait-selection:v1",
+      memory_budgets: "memory-budgets:v1",
+      recall_framing: "recall-framing:v1",
+    });
+    expect(
+      outcome.manifest.section_budget_vs_actual.memory_class_total,
+    ).toEqual({ ceiling_items: 5, actual_items: 2 });
+    expect(outcome.manifest.portrait_selection).toEqual({
+      pool_count: 1,
+      selected_claim_version_ids: ["version-portrait"],
+    });
+    expect(outcome.manifest.portrait_degraded_reason_codes).toEqual([]);
+    expect(outcome.manifest.timings.memory_compilation_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps a dual-selected Claim only in person_portrait and records the query hit there", async () => {
+    // The structured lane hits the very colleague Claim the Portrait
+    // selected (canonical-key exact, objective floor).
+    const sharedRow = laneRow({
+      memory_claim_id: "claim-portrait",
+      memory_claim_version_id: "version-portrait",
+    });
+    const portraitDetail: MemoryVersionDetail = {
+      ...PORTRAIT_DETAIL,
+      predicateId: COLLEAGUE_OF,
+      kind: "objective",
+      epistemicStatus: "confirmed",
+      objectEntityId: "entity-wang",
+      objectEntityVersionId: "entity-version-wang",
+      renderedText: "Luke 与 小王 · 同事",
+    };
+    const { service, calls } = createHarness({
+      structuredRows: [sharedRow],
+      portraitRows: [portraitDetail],
+    });
+    const outcome = await service.run(retrievalInput());
+
+    expect(outcome.status).toBe("completed");
+    expect(outcome.memorySections.person_portrait).toHaveLength(1);
+    expect(outcome.memorySections.objective_memory).toHaveLength(0);
+    expect(outcome.memorySections.ai_impression).toHaveLength(0);
+    const candidates = calls.insertedCandidates[0]!;
+    expect(candidates[0]!.selectedSection).toBe("person_portrait");
+    expect(candidates[0]!.selectionReasonCodes).toContain(
+      "selected_person_portrait",
+    );
+    expect(
+      outcome.manifest.section_budget_vs_actual.memory_class_total.actual_items,
+    ).toBe(1);
+  });
+
+  it("omits only the Portrait when portrait loading fails; the retrieval round continues", async () => {
+    const { service } = createHarness({
+      structuredRows: [laneRow()],
+      repositoryFaults: { loadPortraitCandidates: new Error("pool unavailable") },
+      versionDetails: [
+        {
+          ...PORTRAIT_DETAIL,
+          versionId: "version-1",
+          claimId: "claim-1",
+          predicateId: "sh.work.employer",
+          kind: "objective",
+          epistemicStatus: "confirmed",
+        },
+      ],
+    });
+    const outcome = await service.run(retrievalInput());
+
+    expect(outcome.status).toBe("completed");
+    expect(outcome.memorySections.person_portrait).toEqual([]);
+    expect(outcome.memorySections.objective_memory).toHaveLength(1);
+    expect(outcome.manifest.portrait_degraded_reason_codes).toEqual([
+      "portrait_load_failed",
+    ]);
+    expect(outcome.manifest.portrait_selection.pool_count).toBe(0);
+  });
+
+  it("fails the round's memory closed when selected-candidate hydration fails", async () => {
+    const { service } = createHarness({
+      structuredRows: [laneRow()],
+      repositoryFaults: { loadVersionDetails: new Error("details unavailable") },
+    });
+    const outcome = await service.run(retrievalInput());
+
+    expect(outcome.status).toBe("degraded");
+    expect(outcome.degradedReasonCodes).toContain(
+      "retrieval_candidate_hydration_failed",
+    );
+    expect(outcome.memorySections.person_portrait).toEqual([]);
+    expect(outcome.memorySections.objective_memory).toEqual([]);
+    expect(outcome.memorySections.ai_impression).toEqual([]);
+  });
+
+  it("returns empty sections on a degraded run (lane failure fails the round's memory)", async () => {
+    const { service } = createHarness({
+      portraitRows: [PORTRAIT_DETAIL],
+      testConfiguration: {
+        structuredExact: { failWith: new Error("lane down") },
+      },
+    });
+    const outcome = await service.run(retrievalInput());
+    expect(outcome.status).toBe("degraded");
+    expect(outcome.memorySections.person_portrait).toEqual([]);
+    expect(outcome.memorySections.objective_memory).toEqual([]);
+    expect(outcome.memorySections.ai_impression).toEqual([]);
+  });
+
+  it("drops portrait pool members that fail a trust fence", async () => {
+    const { service } = createHarness({
+      portraitRows: [PORTRAIT_DETAIL],
+      fenceLoader: async (versionIds) =>
+        versionIds.map((versionId) =>
+          versionId === "version-portrait"
+            ? fenceState({ versionId, versionStatus: "dormant" })
+            : fenceState({ versionId }),
+        ),
+    });
+    const outcome = await service.run(retrievalInput());
+    expect(outcome.status).toBe("completed");
+    expect(outcome.memorySections.person_portrait).toEqual([]);
+    expect(outcome.manifest.portrait_selection.pool_count).toBe(0);
   });
 });

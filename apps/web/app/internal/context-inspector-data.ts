@@ -123,6 +123,16 @@ export function sectionVersionLabel(
         renderedPolicyVersion(section.reference) ??
         "curiosity-stop-signal:unavailable"
       );
+    case "person_portrait":
+    case "objective_memory":
+    case "ai_impression":
+      // #117: the memory sections pin their strategy versions inside the
+      // rendered reference ("[portrait-selection:v1 | memory-budgets:v1 |
+      // recall-framing:v1]").
+      return (
+        section.reference.match(/\[(portrait-selection:[^\]]+)\]/)?.[1] ??
+        "memory-selection:unavailable"
+      );
     case "rolling_summary":
       return (
         referenceValue(section.reference, ":policy:", ":prompt:") ??

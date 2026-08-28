@@ -8,6 +8,13 @@ import type {
   PredicateLocalization,
   PredicateRegistryEntry,
 } from "../predicate-registry/types";
+import type {
+  MemoryContextItem,
+  MemorySectionBudgetActual,
+  MemorySectionKey,
+  MemoryVersionDetail,
+  MemoryVersionEvidence,
+} from "./memory-compilation";
 
 /**
  * Structured-Lexical Retrieval Baseline types (issue #116, ADR-0115, SPEC
@@ -49,7 +56,12 @@ export type RetrievalDegradedReasonCode =
   | "retrieval_lane_failed"
   | "retrieval_query_construction_failed"
   | "retrieval_policy_unavailable"
-  | "retrieval_run_recording_failed";
+  | "retrieval_run_recording_failed"
+  /** #117: hydrating selected retrieval candidates failed — the round's memory fails closed. */
+  | "retrieval_candidate_hydration_failed";
+
+/** #117: portrait-side failures degrade only the Portrait section (omitted), never the retrieval round. */
+export type PortraitDegradedReasonCode = "portrait_load_failed";
 
 export type RetrievalFenceCode =
   | "current_version"
@@ -334,10 +346,25 @@ export type RetrievalRunManifest = Readonly<{
   candidate_count: number;
   qualified_count: number;
   fenced_out_count: number;
+  /** #117: pinned selection strategy versions (cutover pin-list discipline). */
+  selection_policy_versions: Readonly<{
+    portrait_selection: string;
+    memory_budgets: string;
+    recall_framing: string;
+  }>;
+  /** #117: versioned ceilings versus injected actuals per memory section. */
+  section_budget_vs_actual: MemorySectionBudgetActual;
+  /** #117: per-turn Portrait reselection visibility (pool size + selections). */
+  portrait_selection: Readonly<{
+    pool_count: number;
+    selected_claim_version_ids: readonly string[];
+  }>;
+  /** #117: Portrait-only failures; the retrieval round itself stays completed. */
+  portrait_degraded_reason_codes: readonly PortraitDegradedReasonCode[];
   timings: Readonly<Record<string, number>>;
   duration_ms: number;
   deadline_exceeded_stage: string | null;
-  degraded_reason_codes: readonly string[];
+  degraded_reason_codes: readonly RetrievalDegradedReasonCode[];
 }>;
 
 export type MemoryRetrievalRunOutcome = Readonly<{
@@ -345,6 +372,11 @@ export type MemoryRetrievalRunOutcome = Readonly<{
   status: "completed" | "degraded";
   degradedReasonCodes: readonly RetrievalDegradedReasonCode[];
   manifest: RetrievalRunManifest;
+  /**
+   * #117: the compiled memory items per section. Empty arrays when the run
+   * degraded (the round's memory fails closed) or nothing qualified.
+   */
+  memorySections: Readonly<Record<MemorySectionKey, readonly MemoryContextItem[]>>;
 }>;
 
 export type MemoryRetrievalInput = Readonly<{
@@ -360,6 +392,8 @@ export type MemoryRetrievalInput = Readonly<{
   dialogueRevision: number;
   /** Sequence of the current input event; prior exchange events load before it. */
   currentInputSequence: number;
+  /** Compile locale resolved to a projection locale (zh / en, issue #117). */
+  locale: "zh" | "en";
 }>;
 
 export type MemoryRetrievalPort = Readonly<{
@@ -449,6 +483,33 @@ export type MemoryRetrievalRepository = Readonly<{
     userId: UserId,
     versionIds: readonly string[],
   ): Promise<readonly CandidateFenceState[]>;
+  /**
+   * #117: current ClaimVersions of the portrait-eligible predicates with the
+   * locale-resolved projection material (rendered text + lexical terms).
+   * Structural prefiltering only — trust fences re-check per candidate.
+   */
+  loadPortraitCandidateVersions(input: {
+    userId: UserId;
+    predicateIds: readonly string[];
+    locale: "zh" | "en";
+  }): Promise<readonly MemoryVersionDetail[]>;
+  /**
+   * #117: hydration for retrieval-selected versions (rendered text, entity
+   * version ids, epistemic / temporal state of the current version).
+   */
+  loadMemoryVersionDetails(input: {
+    userId: UserId;
+    versionIds: readonly string[];
+    locale: "zh" | "en";
+  }): Promise<readonly MemoryVersionDetail[]>;
+  /**
+   * #117: valid Evidence ids (ordered) plus latest valid Evidence timestamp
+   * per version — the item's evidence trace and the portrait tie-break input.
+   */
+  loadMemoryVersionEvidence(
+    userId: UserId,
+    versionIds: readonly string[],
+  ): Promise<readonly MemoryVersionEvidence[]>;
   insertRetrievalRun(input: {
     retrievalRunId: string;
     userId: UserId;
@@ -485,6 +546,7 @@ export type MemoryRetrievalRepository = Readonly<{
       trustFenceResults: readonly TrustFenceResult[];
       rankComponents: RankComponents;
       finalRank: number | null;
+      selectedSection: MemorySectionKey | null;
       selectionReasonCodes: readonly string[];
       rejectionReasonCodes: readonly string[];
     }>[];

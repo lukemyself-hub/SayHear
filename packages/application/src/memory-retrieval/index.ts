@@ -18,6 +18,30 @@ export {
 } from "./ranking";
 export { createMemoryRetrievalService } from "./service";
 export {
+  MEMORY_BUDGETS_POLICY_VERSION,
+  MEMORY_BUDGETS_V1,
+  MEMORY_SECTION_KEYS,
+  PORTRAIT_ELIGIBLE_PREDICATES,
+  PORTRAIT_ELIGIBLE_PREDICATE_IDS,
+  PORTRAIT_SELECTION_POLICY_VERSION,
+  RECALL_FRAMING_POLICY_VERSION,
+  buildMemoryContextItems,
+  memoryLocaleOf,
+  portraitUnderstandingTier,
+  renderMemorySection,
+  selectMemoryForInjection,
+  type MemoryContextItem,
+  type MemorySectionBudgetActual,
+  type MemorySectionKey,
+  type MemorySelectionDecision,
+  type MemorySelectionPlan,
+  type MemoryVersionDetail,
+  type MemoryVersionEvidence,
+  type PortraitEligibility,
+  type PortraitPoolCandidate,
+  type RetrievalQualifiedCandidate,
+} from "./memory-compilation";
+export {
   CLAIM_RETRIEVAL_PROJECTION_POLICY_VERSION,
   MEMORY_RETRIEVAL_POLICY_VERSION,
   RETRIEVAL_BROAD_TERM_STOP_LIST,
@@ -29,6 +53,7 @@ export {
   type ConstructedRetrievalQuery,
   type LaneCandidateHit,
   type MemoryRetrievalInput,
+  type PortraitDegradedReasonCode,
   type MemoryRetrievalPolicy,
   type MemoryRetrievalPort,
   type MemoryRetrievalRepository,

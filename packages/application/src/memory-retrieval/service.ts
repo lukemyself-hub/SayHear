@@ -14,6 +14,21 @@ import {
   temporalFitOf,
 } from "./ranking";
 import {
+  EMPTY_MEMORY_SECTIONS,
+  MEMORY_BUDGETS_POLICY_VERSION,
+  PORTRAIT_ELIGIBLE_PREDICATE_IDS,
+  PORTRAIT_SELECTION_POLICY_VERSION,
+  RECALL_FRAMING_POLICY_VERSION,
+  buildMemoryContextItems,
+  emptyBudgetVsActual,
+  selectMemoryForInjection,
+  type MemoryContextItem,
+  type MemorySectionKey,
+  type MemoryVersionDetail,
+  type MemoryVersionEvidence,
+  type PortraitPoolCandidate,
+} from "./memory-compilation";
+import {
   MEMORY_RETRIEVAL_POLICY_VERSION,
   RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION,
   CLAIM_RETRIEVAL_PROJECTION_POLICY_VERSION,
@@ -24,6 +39,7 @@ import {
   type MemoryRetrievalRepository,
   type MemoryRetrievalRunOutcome,
   type MemoryRetrievalPolicy,
+  type PortraitDegradedReasonCode,
   type RetrievalTestSupport,
   type RetrievalDeadlineStage,
   type RetrievalDegradedReasonCode,
@@ -62,6 +78,13 @@ class RetrievalQueryConstructionError extends Error {
   public constructor(cause: unknown) {
     super(`Retrieval query construction failed: ${String(cause)}`);
     this.name = "RetrievalQueryConstructionError";
+  }
+}
+
+class RetrievalHydrationError extends Error {
+  public constructor(cause: unknown) {
+    super(`Retrieval candidate hydration failed: ${String(cause)}`);
+    this.name = "RetrievalHydrationError";
   }
 }
 
@@ -296,6 +319,118 @@ export function createMemoryRetrievalService(dependencies: {
         timings.ranking_ms = Math.round(monotonicNow() - rankingStart);
         checkDeadline("ranking");
 
+        // --- memory compilation (issue #117) -------------------------------
+        // Selection completes inside the run because candidate rows are
+        // immutable after insert — `selected_section` and the budget reason
+        // codes must be known here. The Portrait arm degrades alone: a load
+        // failure omits the Portrait section (never fabricated) while the
+        // retrieval round itself continues. The versioned 200 ms deadline
+        // keeps covering its five stages; compilation is timed separately.
+        const compilationStart = monotonicNow();
+        const portraitDegradedCodes: PortraitDegradedReasonCode[] = [];
+        let portraitPool: PortraitPoolCandidate[] = [];
+        const evidenceByVersion = new Map<string, MemoryVersionEvidence>();
+        try {
+          const poolDetails = await repository.loadPortraitCandidateVersions({
+            userId: input.userId,
+            predicateIds: PORTRAIT_ELIGIBLE_PREDICATE_IDS,
+            locale: input.locale,
+          });
+          const poolVersionIds = poolDetails.map((detail) => detail.versionId);
+          const poolFenceStates = poolVersionIds.length > 0
+            ? await repository.loadCandidateFenceStates(
+                input.userId,
+                poolVersionIds,
+              )
+            : [];
+          const poolFenceByVersion = new Map(
+            poolFenceStates.map((state) => [state.versionId, state]),
+          );
+          for (const row of await repository.loadMemoryVersionEvidence(
+            input.userId,
+            poolVersionIds,
+          )) {
+            evidenceByVersion.set(row.versionId, row);
+          }
+          portraitPool = poolDetails
+            .filter((detail) => {
+              const state = poolFenceByVersion.get(detail.versionId) ?? null;
+              const results = state
+                ? evaluateTrustFences({
+                    claim: { objectEntityId: detail.objectEntityId },
+                    fenceState: state,
+                  })
+                : missingFenceResults();
+              return results.every((result) => result.passed);
+            })
+            .map((detail) => ({
+              detail,
+              validEvidenceCount:
+                poolFenceByVersion.get(detail.versionId)?.validEvidenceCount ?? 0,
+              latestEvidenceAt:
+                evidenceByVersion.get(detail.versionId)?.latestEvidenceAt ?? null,
+            }));
+        } catch {
+          portraitDegradedCodes.push("portrait_load_failed");
+          portraitPool = [];
+        }
+
+        const plan = selectMemoryForInjection({
+          query: constructed,
+          registry,
+          portraitPool,
+          retrievalQualified: withCutoffs
+            .filter((candidate) => candidate.cutoffPassed)
+            .map((candidate) => ({
+              claim: candidate.claim,
+              finalRank: candidate.finalRank,
+              selectionReasonCodes: candidate.selectionReasonCodes,
+            })),
+        });
+
+        // Hydrate the retrieval-selected versions (rendered text, entity
+        // version ids); portrait-selected details are already loaded. A
+        // hydration failure fails the round's memory closed — items cannot
+        // render without their details.
+        const detailByVersion = new Map<string, MemoryVersionDetail>(
+          plan.portraitSelected.map((candidate) => [
+            candidate.detail.versionId,
+            candidate.detail,
+          ]),
+        );
+        const retrievalVersionIds = plan.retrievalSelected.map(
+          (entry) => entry.candidate.claim.versionId,
+        );
+        try {
+          const retrievalDetails = await repository.loadMemoryVersionDetails({
+            userId: input.userId,
+            versionIds: retrievalVersionIds,
+            locale: input.locale,
+          });
+          for (const detail of retrievalDetails) {
+            detailByVersion.set(detail.versionId, detail);
+          }
+          for (const row of await repository.loadMemoryVersionEvidence(
+            input.userId,
+            retrievalVersionIds,
+          )) {
+            evidenceByVersion.set(row.versionId, row);
+          }
+        } catch (error) {
+          throw new RetrievalHydrationError(error);
+        }
+        const memorySections = buildMemoryContextItems({
+          plan,
+          detailByVersion,
+          evidenceByVersion,
+        });
+        timings.memory_compilation_ms = Math.round(
+          monotonicNow() - compilationStart,
+        );
+
+        const decisionByVersion = new Map(
+          plan.decisions.map((decision) => [decision.claimVersionId, decision]),
+        );
         const candidateRecords = [
           ...fencedOut.map((entry) => ({
             claimVersionId: entry.candidate.claim.versionId,
@@ -306,6 +441,7 @@ export function createMemoryRetrievalService(dependencies: {
             trustFenceResults: entry.fenceResults,
             rankComponents: stubRankComponents(entry.candidate),
             finalRank: null,
+            selectedSection: null,
             selectionReasonCodes: [],
             rejectionReasonCodes: fenceFailureCodes(entry.fenceResults),
           })),
@@ -313,6 +449,8 @@ export function createMemoryRetrievalService(dependencies: {
             const fenceEntry = fenceEvaluated.find(
               (entry) => entry.candidate.claim.versionId === candidate.claim.versionId,
             )!;
+            const decision =
+              decisionByVersion.get(candidate.claim.versionId) ?? null;
             return {
               claimVersionId: candidate.claim.versionId,
               retrievalProjectionId: candidate.claim.projectionId,
@@ -322,8 +460,19 @@ export function createMemoryRetrievalService(dependencies: {
               trustFenceResults: fenceEntry.fenceResults,
               rankComponents: candidate.rankComponents,
               finalRank: candidate.finalRank,
-              selectionReasonCodes: candidate.selectionReasonCodes,
-              rejectionReasonCodes: candidate.rejectionReasonCodes,
+              selectedSection: decision?.selectedSection ?? null,
+              selectionReasonCodes: decision
+                ? [
+                    ...candidate.selectionReasonCodes,
+                    ...decision.selectionReasonCodes,
+                  ]
+                : candidate.selectionReasonCodes,
+              rejectionReasonCodes: decision
+                ? [
+                    ...candidate.rejectionReasonCodes,
+                    ...decision.rejectionReasonCodes,
+                  ]
+                : candidate.rejectionReasonCodes,
             };
           }),
         ];
@@ -349,6 +498,19 @@ export function createMemoryRetrievalService(dependencies: {
           qualified_count: withCutoffs.filter((candidate) => candidate.cutoffPassed)
             .length,
           fenced_out_count: fencedOut.length,
+          selection_policy_versions: {
+            portrait_selection: PORTRAIT_SELECTION_POLICY_VERSION,
+            memory_budgets: MEMORY_BUDGETS_POLICY_VERSION,
+            recall_framing: RECALL_FRAMING_POLICY_VERSION,
+          },
+          section_budget_vs_actual: plan.budgetVsActual,
+          portrait_selection: {
+            pool_count: plan.portraitPoolCount,
+            selected_claim_version_ids: plan.portraitSelected.map(
+              (candidate) => candidate.detail.versionId,
+            ),
+          },
+          portrait_degraded_reason_codes: portraitDegradedCodes,
           timings,
           duration_ms: elapsed(),
           deadline_exceeded_stage: null,
@@ -369,6 +531,7 @@ export function createMemoryRetrievalService(dependencies: {
           status: "completed",
           degradedReasonCodes: [],
           manifest,
+          memorySections,
         };
       } catch (error) {
         const finalDuration = elapsed();
@@ -378,6 +541,8 @@ export function createMemoryRetrievalService(dependencies: {
           degradedCodes.push("retrieval_lane_failed");
         } else if (error instanceof RetrievalQueryConstructionError) {
           degradedCodes.push("retrieval_query_construction_failed");
+        } else if (error instanceof RetrievalHydrationError) {
+          degradedCodes.push("retrieval_candidate_hydration_failed");
         } else {
           degradedCodes.push("retrieval_run_recording_failed");
         }
@@ -395,6 +560,14 @@ export function createMemoryRetrievalService(dependencies: {
           candidate_count: 0,
           qualified_count: 0,
           fenced_out_count: 0,
+          selection_policy_versions: {
+            portrait_selection: PORTRAIT_SELECTION_POLICY_VERSION,
+            memory_budgets: MEMORY_BUDGETS_POLICY_VERSION,
+            recall_framing: RECALL_FRAMING_POLICY_VERSION,
+          },
+          section_budget_vs_actual: emptyBudgetVsActual(),
+          portrait_selection: { pool_count: 0, selected_claim_version_ids: [] },
+          portrait_degraded_reason_codes: [],
           timings,
           duration_ms: finalDuration,
           deadline_exceeded_stage:
@@ -425,6 +598,7 @@ export function createMemoryRetrievalService(dependencies: {
           status: "degraded",
           degradedReasonCodes: degradedCodes,
           manifest,
+          memorySections: EMPTY_MEMORY_SECTIONS,
         };
       }
     },
@@ -617,13 +791,23 @@ function degradedOutcomeWithoutRun(input: {
       candidate_count: 0,
       qualified_count: 0,
       fenced_out_count: 0,
+      selection_policy_versions: {
+        portrait_selection: PORTRAIT_SELECTION_POLICY_VERSION,
+        memory_budgets: MEMORY_BUDGETS_POLICY_VERSION,
+        recall_framing: RECALL_FRAMING_POLICY_VERSION,
+      },
+      section_budget_vs_actual: emptyBudgetVsActual(),
+      portrait_selection: { pool_count: 0, selected_claim_version_ids: [] },
+      portrait_degraded_reason_codes: [],
       timings: {},
       duration_ms: input.durationMs,
       deadline_exceeded_stage: null,
       degraded_reason_codes: [input.code],
     },
+    memorySections: EMPTY_MEMORY_SECTIONS,
   };
 }
+
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {

@@ -37,6 +37,13 @@ import type {
   MemoryRetrievalPort,
   RetrievalRunManifest,
 } from "./memory-retrieval/types";
+import {
+  MEMORY_SECTION_KEYS,
+  memoryLocaleOf,
+  renderMemorySection,
+  type MemoryContextItem,
+  type MemorySectionKey,
+} from "./memory-retrieval/memory-compilation";
 import type {
   ConversationActionAdmission,
   ConversationActionExecution,
@@ -123,6 +130,9 @@ export type CompiledContextSectionKey =
   | "daily_session"
   | "dialogue_state"
   | "curiosity_stop_signal"
+  | "person_portrait"
+  | "objective_memory"
+  | "ai_impression"
   | "rolling_summary"
   | "committed_raw_events"
   | "current_user_input"
@@ -313,6 +323,7 @@ export function createContextCompiler(dependencies: {
             currentTopic: dialogueState?.content.current_topic.value ?? null,
             dialogueRevision: source.dialogueRevision,
             currentInputSequence: currentInput.sequence,
+            locale: memoryLocaleOf(source.locale),
           })
         : null;
 
@@ -369,6 +380,13 @@ export function createContextCompiler(dependencies: {
         curiosityStopSignal: source.curiosityStopSignal ?? null,
         currentExchangeNo: source.dailySession.continuousExchangeNo,
         dialogueState,
+        // #117: a degraded retrieval run carries empty sections (the round's
+        // memory fails closed) and empty sections are omitted entirely —
+        // never placeholder text, never fabricated.
+        memorySections:
+          retrievalOutcome === null || retrievalOutcome.status === "degraded"
+            ? undefined
+            : retrievalOutcome.memorySections,
         rollingSummary: source.rollingSummary ?? null,
         safetyPosture: source.safetyPosture ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
@@ -488,6 +506,17 @@ export function createContextCompiler(dependencies: {
       const safetyPostureSection = source.sections.find(
         (section) => section.key === "safety_posture",
       );
+      // #117: memory sections replay their exact frozen content from the
+      // section reference (dialogue-state pattern) — what was inspected is
+      // what was injected.
+      const memorySectionContents = Object.fromEntries(
+        MEMORY_SECTION_KEYS.flatMap((key) => {
+          const section = source.sections.find(
+            (candidate) => candidate.key === key,
+          );
+          return section ? [[key, section.reference] as const] : [];
+        }),
+      ) as Partial<Record<MemorySectionKey, string>>;
       if (
         currentInputs.length !== 1 ||
         !currentInput ||
@@ -497,7 +526,10 @@ export function createContextCompiler(dependencies: {
         rawEventBudget === undefined ||
         (dialogueStateSection && !dialogueStateSection.reference) ||
         (stopSignalSection && !stopSignalSection.reference) ||
-        (safetyPostureSection && !safetyPostureSection.reference)
+        (safetyPostureSection && !safetyPostureSection.reference) ||
+        MEMORY_SECTION_KEYS.some(
+          (key) => memorySectionContents[key] === "",
+        )
       ) {
         throw new CompiledContextIntegrityError();
       }
@@ -520,6 +552,7 @@ export function createContextCompiler(dependencies: {
         ...(safetyPostureSection?.reference
           ? { safetyPostureContent: safetyPostureSection.reference }
           : {}),
+        memorySectionContents,
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
       });
@@ -612,6 +645,12 @@ function createSections(input: {
   curiosityStopSignal: CurrentCuriosityStopSignal | null;
   dialogueState?: CurrentDialogueState | null;
   dialogueStateContent?: string;
+  /** #117: compiled memory items per section (compile-time path). */
+  memorySections?:
+    | Readonly<Record<MemorySectionKey, readonly MemoryContextItem[]>>
+    | undefined;
+  /** #117: exact frozen content replayed from the manifest (egress path). */
+  memorySectionContents?: Partial<Record<MemorySectionKey, string>>;
   rollingSummary: CurrentRollingSummary | null;
   safetyPosture?: CurrentSafetyPosture | null;
   safetyPostureContent?: string;
@@ -765,6 +804,7 @@ function createSections(input: {
         ]
       : []),
     ...renderCuriosityStopSignalSection(input),
+    ...renderMemorySections(input),
     {
       budgetTokens: input.rawEventTokenBudget,
       content: input.history
@@ -883,6 +923,60 @@ function renderCuriosityStopSignalSection(input: {
       truncatable: false,
     },
   ];
+}
+
+/**
+ * The three memory sections (#117, ADR-0111): compiled only when the run
+ * produced items for them. Empty sections are omitted without placeholder
+ * text; `memorySectionContents` replays the exact content frozen at compile
+ * time for the Provider Egress re-derivation (what was inspected is what was
+ * injected). The section reference carries the full rendered content, so the
+ * replay needs no second persisted copy.
+ */
+function renderMemorySections(input: {
+  locale: string;
+  memorySections?:
+    | Readonly<Record<MemorySectionKey, readonly MemoryContextItem[]>>
+    | undefined;
+  memorySectionContents?: Partial<Record<MemorySectionKey, string>>;
+}): readonly Readonly<{
+  budgetTokens: null;
+  content: string;
+  key: MemorySectionKey;
+  reference: string;
+  truncatable: false;
+}>[] {
+  const sections: {
+    budgetTokens: null;
+    content: string;
+    key: MemorySectionKey;
+    reference: string;
+    truncatable: false;
+  }[] = [];
+  for (const key of MEMORY_SECTION_KEYS) {
+    const replayed = input.memorySectionContents?.[key];
+    if (replayed !== undefined) {
+      sections.push({
+        budgetTokens: null,
+        content: replayed,
+        key,
+        reference: replayed,
+        truncatable: false,
+      });
+      continue;
+    }
+    const items = input.memorySections?.[key] ?? [];
+    if (items.length === 0) continue;
+    const content = renderMemorySection({ key, items, locale: input.locale });
+    sections.push({
+      budgetTokens: null,
+      content,
+      key,
+      reference: content,
+      truncatable: false,
+    });
+  }
+  return sections;
 }
 
 function renderDialogueState(state: CurrentDialogueState): string {
