@@ -289,7 +289,8 @@ export class PostgresInternalInspectionRepository
         row.context_retrieval_manifest === null
           ? []
           : await loadRetrievalCandidates(client, {
-              compiledContextId: row.context_id,
+              retrievalRunId:
+                row.context_retrieval_manifest.retrieval_run_id,
               userId: input.userId,
             });
       await client.query("COMMIT");
@@ -512,34 +513,25 @@ type RetrievalCandidateRow = Readonly<{
   memory_claim_version_id: string;
   rank_components: RetrievalCandidateInspection["rankComponents"];
   rejection_reason_codes: readonly string[];
-  retrieval_lane: string;
+  retrieval_lane: RetrievalCandidateInspection["lane"];
   selected_section: MemorySectionKey | null;
   selection_reason_codes: readonly string[];
-  trust_fence_results: readonly Readonly<{
-    fence: string;
-    passed: boolean;
-  }>[];
+  trust_fence_results: RetrievalCandidateInspection["trustFenceResults"];
 }>;
 
 /**
- * #122: the retrieval panel's candidate funnel — the run-ledger rows of the
- * context's retrieval run, read-only, with the recorded reasons verbatim.
- * Ordered by final rank with unranked (fenced-out) rows last.
+ * #122: the retrieval panel's candidate funnel — the run-ledger rows joined
+ * by the manifest's pinned retrieval_run_id (the funnel and the manifest
+ * describe the same run by construction), read-only, with the recorded
+ * reasons verbatim. Ordered by final rank with unranked (fenced-out) rows
+ * last.
  */
 async function loadRetrievalCandidates(
   client: PoolClient,
-  input: { compiledContextId: string; userId: string },
+  input: { retrievalRunId: string; userId: string },
 ): Promise<readonly RetrievalCandidateInspection[]> {
   const result = await client.query<RetrievalCandidateRow>(
     `
-      WITH run AS (
-        SELECT retrieval_run_id
-        FROM retrieval_runs
-        WHERE user_id = $2
-          AND compiled_context_id = $1
-        ORDER BY started_at DESC
-        LIMIT 1
-      )
       SELECT
         candidate.claim_retrieval_projection_id::text,
         candidate.final_rank,
@@ -553,13 +545,12 @@ async function loadRetrievalCandidates(
         candidate.selection_reason_codes,
         candidate.trust_fence_results
       FROM retrieval_run_candidates candidate
-      INNER JOIN run
-        ON run.retrieval_run_id = candidate.retrieval_run_id
       WHERE candidate.user_id = $2
+        AND candidate.retrieval_run_id = $1
       ORDER BY candidate.final_rank ASC NULLS LAST,
         candidate.retrieval_lane
     `,
-    [input.compiledContextId, input.userId],
+    [input.retrievalRunId, input.userId],
   );
   return result.rows.map((row) => ({
     claimVersionId: row.memory_claim_version_id,

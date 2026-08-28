@@ -15,7 +15,10 @@ import type { CurrentDialogueState } from "./dialogue-state";
 import type { MemorySectionKey } from "./memory-retrieval/memory-compilation";
 import type {
   RankComponents,
+  RetrievalFenceCode,
+  RetrievalLane,
   RetrievalRunManifest,
+  TrustFenceResult,
 } from "./memory-retrieval/types";
 import type { RecoveryGate } from "./recovery-gate";
 import type { CurrentSafetyPosture } from "./safety-posture";
@@ -35,7 +38,7 @@ export type CompiledContextSafetyPostureInspection = Readonly<{
 export type RetrievalCandidateInspection = Readonly<{
   claimVersionId: string;
   finalRank: number | null;
-  lane: string;
+  lane: RetrievalLane;
   matchedFields: readonly string[];
   matchedTerms: readonly string[];
   rankComponents: RankComponents;
@@ -43,10 +46,7 @@ export type RetrievalCandidateInspection = Readonly<{
   retrievalProjectionId: string;
   selectedSection: MemorySectionKey | null;
   selectionReasonCodes: readonly string[];
-  trustFenceResults: readonly Readonly<{
-    fence: string;
-    passed: boolean;
-  }>[];
+  trustFenceResults: readonly TrustFenceResult[];
 }>;
 
 export type CompiledContextInspection = Readonly<{
@@ -113,11 +113,6 @@ export type GenerationInspectionMetadata = Readonly<{
   providerLatencyMs: number | null;
   providerPolicyVersion: string;
   providerRequestId: string | null;
-  /**
-   * #122: the full candidate funnel of the context's retrieval run, ordered
-   * by final rank with unranked (fenced-out) rows last. Empty when no run is
-   * linked to the context.
-   */
   recovery: Readonly<{
     attempts: readonly Readonly<{
       attemptNo: number;
@@ -139,6 +134,12 @@ export type GenerationInspectionMetadata = Readonly<{
     policyVersion: string;
     status: string;
   }>;
+  /**
+   * #122: the full candidate funnel of the context's retrieval run — the
+   * run-ledger rows joined by the manifest's pinned retrieval_run_id, ordered
+   * by final rank with unranked (fenced-out) rows last. Empty when no run is
+   * linked to the context.
+   */
   retrievalCandidates: readonly RetrievalCandidateInspection[];
   role: string;
   sourceRevisionId: ConversationEventRevisionId;

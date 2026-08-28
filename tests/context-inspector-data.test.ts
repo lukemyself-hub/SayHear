@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { renderMemorySection } from "@sayhear/application";
+
 import {
   DIALOGUE_STATE_FIELDS,
   memorySectionItemsFromSections,
@@ -218,5 +220,76 @@ describe("Context Inspector memory item parsing (#122)", () => {
     ]);
     expect(items[0]?.items).toHaveLength(2);
     expect(items[1]?.items).toEqual([]);
+  });
+
+  it("parses the current renderMemorySection output round-trip (format conformance)", () => {
+    // If renderMemorySection's line format ever drifts, this fails in CI
+    // instead of the panel silently showing zero injected items.
+    const items = [
+      {
+        claimId: "claim-1",
+        claimVersionId: "version-1",
+        contextMemoryRef: "shh-memory-1",
+        renderedText: "老家在西安",
+        kind: "objective" as const,
+        epistemicStatus: "confirmed" as const,
+        temporalStatus: "current" as const,
+        validFrom: "2026-01-01",
+        validTo: null,
+        entityVersionIds: ["entity-version-1"],
+        evidenceIds: ["ev-1", "ev-2"],
+        recallFramingPolicyVersion: "recall-framing:v1",
+        selectionSource: "person_portrait" as const,
+        predicateId: "sh.place.hometown",
+      },
+      {
+        claimId: "claim-2",
+        claimVersionId: "version-2",
+        contextMemoryRef: "shh-memory-2",
+        renderedText: "重视家庭 — 每次都提到",
+        kind: "impression" as const,
+        epistemicStatus: "inferred" as const,
+        temporalStatus: "ended" as const,
+        validFrom: "2026-01-02",
+        validTo: "2026-06-30",
+        entityVersionIds: [],
+        evidenceIds: [],
+        recallFramingPolicyVersion: "recall-framing:v1",
+        selectionSource: "query_retrieval" as const,
+        predicateId: "sh.value.core_priorities",
+      },
+    ] as const;
+
+    const rendered = renderMemorySection({
+      items,
+      key: "person_portrait",
+      locale: "zh",
+    });
+    expect(parseMemorySectionItems(rendered)).toEqual([
+      {
+        claimId: "claim-1",
+        claimVersionId: "version-1",
+        contextMemoryRef: "shh-memory-1",
+        epistemicStatus: "confirmed",
+        evidenceIds: ["ev-1", "ev-2"],
+        kind: "objective",
+        renderedText: "老家在西安",
+        temporalStatus: "current",
+        validFrom: "2026-01-01",
+        validTo: null,
+      },
+      {
+        claimId: "claim-2",
+        claimVersionId: "version-2",
+        contextMemoryRef: "shh-memory-2",
+        epistemicStatus: "inferred",
+        evidenceIds: [],
+        kind: "impression",
+        renderedText: "重视家庭 — 每次都提到",
+        temporalStatus: "ended",
+        validFrom: "2026-01-02",
+        validTo: "2026-06-30",
+      },
+    ]);
   });
 });

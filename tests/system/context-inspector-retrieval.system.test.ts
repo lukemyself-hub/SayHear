@@ -207,8 +207,24 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
   beforeEach(async () => {
     clockNowMs = BASE_TIME;
     retrievalFaults = null;
+    // Migrations from concurrently developed branches may add tables that
+    // reference the truncated set (e.g. the #119 trust-action face); include
+    // them only when they exist so the reset works before and after they land.
+    const optionalReferencingTables = await database.pool.query<{
+      name: string;
+    }>(`
+      SELECT name
+      FROM (
+        VALUES ('memory_claim_corrections'), ('memory_impression_vetoes')
+      ) AS candidate(name)
+      WHERE to_regclass(format('%I', name)) IS NOT NULL
+    `);
+    const optionalNames = optionalReferencingTables.rows
+      .map((row) => row.name)
+      .join(", ");
     await database.pool.query(`
       TRUNCATE TABLE
+        ${optionalNames ? `${optionalNames},` : ""}
         retrieval_run_candidates,
         retrieval_runs,
         claim_retrieval_projections,
