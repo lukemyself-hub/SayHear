@@ -356,8 +356,9 @@ const RECALL_EXPERIENCE_CONTRACT_CONTENT: Readonly<
 
 /**
  * Resolve the recall experience contract for a compile that carries memory
- * sections. Fail-closed on an unresolvable version or locale, like every
- * identity layer.
+ * sections. The version resolves fail-closed; the locale resolves through the
+ * ADR-0072 two-language rule (any non-zh locale reads the en contract), the
+ * same fallback every locale-conditional layer uses.
  */
 export function resolveRecallExperienceContract(input: {
   locale: string;

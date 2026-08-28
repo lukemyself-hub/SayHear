@@ -581,7 +581,9 @@ const newScenarios: NewScenario[] = [
           atTurn: 4,
           semantic:
             "The response grounds in the corrected state — they decided to stay friends — and never resurrects the dating frame.",
-          requiredTokens: ["friend"],
+          // "friends", not "friend": the plural form cannot be satisfied by
+          // the fenced paraphrase tokens "boyfriend" / "girlfriend".
+          requiredTokens: ["friends"],
         },
       ],
       forbiddenMentions: [
@@ -640,7 +642,9 @@ const newScenarios: NewScenario[] = [
           atTurn: 4,
           semantic:
             "回应以更正后的状态为落点——两人决定做朋友——绝不复活恋爱框架。",
-          requiredTokens: ["朋友"],
+          // 「做朋友」，不是「朋友」：前者不会被围栏转述词「男朋友」「女朋友」
+          // 以子串方式满足。
+          requiredTokens: ["做朋友"],
         },
       ],
       forbiddenMentions: [

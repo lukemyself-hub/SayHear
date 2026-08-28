@@ -190,10 +190,11 @@ describe("scenario-pack:v3 (#118)", () => {
 
   it("pins the v3 checker and tiering identities", () => {
     expect(TIERED_CHECKS_VERSION).toBe("tiered-checks:v3");
+    // The active tier names the emitted gate IDs one-to-one.
     expect(MEMORY_CHECK_TIERING.activeChecks).toEqual([
-      "forbidden_mention",
-      "required_recall_token_level",
-      "fenced_mention",
+      "forbidden_memory_mention",
+      "required_recall_missing",
+      "fenced_memory_mention",
     ]);
     expect(MEMORY_CHECK_TIERING.advisoryChecks).toEqual([
       "semantic_expected_recall",
@@ -247,6 +248,25 @@ describe("v3 memory hard gates", () => {
     });
     expect(hardGates.map((gate) => gate.gate)).toEqual([
       "fenced_memory_mention",
+      "fenced_memory_mention",
+    ]);
+  });
+
+  it("does not let a fenced romance token satisfy the required friendship recall", () => {
+    // Regression for the substring edge: "friend" is a substring of
+    // "boyfriend", so the fixture requires "friends" — a romance-resurrecting
+    // reply must miss the required recall AND trip the fence.
+    const { hardGates } = checkTurn({
+      ...base,
+      scenarioId: "memory-temporal-en",
+      sequenceInScenario: 4,
+      userText: "Alex invited me to their housewarming tonight.",
+      assistantText: "Go! He's your boyfriend — of course he wants you there.",
+      requiredRecallTokens: ["friends"],
+      fencedMentionTokens: ["boyfriend"],
+    });
+    expect(hardGates.map((gate) => gate.gate)).toEqual([
+      "required_recall_missing",
       "fenced_memory_mention",
     ]);
   });

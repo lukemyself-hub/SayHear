@@ -1667,7 +1667,7 @@
             "atTurn": 4,
             "semantic": "The response grounds in the corrected state — they decided to stay friends — and never resurrects the dating frame.",
             "requiredTokens": [
-              "friend"
+              "friends"
             ]
           }
         ],
@@ -1750,7 +1750,7 @@
             "atTurn": 4,
             "semantic": "回应以更正后的状态为落点——两人决定做朋友——绝不复活恋爱框架。",
             "requiredTokens": [
-              "朋友"
+              "做朋友"
             ]
           }
         ],

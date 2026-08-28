@@ -137,11 +137,13 @@ function contains(text: string, token: string): boolean {
 // ---------------------------------------------------------------------------
 
 export type MemoryCheckTiering = Readonly<{
+  /** The emitted hard-gate IDs the activated memory checks resolve to. */
   activeChecks: readonly [
-    "forbidden_mention",
-    "required_recall_token_level",
-    "fenced_mention",
+    "forbidden_memory_mention",
+    "required_recall_missing",
+    "fenced_memory_mention",
   ];
+  /** Advisory tier: judge pre-screen plus human ruling, never a gate here. */
   advisoryChecks: readonly ["semantic_expected_recall"];
 }>;
 
@@ -154,9 +156,9 @@ export type MemoryCheckTiering = Readonly<{
  */
 export const MEMORY_CHECK_TIERING: MemoryCheckTiering = Object.freeze({
   activeChecks: Object.freeze([
-    "forbidden_mention",
-    "required_recall_token_level",
-    "fenced_mention",
+    "forbidden_memory_mention",
+    "required_recall_missing",
+    "fenced_memory_mention",
   ] as const),
   advisoryChecks: Object.freeze(["semantic_expected_recall"] as const),
 });
