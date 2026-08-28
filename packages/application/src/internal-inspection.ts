@@ -12,12 +12,41 @@ import type {
   ContextPolicyVersions,
 } from "./context-compiler";
 import type { CurrentDialogueState } from "./dialogue-state";
+import type { MemorySectionKey } from "./memory-retrieval/memory-compilation";
+import type {
+  RankComponents,
+  RetrievalRunManifest,
+} from "./memory-retrieval/types";
 import type { RecoveryGate } from "./recovery-gate";
 import type { CurrentSafetyPosture } from "./safety-posture";
 
 export type CompiledContextSafetyPostureInspection = Readonly<{
   posture: CurrentSafetyPosture | null;
   state: "active" | "default" | "released";
+}>;
+
+/**
+ * #122: one retrieval-funnel row from the run ledger — lane, hit and ranking
+ * fields, trust-fence results, and the selection / rejection reasons recorded
+ * at run time. The Inspector renders these rows next to the CompiledContext
+ * memory sections; it never recomputes a selection (ADR-0115: no second
+ * "selected but not injected" state).
+ */
+export type RetrievalCandidateInspection = Readonly<{
+  claimVersionId: string;
+  finalRank: number | null;
+  lane: string;
+  matchedFields: readonly string[];
+  matchedTerms: readonly string[];
+  rankComponents: RankComponents;
+  rejectionReasonCodes: readonly string[];
+  retrievalProjectionId: string;
+  selectedSection: MemorySectionKey | null;
+  selectionReasonCodes: readonly string[];
+  trustFenceResults: readonly Readonly<{
+    fence: string;
+    passed: boolean;
+  }>[];
 }>;
 
 export type CompiledContextInspection = Readonly<{
@@ -49,6 +78,13 @@ export type CompiledContextInspection = Readonly<{
     selectedTokens: number;
     truncatable: boolean;
   }>[];
+  /**
+   * #122: the compact retrieval manifest pinned on the CompiledContext at
+   * compile commit — the run outcome, lane plan, and counters the panel
+   * displays. Null for Contexts compiled before the retrieval baseline or
+   * with the memory switch off.
+   */
+  retrievalManifest: RetrievalRunManifest | null;
   safetyPosture: CompiledContextSafetyPostureInspection;
   sourceRevision: number;
   totalTokens: number;
@@ -77,6 +113,11 @@ export type GenerationInspectionMetadata = Readonly<{
   providerLatencyMs: number | null;
   providerPolicyVersion: string;
   providerRequestId: string | null;
+  /**
+   * #122: the full candidate funnel of the context's retrieval run, ordered
+   * by final rank with unranked (fenced-out) rows last. Empty when no run is
+   * linked to the context.
+   */
   recovery: Readonly<{
     attempts: readonly Readonly<{
       attemptNo: number;
@@ -98,6 +139,7 @@ export type GenerationInspectionMetadata = Readonly<{
     policyVersion: string;
     status: string;
   }>;
+  retrievalCandidates: readonly RetrievalCandidateInspection[];
   role: string;
   sourceRevisionId: ConversationEventRevisionId;
 }>;

@@ -219,6 +219,7 @@ export {
   type GenerationInspectionMetadata,
   type InternalInspectionRepository,
   type InternalInspectionService,
+  type RetrievalCandidateInspection,
   type SensitiveInspectionDenialReason,
 } from "./internal-inspection";
 export {
