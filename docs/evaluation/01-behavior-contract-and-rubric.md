@@ -140,7 +140,8 @@ Internal Owner 在每个回合为两边各打 1–5 分：
 5. 台账是检查自身的质量指标：某检查误报率超标，即从硬门禁降级为咨询性预筛。
    硬门禁检查的误报率门槛最严。
 
-台账落点：`eval/scenario-pack-v2/ledger.json`。
+台账落点：`eval/scenario-pack-v3/ledger.json`（#118 起；v2 及之前的条目保留在
+`eval/scenario-pack-v2/ledger.json`）。
 
 ## 七、数据集 v2（scenario-pack:v2.1）
 
@@ -160,6 +161,14 @@ Internal Owner 在每个回合为两边各打 1–5 分：
 - pairwise v2 的 15 场景抽样不是全量质量证明：样本只承担人工偏好筛查，完整
   scenario pack 的确定性门禁仍必须运行。
 - 场景素材全部虚构（ADR-0020 Initial Replay ingress 规则）。
+- **#118 起（scenario-pack:v3）**：54 场景 = v2.1 的 45 + 9 个多日召回场景
+  （Objective Memory / Portrait-Impression / 关系时间变化 + 更正与遗忘后不复用
+  × 三语言形态）；数据集与检查器迁至 `eval/scenario-pack-v3/`，共享确定性机制
+  仍复用 v2 模块。v2 中 deferred 到 1A.3a 的 expected-recall 翻活为 #99 两级制：
+  token 级期望词（required fixtures）= 硬门禁全 locale 100% 通过；语义级 =
+  judge 预筛 + Internal Owner 盲评样本内终审。新增 `fenced_mention` 硬门禁
+  （post-Correction / post-Forget 旧状态不复用）与跨日 forbidden-mention 边界
+  轮（正确零开场：零注入、不表现连续性判对不判漏，ADR-0117）。
 
 ## 八、基线与发布证据
 

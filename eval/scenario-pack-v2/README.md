@@ -6,6 +6,12 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 [`docs/evaluation/01-behavior-contract-and-rubric.md`](../../docs/evaluation/01-behavior-contract-and-rubric.md)）。
 非权威评测制品（ADR-0020 / ADR-0073 精神）：仅合成输入，不写产品状态。
 
+**#118 起 pack 与检查器的现行版本是
+[`eval/scenario-pack-v3/`](../scenario-pack-v3/)（scenario-pack:v3 /
+tiered-checks:v3，两级 expectedRecall 翻活 + 9 个多日召回场景）。本目录保持
+v2.1 原样，作为 #61/#77/#79 冻结证据的复现基座；其共享确定性机制被 v3 检查器
+复用。**
+
 ## TL;DR
 
 - `scenarios.json` 是 `scenario-pack:v2.1`：45 个合成多回合场景 = #61 的 33 个 +

@@ -2,7 +2,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 
 import {
+  RECALL_EXPERIENCE_CONTRACT_VERSION,
   resolvePromptArtifacts,
+  resolveRecallExperienceContract,
   resolveSafetyPostureReducedPersona,
   SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
   type GenerationCommandStage,
@@ -133,6 +135,7 @@ export type CompiledContextSectionKey =
   | "person_portrait"
   | "objective_memory"
   | "ai_impression"
+  | "recall_experience"
   | "rolling_summary"
   | "committed_raw_events"
   | "current_user_input"
@@ -517,6 +520,11 @@ export function createContextCompiler(dependencies: {
           return section ? [[key, section.reference] as const] : [];
         }),
       ) as Partial<Record<MemorySectionKey, string>>;
+      // #118: the recall experience contract rides the same reference-is-
+      // content replay as the memory sections it governs.
+      const recallExperienceSection = source.sections.find(
+        (candidate) => candidate.key === "recall_experience",
+      );
       if (
         currentInputs.length !== 1 ||
         !currentInput ||
@@ -529,7 +537,8 @@ export function createContextCompiler(dependencies: {
         (safetyPostureSection && !safetyPostureSection.reference) ||
         MEMORY_SECTION_KEYS.some(
           (key) => memorySectionContents[key] === "",
-        )
+        ) ||
+        (recallExperienceSection && !recallExperienceSection.reference)
       ) {
         throw new CompiledContextIntegrityError();
       }
@@ -551,6 +560,9 @@ export function createContextCompiler(dependencies: {
           : {}),
         ...(safetyPostureSection?.reference
           ? { safetyPostureContent: safetyPostureSection.reference }
+          : {}),
+        ...(recallExperienceSection?.reference
+          ? { recallExperienceContent: recallExperienceSection.reference }
           : {}),
         memorySectionContents,
         rollingSummary: source.rollingSummary ?? null,
@@ -805,6 +817,7 @@ function createSections(input: {
       : []),
     ...renderCuriosityStopSignalSection(input),
     ...renderMemorySections(input),
+    ...renderRecallExperienceSection(input),
     {
       budgetTokens: input.rawEventTokenBudget,
       content: input.history
@@ -977,6 +990,62 @@ function renderMemorySections(input: {
     });
   }
   return sections;
+}
+
+/**
+ * The recall experience contract (issue #118, ADR-0116 / ADR-0117): present
+ * exactly when at least one memory section is present, so the opener
+ * permission and recall-language rules never speak for a turn memory did not
+ * participate in. On a fail-closed round with zero injection the section is
+ * absent and the response continues as if memory did not participate — the
+ * structural half of the double prohibition. `recallExperienceContent`
+ * replays the exact content frozen at compile time for the Provider Egress
+ * re-derivation (the section reference carries the full rendered content).
+ */
+function renderRecallExperienceSection(input: {
+  locale: string;
+  memorySections?:
+    | Readonly<Record<MemorySectionKey, readonly MemoryContextItem[]>>
+    | undefined;
+  memorySectionContents?: Partial<Record<MemorySectionKey, string>>;
+  recallExperienceContent?: string;
+}): readonly Readonly<{
+  budgetTokens: null;
+  content: string;
+  key: "recall_experience";
+  reference: string;
+  truncatable: false;
+}>[] {
+  if (input.recallExperienceContent !== undefined) {
+    return [
+      {
+        budgetTokens: null,
+        content: input.recallExperienceContent,
+        key: "recall_experience",
+        reference: input.recallExperienceContent,
+        truncatable: false,
+      },
+    ];
+  }
+  const anyMemorySection = MEMORY_SECTION_KEYS.some(
+    (key) => (input.memorySections?.[key]?.length ?? 0) > 0,
+  );
+  if (!anyMemorySection) {
+    return [];
+  }
+  const content = resolveRecallExperienceContract({
+    locale: input.locale,
+    version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+  });
+  return [
+    {
+      budgetTokens: null,
+      content,
+      key: "recall_experience",
+      reference: content,
+      truncatable: false,
+    },
+  ];
 }
 
 function renderDialogueState(state: CurrentDialogueState): string {
