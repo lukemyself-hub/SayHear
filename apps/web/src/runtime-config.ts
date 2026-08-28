@@ -262,6 +262,10 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_EVIDENCE_EXTRACTION_ENABLED",
     ),
+    memoryRetrievalEnabled: enabledSwitch(
+      environment,
+      "SAYHEAR_MEMORY_RETRIEVAL_ENABLED",
+    ),
     fastPathExtractionEnabled: enabledSwitch(
       environment,
       "SAYHEAR_FAST_PATH_EXTRACTION_ENABLED",

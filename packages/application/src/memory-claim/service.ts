@@ -35,6 +35,7 @@ import {
 } from "./types";
 import type { RelationshipResolverHintRecord } from "../relationship-resolver-hints";
 import type { ResolverHintLocale } from "../relationship-resolver-hints";
+import type { RetrievalProjectionMaterial } from "../memory-retrieval/types";
 
 /**
  * Memory Claim service (SPEC #107 "Claims and admission"): the write-side
@@ -204,6 +205,8 @@ export type MemoryClaimRepository = Readonly<{
     evidenceItemIds: readonly string[];
     lineage: MemoryCandidateProposal["lineage"];
     relationshipHints: RelationshipHintProjectionInputs | null;
+    /** #116: retrieval projection material; null leaves maintenance absent. */
+    retrievalProjection?: RetrievalProjectionMaterial | null;
     now: Date;
   }): Promise<Readonly<{
     memoryClaimId: MemoryClaimId;
@@ -236,6 +239,7 @@ export type MemoryClaimRepository = Readonly<{
     claimKind: "objective" | "impression";
     retractedVersionId: MemoryClaimVersionId;
     relationshipHints?: RelationshipHintProjectionInputs | null;
+    retrievalProjection?: RetrievalProjectionMaterial | null;
     now: Date;
   }): Promise<Readonly<{ claimVersionId: MemoryClaimVersionId }>>;
   /**
@@ -612,6 +616,7 @@ export function createMemoryClaimService(dependencies: {
             )
           : [];
       const relationshipHints = relationshipHintInputsFor(registry, registryEntry);
+      const retrievalProjection = retrievalProjectionInputsFor(registry, registryEntry);
 
       const plan = planClaimAdmission({
         proposal: candidateRecordToProposal(candidate, evidenceItemIds),
@@ -640,6 +645,7 @@ export function createMemoryClaimService(dependencies: {
           evidenceItemIds,
           lineage: candidateRecordToLineage(candidate),
           relationshipHints,
+          retrievalProjection,
           now,
         });
         await repository.transitionCandidate({
@@ -847,6 +853,9 @@ export function createMemoryClaimService(dependencies: {
         relationshipHints: reversalEntry
           ? relationshipHintInputsFor(registry, reversalEntry)
           : null,
+        retrievalProjection: reversalEntry
+          ? retrievalProjectionInputsFor(registry, reversalEntry)
+          : null,
         now,
       });
       return {
@@ -900,6 +909,22 @@ export function createMemoryClaimService(dependencies: {
       });
       return { rebuiltRows: executed.rebuiltRows };
     },
+  };
+}
+
+/**
+ * Registry material for retrieval projection planning, or null when the
+ * lookup does not expose localizations (narrow test doubles); projection
+ * maintenance then stays absent and the query-time fences hold.
+ */
+export function retrievalProjectionInputsFor(
+  registry: RegistryEntryLookup,
+  entry: NonNullable<ReturnType<RegistryEntryLookup["entryFor"]>>,
+): RetrievalProjectionMaterial | null {
+  if (!registry.predicateLocalizationsFor) return null;
+  return {
+    entry,
+    localizations: registry.predicateLocalizationsFor(entry.predicateId),
   };
 }
 

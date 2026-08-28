@@ -990,11 +990,12 @@ export class PostgresConversationResponseRepository
             content_hmac,
             integrity_algorithm,
             integrity_key_version,
+            retrieval_manifest,
             created_at
           )
           VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
-            $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17
+            $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17::jsonb, $18
           )
         `,
         [
@@ -1014,9 +1015,22 @@ export class PostgresConversationResponseRepository
           input.integrity.contentHmac,
           input.integrity.algorithm,
           input.integrity.keyVersion,
+          input.retrievalManifest === undefined || input.retrievalManifest === null
+            ? null
+            : JSON.stringify(input.retrievalManifest),
           input.now,
         ],
       );
+      // #116: the retrieval run row links to the compiled context at commit
+      // (retrieval_runs.compiled_context_id is nullable until this point).
+      if (input.retrievalRunId) {
+        await client.query(
+          `UPDATE retrieval_runs SET compiled_context_id = $3
+           WHERE user_id = $1 AND retrieval_run_id = $2
+             AND compiled_context_id IS NULL`,
+          [input.userId, input.retrievalRunId, compiledContextId],
+        );
+      }
       for (const [ordinal, event] of input.referencedEvents.entries()) {
         await client.query(
           `

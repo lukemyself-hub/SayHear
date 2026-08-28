@@ -34,6 +34,10 @@ import type {
   ActionReferenceTarget,
 } from "./conversation-action-catalog";
 import type {
+  MemoryRetrievalPort,
+  RetrievalRunManifest,
+} from "./memory-retrieval/types";
+import type {
   ConversationActionAdmission,
   ConversationActionExecution,
 } from "./conversation-action-gateway";
@@ -101,6 +105,7 @@ export type CompiledContextDegradedReason =
   | "dialogue_state_failed"
   | "dialogue_state_lagging"
   | "rolling_summary_failed"
+  | "memory_retrieval_failed"
   | "fast_path_pending"
   | null;
 
@@ -146,6 +151,16 @@ export type CompiledContext = Readonly<{
   dialogueRevision: number;
   id: CompiledContextId;
   locale: string;
+  /**
+   * #116: the Structured-Lexical retrieval run behind this compile. Absent
+   * when retrieval is not wired (no port configured). A degraded run still
+   * carries its manifest — detailed codes live on the retrieval run row.
+   */
+  retrieval?: Readonly<{
+    degraded: boolean;
+    manifest: RetrievalRunManifest;
+    retrievalRunId: string | null;
+  }>;
   referencedRevisionIds: readonly ConversationEventRevisionId[];
   sourceRevision: number;
   statistics: Readonly<{
@@ -208,6 +223,8 @@ export type ContextCompilerRepository = Readonly<{
     locale: string;
     now: Date;
     policyVersions: ContextPolicyVersions;
+    retrievalManifest?: RetrievalRunManifest | null;
+    retrievalRunId?: string | null;
     rollingSummary: CurrentRollingSummary | null;
     referencedEvents: readonly CompiledContextReferencedEvent[];
     sectionBudgets: Readonly<{ committedRawEvents: number }>;
@@ -243,6 +260,8 @@ export function createContextCompiler(dependencies: {
   contentHmacSecret: string;
   rawEventTokenBudget: number;
   repository: ContextCompilerRepository;
+  /** #116: optional until composition enables the retrieval baseline. */
+  memoryRetrieval?: MemoryRetrievalPort;
 }): ContextCompiler {
   const integrityKeyVersion =
     dependencies.contentHmacKeyVersion ?? "context-integrity:v1";
@@ -274,6 +293,28 @@ export function createContextCompiler(dependencies: {
         (source.dialogueState !== undefined &&
           source.dialogueState !== null &&
           dialogueState === null);
+
+      // #116: the Structured-Lexical retrieval run shares this compile. Its
+      // one versioned deadline covers query construction, lanes, ranking,
+      // and fences; a degraded run closes the round's memory (no partial
+      // injection, no reuse of a previous turn's cache) and the conversation
+      // continues without memory (ADR-0111).
+      const retrievalOutcome = dependencies.memoryRetrieval
+        ? await dependencies.memoryRetrieval.run({
+            userId: input.userId,
+            dailySession: {
+              id: source.dailySession.id,
+              continuousExchangeNo: source.dailySession.continuousExchangeNo,
+            },
+            sourceEventRevisionId: source.inputRevisionId,
+            currentInputText: currentInput.text,
+            // Only a source-valid current topic may feed the query (story 44):
+            // a stale / failed / invalidated projection yields null.
+            currentTopic: dialogueState?.content.current_topic.value ?? null,
+            dialogueRevision: source.dialogueRevision,
+            currentInputSequence: currentInput.sequence,
+          })
+        : null;
 
       const historyNewestFirst = source.events
         .filter((event) => {
@@ -347,9 +388,11 @@ export function createContextCompiler(dependencies: {
             ? "rolling_summary_failed"
             : selectedHistory.length < historyNewestFirst.length
               ? "raw_event_budget_exceeded"
-              : source.fastPathPending === true
-                ? "fast_path_pending"
-                : null;
+              : retrievalOutcome?.status === "degraded"
+                ? "memory_retrieval_failed"
+                : source.fastPathPending === true
+                  ? "fast_path_pending"
+                  : null;
       const contentHmac = createManifestContentHmac(
         dependencies.contentHmacSecret,
         sections,
@@ -365,7 +408,7 @@ export function createContextCompiler(dependencies: {
         }),
       );
 
-      return dependencies.repository.saveCompiledContext({
+      const compiled = await dependencies.repository.saveCompiledContext({
         ...(actionReferenceHandles.length === 0
           ? {}
           : { actionReferenceHandles }),
@@ -381,16 +424,31 @@ export function createContextCompiler(dependencies: {
         locale: source.locale,
         now: dependencies.clock(),
         policyVersions: source.policyVersions,
+        ...(retrievalOutcome
+          ? {
+              retrievalManifest: retrievalOutcome.manifest,
+              retrievalRunId: retrievalOutcome.retrievalRunId,
+            }
+          : {}),
         rollingSummary: source.rollingSummary ?? null,
         referencedEvents,
         sectionBudgets: {
           committedRawEvents: dependencies.rawEventTokenBudget,
         },
-          sections,
-          sourceRevision: source.sourceRevision,
-          totalTokens,
-          userId: input.userId,
+        sections,
+        sourceRevision: source.sourceRevision,
+        totalTokens,
+        userId: input.userId,
       });
+      if (!retrievalOutcome) return compiled;
+      return {
+        ...compiled,
+        retrieval: {
+          degraded: retrievalOutcome.status === "degraded",
+          manifest: retrievalOutcome.manifest,
+          retrievalRunId: retrievalOutcome.retrievalRunId,
+        },
+      };
     },
     renderPermittedPayload(source) {
       assertSupportedPolicyVersions(source.policyVersions);

@@ -1,4 +1,5 @@
 import {
+  createMemoryRetrievalService,
   createInternalOwnerAccessService,
   createInternalInspectionService,
   createConversationAgentHarness,
@@ -51,6 +52,7 @@ import {
   PostgresEntityRepository,
   PostgresFastPathExtractionRepository,
   PostgresMemoryConsolidationRepository,
+  PostgresMemoryRetrievalRepository,
   PostgresJournalRepository,
   PostgresOutboxDispatcherRepository,
   PostgresOwnerPurgeRepository,
@@ -382,12 +384,28 @@ export function createServerComposition() {
     recoveryGate,
     repository: conversationRepository,
   });
+  // #116: the Structured-Lexical retrieval baseline. The registry material
+  // is the same released snapshot the admission path pins; the port is wired
+  // into the Context Compiler only when the write switch enables the
+  // baseline, so a disabled deployment compiles exactly as before.
+  const memoryRetrievalPort = configuration.writeSwitches.memoryRetrievalEnabled
+    ? createMemoryRetrievalService({
+        repository: new PostgresMemoryRetrievalRepository(pool),
+        registry: {
+          registryVersion: predicateRegistrySnapshot.registryVersion,
+          entryFor: predicateRegistryLookup.entryFor,
+          localizations: predicateRegistrySnapshot.localizations,
+        },
+        clock: configuration.clock,
+      })
+    : undefined;
   const contextCompiler = createContextCompiler({
     clock: configuration.clock,
     compilerVersion: "context-compiler:v1",
     contentHmacSecret: configuration.contextHmacSecret,
     rawEventTokenBudget: 4_000,
     repository: responseRepository,
+    ...(memoryRetrievalPort ? { memoryRetrieval: memoryRetrievalPort } : {}),
   });
   const egressPort = createRuntimeProviderEgressPort({
     adapter:
