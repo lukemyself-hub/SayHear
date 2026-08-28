@@ -975,10 +975,15 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
         [input.userId, input.claimId],
       );
       // #116: the retrieval projection goes with the same fence — forgotten
-      // content never reappears through retrieval.
+      // content never reappears through retrieval. Fence teardown is the
+      // sanctioned active -> deleted lifecycle transition (projection freeze
+      // trigger): the row stays for the observation ledger's foreign key
+      // (retrieval_run_candidates is immutable) while all three lanes read
+      // only status='active', so recall still stops structurally. Physical
+      // deletion remains the purge face's job (#99/#123).
       await client.query(
-        `DELETE FROM claim_retrieval_projections
-         WHERE user_id = $1 AND memory_claim_id = $2`,
+        `UPDATE claim_retrieval_projections SET status = 'deleted'
+         WHERE user_id = $1 AND memory_claim_id = $2 AND status <> 'deleted'`,
         [input.userId, input.claimId],
       );
 

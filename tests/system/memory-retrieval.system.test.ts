@@ -863,9 +863,12 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
       requestEventRevisionId: await submitTurn("忘掉小王的事。"),
     });
     expect(forget.outcome).toBe("applied");
+    // Fence teardown is the active -> deleted lifecycle: no projection
+    // participates in recall any more (the row itself stays for the immutable
+    // retrieval observation ledger; physical deletion is the purge face).
     const projections = await database.pool.query(
       `SELECT COUNT(*)::int AS count FROM claim_retrieval_projections
-       WHERE memory_claim_id = $1`,
+       WHERE memory_claim_id = $1 AND status = 'active'`,
       [claimId],
     );
     expect(projections.rows[0]!.count).toBe(0);
