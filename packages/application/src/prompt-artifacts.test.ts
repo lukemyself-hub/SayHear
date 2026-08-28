@@ -14,7 +14,9 @@ import {
   PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PromptArtifactResolutionError,
   resolvePromptArtifacts,
+  resolveRecallExperienceContract,
   resolveSafetyPostureReducedPersona,
+  RECALL_EXPERIENCE_CONTRACT_VERSION,
   SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
 } from "./prompt-artifacts";
 
@@ -336,6 +338,135 @@ describe("safety posture reduced persona variant", () => {
   it("fails closed when the reduced variant version cannot be resolved", () => {
     expect(() =>
       resolveSafetyPostureReducedPersona("safety-posture-reduced-persona:vMissing"),
+    ).toThrow(PromptArtifactResolutionError);
+  });
+});
+
+describe("recall experience contract (issue #118, ADR-0116 / ADR-0117)", () => {
+  it("carries the version identity in its own rendered content", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(en).toContain(RECALL_EXPERIENCE_CONTRACT_VERSION);
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain(RECALL_EXPERIENCE_CONTRACT_VERSION);
+    expect(en).not.toBe(zh);
+  });
+
+  it("grants the narrow opener permission with no ritual hedge (ADR-0117 / ADR-0116)", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(en).toContain("opening");
+    expect(en.toLowerCase()).toContain("based on our past conversations");
+    expect(en.toLowerCase()).toContain("i have an impression");
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain("开场");
+    expect(zh).toContain("根据我们以前的对话");
+    expect(zh).toContain("我有一个印象");
+  });
+
+  it("demands explicitly recognizable recall, not vague hints", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(en.toLowerCase()).toContain("recognizable");
+    expect(en.toLowerCase()).toContain("vague");
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain("含糊");
+  });
+
+  it("keeps the two-kind recall language distinct (ADR-0009)", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    // Objective: source attribution allowed, verification never implied.
+    expect(en.toLowerCase()).toContain("you mentioned");
+    expect(en.toLowerCase()).toContain("independently verified");
+    // Impression: natural and confident, never upgraded, never a global
+    // trait, never a frozen temporary state, never a diagnostic label.
+    expect(en.toLowerCase()).toContain("never upgrade");
+    expect(en.toLowerCase()).toContain("global trait");
+    expect(en.toLowerCase()).toContain("temporary state");
+    expect(en.toLowerCase()).toContain("diagnostic");
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain("你之前说过");
+    expect(zh).toContain("独立核验");
+    expect(zh).toContain("升级");
+    expect(zh).toContain("永久标签");
+    expect(zh).toContain("暂时的状态");
+    expect(zh).toContain("诊断式");
+  });
+
+  it("holds the grounding guard: only the injected sections may be referenced", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(en).toContain("no memory section");
+    expect(en.toLowerCase()).toContain("fabricat");
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain("没有任何记忆 section");
+    expect(zh).toContain("编造");
+  });
+
+  it("keeps the fail-closed double prohibition and the ADR-0008 challenge rule", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(en.toLowerCase()).toContain("internal fault");
+    expect(en.toLowerCase()).toContain("cannot verify");
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain("内部故障");
+    expect(zh).toContain("无法核实");
+  });
+
+  it("puts a memory follow-up question inside the one-question slot and suppresses stopped directions", () => {
+    const en = resolveRecallExperienceContract({
+      locale: "en-US",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(en.toLowerCase()).toContain("one question");
+    expect(en.toLowerCase()).toContain("statement");
+    expect(en.toLowerCase()).toContain("reopen");
+    const zh = resolveRecallExperienceContract({
+      locale: "zh-CN",
+      version: RECALL_EXPERIENCE_CONTRACT_VERSION,
+    });
+    expect(zh).toContain("唯一的问题");
+    expect(zh).toContain("陈述式");
+    expect(zh).toContain("重开");
+  });
+
+  it("fails closed when the contract version cannot be resolved", () => {
+    expect(() =>
+      resolveRecallExperienceContract({
+        locale: "en-US",
+        version: "recall-experience-contract:vMissing",
+      }),
     ).toThrow(PromptArtifactResolutionError);
   });
 });

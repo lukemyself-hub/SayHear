@@ -133,6 +133,13 @@ export function sectionVersionLabel(
         section.reference.match(/\[(portrait-selection:[^\]]+)\]/)?.[1] ??
         "memory-selection:unavailable"
       );
+    case "recall_experience":
+      // #118: the recall experience contract version sits in the rendered
+      // content ("[recall-experience-contract:v1]").
+      return (
+        section.reference.match(/\[(recall-experience-contract:[^\]]+)\]/)
+          ?.[1] ?? "recall-experience:unavailable"
+      );
     case "rolling_summary":
       return (
         referenceValue(section.reference, ":policy:", ":prompt:") ??

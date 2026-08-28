@@ -15,7 +15,10 @@ import {
   type ContextPolicyVersions,
   type ContextSourceSnapshot,
 } from "./context-compiler";
-import { PromptArtifactResolutionError } from "./prompt-artifacts";
+import {
+  PromptArtifactResolutionError,
+  RECALL_EXPERIENCE_CONTRACT_VERSION,
+} from "./prompt-artifacts";
 
 describe("Context Compiler", () => {
   it("uses a valid lagging DialogueState and only sends raw Events after its coverage", async () => {
@@ -1281,7 +1284,56 @@ describe("Context Compiler — memory sections (#117)", () => {
     expect(payload.instructions).toContain("objective_memory");
   });
 
-  it("omits every memory section and records the degraded reason when the run degraded", async () => {
+  it("emits the recall experience contract exactly when memory sections are present (#118)", async () => {
+    const { compiler, saved } = createCompilerWithMemory(
+      completedOutcomeWithItems(),
+    );
+    await compiler.compile({
+      generationCommandId: asGenerationCommandId(
+        "01984477-59a9-7d20-9d97-e588769566c4",
+      ),
+      interactionTurnId: asInteractionTurnId(
+        "01984477-59a9-7d20-9d97-e588769566c5",
+      ),
+      userId,
+    });
+    const input = saved();
+    const keys = input.sections.map((section) => section.key);
+    expect(keys).toContain("recall_experience");
+    // The contract sits with the memory sections, before the raw Events.
+    expect(keys.indexOf("recall_experience")).toBeGreaterThan(
+      keys.indexOf("person_portrait"),
+    );
+    expect(keys.indexOf("recall_experience")).toBeLessThan(
+      keys.indexOf("committed_raw_events"),
+    );
+    const contract = input.sections.find(
+      (section) => section.key === "recall_experience",
+    );
+    // The section reference carries the full rendered content (the frozen
+    // replay needs no second persisted copy) with the artifact version in it.
+    // The factory's source locale is zh, so the zh contract renders.
+    expect(contract?.reference).toContain(RECALL_EXPERIENCE_CONTRACT_VERSION);
+    expect(contract?.reference).toContain("开场许可");
+
+    // The egress payload replays the exact frozen contract and its integrity
+    // holds.
+    const payload = compiler.renderPermittedPayload({
+      compilerVersion: input.compilerVersion,
+      generationStage: "decision",
+      integrity: input.integrity,
+      locale: input.locale,
+      policyVersions: input.policyVersions,
+      referencedEvents: input.referencedEvents,
+      sections: input.sections,
+      totalTokens: input.totalTokens,
+    });
+    expect(payload.instructions).toContain(RECALL_EXPERIENCE_CONTRACT_VERSION);
+    expect(payload.instructions).toContain("开场许可");
+    expect(payload.instructions).toContain("零规则");
+  });
+
+  it("emits no recall experience section when the run degraded", async () => {
     const degraded = {
       ...completedOutcomeWithItems(),
       status: "degraded" as const,
@@ -1308,7 +1360,9 @@ describe("Context Compiler — memory sections (#117)", () => {
     expect(keys).not.toContain("person_portrait");
     expect(keys).not.toContain("objective_memory");
     expect(keys).not.toContain("ai_impression");
-    // The prompt payload carries no memory content at all.
+    // No memory sections means no contract: the fail-closed round speaks as
+    // if memory did not participate, and the prompt carries none of it.
+    expect(keys).not.toContain("recall_experience");
     const payload = compiler.renderPermittedPayload({
       compilerVersion: input.compilerVersion,
       generationStage: "decision",
@@ -1320,9 +1374,12 @@ describe("Context Compiler — memory sections (#117)", () => {
       totalTokens: input.totalTokens,
     });
     expect(payload.instructions).not.toContain("shh-memory-1");
+    expect(payload.instructions).not.toContain(
+      RECALL_EXPERIENCE_CONTRACT_VERSION,
+    );
   });
 
-  it("omits memory sections entirely when a completed run selected nothing", async () => {
+  it("emits no recall experience section when a completed run selected nothing", async () => {
     const empty = {
       ...completedOutcomeWithItems(),
       memorySections: {
@@ -1346,5 +1403,6 @@ describe("Context Compiler — memory sections (#117)", () => {
     expect(keys).not.toContain("person_portrait");
     expect(keys).not.toContain("objective_memory");
     expect(keys).not.toContain("ai_impression");
+    expect(keys).not.toContain("recall_experience");
   });
 });
