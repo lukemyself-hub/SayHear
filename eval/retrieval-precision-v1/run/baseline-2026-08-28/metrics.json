@@ -15,8 +15,8 @@
   "fenceLeakCount": 0,
   "budgetViolationCount": 0,
   "deadlineViolationCount": 0,
-  "durationP50Ms": 9,
-  "durationP95Ms": 15,
+  "durationP50Ms": 8,
+  "durationP95Ms": 13,
   "deadlineMs": 200,
-  "wallClockMs": 1535
+  "wallClockMs": 1475
 }

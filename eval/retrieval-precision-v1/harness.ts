@@ -17,6 +17,7 @@ import {
   type MemoryRetrievalRunOutcome,
 } from "@sayhear/application";
 import {
+  createUuidV7,
   PostgresContinuousExchangeRepository,
   PostgresEntityRepository,
   PostgresInternalOwnerAccessRepository,
@@ -73,12 +74,11 @@ const OWNER = fixedInternalOwnerPrincipal.userId;
 
 const registrySnapshot = loadPredicateRegistrySnapshot(1);
 
+const registryEntryFor = (predicateId: string) =>
+  registrySnapshot.entries.find((entry) => entry.predicateId === predicateId) ?? null;
+
 const claimRegistry = {
-  entryFor(predicateId: string) {
-    return (
-      registrySnapshot.entries.find((entry) => entry.predicateId === predicateId) ?? null
-    );
-  },
+  entryFor: registryEntryFor,
   registryVersion: () => registrySnapshot.registryVersion,
   relationshipProjectionsFor(predicateId: string) {
     return registrySnapshot.relationshipProjections.filter(
@@ -94,11 +94,7 @@ const claimRegistry = {
 
 const retrievalRegistry = {
   registryVersion: registrySnapshot.registryVersion,
-  entryFor(predicateId: string) {
-    return (
-      registrySnapshot.entries.find((entry) => entry.predicateId === predicateId) ?? null
-    );
-  },
+  entryFor: registryEntryFor,
   localizations: registrySnapshot.localizations,
 };
 
@@ -128,25 +124,13 @@ const SESSION_OFFSET_MS = [0, 41_400_000] as const; // 09:00 and 20:30 China Sta
 const TURN_SPACING_MS = 180_000;
 const DORMANCY_DAY_OFFSET = 44; // past the 30-day impression review deadline
 
-/** Opaque UUIDv7 generator for fixture rows (domain ID guards reject v4 UUIDs). */
-function createUuidV7(now: Date): string {
-  const bytes = randomBytes(16);
-  let timestamp = now.getTime();
-  for (let index = 5; index >= 0; index -= 1) {
-    bytes[index] = Number(timestamp & 0xff);
-    timestamp = Math.floor(timestamp / 256);
-  }
-  bytes[6] = (bytes[6]! & 0x0f) | 0x70;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = Buffer.from(bytes).toString("hex");
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20),
-  ].join("-");
-}
+/** One committed conversation turn, as the retrieval input needs it. */
+type SubmittedTurn = Readonly<{
+  revisionId: string;
+  sequence: number;
+  dailySessionId: string;
+  exchangeNo: number;
+}>;
 
 export type CorpusHarnessResult = Readonly<{
   corpus: PrecisionCorpus;
@@ -164,10 +148,8 @@ export type CorpusHarnessResult = Readonly<{
 export async function runRetrievalPrecisionCorpus(input: {
   pool: Pool;
   log?: (line: string) => void;
-  /** Default true: force the dormancy fence probe past the review deadline. */
-  includeDormancyPhase?: boolean;
 }): Promise<CorpusHarnessResult> {
-  const { pool, log = () => {}, includeDormancyPhase = true } = input;
+  const { pool, log = () => {} } = input;
   const corpus = buildCorpus();
   const baseTime = Date.parse(CORPUS_BASE_TIME_UTC);
   let clockNowMs = baseTime;
@@ -244,12 +226,7 @@ export async function runRetrievalPrecisionCorpus(input: {
   const plantedByCorpusClaimId = new Map<string, { memoryClaimId: string; currentVersionId: string }>();
   const runs: QueryRunRecord[] = [];
 
-  async function submitTurn(text: string): Promise<{
-    revisionId: string;
-    sequence: number;
-    dailySessionId: string;
-    exchangeNo: number;
-  }> {
+  async function submitTurn(text: string): Promise<SubmittedTurn> {
     submitCount += 1;
     const turn = await conversationService.submit(OWNER, {
       clientEventId: `corpus-event-${submitCount}`,
@@ -271,10 +248,7 @@ export async function runRetrievalPrecisionCorpus(input: {
   }
 
   /** Seed one whole-revision User EvidenceItem, the shape the fast path writes. */
-  async function seedEvidence(submitted: {
-    revisionId: string;
-    dailySessionId: string;
-  }): Promise<string> {
+  async function seedEvidence(submitted: SubmittedTurn): Promise<string> {
     const now = clock();
     const snapshotId = createUuidV7(now);
     const itemId = createUuidV7(now);
@@ -470,7 +444,7 @@ export async function runRetrievalPrecisionCorpus(input: {
   async function runQuery(
     query: QuerySpec,
     turn: CorpusTurnSpec,
-    submitted: { revisionId: string; sequence: number; dailySessionId: string; exchangeNo: number },
+    submitted: SubmittedTurn,
   ): Promise<void> {
     const outcome: MemoryRetrievalRunOutcome = await retrievalService.run({
       userId: OWNER,
@@ -611,7 +585,17 @@ export async function runRetrievalPrecisionCorpus(input: {
   }
 
   // ── dormancy fence probe (ADR-0041): force the review deadline, then probe ─
-  if (includeDormancyPhase) {
+  const dormancyTurn: CorpusTurnSpec = {
+    turnId: "post-dormancy",
+    day: DORMANCY_DAY_OFFSET + 1,
+    session: 0,
+    slot: 0,
+    locale: POST_DORMANCY_QUERY.locale,
+    text: POST_DORMANCY_QUERY.text,
+    role: "query",
+    query: POST_DORMANCY_QUERY,
+  };
+  {
     clockNowMs = baseTime + DORMANCY_DAY_OFFSET * 86_400_000;
     const dormancyClaim = plantedByCorpusClaimId.get(DORMANCY_PROBE_CLAIM_ID);
     if (!dormancyClaim) throw new Error("dormancy probe claim was never planted.");
@@ -623,41 +607,13 @@ export async function runRetrievalPrecisionCorpus(input: {
       throw new Error(`dormancy probe did not go dormant (${dormancy.outcome}).`);
     }
     await refreshCurrentVersion(DORMANCY_PROBE_CLAIM_ID);
-    const dormancyTurn: CorpusTurnSpec = {
-      turnId: "post-dormancy",
-      day: DORMANCY_DAY_OFFSET + 1,
-      session: 0,
-      slot: 0,
-      locale: POST_DORMANCY_QUERY.locale,
-      text: POST_DORMANCY_QUERY.text,
-      role: "query",
-      query: POST_DORMANCY_QUERY,
-    };
     const submitted = await submitTurn(POST_DORMANCY_QUERY.text);
     await runQuery(POST_DORMANCY_QUERY, dormancyTurn, submitted);
   }
 
   // ── accounting ────────────────────────────────────────────────────────────
-  const evaluationCorpus: PrecisionCorpus = includeDormancyPhase
-    ? {
-        ...corpus,
-        turns: [
-          ...corpus.turns,
-          {
-            turnId: "post-dormancy",
-            day: DORMANCY_DAY_OFFSET + 1,
-            session: 0,
-            slot: 0,
-            locale: POST_DORMANCY_QUERY.locale,
-            text: POST_DORMANCY_QUERY.text,
-            role: "query",
-            query: POST_DORMANCY_QUERY,
-          },
-        ],
-      }
-    : corpus;
   const { ledger, metrics } = evaluateQueryRuns({
-    corpus: evaluationCorpus,
+    corpus: { ...corpus, turns: [...corpus.turns, dormancyTurn] },
     claimIdByVersionId,
     runs,
   });

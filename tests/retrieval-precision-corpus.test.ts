@@ -72,7 +72,7 @@ describe("retrieval-precision corpus definition (#125, AC 38)", () => {
     expect(distractors.length).toBeGreaterThanOrEqual(planted.length);
 
     const categories = new Set(planted.map((claim) => claim.category));
-    expect(categories.has("objective_fact")).toBe(true);
+    expect(categories.has("objective_memory")).toBe(true);
     expect(categories.has("relationship")).toBe(true);
     expect(categories.has("impression")).toBe(true);
     expect(planted.filter((claim) => claim.supersedesClaimId !== undefined).length).toBeGreaterThanOrEqual(3);
@@ -281,7 +281,7 @@ function tinyCorpus(): PrecisionCorpus {
   return {
     ...corpus,
     claims: [
-      { claimId: "claim-a", category: "objective_fact", kind: "objective", predicateId: "p.a" },
+      { claimId: "claim-a", category: "objective_memory", kind: "objective", predicateId: "p.a" },
       { claimId: "claim-b", category: "relationship", kind: "objective", predicateId: "p.b", personId: "wang" },
       { claimId: "claim-distractor", category: "distractor", kind: "objective", predicateId: "p.c", personId: "wang2" },
     ],

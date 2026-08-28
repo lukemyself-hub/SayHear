@@ -10,16 +10,16 @@
       "emp-blue"
     ],
     "expectedVersionIds": [
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "qualifiedVersionIds": [
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a05a7a-ea80-7fad-a39a-48af185d8103",
-        "01a0621e-7b80-7980-9f77-03b88dbc0e07",
-        "01a05fa1-4680-701d-a3ad-19917e2e8dd2"
+        "01a05a7a-ea80-7e19-a318-27da5aaefb7d",
+        "01a0621e-7b80-79dd-b054-292e9839549b",
+        "01a05fa1-4680-7287-82f9-135f0802a619"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -32,7 +32,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 1,
@@ -51,16 +51,16 @@
       "role-be"
     ],
     "expectedVersionIds": [
-      "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4"
+      "01a05a7a-ea80-718c-9059-07830416c605"
     ],
     "qualifiedVersionIds": [
-      "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4"
+      "01a05a7a-ea80-718c-9059-07830416c605"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4",
-        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
-        "01a0621e-7b80-7980-9f77-03b88dbc0e07"
+        "01a05a7a-ea80-718c-9059-07830416c605",
+        "01a064cd-20c0-7163-98b4-0f4d3fd088b2",
+        "01a0621e-7b80-79dd-b054-292e9839549b"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -92,17 +92,17 @@
       "family-single"
     ],
     "expectedVersionIds": [
-      "01a0621e-7b80-7980-9f77-03b88dbc0e07"
+      "01a0621e-7b80-79dd-b054-292e9839549b"
     ],
     "qualifiedVersionIds": [
-      "01a0621e-7b80-7980-9f77-03b88dbc0e07",
-      "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4"
+      "01a0621e-7b80-79dd-b054-292e9839549b",
+      "01a05a7a-ea80-718c-9059-07830416c605"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a0621e-7b80-7980-9f77-03b88dbc0e07",
-        "01a05a7a-ea80-7a57-bdd7-e4d87194d7a4",
-        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+        "01a0621e-7b80-79dd-b054-292e9839549b",
+        "01a05a7a-ea80-718c-9059-07830416c605",
+        "01a064cd-20c0-7163-98b4-0f4d3fd088b2"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -115,7 +115,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 6,
+    "durationMs": 5,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 2,
@@ -134,16 +134,16 @@
       "res-hz"
     ],
     "expectedVersionIds": [
-      "01a05a80-68c0-743f-a49f-28de5e80cdf2"
+      "01a05a80-68c0-7986-9e2a-09901c4803a8"
     ],
     "qualifiedVersionIds": [
-      "01a05a80-68c0-743f-a49f-28de5e80cdf2"
+      "01a05a80-68c0-7986-9e2a-09901c4803a8"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a05a80-68c0-743f-a49f-28de5e80cdf2",
-        "01a069fe-7940-772c-be29-b0697899090d",
-        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+        "01a05a80-68c0-7986-9e2a-09901c4803a8",
+        "01a069fe-7940-7d2d-9479-01a7b094a086",
+        "01a064cd-20c0-7163-98b4-0f4d3fd088b2"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -175,26 +175,26 @@
       "home-mianyang"
     ],
     "expectedVersionIds": [
-      "01a05fa1-4680-701d-a3ad-19917e2e8dd2"
+      "01a05fa1-4680-7287-82f9-135f0802a619"
     ],
     "qualifiedVersionIds": [
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05fa1-4680-7287-82f9-135f0802a619",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
-        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-        "01a06a03-f780-7065-b095-f663da1c4bed"
+        "01a05fa1-4680-7287-82f9-135f0802a619",
+        "01a06c7b-ae40-716d-ba47-686913e47302",
+        "01a06a03-f780-7218-a355-c40fcd520f8d"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -207,7 +207,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 7,
+    "durationMs": 6,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 11,
@@ -226,43 +226,43 @@
       "rel-colleague-zhou"
     ],
     "expectedVersionIds": [
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1"
+      "01a064d2-9f00-7251-8732-6e2d00c5f754"
     ],
     "qualifiedVersionIds": [
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05fa1-4680-7287-82f9-135f0802a619",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a05fa1-4680-701d-a3ad-19917e2e8dd2",
-        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-        "01a06a03-f780-7065-b095-f663da1c4bed"
+        "01a05fa1-4680-7287-82f9-135f0802a619",
+        "01a06c7b-ae40-716d-ba47-686913e47302",
+        "01a06a03-f780-7218-a355-c40fcd520f8d"
       ],
       "objective_memory": [
-        "01a064d2-9f00-7630-8ffe-cc390a7584d1"
+        "01a064d2-9f00-7251-8732-6e2d00c5f754"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1"
+      "01a064d2-9f00-7251-8732-6e2d00c5f754"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 11,
@@ -281,42 +281,42 @@
       "rel-roommate-zhe"
     ],
     "expectedVersionIds": [
-      "01a06223-f9c0-780a-bbe2-98ea41746d87"
+      "01a06223-f9c0-7141-a81b-da8ead9a4368"
     ],
     "qualifiedVersionIds": [
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06223-f9c0-780a-bbe2-98ea41746d87",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06c76-3000-7654-997f-d224f86e9880",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06223-f9c0-7141-a81b-da8ead9a4368",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-        "01a06c76-3000-7654-997f-d224f86e9880",
-        "01a06a03-f780-7065-b095-f663da1c4bed"
+        "01a06c7b-ae40-716d-ba47-686913e47302",
+        "01a06c76-3000-7c65-8859-b1a1f7041b81",
+        "01a06a03-f780-7218-a355-c40fcd520f8d"
       ],
       "objective_memory": [
-        "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-        "01a06223-f9c0-780a-bbe2-98ea41746d87"
+        "01a064d2-9f00-7251-8732-6e2d00c5f754",
+        "01a06223-f9c0-7141-a81b-da8ead9a4368"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a06223-f9c0-780a-bbe2-98ea41746d87"
+      "01a06223-f9c0-7141-a81b-da8ead9a4368"
     ],
     "falsePositives": [
       {
-        "versionId": "01a064d2-9f00-7630-8ffe-cc390a7584d1",
+        "versionId": "01a064d2-9f00-7251-8732-6e2d00c5f754",
         "classification": "planted_other"
       }
     ],
@@ -324,7 +324,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 8,
+    "durationMs": 7,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 12,
@@ -343,18 +343,18 @@
       "emp-blue"
     ],
     "expectedVersionIds": [
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "qualifiedVersionIds": [
-      "01a06223-f9c0-780a-bbe2-98ea41746d87",
-      "01a06c76-3000-7654-997f-d224f86e9880",
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a06223-f9c0-7141-a81b-da8ead9a4368",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81",
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a06c76-3000-7654-997f-d224f86e9880",
-        "01a06223-f9c0-780a-bbe2-98ea41746d87",
-        "01a05a7a-ea80-7fad-a39a-48af185d8103"
+        "01a06c76-3000-7c65-8859-b1a1f7041b81",
+        "01a06223-f9c0-7141-a81b-da8ead9a4368",
+        "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -386,42 +386,42 @@
       "rel-colleague-wang"
     ],
     "expectedVersionIds": [
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "qualifiedVersionIds": [
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f"
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-        "01a06a03-f780-7065-b095-f663da1c4bed",
-        "01a0674a-55c0-7253-a896-e4c28e54b083"
+        "01a06c7b-ae40-716d-ba47-686913e47302",
+        "01a06a03-f780-7218-a355-c40fcd520f8d",
+        "01a0674a-55c0-7826-9463-0ceee38e23ce"
       ],
       "objective_memory": [
-        "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+        "01a05cf2-a140-7050-b28b-ccf55e0374d9"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 7,
+    "durationMs": 6,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 10,
@@ -440,41 +440,41 @@
       "wp-binjiang"
     ],
     "expectedVersionIds": [
-      "01a06218-fd40-78a7-a4bb-d33ea174f204"
+      "01a06218-fd40-787e-955f-73dd5b4671a5"
     ],
     "qualifiedVersionIds": [
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a06218-fd40-78a7-a4bb-d33ea174f204",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f"
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a06218-fd40-787e-955f-73dd5b4671a5",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-        "01a06a03-f780-7065-b095-f663da1c4bed",
-        "01a0674a-55c0-7253-a896-e4c28e54b083"
+        "01a06c7b-ae40-716d-ba47-686913e47302",
+        "01a06a03-f780-7218-a355-c40fcd520f8d",
+        "01a0674a-55c0-7826-9463-0ceee38e23ce"
       ],
       "objective_memory": [
-        "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
-        "01a06218-fd40-78a7-a4bb-d33ea174f204"
+        "01a05cf2-a140-7050-b28b-ccf55e0374d9",
+        "01a06218-fd40-787e-955f-73dd5b4671a5"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a06218-fd40-78a7-a4bb-d33ea174f204"
+      "01a06218-fd40-787e-955f-73dd5b4671a5"
     ],
     "falsePositives": [
       {
-        "versionId": "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
+        "versionId": "01a05cf2-a140-7050-b28b-ccf55e0374d9",
         "classification": "planted_other"
       }
     ],
@@ -482,7 +482,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 7,
+    "durationMs": 6,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 11,
@@ -501,16 +501,16 @@
       "career-employed"
     ],
     "expectedVersionIds": [
-      "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+      "01a064cd-20c0-7163-98b4-0f4d3fd088b2"
     ],
     "qualifiedVersionIds": [
-      "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8"
+      "01a064cd-20c0-7163-98b4-0f4d3fd088b2"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
-        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
-        "01a069fe-7940-772c-be29-b0697899090d"
+        "01a064cd-20c0-7163-98b4-0f4d3fd088b2",
+        "01a06f2a-5380-7b6c-98cb-8064e8950bff",
+        "01a069fe-7940-7d2d-9479-01a7b094a086"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -542,38 +542,38 @@
       "rel-friend-lin"
     ],
     "expectedVersionIds": [
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8"
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689"
     ],
     "qualifiedVersionIds": [
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a064cd-20c0-7163-98b4-0f4d3fd088b2",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a064cd-20c0-7c2a-98e0-9cf0e146d8a8",
-        "01a06f32-90e0-76d8-af3c-e225c203af91",
-        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+        "01a064cd-20c0-7163-98b4-0f4d3fd088b2",
+        "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+        "01a06f2f-d1c0-7a32-86a9-a4b35f21c078"
       ],
       "objective_memory": [
-        "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8"
+        "01a05fa6-c4c0-78f1-a3de-58f485ada689"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8"
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689"
     ],
     "falsePositives": [],
     "fenceLeak": false,
@@ -600,47 +600,47 @@
       "rel-roommate-mike"
     ],
     "expectedVersionIds": [
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a06c76-3000-7654-997f-d224f86e9880"
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81"
     ],
     "qualifiedVersionIds": [
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a06c76-3000-7654-997f-d224f86e9880",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a0744b-3140-7960-aa3f-896713e297a1",
-        "01a06f32-90e0-76d8-af3c-e225c203af91",
-        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+        "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+        "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+        "01a06f2f-d1c0-7a32-86a9-a4b35f21c078"
       ],
       "objective_memory": [
-        "01a06744-d780-7dae-8c96-bca414fc9737"
+        "01a06744-d780-7ea0-ac8e-4afcb7d79480"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a06744-d780-7dae-8c96-bca414fc9737"
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 10,
+    "durationMs": 9,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 14,
@@ -659,45 +659,45 @@
       "rel-manager-chen"
     ],
     "expectedVersionIds": [
-      "01a069f8-fb00-7356-abf6-961ff983189f"
+      "01a069f8-fb00-7f06-9c60-3dbea61043e9"
     ],
     "qualifiedVersionIds": [
-      "01a069f8-fb00-7356-abf6-961ff983189f",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a06c76-3000-7654-997f-d224f86e9880",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+      "01a069f8-fb00-7f06-9c60-3dbea61043e9",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a0744b-3140-7960-aa3f-896713e297a1",
-        "01a06f32-90e0-76d8-af3c-e225c203af91",
-        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+        "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+        "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+        "01a06f2f-d1c0-7a32-86a9-a4b35f21c078"
       ],
       "objective_memory": [
-        "01a069f8-fb00-7356-abf6-961ff983189f",
-        "01a06744-d780-7dae-8c96-bca414fc9737"
+        "01a069f8-fb00-7f06-9c60-3dbea61043e9",
+        "01a06744-d780-7ea0-ac8e-4afcb7d79480"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a069f8-fb00-7356-abf6-961ff983189f"
+      "01a069f8-fb00-7f06-9c60-3dbea61043e9"
     ],
     "falsePositives": [
       {
-        "versionId": "01a06744-d780-7dae-8c96-bca414fc9737",
+        "versionId": "01a06744-d780-7ea0-ac8e-4afcb7d79480",
         "classification": "planted_other"
       }
     ],
@@ -705,7 +705,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 15,
@@ -724,34 +724,34 @@
       "proj-nebula"
     ],
     "expectedVersionIds": [
-      "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+      "01a0673f-5940-75a4-af19-c0b6365bb43b"
     ],
     "qualifiedVersionIds": [
-      "01a069f8-fb00-7356-abf6-961ff983189f",
-      "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+      "01a069f8-fb00-7f06-9c60-3dbea61043e9",
+      "01a0673f-5940-75a4-af19-c0b6365bb43b"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a069f8-fb00-7356-abf6-961ff983189f",
-        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
-        "01a069fe-7940-772c-be29-b0697899090d"
+        "01a069f8-fb00-7f06-9c60-3dbea61043e9",
+        "01a06f2a-5380-7b6c-98cb-8064e8950bff",
+        "01a069fe-7940-7d2d-9479-01a7b094a086"
       ],
       "objective_memory": [
-        "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+        "01a0673f-5940-75a4-af19-c0b6365bb43b"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a0673f-5940-7a5f-802a-7ae7269c2c2d"
+      "01a0673f-5940-75a4-af19-c0b6365bb43b"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 8,
+    "durationMs": 7,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 2,
@@ -770,16 +770,16 @@
       "horizon-long"
     ],
     "expectedVersionIds": [
-      "01a069fe-7940-772c-be29-b0697899090d"
+      "01a069fe-7940-7d2d-9479-01a7b094a086"
     ],
     "qualifiedVersionIds": [
-      "01a069fe-7940-772c-be29-b0697899090d"
+      "01a069fe-7940-7d2d-9479-01a7b094a086"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a069fe-7940-772c-be29-b0697899090d",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03",
-        "01a06f2a-5380-7492-849d-dcdfcb12acf5"
+        "01a069fe-7940-7d2d-9479-01a7b094a086",
+        "01a076cd-e480-798c-b1a3-848991c3cd24",
+        "01a06f2a-5380-7b6c-98cb-8064e8950bff"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -792,7 +792,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 7,
+    "durationMs": 6,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 1,
@@ -811,17 +811,17 @@
       "rel-sibling-fang"
     ],
     "expectedVersionIds": [
-      "01a06c70-b1c0-7f2d-9ac1-290d9b335060"
+      "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6"
     ],
     "qualifiedVersionIds": [
-      "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
-      "01a069fe-7940-772c-be29-b0697899090d"
+      "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6",
+      "01a069fe-7940-7d2d-9479-01a7b094a086"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a069fe-7940-772c-be29-b0697899090d",
-        "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+        "01a069fe-7940-7d2d-9479-01a7b094a086",
+        "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6",
+        "01a076cd-e480-798c-b1a3-848991c3cd24"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -834,7 +834,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 2,
@@ -853,46 +853,46 @@
       "rel-friend-nana"
     ],
     "expectedVersionIds": [
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078"
     ],
     "qualifiedVersionIds": [
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
-      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-      "01a076cb-2560-7f60-9f1c-842d21c6f840",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6",
+      "01a076cd-e480-7668-af3c-aec4887286ee",
+      "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-        "01a076cb-2560-7f60-9f1c-842d21c6f840",
-        "01a0744b-3140-7960-aa3f-896713e297a1"
+        "01a076cd-e480-7668-af3c-aec4887286ee",
+        "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+        "01a0744b-3140-7a7c-8c6c-286cd54d7ba6"
       ],
       "objective_memory": [
-        "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-        "01a06c70-b1c0-7f2d-9ac1-290d9b335060"
+        "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+        "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6"
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078"
     ],
     "falsePositives": [
       {
-        "versionId": "01a06c70-b1c0-7f2d-9ac1-290d9b335060",
+        "versionId": "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6",
         "classification": "planted_other"
       }
     ],
@@ -900,7 +900,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 16,
@@ -919,16 +919,16 @@
       "travel-neg"
     ],
     "expectedVersionIds": [
-      "01a06f2a-5380-7492-849d-dcdfcb12acf5"
+      "01a06f2a-5380-7b6c-98cb-8064e8950bff"
     ],
     "qualifiedVersionIds": [
-      "01a06f2a-5380-7492-849d-dcdfcb12acf5"
+      "01a06f2a-5380-7b6c-98cb-8064e8950bff"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03",
-        "01a069fe-7940-772c-be29-b0697899090d"
+        "01a06f2a-5380-7b6c-98cb-8064e8950bff",
+        "01a076cd-e480-798c-b1a3-848991c3cd24",
+        "01a069fe-7940-7d2d-9479-01a7b094a086"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -960,48 +960,48 @@
       "rel-colleague-david"
     ],
     "expectedVersionIds": [
-      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6"
+      "01a0719c-8c00-730a-8b31-bcd6ff67f019"
     ],
     "qualifiedVersionIds": [
-      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a06f2a-5380-7492-849d-dcdfcb12acf5",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a0719c-8c00-730a-8b31-bcd6ff67f019",
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a06f2a-5380-7b6c-98cb-8064e8950bff",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a06f2a-5380-7492-849d-dcdfcb12acf5",
-        "01a07977-0b80-7946-bf76-2e79aea2417d",
-        "01a07453-6ea0-7fdf-8990-8d8106b07f6d"
+        "01a06f2a-5380-7b6c-98cb-8064e8950bff",
+        "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+        "01a07453-6ea0-7791-aecf-70fc041021af"
       ],
       "objective_memory": [
-        "01a0719c-8c00-747d-9e1b-f9fefd11e4d6"
+        "01a0719c-8c00-730a-8b31-bcd6ff67f019"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6"
+      "01a0719c-8c00-730a-8b31-bcd6ff67f019"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 11,
+    "durationMs": 10,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 16,
@@ -1020,45 +1020,45 @@
       "rel-colleague-wang"
     ],
     "expectedVersionIds": [
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "qualifiedVersionIds": [
-      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f"
+      "01a0719c-8c00-730a-8b31-bcd6ff67f019",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9",
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07977-0b80-7946-bf76-2e79aea2417d",
-        "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-        "01a0744d-f060-7925-9800-9505ae3d8662"
+        "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+        "01a07453-6ea0-7791-aecf-70fc041021af",
+        "01a0744d-f060-7aa5-80a2-70a048274559"
       ],
       "objective_memory": [
-        "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
-        "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+        "01a0719c-8c00-730a-8b31-bcd6ff67f019",
+        "01a05cf2-a140-7050-b28b-ccf55e0374d9"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "falsePositives": [
       {
-        "versionId": "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
+        "versionId": "01a0719c-8c00-730a-8b31-bcd6ff67f019",
         "classification": "planted_other"
       }
     ],
@@ -1066,7 +1066,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 11,
+    "durationMs": 10,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 15,
@@ -1085,16 +1085,16 @@
       "res-suzhou"
     ],
     "expectedVersionIds": [
-      "01a07445-b300-72fa-9d01-584c44d84443"
+      "01a07445-b300-7152-a7b9-897f1bcf1511"
     ],
     "qualifiedVersionIds": [
-      "01a07445-b300-72fa-9d01-584c44d84443"
+      "01a07445-b300-7152-a7b9-897f1bcf1511"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07445-b300-72fa-9d01-584c44d84443",
-        "01a07be9-4400-73af-8b0c-516f65e69de8",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+        "01a07445-b300-7152-a7b9-897f1bcf1511",
+        "01a07be9-4400-7aeb-bb6b-38c70622a075",
+        "01a076cd-e480-798c-b1a3-848991c3cd24"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1126,17 +1126,17 @@
       "imp-style"
     ],
     "expectedVersionIds": [
-      "01a07be9-4400-73af-8b0c-516f65e69de8"
+      "01a07be9-4400-7aeb-bb6b-38c70622a075"
     ],
     "qualifiedVersionIds": [
-      "01a07445-b300-72fa-9d01-584c44d84443",
-      "01a07be9-4400-73af-8b0c-516f65e69de8"
+      "01a07445-b300-7152-a7b9-897f1bcf1511",
+      "01a07be9-4400-7aeb-bb6b-38c70622a075"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07be9-4400-73af-8b0c-516f65e69de8",
-        "01a07445-b300-72fa-9d01-584c44d84443",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+        "01a07be9-4400-7aeb-bb6b-38c70622a075",
+        "01a07445-b300-7152-a7b9-897f1bcf1511",
+        "01a076cd-e480-798c-b1a3-848991c3cd24"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1168,53 +1168,53 @@
       "rel-partner-yu"
     ],
     "expectedVersionIds": [
-      "01a076c2-e800-7100-939b-b6ace5a8c8ba"
+      "01a076c2-e800-78bd-b541-014244b2d56a"
     ],
     "qualifiedVersionIds": [
-      "01a076c2-e800-7100-939b-b6ace5a8c8ba",
-      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
-      "01a07979-caa0-7a18-9ef1-c92e6051c450",
-      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-      "01a076cb-2560-7f60-9f1c-842d21c6f840",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5",
-      "01a07be9-4400-73af-8b0c-516f65e69de8"
+      "01a076c2-e800-78bd-b541-014244b2d56a",
+      "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+      "01a07bf4-4080-7b93-899b-f67518400daf",
+      "01a07bee-c240-7a02-881d-f67f6a784b58",
+      "01a07979-caa0-7b93-898b-5a12830d8948",
+      "01a076cd-e480-7668-af3c-aec4887286ee",
+      "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5",
+      "01a07be9-4400-7aeb-bb6b-38c70622a075"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07be9-4400-73af-8b0c-516f65e69de8",
-        "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-        "01a07bf4-4080-7e1e-bf7e-aa1db8990083"
+        "01a07be9-4400-7aeb-bb6b-38c70622a075",
+        "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+        "01a07bf4-4080-7b93-899b-f67518400daf"
       ],
       "objective_memory": [
-        "01a076c2-e800-7100-939b-b6ace5a8c8ba"
+        "01a076c2-e800-78bd-b541-014244b2d56a"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a076c2-e800-7100-939b-b6ace5a8c8ba"
+      "01a076c2-e800-78bd-b541-014244b2d56a"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 11,
+    "durationMs": 10,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 21,
@@ -1233,16 +1233,16 @@
       "family-couple"
     ],
     "expectedVersionIds": [
-      "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      "01a076cd-e480-798c-b1a3-848991c3cd24"
     ],
     "qualifiedVersionIds": [
-      "01a076cd-e480-7f39-9d06-7638ffb02b03"
+      "01a076cd-e480-798c-b1a3-848991c3cd24"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a076cd-e480-7f39-9d06-7638ffb02b03",
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
-        "01a07be9-4400-73af-8b0c-516f65e69de8"
+        "01a076cd-e480-798c-b1a3-848991c3cd24",
+        "01a07e97-e940-7084-ac39-4e043429d586",
+        "01a07be9-4400-7aeb-bb6b-38c70622a075"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1255,7 +1255,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 8,
+    "durationMs": 7,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 1,
@@ -1274,45 +1274,45 @@
       "rel-friend-kai"
     ],
     "expectedVersionIds": [
-      "01a0744b-3140-7960-aa3f-896713e297a1"
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6"
     ],
     "qualifiedVersionIds": [
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
-      "01a07979-caa0-7a18-9ef1-c92e6051c450",
-      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-      "01a076cd-e480-7f39-9d06-7638ffb02b03",
-      "01a076cb-2560-7f60-9f1c-842d21c6f840",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5"
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+      "01a07bf4-4080-7b93-899b-f67518400daf",
+      "01a07bee-c240-7a02-881d-f67f6a784b58",
+      "01a07979-caa0-7b93-898b-5a12830d8948",
+      "01a076cd-e480-7668-af3c-aec4887286ee",
+      "01a076cd-e480-798c-b1a3-848991c3cd24",
+      "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a076cd-e480-7f39-9d06-7638ffb02b03",
-        "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-        "01a07bf4-4080-7e1e-bf7e-aa1db8990083"
+        "01a076cd-e480-798c-b1a3-848991c3cd24",
+        "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+        "01a07bf4-4080-7b93-899b-f67518400daf"
       ],
       "objective_memory": [
-        "01a0744b-3140-7960-aa3f-896713e297a1"
+        "01a0744b-3140-7a7c-8c6c-286cd54d7ba6"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a0744b-3140-7960-aa3f-896713e297a1"
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6"
     ],
     "falsePositives": [],
     "fenceLeak": false,
@@ -1338,50 +1338,50 @@
       "rel-colleague-hui"
     ],
     "expectedVersionIds": [
-      "01a07977-0b80-7946-bf76-2e79aea2417d"
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4"
     ],
     "qualifiedVersionIds": [
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-      "01a07e9d-6780-73df-bfeb-ed714827f772",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a08117-dd60-779e-be64-a302aeadf4d7",
+      "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+      "01a07e9d-6780-7f02-86ce-e85ab857c043",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a0719c-8c00-730a-8b31-bcd6ff67f019",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-        "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-        "01a07e9d-6780-73df-bfeb-ed714827f772"
+        "01a08117-dd60-779e-be64-a302aeadf4d7",
+        "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+        "01a07e9d-6780-7f02-86ce-e85ab857c043"
       ],
       "objective_memory": [
-        "01a07977-0b80-7946-bf76-2e79aea2417d"
+        "01a07977-0b80-7fc7-bf5f-c1cef589f2d4"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a07977-0b80-7946-bf76-2e79aea2417d"
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 10,
+    "durationMs": 9,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 18,
@@ -1400,37 +1400,37 @@
       "life-wedding"
     ],
     "expectedVersionIds": [
-      "01a07971-8d40-79cf-863b-d06039e723c1"
+      "01a07971-8d40-7e60-b3de-38b3d207251d"
     ],
     "qualifiedVersionIds": [
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-      "01a07e9d-6780-73df-bfeb-ed714827f772",
-      "01a07971-8d40-79cf-863b-d06039e723c1",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a0719c-8c00-747d-9e1b-f9fefd11e4d6",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a08117-dd60-779e-be64-a302aeadf4d7",
+      "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+      "01a07e9d-6780-7f02-86ce-e85ab857c043",
+      "01a07971-8d40-7e60-b3de-38b3d207251d",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a0719c-8c00-730a-8b31-bcd6ff67f019",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-        "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-        "01a07e9d-6780-73df-bfeb-ed714827f772"
+        "01a08117-dd60-779e-be64-a302aeadf4d7",
+        "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+        "01a07e9d-6780-7f02-86ce-e85ab857c043"
       ],
       "objective_memory": [
-        "01a07977-0b80-7946-bf76-2e79aea2417d"
+        "01a07977-0b80-7fc7-bf5f-c1cef589f2d4"
       ],
       "ai_impression": []
     },
@@ -1439,7 +1439,7 @@
     "truePositives": [],
     "falsePositives": [
       {
-        "versionId": "01a07977-0b80-7946-bf76-2e79aea2417d",
+        "versionId": "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
         "classification": "planted_other"
       }
     ],
@@ -1447,7 +1447,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 13,
+    "durationMs": 12,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 19,
@@ -1466,17 +1466,17 @@
       "role-senior"
     ],
     "expectedVersionIds": [
-      "01a07bee-c240-7448-be10-0b1ef0a88633"
+      "01a07bee-c240-753f-ac1b-fad80bde436e"
     ],
     "qualifiedVersionIds": [
-      "01a07bee-c240-7448-be10-0b1ef0a88633",
-      "01a07971-8d40-79cf-863b-d06039e723c1"
+      "01a07bee-c240-753f-ac1b-fad80bde436e",
+      "01a07971-8d40-7e60-b3de-38b3d207251d"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07bee-c240-7448-be10-0b1ef0a88633",
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
-        "01a07be9-4400-73af-8b0c-516f65e69de8"
+        "01a07bee-c240-753f-ac1b-fad80bde436e",
+        "01a07e97-e940-7084-ac39-4e043429d586",
+        "01a07be9-4400-7aeb-bb6b-38c70622a075"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1489,7 +1489,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 2,
@@ -1508,16 +1508,16 @@
       "imp-consider"
     ],
     "expectedVersionIds": [
-      "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+      "01a07e97-e940-7084-ac39-4e043429d586"
     ],
     "qualifiedVersionIds": [
-      "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+      "01a07e97-e940-7084-ac39-4e043429d586"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
-        "01a083be-4540-7a4e-a893-df94658dec55",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+        "01a07e97-e940-7084-ac39-4e043429d586",
+        "01a083be-4540-72e2-8a2a-152f4eb3cd21",
+        "01a076cd-e480-798c-b1a3-848991c3cd24"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1530,7 +1530,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 1,
@@ -1549,52 +1549,52 @@
       "rel-friend-elena"
     ],
     "expectedVersionIds": [
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0"
+      "01a07bee-c240-7a02-881d-f67f6a784b58"
     ],
     "qualifiedVersionIds": [
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
-      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
-      "01a07979-caa0-7a18-9ef1-c92e6051c450",
-      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-      "01a076cb-2560-7f60-9f1c-842d21c6f840",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5",
-      "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+      "01a07bee-c240-7a02-881d-f67f6a784b58",
+      "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+      "01a07bf4-4080-7b93-899b-f67518400daf",
+      "01a07979-caa0-7b93-898b-5a12830d8948",
+      "01a076cd-e480-7668-af3c-aec4887286ee",
+      "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5",
+      "01a07e97-e940-7084-ac39-4e043429d586"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
-        "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-        "01a07bf4-4080-7e1e-bf7e-aa1db8990083"
+        "01a07e97-e940-7084-ac39-4e043429d586",
+        "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+        "01a07bf4-4080-7b93-899b-f67518400daf"
       ],
       "objective_memory": [
-        "01a07bee-c240-7c39-8cf4-815caa9da9b0"
+        "01a07bee-c240-7a02-881d-f67f6a784b58"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0"
+      "01a07bee-c240-7a02-881d-f67f6a784b58"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 13,
+    "durationMs": 12,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 20,
@@ -1614,9 +1614,9 @@
     "qualifiedVersionIds": [],
     "injectedBySection": {
       "person_portrait": [
-        "01a083be-4540-7a4e-a893-df94658dec55",
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+        "01a083be-4540-72e2-8a2a-152f4eb3cd21",
+        "01a07e97-e940-7084-ac39-4e043429d586",
+        "01a076cd-e480-798c-b1a3-848991c3cd24"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1629,7 +1629,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 8,
+    "durationMs": 7,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 0,
@@ -1649,54 +1649,54 @@
       "rel-colleague-lin"
     ],
     "expectedVersionIds": [
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a07e9d-6780-73df-bfeb-ed714827f772"
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a07e9d-6780-7f02-86ce-e85ab857c043"
     ],
     "qualifiedVersionIds": [
-      "01a07e9d-6780-73df-bfeb-ed714827f772",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a0863b-7a40-7551-8947-e53bbf768576",
-      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
-      "01a083c6-82a0-703a-ade5-286c8e5af905",
-      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a07e9d-6780-7f02-86ce-e85ab857c043",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0",
+      "01a08630-7dc0-729a-870e-7818d35fc81f",
+      "01a083c6-82a0-79d0-94b0-54e533c07a46",
+      "01a08117-dd60-779e-be64-a302aeadf4d7",
+      "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a0863b-7a40-7551-8947-e53bbf768576",
-        "01a083c6-82a0-703a-ade5-286c8e5af905",
-        "01a08117-dd60-70fe-8b20-68ab0ad0bed5"
+        "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0",
+        "01a083c6-82a0-79d0-94b0-54e533c07a46",
+        "01a08117-dd60-779e-be64-a302aeadf4d7"
       ],
       "objective_memory": [
-        "01a07e9d-6780-73df-bfeb-ed714827f772"
+        "01a07e9d-6780-7f02-86ce-e85ab857c043"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a07e9d-6780-73df-bfeb-ed714827f772"
+      "01a07e9d-6780-7f02-86ce-e85ab857c043"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 12,
+    "durationMs": 11,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 21,
@@ -1715,52 +1715,52 @@
       "rel-colleague-david-ended"
     ],
     "expectedVersionIds": [
-      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa"
+      "01a08630-7dc0-729a-870e-7818d35fc81f"
     ],
     "qualifiedVersionIds": [
-      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
-      "01a07e9d-6780-73df-bfeb-ed714827f772",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a0863b-7a40-7551-8947-e53bbf768576",
-      "01a083c6-82a0-703a-ade5-286c8e5af905",
-      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2",
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a08630-7dc0-729a-870e-7818d35fc81f",
+      "01a07e9d-6780-7f02-86ce-e85ab857c043",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0",
+      "01a083c6-82a0-79d0-94b0-54e533c07a46",
+      "01a08117-dd60-779e-be64-a302aeadf4d7",
+      "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9",
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a0863b-7a40-7551-8947-e53bbf768576",
-        "01a083c6-82a0-703a-ade5-286c8e5af905",
-        "01a08117-dd60-70fe-8b20-68ab0ad0bed5"
+        "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0",
+        "01a083c6-82a0-79d0-94b0-54e533c07a46",
+        "01a08117-dd60-779e-be64-a302aeadf4d7"
       ],
       "objective_memory": [
-        "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
-        "01a07e9d-6780-73df-bfeb-ed714827f772"
+        "01a08630-7dc0-729a-870e-7818d35fc81f",
+        "01a07e9d-6780-7f02-86ce-e85ab857c043"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa"
+      "01a08630-7dc0-729a-870e-7818d35fc81f"
     ],
     "falsePositives": [
       {
-        "versionId": "01a07e9d-6780-73df-bfeb-ed714827f772",
+        "versionId": "01a07e9d-6780-7f02-86ce-e85ab857c043",
         "classification": "planted_other"
       }
     ],
@@ -1768,7 +1768,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 17,
+    "durationMs": 14,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 22,
@@ -1787,16 +1787,16 @@
       "imp-core"
     ],
     "expectedVersionIds": [
-      "01a083be-4540-7a4e-a893-df94658dec55"
+      "01a083be-4540-72e2-8a2a-152f4eb3cd21"
     ],
     "qualifiedVersionIds": [
-      "01a083be-4540-7a4e-a893-df94658dec55"
+      "01a083be-4540-72e2-8a2a-152f4eb3cd21"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a083be-4540-7a4e-a893-df94658dec55",
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d",
-        "01a076cd-e480-7f39-9d06-7638ffb02b03"
+        "01a083be-4540-72e2-8a2a-152f4eb3cd21",
+        "01a07e97-e940-7084-ac39-4e043429d586",
+        "01a076cd-e480-798c-b1a3-848991c3cd24"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1809,7 +1809,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 9,
+    "durationMs": 8,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 1,
@@ -1828,38 +1828,38 @@
       "rel-roommate-zhe-ended"
     ],
     "expectedVersionIds": [
-      "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+      "01a0810a-21c0-7c48-beb7-2d8454a4dc66"
     ],
     "qualifiedVersionIds": [
-      "01a0810a-21c0-73cd-8566-ec65a7093d7e",
-      "01a083c9-41c0-7047-b3a1-708a9d40030f",
-      "01a0797c-89c0-7108-bf2a-fd86c6e538fc",
-      "01a071a4-c960-7014-b9c0-b42096b0ad0c",
-      "01a06c76-3000-7654-997f-d224f86e9880",
-      "01a083be-4540-7a4e-a893-df94658dec55"
+      "01a0810a-21c0-7c48-beb7-2d8454a4dc66",
+      "01a083c9-41c0-704d-8de5-cb39b0169fd2",
+      "01a0797c-89c0-78d9-b079-140a8e1add1d",
+      "01a071a4-c960-70c0-82e5-6c970e84f722",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81",
+      "01a083be-4540-72e2-8a2a-152f4eb3cd21"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a083be-4540-7a4e-a893-df94658dec55",
-        "01a083c9-41c0-7047-b3a1-708a9d40030f",
-        "01a0797c-89c0-7108-bf2a-fd86c6e538fc"
+        "01a083be-4540-72e2-8a2a-152f4eb3cd21",
+        "01a083c9-41c0-704d-8de5-cb39b0169fd2",
+        "01a0797c-89c0-78d9-b079-140a8e1add1d"
       ],
       "objective_memory": [
-        "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+        "01a0810a-21c0-7c48-beb7-2d8454a4dc66"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+      "01a0810a-21c0-7c48-beb7-2d8454a4dc66"
     ],
     "falsePositives": [],
     "fenceLeak": false,
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 12,
+    "durationMs": 11,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 6,
@@ -1877,20 +1877,20 @@
     "expectedClaimIds": [],
     "expectedVersionIds": [],
     "qualifiedVersionIds": [
-      "01a0810a-21c0-73cd-8566-ec65a7093d7e",
-      "01a083c9-41c0-7047-b3a1-708a9d40030f",
-      "01a0797c-89c0-7108-bf2a-fd86c6e538fc",
-      "01a071a4-c960-7014-b9c0-b42096b0ad0c",
-      "01a06c76-3000-7654-997f-d224f86e9880"
+      "01a0810a-21c0-7c48-beb7-2d8454a4dc66",
+      "01a083c9-41c0-704d-8de5-cb39b0169fd2",
+      "01a0797c-89c0-78d9-b079-140a8e1add1d",
+      "01a071a4-c960-70c0-82e5-6c970e84f722",
+      "01a06c76-3000-7c65-8859-b1a1f7041b81"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a083c9-41c0-7047-b3a1-708a9d40030f",
-        "01a0797c-89c0-7108-bf2a-fd86c6e538fc",
-        "01a071a4-c960-7014-b9c0-b42096b0ad0c"
+        "01a083c9-41c0-704d-8de5-cb39b0169fd2",
+        "01a0797c-89c0-78d9-b079-140a8e1add1d",
+        "01a071a4-c960-70c0-82e5-6c970e84f722"
       ],
       "objective_memory": [
-        "01a0810a-21c0-73cd-8566-ec65a7093d7e"
+        "01a0810a-21c0-7c48-beb7-2d8454a4dc66"
       ],
       "ai_impression": []
     },
@@ -1899,7 +1899,7 @@
     "truePositives": [],
     "falsePositives": [
       {
-        "versionId": "01a0810a-21c0-73cd-8566-ec65a7093d7e",
+        "versionId": "01a0810a-21c0-7c48-beb7-2d8454a4dc66",
         "classification": "planted_other"
       }
     ],
@@ -1907,7 +1907,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 13,
+    "durationMs": 11,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 5,
@@ -1926,16 +1926,16 @@
       "emp-blue"
     ],
     "expectedVersionIds": [
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "qualifiedVersionIds": [
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a05a7a-ea80-7fad-a39a-48af185d8103",
-        "01a083be-4540-7a4e-a893-df94658dec55",
-        "01a07e97-e940-7d51-9b2c-ac331e0a507d"
+        "01a05a7a-ea80-7e19-a318-27da5aaefb7d",
+        "01a083be-4540-72e2-8a2a-152f4eb3cd21",
+        "01a07e97-e940-7084-ac39-4e043429d586"
       ],
       "objective_memory": [],
       "ai_impression": []
@@ -1948,7 +1948,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 15,
+    "durationMs": 13,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 1,
@@ -1967,41 +1967,41 @@
       "rel-friend-song"
     ],
     "expectedVersionIds": [
-      "01a08635-fc00-7178-a5ab-57eb871a692a"
+      "01a08635-fc00-7686-ab14-7df036adbbfb"
     ],
     "qualifiedVersionIds": [
-      "01a08635-fc00-7178-a5ab-57eb871a692a",
-      "01a088e4-a140-7081-8336-7c3aef782964",
-      "01a08638-bb20-78a8-8ef7-0351775c761c",
-      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
-      "01a07979-caa0-7a18-9ef1-c92e6051c450",
-      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-      "01a076cb-2560-7f60-9f1c-842d21c6f840",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c",
-      "01a06c78-ef20-7a45-b402-8e1db8c66fa7",
-      "01a06755-5240-73c7-9161-55f7f5f6491b",
-      "01a0674f-d400-77e2-900d-570192ec0d3d",
-      "01a06744-d780-7dae-8c96-bca414fc9737",
-      "01a0622c-3720-7b18-b87d-4f65aec23349",
-      "01a05fac-4300-743b-ad0e-b3d50fda1816",
-      "01a05fa6-c4c0-73bb-bbbe-93853b5f21f8",
-      "01a05cfd-9dc0-73a7-8e95-4b3c0d0ff4aa",
-      "01a05a85-e700-77cc-8e00-e66d8095ced5",
-      "01a05a7a-ea80-7fad-a39a-48af185d8103"
+      "01a08635-fc00-7686-ab14-7df036adbbfb",
+      "01a088e4-a140-7636-8ef1-40bb8697e3db",
+      "01a08638-bb20-7ecf-9d96-7c3fcabdd004",
+      "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+      "01a07bf4-4080-7b93-899b-f67518400daf",
+      "01a07bee-c240-7a02-881d-f67f6a784b58",
+      "01a07979-caa0-7b93-898b-5a12830d8948",
+      "01a076cd-e480-7668-af3c-aec4887286ee",
+      "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454",
+      "01a06c78-ef20-7e74-9265-1d0e28f426d2",
+      "01a06755-5240-714d-99e4-81d9cb88ebc0",
+      "01a0674f-d400-7dba-8d33-795f7e29933e",
+      "01a06744-d780-7ea0-ac8e-4afcb7d79480",
+      "01a0622c-3720-7d26-86fc-643e7fb183ce",
+      "01a05fac-4300-75c3-afb1-cdd3c1dd32d4",
+      "01a05fa6-c4c0-78f1-a3de-58f485ada689",
+      "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7",
+      "01a05a85-e700-7110-846c-9c9d30673ed5",
+      "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a088e4-a140-7081-8336-7c3aef782964",
-        "01a08638-bb20-78a8-8ef7-0351775c761c",
-        "01a08635-fc00-7178-a5ab-57eb871a692a"
+        "01a088e4-a140-7636-8ef1-40bb8697e3db",
+        "01a08638-bb20-7ecf-9d96-7c3fcabdd004",
+        "01a08635-fc00-7686-ab14-7df036adbbfb"
       ],
       "objective_memory": [
-        "01a05a7a-ea80-7fad-a39a-48af185d8103"
+        "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
       ],
       "ai_impression": []
     },
@@ -2010,7 +2010,7 @@
     "truePositives": [],
     "falsePositives": [
       {
-        "versionId": "01a05a7a-ea80-7fad-a39a-48af185d8103",
+        "versionId": "01a05a7a-ea80-7e19-a318-27da5aaefb7d",
         "classification": "planted_other"
       }
     ],
@@ -2018,7 +2018,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 15,
+    "durationMs": 13,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 23,
@@ -2037,55 +2037,55 @@
       "rel-colleague-he"
     ],
     "expectedVersionIds": [
-      "01a083c6-82a0-703a-ade5-286c8e5af905"
+      "01a083c6-82a0-79d0-94b0-54e533c07a46"
     ],
     "qualifiedVersionIds": [
-      "01a08635-fc00-7178-a5ab-57eb871a692a",
-      "01a083c6-82a0-703a-ade5-286c8e5af905",
-      "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
-      "01a088e7-6060-7227-83ec-b7076c379bfa",
-      "01a088e4-a140-7081-8336-7c3aef782964",
-      "01a0863b-7a40-7551-8947-e53bbf768576",
-      "01a08638-bb20-78a8-8ef7-0351775c761c",
-      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
-      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-      "01a07e9d-6780-73df-bfeb-ed714827f772",
-      "01a07bf6-ffa0-7ff4-86eb-fd1f2ed8e379",
-      "01a07bf4-4080-7e1e-bf7e-aa1db8990083",
-      "01a07bee-c240-7c39-8cf4-815caa9da9b0",
-      "01a07979-caa0-7a18-9ef1-c92e6051c450",
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a076cd-e480-7191-ac80-ae42d8db1bb2",
-      "01a076cb-2560-7f60-9f1c-842d21c6f840",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a0744b-3140-7960-aa3f-896713e297a1",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a06f32-90e0-76d8-af3c-e225c203af91",
-      "01a06f2f-d1c0-79a5-97e5-2df394a35ce6",
-      "01a06c81-2c80-7167-aa46-4619329da75c"
+      "01a08635-fc00-7686-ab14-7df036adbbfb",
+      "01a083c6-82a0-79d0-94b0-54e533c07a46",
+      "01a088ec-dea0-7512-9f50-7df639179c8b",
+      "01a088e7-6060-7157-b0d8-c991b1aafc9c",
+      "01a088e4-a140-7636-8ef1-40bb8697e3db",
+      "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0",
+      "01a08638-bb20-7ecf-9d96-7c3fcabdd004",
+      "01a08630-7dc0-729a-870e-7818d35fc81f",
+      "01a08117-dd60-779e-be64-a302aeadf4d7",
+      "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+      "01a07e9d-6780-7f02-86ce-e85ab857c043",
+      "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35",
+      "01a07bf4-4080-7b93-899b-f67518400daf",
+      "01a07bee-c240-7a02-881d-f67f6a784b58",
+      "01a07979-caa0-7b93-898b-5a12830d8948",
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a076cd-e480-7668-af3c-aec4887286ee",
+      "01a076cb-2560-7467-8cf5-43f5a87d8b2c",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a0744b-3140-7a7c-8c6c-286cd54d7ba6",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a06f32-90e0-78c7-bf8d-4faf99d5d965",
+      "01a06f2f-d1c0-7a32-86a9-a4b35f21c078",
+      "01a06c81-2c80-7fd8-b6b9-5c8471ab3454"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
-        "01a088e7-6060-7227-83ec-b7076c379bfa",
-        "01a088e4-a140-7081-8336-7c3aef782964"
+        "01a088ec-dea0-7512-9f50-7df639179c8b",
+        "01a088e7-6060-7157-b0d8-c991b1aafc9c",
+        "01a088e4-a140-7636-8ef1-40bb8697e3db"
       ],
       "objective_memory": [
-        "01a08635-fc00-7178-a5ab-57eb871a692a",
-        "01a083c6-82a0-703a-ade5-286c8e5af905"
+        "01a08635-fc00-7686-ab14-7df036adbbfb",
+        "01a083c6-82a0-79d0-94b0-54e533c07a46"
       ],
       "ai_impression": []
     },
     "hitRetrieved": true,
     "hitInjected": true,
     "truePositives": [
-      "01a083c6-82a0-703a-ade5-286c8e5af905"
+      "01a083c6-82a0-79d0-94b0-54e533c07a46"
     ],
     "falsePositives": [
       {
-        "versionId": "01a08635-fc00-7178-a5ab-57eb871a692a",
+        "versionId": "01a08635-fc00-7686-ab14-7df036adbbfb",
         "classification": "planted_other"
       }
     ],
@@ -2093,7 +2093,7 @@
     "budgetViolation": false,
     "deadlineViolation": false,
     "degraded": false,
-    "durationMs": 13,
+    "durationMs": 12,
     "deadlineMs": 200,
     "laneHitCounts": {
       "structured_exact": 25,
@@ -2111,39 +2111,39 @@
     "expectedClaimIds": [],
     "expectedVersionIds": [],
     "qualifiedVersionIds": [
-      "01a083c6-82a0-703a-ade5-286c8e5af905",
-      "01a05fb1-c140-70ce-952c-43e39d521e02",
-      "01a08b6a-13a0-7a1d-8ffb-19ed88d6c0a3",
-      "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
-      "01a088e7-6060-7227-83ec-b7076c379bfa",
-      "01a0863b-7a40-7551-8947-e53bbf768576",
-      "01a08630-7dc0-74e5-909f-2c8b6fc10eaa",
-      "01a08117-dd60-70fe-8b20-68ab0ad0bed5",
-      "01a07ea2-e5c0-7507-97a3-c43f86f07edb",
-      "01a07e9d-6780-73df-bfeb-ed714827f772",
-      "01a07977-0b80-7946-bf76-2e79aea2417d",
-      "01a07453-6ea0-7fdf-8990-8d8106b07f6d",
-      "01a0744d-f060-7925-9800-9505ae3d8662",
-      "01a071a2-0a40-7837-a5b8-4aefa5d53242",
-      "01a06c7b-ae40-7b91-aeb0-3e75444d30a6",
-      "01a06a03-f780-7065-b095-f663da1c4bed",
-      "01a0674a-55c0-7253-a896-e4c28e54b083",
-      "01a064dd-9b80-76f4-b811-17da7f90a3a5",
-      "01a064d2-9f00-7630-8ffe-cc390a7584d1",
-      "01a06229-7800-76bf-ad54-10894183966a",
-      "01a05fb7-3f80-7aa0-bf0d-e215d374d904",
-      "01a05cf8-1f80-7d8b-af3a-b058d97adc9f",
-      "01a05cf2-a140-78bf-b49c-6d9b8cc216f2"
+      "01a083c6-82a0-79d0-94b0-54e533c07a46",
+      "01a05fb1-c140-79b7-b809-5982ad62f196",
+      "01a08b6a-13a0-7029-9de3-6473782e6742",
+      "01a088ec-dea0-7512-9f50-7df639179c8b",
+      "01a088e7-6060-7157-b0d8-c991b1aafc9c",
+      "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0",
+      "01a08630-7dc0-729a-870e-7818d35fc81f",
+      "01a08117-dd60-779e-be64-a302aeadf4d7",
+      "01a07ea2-e5c0-7c37-8cf4-f5435b174e61",
+      "01a07e9d-6780-7f02-86ce-e85ab857c043",
+      "01a07977-0b80-7fc7-bf5f-c1cef589f2d4",
+      "01a07453-6ea0-7791-aecf-70fc041021af",
+      "01a0744d-f060-7aa5-80a2-70a048274559",
+      "01a071a2-0a40-7af8-8bc2-66668241bea3",
+      "01a06c7b-ae40-716d-ba47-686913e47302",
+      "01a06a03-f780-7218-a355-c40fcd520f8d",
+      "01a0674a-55c0-7826-9463-0ceee38e23ce",
+      "01a064dd-9b80-7502-9daf-8e4d1002f7b2",
+      "01a064d2-9f00-7251-8732-6e2d00c5f754",
+      "01a06229-7800-7c00-a49a-960d354a5341",
+      "01a05fb7-3f80-732b-989e-d9a56abb8b91",
+      "01a05cf8-1f80-72ab-9b10-11c9f9483976",
+      "01a05cf2-a140-7050-b28b-ccf55e0374d9"
     ],
     "injectedBySection": {
       "person_portrait": [
-        "01a08b6a-13a0-7a1d-8ffb-19ed88d6c0a3",
-        "01a088ec-dea0-76e2-84d1-98a89e4e8d2b",
-        "01a088e7-6060-7227-83ec-b7076c379bfa"
+        "01a08b6a-13a0-7029-9de3-6473782e6742",
+        "01a088ec-dea0-7512-9f50-7df639179c8b",
+        "01a088e7-6060-7157-b0d8-c991b1aafc9c"
       ],
       "objective_memory": [
-        "01a083c6-82a0-703a-ade5-286c8e5af905",
-        "01a05fb1-c140-70ce-952c-43e39d521e02"
+        "01a083c6-82a0-79d0-94b0-54e533c07a46",
+        "01a05fb1-c140-79b7-b809-5982ad62f196"
       ],
       "ai_impression": []
     },
@@ -2152,11 +2152,11 @@
     "truePositives": [],
     "falsePositives": [
       {
-        "versionId": "01a083c6-82a0-703a-ade5-286c8e5af905",
+        "versionId": "01a083c6-82a0-79d0-94b0-54e533c07a46",
         "classification": "planted_other"
       },
       {
-        "versionId": "01a05fb1-c140-70ce-952c-43e39d521e02",
+        "versionId": "01a05fb1-c140-79b7-b809-5982ad62f196",
         "classification": "distractor"
       }
     ],

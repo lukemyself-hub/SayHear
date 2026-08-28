@@ -11,9 +11,10 @@ not to gate"）。非权威评测制品（ADR-0020 / ADR-0073 精神、ADR-0110�
 ## TL;DR
 
 - `corpus.ts`（`retrieval-precision-corpus:v1`，seed 20260828）：全合成多日语料——
-  10 自然日 × 2 session × 12 turn；37 个 planted Claims（objective 事实、人物、
+  10 自然日 × 2 session × 12 turn；36 个 planted Claims（Objective Memory、人物、
   关系 + temporal change、impressions）+ 37 个 distractors；en / zh / mix 三语；
-  40 条 probe 查询全部跨日；含 post-forget 与 post-dormancy 围栏探针。
+  40 条 probe 查询全部跨日（语料校验器强制），外加 post-forget 与 post-dormancy
+  围栏探针（合计 41 条运行）。
   重建字节级确定，纯数据、无 IO。
 - `harness.ts`：把语料经**生产写路径**种入（conversation submit、claim admission
   + registry write-through、whole-claim forget、impression dormancy；Evidence 行

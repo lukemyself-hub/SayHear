@@ -52,7 +52,7 @@ export type PlantedPerson = Readonly<{
 }>;
 
 export type ClaimCategory =
-  | "objective_fact"
+  | "objective_memory"
   | "relationship"
   | "impression"
   | "distractor";
@@ -238,17 +238,17 @@ const FILLERS_EN: readonly string[] = [
 
 const CLAIMS: readonly PlantedClaimSpec[] = [
   // ── objective self facts ──────────────────────────────────────────────────
-  { claimId: "emp-blue", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.employer, typedValue: "蓝湾科技", statementTurnId: "d1s0-t0" },
-  { claimId: "role-be", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.roleTitle, typedValue: "后端工程师", statementTurnId: "d1s0-t0" },
-  { claimId: "res-hz", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.residence, typedValue: "杭州滨江", statementTurnId: "d1s0-t2" },
-  { claimId: "home-mianyang", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.hometown, typedValue: "四川绵阳", statementTurnId: "d2s0-t0" },
-  { claimId: "wp-binjiang", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.workplace, typedValue: ["滨江园区"], statementTurnId: "d2s1-t0" },
-  { claimId: "family-single", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.familyStage, typedValue: "single", statementTurnId: "d2s1-t2" },
-  { claimId: "career-employed", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.careerStage, typedValue: "employed", statementTurnId: "d3s0-t2" },
-  { claimId: "proj-nebula", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.projectParticipation, typedValue: ["星云项目"], statementTurnId: "d3s1-t0", forgottenOnTurnId: "d8s1-t6" },
-  { claimId: "horizon-long", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.relationshipHorizon, typedValue: "long_term", statementTurnId: "d4s0-t6" },
-  { claimId: "travel-neg", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.businessTravel, typedValue: "negative", statementTurnId: "d5s0-t8", forgottenOnTurnId: "d9s0-t8" },
-  { claimId: "life-wedding", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.lifeChange, typedValue: "wedding_prep", statementTurnId: "d7s0-t6" },
+  { claimId: "emp-blue", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.employer, typedValue: "蓝湾科技", statementTurnId: "d1s0-t0" },
+  { claimId: "role-be", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.roleTitle, typedValue: "后端工程师", statementTurnId: "d1s0-t0" },
+  { claimId: "res-hz", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.residence, typedValue: "杭州滨江", statementTurnId: "d1s0-t2" },
+  { claimId: "home-mianyang", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.hometown, typedValue: "四川绵阳", statementTurnId: "d2s0-t0" },
+  { claimId: "wp-binjiang", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.workplace, typedValue: ["滨江园区"], statementTurnId: "d2s1-t0" },
+  { claimId: "family-single", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.familyStage, typedValue: "single", statementTurnId: "d2s1-t2" },
+  { claimId: "career-employed", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.careerStage, typedValue: "employed", statementTurnId: "d3s0-t2" },
+  { claimId: "proj-nebula", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.projectParticipation, typedValue: ["星云项目"], statementTurnId: "d3s1-t0", forgottenOnTurnId: "d8s1-t6" },
+  { claimId: "horizon-long", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.relationshipHorizon, typedValue: "long_term", statementTurnId: "d4s0-t6" },
+  { claimId: "travel-neg", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.businessTravel, typedValue: "negative", statementTurnId: "d5s0-t8", forgottenOnTurnId: "d9s0-t8" },
+  { claimId: "life-wedding", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.lifeChange, typedValue: "wedding_prep", statementTurnId: "d7s0-t6" },
   // ── relationships ─────────────────────────────────────────────────────────
   { claimId: "rel-colleague-wang", category: "relationship", kind: "objective", predicateId: PREDICATE_IDS.colleagueOf, personId: "wang", statementTurnId: "d1s1-t0" },
   { claimId: "rel-friend-lin", category: "relationship", kind: "objective", predicateId: PREDICATE_IDS.friendOf, personId: "lin", statementTurnId: "d2s0-t2" },
@@ -272,9 +272,9 @@ const CLAIMS: readonly PlantedClaimSpec[] = [
   { claimId: "imp-consider", category: "impression", kind: "impression", predicateId: PREDICATE_IDS.considerationStyle, typedValue: "重大决定先列利弊清单", evidenceTurnIds: ["d5s1-t4", "d8s0-t6"] },
   { claimId: "imp-core", category: "impression", kind: "impression", predicateId: PREDICATE_IDS.corePriorities, typedValue: ["家人健康", "工作稳定"], evidenceTurnIds: ["d6s1-t8", "d9s0-t6"] },
   // ── temporal change (superseding statements on existing canonical keys) ──
-  { claimId: "res-suzhou", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.residence, typedValue: "苏州工业园区", statementTurnId: "d6s0-t4", supersedesClaimId: "res-hz" },
-  { claimId: "family-couple", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.familyStage, typedValue: "in_relationship", statementTurnId: "d6s1-t10", supersedesClaimId: "family-single" },
-  { claimId: "role-senior", category: "objective_fact", kind: "objective", predicateId: PREDICATE_IDS.roleTitle, typedValue: "资深后端工程师", statementTurnId: "d7s1-t8", supersedesClaimId: "role-be" },
+  { claimId: "res-suzhou", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.residence, typedValue: "苏州工业园区", statementTurnId: "d6s0-t4", supersedesClaimId: "res-hz" },
+  { claimId: "family-couple", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.familyStage, typedValue: "in_relationship", statementTurnId: "d6s1-t10", supersedesClaimId: "family-single" },
+  { claimId: "role-senior", category: "objective_memory", kind: "objective", predicateId: PREDICATE_IDS.roleTitle, typedValue: "资深后端工程师", statementTurnId: "d7s1-t8", supersedesClaimId: "role-be" },
   { claimId: "rel-roommate-zhe-ended", category: "relationship", kind: "objective", predicateId: PREDICATE_IDS.roommateOf, personId: "zhe", temporalStatus: "ended", statementTurnId: "d8s1-t4", supersedesClaimId: "rel-roommate-zhe" },
   { claimId: "rel-colleague-david-ended", category: "relationship", kind: "objective", predicateId: PREDICATE_IDS.colleagueOf, personId: "david", temporalStatus: "ended", statementTurnId: "d9s1-t4", supersedesClaimId: "rel-colleague-david" },
   // ── distractors (≥ non-distractor count; never probed) ────────────────────
@@ -1146,7 +1146,7 @@ export function validateCorpus(corpus: PrecisionCorpus): readonly string[] {
   // Category coverage (objective statements, people/relationships, temporal
   // change, impressions).
   const categories = new Set(planted.map((claim) => claim.category));
-  for (const required of ["objective_fact", "relationship", "impression"] as const) {
+  for (const required of ["objective_memory", "relationship", "impression"] as const) {
     if (!categories.has(required)) problems.push(`missing claim category ${required}`);
   }
   const hasTemporalChange = corpus.claims.some((claim) => claim.supersedesClaimId !== undefined);
@@ -1281,6 +1281,11 @@ export function validateCorpus(corpus: PrecisionCorpus): readonly string[] {
         : claim.statementTurnId ?? "";
       if ((orderIndex.get(statementTurn) ?? -1) >= (orderIndex.get(turn.turnId) ?? Infinity)) {
         problems.push(`${query.queryId}: expected claim ${claimId} is planted at/after the query`);
+      }
+      // SPEC AC 38: cross-day queries — the claim is planted on an EARLIER DAY.
+      const plantedDay = statementTurn ? turnById.get(statementTurn)?.day : undefined;
+      if (plantedDay !== undefined && plantedDay >= turn.day) {
+        problems.push(`${query.queryId}: expected claim ${claimId} is planted on the same day (cross-day required)`);
       }
       const forgetTurn = claim.forgottenOnTurnId;
       if (forgetTurn && (orderIndex.get(forgetTurn) ?? Infinity) < (orderIndex.get(turn.turnId) ?? -1)) {

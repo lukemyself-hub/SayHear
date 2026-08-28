@@ -3,6 +3,7 @@ export {
   purgeMarkerMigrationsDirectory,
   runMigrations,
 } from "./migrations";
+export { createUuidV7 } from "./uuid-v7";
 export { createPostgresPool } from "./pool";
 export {
   createPostgresAuthAdapter,
