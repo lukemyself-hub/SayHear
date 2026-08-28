@@ -1,0 +1,367 @@
+[
+  {
+    "corpusClaimId": "emp-blue",
+    "memoryClaimId": "01a05a7a-ea80-72e2-94f0-64e799da4327",
+    "currentVersionId": "01a05a7a-ea80-7e19-a318-27da5aaefb7d"
+  },
+  {
+    "corpusClaimId": "role-be",
+    "memoryClaimId": "01a05a7a-ea80-70fd-ba12-cbed462dee5b",
+    "currentVersionId": "01a05a7a-ea80-718c-9059-07830416c605"
+  },
+  {
+    "corpusClaimId": "res-hz",
+    "memoryClaimId": "01a05a80-68c0-7315-9499-ab6f465184db",
+    "currentVersionId": "01a05a80-68c0-7986-9e2a-09901c4803a8"
+  },
+  {
+    "corpusClaimId": "dz-friend-wang2",
+    "memoryClaimId": "01a05a85-e700-714b-b9e7-acebe7755cbe",
+    "currentVersionId": "01a05a85-e700-7110-846c-9c9d30673ed5"
+  },
+  {
+    "corpusClaimId": "rel-colleague-wang",
+    "memoryClaimId": "01a05cf2-a140-7c63-94b8-232f5fe726d1",
+    "currentVersionId": "01a05cf2-a140-7050-b28b-ccf55e0374d9"
+  },
+  {
+    "corpusClaimId": "dz-colleague-qin",
+    "memoryClaimId": "01a05cf8-1f80-7d6d-881e-089440233c87",
+    "currentVersionId": "01a05cf8-1f80-72ab-9b10-11c9f9483976"
+  },
+  {
+    "corpusClaimId": "dz-friend-shao",
+    "memoryClaimId": "01a05cfd-9dc0-7b0f-960b-87ac20e01953",
+    "currentVersionId": "01a05cfd-9dc0-7fd4-9dfa-c23aa71036d7"
+  },
+  {
+    "corpusClaimId": "home-mianyang",
+    "memoryClaimId": "01a05fa1-4680-7798-9d2c-819703553d55",
+    "currentVersionId": "01a05fa1-4680-7287-82f9-135f0802a619"
+  },
+  {
+    "corpusClaimId": "rel-friend-lin",
+    "memoryClaimId": "01a05fa6-c4c0-75ed-8f5a-fa8bad56c1c8",
+    "currentVersionId": "01a05fa6-c4c0-78f1-a3de-58f485ada689"
+  },
+  {
+    "corpusClaimId": "dz-friend-fei",
+    "memoryClaimId": "01a05fac-4300-7519-b356-764c303f528d",
+    "currentVersionId": "01a05fac-4300-75c3-afb1-cdd3c1dd32d4"
+  },
+  {
+    "corpusClaimId": "dz-colleague-yan",
+    "memoryClaimId": "01a05fb1-c140-717e-9d87-a7fd03fdf350",
+    "currentVersionId": "01a05fb1-c140-79b7-b809-5982ad62f196"
+  },
+  {
+    "corpusClaimId": "dz-colleague-lin2",
+    "memoryClaimId": "01a05fb7-3f80-732d-a9b0-ac5c558e4388",
+    "currentVersionId": "01a05fb7-3f80-732b-989e-d9a56abb8b91"
+  },
+  {
+    "corpusClaimId": "wp-binjiang",
+    "memoryClaimId": "01a06218-fd40-7138-84d3-39c7512d7ad1",
+    "currentVersionId": "01a06218-fd40-787e-955f-73dd5b4671a5"
+  },
+  {
+    "corpusClaimId": "family-single",
+    "memoryClaimId": "01a0621e-7b80-7053-9c79-fbb9c7f07ae4",
+    "currentVersionId": "01a0621e-7b80-79dd-b054-292e9839549b"
+  },
+  {
+    "corpusClaimId": "rel-roommate-zhe",
+    "memoryClaimId": "01a06223-f9c0-7589-9ab2-90db527d25d9",
+    "currentVersionId": "01a06223-f9c0-7141-a81b-da8ead9a4368"
+  },
+  {
+    "corpusClaimId": "dz-colleague-david2",
+    "memoryClaimId": "01a06229-7800-729b-9902-2f82b52ef9fe",
+    "currentVersionId": "01a06229-7800-7c00-a49a-960d354a5341"
+  },
+  {
+    "corpusClaimId": "dz-friend-duan2",
+    "memoryClaimId": "01a0622c-3720-7030-95e1-f042965b0d70",
+    "currentVersionId": "01a0622c-3720-7d26-86fc-643e7fb183ce"
+  },
+  {
+    "corpusClaimId": "career-employed",
+    "memoryClaimId": "01a064cd-20c0-7bb2-9118-8e4fe317a9fc",
+    "currentVersionId": "01a064cd-20c0-7163-98b4-0f4d3fd088b2"
+  },
+  {
+    "corpusClaimId": "rel-colleague-zhou",
+    "memoryClaimId": "01a064d2-9f00-74bd-8d67-9d66719f44d8",
+    "currentVersionId": "01a064d2-9f00-7251-8732-6e2d00c5f754"
+  },
+  {
+    "corpusClaimId": "dz-colleague-wang2",
+    "memoryClaimId": "01a064dd-9b80-759b-b0c7-492273878c7f",
+    "currentVersionId": "01a064dd-9b80-7502-9daf-8e4d1002f7b2"
+  },
+  {
+    "corpusClaimId": "proj-nebula",
+    "memoryClaimId": "01a0673f-5940-72da-a915-0e842acae5eb",
+    "currentVersionId": "01a0810f-a000-75a8-a8da-e31df9d09be0"
+  },
+  {
+    "corpusClaimId": "rel-friend-mike",
+    "memoryClaimId": "01a06744-d780-7c62-a6ec-25de957f95e9",
+    "currentVersionId": "01a06744-d780-7ea0-ac8e-4afcb7d79480"
+  },
+  {
+    "corpusClaimId": "dz-colleague-kang",
+    "memoryClaimId": "01a0674a-55c0-7340-bbd7-dc730f23be11",
+    "currentVersionId": "01a0674a-55c0-7826-9463-0ceee38e23ce"
+  },
+  {
+    "corpusClaimId": "dz-friend-cen",
+    "memoryClaimId": "01a0674f-d400-7463-8bb2-a625a12dbb82",
+    "currentVersionId": "01a0674f-d400-7dba-8d33-795f7e29933e"
+  },
+  {
+    "corpusClaimId": "dz-friend-mo",
+    "memoryClaimId": "01a06755-5240-7f3e-b863-cf1069ad84be",
+    "currentVersionId": "01a06755-5240-714d-99e4-81d9cb88ebc0"
+  },
+  {
+    "corpusClaimId": "rel-manager-chen",
+    "memoryClaimId": "01a069f8-fb00-71b8-ae1c-409d0e1f295f",
+    "currentVersionId": "01a069f8-fb00-7f06-9c60-3dbea61043e9"
+  },
+  {
+    "corpusClaimId": "horizon-long",
+    "memoryClaimId": "01a069fe-7940-7ac6-9e5e-39c2db75b45e",
+    "currentVersionId": "01a069fe-7940-7d2d-9479-01a7b094a086"
+  },
+  {
+    "corpusClaimId": "dz-colleague-liu2",
+    "memoryClaimId": "01a06a03-f780-7fca-ad99-9772a6e0b20f",
+    "currentVersionId": "01a06a03-f780-7218-a355-c40fcd520f8d"
+  },
+  {
+    "corpusClaimId": "rel-sibling-fang",
+    "memoryClaimId": "01a06c70-b1c0-7568-a040-430a0d76746e",
+    "currentVersionId": "01a06c70-b1c0-749a-b7c2-78d1d2d1d3f6"
+  },
+  {
+    "corpusClaimId": "rel-roommate-mike",
+    "memoryClaimId": "01a06c76-3000-7e2f-952a-c8bbd5efc590",
+    "currentVersionId": "01a06c76-3000-7c65-8859-b1a1f7041b81"
+  },
+  {
+    "corpusClaimId": "dz-friend-lin2",
+    "memoryClaimId": "01a06c78-ef20-72bf-a8d2-35bfbe08b613",
+    "currentVersionId": "01a06c78-ef20-7e74-9265-1d0e28f426d2"
+  },
+  {
+    "corpusClaimId": "dz-colleague-fei2",
+    "memoryClaimId": "01a06c7b-ae40-7e4b-95da-7be8edbb2411",
+    "currentVersionId": "01a06c7b-ae40-716d-ba47-686913e47302"
+  },
+  {
+    "corpusClaimId": "dz-friend-kang",
+    "memoryClaimId": "01a06c81-2c80-7ad8-829d-b0e798b3704f",
+    "currentVersionId": "01a06c81-2c80-7fd8-b6b9-5c8471ab3454"
+  },
+  {
+    "corpusClaimId": "travel-neg",
+    "memoryClaimId": "01a06f2a-5380-7e04-a45f-02f172123b18",
+    "currentVersionId": "01a083c3-c380-771b-ac1e-76ac11669cc1"
+  },
+  {
+    "corpusClaimId": "rel-friend-nana",
+    "memoryClaimId": "01a06f2f-d1c0-71c1-bd03-a82479f23f7e",
+    "currentVersionId": "01a06f2f-d1c0-7a32-86a9-a4b35f21c078"
+  },
+  {
+    "corpusClaimId": "dz-friend-guan",
+    "memoryClaimId": "01a06f32-90e0-789e-802c-ccac401e9835",
+    "currentVersionId": "01a06f32-90e0-78c7-bf8d-4faf99d5d965"
+  },
+  {
+    "corpusClaimId": "rel-colleague-david",
+    "memoryClaimId": "01a0719c-8c00-7c4b-930c-4c8576bbb1fc",
+    "currentVersionId": "01a0719c-8c00-730a-8b31-bcd6ff67f019"
+  },
+  {
+    "corpusClaimId": "dz-colleague-xu",
+    "memoryClaimId": "01a071a2-0a40-7384-b392-09a4f02efab8",
+    "currentVersionId": "01a071a2-0a40-7af8-8bc2-66668241bea3"
+  },
+  {
+    "corpusClaimId": "dz-roommate-fu",
+    "memoryClaimId": "01a071a4-c960-7a77-8f3c-dc0444de193e",
+    "currentVersionId": "01a071a4-c960-70c0-82e5-6c970e84f722"
+  },
+  {
+    "corpusClaimId": "res-suzhou",
+    "memoryClaimId": "01a05a80-68c0-7315-9499-ab6f465184db",
+    "currentVersionId": "01a07445-b300-7152-a7b9-897f1bcf1511"
+  },
+  {
+    "corpusClaimId": "rel-friend-kai",
+    "memoryClaimId": "01a0744b-3140-720a-9455-50ef79ec8a5b",
+    "currentVersionId": "01a0744b-3140-7a7c-8c6c-286cd54d7ba6"
+  },
+  {
+    "corpusClaimId": "dz-colleague-chu",
+    "memoryClaimId": "01a0744d-f060-7f45-9441-21f11c7f24f9",
+    "currentVersionId": "01a0744d-f060-7aa5-80a2-70a048274559"
+  },
+  {
+    "corpusClaimId": "dz-colleague-gao",
+    "memoryClaimId": "01a07453-6ea0-7ef3-ae8a-6f4f6da66f9d",
+    "currentVersionId": "01a07453-6ea0-7791-aecf-70fc041021af"
+  },
+  {
+    "corpusClaimId": "rel-partner-yu",
+    "memoryClaimId": "01a076c2-e800-7ac6-82f1-6a30e277d993",
+    "currentVersionId": "01a076c2-e800-78bd-b541-014244b2d56a"
+  },
+  {
+    "corpusClaimId": "dz-friend-gao",
+    "memoryClaimId": "01a076cb-2560-757d-897a-95463060bf93",
+    "currentVersionId": "01a076cb-2560-7467-8cf5-43f5a87d8b2c"
+  },
+  {
+    "corpusClaimId": "family-couple",
+    "memoryClaimId": "01a0621e-7b80-7053-9c79-fbb9c7f07ae4",
+    "currentVersionId": "01a076cd-e480-798c-b1a3-848991c3cd24"
+  },
+  {
+    "corpusClaimId": "dz-friend-qian2",
+    "memoryClaimId": "01a076cd-e480-7e68-a558-8429d46313e7",
+    "currentVersionId": "01a076cd-e480-7668-af3c-aec4887286ee"
+  },
+  {
+    "corpusClaimId": "life-wedding",
+    "memoryClaimId": "01a07971-8d40-767c-bf89-cd51d2c2aeac",
+    "currentVersionId": "01a07971-8d40-7e60-b3de-38b3d207251d"
+  },
+  {
+    "corpusClaimId": "rel-colleague-hui",
+    "memoryClaimId": "01a07977-0b80-777c-b491-c73c438fe02f",
+    "currentVersionId": "01a07977-0b80-7fc7-bf5f-c1cef589f2d4"
+  },
+  {
+    "corpusClaimId": "dz-friend-jiang",
+    "memoryClaimId": "01a07979-caa0-73cf-81fa-88cd464cddce",
+    "currentVersionId": "01a07979-caa0-7b93-898b-5a12830d8948"
+  },
+  {
+    "corpusClaimId": "dz-roommate-ruan",
+    "memoryClaimId": "01a0797c-89c0-78cf-b1e7-b29fab9d4dc4",
+    "currentVersionId": "01a0797c-89c0-78d9-b079-140a8e1add1d"
+  },
+  {
+    "corpusClaimId": "imp-style",
+    "memoryClaimId": "01a07be9-4400-799c-a69c-92506f270b90",
+    "currentVersionId": "01a07be9-4400-7aeb-bb6b-38c70622a075"
+  },
+  {
+    "corpusClaimId": "role-senior",
+    "memoryClaimId": "01a05a7a-ea80-70fd-ba12-cbed462dee5b",
+    "currentVersionId": "01a07bee-c240-753f-ac1b-fad80bde436e"
+  },
+  {
+    "corpusClaimId": "rel-friend-elena",
+    "memoryClaimId": "01a07bee-c240-7be3-b6ce-420a3437d41a",
+    "currentVersionId": "01a07bee-c240-7a02-881d-f67f6a784b58"
+  },
+  {
+    "corpusClaimId": "dz-friend-lun",
+    "memoryClaimId": "01a07bf4-4080-7184-b381-037625194ade",
+    "currentVersionId": "01a07bf4-4080-7b93-899b-f67518400daf"
+  },
+  {
+    "corpusClaimId": "dz-friend-xun",
+    "memoryClaimId": "01a07bf6-ffa0-7120-8d66-d92918318ba4",
+    "currentVersionId": "01a07bf6-ffa0-73c0-8fd5-9c8325a8cc35"
+  },
+  {
+    "corpusClaimId": "imp-consider",
+    "memoryClaimId": "01a07e97-e940-7b78-b5ae-5603a593ab2a",
+    "currentVersionId": "01a13d12-ba80-71dd-9b00-a29d1471d6d9"
+  },
+  {
+    "corpusClaimId": "rel-colleague-lin",
+    "memoryClaimId": "01a07e9d-6780-7022-a654-1301b15eb9e0",
+    "currentVersionId": "01a07e9d-6780-7f02-86ce-e85ab857c043"
+  },
+  {
+    "corpusClaimId": "dz-colleague-duan",
+    "memoryClaimId": "01a07ea2-e5c0-7438-ae40-dcca9e625abb",
+    "currentVersionId": "01a07ea2-e5c0-7c37-8cf4-f5435b174e61"
+  },
+  {
+    "corpusClaimId": "rel-roommate-zhe-ended",
+    "memoryClaimId": "01a06223-f9c0-7589-9ab2-90db527d25d9",
+    "currentVersionId": "01a0810a-21c0-7c48-beb7-2d8454a4dc66"
+  },
+  {
+    "corpusClaimId": "dz-relative-qian",
+    "memoryClaimId": "01a08115-1e40-7c99-947b-fda5f8677614",
+    "currentVersionId": "01a08115-1e40-76cc-977f-7d9488f15ba8"
+  },
+  {
+    "corpusClaimId": "dz-colleague-mo",
+    "memoryClaimId": "01a08117-dd60-7aec-a6d9-1206b6fa4674",
+    "currentVersionId": "01a08117-dd60-779e-be64-a302aeadf4d7"
+  },
+  {
+    "corpusClaimId": "imp-core",
+    "memoryClaimId": "01a083be-4540-768f-aaf5-f6273122dd3e",
+    "currentVersionId": "01a083be-4540-72e2-8a2a-152f4eb3cd21"
+  },
+  {
+    "corpusClaimId": "rel-colleague-he",
+    "memoryClaimId": "01a083c6-82a0-7583-8736-b01850e19e7d",
+    "currentVersionId": "01a083c6-82a0-79d0-94b0-54e533c07a46"
+  },
+  {
+    "corpusClaimId": "dz-roommate-man",
+    "memoryClaimId": "01a083c9-41c0-7edf-91fa-5f566b121c8a",
+    "currentVersionId": "01a083c9-41c0-704d-8de5-cb39b0169fd2"
+  },
+  {
+    "corpusClaimId": "rel-colleague-david-ended",
+    "memoryClaimId": "01a0719c-8c00-7c4b-930c-4c8576bbb1fc",
+    "currentVersionId": "01a08630-7dc0-729a-870e-7818d35fc81f"
+  },
+  {
+    "corpusClaimId": "rel-friend-song",
+    "memoryClaimId": "01a08635-fc00-7273-98ea-c50d26c85728",
+    "currentVersionId": "01a08635-fc00-7686-ab14-7df036adbbfb"
+  },
+  {
+    "corpusClaimId": "dz-friend-bei",
+    "memoryClaimId": "01a08638-bb20-731b-a788-8e46986ae6c4",
+    "currentVersionId": "01a08638-bb20-7ecf-9d96-7c3fcabdd004"
+  },
+  {
+    "corpusClaimId": "dz-colleague-gong",
+    "memoryClaimId": "01a0863b-7a40-764b-b4b4-7301a753a21e",
+    "currentVersionId": "01a0863b-7a40-78a7-8f5a-e6dbbd8e68e0"
+  },
+  {
+    "corpusClaimId": "dz-friend-zhu",
+    "memoryClaimId": "01a088e4-a140-7eda-b7df-3a7c4d262a04",
+    "currentVersionId": "01a088e4-a140-7636-8ef1-40bb8697e3db"
+  },
+  {
+    "corpusClaimId": "dz-colleague-qi",
+    "memoryClaimId": "01a088e7-6060-73bc-81a0-4241be905216",
+    "currentVersionId": "01a088e7-6060-7157-b0d8-c991b1aafc9c"
+  },
+  {
+    "corpusClaimId": "dz-colleague-mo2",
+    "memoryClaimId": "01a088ec-dea0-7c65-a8b3-482688516420",
+    "currentVersionId": "01a088ec-dea0-7512-9f50-7df639179c8b"
+  },
+  {
+    "corpusClaimId": "dz-friend-lin3",
+    "memoryClaimId": "01a08b6a-13a0-7941-9c6d-60a4a4ba53c5",
+    "currentVersionId": "01a08b6a-13a0-7029-9de3-6473782e6742"
+  }
+]

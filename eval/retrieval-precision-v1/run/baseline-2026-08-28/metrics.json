@@ -1,0 +1,22 @@
+{
+  "runnerVersion": "retrieval-precision-corpus:v1",
+  "corpusVersion": "retrieval-precision-corpus:v1",
+  "seed": 20260828,
+  "queriesTotal": 41,
+  "runsCompleted": 41,
+  "runsDegraded": 0,
+  "hitRateRetrieved": 0.9268,
+  "hitRateInjected": 0.9024,
+  "queryRetrievalPrecision": 0.6129,
+  "queryRetrievedInjectionTotal": 31,
+  "truePositiveTotal": 19,
+  "falsePositiveTotal": 12,
+  "portraitInjectionTotal": 123,
+  "fenceLeakCount": 0,
+  "budgetViolationCount": 0,
+  "deadlineViolationCount": 0,
+  "durationP50Ms": 8,
+  "durationP95Ms": 13,
+  "deadlineMs": 200,
+  "wallClockMs": 1475
+}
