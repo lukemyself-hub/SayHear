@@ -48,6 +48,7 @@ export type RetrievalDegradedReasonCode =
   | "retrieval_deadline_exceeded"
   | "retrieval_lane_failed"
   | "retrieval_query_construction_failed"
+  | "retrieval_policy_unavailable"
   | "retrieval_run_recording_failed";
 
 export type RetrievalFenceCode =
@@ -145,7 +146,6 @@ export type RetrievalQuerySourceRef =
   | Readonly<{
       kind: "current_topic";
       dialogueRevision: number;
-      field: "current_topic";
     }>
   | Readonly<{ kind: "registry_lexical_alias"; registryVersion: number }>;
 
@@ -281,12 +281,6 @@ export type CandidateFenceState = Readonly<{
   objectEntityDeleted: boolean;
 }>;
 
-export type FenceEvaluatedCandidate = Readonly<{
-  hit: LaneCandidateHit;
-  fenceResults: readonly TrustFenceResult[];
-  passed: boolean;
-}>;
-
 // ---------------------------------------------------------------------------
 // Ranking + relevance cutoffs (SPEC §10.3).
 // ---------------------------------------------------------------------------
@@ -361,7 +355,6 @@ export type MemoryRetrievalInput = Readonly<{
   }>;
   sourceEventRevisionId: string;
   currentInputText: string;
-  locale: string;
   /** Source-valid current topic or null (stale / failed / invalidated). */
   currentTopic: string | null;
   dialogueRevision: number;
@@ -395,9 +388,6 @@ export type RetrievalTestSupport = Readonly<{
   configuration(): RetrievalTestSupportConfiguration | null;
 }>;
 
-/** Alias kept for composition-side naming clarity. */
-export type MemoryRetrievalTestSupport = RetrievalTestSupport;
-export type MemoryRetrievalTestSupportConfiguration = RetrievalTestSupportConfiguration;
 
 // ---------------------------------------------------------------------------
 // Repository port (Postgres implementation in @sayhear/data).
@@ -442,9 +432,7 @@ export type MemoryRetrievalRepository = Readonly<{
     entityIds: readonly string[];
     predicateIds: readonly string[];
     canonicalKeys: readonly string[];
-    pastTimeQuery: boolean;
-    recentWindowStart: string | null;
-    valueTokens: readonly string[];
+    dateTokens: readonly string[];
     limit: number;
   }): Promise<readonly RetrievalLaneRow[]>;
   runLexicalLane(input: {
@@ -501,10 +489,5 @@ export type MemoryRetrievalRepository = Readonly<{
       rejectionReasonCodes: readonly string[];
     }>[];
     now: Date;
-  }): Promise<void>;
-  attachRetrievalRunToCompiledContext(input: {
-    retrievalRunId: string;
-    compiledContextId: string;
-    userId: UserId;
   }): Promise<void>;
 }>;

@@ -15,6 +15,19 @@ import {
 } from "./types";
 
 /**
+ * Surface containment: CJK surfaces match as substrings; ASCII surfaces are
+ * word-boundary matches so "work" never fires inside "homework".
+ */
+function surfaceInText(surface: string, normalizedText: string): boolean {
+  if (/[a-z0-9]/.test(surface)) {
+    return new RegExp(
+      `(?:^|[^a-z0-9])${surface.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`,
+    ).test(normalizedText);
+  }
+  return normalizedText.includes(surface);
+}
+
+/**
  * Deterministic query construction (SPEC story 44, architecture §10.2): the
  * query is built only from committed, verifiable inputs — the current User
  * Event text, the last two final / corrected User Events of the Continuous
@@ -52,7 +65,6 @@ export function buildRetrievalQuery(input: {
     sourceRefs.push({
       kind: "current_topic",
       dialogueRevision: sources.dialogueRevision,
-      field: "current_topic",
     });
   }
 
@@ -82,7 +94,7 @@ export function buildRetrievalQuery(input: {
   for (const [surface, binding] of [...surfaces.entries()].sort(([a], [b]) =>
     a.localeCompare(b, "en"),
   )) {
-    if (binding !== null && combined.includes(surface)) {
+    if (binding !== null && surfaceInText(surface, combined)) {
       resolvedEntities.push({
         entityId: binding.entityId,
         basis: binding.basis,
@@ -95,12 +107,12 @@ export function buildRetrievalQuery(input: {
   const predicateCandidates: QueryPredicateCandidate[] = [];
   const aliasSurfaces: readonly LexicalSurface[] =
     registry.localizations.flatMap((localization) =>
-      localization.lexicalSurfaces.map((surface) => surface),
+      localization.lexicalSurfaces,
     );
   const seenPredicates = new Set<string>();
   for (const surface of aliasSurfaces) {
     const normalized = normalizeRetrievalTerm(surface.text);
-    if (normalized === "" || !combined.includes(normalized)) continue;
+    if (normalized === "" || !surfaceInText(normalized, combined)) continue;
     const key = `${surface.text}\u0000${normalized}`;
     if (seenPredicates.has(key)) continue;
     seenPredicates.add(key);
@@ -132,19 +144,24 @@ export function buildRetrievalQuery(input: {
   // relationships) object entity both resolved (scope-none registry entries).
   const canonicalKeys: string[] = [];
   if (sources.selfEntityId !== null) {
+    // Precision first: an exact canonical-key hit is only constructed when
+    // the object side is unambiguous — with several resolved non-self
+    // entities the key could bind the wrong person, so none is built.
+    const nonSelfEntities = resolvedEntities.filter(
+      (entity) => entity.entityId !== sources.selfEntityId,
+    );
+    const uniqueObject =
+      nonSelfEntities.length === 1 ? nonSelfEntities[0] : null;
     for (const candidate of predicateCandidates) {
       const entry = registry.entryFor(candidate.predicateId);
       if (!entry || entry.scopeSchema.kind !== "none") continue;
       const isRelationship = entry.relationshipSemantics !== null;
-      const objectEntityId = resolvedEntities.find(
-        (entity) => entity.entityId !== sources.selfEntityId,
-      );
-      if (isRelationship && !objectEntityId) continue;
+      if (isRelationship && !uniqueObject) continue;
       canonicalKeys.push(
         claimCanonicalKey({
           predicateId: candidate.predicateId,
           subjectEntityId: sources.selfEntityId,
-          objectEntityId: isRelationship ? objectEntityId!.entityId : null,
+          objectEntityId: isRelationship ? uniqueObject!.entityId : null,
           scopeKey: "",
           relationshipDirection: entry.relationshipSemantics?.direction ?? null,
         }),
@@ -157,7 +174,7 @@ export function buildRetrievalQuery(input: {
   const timeWordClasses = (Object.keys(RETRIEVAL_TIME_WORDS) as readonly RetrievalTimeWordClass[])
     .filter((clazz) =>
       RETRIEVAL_TIME_WORDS[clazz].some((word) =>
-        combined.includes(normalizeRetrievalTerm(word)),
+        surfaceInText(normalizeRetrievalTerm(word), combined),
       ),
     )
     .sort();

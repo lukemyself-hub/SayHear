@@ -9,6 +9,7 @@ import {
   dedupeLaneHits,
   evaluateTrustFences,
   fenceFailureCodes,
+  FENCE_ORDER,
   rankCandidates,
   temporalFitOf,
 } from "./ranking";
@@ -98,7 +99,18 @@ export function createMemoryRetrievalService(dependencies: {
 
   let policyPromise: Promise<MemoryRetrievalPolicy | null> | null = null;
   function loadPolicy(): Promise<MemoryRetrievalPolicy | null> {
-    policyPromise ??= repository.loadPolicy(policyVersion);
+    // Only successful loads are memoized: a transient failure or a missing
+    // policy row retries on the next run instead of degrading forever.
+    if (policyPromise === null) {
+      const pending = repository.loadPolicy(policyVersion).catch(
+        () => null,
+      );
+      policyPromise = pending.then((policy) => {
+        if (policy === null && policyPromise === pending) policyPromise = null;
+        return policy;
+      });
+      return policyPromise;
+    }
     return policyPromise;
   }
 
@@ -137,12 +149,11 @@ export function createMemoryRetrievalService(dependencies: {
         return durationMs;
       };
 
-      const policy = await loadPolicy().catch(() => null);
+      const policy = await loadPolicy();
       if (!policy) {
         return degradedOutcomeWithoutRun({
-          code: "retrieval_run_recording_failed",
+          code: "retrieval_policy_unavailable",
           durationMs: elapsed(),
-          startedAt: wallStartedAt,
         });
       }
       const checkDeadline = (currentStage: RetrievalDeadlineStage) => {
@@ -432,10 +443,7 @@ async function runLane(
 ): Promise<readonly RetrievalLaneRow[]> {
   const { query, policy, now } = input;
   if (lane === "structured_exact") {
-    const recentWindowStart =
-      query.timeWordClasses.includes("recent")
-        ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1_000).toISOString()
-        : null;
+    void now;
     return repository.runStructuredLane({
       userId,
       entityIds: query.resolvedEntities.map((entity) => entity.entityId),
@@ -443,9 +451,7 @@ async function runLane(
         (candidate) => candidate.predicateId,
       ),
       canonicalKeys: query.canonicalKeys,
-      pastTimeQuery: query.timeWordClasses.includes("past"),
-      recentWindowStart,
-      valueTokens: query.dateTokens,
+      dateTokens: query.dateTokens,
       limit: policy.candidateLimitPerLane,
     });
   }
@@ -558,16 +564,7 @@ function stubRankComponents(
 function missingFenceResults(): readonly TrustFenceResult[] {
   // A candidate whose fence state cannot be loaded fails every fence
   // fail-closed rather than being silently dropped.
-  return ([
-    "current_version",
-    "evidence",
-    "entity",
-    "correction",
-    "forget",
-    "contested",
-    "dormant",
-    "deletion",
-  ] as const).map((fence) => ({ fence, passed: false }));
+  return FENCE_ORDER.map((fence) => ({ fence, passed: false }));
 }
 
 function normalizedTermsOf(
@@ -590,9 +587,7 @@ function normalizedTermsOf(
 function degradedOutcomeWithoutRun(input: {
   code: RetrievalDegradedReasonCode;
   durationMs: number;
-  startedAt: Date;
 }): MemoryRetrievalRunOutcome {
-  void input.startedAt;
   return {
     retrievalRunId: null,
     status: "degraded",

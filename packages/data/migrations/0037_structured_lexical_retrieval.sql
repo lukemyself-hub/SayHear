@@ -117,15 +117,16 @@ BEGIN
     AND NEW.lexical_terms = OLD.lexical_terms
     AND NEW.projection_policy_version = OLD.projection_policy_version
     AND NEW.created_at = OLD.created_at
-    AND NEW.content_purged_at IS NOT DISTINCT FROM OLD.content_purged_at
     AND (
       -- lifecycle-only transitions, never backwards out of a terminal state
       (NEW.status <> OLD.status
+        AND NEW.content_purged_at IS NOT DISTINCT FROM OLD.content_purged_at
         AND (
           (OLD.status = 'active' AND NEW.status IN ('stale', 'deleted'))
           OR (OLD.status = 'stale' AND NEW.status = 'deleted')
         ))
       OR
+      -- the purge face (#123) sets the marker without touching the lifecycle
       (NEW.status = OLD.status
         AND OLD.content_purged_at IS NULL
         AND NEW.content_purged_at IS NOT NULL)

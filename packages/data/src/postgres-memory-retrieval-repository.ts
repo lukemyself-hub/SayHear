@@ -15,6 +15,8 @@ import type {
 } from "@sayhear/application";
 import type { DailySessionId, UserId } from "@sayhear/domain";
 
+import { createUuidV7 } from "./uuid-v7";
+
 /**
  * Postgres implementation of the Structured-Lexical Retrieval Baseline
  * repository (issue #116, architecture §10). Lane queries read only active
@@ -47,6 +49,7 @@ const LANE_TARGET_JOIN = `
   INNER JOIN memory_claim_versions v
     ON v.memory_claim_version_id = claim.current_version_id
    AND v.user_id = claim.user_id
+   AND v.content_purged_at IS NULL
   INNER JOIN claim_retrieval_projections proj
     ON proj.memory_claim_version_id = v.memory_claim_version_id
    AND proj.user_id = v.user_id
@@ -70,10 +73,36 @@ const LANE_COLUMNS = `
   v.valid_from,
   v.valid_to,
   v.last_observed_at,
-  v.typed_value::text,
-  v.content_purged_at,
-  claim.deleted_at,
-  claim.content_purged_at
+  v.typed_value::text
+`;
+
+// A ClaimVersion matches through ANY of its active locale projections;
+// matched material aggregates across both locales so an English-only hit
+// never collapses into a false single-term zh row (architecture §10.3
+// cross-language identity rule). The representative projection row stays
+// deterministic (zh preferred).
+const LANE_MATCHED_TERMS_SQL = `
+  (SELECT array_agg(DISTINCT term) FROM (
+     SELECT p2.memory_claim_version_id, term
+     FROM claim_retrieval_projections p2
+     CROSS JOIN LATERAL unnest(p2.lexical_terms) AS term
+     WHERE p2.user_id = claim.user_id
+       AND p2.memory_claim_version_id = v.memory_claim_version_id
+       AND p2.status = 'active'
+       AND p2.content_purged_at IS NULL
+       AND term = ANY($2::text[])
+   ) matched)
+`;
+
+const LANE_MATCHING_PROJECTION_EXISTS_SQL = `
+  EXISTS (
+    SELECT 1 FROM claim_retrieval_projections p2
+    WHERE p2.user_id = claim.user_id
+      AND p2.memory_claim_version_id = v.memory_claim_version_id
+      AND p2.status = 'active'
+      AND p2.content_purged_at IS NULL
+      AND p2.lexical_terms && $2::text[]
+  )
 `;
 
 export class PostgresMemoryRetrievalRepository
@@ -221,12 +250,10 @@ export class PostgresMemoryRetrievalRepository
     entityIds: readonly string[];
     predicateIds: readonly string[];
     canonicalKeys: readonly string[];
-    pastTimeQuery: boolean;
-    recentWindowStart: string | null;
-    valueTokens: readonly string[];
+    dateTokens: readonly string[];
     limit: number;
   }): Promise<readonly RetrievalLaneRow[]> {
-    const valuePatterns = input.valueTokens.map((token) => `%${token}%`);
+    const valuePatterns = input.dateTokens.map((token) => `%${token}%`);
     const result = await this.pool.query<LaneRow>(
       `SELECT * FROM (
         SELECT DISTINCT ON (v.memory_claim_version_id)
@@ -239,22 +266,26 @@ export class PostgresMemoryRetrievalRepository
           OR claim.object_entity_id = ANY($2::uuid[])
           OR claim.predicate_id = ANY($3::text[])
           OR claim.canonical_key = ANY($4::text[])
-          OR ($5 AND (v.temporal_status = 'ended'
-              OR (v.valid_to IS NOT NULL AND v.valid_to < now())))
-          OR ($6::timestamptz IS NOT NULL AND v.last_observed_at >= $6)
-          OR v.typed_value::text LIKE ANY($7::text[])
+          OR v.typed_value::text LIKE ANY($5::text[])
         )
         ORDER BY v.memory_claim_version_id, proj.locale DESC
       ) lane_rows
-      ORDER BY lane_rows.last_observed_at DESC
-      LIMIT $8`,
+      -- Exact signals outrank weaker dimensions so the per-lane cap can
+      -- never evict a canonical-key or Entity hit (deterministic under cap).
+      ORDER BY
+        (lane_rows.canonical_key = ANY($4::text[])) DESC,
+        (
+          lane_rows.subject_entity_id::uuid = ANY($2::uuid[])
+          OR lane_rows.object_entity_id::uuid = ANY($2::uuid[])
+        ) DESC,
+        (lane_rows.predicate_id = ANY($3::text[])) DESC,
+        lane_rows.last_observed_at DESC
+      LIMIT $6`,
       [
         input.userId,
         input.entityIds,
         input.predicateIds,
         input.canonicalKeys,
-        input.pastTimeQuery,
-        input.recentWindowStart,
         valuePatterns,
         input.limit,
       ],
@@ -271,17 +302,14 @@ export class PostgresMemoryRetrievalRepository
       `SELECT * FROM (
         SELECT DISTINCT ON (v.memory_claim_version_id)
           ${LANE_COLUMNS},
-          ARRAY(
-            SELECT unnest(proj.lexical_terms)
-            INTERSECT
-            SELECT unnest($2::text[])
-          ) AS matched_terms,
+          ${LANE_MATCHED_TERMS_SQL} AS matched_terms,
           NULL::numeric AS fts_rank
         ${LANE_TARGET_JOIN}
-        AND proj.lexical_terms && $2::text[]
+        AND ${LANE_MATCHING_PROJECTION_EXISTS_SQL}
         ORDER BY v.memory_claim_version_id, proj.locale DESC
       ) lane_rows
-      ORDER BY lane_rows.last_observed_at DESC
+      ORDER BY coalesce(array_length(lane_rows.matched_terms, 1), 0) DESC,
+               lane_rows.last_observed_at DESC
       LIMIT $3`,
       [input.userId, input.terms, input.limit],
     );
@@ -294,17 +322,34 @@ export class PostgresMemoryRetrievalRepository
     limit: number;
   }): Promise<readonly RetrievalLaneRow[]> {
     // plainto_tsquery is inlined per reference so the GIN index and the rank
-    // expression bind to the same query (architecture §10.1 lane 3).
+    // expression bind to the same query (architecture §10.1 lane 3); the
+    // match may come from either locale's projection, so the rank is the
+    // best row of the version.
     const result = await this.pool.query<LaneRow>(
       `SELECT * FROM (
         SELECT DISTINCT ON (v.memory_claim_version_id)
           ${LANE_COLUMNS},
           NULL::text[] AS matched_terms,
-          ts_rank_cd(proj.english_search, plainto_tsquery('pg_catalog.english', $2)) AS fts_rank
+          (
+            SELECT max(ts_rank_cd(p2.english_search,
+                                  plainto_tsquery('pg_catalog.english', $2)))
+            FROM claim_retrieval_projections p2
+            WHERE p2.user_id = claim.user_id
+              AND p2.memory_claim_version_id = v.memory_claim_version_id
+              AND p2.status = 'active'
+              AND p2.content_purged_at IS NULL
+              AND p2.english_search @@ plainto_tsquery('pg_catalog.english', $2)
+          ) AS fts_rank
         ${LANE_TARGET_JOIN}
-        AND proj.english_search @@ plainto_tsquery('pg_catalog.english', $2)
-        ORDER BY v.memory_claim_version_id, proj.locale DESC,
-                 ts_rank_cd(proj.english_search, plainto_tsquery('pg_catalog.english', $2)) DESC
+        AND EXISTS (
+          SELECT 1 FROM claim_retrieval_projections p2
+          WHERE p2.user_id = claim.user_id
+            AND p2.memory_claim_version_id = v.memory_claim_version_id
+            AND p2.status = 'active'
+            AND p2.content_purged_at IS NULL
+            AND p2.english_search @@ plainto_tsquery('pg_catalog.english', $2)
+        )
+        ORDER BY v.memory_claim_version_id, proj.locale DESC
       ) lane_rows
       ORDER BY lane_rows.fts_rank DESC, lane_rows.last_observed_at DESC
       LIMIT $3`,
@@ -527,50 +572,44 @@ export class PostgresMemoryRetrievalRepository
     }[];
     now: Date;
   }): Promise<void> {
+    if (input.candidates.length === 0) return;
+    // One round trip for the whole candidate set: the insert sits inside the
+    // shared retrieval deadline. Parameter numbers are assigned explicitly.
+    const tuples: string[] = [];
+    const values: unknown[] = [input.retrievalRunId, input.userId];
     for (const candidate of input.candidates) {
-      await this.pool.query(
-        `INSERT INTO retrieval_run_candidates (
-          retrieval_run_candidate_id, retrieval_run_id, user_id,
-          memory_claim_version_id, claim_retrieval_projection_id,
-          retrieval_lane, matched_fields, matched_terms,
-          trust_fence_results, rank_components, final_rank,
-          selected_section, selection_reason_codes, rejection_reason_codes,
-          created_at
-        ) VALUES (
-          gen_random_uuid(), $1, $2, $3, $4,
-          $5, $6::jsonb, $7::jsonb,
-          $8::jsonb, $9::jsonb, $10,
-          NULL, $11, $12, $13
-        )`,
-        [
-          input.retrievalRunId,
-          input.userId,
-          candidate.claimVersionId,
-          candidate.retrievalProjectionId,
-          candidate.lane,
-          JSON.stringify(candidate.matchedFields),
-          JSON.stringify(candidate.matchedTerms),
-          JSON.stringify(candidate.trustFenceResults),
-          JSON.stringify(candidate.rankComponents),
-          candidate.finalRank,
-          candidate.selectionReasonCodes,
-          candidate.rejectionReasonCodes,
-          input.now,
-        ],
+      const base = values.length;
+      tuples.push(
+        `($${base + 1}::uuid, $1, $2, $${base + 2}::uuid, $${base + 3}::uuid,` +
+          ` $${base + 4}, $${base + 5}::jsonb, $${base + 6}::jsonb,` +
+          ` $${base + 7}::jsonb, $${base + 8}::jsonb, $${base + 9},` +
+          ` NULL, $${base + 10}, $${base + 11}, $${base + 12})`,
+      );
+      values.push(
+        createUuidV7(input.now),
+        candidate.claimVersionId,
+        candidate.retrievalProjectionId,
+        candidate.lane,
+        JSON.stringify(candidate.matchedFields),
+        JSON.stringify(candidate.matchedTerms),
+        JSON.stringify(candidate.trustFenceResults),
+        JSON.stringify(candidate.rankComponents),
+        candidate.finalRank,
+        candidate.selectionReasonCodes,
+        candidate.rejectionReasonCodes,
+        input.now,
       );
     }
-  }
-
-  public async attachRetrievalRunToCompiledContext(input: {
-    retrievalRunId: string;
-    compiledContextId: string;
-    userId: UserId;
-  }): Promise<void> {
     await this.pool.query(
-      `UPDATE retrieval_runs SET compiled_context_id = $3
-       WHERE user_id = $1 AND retrieval_run_id = $2
-         AND compiled_context_id IS NULL`,
-      [input.userId, input.retrievalRunId, input.compiledContextId],
+      `INSERT INTO retrieval_run_candidates (
+        retrieval_run_candidate_id, retrieval_run_id, user_id,
+        memory_claim_version_id, claim_retrieval_projection_id,
+        retrieval_lane, matched_fields, matched_terms,
+        trust_fence_results, rank_components, final_rank,
+        selected_section, selection_reason_codes, rejection_reason_codes,
+        created_at
+      ) VALUES ${tuples.join(", ")}`,
+      values,
     );
   }
 }

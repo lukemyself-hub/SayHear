@@ -18,7 +18,7 @@ import {
   asMemoryCandidateId,
   type EntityService,
   type MemoryClaimService,
-  type MemoryRetrievalTestSupportConfiguration,
+  type RetrievalTestSupportConfiguration,
 } from "@sayhear/application";
 import {
   PostgresContinuousExchangeRepository,
@@ -136,7 +136,7 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
   let submitCount = 0;
 
   /** Mutable lane fault configuration read per run (test-support only). */
-  let retrievalFaults: MemoryRetrievalTestSupportConfiguration | null;
+  let retrievalFaults: RetrievalTestSupportConfiguration | null;
 
   beforeAll(async () => {
     database = await createIsolatedPostgresSchema(testDatabaseUrl);

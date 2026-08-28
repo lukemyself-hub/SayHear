@@ -32,7 +32,6 @@ import {
   PERSONA_CONTRACT_INVARIANT_VERSION,
   loadPredicateRegistrySnapshot,
   createMemoryConsolidationScanService,
-  MEMORY_RETRIEVAL_POLICY_VERSION,
   type FastPathExtractionEntrypointDependencies,
   type MemoryConsolidationEntrypointDependencies,
 } from "@sayhear/application";
@@ -398,7 +397,6 @@ export function createServerComposition() {
           localizations: predicateRegistrySnapshot.localizations,
         },
         clock: configuration.clock,
-        policyVersion: MEMORY_RETRIEVAL_POLICY_VERSION,
       })
     : undefined;
   const contextCompiler = createContextCompiler({

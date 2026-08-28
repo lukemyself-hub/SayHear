@@ -21,9 +21,9 @@ import {
  */
 
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
-const DAY_MS = 24 * 60 * 60 * 1_000;
 
-const FENCE_ORDER = [
+/** Canonical fence evaluation order (single source). */
+export const FENCE_ORDER = [
   "current_version",
   "evidence",
   "entity",
@@ -73,9 +73,8 @@ export function evaluateTrustFences(input: {
         !state.projectionContentPurged,
     },
   ];
-  return FENCE_ORDER.map(
-    (fence) => results.find((result) => result.fence === fence)!,
-  );
+  const byFence = new Map(results.map((result) => [result.fence, result]));
+  return FENCE_ORDER.map((fence) => byFence.get(fence)!);
 }
 
 export type DedupedCandidate = LaneCandidateHit &
@@ -341,7 +340,3 @@ export function fenceFailureCodes(
     .filter((result) => !result.passed)
     .map((result) => `trust_fence_failed_${result.fence}`);
 }
-
-/** One day in milliseconds, exported for deadline-aware tests. */
-export const RANKING_RECENT_WINDOW_MS = RECENT_WINDOW_MS;
-export const RANKING_DAY_MS = DAY_MS;

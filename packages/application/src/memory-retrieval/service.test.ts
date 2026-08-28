@@ -155,7 +155,6 @@ function createHarness(options: {
       }
       calls.insertedCandidates.push(input.candidates);
     },
-    async attachRetrievalRunToCompiledContext() {},
   };
   let monotonicBase = 0;
   const service = createMemoryRetrievalService({
@@ -181,7 +180,6 @@ function retrievalInput(overrides: Partial<MemoryRetrievalInput> = {}): MemoryRe
     dailySession: { id: "session-1" as never, continuousExchangeNo: 1 },
     sourceEventRevisionId: "rev-1",
     currentInputText: "我同事小王还好吗",
-    locale: "zh",
     currentTopic: null,
     dialogueRevision: 3,
     currentInputSequence: 5,
@@ -292,6 +290,33 @@ describe("createMemoryRetrievalService", () => {
     expect(outcome.manifest.duration_ms).toBeGreaterThanOrEqual(30);
   });
 
+  it("treats elapsed == deadline as boundary success (expiry is strictly greater)", async () => {
+    // Every stage check reads exactly the deadline: 200 > 200 is false, so
+    // the run completes — the documented boundary semantics of AC 18.
+    const { service } = createHarness({
+      policy: {
+        version: MEMORY_RETRIEVAL_POLICY_VERSION,
+        deadlineMs: 200,
+        candidateLimitPerLane: 25,
+      },
+      monotonicNow: (() => {
+        let base = 0;
+        return () => {
+          if (base === 0) {
+            base = 1;
+            return 0;
+          }
+          return 200;
+        };
+      })(),
+      structuredRows: [laneRow()],
+    });
+    const outcome = await service.run(retrievalInput());
+    expect(outcome.status).toBe("completed");
+    expect(outcome.manifest.duration_ms).toBe(200);
+    expect(outcome.manifest.qualified_count).toBe(1);
+  });
+
   it("demonstrates boundary success inside the deadline", async () => {
     const { service } = createHarness({
       policy: {
@@ -355,7 +380,7 @@ describe("createMemoryRetrievalService", () => {
     const { service } = createHarness({ policy: null });
     const outcome = await service.run(retrievalInput());
     expect(outcome.status).toBe("degraded");
-    expect(outcome.degradedReasonCodes).toContain("retrieval_run_recording_failed");
+    expect(outcome.degradedReasonCodes).toContain("retrieval_policy_unavailable");
     expect(outcome.retrievalRunId).toBeNull();
   });
 });

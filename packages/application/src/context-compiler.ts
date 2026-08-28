@@ -308,7 +308,6 @@ export function createContextCompiler(dependencies: {
             },
             sourceEventRevisionId: source.inputRevisionId,
             currentInputText: currentInput.text,
-            locale: source.locale,
             // Only a source-valid current topic may feed the query (story 44):
             // a stale / failed / invalidated projection yields null.
             currentTopic: dialogueState?.content.current_topic.value ?? null,

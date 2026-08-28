@@ -130,7 +130,6 @@ describe("buildRetrievalQuery", () => {
     expect(query.sourceRefs).toContainEqual({
       kind: "current_topic",
       dialogueRevision: 6,
-      field: "current_topic",
     });
   });
 
