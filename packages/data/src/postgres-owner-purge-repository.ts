@@ -74,8 +74,44 @@ const ORDER_COLUMNS = `
   needs_attention_at, needs_attention_reason, backup_retention_until
 `;
 
+// workflow_commands is deliberately polymorphic: its subject has no foreign
+// key because the command vocabulary spans tables introduced over time. Keep
+// this scope expression in one place so every purge delete and its immediate
+// verification use the same owner-bound subject set.
+const OWNER_WORKFLOW_COMMAND_SCOPE = `(
+  (
+    command.subject_type = 'daily_session'
+    AND command.subject_id IN (
+      SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
+    )
+  )
+  OR (
+    command.subject_type = 'conversation_event_revision'
+    AND command.subject_id IN (
+      SELECT conversation_event_revision_id
+      FROM conversation_event_revisions WHERE user_id = $1
+    )
+  )
+  OR (
+    command.subject_type = 'memory_claim'
+    AND command.subject_id IN (
+      SELECT memory_claim_id FROM memory_claims WHERE user_id = $1
+    )
+  )
+  OR (
+    command.subject_type = 'entity'
+    AND command.subject_id IN (
+      SELECT entity_id FROM entities WHERE user_id = $1
+    )
+  )
+  OR (
+    command.subject_type = 'app_user'
+    AND command.subject_id = $1
+  )
+)`;
+
 /**
- * Every owner-scoped surface present through 1A.2 that the Full Purge clears,
+ * Every owner-scoped surface present through 1A.3a that the Full Purge clears,
  * with the count query verification uses. Conversation Event Revisions are
  * intentionally absent: they survive as content-free tombstoned envelopes
  * (content_purged_at + empty canonical_text) per the issue #27 clearing
@@ -121,10 +157,113 @@ const CLEARED_SURFACES: ReadonlyArray<Readonly<{
   { label: "current_dialogue_states", sql: "SELECT count(*) FROM current_dialogue_states WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
   { label: "daily_session_date_outcomes", sql: "SELECT count(*) FROM daily_session_date_outcomes WHERE user_id = $1" },
   { label: "auth_sessions", sql: "SELECT count(*) FROM auth_sessions WHERE user_id = $1" },
+  { label: "entity_labels", sql: "SELECT count(*) FROM entity_labels WHERE user_id = $1" },
+  { label: "entity_mentions", sql: "SELECT count(*) FROM entity_mentions WHERE user_id = $1" },
+  { label: "entity_mention_candidates", sql: "SELECT count(*) FROM entity_mention_candidates WHERE user_id = $1" },
+  { label: "memory_candidates", sql: "SELECT count(*) FROM memory_candidates WHERE user_id = $1" },
+  { label: "memory_candidate_evidence_links", sql: "SELECT count(*) FROM memory_candidate_evidence_links WHERE user_id = $1" },
+  { label: "memory_forget_requests", sql: "SELECT count(*) FROM memory_forget_requests WHERE user_id = $1" },
+  { label: "memory_forget_evidence_exclusions", sql: "SELECT count(*) FROM memory_forget_evidence_exclusions WHERE user_id = $1" },
+  { label: "memory_forget_reversals", sql: "SELECT count(*) FROM memory_forget_reversals WHERE user_id = $1" },
+  { label: "relationship_resolver_hints", sql: "SELECT count(*) FROM relationship_resolver_hints WHERE user_id = $1" },
+  { label: "claim_evidence_links", sql: "SELECT count(*) FROM claim_evidence_links WHERE user_id = $1" },
+  { label: "memory_claim_version_qualifier_evidence", sql: "SELECT count(*) FROM memory_claim_version_qualifier_evidence WHERE user_id = $1" },
+  { label: "claim_retrieval_projections", sql: "SELECT count(*) FROM claim_retrieval_projections WHERE user_id = $1" },
+  { label: "retrieval_run_candidates", sql: "SELECT count(*) FROM retrieval_run_candidates WHERE user_id = $1" },
+  { label: "retrieval_runs", sql: "SELECT count(*) FROM retrieval_runs WHERE user_id = $1" },
+  { label: "fast_path_session_items", sql: "SELECT count(*) FROM fast_path_session_items WHERE user_id = $1" },
+  { label: "entity_resolve_gate_outcomes", sql: "SELECT count(*) FROM entity_resolve_gate_outcomes WHERE user_id = $1" },
+  { label: "entity_clarification_proposals", sql: "SELECT count(*) FROM entity_clarification_proposals WHERE user_id = $1" },
+  { label: "fast_path_extraction_runs", sql: "SELECT count(*) FROM fast_path_extraction_runs WHERE user_id = $1" },
+  { label: "memory_consolidation_diffs", sql: "SELECT count(*) FROM memory_consolidation_diffs WHERE user_id = $1" },
+  { label: "memory_consolidation_runs", sql: "SELECT count(*) FROM memory_consolidation_runs WHERE user_id = $1" },
+  { label: "memory_claim_corrections", sql: "SELECT count(*) FROM memory_claim_corrections WHERE user_id = $1" },
+  { label: "memory_impression_vetoes", sql: "SELECT count(*) FROM memory_impression_vetoes WHERE user_id = $1" },
+  { label: "memory_correction_followups", sql: "SELECT count(*) FROM memory_correction_followups WHERE user_id = $1" },
+  { label: "conversation_action_handles", sql: "SELECT count(*) FROM conversation_action_handles WHERE user_id = $1" },
+  { label: "conversation_action_payloads", sql: "SELECT count(*) FROM conversation_action_payloads WHERE action_execution_id IN (SELECT action_execution_id FROM conversation_action_executions WHERE user_id = $1)" },
+  { label: "conversation_action_receipts", sql: "SELECT count(*) FROM conversation_action_receipts WHERE action_execution_id IN (SELECT action_execution_id FROM conversation_action_executions WHERE user_id = $1)" },
+  { label: "conversation_action_executions", sql: "SELECT count(*) FROM conversation_action_executions WHERE user_id = $1" },
   // Source-ref tables have no user_id and are cleared by ON DELETE CASCADE
   // from their commands; verification asserts no orphans survived.
   { label: "rolling_summary_command_source_refs", params: [], sql: "SELECT count(*) FROM rolling_summary_command_source_refs ref LEFT JOIN rolling_summary_commands command ON command.rolling_summary_command_id = ref.rolling_summary_command_id WHERE command.rolling_summary_command_id IS NULL" },
   { label: "dialogue_state_command_source_refs", params: [], sql: "SELECT count(*) FROM dialogue_state_command_source_refs ref LEFT JOIN dialogue_state_commands command ON command.dialogue_state_command_id = ref.dialogue_state_command_id WHERE command.dialogue_state_command_id IS NULL" },
+];
+
+/**
+ * Immutable EntityVersion / ClaimVersion rows cannot be deleted without
+ * breaking their history contract. Full Purge therefore leaves only their
+ * contentless tombstone markers; no current pointer or readable owner row may
+ * survive. The Self Entity's active envelope is deliberately excluded.
+ */
+const PURGED_MEMORY_SURFACES: ReadonlyArray<Readonly<{
+  label: string;
+  sql: string;
+}>> = [
+  {
+    label: "memory_claims_not_purged",
+    sql: `
+      SELECT count(*)
+      FROM memory_claims claim
+      WHERE claim.user_id = $1
+        AND (
+          claim.current_version_id IS NOT NULL
+          OR claim.deleted_at IS NULL
+          OR claim.content_purged_at IS NULL
+        )
+    `,
+  },
+  {
+    label: "memory_claim_versions_not_purged",
+    sql: `
+      SELECT count(*)
+      FROM memory_claim_versions version
+      WHERE version.user_id = $1
+        AND version.content_purged_at IS NULL
+    `,
+  },
+  {
+    label: "memory_claim_version_qualifiers_not_purged",
+    sql: `
+      SELECT count(*)
+      FROM memory_claim_version_qualifiers qualifier
+      WHERE qualifier.user_id = $1
+        AND qualifier.content_purged_at IS NULL
+    `,
+  },
+  {
+    label: "ordinary_entities_not_purged",
+    sql: `
+      SELECT count(*)
+      FROM entities entity
+      WHERE entity.user_id = $1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_self_entities binding
+          WHERE binding.user_id = $1
+            AND binding.entity_id = entity.entity_id
+        )
+        AND (
+          entity.current_version_id IS NOT NULL
+          OR entity.deleted_at IS NULL
+        )
+    `,
+  },
+  {
+    label: "ordinary_entity_versions_not_purged",
+    sql: `
+      SELECT count(*)
+      FROM entity_versions version
+      WHERE version.user_id = $1
+        AND version.content_purged_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM user_self_entities binding
+          WHERE binding.user_id = $1
+            AND binding.entity_id = version.entity_id
+        )
+    `,
+  },
 ];
 
 export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
@@ -560,6 +699,72 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         [userId],
       );
 
+      // Memory logical identities and immutable history retain only the
+      // content-free envelopes allowed by ADR-0074. Clear every current
+      // pointer first so no reader can reach a purged version while the
+      // dependent projections are being removed. The Self Entity envelope
+      // and its one-to-one binding are intentionally excluded.
+      await client.query(
+        `UPDATE memory_claims
+         SET current_version_id = NULL
+         WHERE user_id = $1 AND current_version_id IS NOT NULL`,
+        [userId],
+      );
+      await client.query(
+        `UPDATE entities entity
+         SET current_version_id = NULL
+         WHERE entity.user_id = $1
+           AND entity.current_version_id IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM user_self_entities binding
+             WHERE binding.user_id = $1 AND binding.entity_id = entity.entity_id
+           )`,
+        [userId],
+      );
+      await client.query(
+        `UPDATE memory_claims
+         SET deleted_at = COALESCE(deleted_at, $2),
+             content_purged_at = COALESCE(content_purged_at, $2)
+         WHERE user_id = $1`,
+        [userId, input.now],
+      );
+      await client.query(
+        `UPDATE memory_claim_versions
+         SET content_purged_at = $2,
+             typed_value = NULL
+         WHERE user_id = $1 AND content_purged_at IS NULL`,
+        [userId, input.now],
+      );
+      await client.query(
+        `UPDATE memory_claim_version_qualifiers
+         SET content_purged_at = $2,
+             typed_value = NULL
+         WHERE user_id = $1 AND content_purged_at IS NULL`,
+        [userId, input.now],
+      );
+      await client.query(
+        `UPDATE entity_versions version
+         SET content_purged_at = $2
+         WHERE version.user_id = $1
+           AND version.content_purged_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM user_self_entities binding
+             WHERE binding.user_id = $1 AND binding.entity_id = version.entity_id
+           )`,
+        [userId, input.now],
+      );
+      await client.query(
+        `UPDATE entities entity
+         SET deleted_at = COALESCE(deleted_at, $2)
+         WHERE entity.user_id = $1
+           AND entity.deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM user_self_entities binding
+             WHERE binding.user_id = $1 AND binding.entity_id = entity.entity_id
+           )`,
+        [userId, input.now],
+      );
+
       // Hard-DELETE every other owner-scoped surface, FK-safe order.
       await client.query(
         "DELETE FROM entity_identity_revalidation_runs WHERE user_id = $1",
@@ -575,6 +780,153 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       );
       await client.query(
         "DELETE FROM entity_identity_corrections WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_correction_followups WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_claim_corrections WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_impression_vetoes WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_consolidation_diffs WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_consolidation_runs WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM fast_path_session_items WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM entity_resolve_gate_outcomes WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM entity_clarification_proposals WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM fast_path_extraction_runs WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM retrieval_run_candidates WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM retrieval_runs WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM relationship_resolver_hints WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM claim_retrieval_projections WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_claim_version_qualifier_evidence WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM claim_evidence_links WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_candidate_evidence_links WHERE user_id = $1",
+        [userId],
+      );
+      await client.query("DELETE FROM memory_candidates WHERE user_id = $1", [userId]);
+      await client.query(
+        "DELETE FROM memory_forget_reversals WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_forget_evidence_exclusions WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM memory_forget_requests WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM entity_mention_candidates WHERE user_id = $1",
+        [userId],
+      );
+      await client.query("DELETE FROM entity_mentions WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM entity_labels WHERE user_id = $1", [userId]);
+
+      // These action rows carry typed Claim / Qualifier / Entity references.
+      // Remove every owner workflow and outbox record first, then the
+      // content-bearing action envelope, before the old 1A.2 tables below.
+      await client.query(
+        `UPDATE generation_commands
+         SET action_execution_id = NULL
+         WHERE user_id = $1 AND action_execution_id IS NOT NULL`,
+        [userId],
+      );
+      await client.query(
+        `UPDATE journal_generation_commands
+         SET action_execution_id = NULL
+         WHERE user_id = $1 AND action_execution_id IS NOT NULL`,
+        [userId],
+      );
+      await client.query(
+        `DELETE FROM outbox_events
+         WHERE workflow_command_id IN (
+           SELECT workflow_command_id
+           FROM workflow_commands command
+           WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
+           AND command.command_type <> 'owner_full_purge'
+         )`,
+        [userId],
+      );
+      await client.query(
+        `DELETE FROM workflow_commands command
+         WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
+         AND command.command_type <> 'owner_full_purge'`,
+        [userId],
+      );
+      const remainingWorkflowCommands = await client.query<{ count: string }>(
+        `SELECT count(*) AS count
+         FROM workflow_commands command
+         WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
+           AND command.command_type <> 'owner_full_purge'`,
+        [userId],
+      );
+      if (Number(remainingWorkflowCommands.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError("workflow_commands_not_cleared");
+      }
+      await client.query(
+        "DELETE FROM conversation_action_handles WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        `DELETE FROM conversation_action_receipts receipt
+         USING conversation_action_executions execution
+         WHERE receipt.action_execution_id = execution.action_execution_id
+           AND execution.user_id = $1`,
+        [userId],
+      );
+      await client.query(
+        `DELETE FROM conversation_action_payloads payload
+         USING conversation_action_executions execution
+         WHERE payload.action_execution_id = execution.action_execution_id
+           AND execution.user_id = $1`,
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM conversation_action_executions WHERE user_id = $1",
         [userId],
       );
       await client.query(
@@ -795,6 +1147,13 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
           throw new PurgeVerificationError(`${surface.label}_not_empty`);
         }
       }
+      for (const surface of PURGED_MEMORY_SURFACES) {
+        const count = await client.query<{ count: string }>(surface.sql, [userId]);
+        if (Number(count.rows[0]?.count ?? 0) > 0) {
+          await client.query("ROLLBACK");
+          throw new PurgeVerificationError(`${surface.label}`);
+        }
+      }
       const unpurged = await client.query<{ count: string }>(
         `
           SELECT count(*) AS count FROM conversation_event_revisions
@@ -806,21 +1165,6 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         await client.query("ROLLBACK");
         throw new PurgeVerificationError("revisions_not_purged");
       }
-      // No executable command of the purged owner may remain. Sessions of the
-      // owner are gone, so any dangling daily_session command is a miss;
-      // commands of other owners (Phase 2+) must not false-park this order.
-      const executable = await client.query<{ count: string }>(
-        `
-          SELECT count(*) AS count FROM workflow_commands
-          WHERE subject_type = 'daily_session'
-            AND subject_id NOT IN (SELECT daily_session_id FROM daily_sessions)
-        `,
-      );
-      if (Number(executable.rows[0]?.count ?? 0) > 0) {
-        await client.query("ROLLBACK");
-        throw new PurgeVerificationError("executable_commands_remain");
-      }
-
       await client.query(
         `UPDATE owner_purge_orders
          SET status = 'verifying',

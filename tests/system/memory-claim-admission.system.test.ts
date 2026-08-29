@@ -395,6 +395,89 @@ describe("Memory Claim admission system seam", () => {
     );
   });
 
+  it("starts a new Claim lifecycle after purge without restoring the old version", async () => {
+    const firstRevision = await submitTurn("我住在北京。", "zh-CN");
+    const firstEvidence = await seedEvidence(firstRevision);
+    const first = await recordAndAdmit(
+      await mappedProposal({
+        predicateId: RESIDENCE,
+        typedValue: "北京",
+        evidenceItemIds: [firstEvidence],
+      }),
+    );
+    const claimId = claimIdOf(first);
+    const firstInspection = await claimService.inspectClaim({
+      userId: OWNER,
+      claimId,
+    });
+    const firstVersionId = firstInspection?.versions[0]?.memoryClaimVersionId;
+    if (!firstVersionId) throw new Error("First ClaimVersion was not created.");
+
+    // Mirror the owner Full Purge result: links and proposal rows are gone,
+    // the logical Claim remains as a tombstone, and the immutable version has
+    // its content cleared.
+    await database.pool.query(
+      `DELETE FROM claim_evidence_links
+       WHERE user_id = $1 AND memory_claim_version_id = $2`,
+      [OWNER, firstVersionId],
+    );
+    await database.pool.query(
+      `UPDATE memory_claim_versions
+       SET content_purged_at = $2, typed_value = NULL
+       WHERE user_id = $1 AND memory_claim_version_id = $3`,
+      [OWNER, clock(), firstVersionId],
+    );
+    await database.pool.query(
+      `UPDATE memory_claims
+       SET current_version_id = NULL, deleted_at = $2, content_purged_at = $2
+       WHERE user_id = $1 AND memory_claim_id = $3`,
+      [OWNER, clock(), claimId],
+    );
+
+    const secondRevision = await submitTurn("我现在住在上海。", "zh-CN");
+    const secondEvidence = await seedEvidence(secondRevision);
+    const second = await recordAndAdmit(
+      await mappedProposal({
+        predicateId: RESIDENCE,
+        typedValue: "上海",
+        evidenceItemIds: [secondEvidence],
+      }),
+    );
+
+    expect(second).toMatchObject({
+      outcome: "promoted",
+      claimId,
+      createdClaim: false,
+      revision: 2,
+    });
+    const secondInspection = await claimService.inspectClaim({
+      userId: OWNER,
+      claimId,
+    });
+    expect(secondInspection?.versions).toHaveLength(2);
+    expect(secondInspection?.versions[0]?.typedValue).toBe("");
+    expect(secondInspection?.versions[1]).toMatchObject({
+      typedValue: "上海",
+      status: "active",
+    });
+    expect(secondInspection?.claim.currentVersionId).toBe(
+      secondInspection?.versions[1]?.memoryClaimVersionId,
+    );
+
+    const claimRow = await database.pool.query<{
+      deleted_at: Date | null;
+      content_purged_at: Date | null;
+    }>(
+      `SELECT deleted_at, content_purged_at FROM memory_claims
+       WHERE user_id = $1 AND memory_claim_id = $2`,
+      [OWNER, claimId],
+    );
+    expect(claimRow.rows[0]).toEqual({
+      deleted_at: null,
+      content_purged_at: null,
+    });
+  });
+
   it("enforces the two recallable epistemic combinations at the database level (AC 6)", async () => {
     const claimId = createTestUuidV7(clock());
     const versionId = createTestUuidV7(clock());
