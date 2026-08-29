@@ -6,7 +6,9 @@ import {
   resolvePromptArtifacts,
   resolveRecallExperienceContract,
   resolveSafetyPostureReducedPersona,
+  resolveTrustActionExpressionContract,
   SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
+  TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
   type GenerationCommandStage,
   type ResolvedPromptArtifacts,
 } from "./prompt-artifacts";
@@ -35,6 +37,7 @@ import type {
   ActionReferenceHandle,
   ActionReferenceTarget,
 } from "./conversation-action-catalog";
+import { resolveConversationLocale } from "./conversation-behavior";
 import type {
   MemoryRetrievalPort,
   RetrievalRunManifest,
@@ -51,11 +54,33 @@ import type {
   ConversationActionExecution,
 } from "./conversation-action-gateway";
 
+/**
+ * The trust-action detail of a frozen Action Finalization Receipt (issue
+ * #119). Populated by the repository loaders only for trust-action receipts:
+ * the typed reference to the resolved Claim (ADR-0118), the multi-hit
+ * candidate count, and — for source explanations — the verified evidence
+ * snapshot or the `unverifiable` verdict (ADR-0008). No prose beyond the
+ * bounded user-word quotes the reply must cite.
+ */
+export type ActionFinalizationTrustActionDetail = Readonly<{
+  candidateCount: number | null;
+  claimId: string | null;
+  claimKind: "objective" | "impression" | null;
+  claimVersionId: string | null;
+  evidenceItems: readonly Readonly<{
+    occurredOn: string;
+    quote: string;
+  }>[];
+  evidenceVerdict: "verified" | "unverifiable" | null;
+}>;
+
 export type ActionFinalizationReceiptSnapshot = Readonly<{
+  actionKind: string | null;
   admission: ConversationActionAdmission;
   disposition: string | null;
   execution: ConversationActionExecution;
   sequence: number;
+  trustAction?: ActionFinalizationTrustActionDetail | null;
 }>;
 
 export type ContextPolicyVersions = Readonly<{
@@ -116,6 +141,8 @@ export type CompiledContextDegradedReason =
   | "rolling_summary_failed"
   | "memory_retrieval_failed"
   | "fast_path_pending"
+  /** #119: a materially ambiguous trust-action target closes the reply round's memory. */
+  | "trust_action_memory_fenced"
   | null;
 
 export type CompiledContextSectionKey =
@@ -136,6 +163,7 @@ export type CompiledContextSectionKey =
   | "objective_memory"
   | "ai_impression"
   | "recall_experience"
+  | "trust_action_expression"
   | "rolling_summary"
   | "committed_raw_events"
   | "current_user_input"
@@ -385,9 +413,13 @@ export function createContextCompiler(dependencies: {
         dialogueState,
         // #117: a degraded retrieval run carries empty sections (the round's
         // memory fails closed) and empty sections are omitted entirely —
-        // never placeholder text, never fabricated.
+        // never placeholder text, never fabricated. #119: a materially
+        // ambiguous trust-action target closes the reply round's memory the
+        // same way (SPEC AC 29).
         memorySections:
-          retrievalOutcome === null || retrievalOutcome.status === "degraded"
+          retrievalOutcome === null ||
+          retrievalOutcome.status === "degraded" ||
+          trustActionFencesMemory(source.actionFinalizationReceipt)
             ? undefined
             : retrievalOutcome.memorySections,
         rollingSummary: source.rollingSummary ?? null,
@@ -411,9 +443,11 @@ export function createContextCompiler(dependencies: {
               ? "raw_event_budget_exceeded"
               : retrievalOutcome?.status === "degraded"
                 ? "memory_retrieval_failed"
-                : source.fastPathPending === true
-                  ? "fast_path_pending"
-                  : null;
+                : trustActionFencesMemory(source.actionFinalizationReceipt)
+                  ? "trust_action_memory_fenced"
+                  : source.fastPathPending === true
+                    ? "fast_path_pending"
+                    : null;
       const contentHmac = createManifestContentHmac(
         dependencies.contentHmacSecret,
         sections,
@@ -525,6 +559,10 @@ export function createContextCompiler(dependencies: {
       const recallExperienceSection = source.sections.find(
         (candidate) => candidate.key === "recall_experience",
       );
+      // #119: the P1–P6 trust-action expression contract replays the same way.
+      const trustActionExpressionSection = source.sections.find(
+        (candidate) => candidate.key === "trust_action_expression",
+      );
       if (
         currentInputs.length !== 1 ||
         !currentInput ||
@@ -538,7 +576,8 @@ export function createContextCompiler(dependencies: {
         MEMORY_SECTION_KEYS.some(
           (key) => memorySectionContents[key] === "",
         ) ||
-        (recallExperienceSection && !recallExperienceSection.reference)
+        (recallExperienceSection && !recallExperienceSection.reference) ||
+        (trustActionExpressionSection && !trustActionExpressionSection.reference)
       ) {
         throw new CompiledContextIntegrityError();
       }
@@ -563,6 +602,12 @@ export function createContextCompiler(dependencies: {
           : {}),
         ...(recallExperienceSection?.reference
           ? { recallExperienceContent: recallExperienceSection.reference }
+          : {}),
+        ...(trustActionExpressionSection?.reference
+          ? {
+              trustActionExpressionContent:
+                trustActionExpressionSection.reference,
+            }
           : {}),
         memorySectionContents,
         rollingSummary: source.rollingSummary ?? null,
@@ -626,9 +671,58 @@ function renderActionReferenceInstructions(
   ].join("\n");
 }
 
+/** The trust-action kinds whose receipts ship with issue #119 (ADR-0118). */
+export const TRUST_ACTION_KINDS: readonly string[] = [
+  "memory_correction",
+  "explain_memory_source",
+];
+
+export function isTrustActionReceipt(
+  receipt: ActionFinalizationReceiptSnapshot | undefined,
+): receipt is ActionFinalizationReceiptSnapshot &
+  Readonly<{ actionKind: string }> {
+  return (
+    receipt !== undefined &&
+    receipt.actionKind !== null &&
+    TRUST_ACTION_KINDS.includes(receipt.actionKind)
+  );
+}
+
+/**
+ * A materially ambiguous trust-action target closes the round's memory on
+ * the reply context (SPEC AC 29): the user disputed remembered content the
+ * system cannot uniquely locate, so the reply continues with zero memory
+ * injection — no partial memory, no reuse of the decision stage's view —
+ * while the honest clarification reply explains itself from the frozen
+ * receipt.
+ */
+export function trustActionFencesMemory(
+  receipt: ActionFinalizationReceiptSnapshot | undefined,
+): boolean {
+  return (
+    isTrustActionReceipt(receipt) &&
+    receipt.admission === "clarification_required" &&
+    receipt.disposition === "target_ambiguous_multi_hit"
+  );
+}
+
+const TRUST_ACTION_UNVERIFIABLE_PHRASING: Readonly<{ en: string; zh: string }> = {
+  en: "I can't verify where this came from.",
+  zh: "我无法核实这条记忆是从哪来的。",
+};
+
+export function trustActionUnverifiablePhrasing(locale: string): string {
+  return resolveConversationLocale(locale) === "zh"
+    ? TRUST_ACTION_UNVERIFIABLE_PHRASING.zh
+    : TRUST_ACTION_UNVERIFIABLE_PHRASING.en;
+}
+
 function renderActionFinalizationReceipt(
   receipt: ActionFinalizationReceiptSnapshot,
 ): string {
+  if (isTrustActionReceipt(receipt)) {
+    return renderTrustActionFinalizationReceipt(receipt);
+  }
   const completionRule = receipt.execution === "succeeded"
     ? "The Action completed successfully; it is valid to say the regenerated Journal is complete."
     : "The Action is not complete; do not claim that a new Journal Version was generated or became current.";
@@ -638,6 +732,69 @@ function renderActionFinalizationReceipt(
     completionRule,
     "Only this Receipt snapshot may determine the Action status in the final response.",
   ].join("\n");
+}
+
+function renderTrustActionFinalizationReceipt(
+  receipt: ActionFinalizationReceiptSnapshot & Readonly<{ actionKind: string }>,
+): string {
+  const detail = receipt.trustAction ?? null;
+  const lines = [
+    "Action Finalization Receipt (frozen committed source):",
+    `Action: ${receipt.actionKind}; admission: ${receipt.admission}; execution: ${receipt.execution}; sequence: ${receipt.sequence}; disposition: ${receipt.disposition ?? "none"}.`,
+  ];
+  if (receipt.actionKind === "memory_correction") {
+    if (receipt.admission === "accepted" && receipt.execution === "succeeded") {
+      if (receipt.disposition === "succeeded_noop") {
+        lines.push(
+          "Outcome rule: this memory already sat corrected — say so honestly and plainly; nothing new changed this turn, and you must not pretend a fresh correction happened.",
+        );
+      } else {
+        lines.push(
+          "Outcome rule: the correction committed in this turn — that item is corrected now and stops being recalled. Confirm it plainly per P1; acknowledge the corrected version the user stated, if any; the background re-checks are still in progress, never claimed complete (P3). Do not restate the corrected-away content as current memory, and do not confess internal mechanics.",
+        );
+      }
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "target_ambiguous_multi_hit"
+    ) {
+      lines.push(
+        `Outcome rule: several memories (${detail?.candidateCount ?? "some"}) match what the user described. Say only how many are in question — never list their content, never guess or preselect one — and ask which one the user means (P4). Nothing was changed.`,
+      );
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "target_not_found"
+    ) {
+      lines.push(
+        "Outcome rule: no matching memory was found. Say plainly that you could not find such a memory and that nothing was changed (P4). Do not invent a near miss, and do not confess internal mechanics.",
+      );
+    } else {
+      lines.push(
+        "Outcome rule: the correction did not complete; never claim any memory was corrected (P3/P4).",
+      );
+    }
+  } else if (receipt.actionKind === "explain_memory_source") {
+    if (
+      receipt.execution === "succeeded" &&
+      receipt.disposition === "source_evidence_verified" &&
+      detail &&
+      detail.evidenceVerdict === "verified" &&
+      detail.evidenceItems.length > 0
+    ) {
+      lines.push(
+        `Outcome rule: the source is verified. Explain it from these evidence items only, with their dates and the user's actual words, in the two-kind language (P5): claim kind = ${detail.claimKind ?? "unknown"}. ${detail.evidenceItems
+          .map((item) => `[${item.occurredOn}] ${item.quote}`)
+          .join(" ")} Never add a date, word, or event that is not listed here.`,
+      );
+    } else {
+      lines.push(
+        `Outcome rule: the source cannot be verified. Use exactly this phrasing and add nothing that pretends provenance (P5): "${trustActionUnverifiablePhrasing("en")}" / 「${trustActionUnverifiablePhrasing("zh")}」`,
+      );
+    }
+  }
+  lines.push(
+    "Only this Receipt snapshot may determine the Action status in the final response.",
+  );
+  return lines.join("\n");
 }
 
 function estimateTokens(text: string): number {
@@ -718,6 +875,7 @@ function createSections(input: {
           reference: `receipt:${input.actionFinalizationReceipt.sequence}`,
           truncatable: false,
         }]),
+    ...renderTrustActionExpressionSection(input),
     {
       budgetTokens: null,
       content:
@@ -1042,6 +1200,54 @@ function renderRecallExperienceSection(input: {
       budgetTokens: null,
       content,
       key: "recall_experience",
+      reference: content,
+      truncatable: false,
+    },
+  ];
+}
+
+/**
+ * The P1–P6 trust-action expression contract (issue #119, SPEC story 49):
+ * present exactly when the frozen receipt belongs to a trust action, so the
+ * confirmation style is compiled, never improvised. `trustActionExpression-
+ * Content` replays the exact content frozen at compile time for the Provider
+ * Egress re-derivation (the section reference carries the full rendered
+ * content — the recall-experience pattern).
+ */
+function renderTrustActionExpressionSection(input: {
+  actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
+  locale: string;
+  trustActionExpressionContent?: string;
+}): readonly Readonly<{
+  budgetTokens: null;
+  content: string;
+  key: "trust_action_expression";
+  reference: string;
+  truncatable: false;
+}>[] {
+  if (input.trustActionExpressionContent !== undefined) {
+    return [
+      {
+        budgetTokens: null,
+        content: input.trustActionExpressionContent,
+        key: "trust_action_expression",
+        reference: input.trustActionExpressionContent,
+        truncatable: false,
+      },
+    ];
+  }
+  if (!isTrustActionReceipt(input.actionFinalizationReceipt)) {
+    return [];
+  }
+  const content = resolveTrustActionExpressionContract({
+    locale: input.locale,
+    version: TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
+  });
+  return [
+    {
+      budgetTokens: null,
+      content,
+      key: "trust_action_expression",
       reference: content,
       truncatable: false,
     },

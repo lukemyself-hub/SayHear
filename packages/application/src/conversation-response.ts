@@ -314,8 +314,12 @@ export function createConversationResponseService(dependencies: {
         } else if (event.type === "action_admitted") {
           yield event;
           const finalization = event.receipt.finalization;
+          // #119: Trust-Control Actions also finalize their non-accepted
+          // admissions — the count-only multi-hit clarification and the
+          // honest zero-hit report are real replies, shaped by the frozen
+          // receipt (the finalization command exists exactly when a reply is
+          // owed). Accepted actions keep the existing flow.
           if (
-            event.receipt.admission === "accepted" &&
             finalization &&
             dependencies.harness.runFinalizationCommand
           ) {

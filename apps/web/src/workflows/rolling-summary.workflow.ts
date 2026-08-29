@@ -9,6 +9,7 @@ import { dialogueStateWorkflow } from "./dialogue-state.workflow";
 import { ownerFullPurgeWorkflow } from "./owner-full-purge.workflow";
 import { fastPathExtractionWorkflow } from "./fast-path-extraction.workflow";
 import { memoryConsolidationWorkflow } from "./memory-consolidation.workflow";
+import { memoryCorrectionFollowupWorkflow } from "./memory-trust-followup.workflow";
 
 export async function journalRegenerationWorkflow(input: {
   workflowCommandId: string;
@@ -89,6 +90,8 @@ export function createWorkflowStarter(): WorkflowStarter {
       input.eventType === "memory_sweeper_requested"
     ) {
       run = await start(memoryConsolidationWorkflow, [workflowInput]);
+    } else if (input.eventType === "memory_correction_followup_requested") {
+      run = await start(memoryCorrectionFollowupWorkflow, [workflowInput]);
     } else {
       throw new Error(`Unsupported outbox event type: ${input.eventType}`);
     }

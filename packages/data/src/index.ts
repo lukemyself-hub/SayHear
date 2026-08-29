@@ -30,6 +30,13 @@ export {
   PostgresConversationActionRepository,
   PostgresJournalRegenerationActionRepository,
 } from "./postgres-conversation-action-repository";
+export {
+  loadActionFinalizationReceiptSnapshot,
+  loadVerifiedExplainEvidenceItems,
+  PostgresMemoryCorrectionFollowupRepository,
+  PostgresMemoryTrustActionCommitPort,
+  PostgresMemoryTrustActionTargetSource,
+} from "./postgres-memory-trust-action-repository";
 export { PostgresUserTextConversationRepository } from "./postgres-user-text-conversation-repository";
 export {
   loadDialogueStateForContext,

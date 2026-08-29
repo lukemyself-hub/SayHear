@@ -87,6 +87,29 @@ export const SAFETY_POSTURE_REDUCED_PERSONA_VERSION =
 export const RECALL_EXPERIENCE_CONTRACT_VERSION =
   "recall-experience-contract:v1";
 
+/**
+ * The P1–P6 trust-action expression principles (issue #119, SPEC #107 "Trust
+ * actions", stories 45–49): the versioned prompt artifact that governs how an
+ * Action Finalization reply may speak about a Trust-Control Action outcome.
+ * The Context Compiler emits it exactly when the frozen receipt belongs to a
+ * trust action, so confirmation style cannot drift silently and rollback is
+ * re-pinning the previous version. The principles are style law, not pinned
+ * canonical sentences (revisited after internal use):
+ *
+ * - P1 same-turn short explicit confirmation naming the target.
+ * - P2 forget confirmations avoid "删除"-style wording — the journal stays,
+ *   active recall stops. (Forget joins at #120; the principle ships now.)
+ * - P3 async parts are stated honestly as in progress, never claimed complete.
+ * - P4 unsupported requests get honest boundaries plus the real available
+ *   granularity.
+ * - P5 source explanations use the two-kind ADR-0009 language and an explicit
+ *   "cannot verify" when evidence is unreadable.
+ * - P6 natural friend-like tone (ADR-0108 / ADR-0116) — no technical panels,
+ *   no ritual hedges.
+ */
+export const TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
+  "trust-action-expression-contract:v1";
+
 export type GenerationCommandStage = "decision" | "action_finalization";
 
 export class PromptArtifactResolutionError extends Error {
@@ -368,6 +391,61 @@ export function resolveRecallExperienceContract(input: {
   if (!registered) {
     throw new PromptArtifactResolutionError(
       "recall experience contract",
+      input.version,
+    );
+  }
+  return registered[resolveConversationLocale(input.locale)];
+}
+
+/**
+ * The P1–P6 trust-action expression principles, authored per language under
+ * one version identity (ADR-0072). Resolution is fail-closed on both the
+ * version and the locale like every identity layer.
+ */
+// P5's quoted "cannot verify" sentence is illustrative prose; the enforcement
+// point is the frozen receipt rule, which renders the canonical phrasing from
+// trustActionUnverifiablePhrasing (context-compiler). Keep the two wordings
+// consistent when revisiting the artifact after internal use.
+const TRUST_ACTION_EXPRESSION_CONTRACT_CONTENT: Readonly<
+  Record<string, Readonly<{ zh: string; en: string }>>
+> = {
+  [TRUST_ACTION_EXPRESSION_CONTRACT_VERSION]: {
+    en: [
+      "Trust-action expression contract [trust-action-expression-contract:v1]:",
+      "- P1 Confirmation: when the frozen receipt shows the trust action committed, confirm it in one short, explicit sentence that names what changed — nothing theatrical, no restating the whole history.",
+      "- P2 Stopping, not deleting: when something stops being recalled, say it plainly as \"I won't bring this up anymore\" — never \"deleted\" or \"erased\": the journal and the record stay, only active recall stops.",
+      "- P3 Honesty about processing: when parts of the work are still running in the background (bookkeeping and re-checks), say they are in progress; never claim the background part is already done, and never promise a result for it.",
+      "- P4 Honest boundaries: when nothing matched, say plainly that you couldn't find such a memory and nothing was changed; when several memories match, say only how many are in question — never list them, never guess or pick one — and ask which one the user means. When a request exceeds what is supported, name the limit and state the granularity that is supported.",
+      "- P5 Source explanations: an Objective Memory item is the user's own stated fact — cite the dates and their actual words without claiming independent verification; an AI Impression is your own observation built over time — own it as your read, never upgrade it into something they said. When the receipt says the source cannot be verified, say exactly that, plainly: \"I can't verify where this came from\" — never reconstruct a plausible-sounding origin.",
+      "- P6 Voice: keep your ordinary warm friend-like tone in every trust reply — no technical panels, no status codes, no ritual hedges; a correction confirmed like a friend acknowledging it lands right.",
+    ].join("\n"),
+    zh: [
+      "Trust-action expression contract [trust-action-expression-contract:v1]：",
+      "- P1 确认：当冻结回执显示信任动作已生效，用一句简短、明确的话确认改了什么——不夸张，也不把整段历史复述一遍。",
+      "- P2 停止，不是删除：当一段记忆不再被提起，就直说「以后不提了」——绝不说「删除」「清除」：journal 和记录都在，停下的只是主动回忆。",
+      "- P3 处理中就说实话：当还有后台工作在跑（记账、复查），说它们还在处理中；绝不说后台部分已经完成，也不要替它承诺结果。",
+      "- P4 诚实的边界：没找到对应记忆时，坦白说没找到、什么都没改；多条记忆都对得上时，只说有几条对得上——绝不列出内容、绝不代选、绝不猜——然后问用户指的是哪一条。当请求超出支持范围，说出边界，并给出真实可用的粒度。",
+      "- P5 来源解释：Objective Memory 是用户亲口说过的事实——引用日期和用户原话，但不得说成你独立核实过；AI Impression 是你自己长期积累的观察——以你的理解来陈述，绝不能升级成用户说过的话。当回执说来源无法核实时，就照实直说「我无法核实这是从哪来的」——绝不编一个听起来合理的出处。",
+      "- P6 语气：每一条信任回复都保持平常那个温暖朋友的语气——不摆技术面板、不报状态码、不加仪式性铺垫；像朋友确认一句「好，记住了」那样自然。",
+    ].join("\n"),
+  },
+};
+
+/**
+ * Resolve the P1–P6 trust-action expression contract for a compile whose
+ * frozen receipt belongs to a trust action. The version resolves fail-closed;
+ * the locale resolves through the ADR-0072 two-language rule (any non-zh
+ * locale reads the en contract).
+ */
+export function resolveTrustActionExpressionContract(input: {
+  locale: string;
+  version: string;
+}): string {
+  const registered =
+    TRUST_ACTION_EXPRESSION_CONTRACT_CONTENT[input.version];
+  if (!registered) {
+    throw new PromptArtifactResolutionError(
+      "trust action expression contract",
       input.version,
     );
   }
