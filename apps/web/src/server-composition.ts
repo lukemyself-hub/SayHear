@@ -4,6 +4,7 @@ import {
   createInternalInspectionService,
   createConversationAgentHarness,
   createConversationActionGateway,
+  createEntityIdentityCorrectionActionHandler,
   createExplainMemorySourceActionHandler,
   createJournalRegenerationActionHandler,
   createMemoryCorrectionActionHandler,
@@ -58,6 +59,9 @@ import {
   PostgresMemoryCorrectionFollowupRepository,
   PostgresMemoryTrustActionCommitPort,
   PostgresMemoryTrustActionTargetSource,
+  PostgresEntityIdentityCorrectionCommitPort,
+  PostgresEntityIdentityCorrectionTargetSource,
+  PostgresEntityIdentityRevalidationRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
@@ -454,22 +458,34 @@ export function createServerComposition() {
   // structured-lexical search over active Claims and classifies with the
   // pure planner; registry lexical surfaces come from the same released
   // snapshot the retrieval baseline pins.
-  const memoryTrustActionCommitPort = new PostgresMemoryTrustActionCommitPort({
-    relationshipHintsFor(predicateId) {
+  const memoryTrustActionProjectionProvider = {
+    relationshipHintsFor(predicateId: string) {
       const entry = predicateRegistryLookup.entryFor(predicateId);
       return entry
         ? relationshipHintInputsFor(predicateRegistryLookup, entry)
         : null;
     },
-    retrievalProjectionFor(predicateId) {
+    retrievalProjectionFor(predicateId: string) {
       const entry = predicateRegistryLookup.entryFor(predicateId);
       return entry
         ? retrievalProjectionInputsFor(predicateRegistryLookup, entry)
         : null;
     },
-  });
+  };
+  const memoryTrustActionCommitPort = new PostgresMemoryTrustActionCommitPort(
+    memoryTrustActionProjectionProvider,
+  );
   const memoryCorrectionFollowupRepository =
     new PostgresMemoryCorrectionFollowupRepository(pool);
+  const entityIdentityCorrectionCommitPort =
+    new PostgresEntityIdentityCorrectionCommitPort();
+  const entityIdentityCorrectionTargetSource =
+    new PostgresEntityIdentityCorrectionTargetSource(pool);
+  const entityIdentityRevalidationRepository =
+    new PostgresEntityIdentityRevalidationRepository(
+      pool,
+      memoryTrustActionProjectionProvider,
+    );
   const memoryTrustActionTargetSource = new PostgresMemoryTrustActionTargetSource(
     pool,
   );
@@ -559,8 +575,13 @@ export function createServerComposition() {
       createMemoryForgetReversalActionHandler({
         commitPort: memoryTrustActionCommitPort,
       }),
+      createEntityIdentityCorrectionActionHandler({
+        commitPort: entityIdentityCorrectionCommitPort,
+      }),
     ],
     repository: actionRepository,
+    entityIdentityCorrectionTargetResolver:
+      entityIdentityCorrectionTargetSource,
     trustActionTargetResolver,
   });
   const conversationAgentHarness = createConversationAgentHarness({
@@ -649,6 +670,7 @@ export function createServerComposition() {
     entityService,
     fastPathExtractionRepository,
     memoryCorrectionFollowupRepository,
+    entityIdentityRevalidationRepository,
     fastPathExtractionService,
     fastPathExtractionEntrypointDependencies,
     memoryConsolidationRepository,

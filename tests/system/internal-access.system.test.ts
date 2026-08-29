@@ -173,6 +173,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        entity_identity_revalidation_runs,
+        journal_identity_review_fences,
+        journal_statement_entity_links,
+        entity_identity_corrections,
         retrieval_run_candidates,
         retrieval_runs,
         claim_retrieval_projections,

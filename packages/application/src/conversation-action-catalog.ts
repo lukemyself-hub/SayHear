@@ -312,6 +312,13 @@ const MEMORY_FORGET_TARGET_CONTRACT = Object.freeze({
   versioned: true as const,
 });
 
+const ENTITY_IDENTITY_CORRECTION_TARGET_CONTRACT = Object.freeze({
+  handleArgument: "targetAnchor",
+  handleKind: "entity_identity",
+  resolution: "admission_time_anchor" as const,
+  versioned: true as const,
+});
+
 /**
  * `memory_correction` (issue #119, ADR-0001 / ADR-0118): invalidate a wrong
  * understanding synchronously in the admission transaction — the corrected
@@ -478,10 +485,65 @@ export const MEMORY_FORGET_REVERSAL_ACTION_DEFINITION: ConversationActionDefinit
   });
 
 /**
- * The Catalog v2 go-live set (issue #119): the Journal regeneration
- * Definition plus the first two Trust-Control Definitions end-to-end. The
- * Forget chain joins in issue #120. Entity identity correction remains a
- * separate Definition and ticket.
+ * `entity_identity_correction` (issue #121, ADR-0024 / ADR-0025 / ADR-0026):
+ * the only path that can merge, split, or promote an Entity. The action is
+ * available only for an explicit user correction; ordinary mentions and
+ * repeated background Evidence never call it. Anchors are resolved at
+ * admission time and the resulting EntityVersion identities are committed
+ * synchronously, followed by an idempotent reverse-lineage workflow.
+ */
+export const ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION: ConversationActionDefinition =
+  Object.freeze({
+    actionKind: "entity_identity_correction",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "admission_time_entity_target",
+    confirmationPolicy: "none",
+    effectClass: "memory_trust_control",
+    executionMode: "synchronous",
+    functionDescription:
+      "Repair one Entity identity only when the user explicitly corrects SayHear: operation is merge, split, or promote; targetAnchor quotes the user's words identifying the existing Entity. Merge also requires relatedTargetAnchor for the other Entity. Split requires newEntityLabel for the separate identity. Promote is allowed only with an explicit identity statement or at least two independent revisions on different dates. Never use this for an ordinary mention, a fuzzy name, or a guessed identity.",
+    handlerBinding: "entity.identity-correction.v1",
+    idempotencyScope: "request_event_revision",
+    inputSchema: Object.freeze({
+      additionalProperties: false,
+      properties: Object.freeze({
+        newEntityLabel: Object.freeze({
+          maxLength: 200,
+          minLength: 1,
+          type: "string",
+        }),
+        operation: Object.freeze({
+          enum: Object.freeze(["merge", "split", "promote"]),
+          type: "string",
+        }),
+        relatedTargetAnchor: Object.freeze({
+          maxLength: 300,
+          minLength: 1,
+          type: "string",
+        }),
+        targetAnchor: Object.freeze({
+          maxLength: 300,
+          minLength: 1,
+          type: "string",
+        }),
+      }),
+      required: Object.freeze(["operation", "targetAnchor"]),
+      type: "object",
+    }),
+    ratePolicy: Object.freeze({
+      maxInFlightPerTarget: null,
+      name: "entity_identity_correction:v1",
+    }),
+    schemaVersion: "entity-identity-correction:v1",
+    targetContract: ENTITY_IDENTITY_CORRECTION_TARGET_CONTRACT,
+    trustClass: "memory_trust_control",
+  });
+
+/**
+ * The Catalog v2 go-live set (SPEC #107 / issue #121): the Journal
+ * regeneration Definition plus all five Trust-Control Definitions. The set is
+ * immutable for each frozen Decision Command; the identity correction
+ * Definition completes the catalog pin without adding a review queue.
  */
 export const MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG: ConversationActionCatalog =
   Object.freeze({
@@ -491,6 +553,7 @@ export const MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG: ConversationActio
       EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION,
       MEMORY_FORGET_REQUEST_ACTION_DEFINITION,
       MEMORY_FORGET_REVERSAL_ACTION_DEFINITION,
+      ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION,
     ]),
     version: "conversation-action-catalog:memory-trust-actions:v2",
   });
@@ -592,13 +655,21 @@ export function normalizeProviderActionProposal(input: {
     ) {
       return { type: "invalid" };
     }
+    if (
+      Array.isArray(schemaProperties[key]?.enum) &&
+      !schemaProperties[key]!.enum!.includes(parsed[key])
+    ) {
+      return { type: "invalid" };
+    }
   }
   for (const requiredKey of definition.inputSchema.required) {
     const requiredSchema = schemaProperties[requiredKey];
     if (
       !(requiredKey in parsed) ||
       (requiredSchema?.type === "string" &&
-        !stringArgumentMatchesSchema(parsed[requiredKey], requiredSchema!))
+        !stringArgumentMatchesSchema(parsed[requiredKey], requiredSchema!)) ||
+      (Array.isArray(requiredSchema?.enum) &&
+        !requiredSchema!.enum!.includes(parsed[requiredKey]))
     ) {
       return { type: "invalid" };
     }

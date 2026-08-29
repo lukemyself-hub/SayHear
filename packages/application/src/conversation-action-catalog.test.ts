@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+  ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION,
   EMPTY_CONVERSATION_ACTION_CATALOG,
   INITIAL_CONVERSATION_HARNESS_POLICY,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   REGENERATE_JOURNAL_ACTION_DEFINITION,
   actionFunctionsForCatalog,
   normalizeProviderActionProposal,
@@ -228,6 +230,17 @@ describe("Conversation Action Catalog v2 foundation (issue #109)", () => {
     ).toBe("invalid");
     expect(
       normalizeProviderActionProposal({
+        definitions: [ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION],
+        rawArguments: JSON.stringify({
+          operation: "guess",
+          targetAnchor: "Alex",
+        }),
+        rawFunctionName: "entity_identity_correction",
+        requestEventRevisionId,
+      }).type,
+    ).toBe("invalid");
+    expect(
+      normalizeProviderActionProposal({
         definitions: [secondDefinition],
         rawArguments: "{}",
         rawFunctionName: "prefactor_probe",
@@ -242,6 +255,26 @@ describe("Conversation Action Catalog v2 foundation (issue #109)", () => {
         requestEventRevisionId,
       }).type,
     ).toBe("invalid");
+  });
+
+  it("pins all five memory trust-control Definitions in Catalog v2", () => {
+    expect(
+      MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.definitions.map(
+        (definition) => definition.actionKind,
+      ),
+    ).toEqual([
+      "regenerate_journal",
+      "memory_correction",
+      "explain_memory_source",
+      "memory_forget_request",
+      "memory_forget_reversal",
+      "entity_identity_correction",
+    ]);
+    expect(
+      validateConversationActionCatalog(
+        MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
+      ),
+    ).toEqual({ valid: true });
   });
 
   it("bumps the Harness policy version while preserving one state-changing Action", () => {

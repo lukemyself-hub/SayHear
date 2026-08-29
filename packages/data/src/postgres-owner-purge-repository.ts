@@ -105,6 +105,10 @@ const CLEARED_SURFACES: ReadonlyArray<Readonly<{
   { label: "journal_diagnostic_findings", sql: "SELECT count(*) FROM journal_diagnostic_findings WHERE journal_statement_id IN (SELECT journal_statement_id FROM journal_statements WHERE user_id = $1)" },
   { label: "journal_statements", sql: "SELECT count(*) FROM journal_statements WHERE user_id = $1" },
   { label: "journal_statement_evidence_links", sql: "SELECT count(*) FROM journal_statement_evidence_links WHERE user_id = $1" },
+  { label: "journal_statement_entity_links", sql: "SELECT count(*) FROM journal_statement_entity_links WHERE user_id = $1" },
+  { label: "journal_identity_review_fences", sql: "SELECT count(*) FROM journal_identity_review_fences WHERE user_id = $1" },
+  { label: "entity_identity_corrections", sql: "SELECT count(*) FROM entity_identity_corrections WHERE user_id = $1" },
+  { label: "entity_identity_revalidation_runs", sql: "SELECT count(*) FROM entity_identity_revalidation_runs WHERE user_id = $1" },
   { label: "journal_validation_results", sql: "SELECT count(*) FROM journal_validation_results WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
   { label: "journal_generation_commands", sql: "SELECT count(*) FROM journal_generation_commands WHERE user_id = $1" },
   { label: "journal_model_run_attempts", sql: "SELECT count(*) FROM journal_model_run_attempts WHERE generation_command_id IN (SELECT generation_command_id FROM journal_generation_commands WHERE user_id = $1)" },
@@ -557,6 +561,22 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       );
 
       // Hard-DELETE every other owner-scoped surface, FK-safe order.
+      await client.query(
+        "DELETE FROM entity_identity_revalidation_runs WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM journal_identity_review_fences WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM journal_statement_entity_links WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "DELETE FROM entity_identity_corrections WHERE user_id = $1",
+        [userId],
+      );
       await client.query(
         "DELETE FROM journal_statement_evidence_links WHERE user_id = $1",
         [userId],

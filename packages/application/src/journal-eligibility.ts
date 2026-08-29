@@ -1,7 +1,14 @@
 import {
+  asConversationEventRevisionId,
   asDailySessionId,
+  asEntityId,
+  asMemoryClaimId,
+  asUserId,
   asWorkflowCommandId,
+  type ConversationEventRevisionId,
   type DailySessionId,
+  type EntityId,
+  type MemoryClaimId,
   type OutboxEventId,
   type UserId,
   type WorkflowCommandId,
@@ -130,7 +137,7 @@ export type JournalEligibilityRepository = Readonly<{
 export type LeasedOutboxEvent = Readonly<{
   outboxEventId: OutboxEventId;
   workflowCommandId: WorkflowCommandId;
-  aggregateId: DailySessionId;
+  aggregateId: DailySessionId | UserId | EntityId | MemoryClaimId | ConversationEventRevisionId;
   aggregateRevision: number;
   eventType: string;
   payload: Readonly<Record<string, unknown>>;
@@ -290,10 +297,16 @@ export type WorkflowStarter = (input: {
     | "daily_consolidation_requested"
     | "weekly_consolidation_requested"
     | "memory_sweeper_requested"
-    | "memory_correction_followup_requested";
+    | "memory_correction_followup_requested"
+    | "entity_identity_revalidation_requested";
   actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
-  subjectId: DailySessionId | UserId;
+  subjectId:
+    | DailySessionId
+    | UserId
+    | EntityId
+    | MemoryClaimId
+    | ConversationEventRevisionId;
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
@@ -361,7 +374,8 @@ export function createOutboxDispatcherService(dependencies: {
               | "owner_full_purge_requested"
               | "journal_regeneration_requested"
               | "fast_path_extraction_requested"
-              | "memory_correction_followup_requested",
+              | "memory_correction_followup_requested"
+              | "entity_identity_revalidation_requested",
             ...(typeof event.payload.actionExecutionId === "string"
               ? { actionExecutionId: event.payload.actionExecutionId }
               : {}),

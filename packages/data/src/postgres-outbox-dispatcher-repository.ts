@@ -3,10 +3,13 @@ import type {
   OutboxDispatcherRepository,
 } from "@sayhear/application";
 import {
+  asConversationEventRevisionId,
   asDailySessionId,
+  asEntityId,
+  asMemoryClaimId,
   asOutboxEventId,
+  asUserId,
   asWorkflowCommandId,
-  type DailySessionId,
   type OutboxEventId,
 } from "@sayhear/domain";
 import type { Pool, QueryResultRow } from "pg";
@@ -14,6 +17,12 @@ import type { Pool, QueryResultRow } from "pg";
 type OutboxRow = Readonly<{
   outbox_event_id: string;
   workflow_command_id: string;
+  aggregate_type:
+    | "daily_session"
+    | "app_user"
+    | "entity"
+    | "memory_claim"
+    | "conversation_event_revision";
   aggregate_id: string;
   // aggregate_revision is BIGINT, which node-postgres always returns as a
   // string regardless of the value's size.
@@ -33,10 +42,20 @@ function mapLeased(row: OutboxRow): LeasedOutboxEvent {
   } else if (typeof row.payload === "object" && row.payload !== null) {
     payload = row.payload as Record<string, unknown>;
   }
+  const aggregateId =
+    row.aggregate_type === "app_user"
+      ? asUserId(row.aggregate_id)
+      : row.aggregate_type === "entity"
+        ? asEntityId(row.aggregate_id)
+        : row.aggregate_type === "memory_claim"
+          ? asMemoryClaimId(row.aggregate_id)
+          : row.aggregate_type === "conversation_event_revision"
+            ? asConversationEventRevisionId(row.aggregate_id)
+            : asDailySessionId(row.aggregate_id);
   return {
     outboxEventId: asOutboxEventId(row.outbox_event_id),
     workflowCommandId: asWorkflowCommandId(row.workflow_command_id),
-    aggregateId: asDailySessionId(row.aggregate_id) as DailySessionId,
+    aggregateId,
     // Production incident 2026-08-17: leaking the BIGINT string here made the
     // Journal eligibility Workflow receive sourceRevision="20", so the strict
     // stale fence (20 !== "20") threw on every durable retry and the Journal
@@ -64,7 +83,7 @@ export class PostgresOutboxDispatcherRepository
       const leased = await client.query<OutboxRow>(
         `
           SELECT outbox_event_id, workflow_command_id,
-            aggregate_id, aggregate_revision, event_type, payload
+            aggregate_type, aggregate_id, aggregate_revision, event_type, payload
           FROM outbox_events
           WHERE status = 'pending'
             AND next_attempt_at <= $1
@@ -111,7 +130,7 @@ export class PostgresOutboxDispatcherRepository
       const expired = await client.query<OutboxRow>(
         `
           SELECT outbox_event_id, workflow_command_id,
-            aggregate_id, aggregate_revision, event_type, payload
+            aggregate_type, aggregate_id, aggregate_revision, event_type, payload
           FROM outbox_events
           WHERE status = 'leased'
             AND lease_expires_at < $1
