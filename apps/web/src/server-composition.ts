@@ -4,7 +4,9 @@ import {
   createInternalInspectionService,
   createConversationAgentHarness,
   createConversationActionGateway,
+  createExplainMemorySourceActionHandler,
   createJournalRegenerationActionHandler,
+  createMemoryCorrectionActionHandler,
   createContextCompiler,
   createContinuousExchangeService,
   createConversationResponseService,
@@ -20,8 +22,12 @@ import {
   createOutboxDispatcherService,
   createUserTextConversationService,
   type JournalEligibilityRepository,
-  JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+  planTrustActionTargetResolution,
+  RETRIEVAL_BROAD_TERM_STOP_LIST,
+  normalizeRetrievalTerm,
+  type TrustActionTargetResolver,
   CANONICAL_PERSONA_VERSION,
   CHINESE_LOCALE_PACK_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
@@ -45,6 +51,9 @@ import {
   PostgresContinuousExchangeRepository,
   PostgresConversationResponseRepository,
   PostgresJournalRegenerationActionRepository,
+  PostgresMemoryCorrectionFollowupRepository,
+  PostgresMemoryTrustActionCommitPort,
+  PostgresMemoryTrustActionTargetSource,
   PostgresInternalOwnerAccessRepository,
   PostgresInternalInspectionRepository,
   PostgresJournalEligibilityRepository,
@@ -364,7 +373,8 @@ export function createServerComposition() {
       chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
       englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
       harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
-      conversationActionCatalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
+      conversationActionCatalogVersion:
+        MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.version,
       model: configuration.provider.champion.model,
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
@@ -435,13 +445,88 @@ export function createServerComposition() {
     recoveryGate,
     repository: responseRepository,
   });
+  // #119: the trust-action commit port and the admission-time target
+  // resolver (ADR-0118). The resolver runs the bounded owner-scoped
+  // structured-lexical search over active Claims and classifies with the
+  // pure planner; registry lexical surfaces come from the same released
+  // snapshot the retrieval baseline pins.
+  const memoryTrustActionCommitPort = new PostgresMemoryTrustActionCommitPort();
+  const memoryCorrectionFollowupRepository =
+    new PostgresMemoryCorrectionFollowupRepository(pool);
+  const memoryTrustActionTargetSource = new PostgresMemoryTrustActionTargetSource(
+    pool,
+  );
+  const trustActionPredicateSurfaces = new Map(
+    predicateRegistrySnapshot.localizations
+      .flatMap((localization) =>
+        localization.lexicalSurfaces.map((surface) => ({
+          predicateId: localization.predicateId,
+          surface: normalizeRetrievalTerm(surface.text),
+        })),
+      )
+      .reduce((byePredicate, entry) => {
+        const existing = byePredicate.get(entry.predicateId) ?? [];
+        byePredicate.set(entry.predicateId, [...existing, entry.surface]);
+        return byePredicate;
+      }, new Map<string, readonly string[]>()),
+  );
+  const trustActionTargetResolver: TrustActionTargetResolver = {
+    async resolve({ actionKind, anchor, userId }) {
+      if (actionKind !== "memory_correction" && actionKind !== "explain_memory_source") {
+        throw new Error(
+          `No trust-action search space is defined for kind "${actionKind}".`,
+        );
+      }
+      // ADR-0118: the search space differs by kind — Correction also sees
+      // the claims its own prior corrections superseded (repeat convergence,
+      // SPEC story 48); Source Explanation sees active Claims only.
+      const [candidates, labelIndex] = await Promise.all([
+        memoryTrustActionTargetSource.listResolutionCandidates({
+          limit: 100,
+          searchSpace:
+            actionKind === "memory_correction"
+              ? "active_and_corrected"
+              : "active_claims",
+          userId,
+        }),
+        memoryTrustActionTargetSource.listLabelIndex({ userId }),
+      ]);
+      const plan = planTrustActionTargetResolution({
+        anchor,
+        broadTerms: RETRIEVAL_BROAD_TERM_STOP_LIST,
+        candidates: candidates.map((candidate) => ({
+          ...candidate,
+          predicateSurfaces:
+            trustActionPredicateSurfaces.get(candidate.predicateId) ?? [],
+        })),
+        labelIndex,
+      });
+      if (plan.outcome === "unique") {
+        return { outcome: "unique", target: plan.target };
+      }
+      if (plan.outcome === "multi_hit") {
+        return {
+          candidateCount: plan.candidateCount,
+          outcome: "multi_hit",
+        };
+      }
+      return { outcome: "zero_hit" };
+    },
+  };
   const actionGateway = createConversationActionGateway({
     handlers: [
       createJournalRegenerationActionHandler({
         generationPolicyVersion: draftConfiguration.policyVersion,
       }),
+      createMemoryCorrectionActionHandler({
+        commitPort: memoryTrustActionCommitPort,
+      }),
+      createExplainMemorySourceActionHandler({
+        commitPort: memoryTrustActionCommitPort,
+      }),
     ],
     repository: actionRepository,
+    trustActionTargetResolver,
   });
   const conversationAgentHarness = createConversationAgentHarness({
     actionGateway,
@@ -511,7 +596,7 @@ export function createServerComposition() {
       stepUpMaxAgeMs: 10 * 60 * 1_000,
     }),
     conversationResponseService: createConversationResponseService({
-      catalog: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+      catalog: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
       actionGateway,
       clock: configuration.clock,
       contextCompiler,
@@ -528,6 +613,7 @@ export function createServerComposition() {
     conversationService,
     entityService,
     fastPathExtractionRepository,
+    memoryCorrectionFollowupRepository,
     fastPathExtractionService,
     fastPathExtractionEntrypointDependencies,
     memoryConsolidationRepository,

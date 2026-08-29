@@ -4,7 +4,10 @@ import type {
   ConversationActionReceipt,
   PreparedConversationAction,
 } from "@sayhear/application";
-import { ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION } from "@sayhear/application";
+import {
+  ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
+  createConversationActionIdempotencyKey,
+} from "@sayhear/application";
 import type { ConversationActionDefinition, ConversationActionProposal } from "@sayhear/application";
 import {
   asCompiledContextId,
@@ -49,9 +52,11 @@ type HandleRow = Readonly<{
 }>;
 
 /**
- * The typed persistence adapter for the Journal regeneration handler. The
- * Gateway remains action-generic; this adapter owns only the Journal durable
- * command and receipt transaction required by its registered binding.
+ * The typed persistence adapter for Conversation Action admissions (ADR-0098).
+ * Named for the first Definition it carried; it now owns the durable command
+ * and receipt transactions for every registered binding — Journal
+ * regeneration plus the synchronous Trust-Control Actions (#119). The Gateway
+ * remains action-generic.
  */
 export class PostgresJournalRegenerationActionRepository
   implements ConversationActionGatewayRepository
@@ -219,6 +224,7 @@ export class PostgresJournalRegenerationActionRepository
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition | null;
     disposition: string | null;
+    dispositionDetail?: Readonly<Record<string, unknown>>;
     proposal: ConversationActionProposal | null;
     schemaVersion: string;
   }): Promise<ConversationActionReceipt> {
@@ -247,7 +253,7 @@ export class PostgresJournalRegenerationActionRepository
             execution_status, disposition, created_at
           )
           VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-            $9, $10, 'not_started', $11, CURRENT_TIMESTAMP)
+            $8, $9, 'not_started', $10, CURRENT_TIMESTAMP)
         `,
         [
           actionExecutionId,
@@ -268,9 +274,47 @@ export class PostgresJournalRegenerationActionRepository
         admission: input.admission,
         catalogVersion: input.catalogVersion,
         disposition: input.disposition,
+        ...(input.dispositionDetail
+          ? { dispositionDetail: input.dispositionDetail }
+          : {}),
         execution: "not_started",
         schemaVersion: input.schemaVersion,
       });
+      // #119: a Trust-Control Action clarification is a real reply — the
+      // count-only multi-hit clarification and the honest zero-hit report
+      // finalize from the frozen receipt like an accepted action does. The
+      // execution stays `not_started` (ADR-0099); the frozen Admission
+      // Receipt is what the reply may claim.
+      if (
+        input.definition?.targetContract.resolution === "admission_time_anchor" &&
+        input.admission === "clarification_required"
+      ) {
+        const now = new Date();
+        await createActionFinalizationCommand(client, {
+          actionExecutionId,
+          decisionCommandId: input.context.decisionCommandId,
+          finalizationCommandId: createUuidV7(now),
+          finalizationAttemptId: createUuidV7(now),
+          now,
+          receipt: {
+            admission: input.admission,
+            execution: receipt.execution,
+            receiptSequence: receipt.receiptSequence,
+          },
+          userId: input.context.userId,
+        });
+        // Re-read so the receipt carries the frozen finalization reference
+        // the response service runs the clarification reply from.
+        const withFinalization = await findReceipt(
+          client,
+          input.context.userId,
+          idempotencyKey,
+        );
+        if (withFinalization) {
+          await client.query("COMMIT");
+          return withFinalization;
+        }
+      }
       await client.query("COMMIT");
       return receipt;
     } catch (error) {
@@ -285,6 +329,8 @@ export class PostgresJournalRegenerationActionRepository
     catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition;
+    /** Anchor-mode resolved target (ADR-0118); absent for handle-mode. */
+    resolvedClaim?: Readonly<{ claimId: string; claimVersionId: string }>;
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt> {
@@ -300,6 +346,20 @@ export class PostgresJournalRegenerationActionRepository
       if (existing) {
         await client.query("COMMIT");
         return existing;
+      }
+      // ADR-0118 anchor mode: no handle exists to lock; the resolved claim is
+      // re-verified by the handler's commit port under the claim row lock
+      // inside this transaction. The typed reference enters the Execution and
+      // every Receipt.
+      if (input.resolvedClaim) {
+        return await this.commitAcceptedAnchorMode(client, {
+          catalogVersion: input.catalogVersion,
+          context: input.context,
+          definition: input.definition,
+          idempotencyKey,
+          prepare: input.prepare,
+          resolvedClaim: input.resolvedClaim,
+        });
       }
       const handle = await selectHandle(
         client,
@@ -365,7 +425,13 @@ export class PostgresJournalRegenerationActionRepository
       const prepared = input.prepare();
       // A Handler bound to one executionMode must never produce the other's
       // prepared shape; the Catalog publication check and this runtime guard
-      // together fail closed on binding drift (ADR-0098).
+      // together fail closed on binding drift (ADR-0098). Anchor-mode
+      // proposals never reach this branch (they return above).
+      if (prepared.mode === "in_transaction_anchor") {
+        throw new Error(
+          "Prepared Action execution mode does not match its Definition.",
+        );
+      }
       if (
         (input.definition.executionMode === "synchronous") !==
         (prepared.mode === "in_transaction")
@@ -543,15 +609,25 @@ export class PostgresJournalRegenerationActionRepository
         execution: "running",
         schemaVersion: input.definition.schemaVersion,
       });
-      await prepared.commit({
-        actionExecutionId,
-        executor: client,
-      });
+      const committedDisposition =
+        (await prepared.commit({
+          actionExecutionId,
+          executor: client,
+          userId: input.context.userId,
+        })) ?? "committed_in_transaction";
+      // The handler's terminal disposition (committed / noop convergence /
+      // unverifiable verdict) rides both the execution row and the terminal
+      // Completion Receipt — the frozen truth the reply may claim.
+      await client.query(
+        `UPDATE conversation_action_executions SET disposition = $2
+         WHERE action_execution_id = $1`,
+        [actionExecutionId, committedDisposition],
+      );
       const terminalSequence = await insertExecutionReceipt(client, {
         actionExecutionId,
         receiptKey: "execution:succeeded",
         execution: "succeeded",
-        disposition: "committed_in_transaction",
+        disposition: committedDisposition,
       });
       await createActionFinalizationCommand(client, {
         actionExecutionId,
@@ -582,6 +658,129 @@ export class PostgresJournalRegenerationActionRepository
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * ADR-0118 anchor-mode synchronous admission: the Execution row carries the
+   * resolved claim as its typed target reference (no handle exists), the
+   * handler's domain writes join this transaction through the commit port,
+   * and the terminal Completion Receipt freezes the handler's disposition.
+   */
+  private async commitAcceptedAnchorMode(
+    client: PoolClient,
+    input: {
+      catalogVersion: string;
+      context: ConversationActionGatewayContext;
+      definition: ConversationActionDefinition;
+      idempotencyKey: string;
+      prepare: () => PreparedConversationAction;
+      resolvedClaim: Readonly<{ claimId: string; claimVersionId: string }>;
+    },
+  ): Promise<ConversationActionReceipt> {
+    const prepared = input.prepare();
+    if (prepared.mode !== "in_transaction_anchor") {
+      throw new Error(
+        "Prepared Action execution mode does not match its Definition.",
+      );
+    }
+    if (
+      prepared.actionKind !== input.definition.actionKind ||
+      prepared.resolvedClaimId !== input.resolvedClaim.claimId ||
+      prepared.resolvedClaimVersionId !== input.resolvedClaim.claimVersionId
+    ) {
+      throw new Error(
+        "Prepared Action target does not match the admission-time resolution.",
+      );
+    }
+    const now = new Date();
+    const actionExecutionId = createUuidV7(now);
+    const finalizationCommandId = createUuidV7(now);
+    const finalizationAttemptId = createUuidV7(now);
+    await client.query(
+      `
+        INSERT INTO conversation_action_executions (
+          action_execution_id, user_id, decision_command_id,
+          request_event_revision_id, action_kind, schema_version,
+          catalog_version, target_handle, target_kind, target_id,
+          target_version_id, daily_session_id, source_revision,
+          expected_data_epoch, resolved_claim_id, resolved_claim_version_id,
+          idempotency_key, admission_status, execution_status, disposition,
+          created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, 'memory_claim', NULL,
+          NULL, NULL, NULL, NULL, $8, $9, $10, 'accepted', 'succeeded',
+          'committed_in_transaction', $11)
+      `,
+      [
+        actionExecutionId,
+        input.context.userId,
+        input.context.decisionCommandId,
+        input.context.requestEventRevisionId,
+        input.definition.actionKind,
+        input.definition.schemaVersion,
+        input.catalogVersion,
+        input.resolvedClaim.claimId,
+        input.resolvedClaim.claimVersionId,
+        input.idempotencyKey,
+        now,
+      ],
+    );
+    await insertReceipt(client, {
+      actionExecutionId,
+      actionKind: input.definition.actionKind,
+      admission: "accepted",
+      catalogVersion: input.catalogVersion,
+      disposition: null,
+      ...(input.resolvedClaim
+        ? {
+            resolvedClaimId: input.resolvedClaim.claimId,
+            resolvedClaimVersionId: input.resolvedClaim.claimVersionId,
+          }
+        : {}),
+      execution: "running",
+      schemaVersion: input.definition.schemaVersion,
+    });
+    const committedDisposition =
+      (await prepared.commit({
+        actionExecutionId,
+        executor: client,
+        userId: input.context.userId,
+      })) ?? "committed_in_transaction";
+    await client.query(
+      `UPDATE conversation_action_executions SET disposition = $2
+       WHERE action_execution_id = $1`,
+      [actionExecutionId, committedDisposition],
+    );
+    const terminalSequence = await insertExecutionReceipt(client, {
+      actionExecutionId,
+      receiptKey: "execution:succeeded",
+      execution: "succeeded",
+      disposition: committedDisposition,
+      resolvedClaimId: input.resolvedClaim.claimId,
+      resolvedClaimVersionId: input.resolvedClaim.claimVersionId,
+    });
+    await createActionFinalizationCommand(client, {
+      actionExecutionId,
+      decisionCommandId: input.context.decisionCommandId,
+      finalizationCommandId,
+      finalizationAttemptId,
+      now,
+      receipt: {
+        admission: "accepted",
+        receiptSequence: terminalSequence,
+        execution: "succeeded",
+      },
+      userId: input.context.userId,
+    });
+    const committedReceipt = await findReceipt(
+      client,
+      input.context.userId,
+      input.idempotencyKey,
+    );
+    if (!committedReceipt) {
+      throw new Error("The accepted Action Receipt was not committed.");
+    }
+    return committedReceipt;
   }
 
   private async insertExecutionRow(
@@ -847,7 +1046,7 @@ export class PostgresJournalRegenerationActionRepository
          ON attempt.generation_command_id = command.generation_command_id
         AND attempt.attempt_no = 1
         AND attempt.status IN ('prepared', 'running')
-       WHERE execution.admission_status = 'accepted'
+       WHERE execution.admission_status IN ('accepted', 'clarification_required')
          AND (
            execution.execution_status IN ('pending', 'running')
            OR (
@@ -856,6 +1055,13 @@ export class PostgresJournalRegenerationActionRepository
              -- crash lands between the atomic commit and the visible reply.
              execution.execution_status = 'succeeded'
              AND execution.disposition = 'committed_in_transaction'
+           )
+           OR (
+             -- Trust-action clarifications (ADR-0118) finalize their honest
+             -- reply from the frozen Admission Receipt while the execution
+             -- stays not_started (issue #119).
+             execution.admission_status = 'clarification_required'
+             AND execution.execution_status = 'not_started'
            )
          )
        ORDER BY command.created_at, command.generation_command_id
@@ -1068,17 +1274,34 @@ async function exactHeadIsValid(
 async function insertReceipt(
   client: PoolClient,
   input: Omit<ConversationActionReceipt, "actionExecutionId" | "receiptSequence"> &
-    Readonly<{ actionExecutionId: string }>,
+    Readonly<{
+      actionExecutionId: string;
+      dispositionDetail?: Readonly<Record<string, unknown>>;
+      resolvedClaimId?: string;
+      resolvedClaimVersionId?: string;
+    }>,
 ): Promise<ConversationActionReceipt> {
   const receiptId = createUuidV7(new Date());
   await client.query(
     `
       INSERT INTO conversation_action_receipts (
         action_receipt_id, action_execution_id, receipt_sequence,
-        receipt_key, admission_status, execution_status, disposition, created_at
-      ) VALUES ($1, $2, 1, 'admission', $3, $4, $5, CURRENT_TIMESTAMP)
+        receipt_key, admission_status, execution_status, disposition,
+        disposition_detail, resolved_claim_id, resolved_claim_version_id,
+        created_at
+      ) VALUES ($1, $2, 1, 'admission', $3, $4, $5, $6::jsonb, $7, $8,
+        CURRENT_TIMESTAMP)
     `,
-    [receiptId, input.actionExecutionId, input.admission, input.execution, input.disposition],
+    [
+      receiptId,
+      input.actionExecutionId,
+      input.admission,
+      input.execution,
+      input.disposition,
+      input.dispositionDetail ? JSON.stringify(input.dispositionDetail) : null,
+      input.resolvedClaimId ?? null,
+      input.resolvedClaimVersionId ?? null,
+    ],
   );
   return { ...input, receiptSequence: 1 };
 }
@@ -1088,13 +1311,15 @@ async function insertReceipt(
  * (locked) ActionExecution and returns the sequence it committed, so callers
  * freezing later state never guess it.
  */
-async function insertExecutionReceipt(
+export async function insertExecutionReceipt(
   client: PoolClient,
   input: {
     actionExecutionId: string;
     receiptKey: string;
     execution: ConversationActionReceipt["execution"];
     disposition: string;
+    resolvedClaimId?: string;
+    resolvedClaimVersionId?: string;
   },
 ): Promise<number> {
   // The caller holds the ActionExecution lock (its own admission transaction,
@@ -1110,15 +1335,25 @@ async function insertExecutionReceipt(
   await client.query(
     `INSERT INTO conversation_action_receipts (
        action_receipt_id, action_execution_id, receipt_sequence, receipt_key,
-       admission_status, execution_status, disposition, created_at
+       admission_status, execution_status, disposition,
+       resolved_claim_id, resolved_claim_version_id, created_at
      )
      SELECT $1, execution.action_execution_id,
        $6, $2,
-       execution.admission_status, $3, $4, CURRENT_TIMESTAMP
+       execution.admission_status, $3, $4, $7, $8, CURRENT_TIMESTAMP
      FROM conversation_action_executions execution
      WHERE execution.action_execution_id = $5
      ON CONFLICT (action_execution_id, receipt_key) DO NOTHING`,
-    [createUuidV7(new Date()), input.receiptKey, input.execution, input.disposition, input.actionExecutionId, receiptSequence],
+    [
+      createUuidV7(new Date()),
+      input.receiptKey,
+      input.execution,
+      input.disposition,
+      input.actionExecutionId,
+      receiptSequence,
+      input.resolvedClaimId ?? null,
+      input.resolvedClaimVersionId ?? null,
+    ],
   );
   return receiptSequence;
 }
@@ -1178,14 +1413,7 @@ function createIdempotencyKey(
   proposal: ConversationActionProposal | null,
   definition?: ConversationActionDefinition | null,
 ): string {
-  return [
-    context.decisionCommandId,
-    context.requestEventRevisionId,
-    proposal?.actionKind ?? "unsupported",
-    proposal && definition
-      ? readTargetHandle(proposal, definition) ?? "none"
-      : "none",
-  ].join(":");
+  return createConversationActionIdempotencyKey(context, proposal, definition ?? null);
 }
 
 /**

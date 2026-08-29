@@ -289,7 +289,8 @@ export type WorkflowStarter = (input: {
     | "fast_path_extraction_requested"
     | "daily_consolidation_requested"
     | "weekly_consolidation_requested"
-    | "memory_sweeper_requested";
+    | "memory_sweeper_requested"
+    | "memory_correction_followup_requested";
   actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId: DailySessionId | UserId;
@@ -359,7 +360,8 @@ export function createOutboxDispatcherService(dependencies: {
               | "rolling_summary_requested"
               | "owner_full_purge_requested"
               | "journal_regeneration_requested"
-              | "fast_path_extraction_requested",
+              | "fast_path_extraction_requested"
+              | "memory_correction_followup_requested",
             ...(typeof event.payload.actionExecutionId === "string"
               ? { actionExecutionId: event.payload.actionExecutionId }
               : {}),

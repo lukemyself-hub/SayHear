@@ -228,6 +228,14 @@ export function sectionVersionLabel(
         section.reference.match(/\[(recall-experience-contract:[^\]]+)\]/)
           ?.[1] ?? "recall-experience:unavailable"
       );
+    case "trust_action_expression":
+      // #119: the P1–P6 trust-action expression contract version sits in the
+      // rendered content ("[trust-action-expression-contract:v1]").
+      return (
+        section.reference.match(
+          /\[(trust-action-expression-contract:[^\]]+)\]/,
+        )?.[1] ?? "trust-action-expression:unavailable"
+      );
     case "rolling_summary":
       return (
         referenceValue(section.reference, ":policy:", ":prompt:") ??

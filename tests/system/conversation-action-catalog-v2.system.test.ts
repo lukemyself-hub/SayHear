@@ -85,6 +85,9 @@ function createPrefactorProbeHandler(options: {
   return {
     actionKind: "prefactor_probe",
     prepare({ proposal, target }) {
+      if (!target) {
+        throw new Error("The probe handler requires its handle-mode target.");
+      }
       const marker =
         typeof proposal.arguments.marker === "string"
           ? proposal.arguments.marker
@@ -145,6 +148,9 @@ describe("Conversation Action Catalog v2 foundation system seam (issue #109)", (
         relationship_resolver_hints,
         memory_claim_version_qualifier_evidence,
         memory_claim_version_qualifiers,
+        memory_impression_vetoes,
+        memory_correction_followups,
+        memory_claim_corrections,
         memory_consolidation_diffs,
         memory_consolidation_runs,
         fast_path_session_items,

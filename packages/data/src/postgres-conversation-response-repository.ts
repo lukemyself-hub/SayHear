@@ -51,10 +51,12 @@ import {
 import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
+import { loadActionFinalizationReceiptSnapshot } from "./postgres-memory-trust-action-repository";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 import { FAST_PATH_PENDING_REVISIONS_SQL } from "./postgres-fast-path-extraction-repository";
 
 type ContextHeadRow = Readonly<{
+  action_execution_id: string | null;
   action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
   action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
   action_receipt_disposition: string | null;
@@ -102,6 +104,7 @@ type ContextEventRow = Readonly<{
 }>;
 
 type DispatchRow = Readonly<{
+  action_execution_id: string | null;
   action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
   action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
   action_receipt_disposition: string | null;
@@ -176,13 +179,15 @@ export class PostgresConversationResponseRepository
       await client.query("BEGIN");
       await client.query(
         `UPDATE generation_commands
-         SET status = 'succeeded', settled_at = $4,
+         SET status = 'succeeded', settled_at = $3,
              recovery_status = 'not_needed', next_recovery_at = NULL
          WHERE generation_command_id = $1 AND user_id = $2
            AND status IN ('running', 'compiling')
            AND authoritative_result_id IS NULL
            AND generation_stage = 'decision'`,
-        [input.generationCommandId, input.userId, input.modelRunAttemptId, input.completedAt],
+        // The Decision Command carries no attempt column: only the command,
+        // owner, and settle time participate in this transition.
+        [input.generationCommandId, input.userId, input.completedAt],
       );
       await client.query(
         `UPDATE model_run_attempts
@@ -709,6 +714,7 @@ export class PostgresConversationResponseRepository
             session.dialogue_revision,
             session.source_revision,
             command.expected_data_epoch,
+            command.action_execution_id::text AS action_execution_id,
             command.action_execution_status,
             command.action_receipt_sequence,
             frozen_receipt.admission_status AS action_receipt_admission,
@@ -841,16 +847,19 @@ export class PostgresConversationResponseRepository
 
       await client.query("COMMIT");
       return {
-        ...(row.action_receipt_sequence !== null &&
+        ...(row.action_execution_id !== null &&
+        row.action_receipt_sequence !== null &&
         row.action_execution_status !== null &&
         row.action_receipt_admission !== null
           ? {
-              actionFinalizationReceipt: {
-                admission: row.action_receipt_admission,
-                disposition: row.action_receipt_disposition,
-                execution: row.action_execution_status,
-                sequence: row.action_receipt_sequence,
-              },
+              actionFinalizationReceipt:
+                await loadActionFinalizationReceiptSnapshot(client, {
+                  actionExecutionId: row.action_execution_id,
+                  admission: row.action_receipt_admission,
+                  disposition: row.action_receipt_disposition,
+                  execution: row.action_execution_status,
+                  receiptSequence: row.action_receipt_sequence,
+                }),
             }
           : {}),
         ...((row.current_journal_id &&
@@ -1174,6 +1183,7 @@ export class PostgresConversationResponseRepository
             command.consent_policy_version,
             command.freshness_policy,
             command.generation_stage,
+            command.action_execution_id::text AS action_execution_id,
             command.action_execution_status,
             command.action_receipt_sequence,
             frozen_receipt.admission_status AS action_receipt_admission,
@@ -1390,16 +1400,19 @@ export class PostgresConversationResponseRepository
       await client.query("COMMIT");
       return {
         context: {
-          ...(row.action_receipt_sequence !== null &&
+          ...(row.action_execution_id !== null &&
+          row.action_receipt_sequence !== null &&
           row.action_execution_status !== null &&
           row.action_receipt_admission !== null
             ? {
-                actionFinalizationReceipt: {
-                  admission: row.action_receipt_admission,
-                  disposition: row.action_receipt_disposition,
-                  execution: row.action_execution_status,
-                  sequence: row.action_receipt_sequence,
-                },
+                actionFinalizationReceipt:
+                  await loadActionFinalizationReceiptSnapshot(client, {
+                    actionExecutionId: row.action_execution_id,
+                    admission: row.action_receipt_admission,
+                    disposition: row.action_receipt_disposition,
+                    execution: row.action_execution_status,
+                    receiptSequence: row.action_receipt_sequence,
+                  }),
               }
             : {}),
           ...(actionHandles.rows.length === 0

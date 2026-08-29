@@ -108,6 +108,12 @@ export {
   type RenderedCompiledContextPayload,
 } from "./context-compiler";
 export {
+  isTrustActionReceipt,
+  TRUST_ACTION_KINDS,
+  trustActionFencesMemory,
+  trustActionUnverifiablePhrasing,
+} from "./context-compiler";
+export {
   ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
   CANONICAL_PERSONA_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
@@ -121,7 +127,9 @@ export {
   resolvePromptArtifacts,
   resolveRecallExperienceContract,
   resolveSafetyPostureReducedPersona,
+  resolveTrustActionExpressionContract,
   SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
+  TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
   type GenerationCommandStage,
   type ResolvedPromptArtifacts,
 } from "./prompt-artifacts";
@@ -166,8 +174,11 @@ export {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   EMPTY_CONVERSATION_ACTION_CATALOG,
+  EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION,
   INITIAL_CONVERSATION_HARNESS_POLICY,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  MEMORY_CORRECTION_ACTION_DEFINITION,
+  MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   REGENERATE_JOURNAL_ACTION_DEFINITION,
   actionDefinitionsForCatalog,
   actionFunctionsForCatalog,
@@ -187,6 +198,7 @@ export {
   type ConversationHarnessPolicy,
 } from "./conversation-action-catalog";
 export {
+  createConversationActionIdempotencyKey,
   createConversationActionGateway,
   createJournalRegenerationActionHandler,
   type ConversationActionAdmission,
@@ -200,7 +212,34 @@ export {
   type JournalRegenerationExecutionOutcome,
   type JournalRegenerationWorkflowCommand,
   type PreparedConversationAction,
+  type ResolvedTrustActionTarget,
+  type TrustActionTargetResolution,
+  type TrustActionTargetResolver,
 } from "./conversation-action-gateway";
+export {
+  MEMORY_CORRECTION_FOLLOWUP_POLICY_VERSION,
+  runMemoryCorrectionFollowupWorkflow,
+  type MemoryCorrectionFollowupCommand,
+  type MemoryCorrectionFollowupRepository,
+  type MemoryCorrectionFollowupResult,
+} from "./memory-trust-followup";
+export {
+  createExplainMemorySourceActionHandler,
+  createMemoryCorrectionActionHandler,
+  EXPLAIN_SOURCE_QUOTE_MAX_LENGTH,
+  MEMORY_CORRECTION_POLICY_VERSION,
+  planMemoryCorrection,
+  planTrustActionTargetResolution,
+  TRUST_ACTION_ANCHOR_MAX_LENGTH,
+  TRUST_ACTION_TARGET_RESOLUTION_POLICY_VERSION,
+  type ExplainMemorySourceVerdict,
+  type MemoryCorrectionPlan,
+  type MemoryTrustActionCommitPort,
+  type TrustActionClaimSnapshot,
+  type TrustActionLabelIndexEntry,
+  type TrustActionResolutionCandidate,
+  type TrustActionTargetResolutionPlan,
+} from "./memory-trust-actions";
 export type { ActionReferenceBinding } from "./conversation-action-handles";
 export {
   createConversationAgentHarness,

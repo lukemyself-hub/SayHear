@@ -48,6 +48,7 @@ describe("Context Compiler", () => {
       async loadContextSource() {
         return {
           actionFinalizationReceipt: {
+            actionKind: "regenerate_journal",
             admission: "accepted",
             disposition: null,
             execution: "pending",
@@ -196,6 +197,7 @@ describe("Context Compiler", () => {
       sections: saved!.sections,
       totalTokens: saved!.totalTokens,
       actionFinalizationReceipt: {
+        actionKind: "regenerate_journal",
         admission: "accepted",
         disposition: null,
         execution: "pending",

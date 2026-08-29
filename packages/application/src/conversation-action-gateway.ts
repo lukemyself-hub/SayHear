@@ -43,14 +43,22 @@ export type ConversationActionReceipt = Readonly<{
 /**
  * The prepared action a Handler derives from the verified context and typed
  * input (ADR-0098). The `mode` discriminant mirrors the Definition's
- * executionMode:
+ * executionMode and target contract:
  *
  * - `durable_workflow` — the repository creates an idempotent workflow command
  *   / outbox entry inside the admission transaction (regenerate_journal).
  * - `in_transaction` — `commit` performs this Action's authoritative domain
  *   writes during that same admission transaction through the transaction-
  *   scoped executor; any throw rolls the whole admission back, so no partial
- *   effect can survive while a reply claims success (ADR-0099).
+ *   effect can survive while a reply claims success (ADR-0099). Handle-mode
+ *   target fields must match the locked handle.
+ * - `in_transaction_anchor` — the same synchronous in-transaction commit for
+ *   an admission-time-anchor Definition (ADR-0118): the target is the claim
+ *   the Gateway resolved from the owner-scoped structured-lexical anchor, and
+ *   the repository re-verifies it under lock inside the transaction.
+ *
+ * `commit` returns the terminal Completion Receipt disposition (or void for
+ * the plain `committed_in_transaction` outcome).
  */
 export type PreparedConversationAction =
   | Readonly<{
@@ -68,24 +76,36 @@ export type PreparedConversationAction =
       commit(input: {
         actionExecutionId: string;
         executor: ConversationActionTransactionExecutor;
-      }): Promise<void>;
+        userId: string;
+      }): Promise<string | void>;
       dailySessionId: string;
       expectedDataEpoch: number;
       mode: "in_transaction";
       sourceRevision: number;
       targetVersionId: string;
+    }>
+  | Readonly<{
+      actionKind: string;
+      commit(input: {
+        actionExecutionId: string;
+        executor: ConversationActionTransactionExecutor;
+        userId: string;
+      }): Promise<string | void>;
+      mode: "in_transaction_anchor";
+      resolvedClaimId: string;
+      resolvedClaimVersionId: string;
     }>;
 
 /**
- * Transaction-scoped write surface handed to a synchronous in-transaction
- * handler's `commit`. Statements issued here join the single admission
- * transaction (ADR-0099).
+ * Transaction-scoped read/write surface handed to a synchronous in-transaction
+ * handler's `commit` and the trust-action commit port. Statements issued here
+ * join the single admission transaction (ADR-0099).
  */
 export interface ConversationActionTransactionExecutor {
-  query(
+  query<T = Record<string, unknown>>(
     statement: string,
     values?: readonly unknown[],
-  ): Promise<{ rowCount: number | null }>;
+  ): Promise<{ rowCount: number | null; rows: T[] }>;
 }
 
 export type JournalRegenerationWorkflowCommand = Readonly<{
@@ -122,12 +142,49 @@ export type ConversationActionFinalizationCommand = Readonly<{
   userId: ConversationActionGatewayContext["userId"];
 }>;
 
+/**
+ * The typed reference to the real Claim an admission-time anchor resolved to
+ * (ADR-0118). It enters Receipts / Execution records for auditability.
+ */
+export type ResolvedTrustActionTarget = Readonly<{
+  claimId: string;
+  claimKind: "objective" | "impression";
+  claimVersionId: string;
+  predicateId: string;
+}>;
+
+/**
+ * The deterministic admission-time resolution outcome (ADR-0118): only a
+ * unique high-confidence hit admits; a multi-hit clarifies with a count and
+ * never lists or preselects; a zero-hit honestly reports nothing found.
+ */
+export type TrustActionTargetResolution =
+  | Readonly<{ outcome: "unique"; target: ResolvedTrustActionTarget }>
+  | Readonly<{ candidateCount: number; outcome: "multi_hit" }>
+  | Readonly<{ outcome: "zero_hit" }>;
+
+/**
+ * Owner-scoped bounded structured-lexical target resolution over the
+ * Action's search space (Correction / Source Explanation search active
+ * Claims; Reversal will search only the fenced set when it publishes).
+ */
+export type TrustActionTargetResolver = Readonly<{
+  resolve(input: {
+    actionKind: string;
+    userId: string;
+    anchor: string;
+  }): Promise<TrustActionTargetResolution>;
+}>;
+
 export type ConversationActionHandler = Readonly<{
   actionKind: string;
   prepare(input: {
     definition: ConversationActionDefinition;
     proposal: ConversationActionProposal;
-    target: ActionReferenceBinding;
+    /** Handle-mode target (ADR-0096); present only when a locked handle backs the proposal. */
+    target?: ActionReferenceBinding;
+    /** Anchor-mode target (ADR-0118); present only when admission-time resolution admitted. */
+    resolvedTarget?: ResolvedTrustActionTarget;
   }): PreparedConversationAction;
 }>;
 
@@ -136,6 +193,8 @@ export type ConversationActionGatewayRepository = Readonly<{
     catalogVersion: string;
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition;
+    /** Anchor-mode resolved target; absent for handle-mode admissions. */
+    resolvedClaim?: Readonly<{ claimId: string; claimVersionId: string }>;
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt>;
@@ -145,6 +204,8 @@ export type ConversationActionGatewayRepository = Readonly<{
     context: ConversationActionGatewayContext;
     definition: ConversationActionDefinition | null;
     disposition: string | null;
+    /** Structured no-prose detail (IDs / counts / codes only, ADR-0101). */
+    dispositionDetail?: Readonly<Record<string, unknown>>;
     proposal: ConversationActionProposal | null;
     schemaVersion: string;
   }): Promise<ConversationActionReceipt>;
@@ -195,6 +256,12 @@ export function createConversationActionGateway(input: {
    */
   handlers: readonly ConversationActionHandler[];
   repository: ConversationActionGatewayRepository;
+  /**
+   * Required to admit an admission-time-anchor Definition (ADR-0118): the
+   * deterministic owner-scoped structured-lexical target resolution. A trust
+   * proposal arriving without a configured resolver fails closed.
+   */
+  trustActionTargetResolver?: TrustActionTargetResolver;
 }): ConversationActionGateway {
   const handlersByKind = new Map(
     input.handlers.map((handler) => [handler.actionKind, handler]),
@@ -259,6 +326,71 @@ export function createConversationActionGateway(input: {
           disposition: validation.reason,
           proposal,
           schemaVersion,
+        });
+      }
+
+      // ADR-0118: admission-time deterministic owner-scoped structured-lexical
+      // target resolution for Trust-Control Actions. The model-side contract
+      // is unchanged (ADR-0096) — the anchor span is a resolution clue, never
+      // a free-text selector. Unique high-confidence hit admits; multi-hit
+      // returns a count-only clarification without listing or preselecting;
+      // zero hit honestly reports nothing found with zero domain change.
+      if (definition.targetContract.resolution === "admission_time_anchor") {
+        if (!input.trustActionTargetResolver) {
+          throw new Error(
+            `No Trust Action target resolver is configured for kind "${definition.actionKind}".`,
+          );
+        }
+        const resolution = await input.trustActionTargetResolver.resolve({
+          actionKind: definition.actionKind,
+          anchor: String(proposal.arguments[definition.targetContract.handleArgument]),
+          userId: request.context.userId,
+        });
+        if (resolution.outcome === "multi_hit") {
+          return input.repository.commitNonAccepted({
+            admission: "clarification_required",
+            catalogVersion: request.catalog.version,
+            context: request.context,
+            definition,
+            disposition: "target_ambiguous_multi_hit",
+            dispositionDetail: { candidateCount: resolution.candidateCount },
+            proposal,
+            schemaVersion,
+          });
+        }
+        if (resolution.outcome === "zero_hit") {
+          return input.repository.commitNonAccepted({
+            admission: "clarification_required",
+            catalogVersion: request.catalog.version,
+            context: request.context,
+            definition,
+            disposition: "target_not_found",
+            proposal,
+            schemaVersion,
+          });
+        }
+        return input.repository.commitAccepted({
+          catalogVersion: request.catalog.version,
+          context: request.context,
+          definition,
+          resolvedClaim: {
+            claimId: resolution.target.claimId,
+            claimVersionId: resolution.target.claimVersionId,
+          },
+          prepare: () => {
+            const handler = handlersByKind.get(definition.actionKind);
+            if (!handler) {
+              throw new Error(
+                `No Conversation Action Handler is bound for kind "${definition.actionKind}".`,
+              );
+            }
+            return handler.prepare({
+              definition,
+              proposal,
+              resolvedTarget: resolution.target,
+            });
+          },
+          proposal,
         });
       }
 
@@ -348,7 +480,9 @@ export function createConversationActionGateway(input: {
           return handler.prepare({
             definition,
             proposal,
-            target,
+            // The anchor branch returned above; a handle-mode admission
+            // here always carries the resolved, locked handle.
+            target: target!,
           });
         },
         proposal,
@@ -375,6 +509,11 @@ export function createJournalRegenerationActionHandler(input: {
   return {
     actionKind: "regenerate_journal",
     prepare({ proposal, target }) {
+      if (!target) {
+        throw new Error(
+          "Journal regeneration requires its command-scoped handle target.",
+        );
+      }
       const rawGuidance = proposal.arguments.guidance;
       const guidance =
         typeof rawGuidance === "string" ? rawGuidance.trim() : "";
@@ -400,11 +539,36 @@ function createIdempotencyKey(
   proposal: ConversationActionProposal,
   definition: ConversationActionDefinition | null,
 ): string {
+  return createConversationActionIdempotencyKey(context, proposal, definition);
+}
+
+/**
+ * The single source of the Action execution idempotency key (SPEC story 48).
+ * Trust-Control Actions (`idempotencyScope: "request_event_revision"`) key on
+ * the request event revision, so transport retries of the same request event
+ * resolve to the same ActionExecution and its existing Receipts. Every other
+ * scope keys on the decision command + target handle. The user scoping lives
+ * in the repository's UNIQUE (user_id, idempotency_key). The data-layer
+ * repository imports this function — the two sides can never drift.
+ */
+export function createConversationActionIdempotencyKey(
+  context: ConversationActionGatewayContext,
+  proposal: ConversationActionProposal | null,
+  definition: ConversationActionDefinition | null,
+): string {
+  if (definition?.idempotencyScope === "request_event_revision") {
+    return [
+      context.requestEventRevisionId,
+      proposal?.actionKind ?? "unsupported",
+    ].join(":");
+  }
   return [
     context.decisionCommandId,
     context.requestEventRevisionId,
-    proposal.actionKind,
-    readTargetHandleArgument(proposal, definition) ?? "none",
+    proposal?.actionKind ?? "unsupported",
+    proposal && definition
+      ? readTargetHandleArgument(proposal, definition) ?? "none"
+      : "none",
   ].join(":");
 }
 

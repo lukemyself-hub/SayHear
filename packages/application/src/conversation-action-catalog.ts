@@ -115,9 +115,25 @@ export type ConversationActionDefinition = Readonly<{
   }>;
   schemaVersion: string;
   targetContract: Readonly<{
-    /** The required inputSchema property carrying the opaque reference handle. */
+    /**
+     * The required inputSchema property carrying the target reference — the
+     * opaque ADR-0096 handle for `frozen_context_handle` resolution, the
+     * user-words anchor span for `admission_time_anchor` resolution
+     * (ADR-0118).
+     */
     handleArgument: string;
     handleKind: string;
+    /**
+     * How the Gateway resolves the reference. Absent means the default
+     * `frozen_context_handle` (ADR-0096): the reference must resolve to a
+     * minted, command-scoped handle of this Decision's CompiledContext.
+     * `admission_time_anchor` (ADR-0118, Trust-Control Actions): the Gateway
+     * deterministically resolves the owner-scoped structured-lexical anchor
+     * against the Action's search space at admission time — unique
+     * high-confidence hit admits, multi-hit clarifies count-only, zero hit
+     * honestly reports with zero domain change.
+     */
+    resolution?: "frozen_context_handle" | "admission_time_anchor";
     versioned: true;
   }>;
   trustClass: string;
@@ -263,18 +279,138 @@ export const JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG: ConversationActio
     version: "conversation-action-catalog:journal-regeneration:v1",
   });
 
+const MEMORY_TRUST_TARGET_CONTRACT = Object.freeze({
+  handleArgument: "targetAnchor",
+  handleKind: "memory_claim",
+  resolution: "admission_time_anchor" as const,
+  versioned: true as const,
+});
+
 /**
- * The Definitions eligible for this Decision: each Definition carries at least
- * one ActionReferenceHandle for its kind in the frozen CompiledContext. A
- * Definition without a minted handle exposes no Function this turn.
+ * `memory_correction` (issue #119, ADR-0001 / ADR-0118): invalidate a wrong
+ * understanding synchronously in the admission transaction — the corrected
+ * content stops being recallable the same turn — and optionally record an
+ * establishment clause whose structured fact forms forward through ordinary
+ * extraction and admission. Impression corrections additionally record the
+ * user veto so same-topic impressions re-accumulate fresh cross-Session
+ * Evidence from zero (ADR-0039). Correction is a right: no rate limit, no
+ * confirmation.
+ */
+export const MEMORY_CORRECTION_ACTION_DEFINITION: ConversationActionDefinition =
+  Object.freeze({
+    actionKind: "memory_correction",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "admission_time_target",
+    confirmationPolicy: "none",
+    effectClass: "memory_trust_control",
+    executionMode: "synchronous",
+    functionDescription:
+      "Record the user's explicit correction of something SayHear remembers. targetAnchor must quote the user's own words that identify the remembered item; optionally include correctedFact quoting what the user now states instead. Only call this when the user is clearly correcting or revoking a remembered understanding — never for ordinary new information.",
+    handlerBinding: "memory.correction.v1",
+    idempotencyScope: "request_event_revision",
+    inputSchema: Object.freeze({
+      additionalProperties: false,
+      properties: Object.freeze({
+        correctedFact: Object.freeze({
+          maxLength: 300,
+          type: "string",
+        }),
+        targetAnchor: Object.freeze({
+          maxLength: 300,
+          minLength: 1,
+          type: "string",
+        }),
+      }),
+      required: Object.freeze(["targetAnchor"]),
+      type: "object",
+    }),
+    ratePolicy: Object.freeze({
+      maxInFlightPerTarget: null,
+      name: "memory_correction:v1",
+    }),
+    schemaVersion: "memory-correction:v1",
+    targetContract: MEMORY_TRUST_TARGET_CONTRACT,
+    trustClass: "memory_trust_control",
+  });
+
+/**
+ * `explain_memory_source` (issue #119, ADR-0008): read-only source
+ * explanation. The admission transaction verifies the resolved Claim's
+ * Evidence down to valid User Event Revisions and freezes the verdict in the
+ * Receipt — dates and the user's actual words, or the `unverifiable` marker
+ * that drives the fixed ADR-0008 honesty phrasing. Never fabricates
+ * provenance.
+ */
+export const EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION: ConversationActionDefinition =
+  Object.freeze({
+    actionKind: "explain_memory_source",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "admission_time_target",
+    confirmationPolicy: "none",
+    effectClass: "memory_source_explanation",
+    executionMode: "synchronous",
+    functionDescription:
+      "Explain where a remembered understanding came from, when the user asks why SayHear remembers or believes something. targetAnchor must quote the user's own words that identify the remembered item. Read-only: it never changes what SayHear remembers.",
+    handlerBinding: "memory.source-explanation.v1",
+    idempotencyScope: "request_event_revision",
+    inputSchema: Object.freeze({
+      additionalProperties: false,
+      properties: Object.freeze({
+        targetAnchor: Object.freeze({
+          maxLength: 300,
+          minLength: 1,
+          type: "string",
+        }),
+      }),
+      required: Object.freeze(["targetAnchor"]),
+      type: "object",
+    }),
+    ratePolicy: Object.freeze({
+      maxInFlightPerTarget: null,
+      name: "memory_explain_source:v1",
+    }),
+    schemaVersion: "memory-explain-source:v1",
+    targetContract: MEMORY_TRUST_TARGET_CONTRACT,
+    trustClass: "memory_trust_control",
+  });
+
+/**
+ * The Catalog v2 go-live set (issue #119): the Journal regeneration
+ * Definition plus the first two Trust-Control Definitions end-to-end. The
+ * remaining three trust Definitions (`memory_forget_request`,
+ * `memory_forget_reversal`, `entity_identity_correction`) join in their own
+ * tickets; the five-Definition catalog pin completes at the 1A.3a cutover.
+ */
+export const MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG: ConversationActionCatalog =
+  Object.freeze({
+    definitions: Object.freeze([
+      REGENERATE_JOURNAL_ACTION_DEFINITION,
+      MEMORY_CORRECTION_ACTION_DEFINITION,
+      EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION,
+    ]),
+    version: "conversation-action-catalog:memory-trust-actions:v1",
+  });
+
+/**
+ * The Definitions eligible for this Decision: each handle-mode Definition
+ * carries at least one ActionReferenceHandle for its kind in the frozen
+ * CompiledContext — a Definition without a minted handle exposes no Function
+ * this turn. Admission-time-anchor Definitions (ADR-0118 Trust-Control
+ * Actions) resolve their targets outside the frozen context, so they are
+ * always eligible for the authenticated owner: correcting un-injected memory
+ * requires no magic recall.
  */
 export function actionDefinitionsForCatalog(
   catalog: ConversationActionCatalog,
   handles: readonly ActionReferenceHandle[] = [],
 ): readonly ConversationActionDefinition[] {
   if (!validateConversationActionCatalog(catalog).valid) return [];
-  return catalog.definitions.filter((definition) =>
-    handles.some((handle) => handle.actionKinds.includes(definition.actionKind)),
+  return catalog.definitions.filter(
+    (definition) =>
+      definition.targetContract.resolution === "admission_time_anchor" ||
+      handles.some((handle) =>
+        handle.actionKinds.includes(definition.actionKind),
+      ),
   );
 }
 
