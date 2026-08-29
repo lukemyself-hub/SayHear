@@ -6,6 +6,10 @@ import type {
 } from "./conversation-action-catalog";
 import { validateConversationActionCatalog } from "./conversation-action-catalog";
 import type { ActionReferenceBinding } from "./conversation-action-handles";
+import {
+  isPersonWideMemoryForgetAnchor,
+  MEMORY_FORGET_UNSUPPORTED_SCOPE_REASON,
+} from "./memory-trust-actions";
 import type {
   ConversationEventRevisionId,
   InteractionTurnId,
@@ -94,6 +98,8 @@ export type PreparedConversationAction =
       mode: "in_transaction_anchor";
       resolvedClaimId: string;
       resolvedClaimVersionId: string;
+      resolvedQualifierId?: string;
+      resolvedTargetKind: "memory_claim" | "relationship_qualifier";
     }>;
 
 /**
@@ -151,6 +157,11 @@ export type ResolvedTrustActionTarget = Readonly<{
   claimKind: "objective" | "impression";
   claimVersionId: string;
   predicateId: string;
+  targetKind: "memory_claim" | "relationship_qualifier";
+  qualifierId?: string;
+  qualifierAxisId?: string;
+  qualifierRoleSide?: "canonical_subject" | "counterpart";
+  qualifierTypedValue?: string | readonly string[];
 }>;
 
 /**
@@ -160,7 +171,9 @@ export type ResolvedTrustActionTarget = Readonly<{
  */
 export type TrustActionTargetResolution =
   | Readonly<{ outcome: "unique"; target: ResolvedTrustActionTarget }>
+  | Readonly<{ outcome: "scope_ambiguous" }>
   | Readonly<{ candidateCount: number; outcome: "multi_hit" }>
+  | Readonly<{ outcome: "unsupported_scope"; reasonCode: string }>
   | Readonly<{ outcome: "zero_hit" }>;
 
 /**
@@ -195,6 +208,8 @@ export type ConversationActionGatewayRepository = Readonly<{
     definition: ConversationActionDefinition;
     /** Anchor-mode resolved target; absent for handle-mode admissions. */
     resolvedClaim?: Readonly<{ claimId: string; claimVersionId: string }>;
+    /** Full typed target for Trust-Control Actions, including Qualifiers. */
+    resolvedTarget?: ResolvedTrustActionTarget;
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt>;
@@ -341,9 +356,27 @@ export function createConversationActionGateway(input: {
             `No Trust Action target resolver is configured for kind "${definition.actionKind}".`,
           );
         }
+        const targetAnchor = String(
+          proposal.arguments[definition.targetContract.handleArgument],
+        );
+        if (
+          (definition.actionKind === "memory_forget_request" ||
+            definition.actionKind === "memory_forget_reversal") &&
+          isPersonWideMemoryForgetAnchor(targetAnchor)
+        ) {
+          return input.repository.commitNonAccepted({
+            admission: "unsupported",
+            catalogVersion: request.catalog.version,
+            context: request.context,
+            definition,
+            disposition: MEMORY_FORGET_UNSUPPORTED_SCOPE_REASON,
+            proposal,
+            schemaVersion,
+          });
+        }
         const resolution = await input.trustActionTargetResolver.resolve({
           actionKind: definition.actionKind,
-          anchor: String(proposal.arguments[definition.targetContract.handleArgument]),
+          anchor: targetAnchor,
           userId: request.context.userId,
         });
         if (resolution.outcome === "multi_hit") {
@@ -358,13 +391,38 @@ export function createConversationActionGateway(input: {
             schemaVersion,
           });
         }
+        if (resolution.outcome === "scope_ambiguous") {
+          return input.repository.commitNonAccepted({
+            admission: "clarification_required",
+            catalogVersion: request.catalog.version,
+            context: request.context,
+            definition,
+            disposition: "scope_ambiguous",
+            proposal,
+            schemaVersion,
+          });
+        }
+        if (resolution.outcome === "unsupported_scope") {
+          return input.repository.commitNonAccepted({
+            admission: "unsupported",
+            catalogVersion: request.catalog.version,
+            context: request.context,
+            definition,
+            disposition: resolution.reasonCode,
+            proposal,
+            schemaVersion,
+          });
+        }
         if (resolution.outcome === "zero_hit") {
           return input.repository.commitNonAccepted({
             admission: "clarification_required",
             catalogVersion: request.catalog.version,
             context: request.context,
             definition,
-            disposition: "target_not_found",
+            disposition:
+              definition.actionKind === "memory_forget_reversal"
+                ? "target_not_fenced"
+                : "target_not_found",
             proposal,
             schemaVersion,
           });
@@ -373,6 +431,7 @@ export function createConversationActionGateway(input: {
           catalogVersion: request.catalog.version,
           context: request.context,
           definition,
+          resolvedTarget: resolution.target,
           resolvedClaim: {
             claimId: resolution.target.claimId,
             claimVersionId: resolution.target.claimVersionId,
@@ -425,6 +484,7 @@ export function createConversationActionGateway(input: {
       }
       if (
         target.currentVersionStatus !== undefined &&
+        target.targetKind === "journal" &&
         target.currentVersionStatus !== "published"
       ) {
         return input.repository.commitNonAccepted({

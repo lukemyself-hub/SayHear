@@ -67,6 +67,8 @@ export type ActionFinalizationTrustActionDetail = Readonly<{
   claimId: string | null;
   claimKind: "objective" | "impression" | null;
   claimVersionId: string | null;
+  qualifierId: string | null;
+  targetKind: "memory_claim" | "relationship_qualifier" | null;
   evidenceItems: readonly Readonly<{
     occurredOn: string;
     quote: string;
@@ -251,6 +253,11 @@ export type ContextCompilerRepository = Readonly<{
         sourceRevision: number;
         targetId: string;
         targetVersionId: string;
+        targetClaimId?: string;
+        targetQualifierId?: string;
+        qualifierAxisId?: string;
+        qualifierRoleSide?: "canonical_subject" | "counterpart";
+        qualifierTypedValue?: string | readonly string[];
       }>)[];
     compilerVersion: string;
     degradedReason: CompiledContextDegradedReason;
@@ -452,15 +459,31 @@ export function createContextCompiler(dependencies: {
         dependencies.contentHmacSecret,
         sections,
       );
-      const actionReferenceHandles = (source.actionReferenceTargets ?? []).map(
-        (target) => ({
-          actionKinds: target.actionKinds,
-          handle: `shh-handle-${randomUUID()}`,
-          targetKind: target.targetKind,
-          targetId: target.targetId,
-          targetVersionId: target.targetVersionId,
-          sourceRevision: target.sourceRevision,
-        }),
+      const actionReferenceHandles = (source.actionReferenceTargets ?? []).flatMap(
+        (target) =>
+          target.actionKinds.map((actionKind) => ({
+            actionKinds: [actionKind],
+            handle: `shh-handle-${randomUUID()}`,
+            targetKind: target.targetKind,
+            targetId: target.targetId,
+            targetVersionId: target.targetVersionId,
+            sourceRevision: target.sourceRevision,
+            ...(target.targetClaimId === undefined
+              ? {}
+              : { targetClaimId: target.targetClaimId }),
+            ...(target.targetQualifierId === undefined
+              ? {}
+              : { targetQualifierId: target.targetQualifierId }),
+            ...(target.qualifierAxisId === undefined
+              ? {}
+              : { qualifierAxisId: target.qualifierAxisId }),
+            ...(target.qualifierRoleSide === undefined
+              ? {}
+              : { qualifierRoleSide: target.qualifierRoleSide }),
+            ...(target.qualifierTypedValue === undefined
+              ? {}
+              : { qualifierTypedValue: target.qualifierTypedValue }),
+          })),
       );
 
       const compiled = await dependencies.repository.saveCompiledContext({
@@ -675,6 +698,8 @@ function renderActionReferenceInstructions(
 export const TRUST_ACTION_KINDS: readonly string[] = [
   "memory_correction",
   "explain_memory_source",
+  "memory_forget_request",
+  "memory_forget_reversal",
 ];
 
 export function isTrustActionReceipt(
@@ -699,10 +724,22 @@ export function isTrustActionReceipt(
 export function trustActionFencesMemory(
   receipt: ActionFinalizationReceiptSnapshot | undefined,
 ): boolean {
-  return (
-    isTrustActionReceipt(receipt) &&
+  if (!isTrustActionReceipt(receipt)) return false;
+  if (
     receipt.admission === "clarification_required" &&
-    receipt.disposition === "target_ambiguous_multi_hit"
+    (receipt.disposition === "target_ambiguous_multi_hit" ||
+      receipt.disposition === "scope_ambiguous")
+  ) {
+    return true;
+  }
+  return (
+    receipt.admission === "accepted" &&
+    (receipt.execution === "succeeded" ||
+      receipt.execution === "failed" ||
+      receipt.execution === "canceled") &&
+    (receipt.actionKind === "memory_correction" ||
+      receipt.actionKind === "memory_forget_request" ||
+      receipt.actionKind === "memory_forget_reversal")
   );
 }
 
@@ -788,6 +825,60 @@ function renderTrustActionFinalizationReceipt(
     } else {
       lines.push(
         `Outcome rule: the source cannot be verified. Use exactly this phrasing and add nothing that pretends provenance (P5): "${trustActionUnverifiablePhrasing("en")}" / 「${trustActionUnverifiablePhrasing("zh")}」`,
+      );
+    }
+  } else if (receipt.actionKind === "memory_forget_request") {
+    if (receipt.admission === "accepted" && receipt.execution === "succeeded") {
+      if (receipt.disposition === "succeeded_noop") {
+        lines.push(
+          "Outcome rule: this target was already forgotten; say that plainly and do not claim that anything changed or was deleted.",
+        );
+      } else {
+        lines.push(
+          "Outcome rule: the Forget Request committed. Stop using the selected whole memory or relationship role in future memory recall, while the original conversation and Journal remain intact; do not call it deletion and do not restate the forgotten content.",
+        );
+      }
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "scope_ambiguous"
+    ) {
+      lines.push(
+        "Outcome rule: the request could mean the whole remembered relationship or only one role within it. Ask the user which scope they mean; nothing changed.",
+      );
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "target_ambiguous_multi_hit"
+    ) {
+      lines.push(
+        `Outcome rule: several memories (${detail?.candidateCount ?? "some"}) match. Ask which one the user means without listing or guessing; nothing changed.`,
+      );
+    } else {
+      lines.push(
+        "Outcome rule: no matching memory was changed. Say so plainly and do not claim the Forget Request succeeded.",
+      );
+    }
+  } else if (receipt.actionKind === "memory_forget_reversal") {
+    if (receipt.admission === "accepted" && receipt.execution === "succeeded") {
+      lines.push(
+        "Outcome rule: the explicit Forget Reversal committed. The current request is new Evidence and permission; never say that old Evidence or an old ClaimVersion was reactivated.",
+      );
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "target_not_fenced"
+    ) {
+      lines.push(
+        "Outcome rule: no currently forgotten target was found, so nothing was restored. Say that honestly and do not infer permission from ordinary repetition.",
+      );
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "scope_ambiguous"
+    ) {
+      lines.push(
+        "Outcome rule: the request does not identify one forgotten whole memory or relationship role. Ask one concise clarification; nothing changed.",
+      );
+    } else {
+      lines.push(
+        "Outcome rule: no memory was restored. Do not claim that Forget permission changed.",
       );
     }
   }

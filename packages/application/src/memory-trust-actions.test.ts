@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   planMemoryCorrection,
+  planMemoryForgetRequest,
+  planMemoryForgetReversal,
   planTrustActionTargetResolution,
   type TrustActionResolutionCandidate,
 } from "./memory-trust-actions";
@@ -180,6 +182,67 @@ describe("planTrustActionTargetResolution (issue #119, ADR-0118)", () => {
     // ("employer") stays below the two-independent-terms bar.
     expect(plan.outcome).toBe("zero_hit");
   });
+
+  it("returns scope_ambiguous when a whole Claim and its Qualifier both match", () => {
+    const plan = planTrustActionTargetResolution({
+      anchor: "莉莉的姑姑关系不对",
+      broadTerms: RETRIEVAL_BROAD_TERM_STOP_LIST,
+      candidates: [
+        candidate({
+          claimId: "claim-lily",
+          lexicalTerms: ["莉莉", "关系"],
+          predicateSurfaces: ["关系"],
+        }),
+        candidate({
+          claimId: "claim-lily",
+          claimVersionId: "claim-lily-v1",
+          targetKind: "relationship_qualifier",
+          qualifierId: "qualifier-aunt",
+          qualifierAxisId: "kinship_term",
+          qualifierRoleSide: "counterpart",
+          qualifierTypedValue: "姑姑",
+          lexicalTerms: ["莉莉", "姑姑"],
+          typedValues: ["姑姑"],
+          predicateSurfaces: [],
+        }),
+      ],
+      labelIndex: [],
+    });
+    expect(plan).toEqual({ outcome: "scope_ambiguous" });
+  });
+
+  it("returns the typed Qualifier target without exposing a predicate selector", () => {
+    const plan = planTrustActionTargetResolution({
+      anchor: "莉莉是我姑姑",
+      broadTerms: RETRIEVAL_BROAD_TERM_STOP_LIST,
+      candidates: [
+        candidate({
+          claimId: "claim-lily",
+          targetKind: "relationship_qualifier",
+          qualifierId: "qualifier-aunt",
+          qualifierAxisId: "kinship_term",
+          qualifierRoleSide: "counterpart",
+          qualifierTypedValue: "姑姑",
+          lexicalTerms: ["莉莉", "姑姑"],
+          typedValues: ["姑姑"],
+          predicateSurfaces: [],
+        }),
+      ],
+      labelIndex: [],
+    });
+    expect(plan).toMatchObject({
+      outcome: "unique",
+      target: {
+        targetKind: "relationship_qualifier",
+        qualifierId: "qualifier-aunt",
+        qualifierAxisId: "kinship_term",
+        qualifierRoleSide: "counterpart",
+      },
+    });
+    if (plan.outcome === "unique") {
+      expect(plan.target).not.toHaveProperty("predicateSelector");
+    }
+  });
 });
 
 describe("planMemoryCorrection (issue #119)", () => {
@@ -266,6 +329,44 @@ describe("planMemoryCorrection (issue #119)", () => {
     expect(plan).toEqual({
       action: "noop_already_converged",
       reasonCode: "claim_version_retracted",
+    });
+  });
+});
+
+describe("Forget/Reversal planning (issue #120)", () => {
+  it("uses the selected target kind to choose whole-Claim or Qualifier noop", () => {
+    expect(
+      planMemoryForgetRequest({
+        currentVersionStatus: "retracted",
+        targetKind: "memory_claim",
+      }),
+    ).toEqual({ action: "noop_already_fenced", reasonCode: "claim_already_fenced" });
+    expect(
+      planMemoryForgetRequest({
+        currentVersionStatus: "active",
+        targetKind: "relationship_qualifier",
+        targetQualifierPresent: false,
+      }),
+    ).toEqual({
+      action: "noop_already_fenced",
+      reasonCode: "qualifier_already_fenced",
+    });
+    expect(
+      planMemoryForgetRequest({
+        currentVersionStatus: "active",
+        targetKind: "relationship_qualifier",
+        targetQualifierPresent: true,
+      }),
+    ).toEqual({ action: "apply" });
+  });
+
+  it("only permits Reversal when the target is currently fenced", () => {
+    expect(planMemoryForgetReversal({ fencePresent: true })).toEqual({
+      action: "restore",
+    });
+    expect(planMemoryForgetReversal({ fencePresent: false })).toEqual({
+      action: "precondition_failed",
+      reasonCode: "target_not_fenced",
     });
   });
 });

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   CompiledContextIntegrityError,
   createContextCompiler,
+  trustActionFencesMemory,
   type ContextCompilerRepository,
   type ContextPolicyVersions,
   type ContextSourceSnapshot,
@@ -21,6 +22,27 @@ import {
 } from "./prompt-artifacts";
 
 describe("Context Compiler", () => {
+  it("fails the reply round's memory closed for terminal Trust Action outcomes", () => {
+    const receipt = {
+      actionKind: "memory_forget_reversal",
+      admission: "accepted" as const,
+      disposition: "reversal_precondition_failed",
+      execution: "failed" as const,
+      sequence: 2,
+    };
+
+    expect(trustActionFencesMemory(receipt)).toBe(true);
+    expect(
+      trustActionFencesMemory({ ...receipt, execution: "canceled" }),
+    ).toBe(true);
+    expect(
+      trustActionFencesMemory({ ...receipt, execution: "succeeded" }),
+    ).toBe(true);
+    expect(
+      trustActionFencesMemory({ ...receipt, execution: "running" }),
+    ).toBe(false);
+  });
+
   it("uses a valid lagging DialogueState and only sends raw Events after its coverage", async () => {
     const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
     const dailySessionId = asDailySessionId(

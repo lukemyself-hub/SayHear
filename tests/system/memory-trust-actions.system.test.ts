@@ -20,7 +20,11 @@ import {
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   normalizeRetrievalTerm,
   planTrustActionTargetResolution,
+  relationshipHintInputsFor,
+  retrievalProjectionInputsFor,
   RETRIEVAL_BROAD_TERM_STOP_LIST,
+  createMemoryForgetRequestActionHandler,
+  createMemoryForgetReversalActionHandler,
   trustActionUnverifiablePhrasing,
   type ConversationResponseStreamEvent,
   type MemoryClaimService,
@@ -77,6 +81,27 @@ const advanceMs = (ms: number) => {
 };
 
 const registrySnapshot = loadPredicateRegistrySnapshot(1);
+
+const registryLookup = {
+  entryFor(predicateId: string) {
+    return (
+      registrySnapshot.entries.find(
+        (entry) => entry.predicateId === predicateId,
+      ) ?? null
+    );
+  },
+  registryVersion: () => registrySnapshot.registryVersion,
+  relationshipProjectionsFor(predicateId: string) {
+    return registrySnapshot.relationshipProjections.filter(
+      (projection) => projection.predicateId === predicateId,
+    );
+  },
+  predicateLocalizationsFor(predicateId: string) {
+    return registrySnapshot.localizations.filter(
+      (localization) => localization.predicateId === predicateId,
+    );
+  },
+};
 
 const generationPolicy = Object.freeze({
   consentPolicyVersion: null,
@@ -338,7 +363,16 @@ function createTrustGateway() {
     database.pool,
     "test-action-payload-secret",
   );
-  const commitPort = new PostgresMemoryTrustActionCommitPort();
+  const commitPort = new PostgresMemoryTrustActionCommitPort({
+    relationshipHintsFor(predicateId) {
+      const entry = registryLookup.entryFor(predicateId);
+      return entry ? relationshipHintInputsFor(registryLookup, entry) : null;
+    },
+    retrievalProjectionFor(predicateId) {
+      const entry = registryLookup.entryFor(predicateId);
+      return entry ? retrievalProjectionInputsFor(registryLookup, entry) : null;
+    },
+  });
   const targetSource = new PostgresMemoryTrustActionTargetSource(database.pool);
   const predicateSurfaces = new Map<string, readonly string[]>();
   for (const localization of registrySnapshot.localizations) {
@@ -354,6 +388,8 @@ function createTrustGateway() {
     handlers: [
       createMemoryCorrectionActionHandler({ commitPort }),
       createExplainMemorySourceActionHandler({ commitPort }),
+      createMemoryForgetRequestActionHandler({ commitPort }),
+      createMemoryForgetReversalActionHandler({ commitPort }),
     ],
     repository: actionRepository,
     trustActionTargetResolver: {
@@ -364,7 +400,11 @@ function createTrustGateway() {
             searchSpace:
               actionKind === "memory_correction"
                 ? "active_and_corrected"
-                : "active_claims",
+                : actionKind === "explain_memory_source"
+                  ? "active_claims"
+                  : actionKind === "memory_forget_reversal"
+                    ? "fenced_targets"
+                    : "forget_targets",
             userId,
           }),
           targetSource.listLabelIndex({ userId }),
@@ -390,6 +430,9 @@ function createTrustGateway() {
             candidateCount: plan.candidateCount,
             outcome: "multi_hit",
           };
+        }
+        if (plan.outcome === "scope_ambiguous") {
+          return { outcome: "scope_ambiguous" };
         }
         return { outcome: "zero_hit" };
       },
@@ -480,6 +523,7 @@ async function respond(
   });
   let replyText = "";
   let receipt: ActionReceipt | null = null;
+  const eventSummaries: string[] = [];
   for await (const event of responseService.respond(OWNER, {
     clientEventId: `trust-event-${counter}`,
     clientTurnId: `trust-turn-${counter}`,
@@ -487,6 +531,11 @@ async function respond(
     text,
     timezone: "Asia/Shanghai",
   })) {
+    eventSummaries.push(
+      event.type === "response_failed" || event.type === "response_interrupted"
+        ? `${event.type}:${event.category}`
+        : event.type,
+    );
     if (event.type === "assistant_delta") {
       replyText += event.delta;
     } else if (event.type === "action_admitted") {
@@ -496,7 +545,9 @@ async function respond(
     }
   }
   if (!replyText) {
-    throw new Error("The turn produced no visible reply.");
+    throw new Error(
+      `The turn produced no visible reply (events=${eventSummaries.join(",")}, receipt=${JSON.stringify(receipt)}).`,
+    );
   }
   return { receipt, replyText };
 }
@@ -556,6 +607,111 @@ async function selfEntityId(): Promise<string> {
   return entityId;
 }
 
+/** Fixture: introduce one named person and promote its EntityVersion. */
+async function seedNamedPerson(label: string): Promise<string> {
+  const text = `我和${label}是亲戚。`;
+  const revisionId = await submitTurn(text);
+  const evidenceId = await seedEvidence(revisionId);
+  const startOffset = text.indexOf(label);
+  const resolutions = await new PostgresEntityRepository(
+    database.pool,
+  ).resolveMentions({
+    userId: OWNER,
+    eventRevisionId: revisionId,
+    proposals: [
+      {
+        surfaceForm: label,
+        locatorType: "text_span",
+        startOffset,
+        endOffset: startOffset + label.length,
+        mentionKind: "named",
+        newIntroduction: true,
+        entityKindId: "sh.entity.person",
+        evidenceId,
+      },
+    ],
+    resolverPolicyVersion: "entity-resolution:v2",
+    now: clock(),
+  });
+  const entityId = resolutions[0]?.entityId;
+  if (!entityId) throw new Error(`Could not create Entity for ${label}.`);
+  await database.pool.query(
+    `INSERT INTO entity_versions (
+       entity_version_id, entity_id, user_id, revision, entity_kind_id,
+       status, created_at
+     )
+     SELECT $3, entity_id, user_id, revision + 1, entity_kind_id, 'active', $4
+     FROM entity_versions
+     WHERE entity_id = $1 AND user_id = $2
+       AND entity_version_id = (
+         SELECT current_version_id FROM entities
+         WHERE entity_id = $1 AND user_id = $2
+       )`,
+    [entityId, OWNER, createTestUuidV7(clock()), clock()],
+  );
+  await database.pool.query(
+    `UPDATE entities
+     SET current_version_id = (
+       SELECT entity_version_id FROM entity_versions
+       WHERE entity_id = $1 AND user_id = $2
+       ORDER BY revision DESC LIMIT 1
+     )
+     WHERE entity_id = $1 AND user_id = $2`,
+    [entityId, OWNER],
+  );
+  return entityId;
+}
+
+/** Fixture: one relationship Claim with an evidence-backed kinship Qualifier. */
+async function seedRelativeClaim(input: {
+  label?: string;
+  qualifierValue?: string;
+  independentBaseEvidence?: boolean;
+} = {}): Promise<{
+  claimId: string;
+  objectEntityId: string;
+  evidenceId: string;
+  revisionId: string;
+}> {
+  const label = input.label ?? "小明";
+  const qualifierValue = input.qualifierValue ?? "姑姑";
+  const objectEntityId = await seedNamedPerson(label);
+  const baseRevisionId = await submitTurn(`${label}是我的亲戚。`);
+  const baseEvidenceId = await seedEvidence(baseRevisionId);
+  const hasIndependentBaseEvidence = input.independentBaseEvidence ?? true;
+  const qualifierRevisionId = hasIndependentBaseEvidence
+    ? await submitTurn(`${label}是我的${qualifierValue}。`)
+    : baseRevisionId;
+  const qualifierEvidenceId = hasIndependentBaseEvidence
+    ? await seedEvidence(qualifierRevisionId)
+    : baseEvidenceId;
+  const admitted = await recordAndAdmit({
+    basis: "directly_stated",
+    evidenceItemIds: [baseEvidenceId, qualifierEvidenceId],
+    kind: "objective",
+    objectEntityId,
+    predicateId: "sh.relationship.relative_of",
+    qualifiers: [
+      {
+        axisId: "kinship_term",
+        roleSide: "object",
+        typedValue: qualifierValue,
+        evidenceItemIds: [qualifierEvidenceId],
+      },
+    ],
+    typedValue: "",
+  });
+  if (admitted.outcome !== "promoted") {
+    throw new Error(`expected promoted relationship claim, got ${admitted.outcomeCode}`);
+  }
+  return {
+    claimId: admitted.claimId,
+    objectEntityId,
+    evidenceId: qualifierEvidenceId,
+    revisionId: qualifierRevisionId,
+  };
+}
+
 const CLAIM_LINEAGE = {
   extractionPolicyVersion: "memory-extract-test:v1",
   generationCommandId: null,
@@ -571,6 +727,13 @@ async function recordAndAdmit(input: {
   basis: "directly_stated" | "inferred";
   typedValue: string | readonly string[];
   evidenceItemIds: readonly string[];
+  objectEntityId?: string | null;
+  qualifiers?: readonly {
+    axisId: string;
+    roleSide: "subject" | "object";
+    typedValue: string | readonly string[];
+    evidenceItemIds: readonly string[];
+  }[];
 }): Promise<
   | { outcome: "promoted"; claimId: string; claimVersionId: string }
   | { outcome: "not_promoted"; outcomeCode: string }
@@ -588,7 +751,7 @@ async function recordAndAdmit(input: {
     },
     subjectEntityId: await selfEntityId(),
     subjectEntityMentionId: null,
-    objectEntityId: null,
+    objectEntityId: input.objectEntityId ?? null,
     objectEntityMentionId: null,
     scopeKey: "",
     temporal: {
@@ -598,7 +761,7 @@ async function recordAndAdmit(input: {
       validTo: null,
       validToPrecision: "unknown",
     },
-    qualifiers: [],
+    qualifiers: input.qualifiers ?? [],
     evidenceItemIds: input.evidenceItemIds,
     lineage: CLAIM_LINEAGE,
   });
@@ -676,6 +839,84 @@ async function claimState(claimId: string): Promise<{
   };
 }
 
+async function currentQualifiers(claimId: string): Promise<
+  readonly {
+    id: string;
+    versionId: string;
+    axisId: string;
+    roleSide: string;
+    typedValue: unknown;
+    evidenceItemIds: string[];
+  }[]
+> {
+  const rows = await database.pool.query<{
+    id: string;
+    version_id: string;
+    axis_id: string;
+    role_side: string;
+    typed_value: unknown;
+    evidence_item_ids: string[] | null;
+  }>(
+    `SELECT qualifier.memory_claim_version_qualifier_id::text AS id,
+            qualifier.memory_claim_version_id::text AS version_id,
+            qualifier.axis_id, qualifier.role_side, qualifier.typed_value,
+            ARRAY(
+              SELECT evidence_item_id::text
+              FROM memory_claim_version_qualifier_evidence evidence
+              WHERE evidence.memory_claim_version_qualifier_id =
+                qualifier.memory_claim_version_qualifier_id
+              ORDER BY evidence_item_id
+            ) AS evidence_item_ids
+     FROM memory_claims claim
+     INNER JOIN memory_claim_version_qualifiers qualifier
+       ON qualifier.memory_claim_version_id = claim.current_version_id
+      AND qualifier.user_id = claim.user_id
+     WHERE claim.user_id = $1 AND claim.memory_claim_id = $2
+     ORDER BY qualifier.axis_id, qualifier.role_side`,
+    [OWNER, claimId],
+  );
+  return rows.rows.map((row) => ({
+    axisId: row.axis_id,
+    evidenceItemIds: row.evidence_item_ids ?? [],
+    id: row.id,
+    roleSide: row.role_side,
+    typedValue: row.typed_value,
+    versionId: row.version_id,
+  }));
+}
+
+async function currentRelationshipHints(claimId: string): Promise<
+  readonly {
+    locale: string;
+    roleAxisId: string | null;
+    roleSource: string;
+    roleTerm: string;
+    versionId: string;
+  }[]
+> {
+  const rows = await database.pool.query<{
+    locale: string;
+    role_axis_id: string | null;
+    role_source: string;
+    role_term: string;
+    version_id: string;
+  }>(
+    `SELECT hint.locale, hint.role_axis_id, hint.role_source,
+            hint.role_term, hint.memory_claim_version_id::text AS version_id
+     FROM relationship_resolver_hints hint
+     WHERE hint.user_id = $1 AND hint.memory_claim_id = $2
+     ORDER BY hint.locale, hint.resolved_entity_id`,
+    [OWNER, claimId],
+  );
+  return rows.rows.map((row) => ({
+    locale: row.locale,
+    roleAxisId: row.role_axis_id,
+    roleSource: row.role_source,
+    roleTerm: row.role_term,
+    versionId: row.version_id,
+  }));
+}
+
 /** Sections of the newest action-finalization compiled context. */
 async function finalizationContextSections(): Promise<{
   degradedReason: string | null;
@@ -740,10 +981,15 @@ async function executionRow(actionExecutionId: string) {
   const row = await database.pool.query<{
     disposition: string | null;
     resolved_claim_id: string | null;
+    resolved_claim_version_id: string | null;
+    resolved_qualifier_id: string | null;
+    request_event_revision_id: string;
     target_kind: string | null;
   }>(
-    `SELECT disposition, resolved_claim_id::text AS resolved_claim_id,
-            target_kind
+    `SELECT disposition, request_event_revision_id::text AS request_event_revision_id,
+            resolved_claim_id::text AS resolved_claim_id,
+            resolved_claim_version_id::text AS resolved_claim_version_id,
+            resolved_qualifier_id::text AS resolved_qualifier_id, target_kind
      FROM conversation_action_executions WHERE action_execution_id = $1`,
     [actionExecutionId],
   );
@@ -1208,5 +1454,578 @@ describe("Trust actions core (issue #119)", () => {
     // Exactly two versions: the original + the correction (the retry added
     // nothing) — the idempotency key, not dedup machinery, converged it.
     expect(versions.rows[0]!.count).toBe("2");
+  });
+
+  it("forgets a whole Claim without deleting its source and converges repeats", async () => {
+    const claimId = await seedResidenceClaim("我住在上海。");
+    const original = await claimState(claimId);
+    advanceMs(60 * 1_000);
+
+    const { receipt } = await respond("请忘掉我住在上海这件事。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "好，我不会再把这件事作为记忆提起。原对话还在。",
+    });
+
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+    const execution = await executionRow(receipt!.actionExecutionId);
+    expect(execution).toMatchObject({
+      resolved_claim_id: claimId,
+      target_kind: "memory_claim",
+      resolved_qualifier_id: null,
+    });
+    const state = await claimState(claimId);
+    expect(state).toMatchObject({
+      createdBy: "forget_request",
+      currentStatus: "retracted",
+    });
+    expect(state.currentVersionId).not.toBe(original.currentVersionId);
+    expect(state.projectionStatuses.every((status) => status === "deleted")).toBe(
+      true,
+    );
+
+    const request = await database.pool.query<{
+      applied_claim_version_id: string;
+      target_scope: string;
+    }>(
+      `SELECT applied_claim_version_id::text, target_scope
+       FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, claimId],
+    );
+    expect(request.rows).toHaveLength(1);
+    expect(request.rows[0]).toMatchObject({
+      applied_claim_version_id: state.currentVersionId,
+      target_scope: "whole_claim",
+    });
+    const exclusions = await database.pool.query(
+      `SELECT 1 FROM memory_forget_evidence_exclusions
+       WHERE user_id = $1 AND memory_forget_request_id = (
+         SELECT memory_forget_request_id FROM memory_forget_requests
+         WHERE user_id = $1 AND target_claim_id = $2
+       ) AND exclusion_scope = 'whole_claim' AND status = 'active'`,
+      [OWNER, claimId],
+    );
+    expect(exclusions.rowCount).toBe(1);
+
+    const source = await database.pool.query<{
+      event_lifecycle: string;
+      item_status: string;
+      purged_at: Date | null;
+    }>(
+      `SELECT item.status AS item_status,
+              revision.content_purged_at AS purged_at,
+              event.lifecycle_status AS event_lifecycle
+       FROM evidence_items item
+       JOIN conversation_event_revisions revision
+         ON revision.conversation_event_revision_id = item.source_revision_id
+       JOIN conversation_events event
+         ON event.conversation_event_id = revision.conversation_event_id
+       WHERE item.user_id = $1 AND item.evidence_item_id = $2`,
+      [OWNER, (await database.pool.query<{ evidence_item_id: string }>(
+        `SELECT evidence_item_id::text FROM claim_evidence_links
+         WHERE user_id = $1 AND memory_claim_version_id = $2
+         LIMIT 1`,
+        [OWNER, original.currentVersionId],
+      )).rows[0]!.evidence_item_id],
+    );
+    expect(source.rows[0]).toMatchObject({
+      event_lifecycle: "active",
+      item_status: "active",
+      purged_at: null,
+    });
+    const finalization = await finalizationContextSections();
+    expect(finalization.degradedReason).toBe("trust_action_memory_fenced");
+    expect(finalization.sectionKeys).not.toContain("objective_memory");
+
+    advanceMs(60 * 1_000);
+    const repeated = await respond("再忘掉我住在上海这件事。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "这条记忆已经忘记了。",
+    });
+    expect(repeated.receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "succeeded_noop",
+      execution: "succeeded",
+    });
+    expect((await claimState(claimId)).currentVersionId).toBe(
+      state.currentVersionId,
+    );
+    const requestCount = await database.pool.query(
+      `SELECT 1 FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, claimId],
+    );
+    expect(requestCount.rowCount).toBe(1);
+  });
+
+  it("uses a fresh Evidence and ClaimVersion for whole-Claim Forget Reversal", async () => {
+    const claimId = await seedResidenceClaim("我住在上海。");
+    const original = await claimState(claimId);
+    const originalEvidence = await database.pool.query<{
+      evidence_item_id: string;
+    }>(
+      `SELECT evidence_item_id::text
+       FROM claim_evidence_links
+       WHERE user_id = $1 AND memory_claim_version_id = $2
+       LIMIT 1`,
+      [OWNER, original.currentVersionId],
+    );
+    advanceMs(60 * 1_000);
+    await respond("请忘掉我住在上海。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "好。",
+    });
+    const fenced = await claimState(claimId);
+    advanceMs(60 * 1_000);
+
+    const { receipt } = await respond("我明确允许你重新记住我住在上海。", {
+      actionKind: "memory_forget_reversal",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "你已经明确允许我重新记住这件事了。",
+    });
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+    const execution = await executionRow(receipt!.actionExecutionId);
+    expect(execution).toMatchObject({
+      resolved_claim_id: claimId,
+      target_kind: "memory_claim",
+      resolved_qualifier_id: null,
+    });
+    const restored = await claimState(claimId);
+    expect(restored).toMatchObject({
+      createdBy: "forget_reversal",
+      currentStatus: "active",
+    });
+    expect(restored.currentVersionId).not.toBe(fenced.currentVersionId);
+
+    const currentEvidence = await database.pool.query<{
+      evidence_item_id: string;
+      extraction_policy_version: string;
+      source_revision_id: string;
+    }>(
+      `SELECT link.evidence_item_id::text,
+              item.extraction_policy_version,
+              item.source_revision_id::text
+       FROM claim_evidence_links link
+       JOIN evidence_items item
+         ON item.evidence_item_id = link.evidence_item_id
+        AND item.user_id = link.user_id
+       WHERE link.user_id = $1 AND link.memory_claim_version_id = $2
+         AND link.status = 'active'`,
+      [OWNER, restored.currentVersionId],
+    );
+    expect(currentEvidence.rows).toHaveLength(1);
+    expect(currentEvidence.rows[0]!.extraction_policy_version).toBe(
+      "memory-forget-reversal:v1",
+    );
+    expect(currentEvidence.rows[0]!.evidence_item_id).not.toBe(
+      originalEvidence.rows[0]!.evidence_item_id,
+    );
+    expect(currentEvidence.rows[0]!.source_revision_id).toBe(
+      execution.request_event_revision_id,
+    );
+
+    const oldExclusion = await database.pool.query(
+      `SELECT 1
+       FROM memory_forget_evidence_exclusions exclusion
+       JOIN memory_forget_requests request
+         ON request.memory_forget_request_id = exclusion.memory_forget_request_id
+       WHERE request.user_id = $1 AND request.target_claim_id = $2
+         AND exclusion.exclusion_scope = 'whole_claim'
+         AND exclusion.status = 'active'`,
+      [OWNER, claimId],
+    );
+    expect(oldExclusion.rowCount).toBe(1);
+    const versions = await database.pool.query<{
+      created_by: string;
+      status: string;
+    }>(
+      `SELECT created_by, status FROM memory_claim_versions
+       WHERE user_id = $1 AND memory_claim_id = $2
+       ORDER BY revision`,
+      [OWNER, claimId],
+    );
+    expect(versions.rows.map((row) => [row.created_by, row.status])).toEqual([
+      ["consolidation", "active"],
+      ["forget_request", "retracted"],
+      ["forget_reversal", "active"],
+    ]);
+    const reversal = await database.pool.query(
+      `SELECT 1 FROM memory_forget_reversals
+       WHERE user_id = $1 AND memory_forget_request_id = (
+         SELECT memory_forget_request_id FROM memory_forget_requests
+         WHERE user_id = $1 AND target_claim_id = $2
+       ) AND status = 'active' AND applied_claim_version_id = $3`,
+      [OWNER, claimId, restored.currentVersionId],
+    );
+    expect(reversal.rowCount).toBe(1);
+  });
+
+  it("does not reverse an active target without a Forget fence", async () => {
+    const claimId = await seedResidenceClaim("我住在上海。");
+    const before = await claimState(claimId);
+    advanceMs(60 * 1_000);
+
+    const { receipt, replyText } = await respond(
+      "我明确允许你重新记住我住在上海。",
+      {
+        actionKind: "memory_forget_reversal",
+        arguments: { targetAnchor: "我住在上海" },
+        reply: "我没有找到一条目前被忘掉的记忆，因此没有恢复任何内容。",
+      },
+    );
+
+    expect(receipt).toMatchObject({
+      admission: "clarification_required",
+      disposition: "target_not_fenced",
+      execution: "not_started",
+    });
+    expect(replyText).toContain("没有找到");
+    expect(await claimState(claimId)).toMatchObject({
+      currentVersionId: before.currentVersionId,
+      currentStatus: "active",
+    });
+    const reversals = await database.pool.query(
+      `SELECT 1 FROM memory_forget_reversals
+       WHERE user_id = $1 AND status = 'active'`,
+      [OWNER],
+    );
+    expect(reversals.rowCount).toBe(0);
+  });
+
+  it("forgets one relationship Qualifier, keeps neutral relationship recall, and fences re-learning", async () => {
+    const fixture = await seedRelativeClaim();
+    const originalQualifiers = await currentQualifiers(fixture.claimId);
+    expect(originalQualifiers).toHaveLength(1);
+    const originalQualifier = originalQualifiers[0]!;
+    advanceMs(60 * 1_000);
+
+    const { receipt } = await respond("请忘掉小明是我姑姑这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "好，我不会再使用这个具体称谓，但会保留中性的关系。",
+    });
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+    const execution = await executionRow(receipt!.actionExecutionId);
+    expect(execution).toMatchObject({
+      resolved_claim_id: fixture.claimId,
+      target_kind: "relationship_qualifier",
+      resolved_qualifier_id: originalQualifier.id,
+    });
+    const afterForget = await claimState(fixture.claimId);
+    expect(afterForget.currentStatus).toBe("active");
+    expect(await currentQualifiers(fixture.claimId)).toHaveLength(0);
+    const hints = await currentRelationshipHints(fixture.claimId);
+    expect(hints).toHaveLength(4);
+    expect(
+      hints.every(
+        (hint) =>
+          hint.roleAxisId === "kinship_term" &&
+          hint.roleSource === "neutral_fallback" &&
+          hint.roleTerm === (hint.locale === "zh" ? "亲戚" : "relative") &&
+          hint.versionId === afterForget.currentVersionId,
+      ),
+    ).toBe(true);
+    const request = await database.pool.query<{
+      canonical_side: string;
+      qualifier_key: string;
+      target_qualifier_id: string;
+    }>(
+      `SELECT canonical_side, qualifier_key, target_qualifier_id::text
+       FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, fixture.claimId],
+    );
+    expect(request.rows).toEqual([
+      expect.objectContaining({
+        qualifier_key: "kinship_term",
+        target_qualifier_id: originalQualifier.id,
+      }),
+    ]);
+
+    advanceMs(60 * 1_000);
+    const repeated = await respond("再忘掉姑姑这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "这个称谓已经不再使用了。",
+    });
+    expect(repeated.receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "succeeded_noop",
+      execution: "succeeded",
+    });
+    expect((await claimState(fixture.claimId)).currentVersionId).toBe(
+      afterForget.currentVersionId,
+    );
+
+    const newRevisionId = await submitTurn("小明仍然是我的亲戚。");
+    const newEvidenceId = await seedEvidence(newRevisionId);
+    const blocked = await recordAndAdmit({
+      basis: "directly_stated",
+      evidenceItemIds: [newEvidenceId],
+      kind: "objective",
+      objectEntityId: fixture.objectEntityId,
+      predicateId: "sh.relationship.relative_of",
+      qualifiers: [
+        {
+          axisId: "kinship_term",
+          roleSide: "object",
+          typedValue: "姑姑",
+          evidenceItemIds: [newEvidenceId],
+        },
+      ],
+      typedValue: "",
+    });
+    expect(blocked).toEqual({
+      outcome: "not_promoted",
+      outcomeCode: "blocked_forget_fence",
+    });
+
+    // Qualifier-scoped Evidence cannot be repurposed as an independent neutral
+    // relationship source; only Evidence outside the Forget scope may keep the
+    // base relationship alive (ADR-0034).
+    const neutralOldEvidenceReuse = await recordAndAdmit({
+      basis: "directly_stated",
+      evidenceItemIds: [fixture.evidenceId],
+      kind: "objective",
+      objectEntityId: fixture.objectEntityId,
+      predicateId: "sh.relationship.relative_of",
+      typedValue: "",
+    });
+    expect(neutralOldEvidenceReuse).toEqual({
+      outcome: "not_promoted",
+      outcomeCode: "blocked_forget_fence",
+    });
+  });
+
+  it("retracts the whole relationship when the forgotten Qualifier was its only Evidence", async () => {
+    const fixture = await seedRelativeClaim({ independentBaseEvidence: false });
+    advanceMs(60 * 1_000);
+
+    const { receipt } = await respond("请忘掉小明是我姑姑这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "好，这条关系没有其他独立依据，我也不会再保留它。",
+    });
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+    const state = await claimState(fixture.claimId);
+    expect(state.currentStatus).toBe("retracted");
+    expect(state.projectionStatuses.every((status) => status === "deleted")).toBe(
+      true,
+    );
+    expect(await currentQualifiers(fixture.claimId)).toHaveLength(0);
+    expect(await currentRelationshipHints(fixture.claimId)).toHaveLength(0);
+
+    advanceMs(60 * 1_000);
+    const repeated = await respond("再忘掉姑姑这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "这个称谓已经不再使用了。",
+    });
+    expect(repeated.receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "succeeded_noop",
+      execution: "succeeded",
+    });
+  });
+
+  it("fences Evidence from historical versions of the forgotten Qualifier role", async () => {
+    const fixture = await seedRelativeClaim();
+    const revisedRevisionId = await submitTurn("小明是我的侄子。");
+    const revisedEvidenceId = await seedEvidence(revisedRevisionId);
+    const revised = await recordAndAdmit({
+      basis: "directly_stated",
+      evidenceItemIds: [revisedEvidenceId],
+      kind: "objective",
+      objectEntityId: fixture.objectEntityId,
+      predicateId: "sh.relationship.relative_of",
+      qualifiers: [
+        {
+          axisId: "kinship_term",
+          roleSide: "object",
+          typedValue: "侄子",
+          evidenceItemIds: [revisedEvidenceId],
+        },
+      ],
+      typedValue: "",
+    });
+    expect(revised.outcome).toBe("promoted");
+    expect((await currentQualifiers(fixture.claimId))[0]).toMatchObject({
+      typedValue: "侄子",
+      evidenceItemIds: [revisedEvidenceId],
+    });
+
+    advanceMs(60 * 1_000);
+    const { receipt } = await respond("请忘掉侄子这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "侄子" },
+      reply: "好，我不会再使用这个具体称谓。",
+    });
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+
+    const historicalQualifierReuse = await recordAndAdmit({
+      basis: "directly_stated",
+      evidenceItemIds: [fixture.evidenceId],
+      kind: "objective",
+      objectEntityId: fixture.objectEntityId,
+      predicateId: "sh.relationship.relative_of",
+      qualifiers: [
+        {
+          axisId: "kinship_term",
+          roleSide: "object",
+          typedValue: "姑姑",
+          evidenceItemIds: [fixture.evidenceId],
+        },
+      ],
+      typedValue: "",
+    });
+    expect(historicalQualifierReuse).toEqual({
+      outcome: "not_promoted",
+      outcomeCode: "blocked_forget_fence",
+    });
+  });
+
+  it("reverses a forgotten Qualifier with new Evidence while retaining the old exclusion", async () => {
+    const fixture = await seedRelativeClaim();
+    const originalQualifier = (await currentQualifiers(fixture.claimId))[0]!;
+    advanceMs(60 * 1_000);
+    await respond("请忘掉姑姑这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "好。",
+    });
+    advanceMs(60 * 1_000);
+
+    const { receipt } = await respond("我明确允许你重新使用姑姑这个称谓。", {
+      actionKind: "memory_forget_reversal",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "你已经明确允许我重新使用这个称谓了。",
+    });
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+    const execution = await executionRow(receipt!.actionExecutionId);
+    expect(execution).toMatchObject({
+      target_kind: "relationship_qualifier",
+      resolved_qualifier_id: originalQualifier.id,
+    });
+    const current = await claimState(fixture.claimId);
+    expect(current.currentStatus).toBe("active");
+    const qualifiers = await currentQualifiers(fixture.claimId);
+    expect(qualifiers).toHaveLength(1);
+    expect(qualifiers[0]).toMatchObject({
+      axisId: "kinship_term",
+      typedValue: "姑姑",
+    });
+    expect(qualifiers[0]!.id).not.toBe(originalQualifier.id);
+    expect(qualifiers[0]!.evidenceItemIds).not.toContain(fixture.evidenceId);
+    const oldQualifier = await database.pool.query(
+      `SELECT 1 FROM memory_claim_version_qualifiers
+       WHERE user_id = $1 AND memory_claim_version_qualifier_id = $2`,
+      [OWNER, originalQualifier.id],
+    );
+    expect(oldQualifier.rowCount).toBe(1);
+    const exclusion = await database.pool.query(
+      `SELECT 1 FROM memory_forget_evidence_exclusions exclusion
+       JOIN memory_forget_requests request
+         ON request.memory_forget_request_id = exclusion.memory_forget_request_id
+       WHERE request.user_id = $1 AND request.target_claim_id = $2
+         AND exclusion.exclusion_scope = 'relationship_qualifier'
+         AND exclusion.status = 'active'`,
+      [OWNER, fixture.claimId],
+    );
+    expect(exclusion.rowCount).toBe(1);
+    const reversal = await database.pool.query(
+      `SELECT 1 FROM memory_forget_reversals
+       WHERE user_id = $1 AND status = 'active'
+         AND applied_claim_version_id = $2`,
+      [OWNER, current.currentVersionId],
+    );
+    expect(reversal.rowCount).toBe(1);
+
+    const oldEvidenceReuse = await recordAndAdmit({
+      basis: "directly_stated",
+      evidenceItemIds: [fixture.evidenceId],
+      kind: "objective",
+      objectEntityId: fixture.objectEntityId,
+      predicateId: "sh.relationship.relative_of",
+      qualifiers: [
+        {
+          axisId: "kinship_term",
+          roleSide: "object",
+          typedValue: "姑姑",
+          evidenceItemIds: [fixture.evidenceId],
+        },
+      ],
+      typedValue: "",
+    });
+    expect(oldEvidenceReuse).toEqual({
+      outcome: "not_promoted",
+      outcomeCode: "blocked_forget_fence",
+    });
+  });
+
+  it("clarifies whole-vs-Qualifier scope and rejects person-wide Forget honestly", async () => {
+    const fixture = await seedRelativeClaim();
+    advanceMs(60 * 1_000);
+    const ambiguous = await respond("请处理小明的亲戚记忆。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "小明的亲戚" },
+      reply: "你是要忘掉整段关系，还是只忘掉具体称谓？",
+    });
+    expect(ambiguous.receipt).toMatchObject({
+      admission: "clarification_required",
+      disposition: "scope_ambiguous",
+      execution: "not_started",
+    });
+    expect(await currentQualifiers(fixture.claimId)).toHaveLength(1);
+    const requestsBeforeUnsupported = await database.pool.query(
+      `SELECT 1 FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, fixture.claimId],
+    );
+    expect(requestsBeforeUnsupported.rowCount).toBe(0);
+
+    advanceMs(60 * 1_000);
+    const unsupported = await respond("请忘掉所有记忆。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "所有记忆" },
+      reply: "我现在不支持一次忘掉所有人的全部记忆；你可以告诉我具体是哪一条。",
+    });
+    expect(unsupported.receipt).toMatchObject({
+      admission: "unsupported",
+      disposition: "person_wide_unsupported",
+      execution: "not_started",
+    });
+    const requestsAfterUnsupported = await database.pool.query(
+      `SELECT 1 FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, fixture.claimId],
+    );
+    expect(requestsAfterUnsupported.rowCount).toBe(0);
   });
 });

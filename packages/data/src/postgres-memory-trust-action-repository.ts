@@ -4,8 +4,13 @@ import type {
   ExplainMemorySourceVerdict,
   MemoryCorrectionFollowupCommand,
   MemoryCorrectionFollowupRepository,
+  MemoryForgetRequestPlan,
+  MemoryForgetReversalPlan,
   MemoryCorrectionPlan,
   MemoryTrustActionCommitPort,
+  ResolvedTrustActionTarget,
+  RelationshipHintProjectionInputs,
+  RetrievalProjectionMaterial,
   TrustActionClaimSnapshot,
   TrustActionLabelIndexEntry,
   TrustActionResolutionCandidate,
@@ -14,12 +19,29 @@ import {
   EXPLAIN_SOURCE_QUOTE_MAX_LENGTH,
   MEMORY_CORRECTION_FOLLOWUP_POLICY_VERSION,
   MEMORY_CORRECTION_POLICY_VERSION,
+  planMemoryForgetRequest,
+  planMemoryForgetReversal,
   normalizeRetrievalTerm,
   TRUST_ACTION_KINDS,
 } from "@sayhear/application";
-import { asMemoryClaimId, asMemoryClaimVersionId } from "@sayhear/domain";
-import type { Pool } from "pg";
+import {
+  asClaimEvidenceLinkId,
+  asMemoryClaimId,
+  asMemoryClaimVersionId,
+  asMemoryClaimVersionQualifierId,
+  asMemoryForgetEvidenceExclusionId,
+  asMemoryForgetRequestId,
+  asMemoryForgetReversalId,
+  asUserId,
+} from "@sayhear/domain";
+import type { Pool, PoolClient } from "pg";
 import { insertExecutionReceipt } from "./postgres-conversation-action-repository";
+import {
+  listClaimVersionQualifiersWithin,
+  markClaimRetrievalProjectionsStaleWithin,
+  rebuildClaimRetrievalProjectionsWithin,
+  rebuildRelationshipResolverHintsWithin,
+} from "./postgres-memory-claim-repository";
 import { createUuidV7 } from "./uuid-v7";
 
 /**
@@ -58,11 +80,23 @@ type CurrentVersionRow = Readonly<{
   valid_from_precision: string;
   valid_to: Date | null;
   valid_to_precision: string;
+  supersedes_version_id: string | null;
+  last_observed_at: Date;
+  created_at: Date;
+}>;
+
+export type MemoryTrustActionProjectionProvider = Readonly<{
+  relationshipHintsFor(predicateId: string): RelationshipHintProjectionInputs | null;
+  retrievalProjectionFor(predicateId: string): RetrievalProjectionMaterial | null;
 }>;
 
 export class PostgresMemoryTrustActionCommitPort
   implements MemoryTrustActionCommitPort
 {
+  public constructor(
+    private readonly projectionProvider?: MemoryTrustActionProjectionProvider,
+  ) {}
+
   public async loadTrustActionClaim(
     executor: ConversationActionTransactionExecutor,
     input: { claimId: string; userId: string },
@@ -303,6 +337,289 @@ export class PostgresMemoryTrustActionCommitPort
     );
   }
 
+  public async executeMemoryForgetRequestPlan(
+    executor: ConversationActionTransactionExecutor,
+    input: {
+      actionExecutionId: string;
+      requestEventRevisionId: string;
+      target: ResolvedTrustActionTarget;
+      userId: string;
+    },
+  ): Promise<string> {
+    const claim = await executor.query<{
+      current_version_id: string | null;
+      predicate_id: string;
+    }>(
+      `SELECT current_version_id, predicate_id
+       FROM memory_claims
+       WHERE user_id = $1 AND memory_claim_id = $2
+         AND deleted_at IS NULL AND content_purged_at IS NULL
+       FOR UPDATE`,
+      [input.userId, input.target.claimId],
+    );
+    const currentVersionId = claim.rows[0]?.current_version_id;
+    if (!currentVersionId) {
+      throw new Error(`Claim ${input.target.claimId} has no current version.`);
+    }
+    if (currentVersionId !== input.target.claimVersionId) {
+      throw new Error(
+        `Resolved target ${input.target.claimId} advanced before Forget admission.`,
+      );
+    }
+    const current = await loadActionVersion(executor, input.userId, currentVersionId);
+    if (!current) {
+      throw new Error(`Claim version ${currentVersionId} does not exist.`);
+    }
+    const now = new Date();
+
+    if (input.target.targetKind === "memory_claim") {
+      const plan = planMemoryForgetRequest({
+        targetKind: "memory_claim",
+        currentVersionStatus: current.status,
+      });
+      if (plan.action === "noop_already_fenced") return "succeeded_noop";
+      await applyWholeForgetWithin(executor, {
+        actionExecutionId: input.actionExecutionId,
+        claimId: input.target.claimId,
+        current,
+        requestEventRevisionId: input.requestEventRevisionId,
+        userId: input.userId,
+        now,
+      });
+      return "committed_in_transaction";
+    }
+
+    const qualifierId = input.target.qualifierId;
+    if (!qualifierId) {
+      throw new Error("A relationship qualifier target requires its qualifier id.");
+    }
+    const qualifier = await loadQualifier(
+      executor,
+      input.userId,
+      qualifierId,
+      currentVersionId,
+      input.target.claimId,
+    );
+    const plan = planMemoryForgetRequest({
+      targetKind: "relationship_qualifier",
+      currentVersionStatus: current.status,
+      targetQualifierPresent: qualifier !== null,
+    });
+    if (plan.action === "noop_already_fenced") return "succeeded_noop";
+    if (!qualifier) {
+      throw new Error(`Qualifier ${qualifierId} is not on the resolved current version.`);
+    }
+    await applyQualifierForgetWithin(executor, {
+      actionExecutionId: input.actionExecutionId,
+      claimId: input.target.claimId,
+      current,
+      currentQualifier: qualifier,
+      predicateId: claim.rows[0]!.predicate_id,
+      requestEventRevisionId: input.requestEventRevisionId,
+      userId: input.userId,
+      now,
+      ...(this.projectionProvider === undefined
+        ? {}
+        : { provider: this.projectionProvider }),
+    });
+    return "committed_in_transaction";
+  }
+
+  public async executeMemoryForgetReversalPlan(
+    executor: ConversationActionTransactionExecutor,
+    input: {
+      actionExecutionId: string;
+      requestEventRevisionId: string;
+      target: ResolvedTrustActionTarget;
+      userId: string;
+    },
+  ): Promise<string> {
+    const claim = await executor.query<{
+      current_version_id: string | null;
+      predicate_id: string;
+    }>(
+      `SELECT current_version_id, predicate_id
+       FROM memory_claims
+       WHERE user_id = $1 AND memory_claim_id = $2
+         AND deleted_at IS NULL AND content_purged_at IS NULL
+       FOR UPDATE`,
+      [input.userId, input.target.claimId],
+    );
+    const currentVersionId = claim.rows[0]?.current_version_id;
+    if (!currentVersionId) return "reversal_precondition_failed";
+    if (currentVersionId !== input.target.claimVersionId) {
+      return "reversal_precondition_failed";
+    }
+    const current = await loadActionVersion(executor, input.userId, currentVersionId);
+    if (!current) return "reversal_precondition_failed";
+    const targetQualifier = input.target.qualifierId
+      ? await loadQualifier(
+          executor,
+          input.userId,
+          input.target.qualifierId,
+          null,
+          input.target.claimId,
+        )
+      : null;
+    if (
+      input.target.targetKind === "relationship_qualifier" &&
+      targetQualifier === null
+    ) {
+      return "reversal_precondition_failed";
+    }
+    const fence = await findActiveForgetFence(executor, {
+      claimId: input.target.claimId,
+      qualifierId: input.target.qualifierId ?? null,
+      targetKind: input.target.targetKind,
+      userId: input.userId,
+    });
+    const plan = planMemoryForgetReversal({ fencePresent: fence !== null });
+    if (plan.action === "precondition_failed" || !fence) {
+      return "reversal_precondition_failed";
+    }
+
+    const now = new Date();
+    const reversalEvidenceId = await insertReversalEvidenceWithin(executor, {
+      actionExecutionId: input.actionExecutionId,
+      requestEventRevisionId: input.requestEventRevisionId,
+      userId: input.userId,
+      now,
+    });
+    const predecessor =
+      current.supersedes_version_id === null
+        ? null
+        : await loadActionVersion(
+            executor,
+            input.userId,
+            current.supersedes_version_id,
+          );
+    const sourceVersion =
+      input.target.targetKind === "memory_claim" && predecessor
+        ? predecessor
+        : current;
+    const sourceVersionId = sourceVersion.version_id;
+    const sourceQualifiers = await listActionQualifiers(
+      executor,
+      input.userId,
+      sourceVersionId,
+    );
+    const revision = await nextActionClaimRevision(
+      executor,
+      input.target.claimId,
+    );
+    const versionId = asMemoryClaimVersionId(createUuidV7(now));
+    await insertActionClaimVersion(executor, {
+      claimId: input.target.claimId,
+      current,
+      createdBy: "forget_reversal",
+      kind: sourceVersion.kind,
+      revision,
+      status: "active",
+      supersedesVersionId: current.version_id,
+      userId: input.userId,
+      versionId,
+      now,
+    });
+
+    if (input.target.targetKind === "relationship_qualifier") {
+      const baseLinks = await listBaseEvidenceLinks(
+        executor,
+        input.userId,
+        sourceVersionId,
+      );
+      await insertActionEvidenceLinks(executor, {
+        links: [...baseLinks, { evidence_item_id: reversalEvidenceId, link_role: "support" }],
+        userId: input.userId,
+        versionId,
+        now,
+      });
+    } else {
+      await insertActionEvidenceLinks(executor, {
+        links: [{ evidence_item_id: reversalEvidenceId, link_role: "support" }],
+        userId: input.userId,
+        versionId,
+        now,
+      });
+    }
+
+    const copiedQualifierKeys = new Set<string>();
+    for (const qualifier of sourceQualifiers) {
+      const key = `${qualifier.axis_id}:${qualifier.role_side}`;
+      const isTarget =
+        input.target.targetKind === "relationship_qualifier" &&
+        (qualifier.memory_claim_version_qualifier_id === input.target.qualifierId ||
+          (targetQualifier !== null &&
+            qualifier.axis_id === targetQualifier.axis_id &&
+            qualifier.role_side === targetQualifier.role_side));
+      if (isTarget) continue;
+      copiedQualifierKeys.add(key);
+      await insertActionQualifier(executor, {
+        qualifier,
+        evidenceItemIds:
+          input.target.targetKind === "memory_claim"
+            ? [reversalEvidenceId]
+            : qualifier.evidence_item_ids,
+        userId: input.userId,
+        versionId,
+        now,
+      });
+    }
+    if (input.target.targetKind === "relationship_qualifier") {
+      const qualifier = targetQualifier;
+      if (!qualifier) {
+        return "reversal_precondition_failed";
+      }
+      const key = `${qualifier.axis_id}:${qualifier.role_side}`;
+      if (!copiedQualifierKeys.has(key)) {
+        await insertActionQualifier(executor, {
+          qualifier,
+          evidenceItemIds: [reversalEvidenceId],
+          userId: input.userId,
+          versionId,
+          now,
+        });
+      }
+    }
+
+    await executor.query(
+      `INSERT INTO memory_forget_reversals (
+         memory_forget_reversal_id, user_id, memory_forget_request_id,
+         request_event_revision_id, reversal_evidence_id, status,
+         applied_claim_version_id, forget_policy_version, created_at
+       ) VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8)`,
+      [
+        asMemoryForgetReversalId(createUuidV7(now)),
+        input.userId,
+        fence.request_id,
+        input.requestEventRevisionId,
+        reversalEvidenceId,
+        versionId,
+        "memory-forget-reversal:v1",
+        now,
+      ],
+    );
+    const moved = await executor.query(
+      `UPDATE memory_claims SET current_version_id = $3
+       WHERE user_id = $1 AND memory_claim_id = $2
+         AND current_version_id IS NOT DISTINCT FROM $4`,
+      [input.userId, input.target.claimId, versionId, current.version_id],
+    );
+    if (moved.rowCount !== 1) {
+      throw new Error(`Forget Reversal CAS failed for claim ${input.target.claimId}.`);
+    }
+    await refreshActionProjections(executor, {
+      claimId: input.target.claimId,
+      predicateId: claim.rows[0]!.predicate_id,
+      userId: input.userId,
+      now,
+      fence: false,
+      ...(this.projectionProvider === undefined
+        ? {}
+        : { provider: this.projectionProvider }),
+    });
+    return "committed_in_transaction";
+  }
+
   public async loadExplainEvidenceVerdict(
     executor: ConversationActionTransactionExecutor,
     input: { claimId: string; userId: string },
@@ -328,6 +645,741 @@ export class PostgresMemoryTrustActionCommitPort
       return { verdict: "unverifiable" };
     }
     return { claimKind, items, verdict: "verified" };
+  }
+}
+
+type ActionVersionRow = Readonly<{
+  version_id: string;
+  claim_id: string;
+  revision: number;
+  kind: "objective" | "impression";
+  epistemic_status: "confirmed" | "inferred" | "contested";
+  status:
+    | "active"
+    | "review_due"
+    | "dormant"
+    | "superseded"
+    | "retracted";
+  subject_entity_version_id: string;
+  object_entity_version_id: string | null;
+  typed_value: unknown;
+  temporal_status: string;
+  valid_from: Date | null;
+  valid_from_precision: string;
+  valid_to: Date | null;
+  valid_to_precision: string;
+  last_observed_at: Date;
+  supersedes_version_id: string | null;
+  predicate_registry_version: number;
+}>;
+
+type ActionQualifierRow = Readonly<{
+  memory_claim_version_qualifier_id: string;
+  memory_claim_version_id: string;
+  axis_id: string;
+  role_side: "canonical_subject" | "counterpart";
+  typed_value: unknown;
+  evidence_item_ids: string[];
+}>;
+
+async function loadActionVersion(
+  executor: ConversationActionTransactionExecutor,
+  userId: string,
+  versionId: string,
+): Promise<ActionVersionRow | null> {
+  const result = await executor.query<ActionVersionRow>(
+    `SELECT memory_claim_version_id::text AS version_id,
+            memory_claim_id::text AS claim_id, revision, kind,
+            epistemic_status, status, subject_entity_version_id::text,
+            object_entity_version_id::text, typed_value, temporal_status,
+            valid_from, valid_from_precision, valid_to, valid_to_precision,
+            last_observed_at, supersedes_version_id::text,
+            predicate_registry_version
+     FROM memory_claim_versions
+     WHERE user_id = $1 AND memory_claim_version_id = $2`,
+    [userId, versionId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function nextActionClaimRevision(
+  executor: ConversationActionTransactionExecutor,
+  claimId: string,
+): Promise<number> {
+  const result = await executor.query<{ next_revision: number }>(
+    `SELECT COALESCE(MAX(revision), 0) + 1 AS next_revision
+     FROM memory_claim_versions WHERE memory_claim_id = $1`,
+    [claimId],
+  );
+  return result.rows[0]!.next_revision;
+}
+
+async function insertActionClaimVersion(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    claimId: string;
+    current: ActionVersionRow;
+    createdBy: string;
+    kind: "objective" | "impression";
+    revision: number;
+    status: ActionVersionRow["status"];
+    supersedesVersionId: string;
+    userId: string;
+    versionId: string;
+    now: Date;
+  },
+): Promise<void> {
+  await executor.query(
+    `INSERT INTO memory_claim_versions (
+       memory_claim_version_id, memory_claim_id, user_id,
+       revision, kind, epistemic_status, status, subject_entity_version_id,
+       object_entity_version_id, typed_value, confidence, temporal_status,
+       valid_from, valid_from_precision, valid_to, valid_to_precision,
+       last_observed_at, supersedes_version_id, created_by, model_version,
+       prompt_version, predicate_registry_version, created_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, NULL,
+       $11, $12, $13, $14, $15, $16, $17, $18, NULL, NULL, $19, $20)`,
+    [
+      input.versionId,
+      input.claimId,
+      input.userId,
+      input.revision,
+      input.kind,
+      input.current.epistemic_status,
+      input.status,
+      input.current.subject_entity_version_id,
+      input.current.object_entity_version_id,
+      JSON.stringify(toTypedValue(input.current.typed_value)),
+      input.current.temporal_status,
+      input.current.valid_from,
+      input.current.valid_from_precision,
+      input.current.valid_to,
+      input.current.valid_to_precision,
+      input.now,
+      input.supersedesVersionId,
+      input.createdBy,
+      input.current.predicate_registry_version,
+      input.now,
+    ],
+  );
+}
+
+async function loadQualifier(
+  executor: ConversationActionTransactionExecutor,
+  userId: string,
+  qualifierId: string,
+  versionId: string | null,
+  claimId: string,
+): Promise<ActionQualifierRow | null> {
+  const result = await executor.query<ActionQualifierRow>(
+    `SELECT q.memory_claim_version_qualifier_id::text,
+            q.memory_claim_version_id::text, q.axis_id, q.role_side,
+            q.typed_value,
+            ARRAY(
+              SELECT evidence_item_id::text
+              FROM memory_claim_version_qualifier_evidence evidence
+              WHERE evidence.memory_claim_version_qualifier_id =
+                q.memory_claim_version_qualifier_id
+              ORDER BY evidence_item_id
+            ) AS evidence_item_ids
+     FROM memory_claim_version_qualifiers q
+     INNER JOIN memory_claim_versions version
+       ON version.memory_claim_version_id = q.memory_claim_version_id
+      AND version.user_id = q.user_id
+      WHERE q.user_id = $1
+       AND q.memory_claim_version_qualifier_id = $2
+       AND ($3::uuid IS NULL OR q.memory_claim_version_id = $3)
+       AND version.memory_claim_id = $4
+       AND q.content_purged_at IS NULL`,
+    [userId, qualifierId, versionId, claimId],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function listActionQualifiers(
+  executor: ConversationActionTransactionExecutor,
+  userId: string,
+  versionId: string,
+): Promise<readonly ActionQualifierRow[]> {
+  const result = await executor.query<ActionQualifierRow>(
+    `SELECT q.memory_claim_version_qualifier_id::text,
+            q.memory_claim_version_id::text, q.axis_id, q.role_side,
+            q.typed_value,
+            ARRAY(
+              SELECT evidence_item_id::text
+              FROM memory_claim_version_qualifier_evidence evidence
+              WHERE evidence.memory_claim_version_qualifier_id =
+                q.memory_claim_version_qualifier_id
+              ORDER BY evidence_item_id
+            ) AS evidence_item_ids
+     FROM memory_claim_version_qualifiers q
+     WHERE q.user_id = $1 AND q.memory_claim_version_id = $2
+       AND q.content_purged_at IS NULL
+     ORDER BY q.axis_id, q.role_side`,
+    [userId, versionId],
+  );
+  return result.rows;
+}
+
+async function insertActionQualifier(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    qualifier: ActionQualifierRow;
+    evidenceItemIds: readonly string[];
+    userId: string;
+    versionId: string;
+    now: Date;
+  },
+): Promise<void> {
+  const qualifierId = asMemoryClaimVersionQualifierId(createUuidV7(input.now));
+  await executor.query(
+    `INSERT INTO memory_claim_version_qualifiers (
+       memory_claim_version_qualifier_id, memory_claim_version_id, user_id,
+       axis_id, role_side, typed_value, created_by, created_at
+     ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+    [
+      qualifierId,
+      input.versionId,
+      input.userId,
+      input.qualifier.axis_id,
+      input.qualifier.role_side,
+      JSON.stringify(input.qualifier.typed_value),
+      "forget_action",
+      input.now,
+    ],
+  );
+  for (const evidenceItemId of input.evidenceItemIds) {
+    await executor.query(
+      `INSERT INTO memory_claim_version_qualifier_evidence (
+         memory_claim_version_qualifier_evidence_id,
+         memory_claim_version_qualifier_id, user_id, evidence_item_id, created_at
+       ) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT DO NOTHING`,
+      [createUuidV7(input.now), qualifierId, input.userId, evidenceItemId, input.now],
+    );
+  }
+}
+
+async function listBaseEvidenceLinks(
+  executor: ConversationActionTransactionExecutor,
+  userId: string,
+  versionId: string,
+  excludedEvidenceItemIds: readonly string[] = [],
+): Promise<readonly { evidence_item_id: string; link_role: "support" | "counter" | "subjective_report" | "context" }[]> {
+  const result = await executor.query<{
+    evidence_item_id: string;
+    link_role: "support" | "counter" | "subjective_report" | "context";
+  }>(
+    `SELECT link.evidence_item_id::text, link.link_role
+     FROM claim_evidence_links link
+     WHERE link.user_id = $1 AND link.memory_claim_version_id = $2
+       AND link.status = 'active'
+       AND NOT EXISTS (
+         SELECT 1
+         FROM memory_forget_evidence_exclusions exclusion
+         WHERE exclusion.user_id = link.user_id
+           AND exclusion.evidence_item_id = link.evidence_item_id
+           AND exclusion.status = 'active'
+           AND exclusion.exclusion_scope = 'whole_claim'
+       )
+     ORDER BY link.evidence_item_id, link.link_role`,
+    [userId, versionId],
+  );
+  const excluded = new Set(excludedEvidenceItemIds);
+  return result.rows.filter((row) => !excluded.has(row.evidence_item_id));
+}
+
+async function insertActionEvidenceLinks(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    links: readonly { evidence_item_id: string; link_role: string }[];
+    userId: string;
+    versionId: string;
+    now: Date;
+  },
+): Promise<void> {
+  for (const link of input.links) {
+    await executor.query(
+      `INSERT INTO claim_evidence_links (
+         claim_evidence_link_id, memory_claim_version_id, user_id,
+         evidence_item_id, link_role, status, created_at
+       ) VALUES ($1, $2, $3, $4, $5, 'active', $6)
+       ON CONFLICT DO NOTHING`,
+      [
+        asClaimEvidenceLinkId(createUuidV7(input.now)),
+        input.versionId,
+        input.userId,
+        link.evidence_item_id,
+        link.link_role,
+        input.now,
+      ],
+    );
+  }
+}
+
+async function applyWholeForgetWithin(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    actionExecutionId: string;
+    claimId: string;
+    current: ActionVersionRow;
+    requestEventRevisionId: string;
+    userId: string;
+    now: Date;
+  },
+): Promise<void> {
+  const versionId = asMemoryClaimVersionId(createUuidV7(input.now));
+  const revision = await nextActionClaimRevision(executor, input.claimId);
+  await insertActionClaimVersion(executor, {
+    claimId: input.claimId,
+    current: input.current,
+    createdBy: "forget_request",
+    kind: input.current.kind,
+    revision,
+    status: "retracted",
+    supersedesVersionId: input.current.version_id,
+    userId: input.userId,
+    versionId,
+    now: input.now,
+  });
+  const evidence = await executor.query<{ evidence_item_id: string }>(
+    `SELECT DISTINCT link.evidence_item_id::text
+     FROM claim_evidence_links link
+     INNER JOIN memory_claim_versions version
+       ON version.memory_claim_version_id = link.memory_claim_version_id
+      AND version.user_id = link.user_id
+     WHERE link.user_id = $1 AND version.memory_claim_id = $2`,
+    [input.userId, input.claimId],
+  );
+  const requestId = asMemoryForgetRequestId(createUuidV7(input.now));
+  await executor.query(
+    `INSERT INTO memory_forget_requests (
+       memory_forget_request_id, user_id, request_event_revision_id,
+       target_claim_id, target_scope, status, applied_claim_version_id,
+       forget_policy_version, created_at
+     ) VALUES ($1, $2, $3, $4, 'whole_claim', 'applied', $5, $6, $7)`,
+    [
+      requestId,
+      input.userId,
+      input.requestEventRevisionId,
+      input.claimId,
+      versionId,
+      "memory-forget:v1",
+      input.now,
+    ],
+  );
+  for (const row of evidence.rows) {
+    await executor.query(
+      `INSERT INTO memory_forget_evidence_exclusions (
+         memory_forget_evidence_exclusion_id, user_id,
+         memory_forget_request_id, evidence_item_id, exclusion_scope,
+         status, created_at
+       ) VALUES ($1, $2, $3, $4, 'whole_claim', 'active', $5)
+       ON CONFLICT DO NOTHING`,
+      [
+        asMemoryForgetEvidenceExclusionId(createUuidV7(input.now)),
+        input.userId,
+        requestId,
+        row.evidence_item_id,
+        input.now,
+      ],
+    );
+  }
+  const moved = await executor.query(
+    `UPDATE memory_claims SET current_version_id = $3
+     WHERE user_id = $1 AND memory_claim_id = $2
+       AND current_version_id IS NOT DISTINCT FROM $4`,
+    [input.userId, input.claimId, versionId, input.current.version_id],
+  );
+  if (moved.rowCount !== 1) {
+    throw new Error(`Forget CAS failed for claim ${input.claimId}.`);
+  }
+  await executor.query(
+    `DELETE FROM relationship_resolver_hints
+     WHERE user_id = $1 AND memory_claim_id = $2`,
+    [input.userId, input.claimId],
+  );
+  await executor.query(
+    `UPDATE claim_retrieval_projections SET status = 'deleted'
+     WHERE user_id = $1 AND memory_claim_id = $2 AND status <> 'deleted'`,
+    [input.userId, input.claimId],
+  );
+}
+
+async function applyQualifierForgetWithin(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    actionExecutionId: string;
+    claimId: string;
+    current: ActionVersionRow;
+    currentQualifier: ActionQualifierRow;
+    predicateId: string;
+    requestEventRevisionId: string;
+    userId: string;
+    now: Date;
+    provider?: MemoryTrustActionProjectionProvider;
+  },
+): Promise<void> {
+  const historicalQualifierEvidence = await executor.query<{
+    evidence_item_id: string;
+  }>(
+    `SELECT DISTINCT evidence.evidence_item_id::text AS evidence_item_id
+       FROM memory_claim_version_qualifier_evidence evidence
+       INNER JOIN memory_claim_version_qualifiers qualifier
+         ON qualifier.memory_claim_version_qualifier_id =
+              evidence.memory_claim_version_qualifier_id
+        AND qualifier.user_id = evidence.user_id
+       INNER JOIN memory_claim_versions version
+         ON version.memory_claim_version_id = qualifier.memory_claim_version_id
+        AND version.user_id = qualifier.user_id
+      WHERE evidence.user_id = $1
+        AND version.memory_claim_id = $2
+        AND qualifier.content_purged_at IS NULL
+        AND qualifier.axis_id = $3
+        AND qualifier.role_side = $4
+      ORDER BY 1`,
+    [
+      input.userId,
+      input.claimId,
+      input.currentQualifier.axis_id,
+      input.currentQualifier.role_side,
+    ],
+  );
+  const excludedQualifierEvidenceItemIds = historicalQualifierEvidence.rows.map(
+    (row) => row.evidence_item_id,
+  );
+  const baseLinks = await listBaseEvidenceLinks(
+    executor,
+    input.userId,
+    input.current.version_id,
+    excludedQualifierEvidenceItemIds,
+  );
+  const versionId = asMemoryClaimVersionId(createUuidV7(input.now));
+  const revision = await nextActionClaimRevision(executor, input.claimId);
+  const nextStatus: ActionVersionRow["status"] =
+    baseLinks.length === 0 ? "retracted" : input.current.status;
+  await insertActionClaimVersion(executor, {
+    claimId: input.claimId,
+    current: input.current,
+    createdBy: "forget_request",
+    kind: input.current.kind,
+    revision,
+    status: nextStatus,
+    supersedesVersionId: input.current.version_id,
+    userId: input.userId,
+    versionId,
+    now: input.now,
+  });
+  await insertActionEvidenceLinks(executor, {
+    links: baseLinks,
+    userId: input.userId,
+    versionId,
+    now: input.now,
+  });
+  for (const qualifier of await listActionQualifiers(
+    executor,
+    input.userId,
+    input.current.version_id,
+  )) {
+    if (
+      qualifier.memory_claim_version_qualifier_id ===
+      input.currentQualifier.memory_claim_version_qualifier_id
+    ) {
+      continue;
+    }
+    await insertActionQualifier(executor, {
+      qualifier,
+      evidenceItemIds: qualifier.evidence_item_ids,
+      userId: input.userId,
+      versionId,
+      now: input.now,
+    });
+  }
+  const requestId = asMemoryForgetRequestId(createUuidV7(input.now));
+  await executor.query(
+    `INSERT INTO memory_forget_requests (
+       memory_forget_request_id, user_id, request_event_revision_id,
+       target_claim_id, target_scope, canonical_side, qualifier_key,
+       qualifier_typed_value, status, applied_claim_version_id,
+       forget_policy_version, target_qualifier_id, created_at
+     ) VALUES ($1, $2, $3, $4, 'relationship_qualifier', $5, $6, $7::jsonb,
+       'applied', $8, $9, $10, $11)`,
+    [
+      requestId,
+      input.userId,
+      input.requestEventRevisionId,
+      input.claimId,
+      input.currentQualifier.role_side,
+      input.currentQualifier.axis_id,
+      JSON.stringify(toTypedValue(input.currentQualifier.typed_value)),
+      versionId,
+      "memory-forget:v1",
+      input.currentQualifier.memory_claim_version_qualifier_id,
+      input.now,
+    ],
+  );
+  for (const evidenceItemId of excludedQualifierEvidenceItemIds) {
+    await executor.query(
+      `INSERT INTO memory_forget_evidence_exclusions (
+         memory_forget_evidence_exclusion_id, user_id,
+         memory_forget_request_id, evidence_item_id, exclusion_scope,
+         canonical_side, qualifier_key, status, created_at
+       ) VALUES ($1, $2, $3, $4, 'relationship_qualifier', $5, $6,
+         'active', $7)
+       ON CONFLICT DO NOTHING`,
+      [
+        asMemoryForgetEvidenceExclusionId(createUuidV7(input.now)),
+        input.userId,
+        requestId,
+        evidenceItemId,
+        input.currentQualifier.role_side,
+        input.currentQualifier.axis_id,
+        input.now,
+      ],
+    );
+  }
+  const moved = await executor.query(
+    `UPDATE memory_claims SET current_version_id = $3
+     WHERE user_id = $1 AND memory_claim_id = $2
+       AND current_version_id IS NOT DISTINCT FROM $4`,
+    [input.userId, input.claimId, versionId, input.current.version_id],
+  );
+  if (moved.rowCount !== 1) {
+    throw new Error(`Qualifier Forget CAS failed for claim ${input.claimId}.`);
+  }
+  await refreshActionProjections(executor, {
+    claimId: input.claimId,
+    predicateId: input.predicateId,
+    userId: input.userId,
+    now: input.now,
+    fence: nextStatus === "retracted",
+    ...(input.provider === undefined ? {} : { provider: input.provider }),
+  });
+}
+
+async function findActiveForgetFence(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    claimId: string;
+    qualifierId: string | null;
+    targetKind: "memory_claim" | "relationship_qualifier";
+    userId: string;
+  },
+): Promise<{ request_id: string; applied_version_id: string } | null> {
+  const result = await executor.query<{
+    request_id: string;
+    applied_version_id: string;
+  }>(
+    `SELECT request.memory_forget_request_id::text AS request_id,
+            request.applied_claim_version_id::text AS applied_version_id
+     FROM memory_forget_requests request
+     WHERE request.user_id = $1
+       AND request.target_claim_id = $2
+       AND request.target_scope = $3
+       AND request.status = 'applied'
+       AND ($4::uuid IS NULL OR request.target_qualifier_id = $4)
+       AND (
+         request.target_scope = 'whole_claim'
+         OR NOT EXISTS (
+           SELECT 1
+           FROM memory_forget_requests whole_fence
+           WHERE whole_fence.user_id = request.user_id
+             AND whole_fence.target_claim_id = request.target_claim_id
+             AND whole_fence.target_scope = 'whole_claim'
+             AND whole_fence.status = 'applied'
+             AND NOT EXISTS (
+               SELECT 1
+               FROM memory_forget_reversals whole_reversal
+               WHERE whole_reversal.user_id = whole_fence.user_id
+                 AND whole_reversal.memory_forget_request_id =
+                       whole_fence.memory_forget_request_id
+                 AND whole_reversal.status = 'active'
+             )
+         )
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM memory_forget_reversals reversal
+         WHERE reversal.user_id = request.user_id
+           AND reversal.memory_forget_request_id = request.memory_forget_request_id
+           AND reversal.status = 'active'
+       )
+     ORDER BY request.created_at DESC
+     LIMIT 1`,
+    [
+      input.userId,
+      input.claimId,
+      input.targetKind === "memory_claim"
+        ? "whole_claim"
+        : "relationship_qualifier",
+      input.qualifierId,
+    ],
+  );
+  return result.rows[0] ?? null;
+}
+
+async function insertReversalEvidenceWithin(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    actionExecutionId: string;
+    requestEventRevisionId: string;
+    userId: string;
+    now: Date;
+  },
+): Promise<string> {
+  const source = await executor.query<{
+    conversation_event_id: string;
+    daily_session_id: string;
+    sequence_no: string;
+    transcript_status: "final" | "corrected";
+  }>(
+    `SELECT event.conversation_event_id::text,
+            event.daily_session_id::text, event.sequence_no::text,
+            revision.transcript_status
+     FROM conversation_event_revisions revision
+     INNER JOIN conversation_events event
+       ON event.conversation_event_id = revision.conversation_event_id
+      AND event.user_id = revision.user_id
+     WHERE revision.user_id = $1
+       AND revision.conversation_event_revision_id = $2
+       AND revision.content_purged_at IS NULL
+       AND event.current_revision_id = revision.conversation_event_revision_id
+       AND event.actor = 'user'
+       AND event.lifecycle_status = 'active'`,
+    [input.userId, input.requestEventRevisionId],
+  );
+  const sourceRow = source.rows[0];
+  if (!sourceRow || !["final", "corrected"].includes(sourceRow.transcript_status)) {
+    throw new Error("Forget Reversal requires a final user Event Revision.");
+  }
+  const extractionPolicyVersion = "memory-forget-reversal:v1";
+  const snapshotId = createUuidV7(input.now);
+  await executor.query(
+    `INSERT INTO evidence_source_snapshots (
+       evidence_source_snapshot_id, user_id, daily_session_id, source_revision,
+       extraction_policy_version, command_id, attempt_id,
+       champion_config_version, champion_provider, champion_model,
+       champion_snapshot, champion_provider_policy_version, created_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $6, $7, 'openai', 'memory-control',
+       'memory-control', 'memory-control:v1', $8)
+     ON CONFLICT (daily_session_id, source_revision, extraction_policy_version)
+     DO NOTHING`,
+    [
+      snapshotId,
+      input.userId,
+      sourceRow.daily_session_id,
+      Number(sourceRow.sequence_no),
+      extractionPolicyVersion,
+      input.actionExecutionId,
+      input.actionExecutionId,
+      input.now,
+    ],
+  );
+  const snapshot = await executor.query<{ evidence_source_snapshot_id: string }>(
+    `SELECT evidence_source_snapshot_id::text
+     FROM evidence_source_snapshots
+     WHERE user_id = $1 AND daily_session_id = $2
+       AND source_revision = $3 AND extraction_policy_version = $4`,
+    [
+      input.userId,
+      sourceRow.daily_session_id,
+      Number(sourceRow.sequence_no),
+      extractionPolicyVersion,
+    ],
+  );
+  const resolvedSnapshotId = snapshot.rows[0]?.evidence_source_snapshot_id;
+  if (!resolvedSnapshotId) throw new Error("Reversal Evidence snapshot was not created.");
+  const locatorKey = `memory-forget-reversal:${input.actionExecutionId}`;
+  const evidenceId = createUuidV7(input.now);
+  await executor.query(
+    `INSERT INTO evidence_items (
+       evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id,
+       source_revision_id, source_actor, source_status, locator_type, locator_key,
+       extraction_policy_version, evidence_role, created_at
+     ) VALUES ($1, $2, $3, $4, $5, 'user', $6, 'whole_revision', $7, $8,
+       'factual_support', $9)
+     ON CONFLICT (user_id, source_revision_id, locator_key,
+                  extraction_policy_version) DO NOTHING`,
+    [
+      evidenceId,
+      input.userId,
+      resolvedSnapshotId,
+      sourceRow.conversation_event_id,
+      input.requestEventRevisionId,
+      sourceRow.transcript_status,
+      locatorKey,
+      extractionPolicyVersion,
+      input.now,
+    ],
+  );
+  const resolvedEvidence = await executor.query<{ evidence_item_id: string }>(
+    `SELECT evidence_item_id::text FROM evidence_items
+     WHERE user_id = $1 AND source_revision_id = $2 AND locator_key = $3
+       AND extraction_policy_version = $4`,
+    [input.userId, input.requestEventRevisionId, locatorKey, extractionPolicyVersion],
+  );
+  const resolvedEvidenceId = resolvedEvidence.rows[0]?.evidence_item_id;
+  if (!resolvedEvidenceId) throw new Error("Reversal Evidence item was not created.");
+  await executor.query(
+    `INSERT INTO evidence_lineage (evidence_item_id, command_id, attempt_id, created_at)
+     VALUES ($1, $2, $2, $3)
+     ON CONFLICT (evidence_item_id) DO NOTHING`,
+    [resolvedEvidenceId, input.actionExecutionId, input.now],
+  );
+  return resolvedEvidenceId;
+}
+
+async function refreshActionProjections(
+  executor: ConversationActionTransactionExecutor,
+  input: {
+    claimId: string;
+    predicateId: string;
+    userId: string;
+    now: Date;
+    fence: boolean;
+    provider?: MemoryTrustActionProjectionProvider;
+  },
+): Promise<void> {
+  await executor.query(
+    `DELETE FROM relationship_resolver_hints
+     WHERE user_id = $1 AND memory_claim_id = $2`,
+    [input.userId, input.claimId],
+  );
+  await markClaimRetrievalProjectionsStaleWithin(
+    executor as unknown as PoolClient,
+    asUserId(input.userId),
+    asMemoryClaimId(input.claimId),
+  );
+  if (input.fence) {
+    await executor.query(
+      `UPDATE claim_retrieval_projections SET status = 'deleted'
+       WHERE user_id = $1 AND memory_claim_id = $2 AND status <> 'deleted'`,
+      [input.userId, input.claimId],
+    );
+    return;
+  }
+  const hints = input.provider?.relationshipHintsFor(input.predicateId);
+  if (hints) {
+    await rebuildRelationshipResolverHintsWithin(
+      executor as unknown as PoolClient,
+      {
+        userId: asUserId(input.userId),
+        claimId: asMemoryClaimId(input.claimId),
+        hints,
+        now: input.now,
+      },
+    );
+  }
+  const retrieval = input.provider?.retrievalProjectionFor(input.predicateId);
+  if (retrieval) {
+    await rebuildClaimRetrievalProjectionsWithin(
+      executor as unknown as PoolClient,
+      {
+        userId: asUserId(input.userId),
+        claimId: asMemoryClaimId(input.claimId),
+        material: retrieval,
+        now: input.now,
+      },
+    );
   }
 }
 
@@ -379,9 +1431,10 @@ export async function loadVerifiedExplainEvidenceItems(
        AND event.lifecycle_status = 'active'
        AND NOT EXISTS (
          SELECT 1 FROM memory_forget_evidence_exclusions exclusion
-         WHERE exclusion.user_id = link.user_id
-           AND exclusion.evidence_item_id = link.evidence_item_id
-           AND exclusion.status = 'active'
+        WHERE exclusion.user_id = link.user_id
+          AND exclusion.evidence_item_id = link.evidence_item_id
+          AND exclusion.status = 'active'
+          AND exclusion.exclusion_scope = 'whole_claim'
        )
      ORDER BY revision.created_at, revision.conversation_event_revision_id`,
     [userId, claimId],
@@ -430,12 +1483,15 @@ export async function loadActionFinalizationReceiptSnapshot(
 ): Promise<ActionFinalizationReceiptSnapshot> {
   const execution = await client.query<{
     action_kind: string;
+    target_kind: "journal" | "memory_claim" | "relationship_qualifier" | null;
     resolved_claim_id: string | null;
     resolved_claim_version_id: string | null;
+    resolved_qualifier_id: string | null;
   }>(
-    `SELECT action_kind,
+    `SELECT action_kind, target_kind,
             resolved_claim_id::text AS resolved_claim_id,
-            resolved_claim_version_id::text AS resolved_claim_version_id
+            resolved_claim_version_id::text AS resolved_claim_version_id,
+            resolved_qualifier_id::text AS resolved_qualifier_id
      FROM conversation_action_executions
      WHERE action_execution_id = $1`,
     [input.actionExecutionId],
@@ -444,6 +1500,12 @@ export async function loadActionFinalizationReceiptSnapshot(
   const actionKind = row?.action_kind ?? null;
   const claimId = row?.resolved_claim_id ?? null;
   const claimVersionId = row?.resolved_claim_version_id ?? null;
+  const targetKind =
+    row?.target_kind === "memory_claim" ||
+    row?.target_kind === "relationship_qualifier"
+      ? row.target_kind
+      : null;
+  const qualifierId = row?.resolved_qualifier_id ?? null;
   if (!actionKind || !TRUST_ACTION_KINDS.includes(actionKind)) {
     return {
       actionKind,
@@ -514,6 +1576,8 @@ export async function loadActionFinalizationReceiptSnapshot(
       claimId,
       claimKind,
       claimVersionId,
+      qualifierId,
+      targetKind,
       evidenceItems,
       evidenceVerdict,
     },
@@ -541,7 +1605,11 @@ export class PostgresMemoryTrustActionTargetSource {
    */
   public async listResolutionCandidates(input: {
     limit: number;
-    searchSpace: "active_and_corrected" | "active_claims";
+    searchSpace:
+      | "active_and_corrected"
+      | "active_claims"
+      | "forget_targets"
+      | "fenced_targets";
     userId: string;
   }): Promise<readonly TrustActionResolutionCandidate[]> {
     const result = await this.pool.query<{
@@ -581,9 +1649,7 @@ export class PostgresMemoryTrustActionTargetSource {
             WHERE projection.user_id = claim.user_id
               AND projection.memory_claim_id = claim.memory_claim_id
               AND projection.content_purged_at IS NULL
-              AND (
-                projection.status = 'active' OR $3::boolean
-              )
+              AND (projection.status = 'active' OR $5::boolean)
           ) AS lexical_terms,
           claim.object_entity_id::text AS object_entity_id,
           claim.predicate_id,
@@ -598,11 +1664,28 @@ export class PostgresMemoryTrustActionTargetSource {
           AND claim.content_purged_at IS NULL
           AND version.epistemic_status <> 'contested'
           AND (
-            version.status = 'active'
+            ($6::boolean AND version.status = 'active')
             OR (
               $3::boolean
               AND version.status = 'superseded'
               AND version.created_by = 'memory_correction'
+            )
+            OR (
+              $4::boolean
+              AND version.status = 'retracted'
+              AND EXISTS (
+                SELECT 1 FROM memory_forget_requests fence
+                WHERE fence.user_id = claim.user_id
+                  AND fence.target_claim_id = claim.memory_claim_id
+                  AND fence.target_scope = 'whole_claim'
+                  AND fence.status = 'applied'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM memory_forget_reversals reversal
+                    WHERE reversal.user_id = fence.user_id
+                      AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+                      AND reversal.status = 'active'
+                  )
+              )
             )
           )
         ORDER BY claim.memory_claim_id
@@ -612,9 +1695,12 @@ export class PostgresMemoryTrustActionTargetSource {
         input.userId,
         input.limit,
         input.searchSpace === "active_and_corrected",
+        input.searchSpace === "forget_targets" || input.searchSpace === "fenced_targets",
+        input.searchSpace !== "active_claims",
+        input.searchSpace !== "fenced_targets",
       ],
     );
-    return result.rows.map((row) => ({
+    const claimCandidates = result.rows.map((row) => ({
       claimId: row.claim_id,
       claimKind:
         row.claim_kind === "impression"
@@ -634,7 +1720,170 @@ export class PostgresMemoryTrustActionTargetSource {
       predicateId: row.predicate_id,
       subjectEntityId: row.subject_entity_id,
       typedValues: toTypedValues(row.typed_value),
+      targetKind: "memory_claim" as const,
     }));
+    if (
+      input.searchSpace !== "forget_targets" &&
+      input.searchSpace !== "fenced_targets"
+    ) {
+      return claimCandidates;
+    }
+
+    const qualifiers = await this.pool.query<{
+      claim_id: string;
+      claim_kind: string;
+      entity_surface_bindings: { e: string; s: string }[] | null;
+      lexical_terms: string[] | null;
+      object_entity_id: string | null;
+      predicate_id: string;
+      subject_entity_id: string;
+      typed_value: unknown;
+      qualifier_id: string;
+      qualifier_axis_id: string;
+      qualifier_role_side: "canonical_subject" | "counterpart";
+      version_id: string;
+    }>(
+      `
+        SELECT claim.memory_claim_id::text AS claim_id,
+               version.kind AS claim_kind,
+               (
+                 SELECT COALESCE(
+                   jsonb_agg(DISTINCT jsonb_build_object(
+                     's', label.normalized_label, 'e', label.entity_id::text
+                   )), '[]'::jsonb
+                 )
+                 FROM entity_labels label
+                 WHERE label.entity_id IN (
+                   claim.subject_entity_id, claim.object_entity_id
+                 )
+                   AND label.user_id = claim.user_id
+                   AND label.is_current
+                   AND label.content_purged_at IS NULL
+               ) AS entity_surface_bindings,
+               ARRAY(
+                 SELECT DISTINCT term
+                 FROM (
+                   SELECT jsonb_array_elements_text(
+                     CASE jsonb_typeof(qualifier.typed_value)
+                       WHEN 'array' THEN qualifier.typed_value
+                       ELSE jsonb_build_array(qualifier.typed_value)
+                     END
+                   ) AS term
+                   UNION ALL
+                   SELECT hint.role_term
+                   FROM relationship_resolver_hints hint
+                   WHERE hint.user_id = claim.user_id
+                     AND hint.memory_claim_id = claim.memory_claim_id
+                     AND hint.role_axis_id = qualifier.axis_id
+                     AND hint.role_side = qualifier.role_side
+                 ) terms
+               ) AS lexical_terms,
+               claim.object_entity_id::text AS object_entity_id,
+               claim.predicate_id,
+               claim.subject_entity_id::text AS subject_entity_id,
+               qualifier.typed_value,
+               qualifier.memory_claim_version_qualifier_id::text AS qualifier_id,
+               qualifier.axis_id AS qualifier_axis_id,
+               qualifier.role_side AS qualifier_role_side,
+               claim.current_version_id::text AS version_id
+        FROM memory_claims claim
+        INNER JOIN memory_claim_versions version
+          ON version.memory_claim_version_id = claim.current_version_id
+         AND version.user_id = claim.user_id
+        INNER JOIN memory_claim_version_qualifiers qualifier
+          ON qualifier.user_id = claim.user_id
+         AND (
+           qualifier.memory_claim_version_id = claim.current_version_id
+           OR EXISTS (
+             SELECT 1
+             FROM memory_forget_requests fence
+             WHERE fence.user_id = claim.user_id
+               AND fence.target_scope = 'relationship_qualifier'
+               AND fence.target_qualifier_id = qualifier.memory_claim_version_qualifier_id
+               AND fence.target_claim_id = claim.memory_claim_id
+               AND fence.status = 'applied'
+               AND NOT EXISTS (
+                 SELECT 1 FROM memory_forget_reversals reversal
+                 WHERE reversal.user_id = fence.user_id
+                   AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+                   AND reversal.status = 'active'
+               )
+           )
+         )
+        WHERE claim.user_id = $1
+          AND claim.deleted_at IS NULL
+          AND claim.content_purged_at IS NULL
+          AND version.epistemic_status <> 'contested'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM memory_forget_requests whole_fence
+            WHERE whole_fence.user_id = claim.user_id
+              AND whole_fence.target_claim_id = claim.memory_claim_id
+              AND whole_fence.target_scope = 'whole_claim'
+              AND whole_fence.status = 'applied'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM memory_forget_reversals whole_reversal
+                WHERE whole_reversal.user_id = whole_fence.user_id
+                  AND whole_reversal.memory_forget_request_id =
+                        whole_fence.memory_forget_request_id
+                  AND whole_reversal.status = 'active'
+              )
+          )
+          AND (
+            (
+              $2::boolean
+              AND qualifier.memory_claim_version_id = claim.current_version_id
+              AND version.status = 'active'
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM memory_forget_requests fence
+              WHERE fence.user_id = claim.user_id
+                AND fence.target_scope = 'relationship_qualifier'
+                AND fence.target_qualifier_id = qualifier.memory_claim_version_qualifier_id
+                AND fence.target_claim_id = claim.memory_claim_id
+                AND fence.status = 'applied'
+                AND NOT EXISTS (
+                  SELECT 1 FROM memory_forget_reversals reversal
+                  WHERE reversal.user_id = fence.user_id
+                    AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+                    AND reversal.status = 'active'
+                )
+            )
+          )
+        ORDER BY claim.memory_claim_id, qualifier.axis_id, qualifier.role_side
+        LIMIT $3
+      `,
+      [input.userId, input.searchSpace === "forget_targets", input.limit],
+    );
+    const qualifierCandidates = qualifiers.rows.map((row) => ({
+      claimId: row.claim_id,
+      claimKind:
+        row.claim_kind === "impression"
+          ? ("impression" as const)
+          : ("objective" as const),
+      claimVersionId: row.version_id,
+      entitySurfaceBindings: (row.entity_surface_bindings ?? []).map(
+        (binding) => ({
+          entityId: binding.e,
+          surface: normalizeRetrievalTerm(binding.s),
+        }),
+      ),
+      lexicalTerms: (row.lexical_terms ?? [])
+        .map((term) => normalizeRetrievalTerm(term))
+        .filter((term) => term !== ""),
+      objectEntityId: row.object_entity_id,
+      predicateId: row.predicate_id,
+      subjectEntityId: row.subject_entity_id,
+      targetKind: "relationship_qualifier" as const,
+      qualifierId: row.qualifier_id,
+      qualifierAxisId: row.qualifier_axis_id,
+      qualifierRoleSide: row.qualifier_role_side,
+      qualifierTypedValue: toTypedValue(row.typed_value),
+      typedValues: toTypedValues(row.typed_value),
+    }));
+    return [...claimCandidates, ...qualifierCandidates];
   }
 
   /** The owner's full current entity label index (normalized surfaces). */

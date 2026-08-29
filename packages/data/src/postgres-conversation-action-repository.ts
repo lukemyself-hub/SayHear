@@ -3,6 +3,7 @@ import type {
   ConversationActionGatewayRepository,
   ConversationActionReceipt,
   PreparedConversationAction,
+  ResolvedTrustActionTarget,
 } from "@sayhear/application";
 import {
   ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
@@ -38,7 +39,17 @@ type HandleRow = Readonly<{
   action_kind: string;
   compiled_context_id: string;
   current_version_id: string | null;
-  current_version_status: "published" | "stale" | "validation_failed" | "needs_review" | null;
+  current_version_status:
+    | "published"
+    | "stale"
+    | "validation_failed"
+    | "needs_review"
+    | "active"
+    | "review_due"
+    | "dormant"
+    | "superseded"
+    | "retracted"
+    | null;
   daily_session_id: string;
   expected_data_epoch: string;
   generation_command_id: string;
@@ -46,9 +57,12 @@ type HandleRow = Readonly<{
   owner_id: string;
   owner_status: "active" | "deleting" | "disabled";
   source_revision: string;
-  target_id: string;
-  target_kind: "journal";
-  target_version_id: string;
+  target_id: string | null;
+  target_kind: "journal" | "memory_claim" | "relationship_qualifier";
+  target_version_id: string | null;
+  target_claim_id: string | null;
+  target_claim_version_id: string | null;
+  target_qualifier_id: string | null;
 }>;
 
 /**
@@ -85,9 +99,11 @@ export class PostgresJournalRegenerationActionRepository
           SELECT
             handle.action_kind,
             handle.compiled_context_id,
-            journal.current_version_id,
-            current_version.status AS current_version_status,
-            journal.daily_session_id,
+            COALESCE(journal.current_version_id, claim.current_version_id)::text
+              AS current_version_id,
+            COALESCE(current_version.status, memory_current_version.status)
+              AS current_version_status,
+            turn.daily_session_id::text AS daily_session_id,
             handle.expected_data_epoch,
             handle.generation_command_id,
             handle.handle,
@@ -96,18 +112,74 @@ export class PostgresJournalRegenerationActionRepository
             handle.source_revision,
             handle.target_id,
             handle.target_kind,
-            handle.target_version_id
+            handle.target_version_id,
+            handle.target_claim_id,
+            handle.target_claim_version_id,
+            handle.target_qualifier_id
           FROM conversation_action_handles handle
-          INNER JOIN journals journal ON journal.journal_id = handle.target_id
+          INNER JOIN generation_commands generation
+            ON generation.generation_command_id = handle.generation_command_id
+           AND generation.user_id = handle.user_id
+          INNER JOIN interaction_turns turn
+            ON turn.interaction_turn_id = generation.interaction_turn_id
+           AND turn.user_id = generation.user_id
+          LEFT JOIN journals journal
+            ON handle.target_kind = 'journal'
+           AND journal.journal_id = handle.target_id
+           AND journal.user_id = handle.user_id
+          LEFT JOIN memory_claims claim
+            ON handle.target_kind IN ('memory_claim', 'relationship_qualifier')
+           AND claim.memory_claim_id = handle.target_claim_id
+           AND claim.user_id = handle.user_id
           INNER JOIN app_users owner ON owner.user_id = handle.user_id
           LEFT JOIN journal_versions current_version
             ON current_version.journal_version_id = journal.current_version_id
+           AND current_version.user_id = handle.user_id
+          LEFT JOIN memory_claim_versions memory_current_version
+            ON memory_current_version.memory_claim_version_id = claim.current_version_id
+           AND memory_current_version.user_id = claim.user_id
+          LEFT JOIN memory_claim_version_qualifiers qualifier
+            ON qualifier.memory_claim_version_qualifier_id = handle.target_qualifier_id
+           AND qualifier.user_id = handle.user_id
+           AND qualifier.content_purged_at IS NULL
           WHERE handle.handle = $1
             AND handle.user_id = $2
             AND handle.compiled_context_id = $3
             AND handle.generation_command_id = $4
             AND handle.expires_at > CURRENT_TIMESTAMP
-            AND journal.deleted_at IS NULL
+            AND (
+              (handle.target_kind = 'journal' AND journal.deleted_at IS NULL)
+              OR (
+                handle.target_kind IN ('memory_claim', 'relationship_qualifier')
+                AND claim.deleted_at IS NULL
+                AND claim.content_purged_at IS NULL
+                AND (
+                  handle.target_kind = 'memory_claim'
+                  OR (
+                    qualifier.memory_claim_version_qualifier_id IS NOT NULL
+                    AND (
+                      qualifier.memory_claim_version_id = claim.current_version_id
+                      OR EXISTS (
+                        SELECT 1
+                        FROM memory_forget_requests fence
+                        WHERE fence.user_id = handle.user_id
+                          AND fence.target_claim_id = claim.memory_claim_id
+                          AND fence.target_scope = 'relationship_qualifier'
+                          AND fence.target_qualifier_id = qualifier.memory_claim_version_qualifier_id
+                          AND fence.status = 'applied'
+                          AND NOT EXISTS (
+                            SELECT 1
+                            FROM memory_forget_reversals reversal
+                            WHERE reversal.user_id = fence.user_id
+                              AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+                              AND reversal.status = 'active'
+                          )
+                      )
+                    )
+                  )
+                )
+              )
+            )
         `,
         [
           input.handle,
@@ -132,9 +204,15 @@ export class PostgresJournalRegenerationActionRepository
       ownerId: asUserId(row.owner_id),
       ownerStatus: row.owner_status,
       sourceRevision: Number(row.source_revision),
-      targetId: row.target_id,
+      targetId: row.target_id ?? row.target_qualifier_id ?? row.target_claim_id ?? "",
+      ...(row.target_claim_id === null
+        ? {}
+        : { targetClaimId: row.target_claim_id }),
+      ...(row.target_qualifier_id === null
+        ? {}
+        : { targetQualifierId: row.target_qualifier_id }),
       targetKind: row.target_kind,
-      targetVersionId: row.target_version_id,
+      targetVersionId: row.target_claim_version_id ?? row.target_version_id ?? "",
     };
   }
 
@@ -285,10 +363,7 @@ export class PostgresJournalRegenerationActionRepository
       // finalize from the frozen receipt like an accepted action does. The
       // execution stays `not_started` (ADR-0099); the frozen Admission
       // Receipt is what the reply may claim.
-      if (
-        input.definition?.targetContract.resolution === "admission_time_anchor" &&
-        input.admission === "clarification_required"
-      ) {
+      if (input.definition?.targetContract.resolution === "admission_time_anchor") {
         const now = new Date();
         await createActionFinalizationCommand(client, {
           actionExecutionId,
@@ -331,6 +406,7 @@ export class PostgresJournalRegenerationActionRepository
     definition: ConversationActionDefinition;
     /** Anchor-mode resolved target (ADR-0118); absent for handle-mode. */
     resolvedClaim?: Readonly<{ claimId: string; claimVersionId: string }>;
+    resolvedTarget?: import("@sayhear/application").ResolvedTrustActionTarget;
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt> {
@@ -351,14 +427,20 @@ export class PostgresJournalRegenerationActionRepository
       // re-verified by the handler's commit port under the claim row lock
       // inside this transaction. The typed reference enters the Execution and
       // every Receipt.
-      if (input.resolvedClaim) {
+      if (input.resolvedTarget || input.resolvedClaim) {
         return await this.commitAcceptedAnchorMode(client, {
           catalogVersion: input.catalogVersion,
           context: input.context,
           definition: input.definition,
           idempotencyKey,
           prepare: input.prepare,
-          resolvedClaim: input.resolvedClaim,
+          resolvedTarget:
+            input.resolvedTarget ?? {
+              ...input.resolvedClaim!,
+              claimKind: "objective",
+              predicateId: "",
+              targetKind: "memory_claim",
+            },
         });
       }
       const handle = await selectHandle(
@@ -615,18 +697,26 @@ export class PostgresJournalRegenerationActionRepository
           executor: client,
           userId: input.context.userId,
         })) ?? "committed_in_transaction";
+      const terminalExecution: ConversationActionReceipt["execution"] =
+        committedDisposition === "reversal_precondition_failed"
+          ? "failed"
+          : "succeeded";
       // The handler's terminal disposition (committed / noop convergence /
       // unverifiable verdict) rides both the execution row and the terminal
       // Completion Receipt — the frozen truth the reply may claim.
       await client.query(
-        `UPDATE conversation_action_executions SET disposition = $2
+        `UPDATE conversation_action_executions
+         SET disposition = $2, execution_status = $3
          WHERE action_execution_id = $1`,
-        [actionExecutionId, committedDisposition],
+        [actionExecutionId, committedDisposition, terminalExecution],
       );
       const terminalSequence = await insertExecutionReceipt(client, {
         actionExecutionId,
-        receiptKey: "execution:succeeded",
-        execution: "succeeded",
+        receiptKey:
+          terminalExecution === "succeeded"
+            ? "execution:succeeded"
+            : "execution:failed",
+        execution: terminalExecution,
         disposition: committedDisposition,
       });
       await createActionFinalizationCommand(client, {
@@ -638,7 +728,7 @@ export class PostgresJournalRegenerationActionRepository
         receipt: {
           admission: "accepted",
           receiptSequence: terminalSequence,
-          execution: "succeeded",
+          execution: terminalExecution,
         },
         userId: input.context.userId,
       });
@@ -674,7 +764,7 @@ export class PostgresJournalRegenerationActionRepository
       definition: ConversationActionDefinition;
       idempotencyKey: string;
       prepare: () => PreparedConversationAction;
-      resolvedClaim: Readonly<{ claimId: string; claimVersionId: string }>;
+      resolvedTarget: ResolvedTrustActionTarget;
     },
   ): Promise<ConversationActionReceipt> {
     const prepared = input.prepare();
@@ -685,8 +775,11 @@ export class PostgresJournalRegenerationActionRepository
     }
     if (
       prepared.actionKind !== input.definition.actionKind ||
-      prepared.resolvedClaimId !== input.resolvedClaim.claimId ||
-      prepared.resolvedClaimVersionId !== input.resolvedClaim.claimVersionId
+      prepared.resolvedClaimId !== input.resolvedTarget.claimId ||
+      prepared.resolvedClaimVersionId !== input.resolvedTarget.claimVersionId ||
+      prepared.resolvedTargetKind !== input.resolvedTarget.targetKind ||
+      (prepared.resolvedQualifierId ?? null) !==
+        (input.resolvedTarget.qualifierId ?? null)
     ) {
       throw new Error(
         "Prepared Action target does not match the admission-time resolution.",
@@ -704,12 +797,13 @@ export class PostgresJournalRegenerationActionRepository
           catalog_version, target_handle, target_kind, target_id,
           target_version_id, daily_session_id, source_revision,
           expected_data_epoch, resolved_claim_id, resolved_claim_version_id,
+          resolved_qualifier_id,
           idempotency_key, admission_status, execution_status, disposition,
           created_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, 'memory_claim', NULL,
-          NULL, NULL, NULL, NULL, $8, $9, $10, 'accepted', 'succeeded',
-          'committed_in_transaction', $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, NULL,
+          NULL, NULL, NULL, NULL, $9, $10, $11, $12, 'accepted', 'succeeded',
+          'committed_in_transaction', $13)
       `,
       [
         actionExecutionId,
@@ -719,8 +813,10 @@ export class PostgresJournalRegenerationActionRepository
         input.definition.actionKind,
         input.definition.schemaVersion,
         input.catalogVersion,
-        input.resolvedClaim.claimId,
-        input.resolvedClaim.claimVersionId,
+        input.resolvedTarget.targetKind,
+        input.resolvedTarget.claimId,
+        input.resolvedTarget.claimVersionId,
+        input.resolvedTarget.qualifierId ?? null,
         input.idempotencyKey,
         now,
       ],
@@ -731,10 +827,11 @@ export class PostgresJournalRegenerationActionRepository
       admission: "accepted",
       catalogVersion: input.catalogVersion,
       disposition: null,
-      ...(input.resolvedClaim
+      ...(input.resolvedTarget
         ? {
-            resolvedClaimId: input.resolvedClaim.claimId,
-            resolvedClaimVersionId: input.resolvedClaim.claimVersionId,
+            resolvedClaimId: input.resolvedTarget.claimId,
+            resolvedClaimVersionId: input.resolvedTarget.claimVersionId,
+            resolvedQualifierId: input.resolvedTarget.qualifierId,
           }
         : {}),
       execution: "running",
@@ -746,18 +843,29 @@ export class PostgresJournalRegenerationActionRepository
         executor: client,
         userId: input.context.userId,
       })) ?? "committed_in_transaction";
+    const terminalExecution: ConversationActionReceipt["execution"] =
+      committedDisposition === "reversal_precondition_failed"
+        ? "failed"
+        : "succeeded";
     await client.query(
-      `UPDATE conversation_action_executions SET disposition = $2
+      `UPDATE conversation_action_executions
+       SET disposition = $2, execution_status = $3
        WHERE action_execution_id = $1`,
-      [actionExecutionId, committedDisposition],
+      [actionExecutionId, committedDisposition, terminalExecution],
     );
     const terminalSequence = await insertExecutionReceipt(client, {
       actionExecutionId,
-      receiptKey: "execution:succeeded",
-      execution: "succeeded",
+      receiptKey:
+        terminalExecution === "succeeded"
+          ? "execution:succeeded"
+          : "execution:failed",
+      execution: terminalExecution,
       disposition: committedDisposition,
-      resolvedClaimId: input.resolvedClaim.claimId,
-      resolvedClaimVersionId: input.resolvedClaim.claimVersionId,
+      resolvedClaimId: input.resolvedTarget.claimId,
+      resolvedClaimVersionId: input.resolvedTarget.claimVersionId,
+      ...(input.resolvedTarget.qualifierId === undefined
+        ? {}
+        : { resolvedQualifierId: input.resolvedTarget.qualifierId }),
     });
     await createActionFinalizationCommand(client, {
       actionExecutionId,
@@ -768,7 +876,7 @@ export class PostgresJournalRegenerationActionRepository
       receipt: {
         admission: "accepted",
         receiptSequence: terminalSequence,
-        execution: "succeeded",
+        execution: terminalExecution,
       },
       userId: input.context.userId,
     });
@@ -780,6 +888,10 @@ export class PostgresJournalRegenerationActionRepository
     if (!committedReceipt) {
       throw new Error("The accepted Action Receipt was not committed.");
     }
+    // The caller opened the admission transaction before dispatching here.
+    // Anchor-mode admissions return through this helper, so they must close
+    // that transaction explicitly before the pooled client is released.
+    await client.query("COMMIT");
     return committedReceipt;
   }
 
@@ -807,11 +919,20 @@ export class PostgresJournalRegenerationActionRepository
           request_event_revision_id, action_kind, schema_version,
           catalog_version, target_handle, target_kind, target_id,
           target_version_id, daily_session_id, source_revision,
-          expected_data_epoch, idempotency_key, admission_status,
+          expected_data_epoch, resolved_claim_id, resolved_claim_version_id,
+          resolved_qualifier_id, idempotency_key, admission_status,
           execution_status, disposition, created_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-          $14, $15, 'accepted', $16, $17, $18)
+        VALUES ($1, $2, $3, $4, $5, $6, $7,
+          CASE WHEN $9 = 'journal' THEN $8 ELSE NULL END,
+          $9,
+          CASE WHEN $9 = 'journal' THEN $10::uuid ELSE NULL::uuid END,
+          CASE WHEN $9 = 'journal' THEN $11::uuid ELSE NULL::uuid END,
+          $12, $13, $14,
+          CASE WHEN $9 = 'journal' THEN NULL::uuid ELSE $15::uuid END,
+          CASE WHEN $9 = 'journal' THEN NULL::uuid ELSE $16::uuid END,
+          CASE WHEN $9 = 'journal' THEN NULL::uuid ELSE $17::uuid END,
+          $18, 'accepted', $19, $20, $21)
       `,
       [
         input.actionExecutionId,
@@ -828,6 +949,9 @@ export class PostgresJournalRegenerationActionRepository
         input.dailySessionId,
         input.sourceRevision,
         input.expectedDataEpoch,
+        input.target.target_claim_id,
+        input.target.target_claim_version_id,
+        input.target.target_qualifier_id,
         input.idempotencyKey,
         input.executionStatus,
         input.disposition,
@@ -1046,21 +1170,22 @@ export class PostgresJournalRegenerationActionRepository
          ON attempt.generation_command_id = command.generation_command_id
         AND attempt.attempt_no = 1
         AND attempt.status IN ('prepared', 'running')
-       WHERE execution.admission_status IN ('accepted', 'clarification_required')
+       WHERE execution.admission_status IN (
+               'accepted', 'clarification_required', 'unsupported'
+             )
          AND (
            execution.execution_status IN ('pending', 'running')
            OR (
-             -- Synchronous in-transaction commits are terminal at admission
+             -- Synchronous in-transaction outcomes are terminal at admission
              -- time; their pending finalization must still be recovered when a
              -- crash lands between the atomic commit and the visible reply.
-             execution.execution_status = 'succeeded'
-             AND execution.disposition = 'committed_in_transaction'
+             execution.execution_status IN ('succeeded', 'failed', 'canceled')
            )
            OR (
-             -- Trust-action clarifications (ADR-0118) finalize their honest
-             -- reply from the frozen Admission Receipt while the execution
-             -- stays not_started (issue #119).
-             execution.admission_status = 'clarification_required'
+             -- Trust-action non-acceptances (ADR-0118) finalize their honest
+             -- boundary reply from the frozen Admission Receipt while the
+             -- execution stays not_started (issue #119 / #120).
+             execution.admission_status IN ('clarification_required', 'unsupported')
              AND execution.execution_status = 'not_started'
            )
          )
@@ -1224,24 +1349,100 @@ async function selectHandle(
 ): Promise<HandleRow | null> {
   const result = await client.query<HandleRow>(
     `
-      SELECT action_kind, compiled_context_id, journal.current_version_id,
-        current_version.status AS current_version_status,
-        journal.daily_session_id, handle.expected_data_epoch,
-        handle.generation_command_id, handle.handle, handle.user_id AS owner_id,
-        owner.status AS owner_status,
+      SELECT handle.action_kind, handle.compiled_context_id,
+        COALESCE(journal.current_version_id, claim.current_version_id)::text
+          AS current_version_id,
+        COALESCE(current_version.status, claim_version.status)
+          AS current_version_status,
+        turn.daily_session_id::text AS daily_session_id,
+        handle.expected_data_epoch,
+        handle.generation_command_id, handle.handle,
+        handle.user_id AS owner_id, owner.status AS owner_status,
         handle.source_revision, handle.target_id, handle.target_kind,
-        handle.target_version_id
+        handle.target_version_id, handle.target_claim_id,
+        handle.target_claim_version_id, handle.target_qualifier_id
       FROM conversation_action_handles handle
-      INNER JOIN journals journal ON journal.journal_id = handle.target_id
+      INNER JOIN generation_commands generation
+        ON generation.generation_command_id = handle.generation_command_id
+       AND generation.user_id = handle.user_id
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = generation.interaction_turn_id
+       AND turn.user_id = generation.user_id
+      LEFT JOIN journals journal
+        ON handle.target_kind = 'journal'
+       AND journal.journal_id = handle.target_id
+       AND journal.user_id = handle.user_id
+      LEFT JOIN memory_claims claim
+        ON handle.target_kind IN ('memory_claim', 'relationship_qualifier')
+       AND claim.memory_claim_id = handle.target_claim_id
+       AND claim.user_id = handle.user_id
       INNER JOIN app_users owner ON owner.user_id = handle.user_id
       LEFT JOIN journal_versions current_version
         ON current_version.journal_version_id = journal.current_version_id
+      LEFT JOIN memory_claim_versions claim_version
+        ON claim_version.memory_claim_version_id = claim.current_version_id
+       AND claim_version.user_id = claim.user_id
+      LEFT JOIN memory_claim_version_qualifiers qualifier
+        ON qualifier.memory_claim_version_qualifier_id = handle.target_qualifier_id
+       AND qualifier.user_id = handle.user_id
+       AND qualifier.content_purged_at IS NULL
       WHERE handle.handle = $1 AND handle.user_id = $2
         AND handle.compiled_context_id = $3
         AND handle.generation_command_id = $4
         AND handle.expires_at > CURRENT_TIMESTAMP
-        AND journal.deleted_at IS NULL
-      FOR UPDATE OF handle, journal, owner
+        AND (
+          (handle.target_kind = 'journal' AND journal.deleted_at IS NULL)
+          OR (
+            handle.target_kind IN ('memory_claim', 'relationship_qualifier')
+            AND claim.deleted_at IS NULL
+            AND claim.content_purged_at IS NULL
+            AND (
+              handle.target_kind = 'memory_claim'
+              OR (
+                NOT EXISTS (
+                  SELECT 1
+                  FROM memory_forget_requests whole_fence
+                  WHERE whole_fence.user_id = handle.user_id
+                    AND whole_fence.target_claim_id = claim.memory_claim_id
+                    AND whole_fence.target_scope = 'whole_claim'
+                    AND whole_fence.status = 'applied'
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM memory_forget_reversals whole_reversal
+                      WHERE whole_reversal.user_id = whole_fence.user_id
+                        AND whole_reversal.memory_forget_request_id =
+                              whole_fence.memory_forget_request_id
+                        AND whole_reversal.status = 'active'
+                    )
+                )
+                AND qualifier.memory_claim_version_qualifier_id IS NOT NULL
+                AND (
+                  qualifier.memory_claim_version_id = claim.current_version_id
+                  OR (
+                    handle.action_kind = 'memory_forget_reversal'
+                    AND EXISTS (
+                      SELECT 1
+                      FROM memory_forget_requests fence
+                      WHERE fence.user_id = handle.user_id
+                        AND fence.target_claim_id = claim.memory_claim_id
+                        AND fence.target_scope = 'relationship_qualifier'
+                        AND fence.target_qualifier_id = qualifier.memory_claim_version_qualifier_id
+                        AND fence.status = 'applied'
+                        AND NOT EXISTS (
+                          SELECT 1
+                          FROM memory_forget_reversals reversal
+                          WHERE reversal.user_id = fence.user_id
+                            AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+                            AND reversal.status = 'active'
+                        )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      FOR UPDATE OF handle, owner
     `,
     [handle, context.userId, context.compiledContextId, context.decisionCommandId],
   );
@@ -1254,6 +1455,87 @@ async function exactHeadIsValid(
   expectedDataEpoch: number,
 ): Promise<boolean> {
   if (!handle) return false;
+  if (handle.target_kind !== "journal") {
+    const result = await client.query(
+      `
+        SELECT 1
+        FROM app_users owner
+        INNER JOIN memory_claims claim
+          ON claim.user_id = owner.user_id
+         AND claim.memory_claim_id = $3
+        INNER JOIN memory_claim_versions version
+          ON version.user_id = claim.user_id
+         AND version.memory_claim_version_id = claim.current_version_id
+        WHERE owner.user_id = $1
+          AND owner.status = 'active'
+          AND owner.data_epoch = $2
+          AND claim.deleted_at IS NULL
+            AND claim.content_purged_at IS NULL
+            AND claim.current_version_id = $4
+            AND (
+              $5 = 'memory_claim'
+              OR (
+                NOT EXISTS (
+                  SELECT 1
+                  FROM memory_forget_requests whole_fence
+                  WHERE whole_fence.user_id = claim.user_id
+                    AND whole_fence.target_claim_id = claim.memory_claim_id
+                    AND whole_fence.target_scope = 'whole_claim'
+                    AND whole_fence.status = 'applied'
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM memory_forget_reversals whole_reversal
+                      WHERE whole_reversal.user_id = whole_fence.user_id
+                        AND whole_reversal.memory_forget_request_id =
+                              whole_fence.memory_forget_request_id
+                        AND whole_reversal.status = 'active'
+                    )
+                )
+                AND EXISTS (
+                  SELECT 1
+                  FROM memory_claim_version_qualifiers qualifier
+                  WHERE qualifier.user_id = claim.user_id
+                    AND qualifier.memory_claim_version_qualifier_id = $6
+                    AND qualifier.content_purged_at IS NULL
+                    AND (
+                      qualifier.memory_claim_version_id = claim.current_version_id
+                      OR (
+                        $7 = 'memory_forget_reversal'
+                        AND EXISTS (
+                          SELECT 1
+                          FROM memory_forget_requests fence
+                          WHERE fence.user_id = claim.user_id
+                            AND fence.target_claim_id = claim.memory_claim_id
+                            AND fence.target_scope = 'relationship_qualifier'
+                            AND fence.target_qualifier_id = qualifier.memory_claim_version_qualifier_id
+                            AND fence.status = 'applied'
+                            AND NOT EXISTS (
+                              SELECT 1
+                              FROM memory_forget_reversals reversal
+                              WHERE reversal.user_id = fence.user_id
+                                AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+                                AND reversal.status = 'active'
+                            )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+        FOR UPDATE OF claim
+      `,
+      [
+        handle.owner_id,
+        expectedDataEpoch,
+        handle.target_claim_id,
+        handle.target_claim_version_id,
+        handle.target_kind,
+        handle.target_qualifier_id,
+        handle.action_kind,
+      ],
+    );
+    return result.rowCount === 1;
+  }
   const result = await client.query(
     `
       SELECT 1
@@ -1265,6 +1547,7 @@ async function exactHeadIsValid(
         AND journal.journal_id = $3
         AND journal.current_version_id = $4
         AND version.status = 'published'
+      FOR UPDATE OF journal
     `,
     [handle.owner_id, expectedDataEpoch, handle.target_id, handle.target_version_id],
   );
@@ -1279,6 +1562,7 @@ async function insertReceipt(
       dispositionDetail?: Readonly<Record<string, unknown>>;
       resolvedClaimId?: string;
       resolvedClaimVersionId?: string;
+      resolvedQualifierId?: string;
     }>,
 ): Promise<ConversationActionReceipt> {
   const receiptId = createUuidV7(new Date());
@@ -1288,8 +1572,8 @@ async function insertReceipt(
         action_receipt_id, action_execution_id, receipt_sequence,
         receipt_key, admission_status, execution_status, disposition,
         disposition_detail, resolved_claim_id, resolved_claim_version_id,
-        created_at
-      ) VALUES ($1, $2, 1, 'admission', $3, $4, $5, $6::jsonb, $7, $8,
+        resolved_qualifier_id, created_at
+      ) VALUES ($1, $2, 1, 'admission', $3, $4, $5, $6::jsonb, $7, $8, $9,
         CURRENT_TIMESTAMP)
     `,
     [
@@ -1301,6 +1585,7 @@ async function insertReceipt(
       input.dispositionDetail ? JSON.stringify(input.dispositionDetail) : null,
       input.resolvedClaimId ?? null,
       input.resolvedClaimVersionId ?? null,
+      input.resolvedQualifierId ?? null,
     ],
   );
   return { ...input, receiptSequence: 1 };
@@ -1320,6 +1605,7 @@ export async function insertExecutionReceipt(
     disposition: string;
     resolvedClaimId?: string;
     resolvedClaimVersionId?: string;
+    resolvedQualifierId?: string;
   },
 ): Promise<number> {
   // The caller holds the ActionExecution lock (its own admission transaction,
@@ -1336,11 +1622,12 @@ export async function insertExecutionReceipt(
     `INSERT INTO conversation_action_receipts (
        action_receipt_id, action_execution_id, receipt_sequence, receipt_key,
        admission_status, execution_status, disposition,
-       resolved_claim_id, resolved_claim_version_id, created_at
+       resolved_claim_id, resolved_claim_version_id, resolved_qualifier_id,
+       created_at
      )
      SELECT $1, execution.action_execution_id,
        $6, $2,
-       execution.admission_status, $3, $4, $7, $8, CURRENT_TIMESTAMP
+       execution.admission_status, $3, $4, $7, $8, $9, CURRENT_TIMESTAMP
      FROM conversation_action_executions execution
      WHERE execution.action_execution_id = $5
      ON CONFLICT (action_execution_id, receipt_key) DO NOTHING`,
@@ -1353,6 +1640,7 @@ export async function insertExecutionReceipt(
       receiptSequence,
       input.resolvedClaimId ?? null,
       input.resolvedClaimVersionId ?? null,
+      input.resolvedQualifierId ?? null,
     ],
   );
   return receiptSequence;

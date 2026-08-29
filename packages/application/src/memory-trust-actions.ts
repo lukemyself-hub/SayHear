@@ -32,6 +32,9 @@ export const MEMORY_CORRECTION_POLICY_VERSION = "memory-correction:v1";
 export const TRUST_ACTION_TARGET_RESOLUTION_POLICY_VERSION =
   "trust-action-target-resolution:v1";
 
+export const MEMORY_FORGET_UNSUPPORTED_SCOPE_REASON =
+  "person_wide_unsupported";
+
 /** Bounded anchor length mirrors the catalog inputSchema ceiling. */
 export const TRUST_ACTION_ANCHOR_MAX_LENGTH = 300;
 
@@ -48,6 +51,13 @@ export type TrustActionResolutionCandidate = Readonly<{
   claimId: string;
   claimKind: "objective" | "impression";
   claimVersionId: string;
+  /** Defaults to memory_claim for the original #119 candidates. */
+  targetKind?: "memory_claim" | "relationship_qualifier";
+  /** Compiler-minted qualifier identity; never a Predicate ID. */
+  qualifierId?: string;
+  qualifierAxisId?: string;
+  qualifierRoleSide?: "canonical_subject" | "counterpart";
+  qualifierTypedValue?: string | readonly string[];
   /**
    * The claim's current entity label surfaces with the entity each belongs
    * to (normalized; current primary + verified aliases only).
@@ -90,8 +100,14 @@ export type TrustActionTargetResolutionPlan =
         claimKind: "objective" | "impression";
         claimVersionId: string;
         predicateId: string;
+        targetKind: "memory_claim" | "relationship_qualifier";
+        qualifierId?: string;
+        qualifierAxisId?: string;
+        qualifierRoleSide?: "canonical_subject" | "counterpart";
+        qualifierTypedValue?: string | readonly string[];
       }>;
     }>
+  | Readonly<{ outcome: "scope_ambiguous" }>
   | Readonly<{ candidateCount: number; outcome: "multi_hit" }>
   | Readonly<{ outcome: "zero_hit" }>;
 
@@ -167,9 +183,22 @@ export function planTrustActionTargetResolution(input: {
 
   if (highConfidence.length === 0) return { outcome: "zero_hit" };
   if (highConfidence.length > 1) {
+    const claimIds = new Set(highConfidence.map(({ candidate }) => candidate.claimId));
+    const targetKinds = new Set(
+      highConfidence.map(
+        ({ candidate }) => candidate.targetKind ?? "memory_claim",
+      ),
+    );
+    // Whole Claim and Qualifier are two different scopes over the same
+    // logical Claim. When both are plausible, selecting one would silently
+    // turn an ambiguous user request into a destructive choice.
+    if (claimIds.size === 1 && targetKinds.size > 1) {
+      return { outcome: "scope_ambiguous" };
+    }
     return { candidateCount: highConfidence.length, outcome: "multi_hit" };
   }
   const hit = highConfidence[0]!;
+  const targetKind = hit.candidate.targetKind ?? "memory_claim";
   return {
     outcome: "unique",
     signals: hit.signals,
@@ -178,6 +207,19 @@ export function planTrustActionTargetResolution(input: {
       claimKind: hit.candidate.claimKind,
       claimVersionId: hit.candidate.claimVersionId,
       predicateId: hit.candidate.predicateId,
+      targetKind,
+      ...(targetKind === "relationship_qualifier" && hit.candidate.qualifierId
+        ? { qualifierId: hit.candidate.qualifierId }
+        : {}),
+      ...(targetKind === "relationship_qualifier" && hit.candidate.qualifierAxisId
+        ? { qualifierAxisId: hit.candidate.qualifierAxisId }
+        : {}),
+      ...(targetKind === "relationship_qualifier" && hit.candidate.qualifierRoleSide
+        ? { qualifierRoleSide: hit.candidate.qualifierRoleSide }
+        : {}),
+      ...(targetKind === "relationship_qualifier" && hit.candidate.qualifierTypedValue !== undefined
+        ? { qualifierTypedValue: hit.candidate.qualifierTypedValue }
+        : {}),
     },
   };
 }
@@ -252,6 +294,77 @@ export function planMemoryCorrection(input: {
   };
 }
 
+export type MemoryForgetRequestPlan =
+  | Readonly<{ action: "apply" }>
+  | Readonly<{ action: "noop_already_fenced"; reasonCode: string }>;
+
+/**
+ * Forget is a user control operation, not an extraction side effect. The
+ * target type selects the real granularity: a whole Claim or one Qualifier.
+ * This planner intentionally knows only the locked state; SQL owns the
+ * append-only version and exclusion writes.
+ */
+export function planMemoryForgetRequest(input: {
+  targetKind: "memory_claim" | "relationship_qualifier";
+  currentVersionStatus:
+    | "active"
+    | "review_due"
+    | "dormant"
+    | "superseded"
+    | "retracted";
+  targetQualifierPresent?: boolean;
+}): MemoryForgetRequestPlan {
+  if (
+    input.targetKind === "memory_claim" &&
+    input.currentVersionStatus === "retracted"
+  ) {
+    return { action: "noop_already_fenced", reasonCode: "claim_already_fenced" };
+  }
+  if (
+    input.targetKind === "relationship_qualifier" &&
+    input.targetQualifierPresent === false
+  ) {
+    return {
+      action: "noop_already_fenced",
+      reasonCode: "qualifier_already_fenced",
+    };
+  }
+  return { action: "apply" };
+}
+
+export type MemoryForgetReversalPlan =
+  | Readonly<{ action: "restore" }>
+  | Readonly<{ action: "precondition_failed"; reasonCode: string }>;
+
+export function planMemoryForgetReversal(input: {
+  fencePresent: boolean;
+}): MemoryForgetReversalPlan {
+  return input.fencePresent
+    ? { action: "restore" }
+    : { action: "precondition_failed", reasonCode: "target_not_fenced" };
+}
+
+/**
+ * Person-wide Forget/Reversal is deliberately outside this Function's scope.
+ * The check only recognizes explicit broad wording; a normal target anchor
+ * such as "my home in Shanghai" remains eligible for admission-time lookup.
+ */
+export function isPersonWideMemoryForgetAnchor(anchor: string): boolean {
+  const normalized = anchor.normalize("NFKC").toLowerCase().trim();
+  if (normalized === "") return false;
+  return (
+    new Set(["everything", "all", "所有", "全部", "一切"]).has(normalized) ||
+    /\b(?:everything|all|every)\b.{0,80}\b(?:about|of|my\s+memories?|memory|things?)\b/.test(
+      normalized,
+    ) ||
+    /\b(?:all|every)\s+(?:of\s+)?(?:my\s+)?(?:memories?|things?)\b/.test(
+      normalized,
+    ) ||
+    /关于.{0,80}(?:所有|全部|一切).{0,40}(?:记忆|信息|事情)?/.test(normalized) ||
+    /(?:所有|全部|一切).{0,40}(?:记忆|信息)/.test(normalized)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Source explanation evidence verdict (ADR-0008).
 // ---------------------------------------------------------------------------
@@ -301,6 +414,24 @@ export type MemoryTrustActionCommitPort = Readonly<{
       userId: string;
     },
   ): Promise<void>;
+  executeMemoryForgetRequestPlan(
+    executor: ConversationActionTransactionExecutor,
+    input: {
+      actionExecutionId: string;
+      requestEventRevisionId: string;
+      target: ResolvedTrustActionTarget;
+      userId: string;
+    },
+  ): Promise<string>;
+  executeMemoryForgetReversalPlan(
+    executor: ConversationActionTransactionExecutor,
+    input: {
+      actionExecutionId: string;
+      requestEventRevisionId: string;
+      target: ResolvedTrustActionTarget;
+      userId: string;
+    },
+  ): Promise<string>;
   /**
    * Read-only evidence verification for `explain_memory_source`: expand the
    * claim's valid Evidence to final / corrected User Event Revisions (active
@@ -355,6 +486,7 @@ export function createMemoryCorrectionActionHandler(input: {
         mode: "in_transaction_anchor",
         resolvedClaimId: resolvedTarget.claimId,
         resolvedClaimVersionId: resolvedTarget.claimVersionId,
+        resolvedTargetKind: resolvedTarget.targetKind,
         commit: async ({ actionExecutionId, executor, userId }) => {
           const snapshot = await input.commitPort.loadTrustActionClaim(executor, {
             claimId: resolvedTarget.claimId,
@@ -407,6 +539,7 @@ export function createExplainMemorySourceActionHandler(input: {
         mode: "in_transaction_anchor",
         resolvedClaimId: resolvedTarget.claimId,
         resolvedClaimVersionId: resolvedTarget.claimVersionId,
+        resolvedTargetKind: resolvedTarget.targetKind,
         commit: async ({ executor, userId }) => {
           const snapshot = await input.commitPort.loadTrustActionClaim(executor, {
             claimId: resolvedTarget.claimId,
@@ -430,6 +563,70 @@ export function createExplainMemorySourceActionHandler(input: {
             ? "source_evidence_verified"
             : "source_unverifiable";
         },
+      };
+    },
+  };
+}
+
+export function createMemoryForgetRequestActionHandler(input: {
+  commitPort: MemoryTrustActionCommitPort;
+}): ConversationActionHandler {
+  return {
+    actionKind: "memory_forget_request",
+    prepare({ definition, proposal, resolvedTarget }) {
+      if (!resolvedTarget) {
+        throw new Error(
+          "Memory Forget requires the admission-time resolved target.",
+        );
+      }
+      return {
+        actionKind: definition.actionKind,
+        mode: "in_transaction_anchor",
+        resolvedClaimId: resolvedTarget.claimId,
+        resolvedClaimVersionId: resolvedTarget.claimVersionId,
+        resolvedTargetKind: resolvedTarget.targetKind,
+        ...(resolvedTarget.targetKind === "relationship_qualifier"
+          ? { resolvedQualifierId: resolvedTarget.qualifierId }
+          : {}),
+        commit: async ({ actionExecutionId, executor, userId }) =>
+          input.commitPort.executeMemoryForgetRequestPlan(executor, {
+            actionExecutionId,
+            requestEventRevisionId: proposal.requestEventRevisionId,
+            target: resolvedTarget,
+            userId,
+          }),
+      };
+    },
+  };
+}
+
+export function createMemoryForgetReversalActionHandler(input: {
+  commitPort: MemoryTrustActionCommitPort;
+}): ConversationActionHandler {
+  return {
+    actionKind: "memory_forget_reversal",
+    prepare({ definition, proposal, resolvedTarget }) {
+      if (!resolvedTarget) {
+        throw new Error(
+          "Memory Forget Reversal requires the admission-time resolved target.",
+        );
+      }
+      return {
+        actionKind: definition.actionKind,
+        mode: "in_transaction_anchor",
+        resolvedClaimId: resolvedTarget.claimId,
+        resolvedClaimVersionId: resolvedTarget.claimVersionId,
+        resolvedTargetKind: resolvedTarget.targetKind,
+        ...(resolvedTarget.targetKind === "relationship_qualifier"
+          ? { resolvedQualifierId: resolvedTarget.qualifierId }
+          : {}),
+        commit: async ({ actionExecutionId, executor, userId }) =>
+          input.commitPort.executeMemoryForgetReversalPlan(executor, {
+            actionExecutionId,
+            requestEventRevisionId: proposal.requestEventRevisionId,
+            target: resolvedTarget,
+            userId,
+          }),
       };
     },
   };

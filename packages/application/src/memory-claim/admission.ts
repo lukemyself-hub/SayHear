@@ -59,6 +59,17 @@ export type ClaimAdmissionInput = Readonly<{
   evidence: readonly AdmissibleEvidence[];
   /** Evidence currently inside an applied whole-Claim Forget exclusion. */
   excludedEvidenceIds: readonly string[];
+  /** Relationship role keys currently behind an active Qualifier Forget fence. */
+  excludedQualifierKeys?: readonly Readonly<{
+    axisId: string;
+    roleSide: "canonical_subject" | "counterpart";
+  }>[];
+  /** Qualifier-scoped Evidence that remains excluded after an explicit Reversal. */
+  excludedQualifierEvidence?: readonly Readonly<{
+    axisId: string;
+    roleSide: "canonical_subject" | "counterpart";
+    evidenceItemIds: readonly string[];
+  }>[];
 }>;
 
 /**
@@ -516,6 +527,56 @@ export function planClaimAdmission(input: ClaimAdmissionInput): ClaimAdmissionPl
     // Qualifiers exist only on relationship claims (ADR-0033); anywhere else
     // they are a malformed proposal.
     return { action: "reject", reasonCode: "qualifier_invalid" };
+  }
+
+  const excludedQualifierKeys = new Set(
+    (input.excludedQualifierKeys ?? []).map(
+      (key) => `${key.axisId}\u0000${key.roleSide}`,
+    ),
+  );
+  if (
+    admittedQualifiers.some((qualifier) =>
+      excludedQualifierKeys.has(`${qualifier.axisId}\u0000${qualifier.roleSide}`),
+    )
+  ) {
+    return {
+      action: "blocked_forget_fence",
+      reasonCodes: ["qualifier_inside_forget_exclusion"],
+    };
+  }
+  const excludedQualifierEvidence = new Map(
+    (input.excludedQualifierEvidence ?? []).map((entry) => [
+      `${entry.axisId}\u0000${entry.roleSide}`,
+      new Set(entry.evidenceItemIds),
+    ]),
+  );
+  const excludedQualifierEvidenceIds = new Set(
+    [...excludedQualifierEvidence.values()].flatMap((ids) => [...ids]),
+  );
+  if (
+    input.evidence.some((item) =>
+      excludedQualifierEvidenceIds.has(item.evidenceItemId),
+    )
+  ) {
+    return {
+      action: "blocked_forget_fence",
+      reasonCodes: ["qualifier_evidence_inside_forget_exclusion"],
+    };
+  }
+  if (
+    admittedQualifiers.some((qualifier) => {
+      const excluded = excludedQualifierEvidence.get(
+        `${qualifier.axisId}\u0000${qualifier.roleSide}`,
+      );
+      return excluded !== undefined && qualifier.evidenceItemIds.some((id) =>
+        excluded.has(id),
+      );
+    })
+  ) {
+    return {
+      action: "blocked_forget_fence",
+      reasonCodes: ["qualifier_evidence_inside_forget_exclusion"],
+    };
   }
 
   if (statedKind === "impression") {

@@ -38,20 +38,39 @@ export type ConversationActionKind =
   | "regenerate_journal"
   | (string & {});
 
-export type ConversationActionTargetKind = "journal";
+export type ConversationActionTargetKind =
+  | "journal"
+  | "memory_claim"
+  | "relationship_qualifier";
 
 export type ActionReferenceHandle = Readonly<{
   actionKinds: readonly ConversationActionKind[];
   handle: string;
   targetKind: ConversationActionTargetKind;
+  /** Compiler-persisted target identity; never exposed as model selector text. */
+  targetId?: string;
+  targetVersionId?: string;
+  targetClaimId?: string;
+  targetQualifierId?: string;
+  qualifierAxisId?: string;
+  qualifierRoleSide?: "canonical_subject" | "counterpart";
+  qualifierTypedValue?: string | readonly string[];
 }>;
 
 export type ActionReferenceTarget = Readonly<{
   actionKinds: readonly ConversationActionKind[];
+  /** The owning Claim when targetKind is relationship_qualifier. */
+  targetClaimId?: string;
+  /** The compiler-minted qualifier identity when targetKind is a qualifier. */
+  targetQualifierId?: string;
   targetId: string;
   targetKind: ConversationActionTargetKind;
   targetVersionId: string;
   sourceRevision: number;
+  /** Structured qualifier identity; never a Predicate ID or model selector. */
+  qualifierAxisId?: string;
+  qualifierRoleSide?: "canonical_subject" | "counterpart";
+  qualifierTypedValue?: string | readonly string[];
 }>;
 
 export type ConversationFunctionDefinition = Readonly<{
@@ -286,6 +305,13 @@ const MEMORY_TRUST_TARGET_CONTRACT = Object.freeze({
   versioned: true as const,
 });
 
+const MEMORY_FORGET_TARGET_CONTRACT = Object.freeze({
+  handleArgument: "targetAnchor",
+  handleKind: "memory_claim_or_relationship_qualifier",
+  resolution: "admission_time_anchor" as const,
+  versioned: true as const,
+});
+
 /**
  * `memory_correction` (issue #119, ADR-0001 / ADR-0118): invalidate a wrong
  * understanding synchronously in the admission transaction — the corrected
@@ -375,11 +401,87 @@ export const EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION: ConversationActionDefiniti
   });
 
 /**
+ * `memory_forget_request` (issue #120, ADR-0034 / ADR-0118): place one whole
+ * Claim or one Relationship Qualifier behind a durable exclusion fence. The
+ * selected target kind carries the scope; the Function has no scope enum.
+ */
+export const MEMORY_FORGET_REQUEST_ACTION_DEFINITION: ConversationActionDefinition =
+  Object.freeze({
+    actionKind: "memory_forget_request",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "admission_time_target",
+    confirmationPolicy: "none",
+    effectClass: "memory_trust_control",
+    executionMode: "synchronous",
+    functionDescription:
+      "Stop recalling one thing SayHear remembers. Use targetAnchor to quote the user's own words that identify either the whole remembered item or one relationship role. Do not use this for 'everything about' a person; that broader scope is not supported. This keeps the conversation and Journal intact while preventing the selected memory from being learned again.",
+    handlerBinding: "memory.forget-request.v1",
+    idempotencyScope: "request_event_revision",
+    inputSchema: Object.freeze({
+      additionalProperties: false,
+      properties: Object.freeze({
+        targetAnchor: Object.freeze({
+          maxLength: 300,
+          minLength: 1,
+          type: "string",
+        }),
+      }),
+      required: Object.freeze(["targetAnchor"]),
+      type: "object",
+    }),
+    ratePolicy: Object.freeze({
+      maxInFlightPerTarget: null,
+      name: "memory_forget_request:v1",
+    }),
+    schemaVersion: "memory-forget-request:v1",
+    targetContract: MEMORY_FORGET_TARGET_CONTRACT,
+    trustClass: "memory_trust_control",
+  });
+
+/**
+ * `memory_forget_reversal` (issue #120, ADR-0035 / ADR-0118): explicitly
+ * re-enter one currently fenced Claim or Qualifier. The request event itself
+ * becomes the new Evidence; old Evidence and old ClaimVersions are never
+ * reactivated.
+ */
+export const MEMORY_FORGET_REVERSAL_ACTION_DEFINITION: ConversationActionDefinition =
+  Object.freeze({
+    actionKind: "memory_forget_reversal",
+    availabilityPolicy: "authenticated_owner",
+    consistencyPolicy: "admission_time_target",
+    confirmationPolicy: "none",
+    effectClass: "memory_trust_control",
+    executionMode: "synchronous",
+    functionDescription:
+      "Remember one previously forgotten item again only when the user explicitly gives permission. targetAnchor must quote the user's own words identifying the currently fenced whole memory or relationship role. The new permission event is the new Evidence; never reactivate old Evidence, and never infer permission from repetition or time.",
+    handlerBinding: "memory.forget-reversal.v1",
+    idempotencyScope: "request_event_revision",
+    inputSchema: Object.freeze({
+      additionalProperties: false,
+      properties: Object.freeze({
+        targetAnchor: Object.freeze({
+          maxLength: 300,
+          minLength: 1,
+          type: "string",
+        }),
+      }),
+      required: Object.freeze(["targetAnchor"]),
+      type: "object",
+    }),
+    ratePolicy: Object.freeze({
+      maxInFlightPerTarget: null,
+      name: "memory_forget_reversal:v1",
+    }),
+    schemaVersion: "memory-forget-reversal:v1",
+    targetContract: MEMORY_FORGET_TARGET_CONTRACT,
+    trustClass: "memory_trust_control",
+  });
+
+/**
  * The Catalog v2 go-live set (issue #119): the Journal regeneration
  * Definition plus the first two Trust-Control Definitions end-to-end. The
- * remaining three trust Definitions (`memory_forget_request`,
- * `memory_forget_reversal`, `entity_identity_correction`) join in their own
- * tickets; the five-Definition catalog pin completes at the 1A.3a cutover.
+ * Forget chain joins in issue #120. Entity identity correction remains a
+ * separate Definition and ticket.
  */
 export const MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG: ConversationActionCatalog =
   Object.freeze({
@@ -387,8 +489,10 @@ export const MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG: ConversationActio
       REGENERATE_JOURNAL_ACTION_DEFINITION,
       MEMORY_CORRECTION_ACTION_DEFINITION,
       EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION,
+      MEMORY_FORGET_REQUEST_ACTION_DEFINITION,
+      MEMORY_FORGET_REVERSAL_ACTION_DEFINITION,
     ]),
-    version: "conversation-action-catalog:memory-trust-actions:v1",
+    version: "conversation-action-catalog:memory-trust-actions:v2",
   });
 
 /**
