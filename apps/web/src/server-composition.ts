@@ -7,6 +7,8 @@ import {
   createExplainMemorySourceActionHandler,
   createJournalRegenerationActionHandler,
   createMemoryCorrectionActionHandler,
+  createMemoryForgetRequestActionHandler,
+  createMemoryForgetReversalActionHandler,
   createContextCompiler,
   createContinuousExchangeService,
   createConversationResponseService,
@@ -40,6 +42,8 @@ import {
   createMemoryConsolidationScanService,
   type FastPathExtractionEntrypointDependencies,
   type MemoryConsolidationEntrypointDependencies,
+  relationshipHintInputsFor,
+  retrievalProjectionInputsFor,
 } from "@sayhear/application";
 import {
   createRuntimeProviderEgressPort,
@@ -450,7 +454,20 @@ export function createServerComposition() {
   // structured-lexical search over active Claims and classifies with the
   // pure planner; registry lexical surfaces come from the same released
   // snapshot the retrieval baseline pins.
-  const memoryTrustActionCommitPort = new PostgresMemoryTrustActionCommitPort();
+  const memoryTrustActionCommitPort = new PostgresMemoryTrustActionCommitPort({
+    relationshipHintsFor(predicateId) {
+      const entry = predicateRegistryLookup.entryFor(predicateId);
+      return entry
+        ? relationshipHintInputsFor(predicateRegistryLookup, entry)
+        : null;
+    },
+    retrievalProjectionFor(predicateId) {
+      const entry = predicateRegistryLookup.entryFor(predicateId);
+      return entry
+        ? retrievalProjectionInputsFor(predicateRegistryLookup, entry)
+        : null;
+    },
+  });
   const memoryCorrectionFollowupRepository =
     new PostgresMemoryCorrectionFollowupRepository(pool);
   const memoryTrustActionTargetSource = new PostgresMemoryTrustActionTargetSource(
@@ -472,21 +489,30 @@ export function createServerComposition() {
   );
   const trustActionTargetResolver: TrustActionTargetResolver = {
     async resolve({ actionKind, anchor, userId }) {
-      if (actionKind !== "memory_correction" && actionKind !== "explain_memory_source") {
+      if (
+        actionKind !== "memory_correction" &&
+        actionKind !== "explain_memory_source" &&
+        actionKind !== "memory_forget_request" &&
+        actionKind !== "memory_forget_reversal"
+      ) {
         throw new Error(
           `No trust-action search space is defined for kind "${actionKind}".`,
         );
       }
-      // ADR-0118: the search space differs by kind — Correction also sees
-      // the claims its own prior corrections superseded (repeat convergence,
-      // SPEC story 48); Source Explanation sees active Claims only.
+      // ADR-0118: each action owns an explicit search space. Forget targets
+      // include already-fenced items so repeated Forget converges honestly;
+      // Reversal sees only the still-fenced set.
       const [candidates, labelIndex] = await Promise.all([
         memoryTrustActionTargetSource.listResolutionCandidates({
           limit: 100,
           searchSpace:
             actionKind === "memory_correction"
               ? "active_and_corrected"
-              : "active_claims",
+              : actionKind === "explain_memory_source"
+                ? "active_claims"
+                : actionKind === "memory_forget_reversal"
+                  ? "fenced_targets"
+                  : "forget_targets",
           userId,
         }),
         memoryTrustActionTargetSource.listLabelIndex({ userId }),
@@ -510,6 +536,9 @@ export function createServerComposition() {
           outcome: "multi_hit",
         };
       }
+      if (plan.outcome === "scope_ambiguous") {
+        return { outcome: "scope_ambiguous" };
+      }
       return { outcome: "zero_hit" };
     },
   };
@@ -522,6 +551,12 @@ export function createServerComposition() {
         commitPort: memoryTrustActionCommitPort,
       }),
       createExplainMemorySourceActionHandler({
+        commitPort: memoryTrustActionCommitPort,
+      }),
+      createMemoryForgetRequestActionHandler({
+        commitPort: memoryTrustActionCommitPort,
+      }),
+      createMemoryForgetReversalActionHandler({
         commitPort: memoryTrustActionCommitPort,
       }),
     ],

@@ -1146,7 +1146,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         totalTokens: expect.any(Number),
       },
       costMicros: 0,
-      conversationActionCatalogVersion: "conversation-action-catalog:memory-trust-actions:v1",
+      conversationActionCatalogVersion: "conversation-action-catalog:memory-trust-actions:v2",
       disposition: "completed",
       freshnessPolicy: "source_valid:v1",
       generationCommandId,

@@ -673,6 +673,45 @@ describe("forget fence and relationships in admission", () => {
     });
   });
 
+  it("does not let Qualifier-scoped Evidence re-support a neutral relationship", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: RELATIVE_OF,
+        typedValue: "",
+        subjectEntityId: SELF,
+        objectEntityId: MOM,
+        evidenceItemIds: ["e1"],
+      }),
+      registryEntry: entryLookup.entryFor(RELATIVE_OF),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: {
+        ...SELF_BINDING,
+        [MOM]: {
+          entityVersionId: MOM_VERSION,
+          status: "active",
+          entityKindId: "sh.entity.person",
+        },
+      },
+      existingClaim: { memoryClaimId: CURRENT_CLAIM_ID, canonicalKey: "k" },
+      currentVersion: relationshipVersion(),
+      currentVersionQualifiers: [],
+      evidence: [evidence({ id: "e1", session: SESSION_1, revision: "rev-1" })],
+      excludedEvidenceIds: [],
+      excludedQualifierEvidence: [
+        {
+          axisId: "kinship_term",
+          roleSide: "counterpart",
+          evidenceItemIds: ["e1"],
+        },
+      ],
+    });
+    expect(plan).toEqual({
+      action: "blocked_forget_fence",
+      reasonCodes: ["qualifier_evidence_inside_forget_exclusion"],
+    });
+  });
+
   it("parks relationship candidates with an unresolved object Entity", () => {
     const plan = planClaimAdmission({
       proposal: baseProposal({

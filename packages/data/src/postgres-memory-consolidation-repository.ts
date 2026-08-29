@@ -1226,6 +1226,20 @@ async function admitCandidateWithin(
         existingClaim.memoryClaimId,
       )
     : [];
+  const excludedQualifierKeys = existingClaim
+    ? await listActiveExcludedQualifierKeysWithin(
+        client,
+        context.userId,
+        existingClaim.memoryClaimId,
+      )
+    : [];
+  const excludedQualifierEvidence = existingClaim
+    ? await listExcludedQualifierEvidenceWithin(
+        client,
+        context.userId,
+        existingClaim.memoryClaimId,
+      )
+    : [];
   const currentVersionQualifiers =
     existingClaim && currentVersion && registryEntry.relationshipSemantics
       ? await listClaimVersionQualifiersWithin(
@@ -1252,6 +1266,8 @@ async function admitCandidateWithin(
     currentVersionQualifiers,
     evidence,
     excludedEvidenceIds,
+    excludedQualifierKeys,
+    excludedQualifierEvidence,
   });
 
   // ADR-0041: a dormant Impression requalifies only through FRESH Evidence
@@ -1934,10 +1950,98 @@ async function listActiveExcludedEvidenceIdsWithin(
      WHERE exclusion.user_id = $1
        AND version.memory_claim_id = $2
        AND exclusion.status = 'active'
+       AND exclusion.exclusion_scope = 'whole_claim'
      ORDER BY evidence_item_id`,
     [userId, claimId],
   );
   return result.rows.map((row) => row.evidence_item_id);
+}
+
+async function listActiveExcludedQualifierKeysWithin(
+  client: PoolClient,
+  userId: string,
+  claimId: string,
+): Promise<readonly Readonly<{
+  axisId: string;
+  roleSide: "canonical_subject" | "counterpart";
+}>[]> {
+  const result = await client.query<{
+    qualifier_key: string;
+    canonical_side: "canonical_subject" | "counterpart";
+  }>(
+    `SELECT DISTINCT exclusion.qualifier_key,
+            exclusion.canonical_side
+     FROM memory_forget_evidence_exclusions exclusion
+     INNER JOIN memory_forget_requests request
+       ON request.memory_forget_request_id = exclusion.memory_forget_request_id
+      AND request.user_id = exclusion.user_id
+     WHERE exclusion.user_id = $1
+       AND request.target_claim_id = $2
+       AND exclusion.exclusion_scope = 'relationship_qualifier'
+       AND exclusion.status = 'active'
+       AND exclusion.qualifier_key IS NOT NULL
+       AND exclusion.canonical_side IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM memory_forget_reversals reversal
+         WHERE reversal.user_id = request.user_id
+           AND reversal.memory_forget_request_id = request.memory_forget_request_id
+           AND reversal.status = 'active'
+       )
+     ORDER BY exclusion.qualifier_key, exclusion.canonical_side`,
+    [userId, claimId],
+  );
+  return result.rows.map((row) => ({
+    axisId: row.qualifier_key,
+    roleSide: row.canonical_side,
+  }));
+}
+
+async function listExcludedQualifierEvidenceWithin(
+  client: PoolClient,
+  userId: string,
+  claimId: string,
+): Promise<readonly Readonly<{
+  axisId: string;
+  roleSide: "canonical_subject" | "counterpart";
+  evidenceItemIds: readonly string[];
+}>[]> {
+  const result = await client.query<{
+    evidence_item_id: string;
+    qualifier_key: string;
+    canonical_side: "canonical_subject" | "counterpart";
+  }>(
+    `SELECT exclusion.evidence_item_id::text,
+            exclusion.qualifier_key,
+            exclusion.canonical_side
+     FROM memory_forget_evidence_exclusions exclusion
+     INNER JOIN memory_forget_requests request
+       ON request.memory_forget_request_id = exclusion.memory_forget_request_id
+      AND request.user_id = exclusion.user_id
+     WHERE exclusion.user_id = $1
+       AND request.target_claim_id = $2
+       AND exclusion.exclusion_scope = 'relationship_qualifier'
+       AND exclusion.status = 'active'
+       AND exclusion.qualifier_key IS NOT NULL
+       AND exclusion.canonical_side IS NOT NULL
+     ORDER BY exclusion.qualifier_key, exclusion.canonical_side,
+              exclusion.evidence_item_id`,
+    [userId, claimId],
+  );
+  const grouped = new Map<
+    string,
+    { axisId: string; roleSide: "canonical_subject" | "counterpart"; evidenceItemIds: string[] }
+  >();
+  for (const row of result.rows) {
+    const key = `${row.qualifier_key}\u0000${row.canonical_side}`;
+    const existing = grouped.get(key) ?? {
+      axisId: row.qualifier_key,
+      roleSide: row.canonical_side,
+      evidenceItemIds: [],
+    };
+    existing.evidenceItemIds.push(row.evidence_item_id);
+    grouped.set(key, existing);
+  }
+  return [...grouped.values()];
 }
 
 async function transitionCandidateWithin(

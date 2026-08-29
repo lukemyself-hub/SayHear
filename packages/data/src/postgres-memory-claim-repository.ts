@@ -608,10 +608,82 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
        JOIN memory_claim_versions v
          ON v.memory_claim_version_id = l.memory_claim_version_id
        WHERE x.user_id = $1 AND v.memory_claim_id = $2 AND x.status = 'active'
+         AND x.exclusion_scope = 'whole_claim'
        ORDER BY evidence_item_id`,
       [userId, claimId],
     );
     return result.rows.map((row) => row.evidence_item_id);
+  }
+
+  public async listActiveExcludedQualifierKeys(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<readonly Readonly<{
+    axisId: string;
+    roleSide: "canonical_subject" | "counterpart";
+  }>[]> {
+    const result = await this.pool.query<{
+      qualifier_key: string;
+      canonical_side: "canonical_subject" | "counterpart";
+    }>(
+      `SELECT DISTINCT exclusion.qualifier_key,
+              exclusion.canonical_side
+       FROM memory_forget_evidence_exclusions exclusion
+       INNER JOIN memory_forget_requests request
+         ON request.memory_forget_request_id = exclusion.memory_forget_request_id
+        AND request.user_id = exclusion.user_id
+       WHERE exclusion.user_id = $1
+         AND request.target_claim_id = $2
+         AND exclusion.exclusion_scope = 'relationship_qualifier'
+         AND exclusion.status = 'active'
+         AND exclusion.qualifier_key IS NOT NULL
+         AND exclusion.canonical_side IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM memory_forget_reversals reversal
+           WHERE reversal.user_id = request.user_id
+             AND reversal.memory_forget_request_id = request.memory_forget_request_id
+             AND reversal.status = 'active'
+         )
+       ORDER BY exclusion.qualifier_key, exclusion.canonical_side`,
+      [userId, claimId],
+    );
+    return result.rows.map((row) => ({
+      axisId: row.qualifier_key,
+      roleSide: row.canonical_side,
+    }));
+  }
+
+  public async listExcludedQualifierEvidence(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<readonly Readonly<{
+    axisId: string;
+    roleSide: "canonical_subject" | "counterpart";
+    evidenceItemIds: readonly string[];
+  }>[] > {
+    const result = await this.pool.query<{
+      evidence_item_id: string;
+      qualifier_key: string;
+      canonical_side: "canonical_subject" | "counterpart";
+    }>(
+      `SELECT exclusion.evidence_item_id::text,
+              exclusion.qualifier_key,
+              exclusion.canonical_side
+       FROM memory_forget_evidence_exclusions exclusion
+       INNER JOIN memory_forget_requests request
+         ON request.memory_forget_request_id = exclusion.memory_forget_request_id
+        AND request.user_id = exclusion.user_id
+       WHERE exclusion.user_id = $1
+         AND request.target_claim_id = $2
+         AND exclusion.exclusion_scope = 'relationship_qualifier'
+         AND exclusion.status = 'active'
+         AND exclusion.qualifier_key IS NOT NULL
+         AND exclusion.canonical_side IS NOT NULL
+       ORDER BY exclusion.qualifier_key, exclusion.canonical_side,
+                exclusion.evidence_item_id`,
+      [userId, claimId],
+    );
+    return groupExcludedQualifierEvidence(result.rows);
   }
 
   public async findAppliedWholeClaimForget(
@@ -1119,6 +1191,34 @@ export class PostgresMemoryClaimRepository implements MemoryClaimRepository {
       return { claimVersionId: versionId };
     });
   }
+}
+
+function groupExcludedQualifierEvidence(
+  rows: readonly Readonly<{
+    evidence_item_id: string;
+    qualifier_key: string;
+    canonical_side: "canonical_subject" | "counterpart";
+  }>[],
+): readonly Readonly<{
+  axisId: string;
+  roleSide: "canonical_subject" | "counterpart";
+  evidenceItemIds: readonly string[];
+}>[] {
+  const grouped = new Map<
+    string,
+    { axisId: string; roleSide: "canonical_subject" | "counterpart"; evidenceItemIds: string[] }
+  >();
+  for (const row of rows) {
+    const key = `${row.qualifier_key}\u0000${row.canonical_side}`;
+    const existing = grouped.get(key) ?? {
+      axisId: row.qualifier_key,
+      roleSide: row.canonical_side,
+      evidenceItemIds: [],
+    };
+    existing.evidenceItemIds.push(row.evidence_item_id);
+    grouped.set(key, existing);
+  }
+  return [...grouped.values()];
 }
 
 
@@ -1909,7 +2009,7 @@ export async function rebuildRelationshipResolverHintsWithin(
  * Mark the claim's active retrieval projections stale. Allowed by the
  * projection freeze trigger as the only lifecycle transition.
  */
-async function markClaimRetrievalProjectionsStaleWithin(
+export async function markClaimRetrievalProjectionsStaleWithin(
   client: PoolClient,
   userId: UserId,
   claimId: MemoryClaimId,
@@ -1928,7 +2028,7 @@ async function markClaimRetrievalProjectionsStaleWithin(
  * current version is not recallable; the query-time fences remain the
  * authoritative recall gate either way.
  */
-async function rebuildClaimRetrievalProjectionsWithin(
+export async function rebuildClaimRetrievalProjectionsWithin(
   client: PoolClient,
   input: {
     userId: UserId;

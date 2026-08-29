@@ -844,6 +844,28 @@ export class PostgresConversationResponseRepository
         `SELECT EXISTS (${FAST_PATH_PENDING_REVISIONS_SQL}) AS pending`,
         [row.daily_session_id],
       );
+      const memoryActionTargets = await loadMemoryActionReferenceTargets(
+        client,
+        input.userId,
+        Number(row.source_revision),
+      );
+      const actionReferenceTargets: ActionReferenceTarget[] = [
+        ...(row.current_journal_id &&
+        row.current_journal_version_id &&
+        row.current_journal_source_revision &&
+        row.current_journal_version_status === "published"
+          ? [
+              {
+                actionKinds: ["regenerate_journal"],
+                targetId: row.current_journal_id,
+                targetKind: "journal" as const,
+                targetVersionId: row.current_journal_version_id,
+                sourceRevision: Number(row.current_journal_source_revision),
+              } satisfies ActionReferenceTarget,
+            ]
+          : []),
+        ...memoryActionTargets,
+      ];
 
       await client.query("COMMIT");
       return {
@@ -862,22 +884,9 @@ export class PostgresConversationResponseRepository
                 }),
             }
           : {}),
-        ...((row.current_journal_id &&
-          row.current_journal_version_id &&
-          row.current_journal_source_revision &&
-          row.current_journal_version_status === "published")
-          ? {
-              actionReferenceTargets: [
-                {
-                  actionKinds: ["regenerate_journal"],
-                  targetId: row.current_journal_id,
-                  targetKind: "journal" as const,
-                  targetVersionId: row.current_journal_version_id,
-                  sourceRevision: Number(row.current_journal_source_revision),
-                } satisfies ActionReferenceTarget,
-              ],
-            }
-          : {}),
+        ...(actionReferenceTargets.length === 0
+          ? {}
+          : { actionReferenceTargets }),
         curiosityStopSignal,
         dailySession: {
           activityState: row.activity_state,
@@ -1090,11 +1099,18 @@ export class PostgresConversationResponseRepository
               INSERT INTO conversation_action_handles (
                 handle, compiled_context_id, user_id, generation_command_id,
                 action_kind, target_kind, target_id, target_version_id,
+                target_claim_id, target_claim_version_id, target_qualifier_id,
                 source_revision, expected_data_epoch, created_at, expires_at
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+              VALUES ($1, $2, $3, $4, $5, $6,
+                CASE WHEN $6 = 'journal' THEN $7::uuid ELSE NULL::uuid END,
+                CASE WHEN $6 = 'journal' THEN $8::uuid ELSE NULL::uuid END,
+                CASE WHEN $6 = 'journal' THEN NULL::uuid ELSE $9::uuid END,
+                CASE WHEN $6 = 'journal' THEN NULL::uuid ELSE $8::uuid END,
+                CASE WHEN $6 = 'relationship_qualifier' THEN $10::uuid ELSE NULL::uuid END,
+                $11,
                 (SELECT expected_data_epoch FROM generation_commands
-                 WHERE generation_command_id = $4 AND user_id = $3), $10, $11)
+                 WHERE generation_command_id = $4 AND user_id = $3), $12, $13)
             `,
             [
               handle.handle,
@@ -1105,6 +1121,11 @@ export class PostgresConversationResponseRepository
               handle.targetKind,
               handle.targetId,
               handle.targetVersionId,
+              handle.targetClaimId ?? handle.targetId,
+              handle.targetQualifierId ??
+                (handle.targetKind === "relationship_qualifier"
+                  ? handle.targetId
+                  : null),
               handle.sourceRevision,
               input.now,
               new Date(input.now.getTime() + 30 * 60 * 1_000),
@@ -1385,7 +1406,7 @@ export class PostgresConversationResponseRepository
       const actionHandles = await client.query<{
         action_kind: string;
         handle: string;
-        target_kind: "journal";
+        target_kind: "journal" | "memory_claim" | "relationship_qualifier";
       }>(
         `
           SELECT action_kind, handle, target_kind
@@ -2975,6 +2996,215 @@ async function loadContextReferencedEvents(
   }));
 }
 
+/**
+ * Mint typed, command-scoped references for the memory targets that may be
+ * acted on from this frozen Context. The IDs stay in the database-backed
+ * handle row; the model only receives opaque handle strings. A Qualifier is
+ * represented by its own target kind and compiler-minted ID, never by a
+ * predicate or free-form selector (ADR-0096 / ADR-0118).
+ */
+async function loadMemoryActionReferenceTargets(
+  client: PoolClient,
+  userId: UserId,
+  sourceRevision: number,
+): Promise<ActionReferenceTarget[]> {
+  const activeClaims = await client.query<{
+    claim_id: string;
+    version_id: string;
+  }>(
+    `SELECT claim.memory_claim_id::text AS claim_id,
+            version.memory_claim_version_id::text AS version_id
+     FROM memory_claims claim
+     INNER JOIN memory_claim_versions version
+       ON version.memory_claim_version_id = claim.current_version_id
+      AND version.user_id = claim.user_id
+     WHERE claim.user_id = $1
+       AND claim.deleted_at IS NULL
+       AND claim.content_purged_at IS NULL
+       AND version.status = 'active'
+       AND version.epistemic_status <> 'contested'
+       AND version.content_purged_at IS NULL
+     ORDER BY claim.memory_claim_id`,
+    [userId],
+  );
+  const activeQualifiers = await client.query<{
+    claim_id: string;
+    qualifier_id: string;
+    axis_id: string;
+    role_side: "canonical_subject" | "counterpart";
+    typed_value: unknown;
+    version_id: string;
+  }>(
+    `SELECT claim.memory_claim_id::text AS claim_id,
+            qualifier.memory_claim_version_qualifier_id::text AS qualifier_id,
+            qualifier.axis_id, qualifier.role_side, qualifier.typed_value,
+            version.memory_claim_version_id::text AS version_id
+     FROM memory_claims claim
+     INNER JOIN memory_claim_versions version
+       ON version.memory_claim_version_id = claim.current_version_id
+      AND version.user_id = claim.user_id
+     INNER JOIN memory_claim_version_qualifiers qualifier
+       ON qualifier.memory_claim_version_id = version.memory_claim_version_id
+      AND qualifier.user_id = claim.user_id
+       AND qualifier.content_purged_at IS NULL
+     WHERE claim.user_id = $1
+       AND claim.deleted_at IS NULL
+       AND claim.content_purged_at IS NULL
+       AND version.status = 'active'
+       AND version.epistemic_status <> 'contested'
+       AND version.content_purged_at IS NULL
+     ORDER BY claim.memory_claim_id, qualifier.axis_id, qualifier.role_side`,
+    [userId],
+  );
+  const fencedClaims = await client.query<{
+    claim_id: string;
+    version_id: string;
+  }>(
+    `SELECT claim.memory_claim_id::text AS claim_id,
+            version.memory_claim_version_id::text AS version_id
+     FROM memory_claims claim
+     INNER JOIN memory_claim_versions version
+       ON version.memory_claim_version_id = claim.current_version_id
+      AND version.user_id = claim.user_id
+     WHERE claim.user_id = $1
+       AND claim.deleted_at IS NULL
+       AND claim.content_purged_at IS NULL
+       AND version.status = 'retracted'
+       AND version.epistemic_status <> 'contested'
+       AND EXISTS (
+         SELECT 1
+         FROM memory_forget_requests fence
+         WHERE fence.user_id = claim.user_id
+           AND fence.target_claim_id = claim.memory_claim_id
+           AND fence.target_scope = 'whole_claim'
+           AND fence.status = 'applied'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM memory_forget_reversals reversal
+             WHERE reversal.user_id = fence.user_id
+               AND reversal.memory_forget_request_id = fence.memory_forget_request_id
+               AND reversal.status = 'active'
+           )
+       )
+     ORDER BY claim.memory_claim_id`,
+    [userId],
+  );
+  const fencedQualifiers = await client.query<{
+    claim_id: string;
+    qualifier_id: string;
+    axis_id: string;
+    role_side: "canonical_subject" | "counterpart";
+    typed_value: unknown;
+    version_id: string;
+  }>(
+    `SELECT request.target_claim_id::text AS claim_id,
+            qualifier.memory_claim_version_qualifier_id::text AS qualifier_id,
+            qualifier.axis_id, qualifier.role_side, qualifier.typed_value,
+            claim.current_version_id::text AS version_id
+     FROM memory_forget_requests request
+     INNER JOIN memory_claims claim
+       ON claim.memory_claim_id = request.target_claim_id
+       AND claim.user_id = request.user_id
+     INNER JOIN memory_claim_versions current_version
+       ON current_version.memory_claim_version_id = claim.current_version_id
+      AND current_version.user_id = claim.user_id
+     INNER JOIN memory_claim_version_qualifiers qualifier
+       ON qualifier.memory_claim_version_qualifier_id = request.target_qualifier_id
+      AND qualifier.user_id = request.user_id
+     WHERE request.user_id = $1
+       AND request.target_scope = 'relationship_qualifier'
+       AND request.status = 'applied'
+       AND request.target_qualifier_id IS NOT NULL
+       AND claim.deleted_at IS NULL
+       AND claim.content_purged_at IS NULL
+       AND current_version.epistemic_status <> 'contested'
+       AND qualifier.content_purged_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1
+         FROM memory_forget_requests whole_fence
+         WHERE whole_fence.user_id = request.user_id
+           AND whole_fence.target_claim_id = request.target_claim_id
+           AND whole_fence.target_scope = 'whole_claim'
+           AND whole_fence.status = 'applied'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM memory_forget_reversals whole_reversal
+             WHERE whole_reversal.user_id = whole_fence.user_id
+               AND whole_reversal.memory_forget_request_id =
+                     whole_fence.memory_forget_request_id
+               AND whole_reversal.status = 'active'
+           )
+       )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM memory_forget_reversals reversal
+         WHERE reversal.user_id = request.user_id
+           AND reversal.memory_forget_request_id = request.memory_forget_request_id
+           AND reversal.status = 'active'
+       )
+     ORDER BY request.created_at DESC, request.target_claim_id,
+              qualifier.axis_id, qualifier.role_side`,
+    [userId],
+  );
+
+  const targets: ActionReferenceTarget[] = [];
+  for (const row of activeClaims.rows) {
+    targets.push({
+      actionKinds: [
+        "memory_correction",
+        "explain_memory_source",
+        "memory_forget_request",
+      ],
+      targetId: row.claim_id,
+      targetKind: "memory_claim",
+      targetVersionId: row.version_id,
+      sourceRevision,
+    });
+  }
+  for (const row of activeQualifiers.rows) {
+    targets.push({
+      actionKinds: ["memory_forget_request"],
+      qualifierAxisId: row.axis_id,
+      qualifierRoleSide: row.role_side,
+      qualifierTypedValue: toActionTypedValue(row.typed_value),
+      targetClaimId: row.claim_id,
+      targetId: row.qualifier_id,
+      targetKind: "relationship_qualifier",
+      targetQualifierId: row.qualifier_id,
+      targetVersionId: row.version_id,
+      sourceRevision,
+    });
+  }
+  for (const row of fencedClaims.rows) {
+    targets.push({
+      actionKinds: ["memory_forget_reversal"],
+      targetId: row.claim_id,
+      targetKind: "memory_claim",
+      targetVersionId: row.version_id,
+      sourceRevision,
+    });
+  }
+  for (const row of fencedQualifiers.rows) {
+    targets.push({
+      actionKinds: ["memory_forget_reversal"],
+      qualifierAxisId: row.axis_id,
+      qualifierRoleSide: row.role_side,
+      qualifierTypedValue: toActionTypedValue(row.typed_value),
+      targetClaimId: row.claim_id,
+      targetId: row.qualifier_id,
+      targetKind: "relationship_qualifier",
+      targetQualifierId: row.qualifier_id,
+      targetVersionId: row.version_id,
+      sourceRevision,
+    });
+  }
+  return targets;
+}
+
+function toActionTypedValue(value: unknown): string | readonly string[] {
+  return Array.isArray(value) ? value.map((item) => String(item)) : String(value);
+}
+
 async function loadCompiledContext(
   client: PoolClient,
   compiledContextId: CompiledContextId,
@@ -3017,7 +3247,7 @@ async function loadCompiledContext(
   const actionHandles = await client.query<{
     action_kind: string;
     handle: string;
-    target_kind: "journal";
+    target_kind: "journal" | "memory_claim" | "relationship_qualifier";
   }>(
     `
       SELECT action_kind, handle, target_kind

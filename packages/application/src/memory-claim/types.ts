@@ -25,7 +25,7 @@ import type {
 /** Versioned admission / disposition policy for this slice. */
 export const MEMORY_ADMISSION_POLICY_VERSION = "memory-admission:v1";
 
-/** Forget fence policy (whole-Claim scope here; Qualifier scope joins #120). */
+/** Forget fence policy for whole-Claim and relationship-Qualifier scopes. */
 export const MEMORY_FORGET_POLICY_VERSION = "memory-forget:v1";
 
 /**

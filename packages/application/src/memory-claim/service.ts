@@ -173,6 +173,21 @@ export type MemoryClaimRepository = Readonly<{
     locale: ResolverHintLocale,
   ): Promise<readonly RelationshipResolverHintRecord[]>;
   listActiveExcludedEvidenceIds(userId: UserId, claimId: MemoryClaimId): Promise<readonly string[]>;
+  listActiveExcludedQualifierKeys(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<readonly Readonly<{
+    axisId: string;
+    roleSide: "canonical_subject" | "counterpart";
+  }>[] >;
+  listExcludedQualifierEvidence(
+    userId: UserId,
+    claimId: MemoryClaimId,
+  ): Promise<readonly Readonly<{
+    axisId: string;
+    roleSide: "canonical_subject" | "counterpart";
+    evidenceItemIds: readonly string[];
+  }>[] >;
   findAppliedWholeClaimForget(
     userId: UserId,
     claimId: MemoryClaimId,
@@ -608,6 +623,18 @@ export function createMemoryClaimService(dependencies: {
       const excludedEvidenceIds = existingClaim
         ? await repository.listActiveExcludedEvidenceIds(userId, existingClaim.memoryClaimId)
         : [];
+      const excludedQualifierKeys = existingClaim
+        ? await repository.listActiveExcludedQualifierKeys(
+            userId,
+            existingClaim.memoryClaimId,
+          )
+        : [];
+      const excludedQualifierEvidence = existingClaim
+        ? await repository.listExcludedQualifierEvidence(
+            userId,
+            existingClaim.memoryClaimId,
+          )
+        : [];
       const currentVersionQualifiers =
         existingClaim && currentVersion && registryEntry.relationshipSemantics
           ? await repository.listClaimVersionQualifiers(
@@ -631,6 +658,8 @@ export function createMemoryClaimService(dependencies: {
         currentVersionQualifiers,
         evidence,
         excludedEvidenceIds,
+        excludedQualifierKeys,
+        excludedQualifierEvidence,
       });
 
       if (

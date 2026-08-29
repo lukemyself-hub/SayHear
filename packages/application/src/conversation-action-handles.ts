@@ -4,13 +4,26 @@ import type {
   UserId,
 } from "@sayhear/domain";
 
-import type { ConversationActionKind } from "./conversation-action-catalog";
+import type {
+  ConversationActionKind,
+  ConversationActionTargetKind,
+} from "./conversation-action-catalog";
 
 export type ActionReferenceBinding = Readonly<{
   actionKinds: readonly ConversationActionKind[];
   compiledContextId: CompiledContextId;
   currentVersionId: string | null;
-  currentVersionStatus?: "published" | "stale" | "validation_failed" | "needs_review" | null;
+  currentVersionStatus?:
+    | "published"
+    | "stale"
+    | "validation_failed"
+    | "needs_review"
+    | "active"
+    | "review_due"
+    | "dormant"
+    | "superseded"
+    | "retracted"
+    | null;
   dailySessionId: string;
   expectedDataEpoch: number;
   generationCommandId: GenerationCommandId;
@@ -19,6 +32,9 @@ export type ActionReferenceBinding = Readonly<{
   ownerStatus?: "active" | "deleting" | "disabled";
   sourceRevision: number;
   targetId: string;
-  targetKind: "journal";
+  targetKind: ConversationActionTargetKind;
+  /** Set for a relationship_qualifier target; never assembled by the model. */
+  targetClaimId?: string;
+  targetQualifierId?: string;
   targetVersionId: string;
 }>;

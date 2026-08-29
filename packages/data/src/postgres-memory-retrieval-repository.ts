@@ -427,6 +427,7 @@ export class PostgresMemoryRetrievalRepository
               WHERE x.user_id = l.user_id
                 AND x.evidence_item_id = l.evidence_item_id
                 AND x.status = 'active'
+                AND x.exclusion_scope = 'whole_claim'
             )
         ) AS valid_evidence_count,
         subject_version.status AS subject_entity_version_status,
@@ -542,6 +543,7 @@ export class PostgresMemoryRetrievalRepository
           WHERE x.user_id = l.user_id
             AND x.evidence_item_id = l.evidence_item_id
             AND x.status = 'active'
+            AND x.exclusion_scope = 'whole_claim'
         )
       GROUP BY l.memory_claim_version_id`,
       [userId, versionIds],
