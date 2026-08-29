@@ -1,0 +1,146 @@
+{
+  "artifactClass": "non_authoritative_eval_output",
+  "arm": "off",
+  "capturedAt": "2026-08-29T18:40:13.537Z",
+  "completedAt": "2026-08-29T18:54:41.814Z",
+  "cutoverPins": {
+    "conversationActionCatalog": {
+      "actionKinds": [
+        "regenerate_journal",
+        "memory_correction",
+        "explain_memory_source",
+        "memory_forget_request",
+        "memory_forget_reversal",
+        "entity_identity_correction"
+      ],
+      "version": "conversation-action-catalog:memory-trust-actions:v2"
+    },
+    "entityResolvePolicy": {
+      "policyVersion": "entity-resolve-gate:v1",
+      "tAuto": 0.9
+    },
+    "fastPathExtractionPolicyVersion": "fast-path-extraction:v1",
+    "harnessPolicyVersion": "conversation-harness:v3",
+    "localePacks": {
+      "chinese": "locale-pack-zh:v2",
+      "english": "locale-pack-en:v2"
+    },
+    "memoryConsolidationPolicyVersion": "memory-consolidation:v1",
+    "memoryRetrieval": {
+      "memoryBudgets": "memory-budgets:v1",
+      "policyVersion": "memory-retrieval:v1",
+      "portraitSelection": "portrait-selection:v1"
+    },
+    "persona": {
+      "anchors": "persona-behavior-anchors:v2",
+      "canonical": "canonical-persona:v2",
+      "invariant": "persona-contract-invariant:v1"
+    },
+    "predicateRegistry": {
+      "registryVersion": 1,
+      "version": "predicate-registry:v1"
+    },
+    "promptArtifacts": {
+      "groundingGuardAndOpenerPermission": "recall-experience-contract:v1",
+      "trustActionExpression": "trust-action-expression-contract:v1"
+    },
+    "safetyResources": "safety-resources:v2",
+    "taskInstructionVersion": "task-instruction-decision:v2"
+  },
+  "dataSourceDeclaration": "Fully synthetic scenario material (see the pack file); no real private conversation is read (ADR-0020 Initial Replay, ADR-0071 / ADR-0073 explicit non-authoritative Replay — never production shadowing).",
+  "databaseIsolation": "disposable isolated PostgreSQL schema on the DATABASE_URL server; dropped after the run",
+  "memoryWriteSwitches": {
+    "fastPathExtraction": false,
+    "memoryConsolidation": false,
+    "memoryRetrieval": false
+  },
+  "roleConfigurations": [
+    {
+      "configVersion": "conversation-text-champion:v1:memory-extract",
+      "model": "deepseek-v4-flash",
+      "policyVersion": "memory-extraction:v1",
+      "promptFingerprint": "memory-extract:propose:v1",
+      "role": "memory.extract"
+    },
+    {
+      "configVersion": "conversation-text-champion:v1:entity-resolve",
+      "model": "deepseek-v4-flash",
+      "policyVersion": "entity-resolve-gate:v1",
+      "promptFingerprint": "entity-resolve:gate:v1",
+      "role": "entity.resolve"
+    },
+    {
+      "configVersion": "conversation-text-champion:v1:memory-consolidate",
+      "model": "deepseek-v4-flash",
+      "policyVersion": "memory-consolidation:v1",
+      "promptFingerprint": "memory-consolidate:diffs:v1",
+      "role": "memory.consolidate"
+    }
+  ],
+  "scenarioIsolation": "conversation and memory state (entities, claims, candidates, retrieval runs, trust actions) is reset between scenarios; within-scenario multi-turn and cross-day continuity is preserved",
+  "scenarioFile": {
+    "path": "eval/scenario-pack-v3/scenarios.json",
+    "scenarioCount": 54,
+    "sha256": "0b14bccf90f7f550bfe186ed1ee997539b611fd3a9434d47871a1a7aeb53cb73"
+  },
+  "seam": "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway (catalog v2) + Context Compiler (+ Structured-Lexical retrieval in the on arm) -> runtime Provider Egress Port; memory-on also drives the real outbox fast-path extraction and due consolidation scans",
+  "systemVersions": {
+    "champion": {
+      "configVersion": "conversation-text-champion:v1",
+      "consentPolicyVersion": null,
+      "contextLimit": 1000000,
+      "dataRegion": "provider-configured",
+      "model": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "providerPolicyVersion": "deepseek-conversation-text:v1",
+      "retentionMode": "store-disabled",
+      "snapshot": "deepseek-v4-flash",
+      "streaming": true,
+      "supportedLocales": [
+        "en",
+        "zh"
+      ],
+      "trainingPolicy": "api-data-controls"
+    },
+    "contextCompiler": {
+      "compilerVersion": "context-compiler:v1",
+      "rawEventTokenBudget": 4000
+    },
+    "generationPolicy": {
+      "consentPolicyVersion": null,
+      "freshnessPolicy": "source_valid:v1",
+      "chineseLocalePackVersion": "locale-pack-zh:v2",
+      "englishLocalePackVersion": "locale-pack-en:v2",
+      "harnessPolicyVersion": "conversation-harness:v3",
+      "conversationActionCatalogVersion": "conversation-action-catalog:memory-trust-actions:v2",
+      "model": "deepseek-v4-flash",
+      "modelConfigVersion": "conversation-text-champion:v1",
+      "modelSnapshot": "deepseek-v4-flash",
+      "outputFormatVersion": "conversation-output:v1",
+      "canonicalPersonaVersion": "canonical-persona:v2",
+      "personaBehaviorAnchorsVersion": "persona-behavior-anchors:v2",
+      "personaContractInvariantVersion": "persona-contract-invariant:v1",
+      "productPolicyVersion": "product-policy:v1",
+      "taskInstructionVersion": "task-instruction-decision:v2",
+      "provider": "deepseek",
+      "providerPolicyVersion": "deepseek-conversation-text:v1",
+      "relationshipPolicyVersion": "relationship-boundary:v1",
+      "safetyPolicyVersion": "minimum-high-risk-response:v1"
+    },
+    "harnessPolicy": {
+      "version": "conversation-harness:v3",
+      "maxDecisionStages": 1,
+      "maxStateChangingActions": 1
+    },
+    "inactivityPolicy": {
+      "timeoutMs": 1800000,
+      "version": "continuous-exchange-inactivity:v1"
+    },
+    "providerTransport": {
+      "baseUrl": "https://api.deepseek.com",
+      "timeoutMs": 60000,
+      "type": "responses-api"
+    }
+  },
+  "gitCommit": "35e94a14e144418f287fb56b24f36770f1a8b06f"
+}
