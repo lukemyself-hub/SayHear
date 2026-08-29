@@ -167,6 +167,30 @@ describe("evaluateTrustFences", () => {
       }).find((f) => f.fence === "entity")?.passed,
     ).toBe(false);
   });
+
+  it("keeps claims on a newly introduced (unresolved) object Entity recallable", () => {
+    // Architecture §7.7-12: `unresolved` is the normal state of a newly
+    // introduced Entity; its user-stated objective facts stay recallable
+    // (SPEC #107 AC 5). The fence targets merged / split / deleted Entities.
+    expect(
+      evaluateTrustFences({
+        claim: claimState(),
+        fenceState: fenceState({
+          objectEntityVersionStatus: "unresolved",
+          objectEntityCurrentVersionStatus: "unresolved",
+        }),
+      }).find((f) => f.fence === "entity")?.passed,
+    ).toBe(true);
+    expect(
+      evaluateTrustFences({
+        claim: claimState(),
+        fenceState: fenceState({
+          objectEntityVersionStatus: "deleted",
+          objectEntityDeleted: true,
+        }),
+      }).find((f) => f.fence === "entity")?.passed,
+    ).toBe(false);
+  });
 });
 
 describe("dedupeLaneHits", () => {

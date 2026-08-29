@@ -16,6 +16,29 @@ import {
   type MemoryCandidateProposal,
   type RegistryEntryLookup,
 } from "./memory-claim/types";
+import { loadPredicateRegistrySnapshot } from "./predicate-registry";
+
+/**
+ * The released predicate ids the provider may choose from — the same
+ * snapshot the admission path pins. Providers cannot know the registry, and
+ * invented predicate ids can only ever land in `needs_predicate_review`,
+ * so the extraction request carries the real selection space (issue #126
+ * evidence runs exposed this: every real responses-api proposal invented
+ * ids like `sh.predicate.employment` and never reached a recallable Claim).
+ */
+const RELEASED_PREDICATE_IDS: readonly string[] = loadPredicateRegistrySnapshot(
+  1,
+).entries.map((entry) => entry.predicateId);
+/**
+ * The relationship subset: relationship identity is the canonical Entity
+ * pair, so providers must not attach typed values to these predicates
+ * (proposal validation enforces it; the egress normalizer strips stray
+ * values before that check).
+ */
+const RELEASED_RELATIONSHIP_PREDICATE_IDS: readonly string[] =
+  loadPredicateRegistrySnapshot(1).entries
+    .filter((entry) => entry.relationshipSemantics !== null)
+    .map((entry) => entry.predicateId);
 
 /**
  * Fast-path extraction workflow (SPEC #107 "Two-speed pipeline", issue #113,
@@ -142,6 +165,10 @@ export type MemoryExtractProvider = Readonly<{
   role: "memory.extract";
   extract(
     input: {
+      /** The released predicate ids the provider may choose from (or null). */
+      predicateIds?: readonly string[];
+      /** The relationship subset — identity is the Entity pair, never a typed value. */
+      relationshipPredicateIds?: readonly string[];
       revisions: readonly Readonly<{
         revisionId: string;
         sequenceNo: number;
@@ -967,6 +994,8 @@ export async function runFastPathExtraction(input: {
       (invocation) =>
         dependencies.memoryExtract.extract(
           {
+            predicateIds: RELEASED_PREDICATE_IDS,
+            relationshipPredicateIds: RELEASED_RELATIONSHIP_PREDICATE_IDS,
             revisions: batch.map((revision) => ({
               revisionId: revision.revisionId,
               sequenceNo: revision.sequenceNo,

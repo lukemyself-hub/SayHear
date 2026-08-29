@@ -56,6 +56,89 @@ export type JournalRoleProviderRegistry = Readonly<{
  * keeps role selection, prompt fingerprints, and source-text handling out of
  * web, workflow, and persistence callers.
  */
+/**
+ * Deterministic normalization of provider extraction output: shapes the
+ * deterministic validators treat as structural errors but that carry no
+ * information are corrected here instead of failing the whole batch
+ * (observed with DeepSeek): omitted empty arrays (`clarifications` and
+ * siblings — a TypeError on `.length`, not a typed rejection), a non-named
+ * mention flagged as a new introduction, a typed value attached to a
+ * relationship predicate (identity is the Entity pair — the stray value is
+ * dropped, not rejected), and non-relationship candidates without any
+ * concrete value (dropped: there is nothing to admit).
+ */
+function normalizeExtractBatch(
+  batch: readonly unknown[],
+  relationshipPredicateIds: ReadonlySet<string>,
+): readonly unknown[] {
+  return batch.map((element) => {
+    if (typeof element !== "object" || element === null) return element;
+    const revision = element as {
+      candidates?: readonly Record<string, unknown>[];
+      clarifications?: unknown;
+      evidence?: unknown;
+      mentions?: readonly {
+        mentionKind?: unknown;
+        newIntroduction?: unknown;
+      }[];
+    };
+    const candidates = (
+      Array.isArray(revision.candidates) ? revision.candidates : []
+    )
+      .map((candidate) => {
+        const isRelationship =
+          typeof candidate.predicateId === "string" &&
+          relationshipPredicateIds.has(candidate.predicateId);
+        return {
+          ...candidate,
+          ...(isRelationship ? { typedValue: "" } : {}),
+          ...(Array.isArray(candidate.evidenceLocatorKeys)
+            ? {}
+            : { evidenceLocatorKeys: [] }),
+          ...(Array.isArray(candidate.qualifiers) ? {} : { qualifiers: [] }),
+          ...(!candidate.temporal || typeof candidate.temporal !== "object"
+            ? {
+                temporal: {
+                  temporalStatus: "unknown",
+                  validFrom: null,
+                  validFromPrecision: "unknown",
+                  validTo: null,
+                  validToPrecision: "unknown",
+                },
+              }
+            : {}),
+        };
+      })
+      .filter((candidate) => {
+        const isRelationship =
+          typeof candidate.predicateId === "string" &&
+          relationshipPredicateIds.has(candidate.predicateId);
+        const typed =
+          typeof candidate.typedValue === "string"
+            ? candidate.typedValue.trim()
+            : "";
+        return isRelationship || typed !== "";
+      });
+    return {
+      ...revision,
+      candidates,
+      ...(Array.isArray(revision.clarifications)
+        ? {}
+        : { clarifications: [] }),
+      ...(Array.isArray(revision.evidence) ? {} : { evidence: [] }),
+      mentions: (Array.isArray(revision.mentions) ? revision.mentions : []).map(
+        (mention) =>
+          mention !== null &&
+          typeof mention === "object" &&
+          mention.mentionKind !== "named" &&
+          mention.newIntroduction === true
+            ? { ...mention, newIntroduction: false }
+            : mention,
+      ),
+    };
+  });
+}
+
 export function createRuntimeJournalRoleProviderRegistry(input: {
   adapter: Adapter;
   roles: readonly JournalRoleConfiguration[];
@@ -153,7 +236,8 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
     memoryExtractor: {
       role: "memory.extract",
       async extract(request, invocation) {
-        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. Return ONLY a JSON ARRAY with exactly one object per input revision — a single revision is a one-element array, never a bare object. Each element: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
+        const relationshipIds = new Set(request.relationshipPredicateIds ?? []);
+        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. Return ONLY a JSON ARRAY with exactly one object per input revision — a single revision is a one-element array, never a bare object. Each element: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. predicateId MUST be copied verbatim from request.predicateIds when one fits; if none fits, use null with a proposedConcept — NEVER invent a predicate id. Predicates listed in request.relationshipPredicateIds describe person-to-person relationships: leave their typedValue EMPTY ("" — identity is the Entity pair) and bind objectMentionIndex to the other person's mention. Non-relationship candidates need a non-empty typedValue string — omit the candidate entirely when the user stated no concrete value. Every evidenceLocatorKeys element and every mention.evidenceLocatorKey MUST be a locatorKey that appears verbatim in this revision's evidence array. newIntroduction may be true only when mentionKind is 'named'. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
         if (!Array.isArray(parsed)) {
           // Providers occasionally answer a single-revision batch with the
           // bare element instead of the array (observed with DeepSeek). The
@@ -163,11 +247,17 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
             typeof parsed === "object" && parsed !== null &&
             "revisionId" in parsed
           ) {
-            return [parsed as unknown] as readonly MemoryExtractRevisionResult[];
+            return normalizeExtractBatch(
+              [parsed as unknown],
+              relationshipIds,
+            ) as readonly MemoryExtractRevisionResult[];
           }
           throw new Error("memory.extract returned non-array output.");
         }
-        return parsed as readonly MemoryExtractRevisionResult[];
+        return normalizeExtractBatch(
+          parsed as readonly unknown[],
+          relationshipIds,
+        ) as readonly MemoryExtractRevisionResult[];
       },
     },
     entityResolver: {

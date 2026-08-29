@@ -50,8 +50,17 @@ export function evaluateTrustFences(input: {
         state.subjectEntityCurrentVersionStatus === "active" &&
         !state.subjectEntityDeleted &&
         (input.claim.objectEntityId === null ||
-          (state.objectEntityVersionStatus === "active" &&
-            state.objectEntityCurrentVersionStatus === "active" &&
+          // `unresolved` is the normal state of a newly introduced Entity
+          // (clarification happens only on semantic impact, architecture
+          // §7.7-12); its user-stated objective facts stay recallable. The
+          // fence exists to keep claims off merged / split / deleted
+          // Entities, not to gate pending introductions.
+          (["active", "unresolved"].includes(
+            state.objectEntityVersionStatus ?? "",
+          ) &&
+            ["active", "unresolved"].includes(
+              state.objectEntityCurrentVersionStatus ?? "",
+            ) &&
             !state.objectEntityDeleted)),
     },
     { fence: "correction", passed: state.versionStatus !== "superseded" },
@@ -84,12 +93,20 @@ export type DedupedCandidate = LaneCandidateHit &
 /**
  * Cross-lane dedupe by `claim_version_id`: the highest-priority lane wins and
  * the demoted lanes are recorded on the surviving hit (architecture §10.2 —
- * no cross-lane score fusion, strict lane priority).
+ * no cross-lane score fusion, strict lane priority). `matchedTerms` is
+ * evidence vocabulary, not a rank signal: the surviving hit keeps the union
+ * of every lane's matched terms so the relevance cutoffs and the manifest
+ * see the full match evidence (a structured_exact hit that also matched two
+ * lexical terms must not read as "no independent terms").
  */
 export function dedupeLaneHits(
   hits: readonly LaneCandidateHit[],
 ): readonly DedupedCandidate[] {
   const byVersion = new Map<string, DedupedCandidate>();
+  const mergeTerms = (
+    left: readonly string[],
+    right: readonly string[],
+  ): readonly string[] => [...new Set([...left, ...right])];
   for (const hit of hits) {
     const existing = byVersion.get(hit.claim.versionId);
     if (!existing) {
@@ -104,6 +121,7 @@ export function dedupeLaneHits(
         dedupeBeatenLanes: [...existing.dedupeBeatenLanes, existing.lane].sort(
           (a, b) => RETRIEVAL_LANE_PRIORITY.indexOf(a) - RETRIEVAL_LANE_PRIORITY.indexOf(b),
         ),
+        matchedTerms: mergeTerms(hit.matchedTerms, existing.matchedTerms),
       });
     } else {
       byVersion.set(hit.claim.versionId, {
@@ -111,6 +129,7 @@ export function dedupeLaneHits(
         dedupeBeatenLanes: [...existing.dedupeBeatenLanes, hit.lane].sort(
           (a, b) => RETRIEVAL_LANE_PRIORITY.indexOf(a) - RETRIEVAL_LANE_PRIORITY.indexOf(b),
         ),
+        matchedTerms: mergeTerms(existing.matchedTerms, hit.matchedTerms),
       });
     }
   }
