@@ -36,12 +36,15 @@ import {
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   ENGLISH_LOCALE_PACK_VERSION,
   ENTITY_RESOLVE_GATE_POLICY_VERSION,
+  ENTITY_RESOLVE_T_AUTO,
   FAST_PATH_EXTRACTION_POLICY_VERSION,
+  MEMORY_BUDGETS_POLICY_VERSION,
   MEMORY_CONSOLIDATION_POLICY_VERSION,
   MEMORY_RETRIEVAL_POLICY_VERSION,
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
+  PORTRAIT_SELECTION_POLICY_VERSION,
   RECALL_EXPERIENCE_CONTRACT_VERSION,
   RETRIEVAL_BROAD_TERM_STOP_LIST,
   SAFETY_RESOURCE_WHITELIST_VERSION,
@@ -337,6 +340,8 @@ export const TWIN_SCENARIO_RESET_TABLES = `
 export function twinCutoverPins(input: {
   champion: ConversationTextChampion;
   registryVersion: number;
+  /** The t_auto the loaded fast-path policy actually enforced this run. */
+  tAuto: number;
 }): Record<string, unknown> {
   // The single source of the pin list: the constants the production assembly
   // itself resolves, so the manifest cannot drift from what actually ran
@@ -351,7 +356,7 @@ export function twinCutoverPins(input: {
     },
     entityResolvePolicy: {
       policyVersion: ENTITY_RESOLVE_GATE_POLICY_VERSION,
-      tAuto: 0.9,
+      tAuto: input.tAuto,
     },
     fastPathExtractionPolicyVersion: FAST_PATH_EXTRACTION_POLICY_VERSION,
     harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
@@ -361,9 +366,9 @@ export function twinCutoverPins(input: {
     },
     memoryConsolidationPolicyVersion: MEMORY_CONSOLIDATION_POLICY_VERSION,
     memoryRetrieval: {
-      memoryBudgets: "memory-budgets:v1",
+      memoryBudgets: MEMORY_BUDGETS_POLICY_VERSION,
       policyVersion: MEMORY_RETRIEVAL_POLICY_VERSION,
-      portraitSelection: "portrait-selection:v1",
+      portraitSelection: PORTRAIT_SELECTION_POLICY_VERSION,
     },
     persona: {
       anchors: PERSONA_BEHAVIOR_ANCHORS_VERSION,
@@ -864,10 +869,10 @@ export async function runTwinCapture(input: {
           surface: normalizeRetrievalTerm(surface.text),
         })),
       )
-      .reduce((byePredicate, entry) => {
-        const existing = byePredicate.get(entry.predicateId) ?? [];
-        byePredicate.set(entry.predicateId, [...existing, entry.surface]);
-        return byePredicate;
+      .reduce((byPredicate, entry) => {
+        const existing = byPredicate.get(entry.predicateId) ?? [];
+        byPredicate.set(entry.predicateId, [...existing, entry.surface]);
+        return byPredicate;
       }, new Map<string, readonly string[]>()),
   );
   const trustActionTargetResolver: TrustActionTargetResolver = {
@@ -1093,6 +1098,10 @@ export async function runTwinCapture(input: {
     compilerVersion: "context-compiler:v1",
     rawEventTokenBudget: 4_000,
   } as const;
+  // The t_auto pin records what the loaded policy actually enforced (the
+  // seeded policy row); the constant is the fallback when the run never
+  // loaded it (the off arm never dispatches extraction).
+  const loadedFastPathPolicy = await fastPathPolicyPromise.catch(() => null);
   const manifest: TwinManifest = {
     artifactClass: "non_authoritative_eval_output",
     arm,
@@ -1101,6 +1110,7 @@ export async function runTwinCapture(input: {
     cutoverPins: twinCutoverPins({
       champion,
       registryVersion: predicateRegistrySnapshot.registryVersion,
+      tAuto: loadedFastPathPolicy?.tAuto ?? ENTITY_RESOLVE_T_AUTO,
     }),
     dataSourceDeclaration:
       "Fully synthetic scenario material (see the pack file); no real private conversation is read (ADR-0020 Initial Replay, ADR-0071 / ADR-0073 explicit non-authoritative Replay — never production shadowing).",

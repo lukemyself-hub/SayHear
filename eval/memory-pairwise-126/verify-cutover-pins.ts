@@ -26,6 +26,7 @@ import {
   CHINESE_LOCALE_PACK_VERSION,
   ENGLISH_LOCALE_PACK_VERSION,
   ENTITY_RESOLVE_GATE_POLICY_VERSION,
+  ENTITY_RESOLVE_T_AUTO,
   FAST_PATH_EXTRACTION_POLICY_VERSION,
   MEMORY_BUDGETS_POLICY_VERSION,
   MEMORY_CONSOLIDATION_POLICY_VERSION,
@@ -59,7 +60,9 @@ export function expectedPinList(): Record<string, unknown> {
     },
     entityResolvePolicy: {
       policyVersion: ENTITY_RESOLVE_GATE_POLICY_VERSION,
-      tAuto: 0.9,
+      // The fixture-calibrated runtime constant; the manifest records the
+      // t_auto its loaded policy actually enforced, so drift fails here.
+      tAuto: ENTITY_RESOLVE_T_AUTO,
     },
     evalChannel: {
       scenarioPack: "scenario-pack:v3",

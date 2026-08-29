@@ -83,6 +83,7 @@ export const MEMORY_SAMPLE_FORCED_COVERAGE = Object.freeze([
   "memory_objective",
   "memory_impression",
   "memory_continuity",
+  "memory_temporal",
   "post_correction",
   "post_forget",
 ] as const);
@@ -398,6 +399,12 @@ export function buildMemoryPairs(
       languageVariant: scenario.languageVariant as SampleLanguageVariant,
     }),
   );
+  const coverageTagsByScenario = new Map(
+    input.memoryOn.scenarios.map((scenario) => [
+      scenario.id,
+      categoriesOf(scenario, packById.get(scenario.id)),
+    ]),
+  );
   const pairScenarios = input.memoryOn.scenarios.map(comparable);
   const pairById = new Map(
     pairScenarios.map((pair) => [pair.scenarioId, pair]),
@@ -424,13 +431,24 @@ export function buildMemoryPairs(
   const blinded: PairScenario[] = selectedPairs.map((pair, ordinal) => {
     const assignment = identityAssignmentForScenario(input.seed, ordinal);
     mapping[pair.scenarioId] = assignment;
+    // The ADR-0114 forced-coverage tags travel with the pair so the unblind
+    // gates can match fence-reason keys (post_correction / post_forget)
+    // that are not the scenario's pack category.
+    const tagged: PairScenario = {
+      ...pair,
+      ...(coverageTagsByScenario.get(pair.scenarioId)
+        ? {
+            coverageTags: coverageTagsByScenario.get(pair.scenarioId) ?? [],
+          }
+        : {}),
+    };
     if (assignment.A === "baseline") {
       // A shows the Memory-off twin, B the Memory-on twin.
-      return pair;
+      return tagged;
     }
     return {
-      ...pair,
-      turns: pair.turns.map((turn) => ({
+      ...tagged,
+      turns: tagged.turns.map((turn) => ({
         ...turn,
         responseA: turn.responseB,
         responseB: turn.responseA,

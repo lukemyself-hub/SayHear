@@ -36,8 +36,7 @@ const FORBIDDEN_TABLE_PATTERN =
 const FORBIDDEN_EXTENSION_PATTERN = /create\s+extension[^;]*\bvector\b/i;
 
 /** Code-level markers that would betray a built vector / backfill path. */
-const FORBIDDEN_CODE_PATTERN = /\b(pgvector|embedding|embeddings|backfill)\b/i;
-
+const FORBIDDEN_CODE_PATTERN = /\b(pgvector|embeddings?|backfill)\b/i;
 /** Lines that only talk about the forbidden artifact (comments) are expected. */
 function isCommentLine(line: string): boolean {
   const trimmed = line.trimStart();
@@ -110,6 +109,7 @@ export async function runScopeProtectionChecks(input: {
     path.join(REPOSITORY_ROOT, "packages/data/src"),
     path.join(REPOSITORY_ROOT, "packages/domain/src"),
     path.join(REPOSITORY_ROOT, "apps/web/src"),
+    path.join(REPOSITORY_ROOT, "apps/web/app"),
     path.join(REPOSITORY_ROOT, "scripts"),
   ]) {
     for (const file of await listFiles(sourceRoot, ".ts")) {

@@ -96,6 +96,13 @@ export type PairScenario = Readonly<{
   category: string;
   languageVariant: string;
   description: string;
+  /**
+   * #126 memory runs: the ADR-0114 forced-coverage tags this scenario
+   * satisfies beyond its pack category (e.g. fence reasons like
+   * post_correction / post_forget). Optional and ignored by the v2 review
+   * page; the unblind gates match coverage keys against category ∪ tags.
+   */
+  coverageTags?: readonly string[];
   turns: readonly PairTurn[];
 }>;
 

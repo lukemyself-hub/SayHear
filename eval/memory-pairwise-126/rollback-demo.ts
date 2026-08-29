@@ -24,9 +24,9 @@
  *   pnpm exec tsx eval/memory-pairwise-126/rollback-demo.ts \
  *     --out eval/memory-pairwise-126/rollback-demo [--force]
  */
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -47,7 +47,7 @@ import {
   type ConversationTextChampion,
   type GenerationPolicy,
 } from "@sayhear/application";
-import { createRuntimeJournalRoleProviderRegistry, createRuntimeProviderEgressPort } from "@sayhear/ai";
+import { createRuntimeProviderEgressPort } from "@sayhear/ai";
 import {
   PostgresConversationResponseRepository,
   PostgresJournalRegenerationActionRepository,
@@ -59,14 +59,19 @@ import type { Pool } from "pg";
 
 import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
 import {
+  buildChampionAssembly,
+  buildMemoryRoleRegistry,
+  gitCommit,
+  loadDotEnv,
+  REPOSITORY_ROOT,
+} from "./shared";
+import {
   runTwinCapture,
   toProviderAdapterConfig,
   type TwinConversationAdapter,
   type TwinRoleRegistry,
   type TwinScenario,
 } from "./twin-harness";
-
-const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 
 /**
  * The demo scenario: a day-1 statement the fast path can extract, a cross-day
@@ -102,11 +107,6 @@ type DemoTurn = Readonly<{
   sequenceInScenario: number;
   wallMs: number;
 }>;
-
-async function countRows(pool: Pool, table: string): Promise<number> {
-  const result = await pool.query(`SELECT COUNT(*)::text AS count FROM ${table}`);
-  return Number(result.rows[0]!.count);
-}
 
 async function readNdjson(
   response: Response,
@@ -226,9 +226,9 @@ async function runRevertedTurn(input: {
       body: JSON.stringify({
         clientEventId: "rollback-demo-post-revert-event",
         clientTurnId: "rollback-demo-post-revert-turn",
-        locale: "en-US",
+        locale: "zh-CN",
         text: input.text,
-        timezone: "America/Los_Angeles",
+        timezone: "Asia/Shanghai",
       }),
       headers: { "content-type": "application/json" },
       method: "POST",
@@ -248,8 +248,12 @@ async function runRevertedTurn(input: {
     typeof sections === "object" && sections !== null
       ? (sections as Record<string, unknown>)
       : {};
-  const memorySectionsInContext = (["person_portrait", "objective_memory", "ai_impression"] as const).filter(
-    (section) => Array.isArray(sectionsRecord[section]) && sectionsRecord[section]!.length > 0,
+  const memorySectionsInContext = (
+    ["person_portrait", "objective_memory", "ai_impression"] as const
+  ).filter(
+    (section) =>
+      Array.isArray(sectionsRecord[section]) &&
+      sectionsRecord[section]!.length > 0,
   ).length;
   return {
     memorySectionsInContext,
@@ -259,13 +263,35 @@ async function runRevertedTurn(input: {
       finalEventType: String(events.at(-1)?.type ?? "none"),
       injectedMemories: 0,
       input: {
-        locale: "en-US",
+        locale: "zh-CN",
         text: input.text,
-        timezone: "America/Los_Angeles",
+        timezone: "Asia/Shanghai",
       },
       sequenceInScenario: 4,
       wallMs,
     },
+  };
+}
+
+/** A content digest of the memory data face — proves "frozen" beyond counts. */
+async function memoryFaceDigest(
+  pool: Pool,
+): Promise<{ claims: number; claimVersions: number; digest: string }> {
+  const rows = await pool.query<{ claim_id: string; version_id: string }>(
+    `SELECT claim.memory_claim_id::text AS claim_id, claim.current_version_id::text AS version_id
+     FROM memory_claims claim
+     ORDER BY claim.memory_claim_id`,
+  );
+  const versions = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM memory_claim_versions`,
+  );
+  const digest = createHash("sha256")
+    .update(rows.rows.map((row) => `${row.claim_id}:${row.version_id}`).join("\n"))
+    .digest("hex");
+  return {
+    claims: rows.rows.length,
+    claimVersions: Number(versions.rows[0]!.count),
+    digest,
   };
 }
 
@@ -311,8 +337,7 @@ export async function runRollbackDemo(input: {
       wallMs: turn.wallMs,
     })),
   );
-  const claimsBefore = await countRows(input.pool, "memory_claims");
-  const claimVersionsBefore = await countRows(input.pool, "memory_claim_versions");
+  const faceBefore = await memoryFaceDigest(input.pool);
   const epochBefore = await input.pool.query(
     `SELECT data_epoch::text AS epoch FROM app_users WHERE user_id = $1`,
     [fixedInternalOwnerPrincipal.userId],
@@ -322,7 +347,7 @@ export async function runRollbackDemo(input: {
     0,
   );
   log(
-    `[rollback-demo] phase A: ${claimsBefore} claims, ${injectedDuringCutover} injected memory item(s) across turns`,
+    `[rollback-demo] phase A: ${faceBefore.claims} claims, ${injectedDuringCutover} injected memory item(s) across turns`,
   );
 
   // ── Phase B: code revert + re-pin over the same database ─────────────────
@@ -338,8 +363,7 @@ export async function runRollbackDemo(input: {
     pool: input.pool,
     text: "对了，我最近入职的这家公司叫什么来着？想跟朋友提一下。",
   });
-  const claimsAfter = await countRows(input.pool, "memory_claims");
-  const claimVersionsAfter = await countRows(input.pool, "memory_claim_versions");
+  const faceAfter = await memoryFaceDigest(input.pool);
   const epochAfter = await input.pool.query(
     `SELECT data_epoch::text AS epoch FROM app_users WHERE user_id = $1`,
     [fixedInternalOwnerPrincipal.userId],
@@ -347,7 +371,8 @@ export async function runRollbackDemo(input: {
 
   // ── Proofs ────────────────────────────────────────────────────────────────
   const claimsFrozen =
-    claimsBefore === claimsAfter && claimVersionsBefore === claimVersionsAfter;
+    faceBefore.digest === faceAfter.digest &&
+    faceBefore.claimVersions === faceAfter.claimVersions;
   const epochFrozen =
     epochBefore.rows[0]?.epoch === epochAfter.rows[0]?.epoch;
   const noMemoryAfterRevert = postRevert.memorySectionsInContext === 0;
@@ -367,18 +392,20 @@ export async function runRollbackDemo(input: {
       "disposable isolated PostgreSQL schema on the DATABASE_URL server; dropped after the run",
     phaseA: {
       arm: "on",
-      claims: claimsBefore,
-      claimVersions: claimVersionsBefore,
+      claims: faceBefore.claims,
+      claimVersions: faceBefore.claimVersions,
       injectedMemoryItems: injectedDuringCutover,
+      memoryFaceDigest: faceBefore.digest,
       turns: phaseATurns.length,
     },
     phaseB: {
       assembly:
         "code-reverted incumbent stack: journal-regeneration catalog, no fast-path enqueue, no consolidation, no retrieval port",
       catalogVersion: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.version,
-      claimsAfter,
-      claimVersionsAfter,
+      claimsAfter: faceAfter.claims,
+      claimVersionsAfter: faceAfter.claimVersions,
       epochAfter: epochAfter.rows[0]?.epoch ?? null,
+      memoryFaceDigestAfter: faceAfter.digest,
       memorySectionsInContext: postRevert.memorySectionsInContext,
       turn: postRevert.turn,
     },
@@ -387,43 +414,12 @@ export async function runRollbackDemo(input: {
       dataEpochUntouched: epochFrozen,
       noMemoryPathAfterRevert: noMemoryAfterRevert,
       rollbackFormula:
-        "code revert + re-pin of the pre-1A.3a strategy versions; post-cutover Entity / Claim data frozen in place (dormant without a code path), never silently deleted",
+        "code revert + re-pin of the pre-1A.3a strategy versions; post-cutover Entity / Claim data frozen in place (dormant without a code path; sha256 over claim ids + current version ids is unchanged), never silently deleted",
     },
     scenarioIsolation: "single inline synthetic scenario; the schema is dropped after the run",
     seam: phaseA.manifest.seam,
   };
   return { manifest, ok, phaseATurns, phaseBTurn: postRevert.turn };
-}
-
-/** Load repo-root .env without overriding already-set process.env values. */
-function loadDotEnv(): void {
-  const envPath = path.join(REPOSITORY_ROOT, ".env");
-  if (!existsSync(envPath)) return;
-  for (const line of readFileSync(envPath, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
-    const separator = trimmed.indexOf("=");
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    const value = trimmed
-      .slice(separator + 1)
-      .trim()
-      .replace(/^["']|["']$/g, "");
-    if (process.env[key] === undefined) {
-      process.env[key] = value;
-    }
-  }
-}
-
-function gitCommit(): string {
-  try {
-    return execFileSync("git", ["-C", REPOSITORY_ROOT, "rev-parse", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return "unknown";
-  }
 }
 
 async function main(): Promise<void> {
@@ -444,117 +440,12 @@ async function main(): Promise<void> {
 
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required.");
-  const adapter =
-    process.env.SAYHEAR_PROVIDER_ADAPTER === "openai" ? "openai" : "deepseek";
-  const apiKey =
-    adapter === "deepseek"
-      ? process.env.DEEPSEEK_API_KEY
-      : process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error(`${adapter.toUpperCase()}_API_KEY is required.`);
-  const model = process.env.SAYHEAR_CONVERSATION_TEXT_MODEL ??
-    (adapter === "deepseek" ? "deepseek-v4-flash" : "gpt-5.4");
-  const champion: ConversationTextChampion = Object.freeze({
-    configVersion: "conversation-text-champion:v1",
-    consentPolicyVersion: null,
-    contextLimit: 1_000_000,
-    dataRegion: "provider-configured",
-    model,
-    provider: adapter,
-    providerPolicyVersion:
-      adapter === "deepseek"
-        ? "deepseek-conversation-text:v1"
-        : "openai-conversation-text:v1",
-    retentionMode: "store-disabled",
-    snapshot: model,
-    streaming: true,
-    supportedLocales: Object.freeze(["en", "zh"]),
-    trainingPolicy: "api-data-controls",
+  const { champion, conversationAdapter } = buildChampionAssembly(process.env);
+  const roleRegistry = buildMemoryRoleRegistry(conversationAdapter, {
+    championConfigVersion: champion.configVersion,
+    model: champion.model,
+    provider: champion.provider,
   });
-  const conversationAdapter: TwinConversationAdapter = {
-    apiKey,
-    baseUrl:
-      adapter === "deepseek"
-        ? process.env.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com"
-        : "https://api.openai.com/v1",
-    timeoutMs: Number(process.env.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000"),
-    type: "responses-api",
-  };
-
-  // The same memory role cluster as capture-twins.
-  const roleRegistry = createRuntimeJournalRoleProviderRegistry({
-    adapter: {
-      apiKey,
-      baseUrl: conversationAdapter.type === "responses-api" ? conversationAdapter.baseUrl : "",
-      timeoutMs: conversationAdapter.type === "responses-api" ? conversationAdapter.timeoutMs : 60_000,
-      type: "responses-api",
-    },
-    roles: [
-      {
-        role: "memory.extract",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:memory-extract`,
-        policyVersion: "memory-extraction:v1",
-        promptFingerprint: "memory-extract:propose:v1",
-      },
-      {
-        role: "entity.resolve",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:entity-resolve`,
-        policyVersion: "entity-resolve-gate:v1",
-        promptFingerprint: "entity-resolve:gate:v1",
-      },
-      {
-        role: "memory.consolidate",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:memory-consolidate`,
-        policyVersion: "memory-consolidation:v1",
-        promptFingerprint: "memory-consolidate:diffs:v1",
-      },
-      {
-        role: "evidence.extract",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:evidence`,
-        policyVersion: "evidence-extraction:v2",
-        promptFingerprint: "evidence-extract:spans:v2",
-      },
-      {
-        role: "journal.draft",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:journal-draft`,
-        policyVersion: "journal-generation:v2",
-        promptFingerprint: "journal-draft:evidence-only:v2",
-      },
-      {
-        role: "journal.validate",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:journal-validate`,
-        policyVersion: "journal-validator:v3",
-        promptFingerprint: "journal-validate:diagnostic:v3",
-      },
-      {
-        role: "dialogue.state",
-        provider: adapter,
-        model,
-        configVersion: "dialogue-state-model:v1",
-        policyVersion: "dialogue-state:v2",
-        promptFingerprint: "dialogue-state-prompt:v2",
-      },
-      {
-        role: "summary.compress",
-        provider: adapter,
-        model,
-        configVersion: `${champion.configVersion}:summary`,
-        policyVersion: "rolling-summary:v1",
-        promptFingerprint: "rolling-summary:neutral-structured:v1",
-      },
-    ],
-  }) as unknown as TwinRoleRegistry;
 
   const database = await createIsolatedPostgresSchema(databaseUrl);
   console.log("[rollback-demo] isolated schema created");

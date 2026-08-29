@@ -15,7 +15,7 @@ import {
   PERSONA_CONTRACT_INVARIANT_VERSION,
   type ConversationTextChampion,
 } from "@sayhear/application";
-import { createRuntimeJournalRoleProviderRegistry } from "@sayhear/ai";
+import { buildMemoryRoleRegistry } from "../../eval/memory-pairwise-126/shared";
 import { runMigrations } from "@sayhear/data";
 import {
   createIsolatedPostgresSchema,
@@ -117,77 +117,16 @@ const SCENARIOS: readonly TwinScenario[] = [
   },
 ];
 
-/** The scripted memory.extract: one objective proposal per marker statement. */
+/** The scripted memory roles over the shared deterministic registry. */
 function scriptedRoleRegistry(): TwinRoleRegistry {
-  const registry = createRuntimeJournalRoleProviderRegistry({
-    adapter: { type: "deterministic" },
-    roles: [
-      {
-        role: "memory.extract",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:memory-extract",
-        policyVersion: "memory-extraction:v1",
-        promptFingerprint: "memory-extract:propose:v1",
-      },
-      {
-        role: "entity.resolve",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:entity-resolve",
-        policyVersion: "entity-resolve-gate:v1",
-        promptFingerprint: "entity-resolve:gate:v1",
-      },
-      {
-        role: "memory.consolidate",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:memory-consolidate",
-        policyVersion: "memory-consolidation:v1",
-        promptFingerprint: "memory-consolidate:diffs:v1",
-      },
-      {
-        role: "evidence.extract",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:evidence",
-        policyVersion: "evidence-extraction:v2",
-        promptFingerprint: "evidence-extract:spans:v2",
-      },
-      {
-        role: "journal.draft",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:journal-draft",
-        policyVersion: "journal-generation:v2",
-        promptFingerprint: "journal-draft:evidence-only:v2",
-      },
-      {
-        role: "journal.validate",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:journal-validate",
-        policyVersion: "journal-validator:v3",
-        promptFingerprint: "journal-validate:diagnostic:v3",
-      },
-      {
-        role: "dialogue.state",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "dialogue-state-model:v1",
-        policyVersion: "dialogue-state:v2",
-        promptFingerprint: "dialogue-state-prompt:v2",
-      },
-      {
-        role: "summary.compress",
-        provider: "deterministic",
-        model: "deterministic-test-model",
-        configVersion: "conversation-text-champion:v1:summary",
-        policyVersion: "rolling-summary:v1",
-        promptFingerprint: "rolling-summary:neutral-structured:v1",
-      },
-    ],
-  });
+  const registry = buildMemoryRoleRegistry(
+    { type: "deterministic" },
+    {
+      championConfigVersion: "conversation-text-champion:v1",
+      model: "deterministic-test-model",
+      provider: "deterministic",
+    },
+  );
   return {
     ...registry,
     memoryExtractor: {
@@ -452,6 +391,11 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
       expect(pairs.protocol).toBe("blind-pairwise:v2");
       expect(pairs.scenarios).toHaveLength(2);
       expect(pairs.sampling).toBeUndefined();
+      // The forced-coverage tags travel with each pair (fence reasons are
+      // not pack categories).
+      for (const scenario of pairs.scenarios) {
+        expect(scenario.coverageTags).toContain("memory_objective");
+      }
       for (const scenario of pairs.scenarios) {
         expect(scenario.turns).toHaveLength(3);
         for (const turn of scenario.turns) {
@@ -531,8 +475,172 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
     expect(issues).toEqual([]);
   });
 
-  it("the ADR-0114 memory sample satisfies quotas and forced coverage deterministically", () => {
-    // A miniature pool mirroring the pack's memory distribution plus general
+  it("the shared unblind gates compute over the memory coverage keys (issue #126 gate mechanics)", async () => {
+    // A synthetic pairs file in exactly the shape build-memory-pairs emits
+    // (sampling.protectedCoverage over ADR-0114 memory keys; fence-reason
+    // coverage tags instead of pack categories), scored completely, then run
+    // through the REAL unblind CLI. This pins the fix for the gate that used
+    // to demand the #79 general categories on a memory run.
+    const { execFileSync } = await import("node:child_process");
+    const { mkdtemp, writeFile, readFile } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const runUnblind = async (
+      dir: string,
+    ): Promise<{ exit: number; results: Record<string, unknown> }> => {
+      try {
+        execFileSync(
+          "pnpm",
+          [
+            "exec",
+            "tsx",
+            "eval/blind-pairwise/unblind.ts",
+            "--dir",
+            dir,
+          ],
+          { cwd: repositoryRoot, encoding: "utf8", stdio: "pipe" },
+        );
+      } catch (error) {
+        const failure = error as { status?: number };
+        // A gate failure exits non-zero; parse results either way below.
+        return {
+          exit: failure.status ?? 1,
+          results: JSON.parse(await readFile(path.join(dir, "results.json"), "utf8")),
+        };
+      }
+      return {
+        exit: 0,
+        results: JSON.parse(await readFile(path.join(dir, "results.json"), "utf8")),
+      };
+    };
+    const makeRun = async (scoreScenario: (ordinal: number) => "A" | "B") => {
+      const dir = await mkdtemp(path.join(tmpdir(), "memory-unblind-"));
+      const scenarioSpecs = [
+        {
+          category: "memory_objective",
+          coverageTags: ["memory_objective"],
+          id: "s-objective",
+          languageVariant: "en",
+        },
+        {
+          category: "memory_temporal",
+          coverageTags: ["memory_temporal", "post_forget"],
+          id: "s-temporal",
+          languageVariant: "code_switch",
+        },
+      ];
+      const mapping: Record<string, { A: string; B: string }> = {};
+      const scenarios = scenarioSpecs.map((spec, ordinal) => {
+        // Seed 0: identityAssignmentForScenario(0, 0) draws < 0.5 → A=baseline
+        // (memory-off), B=candidate (memory-on); ordinal 1 swaps.
+        mapping[spec.id] =
+          ordinal % 2 === 0
+            ? { A: "baseline", B: "candidate" }
+            : { A: "candidate", B: "baseline" };
+        return {
+          category: spec.category,
+          coverageTags: spec.coverageTags,
+          description: "synthetic memory pair",
+          languageVariant: spec.languageVariant,
+          scenarioId: spec.id,
+          turns: [1, 2].map((sequence) => ({
+            responseA: `arm A reply ${sequence}`,
+            responseB: `arm B reply ${sequence}`,
+            sequenceInScenario: sequence,
+            userInput: {
+              locale: "en-US",
+              text: `turn ${sequence}`,
+              timezone: "UTC",
+            },
+          })),
+        };
+      });
+      const pairs = {
+        baselineSource: "memory-off twin",
+        candidateSource: "memory-on twin",
+        excludedScenarios: [],
+        excludedTurns: [],
+        generatedAt: new Date().toISOString(),
+        protocol: "blind-pairwise:v2",
+        scenarios,
+        sampling: {
+          eligibleCounts: { en: 4, zh: 4, code_switch: 4 },
+          protectedCoverage: {
+            memory_objective: "s-objective",
+            memory_temporal: "s-temporal",
+            post_forget: "s-temporal",
+          },
+          quotas: { en: 1, zh: 0, code_switch: 1 },
+          sampleSeed: 1260,
+          selectedCounts: { en: 1, zh: 0, code_switch: 1 },
+          strategy: "stratified-random-v1",
+        },
+        seed: 126,
+      };
+      const scores = {
+        protocol: "blind-pairwise:v2",
+        scenarios: scenarioSpecs.map((spec, ordinal) => ({
+          overallChoice: scoreScenario(ordinal),
+          scenarioId: spec.id,
+          turns: [1, 2].map((sequence) => ({
+            choice: scoreScenario(ordinal),
+            sequenceInScenario: sequence,
+          })),
+        })),
+        scoredAt: new Date().toISOString(),
+        scorer: "gate-mechanics-test",
+      };
+      await writeFile(path.join(dir, "pairs.json"), JSON.stringify(pairs), "utf8");
+      await writeFile(
+        path.join(dir, "sealed-identities.json"),
+        JSON.stringify({ generatedAt: new Date().toISOString(), mapping, protocol: "blind-pairwise:v2", seed: 126 }),
+        "utf8",
+      );
+      await writeFile(path.join(dir, "scores.json"), JSON.stringify(scores), "utf8");
+      return dir;
+    };
+    const candidateSide = (ordinal: number) => (ordinal % 2 === 0 ? "B" : "A");
+
+    // All-candidate scoring: every gate passes, including the memory
+    // coverage keys resolved through categories and tags.
+    const passDir = await makeRun(candidateSide);
+    const passed = await runUnblind(passDir);
+    expect(passed.exit).toBe(0);
+    const passGate = (
+      (passed.results as { gate?: Record<string, { passed?: boolean }> }).gate ??
+      {}
+    );
+    expect(passGate.candidateStrictlyPreferredOverall?.passed).toBe(true);
+    expect(passGate.localeNoRegression?.passed).toBe(true);
+    expect(passGate.protectedCategoryNoRegression?.passed).toBe(true);
+    const protectedCategories = (
+      passed.results as {
+        pairwise?: {
+          protectedCategories?: Record<string, { sampledScenarios: number }>;
+        };
+      }
+    ).pairwise?.protectedCategories;
+    expect(protectedCategories?.memory_objective?.sampledScenarios).toBe(1);
+    expect(protectedCategories?.post_forget?.sampledScenarios).toBe(1);
+
+    // One forced-category bearer scored for the baseline arm fails the
+    // protected-coverage gate (net regression is not offsettable). The tool
+    // records gate verdicts in results.json; only reverse-check failures
+    // exit non-zero, so the merge decision reads the gate block.
+    const failDir = await makeRun((ordinal) =>
+      ordinal === 1 ? (candidateSide(ordinal) === "B" ? "A" : "B") : candidateSide(ordinal),
+    );
+    const failed = await runUnblind(failDir);
+    expect(failed.exit).toBe(0);
+    const failGate = (
+      (failed.results as { gate?: Record<string, { passed?: boolean; regressions?: string[] }> }).gate ?? {}
+    );
+    expect(failGate.protectedCategoryNoRegression?.passed).toBe(false);
+    expect(failGate.protectedCategoryNoRegression?.regressions).toEqual(
+      expect.arrayContaining([expect.stringContaining("post_forget")]),
+    );
+  }, 120_000);
+
+  it("the ADR-0114 memory sample satisfies quotas and forced coverage deterministically", () => {    // A miniature pool mirroring the pack's memory distribution plus general
     // filler, exercising the same constraint structure as the real run.
     const candidates = [
       { id: "mo-en", categories: ["memory_objective"], languageVariant: "en" as const },
