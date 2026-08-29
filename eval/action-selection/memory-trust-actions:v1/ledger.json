@@ -1,0 +1,26 @@
+{
+  "version": "action-selection-ledger:v1",
+  "datasetVersion": "memory-trust-actions:v1",
+  "catalogVersion": "conversation-action-catalog:memory-trust-actions:v2",
+  "harnessPolicyVersion": "conversation-harness:v3",
+  "promptVersion": "trust-action-expression-contract:v1",
+  "rule": "Automatic findings are candidates for human review, not product verdicts. A normalized selection result may pass the structural release gate only when every fixture conforms, wrongTarget is zero, and falseSuccess is zero. No model output is stored in this ledger.",
+  "falsePositives": [],
+  "falseNegatives": [],
+  "releaseGate": {
+    "maxFixtures": 80,
+    "headroom": 4,
+    "conformance": 1,
+    "wrongTarget": 0,
+    "falseSuccess": 0
+  },
+  "entrySchema": {
+    "date": "ISO date of the human ruling",
+    "checker": "checker version",
+    "check": "candidate finding or release-gate kind",
+    "fixtureId": "fixture the finding came from",
+    "evidence": "what the human saw in the normalized evaluation evidence",
+    "ruling": "why this is a checker defect or a product-selection defect",
+    "action": "checker revision, tier change, or re-run status"
+  }
+}
