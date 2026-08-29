@@ -43,6 +43,27 @@ describe("Context Compiler", () => {
     ).toBe(false);
   });
 
+  it("fails the reply round's memory closed for a committed Entity identity correction", () => {
+    expect(
+      trustActionFencesMemory({
+        actionKind: "entity_identity_correction",
+        admission: "accepted",
+        disposition: "identity_correction_committed",
+        execution: "succeeded",
+        sequence: 1,
+      }),
+    ).toBe(true);
+    expect(
+      trustActionFencesMemory({
+        actionKind: "entity_identity_correction",
+        admission: "clarification_required",
+        disposition: "target_ambiguous_multi_hit",
+        execution: "not_started",
+        sequence: 1,
+      }),
+    ).toBe(true);
+  });
+
   it("uses a valid lagging DialogueState and only sends raw Events after its coverage", async () => {
     const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
     const dailySessionId = asDailySessionId(

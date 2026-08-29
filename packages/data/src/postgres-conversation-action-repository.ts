@@ -3,6 +3,7 @@ import type {
   ConversationActionGatewayRepository,
   ConversationActionReceipt,
   PreparedConversationAction,
+  ResolvedEntityIdentityCorrectionTarget,
   ResolvedTrustActionTarget,
 } from "@sayhear/application";
 import {
@@ -407,6 +408,8 @@ export class PostgresJournalRegenerationActionRepository
     /** Anchor-mode resolved target (ADR-0118); absent for handle-mode. */
     resolvedClaim?: Readonly<{ claimId: string; claimVersionId: string }>;
     resolvedTarget?: import("@sayhear/application").ResolvedTrustActionTarget;
+    /** Admission-time resolved Entity / EntityVersion target (#121). */
+    resolvedIdentityTarget?: ResolvedEntityIdentityCorrectionTarget;
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt> {
@@ -422,6 +425,16 @@ export class PostgresJournalRegenerationActionRepository
       if (existing) {
         await client.query("COMMIT");
         return existing;
+      }
+      if (input.resolvedIdentityTarget) {
+        return await this.commitAcceptedEntityIdentityMode(client, {
+          catalogVersion: input.catalogVersion,
+          context: input.context,
+          definition: input.definition,
+          idempotencyKey,
+          prepare: input.prepare,
+          resolvedIdentityTarget: input.resolvedIdentityTarget,
+        });
       }
       // ADR-0118 anchor mode: no handle exists to lock; the resolved claim is
       // re-verified by the handler's commit port under the claim row lock
@@ -510,6 +523,11 @@ export class PostgresJournalRegenerationActionRepository
       // together fail closed on binding drift (ADR-0098). Anchor-mode
       // proposals never reach this branch (they return above).
       if (prepared.mode === "in_transaction_anchor") {
+        throw new Error(
+          "Prepared Action execution mode does not match its Definition.",
+        );
+      }
+      if (prepared.mode === "in_transaction_entity_identity") {
         throw new Error(
           "Prepared Action execution mode does not match its Definition.",
         );
@@ -748,6 +766,181 @@ export class PostgresJournalRegenerationActionRepository
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * #121 identity-correction admission: the typed Entity / EntityVersion
+   * target is persisted directly on the Execution and Receipts. The handler's
+   * commit port performs the EntityVersion, Claim, Journal-fence, and outbox
+   * writes before this transaction is committed.
+   */
+  private async commitAcceptedEntityIdentityMode(
+    client: PoolClient,
+    input: {
+      catalogVersion: string;
+      context: ConversationActionGatewayContext;
+      definition: ConversationActionDefinition;
+      idempotencyKey: string;
+      prepare: () => PreparedConversationAction;
+      resolvedIdentityTarget: ResolvedEntityIdentityCorrectionTarget;
+    },
+  ): Promise<ConversationActionReceipt> {
+    const prepared = input.prepare();
+    if (prepared.mode !== "in_transaction_entity_identity") {
+      throw new Error(
+        "Prepared Action execution mode does not match its Definition.",
+      );
+    }
+    const target = input.resolvedIdentityTarget;
+    if (
+      prepared.actionKind !== input.definition.actionKind ||
+      prepared.operation !== target.operation ||
+      prepared.sourceEntityId !== target.sourceEntityId ||
+      prepared.sourceEntityVersionId !== target.sourceEntityVersionId ||
+      prepared.targetEntityId !== target.targetEntityId ||
+      prepared.targetEntityVersionId !== target.targetEntityVersionId ||
+      prepared.newEntityLabel !== target.newEntityLabel ||
+      (prepared.promotionEvidence?.explicitStatement ?? null) !==
+        (target.promotionEvidence?.explicitStatement ?? null) ||
+      (prepared.promotionEvidence?.independentRevisionCount ?? null) !==
+        (target.promotionEvidence?.independentRevisionCount ?? null) ||
+      prepared.expectedDataEpoch !== target.expectedDataEpoch
+    ) {
+      throw new Error(
+        "Prepared Action target does not match the admission-time identity resolution.",
+      );
+    }
+    const now = new Date();
+    const actionExecutionId = createUuidV7(now);
+    const finalizationCommandId = createUuidV7(now);
+    const finalizationAttemptId = createUuidV7(now);
+    const insertedExecution = await client.query<{ action_execution_id: string }>(
+      `
+        INSERT INTO conversation_action_executions (
+          action_execution_id, user_id, decision_command_id,
+          request_event_revision_id, action_kind, schema_version,
+          catalog_version, target_handle, target_kind, target_id,
+          target_version_id, daily_session_id, source_revision,
+          expected_data_epoch, resolved_claim_id, resolved_claim_version_id,
+          resolved_qualifier_id, resolved_entity_id, resolved_entity_version_id,
+          resolved_related_entity_id, resolved_related_entity_version_id,
+          entity_identity_operation, idempotency_key, admission_status,
+          execution_status, disposition, created_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NULL,
+          'entity_identity_correction', NULL, NULL, NULL, NULL, $8,
+          NULL, NULL, NULL, $9, $10, $11, $12, $13, $14, 'accepted',
+          'succeeded', 'committed_in_transaction', $15)
+        ON CONFLICT (user_id, idempotency_key) DO NOTHING
+        RETURNING action_execution_id
+      `,
+      [
+        actionExecutionId,
+        input.context.userId,
+        input.context.decisionCommandId,
+        input.context.requestEventRevisionId,
+        input.definition.actionKind,
+        input.definition.schemaVersion,
+        input.catalogVersion,
+        prepared.expectedDataEpoch,
+        target.sourceEntityId,
+        target.sourceEntityVersionId,
+        target.targetEntityId,
+        target.targetEntityVersionId,
+        target.operation,
+        input.idempotencyKey,
+        now,
+      ],
+    );
+    if (insertedExecution.rowCount !== 1) {
+      const existing = await findReceipt(
+        client,
+        input.context.userId,
+        input.idempotencyKey,
+      );
+      if (!existing) {
+        throw new Error(
+          "The concurrent identity Action execution did not expose a Receipt.",
+        );
+      }
+      await client.query("COMMIT");
+      return existing;
+    }
+    await insertReceipt(client, {
+      actionExecutionId,
+      actionKind: input.definition.actionKind,
+      admission: "accepted",
+      catalogVersion: input.catalogVersion,
+      disposition: null,
+      entityIdentityOperation: target.operation,
+      execution: "running",
+      resolvedEntityId: target.sourceEntityId,
+      resolvedEntityVersionId: target.sourceEntityVersionId,
+      ...(target.targetEntityId === null
+        ? {}
+        : { resolvedRelatedEntityId: target.targetEntityId }),
+      ...(target.targetEntityVersionId === null
+        ? {}
+        : { resolvedRelatedEntityVersionId: target.targetEntityVersionId }),
+      schemaVersion: input.definition.schemaVersion,
+    });
+    const committedDisposition =
+      (await prepared.commit({
+        actionExecutionId,
+        executor: client,
+        userId: input.context.userId,
+      })) ?? "committed_in_transaction";
+    const terminalExecution: ConversationActionReceipt["execution"] =
+      committedDisposition === "reversal_precondition_failed"
+        ? "failed"
+        : "succeeded";
+    await client.query(
+      `UPDATE conversation_action_executions
+       SET disposition = $2, execution_status = $3
+       WHERE action_execution_id = $1`,
+      [actionExecutionId, committedDisposition, terminalExecution],
+    );
+    const terminalSequence = await insertExecutionReceipt(client, {
+      actionExecutionId,
+      disposition: committedDisposition,
+      entityIdentityOperation: target.operation,
+      execution: terminalExecution,
+      receiptKey:
+        terminalExecution === "succeeded"
+          ? "execution:succeeded"
+          : "execution:failed",
+      resolvedEntityId: target.sourceEntityId,
+      resolvedEntityVersionId: target.sourceEntityVersionId,
+      ...(target.targetEntityId === null
+        ? {}
+        : { resolvedRelatedEntityId: target.targetEntityId }),
+      ...(target.targetEntityVersionId === null
+        ? {}
+        : { resolvedRelatedEntityVersionId: target.targetEntityVersionId }),
+    });
+    await createActionFinalizationCommand(client, {
+      actionExecutionId,
+      decisionCommandId: input.context.decisionCommandId,
+      finalizationCommandId,
+      finalizationAttemptId,
+      now,
+      receipt: {
+        admission: "accepted",
+        receiptSequence: terminalSequence,
+        execution: terminalExecution,
+      },
+      userId: input.context.userId,
+    });
+    const committedReceipt = await findReceipt(
+      client,
+      input.context.userId,
+      input.idempotencyKey,
+    );
+    if (!committedReceipt) {
+      throw new Error("The accepted identity Action Receipt was not committed.");
+    }
+    await client.query("COMMIT");
+    return committedReceipt;
   }
 
   /**
@@ -1563,6 +1756,11 @@ async function insertReceipt(
       resolvedClaimId?: string;
       resolvedClaimVersionId?: string;
       resolvedQualifierId?: string;
+      resolvedEntityId?: string;
+      resolvedEntityVersionId?: string;
+      resolvedRelatedEntityId?: string;
+      resolvedRelatedEntityVersionId?: string;
+      entityIdentityOperation?: string;
     }>,
 ): Promise<ConversationActionReceipt> {
   const receiptId = createUuidV7(new Date());
@@ -1572,9 +1770,11 @@ async function insertReceipt(
         action_receipt_id, action_execution_id, receipt_sequence,
         receipt_key, admission_status, execution_status, disposition,
         disposition_detail, resolved_claim_id, resolved_claim_version_id,
-        resolved_qualifier_id, created_at
+        resolved_qualifier_id, resolved_entity_id, resolved_entity_version_id,
+        resolved_related_entity_id, resolved_related_entity_version_id,
+        entity_identity_operation, created_at
       ) VALUES ($1, $2, 1, 'admission', $3, $4, $5, $6::jsonb, $7, $8, $9,
-        CURRENT_TIMESTAMP)
+        $10, $11, $12, $13, $14, CURRENT_TIMESTAMP)
     `,
     [
       receiptId,
@@ -1586,6 +1786,11 @@ async function insertReceipt(
       input.resolvedClaimId ?? null,
       input.resolvedClaimVersionId ?? null,
       input.resolvedQualifierId ?? null,
+      input.resolvedEntityId ?? null,
+      input.resolvedEntityVersionId ?? null,
+      input.resolvedRelatedEntityId ?? null,
+      input.resolvedRelatedEntityVersionId ?? null,
+      input.entityIdentityOperation ?? null,
     ],
   );
   return { ...input, receiptSequence: 1 };
@@ -1606,6 +1811,11 @@ export async function insertExecutionReceipt(
     resolvedClaimId?: string;
     resolvedClaimVersionId?: string;
     resolvedQualifierId?: string;
+    resolvedEntityId?: string;
+    resolvedEntityVersionId?: string;
+    resolvedRelatedEntityId?: string;
+    resolvedRelatedEntityVersionId?: string;
+    entityIdentityOperation?: string;
   },
 ): Promise<number> {
   // The caller holds the ActionExecution lock (its own admission transaction,
@@ -1623,11 +1833,15 @@ export async function insertExecutionReceipt(
        action_receipt_id, action_execution_id, receipt_sequence, receipt_key,
        admission_status, execution_status, disposition,
        resolved_claim_id, resolved_claim_version_id, resolved_qualifier_id,
+       resolved_entity_id, resolved_entity_version_id,
+       resolved_related_entity_id, resolved_related_entity_version_id,
+       entity_identity_operation,
        created_at
      )
      SELECT $1, execution.action_execution_id,
        $6, $2,
-       execution.admission_status, $3, $4, $7, $8, $9, CURRENT_TIMESTAMP
+       execution.admission_status, $3, $4, $7, $8, $9, $10, $11, $12, $13,
+       $14, CURRENT_TIMESTAMP
      FROM conversation_action_executions execution
      WHERE execution.action_execution_id = $5
      ON CONFLICT (action_execution_id, receipt_key) DO NOTHING`,
@@ -1641,6 +1855,11 @@ export async function insertExecutionReceipt(
       input.resolvedClaimId ?? null,
       input.resolvedClaimVersionId ?? null,
       input.resolvedQualifierId ?? null,
+      input.resolvedEntityId ?? null,
+      input.resolvedEntityVersionId ?? null,
+      input.resolvedRelatedEntityId ?? null,
+      input.resolvedRelatedEntityVersionId ?? null,
+      input.entityIdentityOperation ?? null,
     ],
   );
   return receiptSequence;

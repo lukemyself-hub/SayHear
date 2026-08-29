@@ -694,12 +694,13 @@ function renderActionReferenceInstructions(
   ].join("\n");
 }
 
-/** The trust-action kinds whose receipts ship with issue #119 (ADR-0118). */
+/** The trust-action kinds whose receipts ship with the Catalog v2 pin (ADR-0118). */
 export const TRUST_ACTION_KINDS: readonly string[] = [
   "memory_correction",
   "explain_memory_source",
   "memory_forget_request",
   "memory_forget_reversal",
+  "entity_identity_correction",
 ];
 
 export function isTrustActionReceipt(
@@ -739,7 +740,8 @@ export function trustActionFencesMemory(
       receipt.execution === "canceled") &&
     (receipt.actionKind === "memory_correction" ||
       receipt.actionKind === "memory_forget_request" ||
-      receipt.actionKind === "memory_forget_reversal")
+      receipt.actionKind === "memory_forget_reversal" ||
+      receipt.actionKind === "entity_identity_correction")
   );
 }
 
@@ -879,6 +881,36 @@ function renderTrustActionFinalizationReceipt(
     } else {
       lines.push(
         "Outcome rule: no memory was restored. Do not claim that Forget permission changed.",
+      );
+    }
+  } else if (receipt.actionKind === "entity_identity_correction") {
+    if (receipt.admission === "accepted" && receipt.execution === "succeeded") {
+      if (receipt.disposition === "succeeded_noop") {
+        lines.push(
+          "Outcome rule: this Entity identity was already in the requested state; say so plainly and do not claim that a new identity correction changed anything.",
+        );
+      } else {
+        lines.push(
+          "Outcome rule: the user's Entity identity correction committed. Say that the identity was corrected plainly, without exposing internal IDs or claiming that the targeted Journal revalidation is already complete; affected Claims and Journal statements remain fenced until their background revalidation finishes.",
+        );
+      }
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "target_ambiguous_multi_hit"
+    ) {
+      lines.push(
+        `Outcome rule: several Entity identities (${detail?.candidateCount ?? "some"}) match what the user described. Say only how many are in question, never list or guess among them, and ask which identity the user means. Nothing changed.`,
+      );
+    } else if (
+      receipt.admission === "clarification_required" &&
+      receipt.disposition === "target_not_found"
+    ) {
+      lines.push(
+        "Outcome rule: no matching Entity identity was found. Say plainly that you could not find it and that nothing changed; do not invent a near match.",
+      );
+    } else {
+      lines.push(
+        "Outcome rule: the Entity identity correction did not complete; never claim that an Entity, Claim, or Journal statement was corrected.",
       );
     }
   }

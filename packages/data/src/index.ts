@@ -37,6 +37,11 @@ export {
   PostgresMemoryTrustActionCommitPort,
   PostgresMemoryTrustActionTargetSource,
 } from "./postgres-memory-trust-action-repository";
+export {
+  PostgresEntityIdentityCorrectionCommitPort,
+  PostgresEntityIdentityCorrectionTargetSource,
+} from "./postgres-entity-identity-correction-repository";
+export { PostgresEntityIdentityRevalidationRepository } from "./postgres-entity-identity-revalidation-repository";
 export { PostgresUserTextConversationRepository } from "./postgres-user-text-conversation-repository";
 export {
   loadDialogueStateForContext,

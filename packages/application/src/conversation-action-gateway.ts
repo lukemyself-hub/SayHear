@@ -14,6 +14,10 @@ import type {
   ConversationEventRevisionId,
   InteractionTurnId,
 } from "@sayhear/domain";
+import type {
+  EntityIdentityCorrectionOperation,
+  ResolvedEntityIdentityCorrectionTarget,
+} from "./entity-identity-correction";
 
 export type ConversationActionAdmission =
   | "accepted"
@@ -100,6 +104,26 @@ export type PreparedConversationAction =
       resolvedClaimVersionId: string;
       resolvedQualifierId?: string;
       resolvedTargetKind: "memory_claim" | "relationship_qualifier";
+    }>
+  | Readonly<{
+      actionKind: "entity_identity_correction";
+      commit(input: {
+        actionExecutionId: string;
+        executor: ConversationActionTransactionExecutor;
+        userId: string;
+      }): Promise<string | void>;
+      expectedDataEpoch: number;
+      mode: "in_transaction_entity_identity";
+      operation: EntityIdentityCorrectionOperation;
+      sourceEntityId: string;
+      sourceEntityVersionId: string;
+      targetEntityId: string | null;
+      targetEntityVersionId: string | null;
+      newEntityLabel: string | null;
+      promotionEvidence: Readonly<{
+        explicitStatement: boolean;
+        independentRevisionCount: number;
+      }> | null;
     }>;
 
 /**
@@ -189,6 +213,32 @@ export type TrustActionTargetResolver = Readonly<{
   }): Promise<TrustActionTargetResolution>;
 }>;
 
+/**
+ * Owner-scoped admission resolver for identity correction. It accepts only
+ * literal user-word anchors and returns typed EntityVersion references; no
+ * UUIDs, predicates, or approximate selectors cross the model boundary.
+ */
+export type EntityIdentityCorrectionTargetResolver = Readonly<{
+  resolve(input: {
+    operation: EntityIdentityCorrectionOperation;
+    relatedTargetAnchor?: string;
+    newEntityLabel?: string;
+    requestEventRevisionId: string;
+    targetAnchor: string;
+    userId: string;
+  }): Promise<EntityIdentityCorrectionTargetResolution>;
+}>;
+
+export type EntityIdentityCorrectionTargetResolution =
+  | Readonly<{
+      outcome: "unique";
+      target: ResolvedEntityIdentityCorrectionTarget;
+    }>
+  | Readonly<{ candidateCount: number; outcome: "multi_hit" }>
+  | Readonly<{ outcome: "zero_hit" }>
+  | Readonly<{ outcome: "unsupported_scope"; reasonCode: string }>
+  | Readonly<{ outcome: "precondition_failed"; reasonCode: string }>;
+
 export type ConversationActionHandler = Readonly<{
   actionKind: string;
   prepare(input: {
@@ -198,6 +248,8 @@ export type ConversationActionHandler = Readonly<{
     target?: ActionReferenceBinding;
     /** Anchor-mode target (ADR-0118); present only when admission-time resolution admitted. */
     resolvedTarget?: ResolvedTrustActionTarget;
+    /** Identity-correction target; present only for the identity action. */
+    resolvedIdentityTarget?: ResolvedEntityIdentityCorrectionTarget;
   }): PreparedConversationAction;
 }>;
 
@@ -210,6 +262,8 @@ export type ConversationActionGatewayRepository = Readonly<{
     resolvedClaim?: Readonly<{ claimId: string; claimVersionId: string }>;
     /** Full typed target for Trust-Control Actions, including Qualifiers. */
     resolvedTarget?: ResolvedTrustActionTarget;
+    /** Full typed Entity / EntityVersion target for identity correction. */
+    resolvedIdentityTarget?: ResolvedEntityIdentityCorrectionTarget;
     prepare: () => PreparedConversationAction;
     proposal: ConversationActionProposal;
   }): Promise<ConversationActionReceipt>;
@@ -277,6 +331,8 @@ export function createConversationActionGateway(input: {
    * proposal arriving without a configured resolver fails closed.
    */
   trustActionTargetResolver?: TrustActionTargetResolver;
+  /** Required to admit `entity_identity_correction`. */
+  entityIdentityCorrectionTargetResolver?: EntityIdentityCorrectionTargetResolver;
 }): ConversationActionGateway {
   const handlersByKind = new Map(
     input.handlers.map((handler) => [handler.actionKind, handler]),
@@ -351,6 +407,112 @@ export function createConversationActionGateway(input: {
       // returns a count-only clarification without listing or preselecting;
       // zero hit honestly reports nothing found with zero domain change.
       if (definition.targetContract.resolution === "admission_time_anchor") {
+        if (definition.actionKind === "entity_identity_correction") {
+          if (!input.entityIdentityCorrectionTargetResolver) {
+            throw new Error(
+              "No Entity Identity Correction target resolver is configured.",
+            );
+          }
+          const operation = proposal.arguments.operation;
+          const targetAnchor = proposal.arguments[
+            definition.targetContract.handleArgument
+          ];
+          if (typeof operation !== "string" || typeof targetAnchor !== "string") {
+            return input.repository.commitNonAccepted({
+              admission: "unsupported",
+              catalogVersion: request.catalog.version,
+              context: request.context,
+              definition,
+              disposition: "malformed_arguments",
+              proposal,
+              schemaVersion,
+            });
+          }
+          const relatedTargetAnchor = readOptionalStringArgument(
+            proposal,
+            "relatedTargetAnchor",
+          );
+          const newEntityLabel = readOptionalStringArgument(
+            proposal,
+            "newEntityLabel",
+          );
+          const resolution =
+            await input.entityIdentityCorrectionTargetResolver.resolve({
+              operation: operation as EntityIdentityCorrectionOperation,
+              ...(relatedTargetAnchor === undefined
+                ? {}
+                : { relatedTargetAnchor }),
+              ...(newEntityLabel === undefined ? {} : { newEntityLabel }),
+              requestEventRevisionId: request.context.requestEventRevisionId,
+              targetAnchor,
+              userId: request.context.userId,
+            });
+          if (resolution.outcome === "multi_hit") {
+            return input.repository.commitNonAccepted({
+              admission: "clarification_required",
+              catalogVersion: request.catalog.version,
+              context: request.context,
+              definition,
+              disposition: "target_ambiguous_multi_hit",
+              dispositionDetail: { candidateCount: resolution.candidateCount },
+              proposal,
+              schemaVersion,
+            });
+          }
+          if (resolution.outcome === "zero_hit") {
+            return input.repository.commitNonAccepted({
+              admission: "clarification_required",
+              catalogVersion: request.catalog.version,
+              context: request.context,
+              definition,
+              disposition: "target_not_found",
+              proposal,
+              schemaVersion,
+            });
+          }
+          if (resolution.outcome === "unsupported_scope") {
+            return input.repository.commitNonAccepted({
+              admission: "unsupported",
+              catalogVersion: request.catalog.version,
+              context: request.context,
+              definition,
+              disposition: resolution.reasonCode,
+              proposal,
+              schemaVersion,
+            });
+          }
+          if (resolution.outcome === "precondition_failed") {
+            return input.repository.commitNonAccepted({
+              admission: "clarification_required",
+              catalogVersion: request.catalog.version,
+              context: request.context,
+              definition,
+              disposition: resolution.reasonCode,
+              proposal,
+              schemaVersion,
+            });
+          }
+          return input.repository.commitAccepted({
+            catalogVersion: request.catalog.version,
+            context: request.context,
+            definition,
+            resolvedIdentityTarget: resolution.target,
+            prepare: () => {
+              const handler = handlersByKind.get(definition.actionKind);
+              if (!handler) {
+                throw new Error(
+                  `No Conversation Action Handler is bound for kind "${definition.actionKind}".`,
+                );
+              }
+              return handler.prepare({
+                definition,
+                proposal,
+                resolvedIdentityTarget: resolution.target,
+              });
+            },
+            proposal,
+          });
+        }
         if (!input.trustActionTargetResolver) {
           throw new Error(
             `No Trust Action target resolver is configured for kind "${definition.actionKind}".`,
@@ -676,6 +838,9 @@ function validateProposal(
         return { valid: false, reason: "malformed_arguments" };
       }
     }
+    if (Array.isArray(schema.enum) && !schema.enum.includes(value)) {
+      return { valid: false, reason: "malformed_arguments" };
+    }
   }
   for (const requiredKey of definition.inputSchema.required) {
     const schema = definition.inputSchema.properties[requiredKey];
@@ -691,6 +856,17 @@ function validateProposal(
     } else if (value === undefined) {
       return { valid: false, reason: "malformed_arguments" };
     }
+    if (Array.isArray(schema?.enum) && !schema.enum.includes(value)) {
+      return { valid: false, reason: "malformed_arguments" };
+    }
   }
   return { valid: true };
+}
+
+function readOptionalStringArgument(
+  proposal: ConversationActionProposal,
+  key: string,
+): string | undefined {
+  const value = proposal.arguments[key];
+  return typeof value === "string" ? value : undefined;
 }

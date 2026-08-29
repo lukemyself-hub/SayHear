@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./journal-eligibility": "./src/journal-eligibility.ts",
     "./journal-regeneration": "./src/journal-regeneration.ts",
-    "./memory-trust-followup": "./src/memory-trust-followup.ts"
+    "./memory-trust-followup": "./src/memory-trust-followup.ts",
+    "./entity-identity-revalidation": "./src/entity-identity-revalidation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

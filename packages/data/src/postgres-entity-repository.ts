@@ -566,23 +566,49 @@ async function loadCurrentLabelIndexWithin(
     label_kind: "primary" | "alias";
     locale: string;
   }>(
-    `SELECT label.entity_id, label.label, label.normalized_label,
-       label.label_kind, label.locale
-     FROM entity_labels label
-     INNER JOIN entities entity
-       ON entity.entity_id = label.entity_id AND entity.user_id = label.user_id
-     INNER JOIN entity_versions version
-       ON version.entity_version_id = entity.current_version_id
-      AND version.entity_id = entity.entity_id
-      AND version.user_id = entity.user_id
-     WHERE label.user_id = $1
+    `WITH RECURSIVE current_entities AS (
+       SELECT entity.entity_id,
+              version.status,
+              version.merged_into_entity_id
+       FROM entities entity
+       INNER JOIN entity_versions version
+         ON version.entity_id = entity.entity_id
+        AND version.user_id = entity.user_id
+        AND version.entity_version_id = entity.current_version_id
+       WHERE entity.user_id = $1
+         AND entity.deleted_at IS NULL
+         AND version.status IN ('active', 'unresolved', 'merged')
+     ),
+     entity_resolution(labeled_entity_id, resolved_entity_id) AS (
+       SELECT entity_id, entity_id FROM current_entities
+       UNION ALL
+       SELECT resolution.labeled_entity_id, next_entity.merged_into_entity_id
+       FROM entity_resolution resolution
+       INNER JOIN current_entities next_entity
+         ON next_entity.entity_id = resolution.resolved_entity_id
+       WHERE next_entity.status = 'merged'
+         AND next_entity.merged_into_entity_id IS NOT NULL
+     )
+     SELECT DISTINCT ON (resolution.resolved_entity_id, label.normalized_label)
+       resolution.resolved_entity_id AS entity_id,
+       label.label,
+       label.normalized_label,
+       label.label_kind,
+       label.locale
+     FROM entity_resolution resolution
+     INNER JOIN current_entities resolved
+       ON resolved.entity_id = resolution.resolved_entity_id
+     INNER JOIN entity_labels label
+       ON label.entity_id = resolution.labeled_entity_id
+      AND label.user_id = $1
+     WHERE resolved.status IN ('active', 'unresolved')
        AND label.is_current
        AND label.content_purged_at IS NULL
-       AND entity.deleted_at IS NULL
-       AND version.status IN ('active', 'unresolved')
        -- Verified-alias discipline: only current primary labels and
        -- evidence-backed aliases are deterministic binding surfaces.
-       AND (label.label_kind = 'primary' OR label.source_evidence_id IS NOT NULL)`,
+       AND (label.label_kind = 'primary' OR label.source_evidence_id IS NOT NULL)
+     ORDER BY resolution.resolved_entity_id, label.normalized_label,
+              label.label_kind, label.label`,
     [userId],
   );
   return result.rows.map((row) => ({

@@ -429,6 +429,10 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     clockNowMs = BASE_TIME.getTime();
     await database.pool.query(`
       TRUNCATE TABLE
+        entity_identity_revalidation_runs,
+        journal_identity_review_fences,
+        journal_statement_entity_links,
+        entity_identity_corrections,
         retrieval_run_candidates,
         retrieval_runs,
         claim_retrieval_projections,
@@ -661,6 +665,10 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
       "journal_diagnostic_findings",
       "journal_statements",
       "journal_statement_evidence_links",
+      "journal_statement_entity_links",
+      "journal_identity_review_fences",
+      "entity_identity_corrections",
+      "entity_identity_revalidation_runs",
       "journal_validation_results",
       "journal_generation_commands",
       "journal_model_run_attempts",

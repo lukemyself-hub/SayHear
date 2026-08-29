@@ -174,6 +174,7 @@ export {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   EMPTY_CONVERSATION_ACTION_CATALOG,
+  ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION,
   EXPLAIN_MEMORY_SOURCE_ACTION_DEFINITION,
   INITIAL_CONVERSATION_HARNESS_POLICY,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
@@ -217,7 +218,30 @@ export {
   type ResolvedTrustActionTarget,
   type TrustActionTargetResolution,
   type TrustActionTargetResolver,
+  type EntityIdentityCorrectionTargetResolution,
+  type EntityIdentityCorrectionTargetResolver,
 } from "./conversation-action-gateway";
+export {
+  ENTITY_IDENTITY_CORRECTION_POLICY_VERSION,
+  createEntityIdentityCorrectionActionHandler,
+  hasExplicitEntityIdentityCorrection,
+  hasExplicitEntityIdentityStatement,
+  planEntityIdentityCorrection,
+  type EntityIdentityCorrectionCommitPort,
+  type EntityIdentityCorrectionOperation,
+  type EntityIdentityCorrectionPlan,
+  type EntityIdentityCorrectionTarget,
+  type ResolvedEntityIdentityCorrectionTarget,
+} from "./entity-identity-correction";
+export {
+  ENTITY_IDENTITY_REVALIDATION_POLICY_VERSION,
+  runEntityIdentityRevalidationWorkflow,
+  type EntityIdentityRevalidationCommand,
+  type EntityIdentityRevalidationOperation,
+  type EntityIdentityRevalidationOutcome,
+  type EntityIdentityRevalidationRepository,
+  type EntityIdentityRevalidationResult,
+} from "./entity-identity-revalidation";
 export {
   MEMORY_CORRECTION_FOLLOWUP_POLICY_VERSION,
   runMemoryCorrectionFollowupWorkflow,

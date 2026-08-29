@@ -10,6 +10,7 @@ import { ownerFullPurgeWorkflow } from "./owner-full-purge.workflow";
 import { fastPathExtractionWorkflow } from "./fast-path-extraction.workflow";
 import { memoryConsolidationWorkflow } from "./memory-consolidation.workflow";
 import { memoryCorrectionFollowupWorkflow } from "./memory-trust-followup.workflow";
+import { entityIdentityRevalidationWorkflow } from "./entity-identity-revalidation.workflow";
 
 export async function journalRegenerationWorkflow(input: {
   workflowCommandId: string;
@@ -92,6 +93,8 @@ export function createWorkflowStarter(): WorkflowStarter {
       run = await start(memoryConsolidationWorkflow, [workflowInput]);
     } else if (input.eventType === "memory_correction_followup_requested") {
       run = await start(memoryCorrectionFollowupWorkflow, [workflowInput]);
+    } else if (input.eventType === "entity_identity_revalidation_requested") {
+      run = await start(entityIdentityRevalidationWorkflow, [workflowInput]);
     } else {
       throw new Error(`Unsupported outbox event type: ${input.eventType}`);
     }

@@ -8,7 +8,9 @@ import {
 } from "@sayhear/domain";
 
 import {
+  ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION,
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+  MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
 } from "./conversation-action-catalog";
 import {
   createConversationActionGateway,
@@ -16,6 +18,7 @@ import {
   type ConversationActionGatewayRepository,
   type ConversationActionReceipt,
 } from "./conversation-action-gateway";
+import { createEntityIdentityCorrectionActionHandler } from "./entity-identity-correction";
 import type { ActionReferenceBinding } from "./conversation-action-handles";
 
 const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
@@ -209,5 +212,158 @@ describe("Journal regeneration Action Gateway", () => {
       disposition: "rate_limited_in_flight",
       execution: "not_started",
     });
+  });
+});
+
+describe("Entity identity correction Action Gateway (issue #121)", () => {
+  it("resolves a typed identity target at admission and passes no anchor to execution", async () => {
+    let prepared = false;
+    let committedTarget: unknown;
+    const resolvedTarget = {
+      explicitUserCorrection: true,
+      expectedDataEpoch: 1,
+      newEntityLabel: "Ren",
+      operation: "split" as const,
+      promotionEvidence: null,
+      sourceEntityId: "entity-source",
+      sourceEntityVersionId: "entity-version-source",
+      sourceEntityVersionStatus: "active" as const,
+      targetEntityId: null,
+      targetEntityVersionId: null,
+      targetEntityVersionStatus: null,
+    };
+    const base = repository();
+    const gateway = createConversationActionGateway({
+      entityIdentityCorrectionTargetResolver: {
+        async resolve(input) {
+          expect(input).toMatchObject({
+            operation: "split",
+            requestEventRevisionId: eventRevisionId,
+            targetAnchor: "Alex",
+            userId,
+          });
+          return { outcome: "unique", target: resolvedTarget };
+        },
+      },
+      handlers: [
+        createEntityIdentityCorrectionActionHandler({
+          commitPort: {
+            async executeEntityIdentityCorrection() {
+              return "identity_correction_committed";
+            },
+          },
+        }),
+      ],
+      repository: {
+        ...base,
+        async commitAccepted(input) {
+          committedTarget = input.resolvedIdentityTarget;
+          const action = input.prepare();
+          prepared = action.mode === "in_transaction_entity_identity";
+          return {
+            actionExecutionId: "identity-execution-1",
+            actionKind: ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION.actionKind,
+            admission: "accepted",
+            catalogVersion:
+              MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.version,
+            disposition: "identity_correction_committed",
+            execution: "succeeded",
+            receiptSequence: 1,
+            schemaVersion: ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION.schemaVersion,
+          };
+        },
+      },
+    });
+
+    const result = await gateway.admit({
+      catalog: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
+      context,
+      proposal: {
+        actionKind: "entity_identity_correction",
+        arguments: { operation: "split", targetAnchor: "Alex" },
+        requestEventRevisionId: eventRevisionId,
+        schemaVersion: ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION.schemaVersion,
+      },
+    });
+
+    expect(result).toMatchObject({
+      actionKind: "entity_identity_correction",
+      admission: "accepted",
+      execution: "succeeded",
+    });
+    expect(prepared).toBe(true);
+    expect(committedTarget).toEqual(resolvedTarget);
+  });
+
+  it("turns an ambiguous identity anchor into a count-only clarification", async () => {
+    let accepted = false;
+    const base = repository();
+    const gateway = createConversationActionGateway({
+      entityIdentityCorrectionTargetResolver: {
+        async resolve() {
+          return { candidateCount: 2, outcome: "multi_hit" };
+        },
+      },
+      handlers: [],
+      repository: {
+        ...base,
+        async commitAccepted(input) {
+          accepted = true;
+          return base.commitAccepted(input);
+        },
+      },
+    });
+
+    const result = await gateway.admit({
+      catalog: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
+      context,
+      proposal: {
+        actionKind: "entity_identity_correction",
+        arguments: { operation: "merge", targetAnchor: "Alex" },
+        requestEventRevisionId: eventRevisionId,
+        schemaVersion: ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION.schemaVersion,
+      },
+    });
+
+    expect(result).toMatchObject({
+      actionKind: "entity_identity_correction",
+      admission: "clarification_required",
+      disposition: "target_ambiguous_multi_hit",
+      execution: "not_started",
+    });
+    expect(accepted).toBe(false);
+  });
+
+  it("rejects an operation outside the published identity enum before resolution", async () => {
+    let resolved = false;
+    const base = repository();
+    const gateway = createConversationActionGateway({
+      entityIdentityCorrectionTargetResolver: {
+        async resolve() {
+          resolved = true;
+          return { outcome: "zero_hit" };
+        },
+      },
+      handlers: [],
+      repository: base,
+    });
+
+    const result = await gateway.admit({
+      catalog: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
+      context,
+      proposal: {
+        actionKind: "entity_identity_correction",
+        arguments: { operation: "guess", targetAnchor: "Alex" },
+        requestEventRevisionId: eventRevisionId,
+        schemaVersion: ENTITY_IDENTITY_CORRECTION_ACTION_DEFINITION.schemaVersion,
+      },
+    });
+
+    expect(result).toMatchObject({
+      admission: "unsupported",
+      disposition: "malformed_arguments",
+      execution: "not_started",
+    });
+    expect(resolved).toBe(false);
   });
 });
