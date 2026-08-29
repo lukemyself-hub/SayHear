@@ -153,8 +153,20 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
     memoryExtractor: {
       role: "memory.extract",
       async extract(request, invocation) {
-        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. For each revision return only JSON: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
-        if (!Array.isArray(parsed)) throw new Error("memory.extract returned non-array output.");
+        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. Return ONLY a JSON ARRAY with exactly one object per input revision — a single revision is a one-element array, never a bare object. Each element: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
+        if (!Array.isArray(parsed)) {
+          // Providers occasionally answer a single-revision batch with the
+          // bare element instead of the array (observed with DeepSeek). The
+          // element shape is unambiguous (revisionId), so normalize instead
+          // of failing the extraction.
+          if (
+            typeof parsed === "object" && parsed !== null &&
+            "revisionId" in parsed
+          ) {
+            return [parsed as unknown] as readonly MemoryExtractRevisionResult[];
+          }
+          throw new Error("memory.extract returned non-array output.");
+        }
         return parsed as readonly MemoryExtractRevisionResult[];
       },
     },

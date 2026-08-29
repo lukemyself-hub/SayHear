@@ -101,7 +101,7 @@ export function expectedPinList(): Record<string, unknown> {
         promptFingerprint: "memory-consolidate:diffs:v1",
       },
       memoryExtract: {
-        promptFingerprint: "memory-extract:propose:v1",
+        promptFingerprint: "memory-extract:propose:v2",
       },
     },
     safetyResources: SAFETY_RESOURCE_WHITELIST_VERSION,

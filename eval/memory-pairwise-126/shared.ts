@@ -154,7 +154,7 @@ export function buildMemoryRoleRegistry(
         model: spec.model,
         configVersion: `${spec.championConfigVersion}:memory-extract`,
         policyVersion: "memory-extraction:v1",
-        promptFingerprint: "memory-extract:propose:v1",
+        promptFingerprint: "memory-extract:propose:v2",
       },
       {
         role: "entity.resolve",

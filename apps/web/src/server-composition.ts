@@ -137,7 +137,7 @@ export function createServerComposition() {
       // Memory roles (issue #113): their own Champion configs, independently
       // versioned, fallback disabled until a fallback Champion is explicitly
       // published per ADR-0060 / ADR-0061.
-      { role: "memory.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:memory-extract`, policyVersion: "memory-extraction:v1", promptFingerprint: "memory-extract:propose:v1" },
+      { role: "memory.extract", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:memory-extract`, policyVersion: "memory-extraction:v1", promptFingerprint: "memory-extract:propose:v2" },
       { role: "entity.resolve", provider: configuration.provider.adapter === "deterministic" ? "deterministic" : configuration.provider.champion.provider, model: configuration.provider.champion.model, configVersion: `${configuration.provider.champion.configVersion}:entity-resolve`, policyVersion: "entity-resolve-gate:v1", promptFingerprint: "entity-resolve:gate:v1" },
       // Slow-path role (issue #114): daily / weekly consolidation diffs get
       // their own Champion config under the same ADR-0060 / ADR-0061
