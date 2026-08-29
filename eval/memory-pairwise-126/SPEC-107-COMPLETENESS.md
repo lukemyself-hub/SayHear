@@ -1,12 +1,17 @@
 # SPEC #107 完成度对照（1A.3a — Memory & Recall）
 
-Status: Working evidence ledger — 2026-08-29，基于 `feature/126-memory-pairwise-closeout`
-（#126 证据运行完成后更新为最终版）。权威 AC 文本以
+Status: Working evidence ledger — 2026-08-29，基于 `feature/126-memory-pairwise-closeout`。
+权威 AC 文本以
 [SPEC #107](https://github.com/lukemyself-hub/SayHear/issues/107) 为准；本文件逐项给出
 代码/测试/证据指针。子票 #109–#125 已全部关闭；#126 为最后一张。
 
-验证基线：`pnpm test` 全绿（961 + 58 tests，后者需 `TEST_DATABASE_URL` +
-`TEST_PURGE_MARKER_DATABASE_URL`）；`pnpm typecheck` 绿；`verify-pack`（v3）绿。
+验证基线：`pnpm test` 全绿（1021 tests，双 DB env）；`pnpm typecheck` 绿；
+`verify-pack`（v3）绿；#124 dataset verify-pack 绿（本次复验）。
+
+**会话重要发现**：#126 证据运行是两速管线第一次真实 provider 跑通，连环暴露并修复
+了 5 个生产缺陷（memory.extract 数组契约 / 空字段省略 TypeError / 谓词表未传递 /
+consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe 丢命中词）。
+修复后 rollback demo 真实端到端验证：2 Claims 准入、跨日 probe 注入、回滚冻结。
 
 ## AC 1–34：功能交付（子票 + 系统测试）
 
@@ -24,14 +29,14 @@ Status: Working evidence ledger — 2026-08-29，基于 `feature/126-memory-pair
 
 | AC | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 35 | 确定性硬门禁全 locale 100% 零容忍（未注入引用、token 级漏召回、错 Entity、遗忘内容复活、无证据人格判断、fence/budget/200ms 违规） | 运行中 | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
-| 36 | memory 盲评 vs Memory-off 孪生：总净偏好严格为正、无语言净回退、无强制类别净回退、持平不计分、三项确定性零容忍不以偏好抵消 | 工具链就绪，待 Luke 盲评 | `run-twins-{on,off}` → `build-memory-pairs`（15 场景、种子 1260）→ 评审页 → `unblind` 门槛 |
-| 37 | 45 场景机械复跑硬门禁 100% 无新违规；味觉样本不重跑 | 运行中（同一转录联接 v2.1 fixture） | `run-twins-on/findings-v2.json` |
+| 35 | 确定性硬门禁全 locale 100% 零容忍（未注入引用、token 级漏召回、错 Entity、遗忘内容复活、无证据人格判断、fence/budget/200ms 违规） | 待 ON 臂重跑（DeepSeek 余额耗尽中断） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
+| 36 | memory 盲评 vs Memory-off 孪生：总净偏好严格为正、无语言净回退、无强制类别净回退、持平不计分、三项确定性零容忍不以偏好抵消 | Memory-off 臂 ✅ 已入库；ON 臂待重跑 + Luke 盲评 | `run-twins-{on,off}` → `build-memory-pairs`（15 场景、种子 1260）→ 评审页 → `unblind` 门槛 |
+| 37 | 45 场景机械复跑硬门禁 100% 无新违规；味觉样本不重跑 | 待 ON 臂重跑（同一转录联接 v2.1 fixture） | `run-twins-on/findings-v2.json` |
 | 38 | 检索精度会计基线（fence/budget/deadline 绝对零，无阈值） | ✅ #125 | `eval/retrieval-precision-v1/run/baseline-2026-08-28/`（本次复验纯侧测试绿） |
 | 39 | trust-action 选择数据集门禁 | ✅ #124 | `eval/action-selection/memory-trust-actions:v1/`（本次复验 verify-pack OK） |
 | 40 | 合并范围保护：无 1A.3b 产物 / embedding / vector、无模型路由 / Provider / Champion 变更、无回填 | 工具链就绪，待 ON manifest | `scope-protection.json`（迁移史 + 源码扫描 + incumbent champion 簇逐字节对比） |
 | pin list | 全 pin 清单记录于 manifest 并与生产常量互证（catalog v2 五 Trust-Control、registry #93、entity.resolve t_auto、memory.extract/consolidate prompt、portrait-selection:v1、检索 manifest+budgets v1、grounding-guard/opener-permission、trust-action P1–P6、tiered-checks:v3、scenario-pack:v3、locale-pack/safety-resources v2、Entity/Memory role Champion 配置） | 工具链就绪 | `verify-cutover-pins.ts` → `pins-report.json` |
-| rollback | code revert + re-pin；cutover 后 memory 数据原地冻结（sha256 于 claim id + 当前版本 id 不变）、data epoch 不动 | 工具链就绪 | `rollback-demo/`（manifest + 双阶段转录） |
+| rollback | code revert + re-pin；cutover 后 memory 数据原地冻结（sha256 于 claim id + 当前版本 id 不变）、data epoch 不动 | ✅ 真实 champion 已验证 | `rollback-demo/`（manifest + 双阶段转录） |
 
 ### 口径说明
 
