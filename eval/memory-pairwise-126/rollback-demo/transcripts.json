@@ -1,0 +1,60 @@
+{
+  "capturedAt": "2026-08-29T20:35:48.251Z",
+  "phaseA": {
+    "scenarioId": "rollback-demo-scenario",
+    "turns": [
+      {
+        "assistantText": "哇，恭喜啊。新工作新环境，刚开始总是又新鲜又有点紧绷的，慢慢就会顺起来。后端那边上手还顺吗？",
+        "domainClockIso": "2026-08-21T02:00:00.000Z",
+        "finalEventType": "assistant_committed",
+        "injectedMemories": 0,
+        "input": {
+          "locale": "zh-CN",
+          "text": "跟你分享一下，我最近入职了蓝湾科技，做后端工程师。",
+          "timezone": "Asia/Shanghai"
+        },
+        "sequenceInScenario": 1,
+        "wallMs": 5217
+      },
+      {
+        "assistantText": "同事好相处真是件大事，等于每天大半天的环境是舒服的。节奏这种事急不来，头几个月本来就是在摸规律，摸到自己的就顺了。",
+        "domainClockIso": "2026-08-21T02:01:30.000Z",
+        "finalEventType": "assistant_committed",
+        "injectedMemories": 0,
+        "input": {
+          "locale": "zh-CN",
+          "text": "新同事都挺不错的，还在适应节奏。",
+          "timezone": "Asia/Shanghai"
+        },
+        "sequenceInScenario": 2,
+        "wallMs": 2835
+      },
+      {
+        "assistantText": "这个我还真不敢乱答。你是跟我说过上班的公司，我也记得你是后端工程师，但具体那家公司的名字，我这会儿对不上号，凭印象瞎编一个给你更糟。你提个头，比如公司名或大概行业，我就能顺着接上。",
+        "domainClockIso": "2026-08-23T02:01:30.000Z",
+        "finalEventType": "assistant_committed",
+        "injectedMemories": 1,
+        "input": {
+          "locale": "zh-CN",
+          "text": "我在哪家公司上班来着？突然想不起来跟家里人怎么说的。",
+          "timezone": "Asia/Shanghai"
+        },
+        "sequenceInScenario": 3,
+        "wallMs": 7687
+      }
+    ]
+  },
+  "phaseB": {
+    "assistantText": "说实话，这家公司的名字我这边没有记录，你刚才问过一次，我也没能对上来——不是故意绕，是这对话里确实没有存这信息。你要是想让我记住，直接告诉我公司名就行，我帮你记着。不然我瞎编一个名字，你拿去跟朋友说，那才麻烦。",
+    "domainClockIso": "2026-08-24T02:01:30.000Z",
+    "finalEventType": "assistant_committed",
+    "injectedMemories": 0,
+    "input": {
+      "locale": "zh-CN",
+      "text": "对了，我最近入职的这家公司叫什么来着？想跟朋友提一下。",
+      "timezone": "Asia/Shanghai"
+    },
+    "sequenceInScenario": 4,
+    "wallMs": 3666
+  }
+}
