@@ -75,6 +75,50 @@ const DSV1 = "11111111-1111-7111-8111-111111111123";
 const DS2 = "11111111-1111-7111-8111-111111111124";
 const WC1 = "11111111-1111-7111-8111-111111111125";
 const OE1 = "11111111-1111-7111-8111-111111111126";
+const SELF_ENTITY_ID = "22222222-2222-7222-8222-222222222201";
+const SELF_ENTITY_VERSION_ID = "22222222-2222-7222-8222-222222222202";
+const PERSON_ENTITY_ID = "22222222-2222-7222-8222-222222222203";
+const PERSON_ENTITY_VERSION_ID = "22222222-2222-7222-8222-222222222204";
+const ENTITY_LABEL_EN_ID = "22222222-2222-7222-8222-222222222205";
+const ENTITY_LABEL_ZH_ID = "22222222-2222-7222-8222-222222222206";
+const ENTITY_MENTION_ID = "22222222-2222-7222-8222-222222222207";
+const ENTITY_MENTION_CANDIDATE_ID = "22222222-2222-7222-8222-222222222208";
+const MEMORY_CLAIM_ID = "22222222-2222-7222-8222-222222222209";
+const MEMORY_CLAIM_VERSION_ID = "22222222-2222-7222-8222-22222222220a";
+const QUALIFIER_ID = "22222222-2222-7222-8222-22222222220b";
+const QUALIFIER_EVIDENCE_ID = "22222222-2222-7222-8222-22222222220c";
+const CLAIM_EVIDENCE_LINK_ID = "22222222-2222-7222-8222-22222222220d";
+const MEMORY_CANDIDATE_ID = "22222222-2222-7222-8222-22222222220e";
+const CANDIDATE_EVIDENCE_LINK_ID = "22222222-2222-7222-8222-22222222220f";
+const FORGET_REQUEST_ID = "22222222-2222-7222-8222-222222222210";
+const FORGET_EXCLUSION_ID = "22222222-2222-7222-8222-222222222211";
+const FORGET_REVERSAL_ID = "22222222-2222-7222-8222-222222222212";
+const RESOLVER_HINT_ID = "22222222-2222-7222-8222-222222222213";
+const RETRIEVAL_PROJECTION_ID = "22222222-2222-7222-8222-222222222214";
+const RETRIEVAL_RUN_ID = "22222222-2222-7222-8222-222222222215";
+const RETRIEVAL_CANDIDATE_ID = "22222222-2222-7222-8222-222222222216";
+const FAST_PATH_WORKFLOW_ID = "22222222-2222-7222-8222-222222222217";
+const FAST_PATH_OUTBOX_ID = "22222222-2222-7222-8222-222222222218";
+const FAST_PATH_RUN_ID = "22222222-2222-7222-8222-222222222219";
+const FAST_PATH_ITEM_ID = "22222222-2222-7222-8222-22222222221a";
+const ENTITY_GATE_OUTCOME_ID = "22222222-2222-7222-8222-22222222221b";
+const ENTITY_CLARIFICATION_ID = "22222222-2222-7222-8222-22222222221c";
+const CONSOLIDATION_WORKFLOW_ID = "22222222-2222-7222-8222-22222222221d";
+const CONSOLIDATION_OUTBOX_ID = "22222222-2222-7222-8222-22222222221e";
+const CONSOLIDATION_RUN_ID = "22222222-2222-7222-8222-22222222221f";
+const CONSOLIDATION_DIFF_ID = "22222222-2222-7222-8222-222222222220";
+const ACTION_EXECUTION_ID = "22222222-2222-7222-8222-222222222221";
+const ACTION_RECEIPT_ID = "22222222-2222-7222-8222-222222222222";
+const CORRECTION_WORKFLOW_ID = "22222222-2222-7222-8222-222222222223";
+const CORRECTION_OUTBOX_ID = "22222222-2222-7222-8222-222222222224";
+const CORRECTION_FOLLOWUP_ID = "22222222-2222-7222-8222-222222222225";
+const CLAIM_CORRECTION_ID = "22222222-2222-7222-8222-222222222226";
+const IMPRESSION_VETO_ID = "22222222-2222-7222-8222-222222222227";
+const ACTION_HANDLE = "purge-test-memory-handle";
+const OTHER_OWNER = "33333333-3333-7333-8333-333333333301";
+const OTHER_SESSION = "33333333-3333-7333-8333-333333333302";
+const OTHER_WORKFLOW = "33333333-3333-7333-8333-333333333303";
+const OTHER_OUTBOX = "33333333-3333-7333-8333-333333333304";
 const SESSION_TOKEN_HASH = createHash("sha256")
   .update("purge-test-session-token", "utf8")
   .digest();
@@ -400,7 +444,393 @@ async function seedOwnerData(pool: IsolatedPostgresSchema["pool"]) {
   `);
 }
 
-describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", () => {
+async function seedMemoryPurgeData(pool: IsolatedPostgresSchema["pool"]) {
+  const createdAt = "2026-08-12T15:02:00.000Z";
+  const expiresAt = "2026-08-19T15:02:00.000Z";
+  await pool.query(
+    `
+      INSERT INTO entities (entity_id, user_id, created_at)
+      VALUES
+        ('${SELF_ENTITY_ID}', '${OWNER}', '${createdAt}'),
+        ('${PERSON_ENTITY_ID}', '${OWNER}', '${createdAt}');
+      INSERT INTO user_self_entities (user_id, entity_id, created_at)
+      VALUES ('${OWNER}', '${SELF_ENTITY_ID}', '${createdAt}');
+      INSERT INTO entity_versions (
+        entity_version_id, entity_id, user_id, revision, entity_kind_id,
+        status, created_at
+      ) VALUES
+        ('${SELF_ENTITY_VERSION_ID}', '${SELF_ENTITY_ID}', '${OWNER}', 1,
+          'sh.entity.person', 'active', '${createdAt}'),
+        ('${PERSON_ENTITY_VERSION_ID}', '${PERSON_ENTITY_ID}', '${OWNER}', 1,
+          'sh.entity.person', 'active', '${createdAt}');
+      UPDATE entities SET current_version_id = (CASE entity_id
+        WHEN '${SELF_ENTITY_ID}' THEN '${SELF_ENTITY_VERSION_ID}'
+        WHEN '${PERSON_ENTITY_ID}' THEN '${PERSON_ENTITY_VERSION_ID}'
+      END)::uuid
+      WHERE user_id = '${OWNER}';
+      INSERT INTO entity_labels (
+        entity_label_id, entity_id, user_id, locale, label,
+        normalized_label, label_kind, is_current, source_evidence_id, created_at
+      ) VALUES
+        ('${ENTITY_LABEL_EN_ID}', '${PERSON_ENTITY_ID}', '${OWNER}', 'en',
+          'Morgan', 'morgan', 'alias', TRUE, '${EI1}', '${createdAt}'),
+        ('${ENTITY_LABEL_ZH_ID}', '${PERSON_ENTITY_ID}', '${OWNER}', 'zh',
+          '摩根', '摩根', 'alias', TRUE, '${EI1}', '${createdAt}');
+      INSERT INTO entity_mentions (
+        entity_mention_id, user_id, conversation_event_id, event_revision_id,
+        evidence_id, locator_type, mention_kind, resolved_entity_id,
+        resolution_status, confidence, resolver_policy_version, created_at
+      ) VALUES (
+        '${ENTITY_MENTION_ID}', '${OWNER}', '${E1}', '${R1}', '${EI1}',
+        'whole_revision', 'named', '${PERSON_ENTITY_ID}', 'resolved', 0.98,
+        'entity-resolve:v1', '${createdAt}'
+      );
+      INSERT INTO entity_mention_candidates (
+        entity_mention_candidate_id, entity_mention_id, user_id,
+        candidate_entity_id, matched_label, candidate_kind, edit_distance,
+        created_at
+      ) VALUES (
+        '${ENTITY_MENTION_CANDIDATE_ID}', '${ENTITY_MENTION_ID}', '${OWNER}',
+        '${PERSON_ENTITY_ID}', 'Morgan', 'near_form', 0, '${createdAt}'
+      );
+      INSERT INTO memory_claims (
+        memory_claim_id, user_id, canonical_key, subject_entity_id,
+        object_entity_id, predicate_id, scope_key, created_at
+      ) VALUES (
+        '${MEMORY_CLAIM_ID}', '${OWNER}',
+        'self|person|sh.relationship.family|default', '${SELF_ENTITY_ID}',
+        '${PERSON_ENTITY_ID}', 'sh.relationship.family', 'default', '${createdAt}'
+      );
+      INSERT INTO memory_claim_versions (
+        memory_claim_version_id, memory_claim_id, user_id, revision, kind,
+        epistemic_status, status, subject_entity_version_id,
+        object_entity_version_id, typed_value, confidence, temporal_status,
+        valid_from_precision, valid_to_precision, last_observed_at,
+        created_by, model_version, prompt_version,
+        predicate_registry_version, created_at
+      ) VALUES (
+        '${MEMORY_CLAIM_VERSION_ID}', '${MEMORY_CLAIM_ID}', '${OWNER}', 1,
+        'objective', 'confirmed', 'active', '${SELF_ENTITY_VERSION_ID}',
+        '${PERSON_ENTITY_VERSION_ID}', '"family"'::jsonb, 0.99, 'current',
+        'unknown', 'unknown', '${createdAt}', 'memory_admission',
+        'memory-model:v1', 'memory-prompt:v1', 1, '${createdAt}'
+      );
+      UPDATE memory_claims
+      SET current_version_id = '${MEMORY_CLAIM_VERSION_ID}'
+      WHERE memory_claim_id = '${MEMORY_CLAIM_ID}';
+      INSERT INTO memory_claim_version_qualifiers (
+        memory_claim_version_qualifier_id, memory_claim_version_id, user_id,
+        axis_id, role_side, typed_value, created_by, created_at
+      ) VALUES (
+        '${QUALIFIER_ID}', '${MEMORY_CLAIM_VERSION_ID}', '${OWNER}',
+        'kinship_term', 'canonical_subject', '"family"'::jsonb,
+        'memory_admission', '${createdAt}'
+      );
+      INSERT INTO memory_claim_version_qualifier_evidence (
+        memory_claim_version_qualifier_evidence_id,
+        memory_claim_version_qualifier_id, user_id, evidence_item_id, created_at
+      ) VALUES (
+        '${QUALIFIER_EVIDENCE_ID}', '${QUALIFIER_ID}', '${OWNER}', '${EI1}',
+        '${createdAt}'
+      );
+      INSERT INTO claim_evidence_links (
+        claim_evidence_link_id, memory_claim_version_id, user_id,
+        evidence_item_id, link_role, created_at
+      ) VALUES (
+        '${CLAIM_EVIDENCE_LINK_ID}', '${MEMORY_CLAIM_VERSION_ID}', '${OWNER}',
+        '${EI1}', 'support', '${createdAt}'
+      );
+      INSERT INTO memory_candidates (
+        memory_candidate_id, user_id, candidate_kind, basis,
+        subject_entity_id, subject_entity_mention_id, object_entity_id,
+        predicate_id, predicate_registry_version, predicate_resolution_status,
+        proposed_object_value, proposed_scope_key, proposed_temporal_status,
+        proposed_valid_from_precision, proposed_valid_to_precision,
+        extraction_policy_version, created_at
+      ) VALUES (
+        '${MEMORY_CANDIDATE_ID}', '${OWNER}', 'objective', 'directly_stated',
+        '${SELF_ENTITY_ID}', '${ENTITY_MENTION_ID}', '${PERSON_ENTITY_ID}',
+        'sh.relationship.family', 1, 'mapped', '"family"'::jsonb, 'default',
+        'current', 'unknown', 'unknown', 'fast-path-extraction:v1', '${createdAt}'
+      );
+      INSERT INTO memory_candidate_evidence_links (
+        memory_candidate_evidence_link_id, memory_candidate_id, user_id,
+        evidence_item_id, created_at
+      ) VALUES (
+        '${CANDIDATE_EVIDENCE_LINK_ID}', '${MEMORY_CANDIDATE_ID}', '${OWNER}',
+        '${EI1}', '${createdAt}'
+      );
+      INSERT INTO memory_forget_requests (
+        memory_forget_request_id, user_id, request_event_revision_id,
+        target_claim_id, target_scope, status, applied_claim_version_id,
+        forget_policy_version, created_at
+      ) VALUES (
+        '${FORGET_REQUEST_ID}', '${OWNER}', '${R1}', '${MEMORY_CLAIM_ID}',
+        'whole_claim', 'applied', '${MEMORY_CLAIM_VERSION_ID}',
+        'memory-forget:v1', '${createdAt}'
+      );
+      INSERT INTO memory_forget_evidence_exclusions (
+        memory_forget_evidence_exclusion_id, user_id, memory_forget_request_id,
+        evidence_item_id, exclusion_scope, status, created_at
+      ) VALUES (
+        '${FORGET_EXCLUSION_ID}', '${OWNER}', '${FORGET_REQUEST_ID}', '${EI1}',
+        'whole_claim', 'active', '${createdAt}'
+      );
+      INSERT INTO memory_forget_reversals (
+        memory_forget_reversal_id, user_id, memory_forget_request_id,
+        request_event_revision_id, reversal_evidence_id, status,
+        applied_claim_version_id, forget_policy_version, created_at
+      ) VALUES (
+        '${FORGET_REVERSAL_ID}', '${OWNER}', '${FORGET_REQUEST_ID}', '${R1}',
+        '${EI1}', 'active', '${MEMORY_CLAIM_VERSION_ID}', 'memory-forget:v1',
+        '${createdAt}'
+      );
+      INSERT INTO relationship_resolver_hints (
+        relationship_resolver_hint_id, user_id, memory_claim_id,
+        memory_claim_version_id, resolved_entity_id, context_entity_id,
+        view_direction, locale, temporal_form, role_side, role_term,
+        role_source, phrase, rebuilt_at
+      ) VALUES (
+        '${RESOLVER_HINT_ID}', '${OWNER}', '${MEMORY_CLAIM_ID}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${PERSON_ENTITY_ID}', '${SELF_ENTITY_ID}',
+        'forward', 'en', 'current', 'canonical_subject', 'family',
+        'predicate_label', 'Morgan is family', '${createdAt}'
+      );
+      INSERT INTO claim_retrieval_projections (
+        claim_retrieval_projection_id, user_id, memory_claim_id,
+        memory_claim_version_id, locale, view_direction, retrieval_text,
+        lexical_terms, projection_policy_version, status, created_at
+      ) VALUES (
+        '${RETRIEVAL_PROJECTION_ID}', '${OWNER}', '${MEMORY_CLAIM_ID}',
+        '${MEMORY_CLAIM_VERSION_ID}', 'en', 'forward', 'Morgan is family',
+        ARRAY['morgan', 'family'], 'memory-retrieval:v1', 'active', '${createdAt}'
+      );
+      INSERT INTO retrieval_runs (
+        retrieval_run_id, user_id, daily_session_id, source_event_revision_id,
+        compiled_context_id, retrieval_policy_version,
+        query_construction_policy_version, projection_policy_version,
+        query_source_refs, normalized_query_terms, lane_plan, deadline_ms,
+        status, duration_ms, timings, started_at, completed_at
+      ) VALUES (
+        '${RETRIEVAL_RUN_ID}', '${OWNER}', '${S1}', '${R1}', '${CC1}',
+        'memory-retrieval:v1', 'context-query:v1', 'memory-retrieval:v1',
+        '[]'::jsonb, '{}'::jsonb, '[]'::jsonb, 200, 'completed', 4,
+        '{}'::jsonb, '${createdAt}', '${createdAt}'
+      );
+      INSERT INTO retrieval_run_candidates (
+        retrieval_run_candidate_id, retrieval_run_id, user_id,
+        memory_claim_version_id, claim_retrieval_projection_id,
+        retrieval_lane, matched_fields, matched_terms, trust_fence_results,
+        rank_components, final_rank, selected_section, selection_reason_codes,
+        rejection_reason_codes, created_at
+      ) VALUES (
+        '${RETRIEVAL_CANDIDATE_ID}', '${RETRIEVAL_RUN_ID}', '${OWNER}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${RETRIEVAL_PROJECTION_ID}',
+        'structured_exact', '[]'::jsonb, '["family"]'::jsonb, '[]'::jsonb,
+        '{}'::jsonb, 1, 'objective_memory', ARRAY['eligible'], ARRAY[]::text[],
+        '${createdAt}'
+      );
+      INSERT INTO workflow_commands (
+        workflow_command_id, command_type, subject_type, subject_id,
+        source_revision, policy_version, expected_data_epoch, status,
+        created_at
+      ) VALUES
+        ('${FAST_PATH_WORKFLOW_ID}', 'fast_path_extraction',
+          'conversation_event_revision', '${R1}', 1,
+          'fast-path-extraction:v1', 1, 'dispatched', '${createdAt}'),
+        ('${CONSOLIDATION_WORKFLOW_ID}', 'daily_consolidation', 'app_user',
+          '${OWNER}', 20260812, 'memory-consolidation:v1', 1, 'completed', '${createdAt}'),
+        ('${CORRECTION_WORKFLOW_ID}', 'memory_correction_followup', 'memory_claim',
+          '${MEMORY_CLAIM_ID}', 1, 'memory-correction:v1', 1, 'completed', '${createdAt}');
+      INSERT INTO outbox_events (
+        outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
+        aggregate_revision, event_type, status, next_attempt_at, lease_owner,
+        lease_expires_at, attempt_count, workflow_receipt_id, payload,
+        created_at, aggregate_coverage, aggregate_data_epoch
+      ) VALUES
+        ('${FAST_PATH_OUTBOX_ID}', '${FAST_PATH_WORKFLOW_ID}',
+          'conversation_event_revision', '${R1}', 1,
+          'fast_path_extraction_requested', 'dispatched', '${createdAt}',
+          'sayhear-memory-test', '${expiresAt}', 1, 'memory-wf-fast', '{}',
+          '${createdAt}', 0, 1),
+        ('${CONSOLIDATION_OUTBOX_ID}', '${CONSOLIDATION_WORKFLOW_ID}',
+          'app_user', '${OWNER}', 20260812, 'daily_consolidation_requested',
+          'dispatched', '${createdAt}', 'sayhear-memory-test', '${expiresAt}',
+          1, 'memory-wf-consolidation', '{}', '${createdAt}', 0, 1),
+        ('${CORRECTION_OUTBOX_ID}', '${CORRECTION_WORKFLOW_ID}', 'memory_claim',
+          '${MEMORY_CLAIM_ID}', 1, 'memory_correction_followup_requested',
+          'dispatched', '${createdAt}', 'sayhear-memory-test', '${expiresAt}',
+          1, 'memory-wf-correction', '{}', '${createdAt}', 0, 1);
+      INSERT INTO fast_path_extraction_runs (
+        fast_path_run_id, user_id, daily_session_id, event_revision_id,
+        event_conversation_event_id, extraction_policy_version,
+        workflow_command_id, model_attempt_id, memory_extract_config_version,
+        memory_extract_model_version, memory_extract_prompt_version, status,
+        event_committed_at, extracted_at, visibility_lag_ms,
+        visibility_target_met, item_count, mention_count, candidate_count,
+        created_at, updated_at
+      ) VALUES (
+        '${FAST_PATH_RUN_ID}', '${OWNER}', '${S1}', '${R1}', '${E1}',
+        'fast-path-extraction:v1', '${FAST_PATH_WORKFLOW_ID}', '${M1}',
+        'memory-extract-config:v1', 'memory-extract-model:v1',
+        'memory-extract-prompt:v1', 'extracted', '${createdAt}', '${createdAt}',
+        10, TRUE, 1, 1, 1, '${createdAt}', '${createdAt}'
+      );
+      INSERT INTO fast_path_session_items (
+        fast_path_item_id, user_id, daily_session_id, event_revision_id,
+        fast_path_run_id, item_class, summary, memory_candidate_id,
+        entity_mention_id, evidence_item_id, dedupe_key, created_at
+      ) VALUES (
+        '${FAST_PATH_ITEM_ID}', '${OWNER}', '${S1}', '${R1}',
+        '${FAST_PATH_RUN_ID}', 'person', 'Morgan family context',
+        '${MEMORY_CANDIDATE_ID}', '${ENTITY_MENTION_ID}', '${EI1}',
+        'memory-purge-fixture', '${createdAt}'
+      );
+      INSERT INTO entity_resolve_gate_outcomes (
+        entity_resolve_gate_outcome_id, user_id, entity_mention_id,
+        gate_policy_version, resolver_policy_version, t_auto, verdict,
+        selected_entity_id, confidence, candidate_count, committed, created_at
+      ) VALUES (
+        '${ENTITY_GATE_OUTCOME_ID}', '${OWNER}', '${ENTITY_MENTION_ID}',
+        'entity-resolve-gate:v1', 'entity-resolve:v1', 0.9, 'match',
+        '${PERSON_ENTITY_ID}', 0.98, 1, TRUE, '${createdAt}'
+      );
+      INSERT INTO entity_clarification_proposals (
+        entity_clarification_proposal_id, user_id, daily_session_id,
+        event_revision_id, entity_mention_id, topic_key, semantic_impact,
+        status, question_text, created_at
+      ) VALUES (
+        '${ENTITY_CLARIFICATION_ID}', '${OWNER}', '${S1}', '${R1}',
+        '${ENTITY_MENTION_ID}', 'family', 'relationship_attribution',
+        'committed', 'Which Morgan do you mean?', '${createdAt}'
+      );
+      INSERT INTO memory_consolidation_runs (
+        memory_consolidation_run_id, user_id, consolidation_kind, anchor_date,
+        policy_version, workflow_command_id, expected_data_epoch,
+        model_attempt_id, consolidate_config_version,
+        consolidate_model_version, consolidate_prompt_version, status,
+        diff_count, promoted_count, created_at, updated_at
+      ) VALUES (
+        '${CONSOLIDATION_RUN_ID}', '${OWNER}', 'daily', '2026-08-12',
+        'memory-consolidation:v1', '${CONSOLIDATION_WORKFLOW_ID}', 1, '${M1}',
+        'consolidate-config:v1', 'consolidate-model:v1', 'consolidate-prompt:v1',
+        'consolidated', 1, 1, '${createdAt}', '${createdAt}'
+      );
+      INSERT INTO memory_consolidation_diffs (
+        memory_consolidation_diff_id, memory_consolidation_run_id, user_id,
+        diff_index, diff_kind, memory_candidate_id, memory_claim_id, outcome,
+        reason_code, created_at
+      ) VALUES (
+        '${CONSOLIDATION_DIFF_ID}', '${CONSOLIDATION_RUN_ID}', '${OWNER}', 0,
+        'reinforce_existing', '${MEMORY_CANDIDATE_ID}', '${MEMORY_CLAIM_ID}',
+        'reinforced', 'fixture', '${createdAt}'
+      );
+      INSERT INTO conversation_action_executions (
+        action_execution_id, user_id, decision_command_id,
+        request_event_revision_id, action_kind, schema_version, catalog_version,
+        target_kind, daily_session_id, source_revision, expected_data_epoch,
+        idempotency_key, admission_status, execution_status, disposition,
+        created_at, resolved_claim_id, resolved_claim_version_id,
+        resolved_qualifier_id
+      ) VALUES (
+        '${ACTION_EXECUTION_ID}', '${OWNER}', '${G1}', '${R1}',
+        'memory_forget', 'memory-action:v1', 'conversation-action-catalog:v1',
+        'relationship_qualifier', '${S1}', 1, 1, 'memory-purge-action',
+        'accepted', 'succeeded', 'applied', '${createdAt}', '${MEMORY_CLAIM_ID}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${QUALIFIER_ID}'
+      );
+      INSERT INTO conversation_action_receipts (
+        action_receipt_id, action_execution_id, receipt_sequence,
+        admission_status, execution_status, disposition, created_at, receipt_key,
+        resolved_claim_id, resolved_claim_version_id, resolved_qualifier_id,
+        disposition_detail
+      ) VALUES (
+        '${ACTION_RECEIPT_ID}', '${ACTION_EXECUTION_ID}', 1, 'accepted',
+        'succeeded', 'applied', '${createdAt}', 'admission', '${MEMORY_CLAIM_ID}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${QUALIFIER_ID}', '{}'::jsonb
+      );
+      INSERT INTO conversation_action_payloads (
+        action_execution_id, payload_schema_version, ciphertext, expires_at
+      ) VALUES (
+        '${ACTION_EXECUTION_ID}', 'memory-action:v1', decode('00', 'hex'), '${expiresAt}'
+      );
+      INSERT INTO conversation_action_handles (
+        handle, compiled_context_id, user_id, generation_command_id, action_kind,
+        target_kind, source_revision, expected_data_epoch, created_at, expires_at,
+        target_claim_id, target_claim_version_id, target_qualifier_id
+      ) VALUES (
+        '${ACTION_HANDLE}', '${CC1}', '${OWNER}', '${G1}', 'memory_forget',
+        'relationship_qualifier', 1, 1, '${createdAt}', '${expiresAt}',
+        '${MEMORY_CLAIM_ID}', '${MEMORY_CLAIM_VERSION_ID}', '${QUALIFIER_ID}'
+      );
+      UPDATE workflow_commands
+      SET action_execution_id = '${ACTION_EXECUTION_ID}'
+      WHERE workflow_command_id = '${CORRECTION_WORKFLOW_ID}';
+      INSERT INTO memory_claim_corrections (
+        memory_claim_correction_id, user_id, request_event_revision_id,
+        target_claim_id, deactivated_claim_version_id, target_scope,
+        corrected_fact_recorded, correction_policy_version, created_at
+      ) VALUES (
+        '${CLAIM_CORRECTION_ID}', '${OWNER}', '${R1}', '${MEMORY_CLAIM_ID}',
+        '${MEMORY_CLAIM_VERSION_ID}', 'whole_claim', FALSE,
+        'memory-correction:v1', '${createdAt}'
+      );
+      INSERT INTO memory_impression_vetoes (
+        memory_impression_veto_id, user_id, memory_claim_id,
+        vetoed_claim_version_id, request_event_revision_id, status,
+        impression_correction_policy_version, created_at
+      ) VALUES (
+        '${IMPRESSION_VETO_ID}', '${OWNER}', '${MEMORY_CLAIM_ID}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${R1}', 'active', 'memory-correction:v1',
+        '${createdAt}'
+      );
+      INSERT INTO memory_correction_followups (
+        memory_correction_followup_id, user_id, workflow_command_id,
+        action_execution_id, target_claim_id, affected_journal_statement_count,
+        followup_policy_version, created_at
+      ) VALUES (
+        '${CORRECTION_FOLLOWUP_ID}', '${OWNER}', '${CORRECTION_WORKFLOW_ID}',
+        '${ACTION_EXECUTION_ID}', '${MEMORY_CLAIM_ID}', 1,
+        'memory-correction-followup:v1', '${createdAt}'
+      );
+    `,
+  );
+}
+
+async function seedOtherOwnerWorkflowData(pool: IsolatedPostgresSchema["pool"]) {
+  const startedAt = "2026-08-12T15:03:00.000Z";
+  await pool.query(`
+    INSERT INTO app_users (user_id, status, data_epoch)
+    VALUES ('${OTHER_OWNER}', 'active', 1);
+    INSERT INTO daily_sessions (
+      daily_session_id, user_id, logical_date, timezone_at_start, started_at,
+      last_activity_at, activity_state, current_continuous_exchange_no,
+      dialogue_revision, source_revision, next_turn_sequence_no,
+      next_event_sequence_no, created_at, updated_at
+    ) VALUES (
+      '${OTHER_SESSION}', '${OTHER_OWNER}', '2026-08-12', 'UTC', '${startedAt}',
+      '${startedAt}', 'active', 1, 0, 0, 1, 1, '${startedAt}', '${startedAt}'
+    );
+    INSERT INTO workflow_commands (
+      workflow_command_id, command_type, subject_type, subject_id,
+      source_revision, policy_version, expected_data_epoch, status, created_at
+    ) VALUES (
+      '${OTHER_WORKFLOW}', 'journal_eligibility', 'daily_session',
+      '${OTHER_SESSION}', 0, 'journal-eligibility:v1', 1, 'created', '${startedAt}'
+    );
+    INSERT INTO outbox_events (
+      outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
+      aggregate_revision, event_type, status, next_attempt_at, attempt_count,
+      payload, created_at, aggregate_coverage, aggregate_data_epoch
+    ) VALUES (
+      '${OTHER_OUTBOX}', '${OTHER_WORKFLOW}', 'daily_session', '${OTHER_SESSION}',
+      0, 'journal_eligibility_requested', 'pending', '${startedAt}', 0,
+      '{}'::jsonb, '${startedAt}', 0, 1
+    );
+  `);
+}
+
+describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", () => {
   let database: IsolatedPostgresSchema;
   let markerDatabase: IsolatedPostgresSchema;
   let purgeRepository: PostgresOwnerPurgeRepository;
@@ -776,6 +1206,291 @@ describe("Internal Owner Full Purge system seam — 1A.2 operator-only purge", (
     expect(finalOrder?.retentionPendingAt).not.toBeNull();
     expect(finalOrder?.activeSystemDeletedAt).not.toBeNull();
     expect(finalOrder?.needsAttentionReason).toBeNull();
+  });
+
+  it("purges the Entity, Memory, fast-path, relationship, retrieval, and Inspector data face while retaining only contentless identity envelopes", async () => {
+    await seedMemoryPurgeData(database.pool);
+    await seedOtherOwnerWorkflowData(database.pool);
+    const { order } = await startPurgeOrder();
+
+    await expect(
+      purgeService.propagate({ ownerPurgeOrderId: order.ownerPurgeOrderId }),
+    ).resolves.toMatchObject({ status: "retention_pending" });
+
+    for (const table of [
+      "entity_labels",
+      "entity_mentions",
+      "entity_mention_candidates",
+      "memory_candidates",
+      "memory_candidate_evidence_links",
+      "memory_forget_requests",
+      "memory_forget_evidence_exclusions",
+      "memory_forget_reversals",
+      "relationship_resolver_hints",
+      "claim_evidence_links",
+      "memory_claim_version_qualifier_evidence",
+      "claim_retrieval_projections",
+      "retrieval_run_candidates",
+      "retrieval_runs",
+      "fast_path_session_items",
+      "entity_resolve_gate_outcomes",
+      "entity_clarification_proposals",
+      "fast_path_extraction_runs",
+      "memory_consolidation_diffs",
+      "memory_consolidation_runs",
+      "memory_claim_corrections",
+      "memory_impression_vetoes",
+      "memory_correction_followups",
+      "conversation_action_handles",
+      "conversation_action_payloads",
+      "conversation_action_receipts",
+      "conversation_action_executions",
+    ]) {
+      expect(await countRows(`SELECT 1 FROM ${table}`)).toBe(0);
+    }
+    for (const workflowCommandId of [
+      WC1,
+      FAST_PATH_WORKFLOW_ID,
+      CONSOLIDATION_WORKFLOW_ID,
+      CORRECTION_WORKFLOW_ID,
+    ]) {
+      expect(
+        await countRows(
+          `SELECT 1 FROM workflow_commands
+           WHERE workflow_command_id = '${workflowCommandId}'`,
+        ),
+      ).toBe(0);
+    }
+    for (const outboxEventId of [
+      OE1,
+      FAST_PATH_OUTBOX_ID,
+      CONSOLIDATION_OUTBOX_ID,
+      CORRECTION_OUTBOX_ID,
+    ]) {
+      expect(
+        await countRows(
+          `SELECT 1 FROM outbox_events
+           WHERE outbox_event_id = '${outboxEventId}'`,
+        ),
+      ).toBe(0);
+    }
+
+    const purgedClaim = await database.pool.query<{
+      content_purged_at: Date | null;
+      current_version_id: string | null;
+      deleted_at: Date | null;
+    }>(
+      `SELECT content_purged_at, current_version_id, deleted_at
+       FROM memory_claims
+       WHERE memory_claim_id = $1 AND user_id = $2`,
+      [MEMORY_CLAIM_ID, OWNER],
+    );
+    expect(purgedClaim.rows[0]).toMatchObject({
+      current_version_id: null,
+    });
+    expect(purgedClaim.rows[0]?.content_purged_at).not.toBeNull();
+    expect(purgedClaim.rows[0]?.deleted_at).not.toBeNull();
+
+    const purgedClaimVersion = await database.pool.query<{
+      content_purged_at: Date | null;
+      typed_value: unknown;
+    }>(
+      `SELECT content_purged_at, typed_value
+       FROM memory_claim_versions
+       WHERE memory_claim_version_id = $1 AND user_id = $2`,
+      [MEMORY_CLAIM_VERSION_ID, OWNER],
+    );
+    expect(purgedClaimVersion.rows[0]?.content_purged_at).not.toBeNull();
+    expect(purgedClaimVersion.rows[0]?.typed_value).toBeNull();
+
+    const purgedQualifier = await database.pool.query<{
+      content_purged_at: Date | null;
+      typed_value: unknown;
+    }>(
+      `SELECT content_purged_at, typed_value
+       FROM memory_claim_version_qualifiers
+       WHERE memory_claim_version_qualifier_id = $1 AND user_id = $2`,
+      [QUALIFIER_ID, OWNER],
+    );
+    expect(purgedQualifier.rows[0]?.content_purged_at).not.toBeNull();
+    expect(purgedQualifier.rows[0]?.typed_value).toBeNull();
+
+    const entities = await database.pool.query<{
+      entity_id: string;
+      current_version_id: string | null;
+      deleted_at: Date | null;
+    }>(
+      `SELECT entity_id, current_version_id, deleted_at
+       FROM entities
+       WHERE user_id = $1
+       ORDER BY entity_id`,
+      [OWNER],
+    );
+    expect(entities.rows).toEqual([
+      {
+        entity_id: SELF_ENTITY_ID,
+        current_version_id: SELF_ENTITY_VERSION_ID,
+        deleted_at: null,
+      },
+      {
+        entity_id: PERSON_ENTITY_ID,
+        current_version_id: null,
+        deleted_at: expect.any(Date),
+      },
+    ]);
+
+    const selfBinding = await database.pool.query<{
+      entity_id: string;
+      status: string;
+      content_purged_at: Date | null;
+    }>(
+      `SELECT binding.entity_id, version.status, version.content_purged_at
+       FROM user_self_entities binding
+       JOIN entities entity ON entity.entity_id = binding.entity_id
+       JOIN entity_versions version ON version.entity_version_id = entity.current_version_id
+       WHERE binding.user_id = $1`,
+      [OWNER],
+    );
+    expect(selfBinding.rows).toEqual([
+      {
+        entity_id: SELF_ENTITY_ID,
+        status: "active",
+        content_purged_at: null,
+      },
+    ]);
+
+    const purgedEntityVersion = await database.pool.query<{
+      content_purged_at: Date | null;
+    }>(
+      `SELECT content_purged_at
+       FROM entity_versions
+       WHERE entity_version_id = $1 AND user_id = $2`,
+      [PERSON_ENTITY_VERSION_ID, OWNER],
+    );
+    expect(purgedEntityVersion.rows[0]?.content_purged_at).not.toBeNull();
+
+    // The shared GIN / FTS indexes remain schema-level rebuildable structures;
+    // only this owner's projection rows disappear.
+    const retrievalIndexes = await database.pool.query<{ indexname: string }>(
+      `SELECT indexname
+       FROM pg_indexes
+       WHERE schemaname = current_schema()
+         AND tablename = 'claim_retrieval_projections'
+         AND indexname IN (
+           'claim_retrieval_projections_lexical_terms_idx',
+           'claim_retrieval_projections_english_search_idx'
+         )
+       ORDER BY indexname`,
+    );
+    expect(retrievalIndexes.rows.map((row) => row.indexname)).toEqual([
+      "claim_retrieval_projections_english_search_idx",
+      "claim_retrieval_projections_lexical_terms_idx",
+    ]);
+
+    const vectorColumns = await database.pool.query(
+      `SELECT table_name, column_name
+       FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND udt_name = 'vector'`,
+    );
+    expect(vectorColumns.rows).toHaveLength(0);
+
+    // The polymorphic workflow table remains tenant-isolated even while this
+    // owner loses all of its command and outbox records.
+    expect(
+      await countRows(
+        `SELECT 1 FROM daily_sessions WHERE user_id = '${OTHER_OWNER}'`,
+      ),
+    ).toBe(1);
+    expect(
+      await countRows(
+        `SELECT 1 FROM workflow_commands WHERE workflow_command_id = '${OTHER_WORKFLOW}'`,
+      ),
+    ).toBe(1);
+    expect(
+      await countRows(
+        `SELECT 1 FROM outbox_events WHERE outbox_event_id = '${OTHER_OUTBOX}'`,
+      ),
+    ).toBe(1);
+  });
+
+  it("reapplies an external marker to an old backup without resurrecting memory or Inspector traces", async () => {
+    await seedMemoryPurgeData(database.pool);
+    await markerRepository.writeMarker({
+      userId: OWNER,
+      dataEpoch: 2,
+      purgedAt: BASE_TIME,
+      backupRetentionUntil: null,
+      receipts: [],
+    });
+    const markerBefore = await markerRepository.findMarker({
+      dataEpoch: 2,
+      userId: OWNER,
+    });
+
+    await expect(
+      purgeRepository.reapplyMarker({
+        userId: OWNER,
+        dataEpoch: 2,
+        now: clock(),
+      }),
+    ).resolves.toEqual({ outcome: "reapplied" });
+
+    expect(
+      await countRows(
+        `SELECT 1 FROM memory_claims
+         WHERE user_id = '${OWNER}' AND content_purged_at IS NULL`,
+      ),
+    ).toBe(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM retrieval_run_candidates
+         WHERE user_id = '${OWNER}'`,
+      ),
+    ).toBe(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM relationship_resolver_hints
+         WHERE user_id = '${OWNER}'`,
+      ),
+    ).toBe(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM claim_retrieval_projections
+         WHERE user_id = '${OWNER}'`,
+      ),
+    ).toBe(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM entities
+         WHERE user_id = '${OWNER}' AND entity_id = '${PERSON_ENTITY_ID}'
+           AND (current_version_id IS NOT NULL OR deleted_at IS NULL)`,
+      ),
+    ).toBe(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM workflow_commands
+         WHERE subject_id IN ('${S1}', '${MEMORY_CLAIM_ID}', '${PERSON_ENTITY_ID}', '${OWNER}')`,
+      ),
+    ).toBe(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM user_self_entities
+         WHERE user_id = '${OWNER}'`,
+      ),
+    ).toBe(1);
+    await expect(markerRepository.findMarker({ dataEpoch: 2, userId: OWNER })).resolves.toEqual(
+      markerBefore,
+    );
+
+    const owner = await database.pool.query<{
+      status: string;
+      data_epoch: string;
+    }>(
+      "SELECT status, data_epoch::text FROM app_users WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(owner.rows[0]).toMatchObject({ status: "active", data_epoch: "2" });
   });
 
   it("keeps the external purge marker at the per-owner high-water epoch", async () => {

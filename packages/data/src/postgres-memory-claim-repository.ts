@@ -1373,8 +1373,15 @@ export async function executeClaimAdmissionPlanWithin(
         ],
       );
 
+      // Owner Full Purge keeps a contentless logical Claim envelope so old
+      // history cannot return. A later fresh admission may start a new
+      // lifecycle on that identity; clear only the envelope markers while the
+      // new current version is installed, leaving every old version purged.
       const moved = await client.query<{ memory_claim_id: string }>(
-        `UPDATE memory_claims SET current_version_id = $3
+        `UPDATE memory_claims
+         SET current_version_id = $3,
+             deleted_at = NULL,
+             content_purged_at = NULL
          WHERE user_id = $1 AND memory_claim_id = $2
            AND current_version_id IS NOT DISTINCT FROM $4
          RETURNING memory_claim_id`,
