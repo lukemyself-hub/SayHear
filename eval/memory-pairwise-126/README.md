@@ -42,12 +42,19 @@ production shadowing。规则权威在
 
 ## 使用
 
+> **2026-08-29 状态**：Memory-off 臂与 rollback demo 已完成入库；Memory-on 臂在
+> DeepSeek 余额耗尽（HTTP 402 Insufficient Balance）后 38/54 场景处中断，产物已
+> 删除。充值后重跑第 1 步 ON 臂（`SAYHEAR_PROVIDER_TIMEOUT_MS=180000`，memory.extract
+> 单次调用 40–70 s 是瓶颈），再依次执行第 2 步起的所有检查。OpenAI 备用 key 已失效
+> （401），不可切换。
+
 ```sh
 # 0. 前置门槛：v3 包 fixture 机械校验（#126 证据运行必须先过这道门）
 pnpm exec tsx eval/scenario-pack-v3/verify-pack.ts
 
-# 1. 双臂捕获（真实 champion；两臂同一冻结输入）
-pnpm exec tsx eval/memory-pairwise-126/capture-twins.ts --arm on
+# 1. 双臂捕获（真实 champion；两臂同一冻结输入；ON 臂需要 180s provider timeout）
+SAYHEAR_PROVIDER_TIMEOUT_MS=180000 \
+  pnpm exec tsx eval/memory-pairwise-126/capture-twins.ts --arm on
 pnpm exec tsx eval/memory-pairwise-126/capture-twins.ts --arm off
 
 # 2. 确定性硬门禁（AC 35）：tiered-checks:v3 过 Memory-on 转录
