@@ -29,13 +29,13 @@ consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe �
 
 | AC | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 35 | 确定性硬门禁全 locale 100% 零容忍（未注入引用、token 级漏召回、错 Entity、遗忘内容复活、无证据人格判断、fence/budget/200ms 违规） | 待 ON 臂重跑（DeepSeek 余额耗尽中断） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
-| 36 | memory 盲评 vs Memory-off 孪生：总净偏好严格为正、无语言净回退、无强制类别净回退、持平不计分、三项确定性零容忍不以偏好抵消 | Memory-off 臂 ✅ 已入库；ON 臂待重跑 + Luke 盲评 | `run-twins-{on,off}` → `build-memory-pairs`（15 场景、种子 1260）→ 评审页 → `unblind` 门槛 |
-| 37 | 45 场景机械复跑硬门禁 100% 无新违规；味觉样本不重跑 | 待 ON 臂重跑（同一转录联接 v2.1 fixture） | `run-twins-on/findings-v2.json` |
+| 35 | 确定性硬门禁全 locale 100% 零容忍 | ❌ **未满足**：10 违规 = required_recall_missing ×8（全部 8 个 token 门禁 memory 场景）+ too_many_questions ×2（1 真 + 1 FP 候选） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
+| 36 | memory 盲评 vs Memory-off 孪生 | ⏸ 暂缓：ON 臂 0 注入 → 双臂行为等价，盲评无意义；待召回迭代后重跑 | `run-twins-{on,off}` → `build-memory-pairs`（15 场景、种子 1260）→ 评审页 → `unblind` 门槛 |
+| 37 | 45 场景机械复跑 | ❌ **未满足**：too_many_questions ×2 为新违规（good-news-mix t1 真双问；topic-change-mix t2 复合单问 FP 候选，待 FP 台账裁定） | `run-twins-on/findings-v2.json` |
 | 38 | 检索精度会计基线（fence/budget/deadline 绝对零，无阈值） | ✅ #125 | `eval/retrieval-precision-v1/run/baseline-2026-08-28/`（本次复验纯侧测试绿） |
 | 39 | trust-action 选择数据集门禁 | ✅ #124 | `eval/action-selection/memory-trust-actions:v1/`（本次复验 verify-pack OK） |
-| 40 | 合并范围保护：无 1A.3b 产物 / embedding / vector、无模型路由 / Provider / Champion 变更、无回填 | 工具链就绪，待 ON manifest | `scope-protection.json`（迁移史 + 源码扫描 + incumbent champion 簇逐字节对比） |
-| pin list | 全 pin 清单记录于 manifest 并与生产常量互证（catalog v2 五 Trust-Control、registry #93、entity.resolve t_auto、memory.extract/consolidate prompt、portrait-selection:v1、检索 manifest+budgets v1、grounding-guard/opener-permission、trust-action P1–P6、tiered-checks:v3、scenario-pack:v3、locale-pack/safety-resources v2、Entity/Memory role Champion 配置） | 工具链就绪 | `verify-cutover-pins.ts` → `pins-report.json` |
+| 40 | 合并范围保护 | ✅ 45 migrations + 148 源文件扫描零命中，champion 簇与 incumbent 逐字节一致 | `scope-protection.json`（迁移史 + 源码扫描 + incumbent champion 簇逐字节对比） |
+| pin list | 全 pin 清单互证 | ✅ pins-report 全绿（含运行时 t_auto、CompiledContext selection versions） | `verify-cutover-pins.ts` → `pins-report.json` |
 | rollback | code revert + re-pin；cutover 后 memory 数据原地冻结（sha256 于 claim id + 当前版本 id 不变）、data epoch 不动 | ✅ 真实 champion 已验证 | `rollback-demo/`（manifest + 双阶段转录） |
 
 ### 口径说明
