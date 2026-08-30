@@ -236,6 +236,8 @@ export type TwinManifest = Readonly<{
     memoryConsolidation: boolean;
     memoryRetrieval: boolean;
   }>;
+  /** Workflow-entrypoint failures that survived the bounded retry. */
+  dispatchFailures: readonly Readonly<{ event: string; reason: string }>[];
   roleConfigurations: readonly Readonly<Record<string, string>>[];
   scenarioIsolation: string;
   scenarioFile: Readonly<{ path: string; scenarioCount: number; sha256?: string }>;
@@ -715,12 +717,19 @@ export async function runTwinCapture(input: {
     pool,
   );
   let workflowCounter = 0;
+  let dispatchFailureLog: readonly Readonly<{
+    event: string;
+    reason: string;
+  }>[] = [];
   const dispatch = async (): Promise<{ dispatched: number; failed: number }> => {
     const dispatcher = createOutboxDispatcherService({
       clock,
       leaseDurationMs: 60_000,
       leaseOwner: `memory-twin-${arm}`,
       repository: outboxDispatcherRepository,
+      // Production runs these entrypoints as durable workflows, which retry
+      // transient provider failures; a single-shot dispatch would understate
+      // production. Bounded retry with backoff keeps the harness faithful.
       startWorkflow: async (event: {
         eventType: string;
         policyVersion: string;
@@ -728,46 +737,70 @@ export async function runTwinCapture(input: {
       }) => {
         workflowCounter += 1;
         const receipt = `wf-twin-${arm}-${workflowCounter}`;
-        if (event.eventType === "fast_path_extraction_requested") {
-          await runFastPathExtraction({
-            command: {
-              workflowCommandId: event.workflowCommandId,
-              policyVersion: event.policyVersion,
-            },
-            dependencies: await fastPathExtractionEntrypointDependencies(
-              receipt,
-            ),
-          });
-        } else if (
-          event.eventType === "daily_consolidation_requested" ||
-          event.eventType === "weekly_consolidation_requested" ||
-          event.eventType === "memory_sweeper_requested"
-        ) {
-          await runMemoryConsolidation({
-            command: {
-              workflowCommandId: event.workflowCommandId,
-              policyVersion: event.policyVersion,
-            },
-            dependencies: await memoryConsolidationEntrypointDependencies(
-              receipt,
-            ),
-          });
-        } else if (
-          event.eventType === "memory_correction_followup_requested" ||
-          event.eventType === "entity_identity_revalidation_requested" ||
-          event.eventType === "journal_eligibility_requested" ||
-          event.eventType === "rolling_summary_requested" ||
-          event.eventType === "dialogue_state_requested"
-        ) {
-          // Out of scope for the twin comparison (the incumbent baseline runs
-          // never started those projectors either); the command is marked
-          // dispatched so the outbox stays observable and clean.
-        } else {
-          throw new Error(
-            `Unsupported outbox event type: ${event.eventType}`,
-          );
+        const runOnce = async (): Promise<void> => {
+          if (event.eventType === "fast_path_extraction_requested") {
+            await runFastPathExtraction({
+              command: {
+                workflowCommandId: event.workflowCommandId,
+                policyVersion: event.policyVersion,
+              },
+              dependencies: await fastPathExtractionEntrypointDependencies(
+                receipt,
+              ),
+            });
+          } else if (
+            event.eventType === "daily_consolidation_requested" ||
+            event.eventType === "weekly_consolidation_requested" ||
+            event.eventType === "memory_sweeper_requested"
+          ) {
+            await runMemoryConsolidation({
+              command: {
+                workflowCommandId: event.workflowCommandId,
+                policyVersion: event.policyVersion,
+              },
+              dependencies: await memoryConsolidationEntrypointDependencies(
+                receipt,
+              ),
+            });
+          } else if (
+            event.eventType === "memory_correction_followup_requested" ||
+            event.eventType === "entity_identity_revalidation_requested" ||
+            event.eventType === "journal_eligibility_requested" ||
+            event.eventType === "rolling_summary_requested" ||
+            event.eventType === "dialogue_state_requested"
+          ) {
+            // Out of scope for the twin comparison (the incumbent baseline
+            // runs never started those projectors either); the command is
+            // marked dispatched so the outbox stays observable and clean.
+          } else {
+            throw new Error(
+              `Unsupported outbox event type: ${event.eventType}`,
+            );
+          }
+        };
+        const attempts = 3;
+        for (let attempt = 1; ; attempt += 1) {
+          try {
+            await runOnce();
+            return { workflowReceiptId: receipt };
+          } catch (error) {
+            if (attempt >= attempts) {
+              dispatchFailureLog = [
+                ...dispatchFailureLog,
+                {
+                  event: event.eventType,
+                  reason: error instanceof Error
+                    ? error.message.slice(0, 200)
+                    : String(error).slice(0, 200),
+                },
+              ];
+              throw error;
+            }
+            // Idempotent entrypoints converge on replay; the backoff mirrors
+            // platform workflow retry pacing.
+            await new Promise((resolve) => setTimeout(resolve, 5_000));
+          }
         }
-        return { workflowReceiptId: receipt };
       },
     });
     return dispatcher.dispatchPending();
@@ -1121,6 +1154,7 @@ export async function runTwinCapture(input: {
       memoryConsolidation: memoryOn,
       memoryRetrieval: memoryOn,
     },
+    dispatchFailures: dispatchFailureLog,
     roleConfigurations: [
       "memory.extract",
       "entity.resolve",
