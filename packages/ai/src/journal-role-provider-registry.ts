@@ -96,17 +96,28 @@ function normalizeExtractBatch(
             ? {}
             : { evidenceLocatorKeys: [] }),
           ...(Array.isArray(candidate.qualifiers) ? {} : { qualifiers: [] }),
-          ...(!candidate.temporal || typeof candidate.temporal !== "object"
-            ? {
-                temporal: {
-                  temporalStatus: "unknown",
-                  validFrom: null,
-                  validFromPrecision: "unknown",
-                  validTo: null,
-                  validToPrecision: "unknown",
-                },
-              }
-            : {}),
+      ...(!candidate.temporal || typeof candidate.temporal !== "object"
+        ? {
+            temporal: {
+              temporalStatus: "unknown",
+              validFrom: null,
+              validFromPrecision: "unknown",
+              validTo: null,
+              validToPrecision: "unknown",
+            },
+          }
+        : {
+            // Providers null out precision fields alongside null dates; the
+            // candidate rows require non-null precision ("unknown") even
+            // when the boundary itself is unknown.
+            temporal: {
+              ...candidate.temporal,
+              validFromPrecision:
+                candidate.temporal.validFromPrecision ?? "unknown",
+              validToPrecision:
+                candidate.temporal.validToPrecision ?? "unknown",
+            },
+          }),
         };
       })
       .filter((candidate) => {
