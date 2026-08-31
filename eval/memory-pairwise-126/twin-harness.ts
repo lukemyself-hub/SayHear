@@ -1099,26 +1099,37 @@ export async function runTwinCapture(input: {
       // does instead of recording a permanently voiceless turn (issue #126
       // evidence runs: one flaked turn at the correction boundary silently
       // broke the whole temporal chain).
-      if (events.at(-1)?.type === "response_failed") {
+      // Bounded to two retry rounds: a real user hits the retry button again
+      // when the first retry also fails. The v3.2 full run (2026-08-31) had
+      // one turn where both the original response and the single retry
+      // failed, leaving a voiceless turn that contaminated the scenario's
+      // evidence (temporal-zh t3); a second round minutes later succeeds
+      // whenever the failure is a transient provider hiccup. Still bounded —
+      // a persistently failing turn must surface as response_failed, never
+      // loop.
+      for (
+        let retryRound = 0;
+        retryRound < 2 && events.at(-1)?.type === "response_failed";
+        retryRound += 1
+      ) {
         const failedTurnId = events.find(
           (event) => event.type === "user_committed",
         )?.turnId;
-        if (typeof failedTurnId === "string") {
-          log(
-            `[twin-${arm}] response_failed on turn ${turnIndex + 1}; retrying via the production retry endpoint`,
-          );
-          const retryResponse = await retryHandler(
-            new Request("http://localhost/api/internal/conversation/responses/retry", {
-              body: JSON.stringify({
-                originalTurnId: failedTurnId,
-                retryRequestId: `${scenario.id}-t${turnIndex + 1}-retry`,
-              }),
-              headers: { "content-type": "application/json" },
-              method: "POST",
+        if (typeof failedTurnId !== "string") break;
+        log(
+          `[twin-${arm}] response_failed on turn ${turnIndex + 1}; retry round ${retryRound + 1} via the production retry endpoint`,
+        );
+        const retryResponse = await retryHandler(
+          new Request("http://localhost/api/internal/conversation/responses/retry", {
+            body: JSON.stringify({
+              originalTurnId: failedTurnId,
+              retryRequestId: `${scenario.id}-t${turnIndex + 1}-retry${retryRound + 1}`,
             }),
-          );
-          events = await readNdjson(retryResponse);
-        }
+            headers: { "content-type": "application/json" },
+            method: "POST",
+          }),
+        );
+        events = await readNdjson(retryResponse);
       }
       const wallMs = Math.round(performance.now() - wallStartedAt);
       const assistantText = joinDeltas(events);

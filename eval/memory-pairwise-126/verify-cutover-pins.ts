@@ -69,7 +69,7 @@ export function expectedPinList(): Record<string, unknown> {
       // en/mix day-3 recall probes onto published stated_style surfaces so
       // the deterministic query has a matchable signal; checker semantics
       // stay tiered-checks:v3.
-      scenarioPack: "scenario-pack:v3.2",
+      scenarioPack: "scenario-pack:v3.3",
       tieredChecks: TIERED_CHECKS_VERSION,
     },
     fastPathExtractionPolicyVersion: FAST_PATH_EXTRACTION_POLICY_VERSION,

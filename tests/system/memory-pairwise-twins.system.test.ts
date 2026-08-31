@@ -260,7 +260,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
       expect(zhProbe.retrieval.selectionPolicyVersions).toEqual({
         memory_budgets: "memory-budgets:v1",
         portrait_selection: "portrait-selection:v1",
-        recall_framing: "recall-framing:v1",
+        recall_framing: "recall-framing:v2",
       });
       // The within-day turns before the claims existed inject nothing.
       expect(transcripts.scenarios[0]!.turns[0]!.injectedMemories).toEqual([]);

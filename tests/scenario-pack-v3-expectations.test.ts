@@ -43,7 +43,7 @@ function scenarioById(id: string) {
 
 describe("scenario-pack:v3 (#118)", () => {
   it("carries 54 unique scenarios: the 45 carried from v2.1 plus 9 new multi-day recall scenarios", () => {
-    expect(pack.version).toBe("scenario-pack:v3.2");
+    expect(pack.version).toBe("scenario-pack:v3.3");
     expect(pack.scenarios).toHaveLength(54);
     expect(new Set(pack.scenarios.map((s) => s.id)).size).toBe(54);
     for (const id of [

@@ -26,6 +26,15 @@
  * v3.1 (#126, Luke's 2026-08-30 fixture ruling): five scenario contents
  * rewritten to match the production logic (see the in-file notes) — the
  * pack version bumps minor per the #77 v2→v2.1 content-revision precedent.
+ *
+ * v3.3 (#126, v3.2 full-run postmortem 2026-08-31): the objective-zh day-1
+ * joining statement moves onto the registry employer positive-example shape
+ * (perfective 「入职了 + company」). The v3.2 phrasing 「下个月入职启明医疗」
+ * sat on the sh.plan.life_change / sh.work.employer extraction-mapping
+ * boundary and rolled the plan side twice (v3.2 full run + isolated diag),
+ * leaving the employer claim structurally unreachable by the t4 新工作 bridge
+ * vocabulary. The mix variant (「入职 Brightline」 with no future modifier
+ * between surface and company) maps reliably and is unchanged.
  */
 import { readFile, writeFile } from "node:fs/promises";
 
@@ -328,7 +337,11 @@ const newScenarios: NewScenario[] = [
     description:
       "多日 Objective Memory：第一天陈述具体事实，第二天零信号开场（正确零）加实质话题轮；检验「你之前说过…」式来源归属、不暗示独立核验（ADR-0009）。",
     turns: [
-      { text: "我今天把 offer 签了，下个月入职启明医疗，做数据工程师。" },
+      // v3.3 (#126, postmortem 2026-08-31): registry-example shape — the
+      // perfective 「入职了」 lead mirrors the zh employer positive example
+      // 「我去年入职了字节跳动」; the future marker moves to the 上班 tail so
+      // the mapping no longer rolls to sh.plan.life_change.
+      { text: "我入职启明医疗了，做数据工程师——offer 今天刚签好，下个月开始上班。" },
       { text: "就是有点不知道怎么跟现在的主管开口，她平时对我挺好的。" },
       {
         text: "早。昨晚没睡好，楼下装修吵到后半夜。",
@@ -901,9 +914,9 @@ async function main(): Promise<void> {
   ];
 
   const pack = {
-    version: "scenario-pack:v3.2",
+    version: "scenario-pack:v3.3",
     generatedFrom:
-      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接)",
+      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接); v3.3 (#126, postmortem 2026-08-31) rewords the objective-zh day-1 joining statement into the registry employer positive-example shape (perfective 入职了 + company) — the v3.2 future-tense phrasing sat on the sh.plan.life_change / sh.work.employer mapping boundary and the full run rolled the plan side twice (zero injection, unreachable by the 新工作 bridge vocabulary)",
     syntheticNotice:
       "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118, #126). No real private conversation is used or reproduced.",
     defaults: source.defaults,

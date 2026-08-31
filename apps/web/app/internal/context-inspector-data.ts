@@ -216,7 +216,7 @@ export function sectionVersionLabel(
     case "ai_impression":
       // #117: the memory sections pin their strategy versions inside the
       // rendered reference ("[portrait-selection:v1 | memory-budgets:v1 |
-      // recall-framing:v1]").
+      // recall-framing:v2]").
       return (
         section.reference.match(/\[(portrait-selection:[^\]]+)\]/)?.[1] ??
         "memory-selection:unavailable"

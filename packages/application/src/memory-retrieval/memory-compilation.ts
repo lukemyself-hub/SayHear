@@ -26,8 +26,19 @@ export const PORTRAIT_SELECTION_POLICY_VERSION = "portrait-selection:v1";
 /** Versioned memory-class budgets (ceilings, not quotas; ADR-0111). */
 export const MEMORY_BUDGETS_POLICY_VERSION = "memory-budgets:v1";
 
-/** Versioned kind-specific recall framing (ADR-0009 / ADR-0116). */
-export const RECALL_FRAMING_POLICY_VERSION = "recall-framing:v1";
+/**
+ * Versioned kind-specific recall framing (ADR-0009 / ADR-0116).
+ *
+ * v2 (issue #126 v3.2 evidence runs): injected items whose rendered text
+ * carries a specific name (institution, project, person, place) were being
+ * paraphrased into generic references ("your new job", "the project") instead
+ * of being picked up naturally — the required-recall token gate failed with
+ * the name present in the compiled context. v2 adds one lexical-specificity
+ * clause to both kinds: use the recalled name rather than a generic
+ * reference. Epistemic discipline (attribution, no upgrading, ADR-0009 /
+ * ADR-0116) is unchanged — the clause governs word choice, not status.
+ */
+export const RECALL_FRAMING_POLICY_VERSION = "recall-framing:v2";
 
 export const MEMORY_SECTION_KEYS = [
   "person_portrait",
@@ -553,12 +564,12 @@ const KIND_FRAMING: Readonly<
   Record<ClaimKind, Readonly<{ zh: string; en: string }>>
 > = {
   objective: {
-    zh: "措辞（objective）：这是用户亲口陈述的事实；可以“你之前说过…”的方式来源归属式引用，不得表述为独立核验过的事实。",
-    en: 'Framing (objective): a user-stated fact; you may reference it with source attribution ("you mentioned..."), never as an independently verified fact.',
+    zh: "措辞（objective）：这是用户亲口陈述的事实；可以“你之前说过…”的方式来源归属式引用，不得表述为独立核验过的事实。记忆中出现的具体名称（机构、项目、人名、地点）在回复中自然使用该名称，不用泛指代替。",
+    en: 'Framing (objective): a user-stated fact; you may reference it with source attribution ("you mentioned..."), never as an independently verified fact. When the memory carries a specific name (institution, project, person, place), use that name naturally in the reply instead of a generic reference.',
   },
   impression: {
-    zh: "措辞（impression）：这是你基于多次观察形成的理解，可以自然、朋友式地表达；不得升级成用户亲述或已核验事实，不得固化成永久标签或诊断式身份。",
-    en: "Framing (impression): your own understanding from repeated observation; voice it naturally and friend-likely, never as user-stated or verified, never frozen into a permanent or diagnostic label.",
+    zh: "措辞（impression）：这是你基于多次观察形成的理解，可以自然、朋友式地表达；不得升级成用户亲述或已核验事实，不得固化成永久标签或诊断式身份。记忆中出现的具体名称（机构、项目、人名、地点）在回复中自然使用该名称，不用泛指代替。",
+    en: "Framing (impression): your own understanding from repeated observation; voice it naturally and friend-likely, never as user-stated or verified, never frozen into a permanent or diagnostic label. When the memory carries a specific name (institution, project, person, place), use that name naturally in the reply instead of a generic reference.",
   },
 };
 
