@@ -241,7 +241,12 @@ export type TwinManifest = Readonly<{
   dispatchFailures: readonly Readonly<{ event: string; reason: string }>[];
   roleConfigurations: readonly Readonly<Record<string, string>>[];
   scenarioIsolation: string;
-  scenarioFile: Readonly<{ path: string; scenarioCount: number; sha256?: string }>;
+  scenarioFile: Readonly<{
+    path: string;
+    scenarioCount: number;
+    onlyFilter?: readonly string[];
+    sha256?: string;
+  }>;
   seam: string;
   systemVersions: Record<string, unknown>;
 }>;
@@ -535,7 +540,12 @@ export async function runTwinCapture(input: {
   log?: (line: string) => void;
   pool: Pool;
   roleRegistry: TwinRoleRegistry;
-  scenarioFile: Readonly<{ path: string; scenarioCount: number; sha256?: string }>;
+  scenarioFile: Readonly<{
+    path: string;
+    scenarioCount: number;
+    onlyFilter?: readonly string[];
+    sha256?: string;
+  }>;
   scenarios: readonly TwinScenario[];
 }): Promise<{ manifest: TwinManifest; transcripts: TwinTranscriptsFile }> {
   const {

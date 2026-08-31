@@ -449,8 +449,15 @@ const newScenarios: NewScenario[] = [
         text: "Hey. Coffee in hand, thinking about stuff.",
         gapMs: 172800000,
       },
+      // v3.2 (#126, layer-2 diagnosis 2026-08-31): the recall probe now carries
+      // a published stated_style surface ("be direct"). The v3.1 wording
+      // ("always so blunt about mistakes") carried no published alias, entity,
+      // or bridge, so the deterministic query construction had zero signal on
+      // every lane and the promoted stated_style claim was structurally
+      // unreachable — mirroring the zh variant, whose 「总是那么直接」 already
+      // rides the 「直接」 surface and injects.
       {
-        text: "My sister asked why I'm always so blunt about mistakes. I don't know, it's just how I am?",
+        text: "My sister asked why I'm always so blunt about mistakes. I don't know — I'd just rather be direct than spin things. It's how I am?",
       },
     ],
     memoryFixture: {
@@ -554,13 +561,25 @@ const newScenarios: NewScenario[] = [
       "code-switch 多日 AI Impression：检验中英夹杂下印象的朋友式自然表达与认识状态边界（ADR-0116 / ADR-0009）。",
     turns: [
       { text: "今天跟 roommate 坦白了打碎台灯的事，早说早了。" },
-      { text: "上周 client 那个锅我也直接 take 了，懒得绕圈子。" },
+      // v3.2 (#126, layer-2 verification 2026-08-31): day-1 t2 moved onto the
+      // registry's stated_style positive-example shape — the v3.1 phrasing
+      // extracted the style claim only ~1-of-2 runs (provider sampling
+      // variance), leaving the day-3 「直接」 probe nothing to recall.
+      // 「我不太喜欢绕弯子」 mirrors the published example 「我不太喜欢绕弯子，
+      // 有意见请直说」; the client/take code-switch stays.
+      { text: "上周 client 那个锅我也直接 take 了——我不太喜欢绕弯子，有锅就早点认。" },
       {
         text: "在呢，抱着咖啡发呆。",
         gapMs: 172800000,
       },
       {
-        text: "我姐问我为什么犯错的事上总那么 direct，我也说不上来，就感觉这样比较 honest 吧。",
+        // v3.2 (#126, layer-2 diagnosis 2026-08-31): 「总那么 direct」 carried
+        // no published surface (the zh alias set is 直接 / 直说 / 沟通方式 and
+        // ASCII "direct" only feeds english_fts, which cannot match the zh
+        // projection 「用户：沟通风格：直接，不喜欢绕圈子」) — swapped to 「直接」
+        // to mirror the zh variant's injectable probe; 「honest」 keeps the
+        // code-switch flavor.
+        text: "我姐问我为什么犯错的事上总那么直接，我也说不上来，就感觉这样比较 honest 吧。",
       },
     ],
     memoryFixture: {
@@ -882,9 +901,9 @@ async function main(): Promise<void> {
   ];
 
   const pack = {
-    version: "scenario-pack:v3.1",
+    version: "scenario-pack:v3.2",
     generatedFrom:
-      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures",
+      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接)",
     syntheticNotice:
       "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118, #126). No real private conversation is used or reproduced.",
     defaults: source.defaults,

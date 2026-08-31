@@ -1,6 +1,6 @@
 {
-  "version": "scenario-pack:v3.1",
-  "generatedFrom": "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures",
+  "version": "scenario-pack:v3.2",
+  "generatedFrom": "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接)",
   "syntheticNotice": "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118, #126). No real private conversation is used or reproduced.",
   "defaults": {
     "gapMs": 90000
@@ -1422,7 +1422,7 @@
           "gapMs": 172800000
         },
         {
-          "text": "My sister asked why I'm always so blunt about mistakes. I don't know, it's just how I am?"
+          "text": "My sister asked why I'm always so blunt about mistakes. I don't know — I'd just rather be direct than spin things. It's how I am?"
         }
       ],
       "memoryFixture": {
@@ -1559,14 +1559,14 @@
           "text": "今天跟 roommate 坦白了打碎台灯的事，早说早了。"
         },
         {
-          "text": "上周 client 那个锅我也直接 take 了，懒得绕圈子。"
+          "text": "上周 client 那个锅我也直接 take 了——我不太喜欢绕弯子，有锅就早点认。"
         },
         {
           "text": "在呢，抱着咖啡发呆。",
           "gapMs": 172800000
         },
         {
-          "text": "我姐问我为什么犯错的事上总那么 direct，我也说不上来，就感觉这样比较 honest 吧。"
+          "text": "我姐问我为什么犯错的事上总那么直接，我也说不上来，就感觉这样比较 honest 吧。"
         }
       ],
       "memoryFixture": {

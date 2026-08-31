@@ -435,8 +435,21 @@ export function planClaimAdmission(input: ClaimAdmissionInput): ClaimAdmissionPl
     return { action: "reject", reasonCode: "claim_kind_not_allowed_by_registry" };
   }
 
-  const typedValue: ClaimTypedValue =
+  const rawTypedValue: ClaimTypedValue =
     proposal.resolution.status === "mapped" ? proposal.resolution.typedValue : "";
+  // Provider protocols carry one scalar value per candidate (fast path and
+  // slow path alike — "one project, one independently valid value" per the
+  // registry definitions), while a multiple-cardinality Claim's value is a
+  // set. Without this wrap every scalar candidate died at the array check
+  // below, so multiple-cardinality claims were structurally unadmittable
+  // (issue #126: sh.project.participation candidates rejected as
+  // typed_value_invalid despite good evidence).
+  const typedValue: ClaimTypedValue =
+    registryEntry.valueCardinality === "multiple" &&
+    typeof rawTypedValue === "string" &&
+    rawTypedValue.trim() !== ""
+      ? [rawTypedValue]
+      : rawTypedValue;
   if (!validateTypedValue(registryEntry, typedValue)) {
     return { action: "reject", reasonCode: "typed_value_invalid" };
   }

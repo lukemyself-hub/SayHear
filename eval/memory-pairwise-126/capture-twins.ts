@@ -3,7 +3,8 @@
  *
  *   pnpm exec tsx eval/memory-pairwise-126/capture-twins.ts \
  *     --arm on --out eval/memory-pairwise-126/run-twins-on \
- *     --scenarios eval/scenario-pack-v3/scenarios.json [--force]
+ *     --scenarios eval/scenario-pack-v3/scenarios.json [--force] \
+ *     [--only scenario-a,scenario-b]
  *
  * Runs the frozen scenario pack through the real production seam with the real
  * champion (responses-api) in the requested arm and records the transcripts,
@@ -44,12 +45,14 @@ type ScenarioFile = Readonly<{ scenarios: readonly TwinScenario[] }>;
 function parseArguments(): {
   arm: "on" | "off";
   force: boolean;
+  only: readonly string[] | null;
   outDir: string;
   scenariosFile: string;
 } {
   const arguments_ = process.argv.slice(2);
   let arm: "on" | "off" | null = null;
   let force = false;
+  let only: readonly string[] | null = null;
   let outDir = "";
   let scenariosFile = path.join(
     REPOSITORY_ROOT,
@@ -66,6 +69,16 @@ function parseArguments(): {
       arm = value;
     } else if (argument === "--force") {
       force = true;
+    } else if (argument === "--only") {
+      const value = requiredArgument(arguments_, ++index, "--only");
+      const ids = value
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
+      if (ids.length === 0) {
+        throw new Error("--only requires at least one scenario id.");
+      }
+      only = ids;
     } else if (argument === "--out") {
       outDir = path.resolve(requiredArgument(arguments_, ++index, "--out"));
     } else if (argument === "--scenarios") {
@@ -83,7 +96,7 @@ function parseArguments(): {
       `eval/memory-pairwise-126/run-twins-${arm}`,
     );
   }
-  return { arm, force, outDir, scenariosFile };
+  return { arm, force, only, outDir, scenariosFile };
 }
 
 function requiredArgument(
@@ -100,7 +113,7 @@ function requiredArgument(
 
 async function main(): Promise<void> {
   loadDotEnv();
-  const { arm, force, outDir, scenariosFile } = parseArguments();
+  const { arm, force, only, outDir, scenariosFile } = parseArguments();
   const manifestPath = path.join(outDir, "manifest.json");
   const transcriptsPath = path.join(outDir, "transcripts.json");
   if (!force && (existsSync(manifestPath) || existsSync(transcriptsPath))) {
@@ -121,6 +134,17 @@ async function main(): Promise<void> {
       throw new Error(`Scenario ${scenario.id} has no turns.`);
     }
   }
+  const onlySet = only ? new Set(only) : null;
+  if (onlySet) {
+    const knownIds = new Set(scenarios.map((scenario) => scenario.id));
+    const unknown = only.filter((id) => !knownIds.has(id));
+    if (unknown.length > 0) {
+      throw new Error(`--only references unknown scenario ids: ${unknown.join(", ")}`);
+    }
+  }
+  const selected = onlySet
+    ? scenarios.filter((scenario) => onlySet.has(scenario.id))
+    : scenarios;
   const scenarioFileSha256 = createHash("sha256")
     .update(scenarioFileText)
     .digest("hex");
@@ -146,10 +170,11 @@ async function main(): Promise<void> {
       roleRegistry,
       scenarioFile: {
         path: path.relative(REPOSITORY_ROOT, scenariosFile),
-        scenarioCount: scenarios.length,
+        scenarioCount: selected.length,
+        ...(only ? { onlyFilter: only } : {}),
         sha256: scenarioFileSha256,
       },
-      scenarios: scenarios.map((scenario) => ({
+      scenarios: selected.map((scenario) => ({
         ...scenario,
         turns: scenario.turns as readonly TwinScenarioTurn[],
       })),

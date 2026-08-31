@@ -65,9 +65,11 @@ export function expectedPinList(): Record<string, unknown> {
       tAuto: ENTITY_RESOLVE_T_AUTO,
     },
     evalChannel: {
-      // v3.1: the #126 fixture rewrite (Luke's 2026-08-30 ruling) bumped
-      // the pack minor version; the checker semantics stay tiered-checks:v3.
-      scenarioPack: "scenario-pack:v3.1",
+      // v3.2: the #126 layer-2 diagnosis (2026-08-31) moved the impression
+      // en/mix day-3 recall probes onto published stated_style surfaces so
+      // the deterministic query has a matchable signal; checker semantics
+      // stay tiered-checks:v3.
+      scenarioPack: "scenario-pack:v3.2",
       tieredChecks: TIERED_CHECKS_VERSION,
     },
     fastPathExtractionPolicyVersion: FAST_PATH_EXTRACTION_POLICY_VERSION,

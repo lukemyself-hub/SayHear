@@ -634,6 +634,58 @@ describe("conflict routing (ADR-0040)", () => {
       "公司C",
     ]);
   });
+
+  it("admits a provider-scalar value as a singleton set on multiple-cardinality entries (#126 defect 16)", () => {
+    // Both provider protocols carry one scalar value per candidate ("one
+    // project, one independently valid value"); without the admission-side
+    // wrap every such candidate died at the array check as
+    // typed_value_invalid, so multiple-cardinality claims were structurally
+    // unadmittable (evidence run: sh.project.participation / 拾光 rejected).
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: PREDICATE_IDS.projectParticipation,
+        typedValue: "拾光",
+      }),
+      registryEntry: entryLookup.entryFor(PREDICATE_IDS.projectParticipation),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: SELF_BINDING,
+      existingClaim: null,
+      currentVersion: null,
+      evidence: CROSS_SESSION_EVIDENCE,
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote.conflictResolution).toBe("initial_admission");
+    expect(promote.typedValue).toEqual(["拾光"]);
+  });
+
+  it("merges a provider-scalar direct statement into an existing objective value set", () => {
+    const plan = planClaimAdmission({
+      proposal: baseProposal({
+        predicateId: PREDICATE_IDS.workplace,
+        typedValue: "公司B",
+      }),
+      registryEntry: entryLookup.entryFor(PREDICATE_IDS.workplace),
+      registryVersion: 1,
+      selfEntityId: SELF,
+      entityVersions: SELF_BINDING,
+      existingClaim: { memoryClaimId: "claim-1", canonicalKey: "k" },
+      currentVersion: currentVersion({
+        kind: "objective",
+        epistemicStatus: "confirmed",
+        typedValue: ["公司A"],
+      }),
+      evidence: CROSS_SESSION_EVIDENCE,
+      excludedEvidenceIds: [],
+    });
+    const promote = expectPromote(plan);
+    expect(promote.conflictResolution).toBe("temporal_or_correction_supersede");
+    expect(canonicalValueSet(promote.typedValue as readonly string[])).toEqual([
+      "公司A",
+      "公司B",
+    ]);
+  });
 });
 
 describe("forget fence and relationships in admission", () => {
