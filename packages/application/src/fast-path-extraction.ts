@@ -1,6 +1,10 @@
 import { asUserId, asWorkflowCommandId } from "@sayhear/domain";
 
-import type { EntityMentionProposal, EntityService } from "./entity";
+import type {
+  EntityLabelIndexEntry,
+  EntityMentionProposal,
+  EntityService,
+} from "./entity";
 import {
   ENTITY_RESOLVER_POLICY_VERSION,
   normalizeEntityLabel,
@@ -47,27 +51,30 @@ const RELEASED_RELATIONSHIP_PREDICATE_IDS: readonly string[] =
  * claims then stayed unadmitted. The definitions are the registry's own
  * admission semantics; the provider still only proposes.
  */
-const RELEASED_PREDICATE_MATERIAL: readonly Readonly<{
+export type ReleasedPredicateMaterial = Readonly<{
   predicateId: string;
   labelZh: string;
   labelEn: string;
   definitionZh: string;
   definitionEn: string;
-}>[] = PREDICATE_REGISTRY_SNAPSHOT.entries.map((entry) => {
-  const localization = (locale: "zh" | "en") =>
-    PREDICATE_REGISTRY_SNAPSHOT.localizations.find(
-      (candidate) =>
-        candidate.predicateId === entry.predicateId &&
-        candidate.locale === locale,
-    );
-  return {
-    predicateId: entry.predicateId,
-    labelZh: localization("zh")?.label ?? "",
-    labelEn: localization("en")?.label ?? "",
-    definitionZh: localization("zh")?.definition ?? "",
-    definitionEn: localization("en")?.definition ?? "",
-  };
-});
+}>;
+
+const RELEASED_PREDICATE_MATERIAL: readonly ReleasedPredicateMaterial[] =
+  PREDICATE_REGISTRY_SNAPSHOT.entries.map((entry) => {
+    const localization = (locale: "zh" | "en") =>
+      PREDICATE_REGISTRY_SNAPSHOT.localizations.find(
+        (candidate) =>
+          candidate.predicateId === entry.predicateId &&
+          candidate.locale === locale,
+      );
+    return {
+      predicateId: entry.predicateId,
+      labelZh: localization("zh")?.label ?? "",
+      labelEn: localization("en")?.label ?? "",
+      definitionZh: localization("zh")?.definition ?? "",
+      definitionEn: localization("en")?.definition ?? "",
+    };
+  });
 
 /**
  * Fast-path extraction workflow (SPEC #107 "Two-speed pipeline", issue #113,
@@ -92,6 +99,9 @@ export const FAST_PATH_VISIBILITY_TARGET_MS = 30_000;
 
 /** Provider-economy batch bound; per-revision semantics are unaffected. */
 export const FAST_PATH_MAX_BATCH_REVISIONS = 8;
+
+/** Known-label context cap: bounds the memory.extract prompt size. */
+export const FAST_PATH_MAX_KNOWN_LABELS = 200;
 
 /** The single fixture-calibrated `entity.resolve` commit threshold (#97). */
 export const ENTITY_RESOLVE_GATE_POLICY_VERSION = "entity-resolve-gate:v1";
@@ -204,13 +214,7 @@ export type MemoryExtractProvider = Readonly<{
        * against — a bare id list left natural phrasing without a published
        * surface mis-mapped.
        */
-      predicates?: readonly Readonly<{
-        predicateId: string;
-        labelZh: string;
-        labelEn: string;
-        definitionZh: string;
-        definitionEn: string;
-      }>[];
+      predicates?: readonly ReleasedPredicateMaterial[];
       /**
        * Normalized labels of the user's current entities (issue #126
        * evidence runs): the context the newIntroduction flag is decided
@@ -903,15 +907,7 @@ export type FastPathExtractionEntrypointDependencies = Readonly<{
     /** Known-label context for the extract request (see MemoryExtractProvider). */
     loadCurrentLabelIndex(
       userId: string,
-    ): Promise<
-      readonly Readonly<{
-        entityId: string;
-        label: string;
-        normalizedLabel: string;
-        labelKind: string;
-        locale: string;
-      }>[]
-    >;
+    ): Promise<readonly EntityLabelIndexEntry[]>;
     applyEntityResolveGateOutcome(input: {
       userId: string;
       mentionId: string;
@@ -1063,7 +1059,7 @@ export async function runFastPathExtraction(input: {
   ]
     .filter((label) => label.trim() !== "")
     .sort((a, b) => a.localeCompare(b, "en"))
-    .slice(0, 200);
+    .slice(0, FAST_PATH_MAX_KNOWN_LABELS);
   let extractResults: readonly MemoryExtractRevisionResult[];
   let roleFallbackUsed = false;
   try {
