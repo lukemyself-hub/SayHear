@@ -109,6 +109,47 @@ describe("planClaimRetrievalProjections", () => {
     expect(zh.retrievalText).toContain("小王");
   });
 
+  it("renders the self subject as a stable owner reference, never its id", () => {
+    // Issue #126 evidence runs: the Self Entity carries no label by design,
+    // so every self-subject claim rendered as a bare UUID in recallable
+    // text. The owner reference is quotable; it must never become a lexical
+    // term (it would make every self-subject claim match every query).
+    const predicateId = "sh.relationship.partner_of";
+    const rows = planClaimRetrievalProjections({
+      entry: entryFor(predicateId),
+      localizations: localizationsFor(predicateId),
+      claim: {
+        memoryClaimId: "claim-self",
+        predicateId,
+        subjectEntityId: "entity-owner",
+        objectEntityId: "entity-wang",
+      },
+      version: {
+        memoryClaimVersionId: "version-self",
+        kind: "objective",
+        typedValue: "",
+        temporal: {
+          temporalStatus: "current",
+          validFrom: null,
+          validFromPrecision: "unknown",
+          validTo: null,
+          validToPrecision: "unknown",
+        },
+      },
+      labels: {
+        "entity-wang": labels["entity-wang"]!,
+      },
+      selfEntityId: "entity-owner",
+    });
+    const zh = rows.find((row) => row.locale === "zh")!;
+    expect(zh.retrievalText).toContain("用户与小王");
+    expect(zh.retrievalText).not.toContain("entity-owner");
+    const en = rows.find((row) => row.locale === "en")!;
+    expect(en.retrievalText).toContain("the user and Wang");
+    expect(rows.flatMap((row) => row.lexicalTerms)).not.toContain("用户");
+    expect(rows.flatMap((row) => row.lexicalTerms)).not.toContain("the user");
+  });
+
   it("marks ended temporality in the retrieval text", () => {
     const predicateId = "sh.relationship.colleague_of";
     const rows = planClaimRetrievalProjections({

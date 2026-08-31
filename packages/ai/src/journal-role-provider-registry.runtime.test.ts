@@ -129,4 +129,126 @@ describe("Journal runtime role provider messages", () => {
       mockOutput.current = DEFAULT_DELTA;
     }
   });
+
+  it("normalizes null structural fields in memory.extract proposals", async () => {
+    // DeepSeek emits `"scopeKey": null` / `"typedValue": null` on correction
+    // texts; before normalization these crashed the deterministic validator
+    // with a TypeError that converged as provider unknown_error and lost the
+    // revision's extraction entirely (issue #126 evidence runs).
+    mockOutput.current = JSON.stringify([
+      {
+        revisionId: "rev-1",
+        evidence: [{ locatorKey: "0:24", role: "factual_support" }],
+        mentions: [
+          {
+            surfaceForm: null,
+            startOffset: null,
+            endOffset: null,
+            mentionKind: "named",
+            newIntroduction: true,
+            entityKindId: "sh.entity.person",
+            evidenceLocatorKey: null,
+          },
+          {
+            surfaceForm: "Alex",
+            startOffset: 0,
+            endOffset: 4,
+            mentionKind: "named",
+            newIntroduction: true,
+            entityKindId: "sh.entity.person",
+            evidenceLocatorKey: null,
+          },
+        ],
+        candidates: [
+          {
+            basis: "directly_stated",
+            candidateKind: "objective",
+            predicateId: "sh.relationship.partner_of",
+            proposedConcept: null,
+            typedValue: "spouse",
+            scopeKey: null,
+            subjectMentionIndex: null,
+            objectMentionIndex: 1,
+            evidenceLocatorKeys: ["0:24"],
+            qualifiers: [
+              {
+                axisId: "role",
+                roleSide: "subject",
+                typedValue: "partner",
+                evidenceLocatorKeys: null,
+              },
+            ],
+            temporal: null,
+            itemClass: "person",
+            itemSummary: null,
+          },
+          {
+            basis: "directly_stated",
+            candidateKind: "objective",
+            predicateId: "sh.life.family_stage",
+            proposedConcept: null,
+            typedValue: null,
+            scopeKey: null,
+            subjectMentionIndex: null,
+            objectMentionIndex: null,
+            evidenceLocatorKeys: ["0:24"],
+            qualifiers: null,
+            temporal: null,
+            itemClass: "open",
+            itemSummary: null,
+          },
+        ],
+        clarifications: null,
+      },
+    ]);
+    try {
+      const registry = createRuntimeJournalRoleProviderRegistry({
+        adapter: { type: "responses-api", apiKey: "test", baseUrl: "https://example.test", timeoutMs: 1000 },
+        roles,
+      });
+      const results = await registry.memoryExtractor.extract(
+        {
+          predicateIds: ["sh.relationship.partner_of", "sh.life.family_stage"],
+          relationshipPredicateIds: ["sh.relationship.partner_of"],
+          revisions: [
+            {
+              revisionId: "rev-1",
+              sequenceNo: 1,
+              locale: "en-US",
+              text: "Alex is my boyfriend now.",
+            },
+          ],
+        },
+        {
+          configVersion: "test",
+          modelVersion: "test",
+          promptVersion: "test",
+        },
+      );
+      expect(results).toHaveLength(1);
+      const revision = results[0]!;
+      // Null scopeKey is the no-information shape of scope-none.
+      const partner = revision.candidates.find(
+        (candidate) => candidate.predicateId === "sh.relationship.partner_of",
+      )!;
+      expect(partner.scopeKey).toBe("");
+      // A typed value on a relationship predicate is dropped, not rejected.
+      expect(partner.typedValue).toBe("");
+      // Qualifier evidence normalizes to the empty array, not a crash.
+      expect(partner.qualifiers[0]!.evidenceLocatorKeys).toEqual([]);
+      // A null typedValue on a non-relationship candidate drops the candidate.
+      expect(
+        revision.candidates.some(
+          (candidate) => candidate.predicateId === "sh.life.family_stage",
+        ),
+      ).toBe(false);
+      // A null surface form normalizes to "" so validation rejects the
+      // mention as invalid instead of crashing on `.trim()`.
+      expect(revision.mentions[0]!.surfaceForm).toBe("");
+      expect(revision.mentions[1]!.surfaceForm).toBe("Alex");
+      expect(revision.clarifications).toEqual([]);
+    } finally {
+      mockOutput.current = DEFAULT_DELTA;
+    }
+  });
 });

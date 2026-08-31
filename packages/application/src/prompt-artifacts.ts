@@ -54,10 +54,10 @@ export const PREVIOUS_PERSONA_BEHAVIOR_ANCHORS_VERSION =
   "persona-behavior-anchors:v1";
 
 export const CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION =
-  "task-instruction-decision:v2";
+  "task-instruction-decision:v3";
 
 export const PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION =
-  "task-instruction-decision:v1";
+  "task-instruction-decision:v2";
 
 export const ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION =
   "task-instruction-action-finalization:v1";
@@ -232,10 +232,19 @@ const TASK_INSTRUCTION_CONTENT: Readonly<
   Record<GenerationCommandStage, Readonly<Record<string, string>>>
 > = {
   decision: {
-    [PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION]:
+    // v1 stays registered so historical transcripts and older fixtures keep
+    // resolving (fail-closed resolution, ADR-0113); v2 is the rollback re-pin.
+    "task-instruction-decision:v1":
       "Continue the private journal conversation. Ask at most one question, anchored in the user's current expression.",
-    [CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION]:
+    [PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION]:
       "Continue the private journal conversation: respond fully to what they actually said. A response with zero questions is complete — asking is optional, not expected. If you ask, ask at most one question: a single sentence ending in a single question mark. Never two question marks in one response.",
+    // v3 (#126 evidence runs, good-news-mix t1 double question): v2's rule
+    // was already "never two question marks" and the model still stacked an
+    // emotional check on top of a concrete follow-up. The revision makes the
+    // choice operational: voice the competing emotional beat as a statement
+    // and spend the single question on the concrete one.
+    [CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION]:
+      "Continue the private journal conversation: respond fully to what they actually said. A response with zero questions is complete — asking is optional, not expected. If you ask, pick the one question that serves understanding best and ask only it: one sentence ending in one question mark, never two in a response. When an emotional check and a concrete follow-up compete, voice the emotional beat as a statement and spend the single question on the concrete one.",
   },
   action_finalization: {
     [ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION]:

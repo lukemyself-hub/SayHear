@@ -103,6 +103,7 @@ import {
 import { fixedInternalOwnerPrincipal } from "@sayhear/test-support";
 
 import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
+import { createConversationRetryHandler } from "../../apps/web/src/conversation-retry-handler";
 
 export type TwinArm = "on" | "off";
 
@@ -739,7 +740,7 @@ export async function runTwinCapture(input: {
         const receipt = `wf-twin-${arm}-${workflowCounter}`;
         const runOnce = async (): Promise<void> => {
           if (event.eventType === "fast_path_extraction_requested") {
-            await runFastPathExtraction({
+            const result = await runFastPathExtraction({
               command: {
                 workflowCommandId: event.workflowCommandId,
                 policyVersion: event.policyVersion,
@@ -748,12 +749,20 @@ export async function runTwinCapture(input: {
                 receipt,
               ),
             });
+            // Provider failures converge inside the entrypoint as
+            // retryable_failed (a run row, not a throw). Rethrow so the
+            // bounded dispatch retry below fires — production durable
+            // workflows retry these; a swallowed outcome would permanently
+            // drop the revision's extraction (issue #126 evidence runs).
+            if (result.outcome === "retryable_failed") {
+              throw new Error("fast path extraction ended retryable_failed");
+            }
           } else if (
             event.eventType === "daily_consolidation_requested" ||
             event.eventType === "weekly_consolidation_requested" ||
             event.eventType === "memory_sweeper_requested"
           ) {
-            await runMemoryConsolidation({
+            const result = await runMemoryConsolidation({
               command: {
                 workflowCommandId: event.workflowCommandId,
                 policyVersion: event.policyVersion,
@@ -762,6 +771,11 @@ export async function runTwinCapture(input: {
                 receipt,
               ),
             });
+            // Same swallow shape as fast path: retryable provider failures
+            // must surface to the dispatch retry, not converge silently.
+            if (result.outcome === "retryable_failed") {
+              throw new Error("memory consolidation ended retryable_failed");
+            }
           } else if (
             event.eventType === "memory_correction_followup_requested" ||
             event.eventType === "entity_identity_revalidation_requested" ||
@@ -1007,6 +1021,10 @@ export async function runTwinCapture(input: {
     authenticate: async () => fixedInternalOwnerPrincipal,
     service,
   });
+  const retryHandler = createConversationRetryHandler({
+    authenticate: async () => fixedInternalOwnerPrincipal,
+    service,
+  });
   const continuousExchangeService = createContinuousExchangeService({
     clock,
     repository: new PostgresContinuousExchangeRepository(pool),
@@ -1063,7 +1081,35 @@ export async function runTwinCapture(input: {
           method: "POST",
         }),
       );
-      const events = await readNdjson(response);
+      let events = await readNdjson(response);
+      // A transient provider failure surfaces as the graceful response_failed
+      // event (the production client offers the retry endpoint in exactly
+      // this state); the user event is already committed, so replaying the
+      // turn through the production retry handler mirrors what a real user
+      // does instead of recording a permanently voiceless turn (issue #126
+      // evidence runs: one flaked turn at the correction boundary silently
+      // broke the whole temporal chain).
+      if (events.at(-1)?.type === "response_failed") {
+        const failedTurnId = events.find(
+          (event) => event.type === "user_committed",
+        )?.turnId;
+        if (typeof failedTurnId === "string") {
+          log(
+            `[twin-${arm}] response_failed on turn ${turnIndex + 1}; retrying via the production retry endpoint`,
+          );
+          const retryResponse = await retryHandler(
+            new Request("http://localhost/api/internal/conversation/responses/retry", {
+              body: JSON.stringify({
+                originalTurnId: failedTurnId,
+                retryRequestId: `${scenario.id}-t${turnIndex + 1}-retry`,
+              }),
+              headers: { "content-type": "application/json" },
+              method: "POST",
+            }),
+          );
+          events = await readNdjson(retryResponse);
+        }
+      }
       const wallMs = Math.round(performance.now() - wallStartedAt);
       const assistantText = joinDeltas(events);
       const receiptEvent = events.find(

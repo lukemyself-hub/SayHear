@@ -53,6 +53,12 @@ export function planClaimRetrievalProjections(input: {
     temporal: TemporalBounds;
   }>;
   labels: Readonly<Record<string, RetrievalProjectionLabelSet | undefined>>;
+  /**
+   * The owner's Self Entity id (issue #126 evidence runs): the Self Entity
+   * carries no label by design, and without this the subject of every
+   * self-subject claim rendered as a bare UUID in recallable text.
+   */
+  selfEntityId?: string | null;
 }): readonly ClaimRetrievalProjectionPlanRow[] {
   const viewDirection: ClaimRetrievalProjectionPlanRow["viewDirection"] =
     input.entry.relationshipSemantics === null
@@ -123,11 +129,19 @@ export function planClaimRetrievalProjections(input: {
     );
     const predicateLabel =
       localization?.label ?? input.localizations[0]?.label ?? input.claim.predicateId;
+    // The Self Entity never carries a label (identity is the owner, not a
+    // name); render it as a stable owner reference instead of the entity id
+    // so recallable text stays quotable — never as a lexical term, which
+    // would make every self-subject claim match every query.
     const subjectLabel =
-      (locale === "zh" ? subjectLabels?.zh : subjectLabels?.en) ??
-      subjectLabels?.zh ??
-      subjectLabels?.en ??
-      input.claim.subjectEntityId;
+      input.claim.subjectEntityId === input.selfEntityId
+        ? locale === "zh"
+          ? "用户"
+          : "the user"
+        : (locale === "zh" ? subjectLabels?.zh : subjectLabels?.en) ??
+          subjectLabels?.zh ??
+          subjectLabels?.en ??
+          input.claim.subjectEntityId;
     const objectLabel =
       input.claim.objectEntityId === null
         ? null

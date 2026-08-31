@@ -240,6 +240,14 @@ export class PostgresEntityRepository implements EntityRepository {
             input.mentionId,
           ],
         );
+        // The gate's committed binding confirms the identity: append the
+        // active EntityVersion so parked relationship candidates can admit
+        // (see ensureActiveVersionWithin).
+        await ensureActiveVersionWithin(client, {
+          userId: input.userId,
+          entityId: plan.boundEntityId,
+          now: input.now,
+        });
       }
       await client.query(
         `INSERT INTO entity_resolve_gate_outcomes (
@@ -815,6 +823,54 @@ async function resolveMentionsWithin(
     });
   }
   return results;
+}
+
+/**
+ * A binding commit appends a new `active` EntityVersion (state changes
+ * append versions; rows are immutable) and advances `entities.
+ * current_version_id`. The introduction version stays `unresolved` until a
+ * later mention actually binds to the Entity — that confirmation is what
+ * unparks relationship-claim admission (issue #126 evidence runs: no
+ * production path ever appended the active version, so relationship claims
+ * could structurally never admit for naturally introduced people; the #115
+ * system tests simulated this step with raw SQL).
+ */
+async function ensureActiveVersionWithin(
+  client: PoolClient,
+  input: { userId: string; entityId: string; now: Date },
+): Promise<void> {
+  const locked = await client.query<{ status: string; revision: number }>(
+    `SELECT version.status, version.revision
+     FROM entity_versions version
+     INNER JOIN entities entity
+       ON entity.current_version_id = version.entity_version_id
+      AND entity.user_id = version.user_id
+     WHERE version.user_id = $1 AND entity.entity_id = $2
+     FOR UPDATE`,
+    [input.userId, input.entityId],
+  );
+  const row = locked.rows[0];
+  if (!row || row.status !== "unresolved") return;
+  const versionId = createUuidV7(input.now);
+  await client.query(
+    `INSERT INTO entity_versions (
+       entity_version_id, entity_id, user_id, revision, entity_kind_id,
+       status, created_at
+     )
+     SELECT $3, entity_id, user_id, $4 + 1, entity_kind_id, 'active', $5
+     FROM entity_versions
+     WHERE user_id = $1
+       AND entity_version_id = (
+         SELECT current_version_id FROM entities
+         WHERE entity_id = $2 AND user_id = $1
+       )`,
+    [input.userId, input.entityId, versionId, row.revision, input.now],
+  );
+  await client.query(
+    `UPDATE entities SET current_version_id = $3
+     WHERE user_id = $1 AND entity_id = $2`,
+    [input.userId, input.entityId, versionId],
+  );
 }
 
 async function insertUnresolvedEntity(

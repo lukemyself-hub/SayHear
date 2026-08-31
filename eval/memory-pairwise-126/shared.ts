@@ -154,7 +154,7 @@ export function buildMemoryRoleRegistry(
         model: spec.model,
         configVersion: `${spec.championConfigVersion}:memory-extract`,
         policyVersion: "memory-extraction:v1",
-        promptFingerprint: "memory-extract:propose:v2",
+        promptFingerprint: "memory-extract:propose:v3",
       },
       {
         role: "entity.resolve",
@@ -162,7 +162,7 @@ export function buildMemoryRoleRegistry(
         model: spec.model,
         configVersion: `${spec.championConfigVersion}:entity-resolve`,
         policyVersion: "entity-resolve-gate:v1",
-        promptFingerprint: "entity-resolve:gate:v1",
+        promptFingerprint: "entity-resolve:gate:v2",
       },
       {
         role: "memory.consolidate",

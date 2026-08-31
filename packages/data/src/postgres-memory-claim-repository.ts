@@ -2076,6 +2076,10 @@ export async function rebuildClaimRetrievalProjectionsWithin(
     claim.subject_entity_id,
     claim.object_entity_id,
   ]);
+  const selfRow = await client.query<{ entity_id: string }>(
+    "SELECT entity_id FROM user_self_entities WHERE user_id = $1",
+    [input.userId],
+  );
   const rows = planClaimRetrievalProjections({
     entry: input.material.entry,
     localizations: input.material.localizations,
@@ -2085,6 +2089,7 @@ export async function rebuildClaimRetrievalProjectionsWithin(
       subjectEntityId: claim.subject_entity_id,
       objectEntityId: claim.object_entity_id,
     },
+    ...(selfRow.rows[0] ? { selfEntityId: selfRow.rows[0].entity_id } : {}),
     version: {
       memoryClaimVersionId: claim.current_version_id,
       kind: claim.kind,
@@ -2156,8 +2161,14 @@ async function currentRetrievalLabelsWithin(
     const entry = labels[row.entity_id];
     if (!entry) continue;
     if (row.label_kind === "primary") {
-      if (row.locale === "zh") entry.zh ??= row.label;
-      else if (row.locale === "en") entry.en ??= row.label;
+      // Conversation locale tags (zh-CN / en-US) fold onto the projection's
+      // two locales by prefix, matching findCurrentPrimaryLabelsWithin.
+      // Exact equality silently dropped every label a mention created from
+      // a region-tagged conversation locale, so retrieval projections
+      // rendered entity UUIDs instead of names (issue #126 evidence runs).
+      const folded = row.locale.toLowerCase();
+      if (folded.startsWith("zh")) entry.zh ??= row.label;
+      else if (folded.startsWith("en")) entry.en ??= row.label;
     } else {
       entry.aliases.push(row.label);
     }

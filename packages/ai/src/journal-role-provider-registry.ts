@@ -65,8 +65,30 @@ export type JournalRoleProviderRegistry = Readonly<{
  * mention flagged as a new introduction, a typed value attached to a
  * relationship predicate (identity is the Entity pair — the stray value is
  * dropped, not rejected), and non-relationship candidates without any
- * concrete value (dropped: there is nothing to admit).
+ * concrete value (dropped: there is nothing to admit). Null structural
+ * scalars (scopeKey, typedValue, a mention's surfaceForm) are null-vs-empty
+ * spellings of the same no-information shape — scope-none for scopeKey,
+ * drop-for-value — and are normalized rather than crashing the validator
+ * (issue #126 evidence runs: `"scopeKey": null` failed whole revisions as
+ * `unknown_error`).
  */
+function normalizeQualifierProposals(
+  qualifiers: unknown,
+): readonly Record<string, unknown>[] {
+  if (!Array.isArray(qualifiers)) return [];
+  return qualifiers
+    .filter(
+      (qualifier): qualifier is Record<string, unknown> =>
+        typeof qualifier === "object" && qualifier !== null,
+    )
+    .map((qualifier) => ({
+      ...qualifier,
+      ...(Array.isArray(qualifier.evidenceLocatorKeys)
+        ? {}
+        : { evidenceLocatorKeys: [] }),
+    }));
+}
+
 function normalizeExtractBatch(
   batch: readonly unknown[],
   relationshipPredicateIds: ReadonlySet<string>,
@@ -91,33 +113,39 @@ function normalizeExtractBatch(
           relationshipPredicateIds.has(candidate.predicateId);
         return {
           ...candidate,
-          ...(isRelationship ? { typedValue: "" } : {}),
+          typedValue: isRelationship
+            ? ""
+            : typeof candidate.typedValue === "string"
+              ? candidate.typedValue
+              : "",
+          scopeKey:
+            typeof candidate.scopeKey === "string" ? candidate.scopeKey : "",
           ...(Array.isArray(candidate.evidenceLocatorKeys)
             ? {}
             : { evidenceLocatorKeys: [] }),
-          ...(Array.isArray(candidate.qualifiers) ? {} : { qualifiers: [] }),
-      ...(!candidate.temporal || typeof candidate.temporal !== "object"
-        ? {
-            temporal: {
-              temporalStatus: "unknown",
-              validFrom: null,
-              validFromPrecision: "unknown",
-              validTo: null,
-              validToPrecision: "unknown",
-            },
-          }
-        : {
-            // Providers null out precision fields alongside null dates; the
-            // candidate rows require non-null precision ("unknown") even
-            // when the boundary itself is unknown.
-            temporal: {
-              ...candidate.temporal,
-              validFromPrecision:
-                candidate.temporal.validFromPrecision ?? "unknown",
-              validToPrecision:
-                candidate.temporal.validToPrecision ?? "unknown",
-            },
-          }),
+          qualifiers: normalizeQualifierProposals(candidate.qualifiers),
+          ...(!candidate.temporal || typeof candidate.temporal !== "object"
+            ? {
+                temporal: {
+                  temporalStatus: "unknown",
+                  validFrom: null,
+                  validFromPrecision: "unknown",
+                  validTo: null,
+                  validToPrecision: "unknown",
+                },
+              }
+            : {
+                // Providers null out precision fields alongside null dates; the
+                // candidate rows require non-null precision ("unknown") even
+                // when the boundary itself is unknown.
+                temporal: {
+                  ...candidate.temporal,
+                  validFromPrecision:
+                    candidate.temporal.validFromPrecision ?? "unknown",
+                  validToPrecision:
+                    candidate.temporal.validToPrecision ?? "unknown",
+                },
+              }),
         };
       })
       .filter((candidate) => {
@@ -139,12 +167,19 @@ function normalizeExtractBatch(
       ...(Array.isArray(revision.evidence) ? {} : { evidence: [] }),
       mentions: (Array.isArray(revision.mentions) ? revision.mentions : []).map(
         (mention) =>
-          mention !== null &&
-          typeof mention === "object" &&
-          mention.mentionKind !== "named" &&
-          mention.newIntroduction === true
-            ? { ...mention, newIntroduction: false }
-            : mention,
+          mention !== null && typeof mention === "object"
+            ? {
+                ...mention,
+                surfaceForm:
+                  typeof mention.surfaceForm === "string"
+                    ? mention.surfaceForm
+                    : "",
+                ...(mention.mentionKind !== "named" &&
+                mention.newIntroduction === true
+                  ? { newIntroduction: false }
+                  : {}),
+              }
+            : { surfaceForm: "" },
       ),
     };
   });
@@ -248,7 +283,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       role: "memory.extract",
       async extract(request, invocation) {
         const relationshipIds = new Set(request.relationshipPredicateIds ?? []);
-        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. Return ONLY a JSON ARRAY with exactly one object per input revision — a single revision is a one-element array, never a bare object. Each element: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. predicateId MUST be copied verbatim from request.predicateIds when one fits; if none fits, use null with a proposedConcept — NEVER invent a predicate id. Predicates listed in request.relationshipPredicateIds describe person-to-person relationships: leave their typedValue EMPTY ("" — identity is the Entity pair) and bind objectMentionIndex to the other person's mention. Non-relationship candidates need a non-empty typedValue string — omit the candidate entirely when the user stated no concrete value. Every evidenceLocatorKeys element and every mention.evidenceLocatorKey MUST be a locatorKey that appears verbatim in this revision's evidence array. newIntroduction may be true only when mentionKind is 'named'. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
+        const parsed = await askJson("memory.extract", `You are SayHear memory.extract. You PROPOSE; deterministic code commits. Return ONLY a JSON ARRAY with exactly one object per input revision — a single revision is a one-element array, never a bare object. Each element: {revisionId, evidence:[{locatorKey:'start:end',role:'factual_support'|'subjective_report'}], mentions:[{surfaceForm,startOffset,endOffset,mentionKind:'first_person'|'named'|'pronoun',newIntroduction:boolean,entityKindId:'sh.entity.person'|'sh.entity.place'|'sh.entity.project',evidenceLocatorKey}], candidates:[{basis:'directly_stated'|'inferred',candidateKind:'objective'|'impression',predicateId|null,proposedConcept|null,typedValue,scopeKey,subjectMentionIndex|null,objectMentionIndex|null,evidenceLocatorKeys:[...],temporal:{temporalStatus:'current'|'ended'|'unknown',validFrom|null,validFromPrecision,validTo|null,validToPrecision},itemClass:'person'|'event'|'preference'|'emotion'|'open',itemSummary}], clarifications:[{mentionIndex,semanticImpact:'relationship_attribution'|'person_identity',questionText}]}. predicateId MUST be copied verbatim from request.predicates — the released registry entries carrying each predicate's bilingual label and definition; read the definitions and choose the one whose admission semantics the user's statement actually meets (e.g. a direct romantic-partnership statement like 在一起了 / we're dating is sh.relationship.partner_of even without a label word), and when none fits use null with a proposedConcept — NEVER invent a predicate id. When a statement names another person and describes the user's relationship WITH that person, choose the matching person-to-person predicate from request.relationshipPredicateIds and bind objectMentionIndex to that person's mention; stage and preference predicates (family_stage, relationship_horizon) describe the user alone and must not take that person as their subject matter. Predicates listed in request.relationshipPredicateIds describe person-to-person relationships: leave their typedValue EMPTY ("" — identity is the Entity pair) and bind objectMentionIndex to the other person's mention. Non-relationship candidates need a non-empty typedValue string — omit the candidate entirely when the user stated no concrete value. Every evidenceLocatorKeys element and every mention.evidenceLocatorKey MUST be a locatorKey that appears verbatim in this revision's evidence array. newIntroduction records whether the named entity is new TO THIS JOURNAL — its first appearance in the user's recorded history — never whether the user personally knows them: set it true exactly when mentionKind is 'named' AND no form of the name (exact, nickname, short form, homophone) appears in request.knownLabels — a first-ever name stays true even when the phrasing assumes familiarity (my boyfriend Alex / 他现在是我对象); set it false only when some variant form of the name is already covered by request.knownLabels — short forms and nicknames of a listed name are that same name (Al for Alex, 小林子 for 小林), never a new introduction (propose the surface exactly as written; never invent a full name to normalize it). For every revision, propose a mention for EVERY named person / place / project its text contains, even when no candidate claim is warranted — an empty mentions array is valid only for text that names nothing. Offsets are character offsets into that revision's text. Only user-stated content may be basis=directly_stated; your own inference is basis=inferred. Never invent text, dates, or identities.`, request, invocation);
         if (!Array.isArray(parsed)) {
           // Providers occasionally answer a single-revision batch with the
           // bare element instead of the array (observed with DeepSeek). The
@@ -274,7 +309,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
     entityResolver: {
       role: "entity.resolve",
       async resolve(request, invocation) {
-        const parsed = await askJson("entity.resolve", `You are SayHear entity.resolve, the single identity gate. Given a surface form and bounded candidate entities, return only JSON: {verdict:'match'|'no_match'|'unclear',entityId:string|null,confidence:number 0..1}. verdict=match with the entityId ONLY when the candidates clearly refer to the same real-world identity; otherwise no_match or unclear. Never select an id not in the candidate list.`, request, invocation);
+        const parsed = await askJson("entity.resolve", `You are SayHear entity.resolve, the single identity gate. Given a surface form and bounded candidate entities, return only JSON: {verdict:'match'|'no_match'|'unclear',entityId:string|null,confidence:number 0..1}. verdict=match with the entityId ONLY when the candidates clearly refer to the same real-world identity; nicknames and short forms of a listed candidate name count as the same identity (Al for Alex, 小林子 for 小林) when nothing suggests a different person; otherwise no_match or unclear. Never select an id not in the candidate list.`, request, invocation);
         if (
           typeof parsed !== "object" || parsed === null ||
           !["match", "no_match", "unclear"].includes(String((parsed as { verdict?: unknown }).verdict)) ||
