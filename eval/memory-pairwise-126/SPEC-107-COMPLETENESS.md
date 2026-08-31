@@ -27,9 +27,18 @@ consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe �
 
 ## AC 35–40：合并门证据（#126）
 
+> **会话 7 进展（2026-08-31，`753a721` + `2e16e32`）**：分层定位完成——「6 场景零注入」
+> 拆解为三类：continuity×3 = 生产缺陷 #16（multiple-cardinality 候选的标量值在 admission
+> 被判 typed_value_invalid，claim 结构性不可建立；已修：标量包装为单元素集合）；
+> objective-en = 抽取采样方差（隔离复跑链路全通）；impression-en/mix = 检索查询零信号
+> （t4 措辞不携带已发布别名；已按 fixture 修订原则改 pack v3.2 携带 be direct / 直接，
+> mix t2 调近 registry 正例）。单场景验证 5/5 PASS（continuity×3 注入+token 命中；
+> impression×2 注入）。**AC 35 正式复判待第 3 层 54 场景 v3.2 全量**（DeepSeek 余额
+> 不足，待充值后执行；此后 OFF 臂同源重跑 → AC 36 盲评、AC 37 findings-v2）。
+
 | AC | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 35 | 确定性硬门禁全 locale 100% 零容忍 | ❌ **未满足**：10 违规 = required_recall_missing ×8（全部 8 个 token 门禁 memory 场景）+ too_many_questions ×2（1 真 + 1 FP 候选） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
+| 35 | 确定性硬门禁全 locale 100% 零容忍 | ❌ **未满足**（0cb4bb5 证据：9 违规 = required_recall_missing ×8 + too_many_questions ×1；#16 修复后待 v3.2 全量复判） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
 | 36 | memory 盲评 vs Memory-off 孪生 | ⏸ 暂缓：ON 臂 0 注入 → 双臂行为等价，盲评无意义；待召回迭代后重跑 | `run-twins-{on,off}` → `build-memory-pairs`（15 场景、种子 1260）→ 评审页 → `unblind` 门槛 |
 | 37 | 45 场景机械复跑 | ❌ **未满足**：too_many_questions ×2 为新违规（good-news-mix t1 真双问；topic-change-mix t2 复合单问 FP 候选，待 FP 台账裁定） | `run-twins-on/findings-v2.json` |
 | 38 | 检索精度会计基线（fence/budget/deadline 绝对零，无阈值） | ✅ #125 | `eval/retrieval-precision-v1/run/baseline-2026-08-28/`（本次复验纯侧测试绿） |
