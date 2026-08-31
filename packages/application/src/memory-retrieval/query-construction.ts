@@ -28,6 +28,42 @@ function surfaceInText(surface: string, normalizedText: string): boolean {
 }
 
 /**
+ * v2 broad-context bridges: the one deterministic extension over v1's
+ * alias-only vocabulary (issue #126 evidence runs — the natural probes
+ * "新工作的事…跟主管说" / "about the new job" carry no published alias, so
+ * admitted employer claims were unreachable). A bridge fires only on a
+ * determiner-modified compound — the bare broad terms (工作 / job / work)
+ * stay broad and bridge nothing — and contributes the same predicate
+ * candidates a published alias would, so canonical-key precision and the
+ * relevance cutoffs apply unchanged.
+ */
+export const RETRIEVAL_BROAD_CONTEXT_BRIDGES: readonly {
+  readonly compound: string;
+  readonly predicateIds: readonly string[];
+}[] = Object.freeze([
+  {
+    compound: "新工作",
+    predicateIds: ["sh.work.employer", "sh.work.role_title"],
+  },
+  {
+    compound: "换工作",
+    predicateIds: ["sh.work.employer", "sh.work.role_title"],
+  },
+  {
+    compound: "工作的事",
+    predicateIds: ["sh.work.employer", "sh.work.role_title"],
+  },
+  {
+    compound: "new job",
+    predicateIds: ["sh.work.employer", "sh.work.role_title"],
+  },
+  {
+    compound: "新 work",
+    predicateIds: ["sh.work.employer", "sh.work.role_title"],
+  },
+]);
+
+/**
  * Deterministic query construction (SPEC story 44, architecture §10.2): the
  * query is built only from committed, verifiable inputs — the current User
  * Event text, the last two final / corrected User Events of the Continuous
@@ -140,6 +176,29 @@ export function buildRetrievalQuery(input: {
     });
   }
 
+  // --- v2 broad-context bridges: modified compounds whose bare term is on
+  // the broad stop list contribute the associated predicate candidates and
+  // join the lexical term set themselves (they are not broad as compounds).
+  const bridgedTerms: string[] = [];
+  for (const bridge of RETRIEVAL_BROAD_CONTEXT_BRIDGES) {
+    if (!surfaceInText(bridge.compound, combined)) continue;
+    bridgedTerms.push(bridge.compound);
+    for (const predicateId of bridge.predicateIds) {
+      const alreadyPresent = predicateCandidates.some(
+        (candidate) => candidate.predicateId === predicateId,
+      );
+      if (alreadyPresent) continue;
+      if (!registry.entryFor(predicateId)) continue;
+      predicateCandidates.push({ predicateId, surface: bridge.compound });
+    }
+  }
+  if (bridgedTerms.length > 0) {
+    predicateCandidates.sort((a, b) =>
+      a.predicateId.localeCompare(b.predicateId, "en"),
+    );
+    sourceRefs.push({ kind: "broad_context_bridge" });
+  }
+
   // --- canonical keys: self-subject claims whose predicate and (for
   // relationships) object entity both resolved (scope-none registry entries).
   const canonicalKeys: string[] = [];
@@ -188,6 +247,7 @@ export function buildRetrievalQuery(input: {
     ...new Set([
       ...resolvedEntities.map((entity) => entity.surface),
       ...predicateCandidates.map((candidate) => candidate.surface),
+      ...bridgedTerms,
       ...(usedTopic !== null ? [usedTopic] : []),
     ]),
   ].sort((a, b) => a.localeCompare(b, "en"));

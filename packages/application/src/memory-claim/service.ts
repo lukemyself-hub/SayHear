@@ -605,11 +605,20 @@ export function createMemoryClaimService(dependencies: {
       }
       const evidenceItemIds = await repository.listCandidateEvidenceItemIds(userId, candidateId);
       const evidence = await requireEvidence(userId, evidenceItemIds);
+      // Scope identity is registry-owned, never model-chosen: a scope-none
+      // entry's claim identity is predicate + entities + empty scope. A
+      // provider-proposed scope (observed: "new_job") would fragment logical
+      // claims across re-statements and break canonical-key recall (issue
+      // #126 evidence runs).
+      const admittedScopeKey =
+        registryEntry.scopeSchema.kind === "none"
+          ? ""
+          : candidate.proposedScopeKey;
       const canonicalKey = claimCanonicalKey({
         predicateId: candidate.predicateId,
         subjectEntityId: candidate.subjectEntityId ?? "",
         objectEntityId: candidate.objectEntityId,
-        scopeKey: candidate.proposedScopeKey,
+        scopeKey: admittedScopeKey,
         relationshipDirection: registryEntry.relationshipSemantics?.direction ?? null,
       });
       const existingClaim = await repository.findClaimByCanonicalKey(userId, canonicalKey);
@@ -646,7 +655,10 @@ export function createMemoryClaimService(dependencies: {
       const retrievalProjection = retrievalProjectionInputsFor(registry, registryEntry);
 
       const plan = planClaimAdmission({
-        proposal: candidateRecordToProposal(candidate, evidenceItemIds),
+        proposal: {
+          ...candidateRecordToProposal(candidate, evidenceItemIds),
+          scopeKey: admittedScopeKey,
+        },
         registryEntry,
         registryVersion: registry.registryVersion(),
         selfEntityId: selfEntity.entityId,

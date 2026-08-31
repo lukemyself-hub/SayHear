@@ -292,23 +292,64 @@ export function applyRelevanceCutoffs(input: {
     const canonicalKeyExact = input.query.canonicalKeys.includes(
       candidate.claim.canonicalKey,
     );
+    // v2 object-elided canonical match: non-relationship claims with a
+    // bound object (employer → the company Entity) can never exact-match
+    // the query-side key, which elides the object for scope-none
+    // non-relationship predicates — the object is not derivable from text.
+    // Single-valued self-subject predicates make the predicate-level key
+    // unambiguous, so the elided form is a sound exact signal (issue #126
+    // evidence runs: the bridged employer probe reached the claim and was
+    // still rejected as "insufficient signals").
+    const canonicalKeyObjectElided = canonicalKeyExact
+      ? false
+      : (() => {
+          const parts = candidate.claim.canonicalKey.split("|");
+          if (parts.length !== 4) return false;
+          const pair = parts[2]!;
+          if (pair.includes("+")) return false; // symmetric pair: never elide
+          const separator = pair.indexOf(">");
+          if (separator < 0) return false;
+          if (pair.slice(separator + 1) === "") return false;
+          return input.query.canonicalKeys.includes(
+            `${parts[0]}|${parts[1]}|${pair.slice(0, separator + 1)}|${parts[3]}`,
+          );
+        })();
     const entityPredicateJoint =
       components.entity_match > 0 && components.predicate_match === 1;
     const twoIndependentTerms = effectiveTerms.length >= 2;
+    // v2 entity-anchored recall (issue #126 evidence runs): a turn that
+    // names a specific person (the query resolved their entity) justifies
+    // recalling that person's claims — the entity signal plus any matched
+    // term (their name rode the lexical lane) is a sufficient joint signal.
+    // Budgets still cap injection and the fences still apply upstream.
+    const entityAnchored =
+      components.entity_match > 0 && candidate.matchedTerms.length > 0;
 
     let passed: boolean;
     const selectionReasonCodes = [...candidate.selectionReasonCodes];
     const rejectionReasonCodes: string[] = [];
-    if (canonicalKeyExact || entityPredicateJoint || twoIndependentTerms) {
+    if (
+      canonicalKeyExact ||
+      canonicalKeyObjectElided ||
+      entityPredicateJoint ||
+      twoIndependentTerms ||
+      entityAnchored
+    ) {
       passed = true;
       if (canonicalKeyExact) {
         selectionReasonCodes.push("relevance_cutoff_canonical_key_exact");
+      }
+      if (canonicalKeyObjectElided) {
+        selectionReasonCodes.push("relevance_cutoff_canonical_key_object_elided");
       }
       if (entityPredicateJoint) {
         selectionReasonCodes.push("relevance_cutoff_entity_predicate_joint");
       }
       if (twoIndependentTerms) {
         selectionReasonCodes.push("relevance_cutoff_lexical_two_terms");
+      }
+      if (entityAnchored) {
+        selectionReasonCodes.push("relevance_cutoff_entity_anchored");
       }
     } else {
       passed = false;
