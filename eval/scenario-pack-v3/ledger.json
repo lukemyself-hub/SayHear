@@ -1,7 +1,18 @@
 {
   "version": "scorer-ledger:v1",
   "rule": "报警≠定罪：所有自动标记（硬门禁违规、咨询性候选）都是候选发现，人工对照原始转录核实后才立案；误报记 falsePositives，人工发现而自动漏报记 falseNegatives；台账决定检查层级，误报率超标的检查从硬门禁降级为咨询性预筛（docs/evaluation/01-behavior-contract-and-rubric.md §6）。v3 之前的台账条目保留在 eval/scenario-pack-v2/ledger.json。",
-  "falsePositives": [],
+  "falsePositives": [
+    {
+      "date": "2026-08-29",
+      "checker": "tiered-checks:v3",
+      "check": "too_many_questions",
+      "scenarioId": "topic-change-mix",
+      "sequenceInScenario": 2,
+      "evidence": "Reply to the bakery-reopen share: 「啊，那家 reopen 了？周末去的人多不多，还能不能买到你常点的那款？」 — the counter saw two question marks: the leading surprised echo 「那家 reopen 了？」 plus the compound follow-up about the weekend crowd and the usual order.",
+      "ruling": "Scorer defect (FP, Luke's 2026-08-29 split ruling of the two too_many_questions flags): the leading fragment is a surprised echo, not a follow-up demanding an answer, and the remainder is one compound question — the turn asks effectively one question (复合单问), unlike good-news-mix t1's true stacked pair.",
+      "action": "Recorded as a known false positive; no checker revision this round. task-instruction-decision:v3 (#126) operationalizes the single-question choice and the zh locale pack already bans question-mark echoes, so the re-run is adjudicated fresh — this entry does not blanket-future turns."
+    }
+  ],
   "falseNegatives": [],
   "entrySchema": {
     "date": "ISO date of the human ruling",

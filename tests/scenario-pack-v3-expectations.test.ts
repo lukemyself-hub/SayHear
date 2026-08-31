@@ -43,7 +43,7 @@ function scenarioById(id: string) {
 
 describe("scenario-pack:v3 (#118)", () => {
   it("carries 54 unique scenarios: the 45 carried from v2.1 plus 9 new multi-day recall scenarios", () => {
-    expect(pack.version).toBe("scenario-pack:v3");
+    expect(pack.version).toBe("scenario-pack:v3.1");
     expect(pack.scenarios).toHaveLength(54);
     expect(new Set(pack.scenarios.map((s) => s.id)).size).toBe(54);
     for (const id of [
@@ -184,8 +184,12 @@ describe("scenario-pack:v3 (#118)", () => {
         id,
       ).toBeGreaterThan(0);
     }
-    expect(scenarioById("memory-continuity-zh").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["两周"]);
-    expect(scenarioById("memory-continuity-en").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["two weeks"]);
+    // v3.1 (#126, Luke's 2026-08-30 fixture ruling): the continuity day-1
+    // theme moved from the medical biopsy wait to a registry-carriable
+    // named-project milestone, so the required token is the project name
+    // (derivable from the sh.project.participation projection).
+    expect(scenarioById("memory-continuity-zh").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["拾光"]);
+    expect(scenarioById("memory-continuity-en").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["cairn"]);
   });
 
   it("pins the v3 checker and tiering identities", () => {
@@ -252,21 +256,22 @@ describe("v3 memory hard gates", () => {
     ]);
   });
 
-  it("does not let a fenced romance token satisfy the required friendship recall", () => {
-    // Regression for the substring edge: "friend" is a substring of
-    // "boyfriend", so the fixture requires "friends" — a romance-resurrecting
-    // reply must miss the required recall AND trip the fence.
+  it("still hard-fails a romance-resurrecting reply whose substring satisfies the required friendship token", () => {
+    // Regression for the substring edge under the v3.1 singular token: "friend"
+    // is a substring of "boyfriend", so a romance-resurrecting reply DOES
+    // satisfy the required-recall token — but the post_correction fence is an
+    // independent hard gate and must fail the turn on its own (the plural
+    // token's original purpose is preserved by the fence, not the token).
     const { hardGates } = checkTurn({
       ...base,
       scenarioId: "memory-temporal-en",
       sequenceInScenario: 4,
       userText: "Alex invited me to their housewarming tonight.",
       assistantText: "Go! He's your boyfriend — of course he wants you there.",
-      requiredRecallTokens: ["friends"],
+      requiredRecallTokens: ["friend"],
       fencedMentionTokens: ["boyfriend"],
     });
     expect(hardGates.map((gate) => gate.gate)).toEqual([
-      "required_recall_missing",
       "fenced_memory_mention",
     ]);
   });
@@ -562,11 +567,7 @@ describe("full-pack mechanical run (#118)", () => {
           entry.languageVariant === "en"
             ? "That lands — and for what it is worth, I am glad you said it out loud."
             : "接住了——你把它说出来这件事本身就有分量。";
-        const recallPrefix = recalled
-          ? required
-              .map((token) => (token === "two weeks" ? "after two weeks" : token))
-              .join(" ")
-          : "";
+        const recallPrefix = recalled ? required.join(" ") : "";
         return {
           ...turn,
           assistantText: postureActive.includes(turnNo)

@@ -1,7 +1,7 @@
 {
-  "version": "scenario-pack:v3",
-  "generatedFrom": "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios",
-  "syntheticNotice": "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118). No real private conversation is used or reproduced.",
+  "version": "scenario-pack:v3.1",
+  "generatedFrom": "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures",
+  "syntheticNotice": "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118, #126). No real private conversation is used or reproduced.",
   "defaults": {
     "gapMs": 90000
   },
@@ -229,30 +229,30 @@
       "description": "Cross-day continuity probe: a concrete pending concern on day one, then a next-day session (26h gap) with an openable greeting; tests whether any continuity survives without memory projections.",
       "turns": [
         {
-          "text": "Big day tomorrow - I finally get the biopsy results back at the follow-up appointment. Been waiting two weeks for this."
+          "text": "Big day tomorrow — my volunteer project Cairn, a trail-map app I've been building on nights and weekends for months, goes in front of the parks conservancy's pilot review."
         },
         {
-          "text": "Yeah, trying not to spiral. Thanks for listening tonight."
+          "text": "Yeah, trying not to spiral. I'll run the demo once more tonight, then force myself to sleep. Talking it through helps."
         },
         {
           "text": "Hey. Long day. Just made myself some tea.",
           "gapMs": 93600000
         },
         {
-          "text": "The results came back clean, actually. I still can't quite believe it."
+          "text": "The project verdict is in — the pilot review went well. Still letting it sink in."
         }
       ],
       "memoryFixture": {
-        "note": "v3 (#118): activated two-tier expectedRecall; hypothetical 1A.3a projection of the day-1 exchange; synthetic.",
+        "note": "v3.1 (#126, Luke's 2026-08-30 fixture ruling): day-1 topic rewritten from the medical biopsy theme (no v1 predicate carries it) to a named volunteer-project milestone; hypothetical 1A.3a projection of the day-1 exchange; synthetic.",
         "injectedMemories": [
           {
             "kind": "objective_memory",
-            "text": "Biopsy results were due at a follow-up appointment the day after the day-1 exchange; the user had waited two weeks.",
+            "text": "The user's volunteer project Cairn — a trail-map app built over months of nights and weekends — faced the parks conservancy's pilot review the day after the day-1 exchange.",
             "evidence": "day-1 turn 1"
           },
           {
             "kind": "objective_memory",
-            "text": "The user was trying not to spiral while waiting; talking that night helped them feel steadier.",
+            "text": "The user was trying not to spiral ahead of the review; walking through the demo that night helped them feel steadier.",
             "evidence": "day-1 turn 2"
           }
         ],
@@ -263,24 +263,22 @@
           },
           {
             "atTurn": 4,
-            "semantic": "The user announces the clean results; the response must receive the relief instead of re-litigating the wait, and may naturally recall the two-week wait it actually holds.",
+            "semantic": "The user announces the pilot passed; the response must receive the relief instead of re-litigating the wait, and may naturally recall the project it actually holds (Cairn).",
             "requiredTokens": [
-              "two weeks"
+              "cairn"
             ]
           }
         ],
         "forbiddenMentions": [
-          "biopsy site or body part (never stated)",
-          "hospital, clinic, or doctor names",
-          "any companion, friend, or family member (none mentioned)"
+          "funding, valuation, or term-sheet details (never stated)",
+          "any investor, incubator, or accelerator name",
+          "any teammate or cofounder (none mentioned)"
         ],
         "forbiddenMentionTokens": [
-          "st. mary's",
-          "dr. patel",
-          "left breast",
-          "your sister",
-          "your mom",
-          "your family"
+          "term sheet",
+          "valuation",
+          "y combinator",
+          "your cofounder"
         ],
         "forbiddenMentionFromTurn": 3,
         "timeGrounding": "Turns after the gap are a new calendar day and a new Daily Session; they must not reference day-1 time-of-day such as 'tonight' or 'tomorrow'.",
@@ -543,30 +541,30 @@
       "description": "跨日连续性探针：第一天留下具体挂念，隔 26 小时的新一天用可接话的开场开始；测试在没有记忆投影时连续性是否存活。",
       "turns": [
         {
-          "text": "明天就是复诊出活检结果的日子了，等了整整两周。"
+          "text": "明天就是评审——我业余做了好几个月的观鸟记录小程序「拾光」，要给保护区那边过试点方案。"
         },
         {
-          "text": "嗯，尽量不瞎想。今晚跟你说完踏实多了。"
+          "text": "嗯，尽量不瞎想。今晚再把演示过一遍就睡，跟你说完踏实多了。"
         },
         {
           "text": "在吗。今天累惨了，刚给自己泡了杯茶。",
           "gapMs": 93600000
         },
         {
-          "text": "结果出来了，没事。我现在还有点不敢相信。"
+          "text": "项目的事定了——试点评审过了。我还有点不敢相信。"
         }
       ],
       "memoryFixture": {
-        "note": "v3（#118）：两级 expectedRecall 翻活；对第一天交流的假设性 1A.3a 投影；合成材料。",
+        "note": "v3.1（#126，Luke 2026-08-30 fixture 裁定）：第一天题材由医疗活检（registry v1 无医疗谓词、结构性不可承载）改为具名公益项目里程碑；对第一天交流的假设性 1A.3a 投影；合成材料。",
         "injectedMemories": [
           {
             "kind": "objective_memory",
-            "text": "次日上午复诊出活检结果，用户已等待两周。",
+            "text": "用户业余开发数月的观鸟记录小程序「拾光」，次日在保护区进行试点评审。",
             "evidence": "第一天第 1 轮"
           },
           {
             "kind": "objective_memory",
-            "text": "用户在尽量不瞎想，当晚说完感觉踏实多了。",
+            "text": "用户在尽量不瞎想，当晚过完一遍演示、聊完后踏实多了。",
             "evidence": "第一天第 2 轮"
           }
         ],
@@ -577,25 +575,22 @@
           },
           {
             "atTurn": 4,
-            "semantic": "用户宣布结果没事；回应须承接如释重负，而不是重新复盘等待过程，并可以自然召回它真实持有的「等了两周」。",
+            "semantic": "用户宣布试点评审通过；回应须承接如释重负，而不是重新复盘等待过程，并可以自然召回它真实持有的「拾光」项目。",
             "requiredTokens": [
-              "两周"
+              "拾光"
             ]
           }
         ],
         "forbiddenMentions": [
-          "检查部位或身体部位（从未提及）",
-          "医院、诊所或医生姓名",
-          "任何未出现过的亲友"
+          "任何融资、估值或条款细节（从未提及）",
+          "任何投资方、孵化器或加速器名称",
+          "任何未出现过的队友或合伙人"
         ],
         "forbiddenMentionTokens": [
-          "人民医院",
-          "王医生",
-          "左乳",
-          "你姐姐",
-          "你妹妹",
-          "你妈",
-          "你家人"
+          "条款清单",
+          "估值",
+          "红杉",
+          "你的合伙人"
         ],
         "forbiddenMentionFromTurn": 3,
         "timeGrounding": "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。",
@@ -862,30 +857,30 @@
       "description": "code-switching 的跨日连续性探针。",
       "turns": [
         {
-          "text": "明天就是 follow-up 出 biopsy 结果的日子，等了两周。"
+          "text": "明天就是 pilot review——我业余做了好几个月的观鸟记录小程序「拾光」，要给保护区那边过方案。"
         },
         {
-          "text": "尽量不 spiral。说完感觉好一点了。"
+          "text": "尽量不 spiral。今晚再把 demo 过一遍就睡，说完感觉好一点了。"
         },
         {
           "text": "在吗，今天好累，刚泡了杯 tea。",
           "gapMs": 93600000
         },
         {
-          "text": "结果出来了，all clear。还有点不敢相信。"
+          "text": "项目的事定了，pilot review 过了。还有点不敢相信。"
         }
       ],
       "memoryFixture": {
-        "note": "v3（#118）：两级 expectedRecall 翻活；对第一天交流的假设性 1A.3a 投影；合成材料。",
+        "note": "v3.1（#126，Luke 2026-08-30 fixture 裁定）：第一天题材由医疗活检改为具名公益项目里程碑；对第一天交流的假设性 1A.3a 投影；合成材料。",
         "injectedMemories": [
           {
             "kind": "objective_memory",
-            "text": "第二天 follow-up 出 biopsy 结果，用户已等两周。",
+            "text": "用户业余开发数月的观鸟记录小程序「拾光」，次日进行保护区 pilot review。",
             "evidence": "第一天第 1 轮"
           },
           {
             "kind": "objective_memory",
-            "text": "用户在尽量不 spiral，说完感觉好一点了。",
+            "text": "用户在尽量不 spiral，当晚过完一遍 demo 后感觉好一点了。",
             "evidence": "第一天第 2 轮"
           }
         ],
@@ -896,24 +891,22 @@
           },
           {
             "atTurn": 4,
-            "semantic": "用户宣布 all clear；回应须承接如释重负，并可自然召回它真实持有的「等了两周」。",
+            "semantic": "用户宣布 pilot 通过；回应须承接如释重负，并可自然召回它真实持有的「拾光」项目。",
             "requiredTokens": [
-              "两周"
+              "拾光"
             ]
           }
         ],
         "forbiddenMentions": [
-          "检查部位或身体部位（从未提及）",
-          "医院、诊所或医生姓名",
-          "任何未出现过的亲友"
+          "任何融资、估值或条款细节（从未提及）",
+          "任何投资方、孵化器或加速器名称",
+          "任何未出现过的队友或合伙人"
         ],
         "forbiddenMentionTokens": [
-          "city hospital",
-          "dr. wang",
-          "肿块",
-          "你姐",
-          "你妈",
-          "你家人"
+          "term sheet",
+          "估值",
+          "红杉",
+          "你的合伙人"
         ],
         "forbiddenMentionFromTurn": 3,
         "timeGrounding": "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。",
@@ -1635,17 +1628,17 @@
       "description": "Multi-day relationship temporal change: day-1 dating statement, day-20 user correction to friendship, day-21 housewarming question; tests post-Correction non-reuse of the corrected-away state.",
       "turns": [
         {
-          "text": "Alex and I finally made it official — we're dating."
+          "text": "There's someone new in my life — Alex. He's my boyfriend now; we finally made it official."
         },
         {
-          "text": "It's new, about three weeks in, but it feels easy."
+          "text": "It's new — three weeks in — but Al makes it feel easy."
         },
         {
-          "text": "Quick correction on us — I jumped the gun before. Alex and I talked it through: we're not dating, we decided to stay friends. Saying it was official was my mistake.",
+          "text": "Quick correction on us — I jumped the gun before. Alex and I talked it through: we're not dating, we decided to stay friends. Saying Alex was my boyfriend was my mistake.",
           "gapMs": 1555200000
         },
         {
-          "text": "Alex invited me to their housewarming tonight. Not sure whether I should go.",
+          "text": "Alex invited me to his housewarming tonight. My sister keeps calling him my ex, and that's not what we decided we are. I don't even know what to tell her. Is it strange to go?",
           "gapMs": 86400000
         }
       ],
@@ -1667,7 +1660,7 @@
             "atTurn": 4,
             "semantic": "The response grounds in the corrected state — they decided to stay friends — and never resurrects the dating frame.",
             "requiredTokens": [
-              "friends"
+              "friend"
             ]
           }
         ],
@@ -1718,17 +1711,17 @@
       "description": "多日关系时间变化：第一天确定关系，第 20 天用户更正为朋友，第 21 天暖居邀请；检验更正后旧状态不复用。",
       "turns": [
         {
-          "text": "我跟小林终于把关系定下来了，在一起了。"
+          "text": "跟你说个新鲜事——我最近认识了一个人，叫小林，我们刚把关系定下来，他现在是我对象。"
         },
         {
-          "text": "才三周，不过相处起来挺自然的。"
+          "text": "才三周，不过小林子这人相处起来挺自然的。"
         },
         {
-          "text": "跟你更正一下之前的话——我说快了。我和小林认真聊了一次，决定只做朋友，之前那不算是确定关系。",
+          "text": "跟你更正一下之前的话——我说快了。我和小林认真聊了一次，决定只做朋友，之前说小林是我对象，那不算数。",
           "gapMs": 1555200000
         },
         {
-          "text": "小林今晚喊我去他们暖居趴，你说我去不去合适？",
+          "text": "小林今晚喊我去他们暖居趴。我们已经不是对象了，这种情况你说我去不去合适？",
           "gapMs": 86400000
         }
       ],
@@ -1750,7 +1743,7 @@
             "atTurn": 4,
             "semantic": "回应以更正后的状态为落点——两人决定做朋友——绝不复活恋爱框架。",
             "requiredTokens": [
-              "做朋友"
+              "朋友"
             ]
           }
         ],
