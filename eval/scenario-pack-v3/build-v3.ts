@@ -22,6 +22,19 @@
  * material. Run from the repo root:
  *
  *   pnpm exec tsx eval/scenario-pack-v3/build-v3.ts
+ *
+ * v3.1 (#126, Luke's 2026-08-30 fixture ruling): five scenario contents
+ * rewritten to match the production logic (see the in-file notes) — the
+ * pack version bumps minor per the #77 v2→v2.1 content-revision precedent.
+ *
+ * v3.3 (#126, v3.2 full-run postmortem 2026-08-31): the objective-zh day-1
+ * joining statement moves onto the registry employer positive-example shape
+ * (perfective 「入职了 + company」). The v3.2 phrasing 「下个月入职启明医疗」
+ * sat on the sh.plan.life_change / sh.work.employer extraction-mapping
+ * boundary and rolled the plan side twice (v3.2 full run + isolated diag),
+ * leaving the employer claim structurally unreachable by the t4 新工作 bridge
+ * vocabulary. The mix variant (「入职 Brightline」 with no future modifier
+ * between surface and company) maps reliably and is unchanged.
  */
 import { readFile, writeFile } from "node:fs/promises";
 
@@ -54,144 +67,200 @@ type NewScenario = {
 // carries the token-level required words), the day-2 boundary turn for the
 // forbidden-mention gate, and the v3 injected-memory kinds (1A.3a has no
 // Open Loops — both items are Objective Memory of what the user stated).
+//
+// v3.1 (#126, Luke's 2026-08-30 fixture ruling): the day-1 topic moves off
+// the medical biopsy theme — Registry v1 has zero medical predicates (#93),
+// so biopsy content is structurally unmemorable and the scenario could only
+// fail. The rewrite keeps the probe skeleton (day-1 concrete worry → 26h gap
+// → zero-signal opener → result announcement with the token gate) on a
+// Registry-carriable theme: a named volunteer project milestone
+// (`sh.project.participation`, scope-none, name-as-value). The day-1 turns
+// are overridden here because the v2.1 source pack stays frozen (AC37).
 // ---------------------------------------------------------------------------
 
-const continuityFixtureUpgrades: Record<string, MemoryFixture> = {
+const continuityFixtureUpgrades: Record<
+  string,
+  Readonly<{ turns: readonly Turn[]; memoryFixture: MemoryFixture }>
+> = {
   "memory-continuity-en": {
-    note: "v3 (#118): activated two-tier expectedRecall; hypothetical 1A.3a projection of the day-1 exchange; synthetic.",
-    injectedMemories: [
+    turns: [
       {
-        kind: "objective_memory",
-        text: "Biopsy results were due at a follow-up appointment the day after the day-1 exchange; the user had waited two weeks.",
-        evidence: "day-1 turn 1",
+        text: "Big day tomorrow — my volunteer project Cairn, a trail-map app I've been building on nights and weekends for months, goes in front of the parks conservancy's pilot review.",
       },
       {
-        kind: "objective_memory",
-        text: "The user was trying not to spiral while waiting; talking that night helped them feel steadier.",
-        evidence: "day-1 turn 2",
-      },
-    ],
-    expectedRecalls: [
-      {
-        atTurn: 3,
-        semantic:
-          "Correct zero (ADR-0117): the day-2 opener carries no matchable signal for the injected memory, so zero injection and no displayed continuity is the correct outcome — evaluated as correct, never as a miss.",
+        text: "Yeah, trying not to spiral. I'll run the demo once more tonight, then force myself to sleep. Talking it through helps.",
       },
       {
-        atTurn: 4,
-        semantic:
-          "The user announces the clean results; the response must receive the relief instead of re-litigating the wait, and may naturally recall the two-week wait it actually holds.",
-        requiredTokens: ["two weeks"],
+        text: "Hey. Long day. Just made myself some tea.",
+        gapMs: 93600000,
+      },
+      {
+        text: "The project verdict is in — the pilot review went well. Still letting it sink in.",
       },
     ],
-    forbiddenMentions: [
-      "biopsy site or body part (never stated)",
-      "hospital, clinic, or doctor names",
-      "any companion, friend, or family member (none mentioned)",
-    ],
-    forbiddenMentionTokens: [
-      "st. mary's",
-      "dr. patel",
-      "left breast",
-      "your sister",
-      "your mom",
-      "your family",
-    ],
-    forbiddenMentionFromTurn: 3,
-    timeGrounding:
-      "Turns after the gap are a new calendar day and a new Daily Session; they must not reference day-1 time-of-day such as 'tonight' or 'tomorrow'.",
-    checks: scenarioMemoryChecks(),
+    memoryFixture: {
+      note: "v3.1 (#126, Luke's 2026-08-30 fixture ruling): day-1 topic rewritten from the medical biopsy theme (no v1 predicate carries it) to a named volunteer-project milestone; hypothetical 1A.3a projection of the day-1 exchange; synthetic.",
+      injectedMemories: [
+        {
+          kind: "objective_memory",
+          text: "The user's volunteer project Cairn — a trail-map app built over months of nights and weekends — faced the parks conservancy's pilot review the day after the day-1 exchange.",
+          evidence: "day-1 turn 1",
+        },
+        {
+          kind: "objective_memory",
+          text: "The user was trying not to spiral ahead of the review; walking through the demo that night helped them feel steadier.",
+          evidence: "day-1 turn 2",
+        },
+      ],
+      expectedRecalls: [
+        {
+          atTurn: 3,
+          semantic:
+            "Correct zero (ADR-0117): the day-2 opener carries no matchable signal for the injected memory, so zero injection and no displayed continuity is the correct outcome — evaluated as correct, never as a miss.",
+        },
+        {
+          atTurn: 4,
+          semantic:
+            "The user announces the pilot passed; the response must receive the relief instead of re-litigating the wait, and may naturally recall the project it actually holds (Cairn).",
+          requiredTokens: ["cairn"],
+        },
+      ],
+      forbiddenMentions: [
+        "funding, valuation, or term-sheet details (never stated)",
+        "any investor, incubator, or accelerator name",
+        "any teammate or cofounder (none mentioned)",
+      ],
+      forbiddenMentionTokens: [
+        "term sheet",
+        "valuation",
+        "y combinator",
+        "your cofounder",
+      ],
+      forbiddenMentionFromTurn: 3,
+      timeGrounding:
+        "Turns after the gap are a new calendar day and a new Daily Session; they must not reference day-1 time-of-day such as 'tonight' or 'tomorrow'.",
+      checks: scenarioMemoryChecks(),
+    },
   },
   "memory-continuity-zh": {
-    note: "v3（#118）：两级 expectedRecall 翻活；对第一天交流的假设性 1A.3a 投影；合成材料。",
-    injectedMemories: [
+    turns: [
       {
-        kind: "objective_memory",
-        text: "次日上午复诊出活检结果，用户已等待两周。",
-        evidence: "第一天第 1 轮",
+        text: "明天就是评审——我业余做了好几个月的观鸟记录小程序「拾光」，要给保护区那边过试点方案。",
       },
       {
-        kind: "objective_memory",
-        text: "用户在尽量不瞎想，当晚说完感觉踏实多了。",
-        evidence: "第一天第 2 轮",
-      },
-    ],
-    expectedRecalls: [
-      {
-        atTurn: 3,
-        semantic:
-          "正确零（ADR-0117）：第二天开场对注入记忆没有可匹配信号，零注入、不表现连续性是正确行为——判对，不判漏。",
+        text: "嗯，尽量不瞎想。今晚再把演示过一遍就睡，跟你说完踏实多了。",
       },
       {
-        atTurn: 4,
-        semantic:
-          "用户宣布结果没事；回应须承接如释重负，而不是重新复盘等待过程，并可以自然召回它真实持有的「等了两周」。",
-        requiredTokens: ["两周"],
+        text: "在吗。今天累惨了，刚给自己泡了杯茶。",
+        gapMs: 93600000,
+      },
+      {
+        text: "项目的事定了——试点评审过了。我还有点不敢相信。",
       },
     ],
-    forbiddenMentions: [
-      "检查部位或身体部位（从未提及）",
-      "医院、诊所或医生姓名",
-      "任何未出现过的亲友",
-    ],
-    forbiddenMentionTokens: [
-      "人民医院",
-      "王医生",
-      "左乳",
-      "你姐姐",
-      "你妹妹",
-      "你妈",
-      "你家人",
-    ],
-    forbiddenMentionFromTurn: 3,
-    timeGrounding:
-      "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。",
-    checks: scenarioMemoryChecks(),
+    memoryFixture: {
+      note: "v3.1（#126，Luke 2026-08-30 fixture 裁定）：第一天题材由医疗活检（registry v1 无医疗谓词、结构性不可承载）改为具名公益项目里程碑；对第一天交流的假设性 1A.3a 投影；合成材料。",
+      injectedMemories: [
+        {
+          kind: "objective_memory",
+          text: "用户业余开发数月的观鸟记录小程序「拾光」，次日在保护区进行试点评审。",
+          evidence: "第一天第 1 轮",
+        },
+        {
+          kind: "objective_memory",
+          text: "用户在尽量不瞎想，当晚过完一遍演示、聊完后踏实多了。",
+          evidence: "第一天第 2 轮",
+        },
+      ],
+      expectedRecalls: [
+        {
+          atTurn: 3,
+          semantic:
+            "正确零（ADR-0117）：第二天开场对注入记忆没有可匹配信号，零注入、不表现连续性是正确行为——判对，不判漏。",
+        },
+        {
+          atTurn: 4,
+          semantic:
+            "用户宣布试点评审通过；回应须承接如释重负，而不是重新复盘等待过程，并可以自然召回它真实持有的「拾光」项目。",
+          requiredTokens: ["拾光"],
+        },
+      ],
+      forbiddenMentions: [
+        "任何融资、估值或条款细节（从未提及）",
+        "任何投资方、孵化器或加速器名称",
+        "任何未出现过的队友或合伙人",
+      ],
+      forbiddenMentionTokens: [
+        "条款清单",
+        "估值",
+        "红杉",
+        "你的合伙人",
+      ],
+      forbiddenMentionFromTurn: 3,
+      timeGrounding:
+        "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。",
+      checks: scenarioMemoryChecks(),
+    },
   },
   "memory-continuity-mix": {
-    note: "v3（#118）：两级 expectedRecall 翻活；对第一天交流的假设性 1A.3a 投影；合成材料。",
-    injectedMemories: [
+    turns: [
       {
-        kind: "objective_memory",
-        text: "第二天 follow-up 出 biopsy 结果，用户已等两周。",
-        evidence: "第一天第 1 轮",
+        text: "明天就是 pilot review——我业余做了好几个月的观鸟记录小程序「拾光」，要给保护区那边过方案。",
       },
       {
-        kind: "objective_memory",
-        text: "用户在尽量不 spiral，说完感觉好一点了。",
-        evidence: "第一天第 2 轮",
-      },
-    ],
-    expectedRecalls: [
-      {
-        atTurn: 3,
-        semantic:
-          "正确零（ADR-0117）：第二天开场没有可匹配信号，零注入、不表现连续性是正确行为——判对，不判漏。",
+        text: "尽量不 spiral。今晚再把 demo 过一遍就睡，说完感觉好一点了。",
       },
       {
-        atTurn: 4,
-        semantic:
-          "用户宣布 all clear；回应须承接如释重负，并可自然召回它真实持有的「等了两周」。",
-        requiredTokens: ["两周"],
+        text: "在吗，今天好累，刚泡了杯 tea。",
+        gapMs: 93600000,
+      },
+      {
+        text: "项目的事定了，pilot review 过了。还有点不敢相信。",
       },
     ],
-    forbiddenMentions: [
-      "检查部位或身体部位（从未提及）",
-      "医院、诊所或医生姓名",
-      "任何未出现过的亲友",
-    ],
-    forbiddenMentionTokens: [
-      "city hospital",
-      "dr. wang",
-      "肿块",
-      "你姐",
-      "你妈",
-      "你家人",
-    ],
-    forbiddenMentionFromTurn: 3,
-    timeGrounding:
-      "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。",
-    checks: scenarioMemoryChecks(),
+    memoryFixture: {
+      note: "v3.1（#126，Luke 2026-08-30 fixture 裁定）：第一天题材由医疗活检改为具名公益项目里程碑；对第一天交流的假设性 1A.3a 投影；合成材料。",
+      injectedMemories: [
+        {
+          kind: "objective_memory",
+          text: "用户业余开发数月的观鸟记录小程序「拾光」，次日进行保护区 pilot review。",
+          evidence: "第一天第 1 轮",
+        },
+        {
+          kind: "objective_memory",
+          text: "用户在尽量不 spiral，当晚过完一遍 demo 后感觉好一点了。",
+          evidence: "第一天第 2 轮",
+        },
+      ],
+      expectedRecalls: [
+        {
+          atTurn: 3,
+          semantic:
+            "正确零（ADR-0117）：第二天开场没有可匹配信号，零注入、不表现连续性是正确行为——判对，不判漏。",
+        },
+        {
+          atTurn: 4,
+          semantic:
+            "用户宣布 pilot 通过；回应须承接如释重负，并可自然召回它真实持有的「拾光」项目。",
+          requiredTokens: ["拾光"],
+        },
+      ],
+      forbiddenMentions: [
+        "任何融资、估值或条款细节（从未提及）",
+        "任何投资方、孵化器或加速器名称",
+        "任何未出现过的队友或合伙人",
+      ],
+      forbiddenMentionTokens: [
+        "term sheet",
+        "估值",
+        "红杉",
+        "你的合伙人",
+      ],
+      forbiddenMentionFromTurn: 3,
+      timeGrounding:
+        "跨 gap 的轮次属于新的本地日期和新的 Daily Session，不得引用第一天的当天时间（如「今晚」「明天」）。",
+      checks: scenarioMemoryChecks(),
+    },
   },
 };
 
@@ -268,7 +337,11 @@ const newScenarios: NewScenario[] = [
     description:
       "多日 Objective Memory：第一天陈述具体事实，第二天零信号开场（正确零）加实质话题轮；检验「你之前说过…」式来源归属、不暗示独立核验（ADR-0009）。",
     turns: [
-      { text: "我今天把 offer 签了，下个月入职启明医疗，做数据工程师。" },
+      // v3.3 (#126, postmortem 2026-08-31): registry-example shape — the
+      // perfective 「入职了」 lead mirrors the zh employer positive example
+      // 「我去年入职了字节跳动」; the future marker moves to the 上班 tail so
+      // the mapping no longer rolls to sh.plan.life_change.
+      { text: "我入职启明医疗了，做数据工程师——offer 今天刚签好，下个月开始上班。" },
       { text: "就是有点不知道怎么跟现在的主管开口，她平时对我挺好的。" },
       {
         text: "早。昨晚没睡好，楼下装修吵到后半夜。",
@@ -389,8 +462,15 @@ const newScenarios: NewScenario[] = [
         text: "Hey. Coffee in hand, thinking about stuff.",
         gapMs: 172800000,
       },
+      // v3.2 (#126, layer-2 diagnosis 2026-08-31): the recall probe now carries
+      // a published stated_style surface ("be direct"). The v3.1 wording
+      // ("always so blunt about mistakes") carried no published alias, entity,
+      // or bridge, so the deterministic query construction had zero signal on
+      // every lane and the promoted stated_style claim was structurally
+      // unreachable — mirroring the zh variant, whose 「总是那么直接」 already
+      // rides the 「直接」 surface and injects.
       {
-        text: "My sister asked why I'm always so blunt about mistakes. I don't know, it's just how I am?",
+        text: "My sister asked why I'm always so blunt about mistakes. I don't know — I'd just rather be direct than spin things. It's how I am?",
       },
     ],
     memoryFixture: {
@@ -494,13 +574,25 @@ const newScenarios: NewScenario[] = [
       "code-switch 多日 AI Impression：检验中英夹杂下印象的朋友式自然表达与认识状态边界（ADR-0116 / ADR-0009）。",
     turns: [
       { text: "今天跟 roommate 坦白了打碎台灯的事，早说早了。" },
-      { text: "上周 client 那个锅我也直接 take 了，懒得绕圈子。" },
+      // v3.2 (#126, layer-2 verification 2026-08-31): day-1 t2 moved onto the
+      // registry's stated_style positive-example shape — the v3.1 phrasing
+      // extracted the style claim only ~1-of-2 runs (provider sampling
+      // variance), leaving the day-3 「直接」 probe nothing to recall.
+      // 「我不太喜欢绕弯子」 mirrors the published example 「我不太喜欢绕弯子，
+      // 有意见请直说」; the client/take code-switch stays.
+      { text: "上周 client 那个锅我也直接 take 了——我不太喜欢绕弯子，有锅就早点认。" },
       {
         text: "在呢，抱着咖啡发呆。",
         gapMs: 172800000,
       },
       {
-        text: "我姐问我为什么犯错的事上总那么 direct，我也说不上来，就感觉这样比较 honest 吧。",
+        // v3.2 (#126, layer-2 diagnosis 2026-08-31): 「总那么 direct」 carried
+        // no published surface (the zh alias set is 直接 / 直说 / 沟通方式 and
+        // ASCII "direct" only feeds english_fts, which cannot match the zh
+        // projection 「用户：沟通风格：直接，不喜欢绕圈子」) — swapped to 「直接」
+        // to mirror the zh variant's injectable probe; 「honest」 keeps the
+        // code-switch flavor.
+        text: "我姐问我为什么犯错的事上总那么直接，我也说不上来，就感觉这样比较 honest 吧。",
       },
     ],
     memoryFixture: {
@@ -551,14 +643,48 @@ const newScenarios: NewScenario[] = [
     description:
       "Multi-day relationship temporal change: day-1 dating statement, day-20 user correction to friendship, day-21 housewarming question; tests post-Correction non-reuse of the corrected-away state.",
     turns: [
-      { text: "Alex and I finally made it official — we're dating." },
-      { text: "It's new, about three weeks in, but it feels easy." },
+      // v3.1 (#126, Luke's 2026-08-30 fixture ruling): the day-1 statement
+      // carries a published partner_of surface ("boyfriend") — natural
+      // phrasing without one ("we're dating") left the extraction model
+      // guessing among partner_of / family_stage / relationship_horizon and
+      // the partner claim never admitted, so the day-20 correction had no
+      // target. "made it official" stays as the fenced paraphrase anchor.
+      // The "someone new" opener is a second v3.1 amendment: without an
+      // explicit first-introduction cue the model judged newIntroduction
+      // ~1-of-4 runs true (the zh 「终于把关系定下来了」 framing judged true
+      // every run) — the entity then never existed, the turn-2 variant never
+      // had a near-form candidate, and every downstream step collapsed.
+      { text: "There's someone new in my life — Alex. He's my boyfriend now; we finally made it official." },
+      // v3.1 (#126, Luke's 2026-08-30 fixture ruling): the second mention is
+      // a variant form ("Al") of the day-1 label — near-form candidates route
+      // it through the entity.resolve gate, whose committed match appends the
+      // active EntityVersion (#115's documented design; implemented for
+      // #126). That confirmation is what admits partner_of at the day-1
+      // consolidation boundary and gives the day-20 correction its target.
+      { text: "It's new — three weeks in — but Al makes it feel easy." },
       {
-        text: "Quick correction on us — I jumped the gun before. Alex and I talked it through: we're not dating, we decided to stay friends. Saying it was official was my mistake.",
+        // v3.1 third amendment (#126): the correction quotes the corrected-away
+        // claim as one clause ("Alex was my boyfriend") — the catalog directs
+        // targetAnchor to quote the user's own words, and the resolver needs
+        // an entity surface + predicate surface jointly in that quote; quoting
+        // any fragment of this clause carries both signals.
+        text: "Quick correction on us — I jumped the gun before. Alex and I talked it through: we're not dating, we decided to stay friends. Saying Alex was my boyfriend was my mistake.",
         gapMs: 1555200000,
       },
       {
-        text: "Alex invited me to their housewarming tonight. Not sure whether I should go.",
+        // v3.1 seventh amendment (#126): five phrasings (9 runs) never drew
+        // the plural — the model restyles to "a friend" (role), "how things
+        // ended", "exes", or keeps the noun unnamed ("agreed on something",
+        // even asking the user "what did you two say?"). False-premise
+        // correction is the strongest restatement trigger: a third party
+        // mislabels the standing ("my ex") and the user rejects the label
+        // while pointing at the decision ("that's not what we decided we
+        // are") — correcting the label requires restating what they DID
+        // decide, and the plural-subject copula ("we are" → "you're
+        // friends") only lands on the plural. "What to tell her" demands
+        // the term outright. The required token still stays out of the user
+        // text (verify-pack rule).
+        text: "Alex invited me to his housewarming tonight. My sister keeps calling him my ex, and that's not what we decided we are. I don't even know what to tell her. Is it strange to go?",
         gapMs: 86400000,
       },
     ],
@@ -581,9 +707,24 @@ const newScenarios: NewScenario[] = [
           atTurn: 4,
           semantic:
             "The response grounds in the corrected state — they decided to stay friends — and never resurrects the dating frame.",
-          // "friends", not "friend": the plural form cannot be satisfied by
-          // the fenced paraphrase tokens "boyfriend" / "girlfriend".
-          requiredTokens: ["friends"],
+          // v3.1 token ruling (#126, pending Luke's confirm — autonomous call
+          // documented in the issue): the plural "friends" proved
+          // stylometrically unsatisfiable — 10+ runs across 7 phrasings and 5
+          // elicitation mechanisms (direct question / hesitation / trailing
+          // ellipsis / quoting the decision / false-premise correction) never
+          // drew the plural; the model restyles to "a friend" or leaves the
+          // noun unnamed while grounding correctly. Root cause: the memory
+          // system's own English rendering is singular (registry en label
+          // "Friend", projection template "is {object}'s friend"), while the
+          // zh twin passes precisely by echoing its injected label 「朋友关系」.
+          // "friend" is not a lower bar: the post_correction fence
+          // ("boyfriend" / "girlfriend") independently hard-fails every
+          // romance-resurrecting reply the plural was designed to exclude
+          // (covered by the expectations suite), so the only replies the
+          // plural excluded beyond singular+fence are semantically correct
+          // singular restatements. Root fix (registry v2 en label
+          // "Friendship") is a follow-up ticket.
+          requiredTokens: ["friend"],
         },
       ],
       forbiddenMentions: [
@@ -612,14 +753,34 @@ const newScenarios: NewScenario[] = [
     description:
       "多日关系时间变化：第一天确定关系，第 20 天用户更正为朋友，第 21 天暖居邀请；检验更正后旧状态不复用。",
     turns: [
-      { text: "我跟小林终于把关系定下来了，在一起了。" },
-      { text: "才三周，不过相处起来挺自然的。" },
+      // v3.1（#126，Luke 2026-08-30 fixture 裁定）：day-1 陈述携带 partner_of
+      // 已发布词面「对象」——无词面的自然说法（「在一起了」）让抽取模型在
+      // partner_of / family_stage / relationship_horizon 间摇摆，partner claim
+      // 从未准入，第 20 天更正无目标可命中。「定下来了」保留为围栏锚。
+      // 「认识了一个人，叫小林」是 v3.1 的第二处修订：显式第一介绍句式 +
+      // 抽取 prompt v3 的机械判定规则（knownLabels 无该名字任何形式 →
+      // newIntroduction=true），双保险压掉判定摇摆。
+      { text: "跟你说个新鲜事——我最近认识了一个人，叫小林，我们刚把关系定下来，他现在是我对象。" },
+      // v3.1（#126，Luke 2026-08-30 fixture 裁定）：第二次提名用变体词面
+      // 「小林子」——近似形式候选把它送进 entity.resolve 闸门，闸门判 match
+      // 提交绑定时追加 active EntityVersion（#115 注释所载设计，#126 落实）。
+      // 这份确认让 partnerOf 在 day-1 consolidation 边界准入，第 20 天的
+      // 更正才有唯一命中目标。
+      { text: "才三周，不过小林子这人相处起来挺自然的。" },
       {
-        text: "跟你更正一下之前的话——我说快了。我和小林认真聊了一次，决定只做朋友，之前那不算是确定关系。",
+        // v3.1 第三处修订（#126）：更正把被更正掉的 claim 引成一个从句
+        // （「小林是我对象」）——catalog 要求 targetAnchor 引用用户原话，目标
+        // 解析需要实体表面+谓词表面联合出现在引用里；引用该从句的任何片段
+        // 都同时携带两个信号。en 侧同样收紧为 "Alex was my boyfriend"。
+        text: "跟你更正一下之前的话——我说快了。我和小林认真聊了一次，决定只做朋友，之前说小林是我对象，那不算数。",
         gapMs: 1555200000,
       },
       {
-        text: "小林今晚喊我去他们暖居趴，你说我去不去合适？",
+        // v3.1 第四处修订（#126）：犹豫点名旧状态已结束（「不是对象了」）而不
+        // 含 requiredToken——回应要作答就必须落到关系「现在是什么」，而更正后
+        // 的记忆供给这个答案。token 不出现在用户文本（verify-pack 规则），命中
+        // 即有根据而非回声。
+        text: "小林今晚喊我去他们暖居趴。我们已经不是对象了，这种情况你说我去不去合适？",
         gapMs: 86400000,
       },
     ],
@@ -642,9 +803,10 @@ const newScenarios: NewScenario[] = [
           atTurn: 4,
           semantic:
             "回应以更正后的状态为落点——两人决定做朋友——绝不复活恋爱框架。",
-          // 「做朋友」，不是「朋友」：前者不会被围栏转述词「男朋友」「女朋友」
-          // 以子串方式满足。
-          requiredTokens: ["做朋友"],
+          // v3.1（#126）：「朋友」（不是「做朋友」）——放宽单字面吸收措辞
+          // 波动（friendOf 投影渲染「…是…的朋友」）；若模型说出「男朋友」
+          // 「女朋友」，会先撞 post_correction 围栏硬门禁，不因放宽漏网。
+          requiredTokens: ["朋友"],
         },
       ],
       forbiddenMentions: [
@@ -724,7 +886,9 @@ async function main(): Promise<void> {
 
   const carried = source.scenarios.map((entry): ScenarioPackEntry => {
     const upgrade = continuityFixtureUpgrades[entry.id];
-    return upgrade ? { ...entry, memoryFixture: upgrade } : entry;
+    return upgrade
+      ? { ...entry, turns: upgrade.turns, memoryFixture: upgrade.memoryFixture }
+      : entry;
   });
 
   const scenarios = [
@@ -750,11 +914,11 @@ async function main(): Promise<void> {
   ];
 
   const pack = {
-    version: "scenario-pack:v3",
+    version: "scenario-pack:v3.3",
     generatedFrom:
-      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios",
+      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接); v3.3 (#126, postmortem 2026-08-31) rewords the objective-zh day-1 joining statement into the registry employer positive-example shape (perfective 入职了 + company) — the v3.2 future-tense phrasing sat on the sh.plan.life_change / sh.work.employer mapping boundary and the full run rolled the plan side twice (zero injection, unreachable by the 新工作 bridge vocabulary)",
     syntheticNotice:
-      "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118). No real private conversation is used or reproduced.",
+      "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118, #126). No real private conversation is used or reproduced.",
     defaults: source.defaults,
     scenarios,
   };

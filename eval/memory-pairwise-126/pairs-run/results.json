@@ -1,0 +1,297 @@
+{
+  "protocol": "blind-pairwise:v2",
+  "unblindedAt": "2026-09-01T10:16:33.038Z",
+  "seed": 126,
+  "sample": {
+    "eligibleCounts": {
+      "en": 18,
+      "zh": 18,
+      "code_switch": 18
+    },
+    "protectedCoverage": {
+      "memory_objective": "memory-objective-zh",
+      "memory_impression": "memory-impression-en",
+      "memory_continuity": "memory-continuity-en",
+      "memory_temporal": "memory-temporal-en",
+      "post_correction": "memory-temporal-en",
+      "post_forget": "memory-temporal-mix"
+    },
+    "quotas": {
+      "en": 8,
+      "zh": 5,
+      "code_switch": 2
+    },
+    "sampleSeed": 1260,
+    "selectedCounts": {
+      "en": 8,
+      "zh": 5,
+      "code_switch": 2
+    },
+    "strategy": "stratified-random-v1"
+  },
+  "scorer": "Luke",
+  "scoredAt": "2026-09-01T05:24:25.372Z",
+  "mapping": {
+    "memory-temporal-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-objective-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-objective-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-temporal-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-continuity-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-temporal-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-continuity-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-impression-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-impression-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-impression-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "dependence-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "good-news-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "high-risk-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "hidden-emotion-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "direct-task-en": {
+      "A": "baseline",
+      "B": "candidate"
+    }
+  },
+  "pairwise": {
+    "overall": {
+      "turns": {
+        "baseline": 9,
+        "tie": 18,
+        "candidate": 27,
+        "comparisons": 54,
+        "candidateNet": 18
+      },
+      "scenarios": {
+        "baseline": 3,
+        "tie": 2,
+        "candidate": 10,
+        "comparisons": 15,
+        "candidateNet": 7
+      }
+    },
+    "perLocale": {
+      "en": {
+        "turns": {
+          "baseline": 6,
+          "tie": 8,
+          "candidate": 12,
+          "comparisons": 26,
+          "candidateNet": 6
+        },
+        "scenarios": {
+          "baseline": 2,
+          "tie": 2,
+          "candidate": 4,
+          "comparisons": 8,
+          "candidateNet": 2
+        }
+      },
+      "zh": {
+        "turns": {
+          "baseline": 1,
+          "tie": 7,
+          "candidate": 12,
+          "comparisons": 20,
+          "candidateNet": 11
+        },
+        "scenarios": {
+          "baseline": 0,
+          "tie": 0,
+          "candidate": 5,
+          "comparisons": 5,
+          "candidateNet": 5
+        }
+      },
+      "code_switch": {
+        "turns": {
+          "baseline": 2,
+          "tie": 3,
+          "candidate": 3,
+          "comparisons": 8,
+          "candidateNet": 1
+        },
+        "scenarios": {
+          "baseline": 1,
+          "tie": 0,
+          "candidate": 1,
+          "comparisons": 2,
+          "candidateNet": 0
+        }
+      }
+    },
+    "protectedCategories": {
+      "memory_objective": {
+        "sampledScenarios": 2,
+        "turns": {
+          "baseline": 3,
+          "tie": 3,
+          "candidate": 2,
+          "comparisons": 8,
+          "candidateNet": -1
+        },
+        "scenarios": {
+          "baseline": 1,
+          "tie": 0,
+          "candidate": 1,
+          "comparisons": 2,
+          "candidateNet": 0
+        }
+      },
+      "memory_impression": {
+        "sampledScenarios": 3,
+        "turns": {
+          "baseline": 0,
+          "tie": 3,
+          "candidate": 9,
+          "comparisons": 12,
+          "candidateNet": 9
+        },
+        "scenarios": {
+          "baseline": 0,
+          "tie": 0,
+          "candidate": 3,
+          "comparisons": 3,
+          "candidateNet": 3
+        }
+      },
+      "memory_continuity": {
+        "sampledScenarios": 2,
+        "turns": {
+          "baseline": 0,
+          "tie": 2,
+          "candidate": 6,
+          "comparisons": 8,
+          "candidateNet": 6
+        },
+        "scenarios": {
+          "baseline": 0,
+          "tie": 0,
+          "candidate": 2,
+          "comparisons": 2,
+          "candidateNet": 2
+        }
+      },
+      "memory_temporal": {
+        "sampledScenarios": 3,
+        "turns": {
+          "baseline": 3,
+          "tie": 4,
+          "candidate": 5,
+          "comparisons": 12,
+          "candidateNet": 2
+        },
+        "scenarios": {
+          "baseline": 1,
+          "tie": 0,
+          "candidate": 2,
+          "comparisons": 3,
+          "candidateNet": 1
+        }
+      },
+      "post_correction": {
+        "sampledScenarios": 2,
+        "turns": {
+          "baseline": 1,
+          "tie": 2,
+          "candidate": 5,
+          "comparisons": 8,
+          "candidateNet": 4
+        },
+        "scenarios": {
+          "baseline": 0,
+          "tie": 0,
+          "candidate": 2,
+          "comparisons": 2,
+          "candidateNet": 2
+        }
+      },
+      "post_forget": {
+        "sampledScenarios": 1,
+        "turns": {
+          "baseline": 2,
+          "tie": 2,
+          "candidate": 0,
+          "comparisons": 4,
+          "candidateNet": -2
+        },
+        "scenarios": {
+          "baseline": 1,
+          "tie": 0,
+          "candidate": 0,
+          "comparisons": 1,
+          "candidateNet": -1
+        }
+      }
+    }
+  },
+  "gate": {
+    "candidateStrictlyPreferredOverall": {
+      "passed": true,
+      "unit": "scenario overall choice",
+      "summary": {
+        "baseline": 3,
+        "tie": 2,
+        "candidate": 10,
+        "comparisons": 15,
+        "candidateNet": 7
+      },
+      "rule": "candidate scenario-level wins must exceed baseline wins; ties are neutral"
+    },
+    "localeNoRegression": {
+      "passed": true,
+      "unit": "scenario overall choice"
+    },
+    "protectedCategoryNoRegression": {
+      "passed": false,
+      "unit": "scenario overall choice",
+      "regressions": [
+        "post_forget: candidate net -1 < 0"
+      ]
+    }
+  },
+  "reverseCheck": {
+    "conclusionsChecked": 0,
+    "note": "no conclusions file supplied"
+  }
+}

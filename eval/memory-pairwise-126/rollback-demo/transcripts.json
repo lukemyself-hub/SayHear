@@ -1,0 +1,60 @@
+{
+  "capturedAt": "2026-09-01T01:51:52.078Z",
+  "phaseA": {
+    "scenarioId": "rollback-demo-scenario",
+    "turns": [
+      {
+        "assistantText": "哇，恭喜啊！新工作这一步迈得挺大的。蓝湾科技，听着就是做正经产品的公司。后端工程师，这岗位挺挑人的，能进去说明人家认你的本事。刚入职这几天还顺吗？",
+        "domainClockIso": "2026-08-21T02:00:00.000Z",
+        "finalEventType": "assistant_committed",
+        "injectedMemories": 0,
+        "input": {
+          "locale": "zh-CN",
+          "text": "跟你分享一下，我最近入职了蓝湾科技，做后端工程师。",
+          "timezone": "Asia/Shanghai"
+        },
+        "sequenceInScenario": 1,
+        "wallMs": 3362
+      },
+      {
+        "assistantText": "同事好相处，这个开局就很加分。节奏这事儿急不来，新人头几周本来就是在摸规律。慢慢来，先把每天该做的事顺下来就行。你们那边技术栈跟你以前用的接近吗？",
+        "domainClockIso": "2026-08-21T02:01:30.000Z",
+        "finalEventType": "assistant_committed",
+        "injectedMemories": 0,
+        "input": {
+          "locale": "zh-CN",
+          "text": "新同事都挺不错的，还在适应节奏。",
+          "timezone": "Asia/Shanghai"
+        },
+        "sequenceInScenario": 2,
+        "wallMs": 5039
+      },
+      {
+        "assistantText": "你之前跟我说过，在蓝湾科技上班，职位是后端工程师。跟家里人说的话，就说「在蓝湾科技做后端开发」就挺清楚的。",
+        "domainClockIso": "2026-08-23T02:01:30.000Z",
+        "finalEventType": "assistant_committed",
+        "injectedMemories": 1,
+        "input": {
+          "locale": "zh-CN",
+          "text": "我在哪家公司上班来着？突然想不起来跟家里人怎么说的。",
+          "timezone": "Asia/Shanghai"
+        },
+        "sequenceInScenario": 3,
+        "wallMs": 3991
+      }
+    ]
+  },
+  "phaseB": {
+    "assistantText": "还是蓝湾科技，咱们刚才还聊到的那家。跟朋友提的话，直接说名字就行。",
+    "domainClockIso": "2026-08-24T02:01:30.000Z",
+    "finalEventType": "assistant_committed",
+    "injectedMemories": 0,
+    "input": {
+      "locale": "zh-CN",
+      "text": "对了，我最近入职的这家公司叫什么来着？想跟朋友提一下。",
+      "timezone": "Asia/Shanghai"
+    },
+    "sequenceInScenario": 4,
+    "wallMs": 2652
+  }
+}

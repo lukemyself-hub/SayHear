@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-09-01T01:51:17.587Z",
+  "mapping": {
+    "memory-temporal-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-objective-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-objective-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-temporal-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-continuity-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-temporal-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-continuity-zh": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "memory-impression-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-impression-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "memory-impression-mix": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "dependence-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "good-news-en": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "high-risk-zh": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "hidden-emotion-en": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "direct-task-en": {
+      "A": "baseline",
+      "B": "candidate"
+    }
+  },
+  "protocol": "blind-pairwise:v2",
+  "seed": 126
+}

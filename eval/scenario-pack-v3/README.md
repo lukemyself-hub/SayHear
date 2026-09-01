@@ -10,8 +10,14 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 
 ## TL;DR
 
-- `scenarios.json` 是 `scenario-pack:v3`：54 个合成多回合场景 =
+- `scenarios.json` 是 `scenario-pack:v3.3`：54 个合成多回合场景 =
   v2.1 的 45 个 + 9 个新的多日召回场景（三类 × en / zh / code-switch）。
+  v3.1（#126，Luke 2026-08-30 fixture 裁定）：5 个场景内容改写以匹配生产逻辑
+  （continuity ×3 换 registry 可承载题材、temporal en/zh 补 day-1 第二次提名），
+  按 #77 v2→v2.1 内容修订先例升 minor 版本。v3.2（#126 分层定位 2026-08-31）：
+  impression en/mix 的 day-3 追问探针携带已发布 stated_style 词面。v3.3（#126
+  全量复盘 2026-08-31）：objective-zh day-1 陈述调近 registry employer 正例形状
+  （完成体「入职了」+ 机构名）。
 - `tiered-checks.ts`（`tiered-checks:v3`）按 ADR-0110 的三档执行机械检查，
   共享的确定性机制（posture 重放、stop-signal 窗口、v2 回合门禁、安全资源
   白名单）直接复用 v2 模块——两代检查器的共同门禁只有一份实现。
@@ -59,8 +65,8 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 
 | 路径 | 用途 |
 | --- | --- |
-| `scenarios.json` | scenario-pack:v3，由 build 脚本生成 |
-| `build-v3.ts` | 生成脚本：读取 v2.1 pack，升级 3 个 memory_continuity fixture，追加 9 个多日场景（provenance 见脚本头注） |
+| `scenarios.json` | scenario-pack:v3.3，由 build 脚本生成 |
+| `build-v3.ts` | 生成脚本：读取 v2.1 pack，升级（v3.1 含改写）3 个 memory_continuity fixture，追加 9 个多日场景（provenance 见脚本头注） |
 | `tiered-checks.ts` | 三档检查模块 v3（复用 v2 模块共享机制 + `@sayhear/application` 版本化校验函数） |
 | `check-transcripts.ts` | CLI：对一个 #61 格式的 transcripts.json 出 TieredReport；可选第三参联接 v3 pack fixture |
 | `verify-pack.ts` | CLI：机械校验全部期望 fixture（54 场景全量、无 provider），mismatch 即退出非零 |

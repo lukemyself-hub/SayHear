@@ -1188,7 +1188,7 @@ describe("Context Compiler — memory sections (#117)", () => {
         selection_policy_versions: {
           portrait_selection: "portrait-selection:v1",
           memory_budgets: "memory-budgets:v1",
-          recall_framing: "recall-framing:v1",
+          recall_framing: "recall-framing:v2",
         },
         section_budget_vs_actual: {
           person_portrait: {
@@ -1230,7 +1230,7 @@ describe("Context Compiler — memory sections (#117)", () => {
             validTo: null,
             entityVersionIds: ["entity-version-self"],
             evidenceIds: ["evidence-a"],
-            recallFramingPolicyVersion: "recall-framing:v1",
+            recallFramingPolicyVersion: "recall-framing:v2",
             selectionSource: "person_portrait",
           },
           {
@@ -1246,7 +1246,7 @@ describe("Context Compiler — memory sections (#117)", () => {
             validTo: null,
             entityVersionIds: ["entity-version-self"],
             evidenceIds: ["evidence-b", "evidence-c"],
-            recallFramingPolicyVersion: "recall-framing:v1",
+            recallFramingPolicyVersion: "recall-framing:v2",
             selectionSource: "person_portrait",
           },
         ],
@@ -1264,7 +1264,7 @@ describe("Context Compiler — memory sections (#117)", () => {
             validTo: null,
             entityVersionIds: ["entity-version-self", "entity-version-wang"],
             evidenceIds: ["evidence-d"],
-            recallFramingPolicyVersion: "recall-framing:v1",
+            recallFramingPolicyVersion: "recall-framing:v2",
             selectionSource: "query_retrieval",
           },
         ],
@@ -1322,7 +1322,7 @@ describe("Context Compiler — memory sections (#117)", () => {
     expect(payload.instructions).toContain("evidence=evidence-b,evidence-c");
     expect(payload.instructions).toContain("portrait-selection:v1");
     expect(payload.instructions).toContain("memory-budgets:v1");
-    expect(payload.instructions).toContain("recall-framing:v1");
+    expect(payload.instructions).toContain("recall-framing:v2");
     // Kind-specific framing rides every item line (objective vs impression).
     expect(payload.instructions).toContain("措辞（objective）");
     expect(payload.instructions).toContain("措辞（impression）");

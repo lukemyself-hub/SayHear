@@ -615,7 +615,7 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
     expect(manifest.selection_policy_versions).toEqual({
       portrait_selection: "portrait-selection:v1",
       memory_budgets: "memory-budgets:v1",
-      recall_framing: "recall-framing:v1",
+      recall_framing: "recall-framing:v2",
     });
 
     // The employer Claim dual-selects: Portrait wins, so objective_memory is

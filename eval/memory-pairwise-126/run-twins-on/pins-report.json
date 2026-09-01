@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-09-01T01:51:09.082Z",
+  "issues": [],
+  "manifest": "eval/memory-pairwise-126/run-twins-on/manifest.json",
+  "pass": true,
+  "pinList": {
+    "conversationActionCatalog": {
+      "actionKinds": [
+        "regenerate_journal",
+        "memory_correction",
+        "explain_memory_source",
+        "memory_forget_request",
+        "memory_forget_reversal",
+        "entity_identity_correction"
+      ],
+      "version": "conversation-action-catalog:memory-trust-actions:v2"
+    },
+    "entityResolvePolicy": {
+      "policyVersion": "entity-resolve-gate:v1",
+      "tAuto": 0.9
+    },
+    "evalChannel": {
+      "scenarioPack": "scenario-pack:v3.3",
+      "tieredChecks": "tiered-checks:v3"
+    },
+    "fastPathExtractionPolicyVersion": "fast-path-extraction:v1",
+    "harnessPolicyVersion": "conversation-harness:v3",
+    "localePacks": {
+      "chinese": "locale-pack-zh:v2",
+      "english": "locale-pack-en:v2"
+    },
+    "memoryConsolidationPolicyVersion": "memory-consolidation:v1",
+    "memoryRetrieval": {
+      "memoryBudgets": "memory-budgets:v1",
+      "policyVersion": "memory-retrieval:v1",
+      "portraitSelection": "portrait-selection:v1"
+    },
+    "persona": {
+      "anchors": "persona-behavior-anchors:v2",
+      "canonical": "canonical-persona:v2",
+      "invariant": "persona-contract-invariant:v1"
+    },
+    "predicateRegistry": {
+      "registryVersion": 1,
+      "version": "predicate-registry:v1"
+    },
+    "promptArtifacts": {
+      "groundingGuardAndOpenerPermission": "recall-experience-contract:v1",
+      "trustActionExpression": "trust-action-expression-contract:v1"
+    },
+    "roleChampionConfigs": {
+      "entityResolve": {
+        "promptFingerprint": "entity-resolve:gate:v2"
+      },
+      "memoryConsolidate": {
+        "promptFingerprint": "memory-consolidate:diffs:v1"
+      },
+      "memoryExtract": {
+        "promptFingerprint": "memory-extract:propose:v3"
+      }
+    },
+    "safetyResources": "safety-resources:v2"
+  }
+}

@@ -608,7 +608,7 @@ describe("Memory context compilation system seam (#117)", () => {
     expect(portrait.reference).toContain("[shh-memory-1]");
     expect(portrait.reference).toContain("portrait-selection:v1");
     expect(portrait.reference).toContain("memory-budgets:v1");
-    expect(portrait.reference).toContain("recall-framing:v1");
+    expect(portrait.reference).toContain("recall-framing:v2");
     expect(portrait.reference).toContain(`version=${employer.claimVersionId}`);
     expect(portrait.reference).toContain("kind=impression");
     expect(portrait.reference).toContain("措辞（objective）");
@@ -635,7 +635,7 @@ describe("Memory context compilation system seam (#117)", () => {
     expect(manifest.selection_policy_versions).toEqual({
       portrait_selection: "portrait-selection:v1",
       memory_budgets: "memory-budgets:v1",
-      recall_framing: "recall-framing:v1",
+      recall_framing: "recall-framing:v2",
     });
     expect(manifest.portrait_selection.pool_count).toBe(4);
     // Current-topic tier first: the 上班 / 公司 surfaces put career stage

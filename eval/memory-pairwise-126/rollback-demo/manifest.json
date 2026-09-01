@@ -1,0 +1,90 @@
+{
+  "artifactClass": "non_authoritative_eval_output",
+  "capturedAt": "2026-09-01T01:51:52.078Z",
+  "completedAt": "2026-09-01T01:59:25.853Z",
+  "cutoverPins": {
+    "conversationActionCatalog": {
+      "actionKinds": [
+        "regenerate_journal",
+        "memory_correction",
+        "explain_memory_source",
+        "memory_forget_request",
+        "memory_forget_reversal",
+        "entity_identity_correction"
+      ],
+      "version": "conversation-action-catalog:memory-trust-actions:v2"
+    },
+    "entityResolvePolicy": {
+      "policyVersion": "entity-resolve-gate:v1",
+      "tAuto": 0.9
+    },
+    "fastPathExtractionPolicyVersion": "fast-path-extraction:v1",
+    "harnessPolicyVersion": "conversation-harness:v3",
+    "localePacks": {
+      "chinese": "locale-pack-zh:v2",
+      "english": "locale-pack-en:v2"
+    },
+    "memoryConsolidationPolicyVersion": "memory-consolidation:v1",
+    "memoryRetrieval": {
+      "memoryBudgets": "memory-budgets:v1",
+      "policyVersion": "memory-retrieval:v1",
+      "portraitSelection": "portrait-selection:v1"
+    },
+    "persona": {
+      "anchors": "persona-behavior-anchors:v2",
+      "canonical": "canonical-persona:v2",
+      "invariant": "persona-contract-invariant:v1"
+    },
+    "predicateRegistry": {
+      "registryVersion": 1,
+      "version": "predicate-registry:v1"
+    },
+    "promptArtifacts": {
+      "groundingGuardAndOpenerPermission": "recall-experience-contract:v1",
+      "trustActionExpression": "trust-action-expression-contract:v1"
+    },
+    "safetyResources": "safety-resources:v2",
+    "taskInstructionVersion": "task-instruction-decision:v3"
+  },
+  "dataSourceDeclaration": "Fully synthetic scenario material; no real private conversation is read (ADR-0020, ADR-0073).",
+  "databaseIsolation": "disposable isolated PostgreSQL schema on the DATABASE_URL server; dropped after the run",
+  "phaseA": {
+    "arm": "on",
+    "claims": 3,
+    "claimVersions": 3,
+    "injectedMemoryItems": 1,
+    "memoryFaceDigest": "b20de6c38406d272dffe3030b6db40f824c074a4a3e1dcb99aa05723f5fee7c6",
+    "turns": 3
+  },
+  "phaseB": {
+    "assembly": "code-reverted incumbent stack: journal-regeneration catalog, no fast-path enqueue, no consolidation, no retrieval port",
+    "catalogVersion": "conversation-action-catalog:journal-regeneration:v1",
+    "claimsAfter": 3,
+    "claimVersionsAfter": 3,
+    "epochAfter": "1",
+    "memoryFaceDigestAfter": "b20de6c38406d272dffe3030b6db40f824c074a4a3e1dcb99aa05723f5fee7c6",
+    "memorySectionsInContext": 0,
+    "turn": {
+      "assistantText": "还是蓝湾科技，咱们刚才还聊到的那家。跟朋友提的话，直接说名字就行。",
+      "domainClockIso": "2026-08-24T02:01:30.000Z",
+      "finalEventType": "assistant_committed",
+      "injectedMemories": 0,
+      "input": {
+        "locale": "zh-CN",
+        "text": "对了，我最近入职的这家公司叫什么来着？想跟朋友提一下。",
+        "timezone": "Asia/Shanghai"
+      },
+      "sequenceInScenario": 4,
+      "wallMs": 2652
+    }
+  },
+  "proofs": {
+    "claimsFrozenInPlace": true,
+    "dataEpochUntouched": true,
+    "noMemoryPathAfterRevert": true,
+    "rollbackFormula": "code revert + re-pin of the pre-1A.3a strategy versions; post-cutover Entity / Claim data frozen in place (dormant without a code path; sha256 over claim ids + current version ids is unchanged), never silently deleted"
+  },
+  "scenarioIsolation": "single inline synthetic scenario; the schema is dropped after the run",
+  "seam": "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway (catalog v2) + Context Compiler (+ Structured-Lexical retrieval in the on arm) -> runtime Provider Egress Port; memory-on also drives the real outbox fast-path extraction and due consolidation scans",
+  "gitCommit": "ce9b0bd892fd03afa49633b696a2dd7021482744"
+}

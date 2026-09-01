@@ -1,6 +1,10 @@
 import { asUserId, asWorkflowCommandId } from "@sayhear/domain";
 
-import type { EntityMentionProposal, EntityService } from "./entity";
+import type {
+  EntityLabelIndexEntry,
+  EntityMentionProposal,
+  EntityService,
+} from "./entity";
 import {
   ENTITY_RESOLVER_POLICY_VERSION,
   normalizeEntityLabel,
@@ -16,6 +20,61 @@ import {
   type MemoryCandidateProposal,
   type RegistryEntryLookup,
 } from "./memory-claim/types";
+import { loadPredicateRegistrySnapshot } from "./predicate-registry";
+
+/**
+ * The released predicate ids the provider may choose from — the same
+ * snapshot the admission path pins. Providers cannot know the registry, and
+ * invented predicate ids can only ever land in `needs_predicate_review`,
+ * so the extraction request carries the real selection space (issue #126
+ * evidence runs exposed this: every real responses-api proposal invented
+ * ids like `sh.predicate.employment` and never reached a recallable Claim).
+ */
+const PREDICATE_REGISTRY_SNAPSHOT = loadPredicateRegistrySnapshot(1);
+const RELEASED_PREDICATE_IDS: readonly string[] =
+  PREDICATE_REGISTRY_SNAPSHOT.entries.map((entry) => entry.predicateId);
+/**
+ * The relationship subset: relationship identity is the canonical Entity
+ * pair, so providers must not attach typed values to these predicates
+ * (proposal validation enforces it; the egress normalizer strips stray
+ * values before that check).
+ */
+const RELEASED_RELATIONSHIP_PREDICATE_IDS: readonly string[] =
+  PREDICATE_REGISTRY_SNAPSHOT.entries
+    .filter((entry) => entry.relationshipSemantics !== null)
+    .map((entry) => entry.predicateId);
+/**
+ * Per-predicate bilingual label + definition (issue #126 evidence runs): a
+ * bare id list left the provider guessing semantics from id spellings, so
+ * natural phrasing without a published lexical surface (「在一起了」…) never
+ * reached partner_of and mis-mapped to unrelated predicates — relationship
+ * claims then stayed unadmitted. The definitions are the registry's own
+ * admission semantics; the provider still only proposes.
+ */
+export type ReleasedPredicateMaterial = Readonly<{
+  predicateId: string;
+  labelZh: string;
+  labelEn: string;
+  definitionZh: string;
+  definitionEn: string;
+}>;
+
+const RELEASED_PREDICATE_MATERIAL: readonly ReleasedPredicateMaterial[] =
+  PREDICATE_REGISTRY_SNAPSHOT.entries.map((entry) => {
+    const localization = (locale: "zh" | "en") =>
+      PREDICATE_REGISTRY_SNAPSHOT.localizations.find(
+        (candidate) =>
+          candidate.predicateId === entry.predicateId &&
+          candidate.locale === locale,
+      );
+    return {
+      predicateId: entry.predicateId,
+      labelZh: localization("zh")?.label ?? "",
+      labelEn: localization("en")?.label ?? "",
+      definitionZh: localization("zh")?.definition ?? "",
+      definitionEn: localization("en")?.definition ?? "",
+    };
+  });
 
 /**
  * Fast-path extraction workflow (SPEC #107 "Two-speed pipeline", issue #113,
@@ -40,6 +99,9 @@ export const FAST_PATH_VISIBILITY_TARGET_MS = 30_000;
 
 /** Provider-economy batch bound; per-revision semantics are unaffected. */
 export const FAST_PATH_MAX_BATCH_REVISIONS = 8;
+
+/** Known-label context cap: bounds the memory.extract prompt size. */
+export const FAST_PATH_MAX_KNOWN_LABELS = 200;
 
 /** The single fixture-calibrated `entity.resolve` commit threshold (#97). */
 export const ENTITY_RESOLVE_GATE_POLICY_VERSION = "entity-resolve-gate:v1";
@@ -142,6 +204,24 @@ export type MemoryExtractProvider = Readonly<{
   role: "memory.extract";
   extract(
     input: {
+      /** The released predicate ids the provider may choose from (or null). */
+      predicateIds?: readonly string[];
+      /** The relationship subset — identity is the Entity pair, never a typed value. */
+      relationshipPredicateIds?: readonly string[];
+      /**
+       * Per-predicate bilingual label + definition (issue #126 evidence
+       * runs): the admission semantics the provider chooses predicateId
+       * against — a bare id list left natural phrasing without a published
+       * surface mis-mapped.
+       */
+      predicates?: readonly ReleasedPredicateMaterial[];
+      /**
+       * Normalized labels of the user's current entities (issue #126
+       * evidence runs): the context the newIntroduction flag is decided
+       * against, so a re-mention of a known name is not proposed as a
+       * fresh introduction.
+       */
+      knownLabels?: readonly string[];
       revisions: readonly Readonly<{
         revisionId: string;
         sequenceNo: number;
@@ -824,6 +904,10 @@ export type FastPathExtractionEntrypointDependencies = Readonly<{
   repository: FastPathExtractionRepository;
   entityService: EntityService;
   entityRepository: Readonly<{
+    /** Known-label context for the extract request (see MemoryExtractProvider). */
+    loadCurrentLabelIndex(
+      userId: string,
+    ): Promise<readonly EntityLabelIndexEntry[]>;
     applyEntityResolveGateOutcome(input: {
       userId: string;
       mentionId: string;
@@ -960,6 +1044,22 @@ export async function runFastPathExtraction(input: {
   // One memory.extract call over the session's pending revisions (Provider
   // economy); everything below validates and commits per revision.
   const batch = command.batch;
+  // Known-label context (issue #126 evidence runs): the provider sees each
+  // revision in isolation, so without the label set it proposed every named
+  // mention as a fresh introduction and the deterministic exact-match
+  // binding lane never fired — re-mentions forked duplicate entities and
+  // relationship claims stayed unadmitted. Capped to bound prompt size.
+  const labelIndex = await dependencies.entityRepository.loadCurrentLabelIndex(
+    command.userId,
+  );
+  const knownLabels = [
+    ...new Set(
+      labelIndex.flatMap((entry) => [entry.normalizedLabel, entry.label]),
+    ),
+  ]
+    .filter((label) => label.trim() !== "")
+    .sort((a, b) => a.localeCompare(b, "en"))
+    .slice(0, FAST_PATH_MAX_KNOWN_LABELS);
   let extractResults: readonly MemoryExtractRevisionResult[];
   let roleFallbackUsed = false;
   try {
@@ -967,6 +1067,10 @@ export async function runFastPathExtraction(input: {
       (invocation) =>
         dependencies.memoryExtract.extract(
           {
+            predicateIds: RELEASED_PREDICATE_IDS,
+            relationshipPredicateIds: RELEASED_RELATIONSHIP_PREDICATE_IDS,
+            predicates: RELEASED_PREDICATE_MATERIAL,
+            knownLabels,
             revisions: batch.map((revision) => ({
               revisionId: revision.revisionId,
               sequenceNo: revision.sequenceNo,

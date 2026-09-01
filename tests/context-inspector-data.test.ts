@@ -140,16 +140,16 @@ describe("Context Inspector data labels", () => {
 describe("Context Inspector memory item parsing (#122)", () => {
   const renderedPortrait = [
     "Person Portrait（用户画像，person_portrait，逐轮重选；条目按记忆引用单独寻址）" +
-      " [portrait-selection:v1 | memory-budgets:v1 | recall-framing:v1]" +
+      " [portrait-selection:v1 | memory-budgets:v1 | recall-framing:v2]" +
       " (section=person_portrait):",
     "- [shh-memory-1] 老家在西安 — kind=objective epistemic=confirmed" +
       " claim=claim-1 version=version-1 evidence=ev-1,ev-2 temporal=current" +
       " valid_from=2026-01-01",
-    "  措辞（objective）：这是用户亲口陈述的事实；可以“你之前说过…”的方式来源归属式引用。",
+    "  措辞（objective）：这是用户亲口陈述的事实；可以“你之前说过…”的方式来源归属式引用，不得表述为独立核验过的事实。记忆中出现的具体名称（机构、项目、人名、地点）在回复中自然使用该名称，不用泛指代替。",
     "- [shh-memory-2] 重视家庭 — kind=impression epistemic=inferred" +
       " claim=claim-2 version=version-2 evidence=none temporal=ended" +
       " valid_from=2026-01-02 valid_to=2026-06-30",
-    "  措辞（impression）：这是你基于多次观察形成的理解，可以自然、朋友式地表达。",
+    "  措辞（impression）：这是你基于多次观察形成的理解，可以自然、朋友式地表达；不得升级成用户亲述或已核验事实，不得固化成永久标签或诊断式身份。记忆中出现的具体名称（机构、项目、人名、地点）在回复中自然使用该名称，不用泛指代替。",
   ].join("\n");
 
   it("parses every injected item with the exact structured fields the model received", () => {
@@ -187,7 +187,7 @@ describe("Context Inspector memory item parsing (#122)", () => {
     const items = parseMemorySectionItems(
       [
         "Objective Memory（objective_memory，本轮话题检索命中）" +
-          " [portrait-selection:v1 | memory-budgets:v1 | recall-framing:v1]" +
+          " [portrait-selection:v1 | memory-budgets:v1 | recall-framing:v2]" +
           " (section=objective_memory):",
         "- [shh-memory-1] 喜欢徒步 — 每月一次山里 — kind=objective" +
           " epistemic=confirmed claim=c version=v evidence=none temporal=current",
@@ -238,7 +238,7 @@ describe("Context Inspector memory item parsing (#122)", () => {
         validTo: null,
         entityVersionIds: ["entity-version-1"],
         evidenceIds: ["ev-1", "ev-2"],
-        recallFramingPolicyVersion: "recall-framing:v1",
+        recallFramingPolicyVersion: "recall-framing:v2",
         selectionSource: "person_portrait" as const,
         predicateId: "sh.place.hometown",
       },
@@ -254,7 +254,7 @@ describe("Context Inspector memory item parsing (#122)", () => {
         validTo: "2026-06-30",
         entityVersionIds: [],
         evidenceIds: [],
-        recallFramingPolicyVersion: "recall-framing:v1",
+        recallFramingPolicyVersion: "recall-framing:v2",
         selectionSource: "query_retrieval" as const,
         predicateId: "sh.value.core_priorities",
       },

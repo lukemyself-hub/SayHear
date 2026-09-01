@@ -590,25 +590,39 @@ function buildV2Results(
       },
     ]),
   );
+  // The protected set is the run's own declared forced coverage when the
+  // pairs carry sampling metadata (#79 v2 runs declare the contract §八 five
+  // categories; #126 memory runs declare the ADR-0114 memory categories and
+  // fence reasons). A run without sampling declares no forced coverage, so
+  // only the overall and locale gates apply. A key matches a scenario through
+  // its pack category or its coverage tags, so fence-reason keys
+  // (post_correction / post_forget) resolve on the scenarios whose fixtures
+  // carry them.
+  const coverageKeys = pairs.sampling
+    ? Object.keys(pairs.sampling.protectedCoverage)
+    : [];
+  const scenarioCovers = (scenario: PairScenario, key: string): boolean =>
+    scenario.category === key ||
+    (scenario.coverageTags ?? []).includes(key);
   const protectedCategories = Object.fromEntries(
-    PROTECTED_CATEGORIES.map((category) => [
+    coverageKeys.map((category) => [
       category,
       {
-        sampledScenarios: pairs.scenarios.filter(
-          (scenario) => scenario.category === category,
+        sampledScenarios: pairs.scenarios.filter((scenario) =>
+          scenarioCovers(scenario, category),
         ).length,
         turns: choiceSummary(
           pairs.scenarios,
           scores,
           mapping,
-          (scenario) => scenario.category === category,
+          (scenario) => scenarioCovers(scenario, category),
           "turns",
         ),
         scenarios: choiceSummary(
           pairs.scenarios,
           scores,
           mapping,
-          (scenario) => scenario.category === category,
+          (scenario) => scenarioCovers(scenario, category),
           "scenarios",
         ),
       },
@@ -631,14 +645,6 @@ function buildV2Results(
         : [];
     },
   );
-  const requiredCoverage = pairs.sampling
-    ? Object.keys(pairs.sampling.protectedCoverage)
-    : PROTECTED_CATEGORIES;
-  for (const category of requiredCoverage) {
-    if (!pairs.scenarios.some((scenario) => scenario.category === category)) {
-      protectedRegressions.push(`${category}: required protected coverage missing`);
-    }
-  }
 
   return {
     protocol: BLIND_PAIRWISE_PROTOCOL_V2,

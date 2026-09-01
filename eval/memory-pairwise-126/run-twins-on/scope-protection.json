@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-01T01:51:13.521Z",
+  "incumbent": "/Users/lukemyself/Projects/SayHear/eval/incumbent-baseline/run/manifest.json",
+  "issues": [],
+  "pass": true,
+  "scanned": {
+    "codeFiles": 148,
+    "migrations": 45
+  },
+  "twin": "/Users/lukemyself/Projects/SayHear/eval/memory-pairwise-126/run-twins-on/manifest.json"
+}

@@ -1192,11 +1192,19 @@ async function admitCandidateWithin(
       claimIdOfDiff,
     );
   }
+  // Scope identity is registry-owned: a scope-none entry admits with the
+  // empty scope regardless of the provider-proposed scope, mirroring the
+  // claim-service admission path (issue #126 evidence runs — a model-chosen
+  // scope fragmented logical claims and broke canonical-key recall).
+  const admittedScopeKey =
+    registryEntry.scopeSchema.kind === "none"
+      ? ""
+      : (candidate.proposedScopeKey ?? "");
   const canonicalKey = claimCanonicalKey({
     predicateId: candidate.predicateId,
     subjectEntityId: candidate.subjectEntityId ?? "",
     objectEntityId: candidate.objectEntityId,
-    scopeKey: candidate.proposedScopeKey ?? "",
+    scopeKey: admittedScopeKey,
     relationshipDirection: registryEntry.relationshipSemantics?.direction ?? null,
   });
   const existingClaim = await findClaimByCanonicalKeyWithin(
@@ -1254,7 +1262,10 @@ async function admitCandidateWithin(
   );
 
   const plan = planClaimAdmission({
-    proposal: candidateRecordToProposal(candidate, evidenceItemIds),
+    proposal: {
+      ...candidateRecordToProposal(candidate, evidenceItemIds),
+      scopeKey: admittedScopeKey,
+    },
     registryEntry,
     registryVersion: context.registry.registryVersion(),
     selfEntityId: selfEntity.entityId,

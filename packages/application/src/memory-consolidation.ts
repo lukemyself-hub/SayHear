@@ -276,7 +276,14 @@ export function validateConsolidateResult(
       continue;
     }
     let evidenceIds: readonly string[];
-    if (diff.kind === "propose_new" && diff.proposal !== null) {
+    // Providers omit an inapplicable `proposal` instead of writing null
+    // (observed with DeepSeek); `!== null` alone misreads the omission as a
+    // present proposal and crashes on the property read below.
+    if (
+      diff.kind === "propose_new" &&
+      diff.proposal !== null &&
+      diff.proposal !== undefined
+    ) {
       evidenceIds = diff.proposal.evidenceItemIds;
     } else {
       evidenceIds = diff.evidenceItemIds;
@@ -291,9 +298,12 @@ export function validateConsolidateResult(
         );
       }
     }
-    if (diff.kind === "propose_new" && diff.candidateId === null) {
+    if (
+      diff.kind === "propose_new" &&
+      (diff.candidateId === null || diff.candidateId === undefined)
+    ) {
       const proposal = diff.proposal;
-      if (proposal === null) {
+      if (proposal === null || proposal === undefined) {
         throw new InvalidMemoryConsolidateProposalError(
           "propose_new without a candidate requires a full proposal.",
         );
