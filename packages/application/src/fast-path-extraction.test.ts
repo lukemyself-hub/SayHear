@@ -349,6 +349,42 @@ describe("memory.extract proposal validation", () => {
     ).not.toThrow();
   });
 
+  it("accepts an unmapped proposal with a non-empty concept and no typed value (#147)", () => {
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              predicateId: null,
+              proposedConcept: "neighbor relationship",
+              typedValue: "",
+            },
+          ],
+        }),
+        source,
+      ),
+    ).not.toThrow();
+  });
+
+  it("fails closed on a conceptless proposal with no typed value (#147)", () => {
+    expect(() =>
+      validateMemoryExtractResult(
+        result({
+          candidates: [
+            {
+              ...result().candidates[0]!,
+              predicateId: null,
+              proposedConcept: "  ",
+              typedValue: "",
+            },
+          ],
+        }),
+        source,
+      ),
+    ).toThrow(/candidate typedValue empty/);
+  });
+
   it("rejects a qualifier citing an unknown evidence locator (#115)", () => {
     expect(() =>
       validateMemoryExtractResult(

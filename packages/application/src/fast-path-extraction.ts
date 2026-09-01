@@ -572,8 +572,10 @@ function parseLocatorKey(
  * `InvalidMemoryExtractProposalError` on structural violations; unknown
  * predicates are not errors — they route to `needs_predicate_review`.
  * Relationship candidates (#115) must carry an empty typed value — identity is
- * the canonical Entity pair and roles ride as qualifiers — and non-empty
- * values elsewhere; `isRelationshipPredicate` decides which rule applies.
+ * the canonical Entity pair and roles ride as qualifiers — and unmapped
+ * proposals (#147) may carry an empty typed value when they provide a
+ * proposed concept; non-empty values are required elsewhere.
+ * `isRelationshipPredicate` decides which relationship rule applies.
  */
 export function validateMemoryExtractResult(
   result: MemoryExtractRevisionResult,
@@ -679,6 +681,10 @@ export function validateMemoryExtractResult(
     const isRelationship =
       candidate.predicateId !== null &&
       (options.isRelationshipPredicate?.(candidate.predicateId) ?? false);
+    const hasUnmappedProposal =
+      candidate.predicateId === null &&
+      typeof candidate.proposedConcept === "string" &&
+      candidate.proposedConcept.trim() !== "";
     const trimmedTypedValue =
       typeof candidate.typedValue === "string" ? candidate.typedValue.trim() : "";
     if (isRelationship && trimmedTypedValue !== "") {
@@ -687,7 +693,7 @@ export function validateMemoryExtractResult(
         "relationship candidates carry roles as qualifiers, not typed values.",
       );
     }
-    if (!isRelationship && trimmedTypedValue === "") {
+    if (!isRelationship && !hasUnmappedProposal && trimmedTypedValue === "") {
       throw new InvalidMemoryExtractProposalError("candidate typedValue empty.");
     }
     if (candidate.typedValue.length > 2_000) {

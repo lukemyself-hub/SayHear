@@ -74,7 +74,9 @@ const MEMORY_EXTRACT_TEMPORAL_PRECISION_INSTRUCTIONS =
  * mention flagged as a new introduction, a typed value attached to a
  * relationship predicate (identity is the Entity pair — the stray value is
  * dropped, not rejected), and non-relationship candidates without any
- * concrete value (dropped: there is nothing to admit). Null structural
+ * concrete value (dropped: there is nothing to admit). A predicate-less
+ * candidate with a non-empty proposed concept is the one exception: it is a
+ * valid unmapped proposal for predicate review (#147). Null structural
  * scalars (scopeKey, typedValue, a mention's surfaceForm) are null-vs-empty
  * spellings of the same no-information shape — scope-none for scopeKey,
  * drop-for-value — and enum-out temporal precision values are normalized
@@ -166,11 +168,15 @@ function normalizeExtractBatch(
         const isRelationship =
           typeof candidate.predicateId === "string" &&
           relationshipPredicateIds.has(candidate.predicateId);
+        const hasUnmappedProposal =
+          candidate.predicateId === null &&
+          typeof candidate.proposedConcept === "string" &&
+          candidate.proposedConcept.trim() !== "";
         const typed =
           typeof candidate.typedValue === "string"
             ? candidate.typedValue.trim()
             : "";
-        return isRelationship || typed !== "";
+        return isRelationship || hasUnmappedProposal || typed !== "";
       });
     return {
       ...revision,
