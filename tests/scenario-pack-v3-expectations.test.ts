@@ -43,7 +43,7 @@ function scenarioById(id: string) {
 
 describe("scenario-pack:v3 (#118)", () => {
   it("carries 54 unique scenarios: the 45 carried from v2.1 plus 9 new multi-day recall scenarios", () => {
-    expect(pack.version).toBe("scenario-pack:v3.3");
+    expect(pack.version).toBe("scenario-pack:v3.4");
     expect(pack.scenarios).toHaveLength(54);
     expect(new Set(pack.scenarios.map((s) => s.id)).size).toBe(54);
     for (const id of [
@@ -109,6 +109,19 @@ describe("scenario-pack:v3 (#118)", () => {
       )!;
       expect(substantive.requiredTokens).toBeUndefined();
       expect(substantive.semantic).toMatch(/diagnostic|诊断/);
+    }
+
+    // AC35 FP ruling (#126): a background company name is optional wording,
+    // so objective recall stays on the advisory semantic tier.
+    for (const id of [
+      "memory-objective-en",
+      "memory-objective-zh",
+      "memory-objective-mix",
+    ]) {
+      const substantive = scenarioById(id).memoryFixture!.expectedRecalls.at(
+        -1,
+      )!;
+      expect(substantive.requiredTokens, id).toBeUndefined();
     }
   });
 
@@ -190,6 +203,13 @@ describe("scenario-pack:v3 (#118)", () => {
     // (derivable from the sh.project.participation projection).
     expect(scenarioById("memory-continuity-zh").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["拾光"]);
     expect(scenarioById("memory-continuity-en").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["cairn"]);
+    expect(scenarioById("memory-continuity-mix").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["拾光"]);
+
+    // Temporal relationship tokens remain hard gates: they protect the
+    // corrected state rather than requiring a background proper name.
+    expect(scenarioById("memory-temporal-en").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["friend"]);
+    expect(scenarioById("memory-temporal-zh").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["朋友"]);
+    expect(scenarioById("memory-temporal-mix").memoryFixture!.expectedRecalls[1]?.requiredTokens).toBeUndefined();
   });
 
   it("pins the v3 checker and tiering identities", () => {
@@ -456,6 +476,15 @@ describe("verify-pack catches v3 fixture drift", () => {
               turns: entry.turns.map((turn, index) =>
                 index === 3 ? { ...turn, text: "不想聊这个。" } : turn,
               ),
+              memoryFixture: {
+                ...entry.memoryFixture!,
+                expectedRecalls: entry.memoryFixture!.expectedRecalls.map(
+                  (expectation) =>
+                    expectation.atTurn === 4
+                      ? { ...expectation, requiredTokens: ["Brightline"] }
+                      : expectation,
+                ),
+              },
             }
           : entry,
       ),

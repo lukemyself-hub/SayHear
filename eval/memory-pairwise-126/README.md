@@ -10,6 +10,11 @@ production shadowing。规则权威在
 [`docs/evaluation/01-behavior-contract-and-rubric.md`](../../docs/evaluation/01-behavior-contract-and-rubric.md)
 与 ADR-0110 / ADR-0114。
 
+> 证据版本边界：`run-twins-on/` 下的 findings、pins 和 transcript 产物是
+> `scenario-pack:v3.3` 在 `ce9b0bd` 的历史运行快照。#148 只把 objective 背景公司名
+> 的 required token 降为 advisory 语义期望，当前 fixture 已升为 v3.4；本票没有重新
+> 调用 provider，因此这些旧产物不能当作 v3.4 的运行证据。
+
 ## TL;DR
 
 - `capture-twins.ts --arm on|off`：把冻结的场景包（默认

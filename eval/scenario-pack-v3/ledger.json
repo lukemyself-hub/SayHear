@@ -11,6 +11,36 @@
       "evidence": "Reply to the bakery-reopen share: 「啊，那家 reopen 了？周末去的人多不多，还能不能买到你常点的那款？」 — the counter saw two question marks: the leading surprised echo 「那家 reopen 了？」 plus the compound follow-up about the weekend crowd and the usual order.",
       "ruling": "Scorer defect (FP, Luke's 2026-08-29 split ruling of the two too_many_questions flags): the leading fragment is a surprised echo, not a follow-up demanding an answer, and the remainder is one compound question — the turn asks effectively one question (复合单问), unlike good-news-mix t1's true stacked pair.",
       "action": "Recorded as a known false positive; no checker revision this round. task-instruction-decision:v3 (#126) operationalizes the single-question choice and the zh locale pack already bans question-mark echoes, so the re-run is adjudicated fresh — this entry does not blanket-future turns."
+    },
+    {
+      "date": "2026-09-01",
+      "checker": "tiered-checks:v3",
+      "check": "required_recall_missing",
+      "scenarioId": "memory-objective-en",
+      "sequenceInScenario": 4,
+      "evidence": "The response clearly addressed the recalled job offer and start-date decision but said \"the offer\" rather than the injected company name Brightline.",
+      "ruling": "Scorer defect (FP, Luke's AC35 ruling): Objective Memory is recalled when the response clearly points to the specific thing; a background company name is optional wording.",
+      "action": "Downgraded this fixture expectation to the advisory semantic tier in scenario-pack:v3.4; temporal and continuity token gates remain active."
+    },
+    {
+      "date": "2026-09-01",
+      "checker": "tiered-checks:v3",
+      "check": "required_recall_missing",
+      "scenarioId": "memory-objective-zh",
+      "sequenceInScenario": 4,
+      "evidence": "The response clearly addressed the recalled new job and offer timing but used generic job wording instead of the injected company name 启明.",
+      "ruling": "Scorer defect (FP, Luke's AC35 ruling): Objective Memory is recalled when the response clearly points to the specific thing; a background company name is optional wording.",
+      "action": "Downgraded this fixture expectation to the advisory semantic tier in scenario-pack:v3.4; temporal and continuity token gates remain active."
+    },
+    {
+      "date": "2026-09-01",
+      "checker": "tiered-checks:v3",
+      "check": "required_recall_missing",
+      "scenarioId": "memory-objective-mix",
+      "sequenceInScenario": 4,
+      "evidence": "The response clearly addressed the recalled offer and new-job decision but did not repeat the injected company name Brightline.",
+      "ruling": "Scorer defect (FP, Luke's AC35 ruling): Objective Memory is recalled when the response clearly points to the specific thing; a background company name is optional wording.",
+      "action": "Downgraded this fixture expectation to the advisory semantic tier in scenario-pack:v3.4; temporal and continuity token gates remain active."
     }
   ],
   "falseNegatives": [],
