@@ -5,11 +5,13 @@ import {
   type ProviderDispatchErrorCategory,
 } from "@sayhear/application";
 
-const { capturedMessages, failWithCategory, mockOutput } = vi.hoisted<{
+const { capturedInstructions, capturedMessages, failWithCategory, mockOutput } = vi.hoisted<{
+  capturedInstructions: string[];
   capturedMessages: unknown[];
   failWithCategory: { current: ProviderDispatchErrorCategory | null };
   mockOutput: { current: string };
 }>(() => ({
+  capturedInstructions: [],
   capturedMessages: [],
   failWithCategory: { current: null },
   mockOutput: {
@@ -31,10 +33,11 @@ vi.mock("./responses-api-conversation-text-model", async () => {
   const { ProviderDispatchError } = await import("@sayhear/application");
   return {
     createResponsesApiConversationTextModel: () => ({
-      async *stream(request: { messages: unknown[] }) {
+      async *stream(request: { instructions?: string; messages: unknown[] }) {
         if (failWithCategory.current) {
           throw new ProviderDispatchError(failWithCategory.current);
         }
+        if (request.instructions) capturedInstructions.push(request.instructions);
         capturedMessages.push(request.messages);
         yield { type: "delta", delta: mockOutput.current };
       },
@@ -322,6 +325,88 @@ describe("Journal runtime role provider messages", () => {
         proposedConcept: "neighbor relationship",
         typedValue: "",
       });
+    } finally {
+      mockOutput.current = DEFAULT_DELTA;
+    }
+  });
+
+  it("coerces invalid temporal precision values to unknown without dropping candidates", async () => {
+    mockOutput.current = JSON.stringify([
+      {
+        revisionId: "rev-1",
+        evidence: [],
+        mentions: [],
+        candidates: [
+          {
+            typedValue: "preparing to change jobs",
+            temporal: {
+              temporalStatus: "current",
+              validFrom: "2026-01-01",
+              validFromPrecision: "day",
+              validTo: null,
+              validToPrecision: "week",
+            },
+          },
+          {
+            typedValue: "planning a move",
+            temporal: {
+              temporalStatus: "current",
+              validFrom: null,
+              validFromPrecision: "calendar-quarter",
+              validTo: null,
+              validToPrecision: "not-a-precision",
+            },
+          },
+          {
+            typedValue: "living in the city",
+            temporal: {
+              temporalStatus: "current",
+              validFrom: null,
+              validFromPrecision: "exact",
+              validTo: null,
+              validToPrecision: "approximate",
+            },
+          },
+        ],
+        clarifications: [],
+      },
+    ]);
+    try {
+      const registry = createRuntimeJournalRoleProviderRegistry({
+        adapter: { type: "responses-api", apiKey: "test", baseUrl: "https://example.test", timeoutMs: 1000 },
+        roles,
+      });
+      const results = await registry.memoryExtractor.extract(
+        {
+          revisions: [
+            {
+              revisionId: "rev-1",
+              sequenceNo: 1,
+              locale: "en-US",
+              text: "I am preparing to change jobs.",
+            },
+          ],
+        },
+        {
+          configVersion: "test",
+          modelVersion: "test",
+          promptVersion: "memory-extract:propose:v4",
+        },
+      );
+
+      expect(results[0]!.candidates).toHaveLength(3);
+      expect(results[0]!.candidates.map((candidate) => ({
+        validFromPrecision: candidate.temporal.validFromPrecision,
+        validToPrecision: candidate.temporal.validToPrecision,
+      }))).toEqual([
+        { validFromPrecision: "unknown", validToPrecision: "unknown" },
+        { validFromPrecision: "unknown", validToPrecision: "unknown" },
+        { validFromPrecision: "exact", validToPrecision: "approximate" },
+      ]);
+      const instructions = capturedInstructions.at(-1)!;
+      expect(instructions).toContain(
+        "validFromPrecision and validToPrecision must each be one of 'exact', 'month', 'year', 'approximate', or 'unknown'",
+      );
     } finally {
       mockOutput.current = DEFAULT_DELTA;
     }

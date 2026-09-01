@@ -172,6 +172,52 @@ export class PostgresDialogueStateRepository implements DialogueStateRepository 
           continue;
         }
 
+        // A policy migration may leave an older-policy outbox event for this
+        // exact frozen coverage. Do not run two policy versions concurrently:
+        // the older command could win the monotonic pointer CAS and leave the
+        // replacement policy permanently stale. Terminal legacy commands are
+        // safe to replace; their event remains immutable history and the
+        // policy-aware outbox key allows the new event to be inserted.
+        const existingOutbox = await client.query<{
+          command_status: string | null;
+          policy_version: string | null;
+          status: string;
+        }>(
+          `SELECT event.status,
+              event.payload->>'policyVersion' AS policy_version,
+              command.status AS command_status
+           FROM outbox_events event
+           LEFT JOIN dialogue_state_commands command
+             ON command.dialogue_state_command_id = event.workflow_command_id
+           WHERE event.aggregate_type = 'daily_session'
+             AND event.aggregate_id = $1
+             AND event.aggregate_revision = $2
+             AND event.aggregate_data_epoch = $3
+             AND event.aggregate_coverage = $4
+             AND event.event_type = 'dialogue_state_requested'
+           LIMIT 1`,
+          [
+            freshSession.daily_session_id,
+            Number(freshSession.source_revision),
+            expectedDataEpoch,
+            coverage,
+          ],
+        );
+        const existingEvent = existingOutbox.rows[0];
+        const existingEventIsInFlight =
+          existingEvent?.status === 'pending' ||
+          existingEvent?.status === 'leased' ||
+          (existingEvent?.status === 'dispatched' &&
+            (existingEvent.command_status === 'created' ||
+              existingEvent.command_status === 'running'));
+        if (
+          existingEvent &&
+          existingEvent.policy_version !== input.policy.policyVersion &&
+          existingEventIsInFlight
+        ) {
+          continue;
+        }
+
         const commandId = createUuidV7(input.now);
         const inserted = await client.query<{ dialogue_state_command_id: string }>(
           `INSERT INTO dialogue_state_commands (

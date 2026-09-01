@@ -2,7 +2,7 @@
   "version": "memory-trust-actions:v1",
   "catalogVersion": "conversation-action-catalog:memory-trust-actions:v2",
   "harnessPolicyVersion": "conversation-harness:v3",
-  "promptVersion": "trust-action-expression-contract:v1",
+  "promptVersion": "trust-action-expression-contract:v2",
   "maxFixtures": 80,
   "headroom": 4,
   "syntheticNotice": "Every persona, name, event, utterance, and target reference in this file is fully synthetic material authored for action-selection evaluation. No real private conversation or production identifier is used.",

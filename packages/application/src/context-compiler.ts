@@ -789,7 +789,7 @@ function renderTrustActionFinalizationReceipt(
         );
       } else {
         lines.push(
-          "Outcome rule: the correction committed in this turn — that item is corrected now and stops being recalled. Confirm it plainly per P1; acknowledge the corrected version the user stated, if any; the background re-checks are still in progress, never claimed complete (P3). Do not restate the corrected-away content as current memory, and do not confess internal mechanics.",
+          "Outcome rule: the correction committed in this turn — that item is corrected now. Confirm the user-visible change plainly per P1, including the corrected version the user stated, if any. Keep the reply focused on that result; do not describe processing details or any extra work.",
         );
       }
     } else if (
@@ -804,7 +804,7 @@ function renderTrustActionFinalizationReceipt(
       receipt.disposition === "target_not_found"
     ) {
       lines.push(
-        "Outcome rule: no matching memory was found. Say plainly that you could not find such a memory and that nothing was changed (P4). Do not invent a near miss, and do not confess internal mechanics.",
+        "Outcome rule: the requested correction did not happen. Say that plainly and that nothing changed; do not claim a correction or explain why (P3/P4).",
       );
     } else {
       lines.push(
@@ -837,7 +837,7 @@ function renderTrustActionFinalizationReceipt(
         );
       } else {
         lines.push(
-          "Outcome rule: the Forget Request committed. Stop using the selected whole memory or relationship role in future memory recall, while the original conversation and Journal remain intact; do not call it deletion and do not restate the forgotten content.",
+          "Outcome rule: the Forget Request committed. Say that the selected subject will not be brought up again in future conversation. Do not call it deletion, describe anything beyond that user-visible result, or restate forgotten content.",
         );
       }
     } else if (
@@ -856,7 +856,7 @@ function renderTrustActionFinalizationReceipt(
       );
     } else {
       lines.push(
-        "Outcome rule: no matching memory was changed. Say so plainly and do not claim the Forget Request succeeded.",
+        "Outcome rule: the requested Forget did not happen. Say that plainly and that nothing changed; do not claim it succeeded or that the subject will not be brought up again.",
       );
     }
   } else if (receipt.actionKind === "memory_forget_reversal") {
@@ -891,7 +891,7 @@ function renderTrustActionFinalizationReceipt(
         );
       } else {
         lines.push(
-          "Outcome rule: the user's Entity identity correction committed. Say that the identity was corrected plainly, without exposing internal IDs or claiming that the targeted Journal revalidation is already complete; affected Claims and Journal statements remain fenced until their background revalidation finishes.",
+          "Outcome rule: the user's Entity identity correction committed. Say that the identity was corrected plainly per P1, without exposing internal IDs or describing processing details or extra work.",
         );
       }
     } else if (
@@ -1330,9 +1330,9 @@ function renderRecallExperienceSection(input: {
 }
 
 /**
- * The P1–P6 trust-action expression contract (issue #119, SPEC story 49):
- * present exactly when the frozen receipt belongs to a trust action, so the
- * confirmation style is compiled, never improvised. `trustActionExpression-
+ * The P1–P6 trust-action expression contract (issues #119/#146, SPEC story
+ * 49): present exactly when the frozen receipt belongs to a trust action, so
+ * the confirmation style is compiled, never improvised. `trustActionExpression-
  * Content` replays the exact content frozen at compile time for the Provider
  * Egress re-derivation (the section reference carries the full rendered
  * content — the recall-experience pattern).
