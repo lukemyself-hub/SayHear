@@ -575,6 +575,93 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
     });
   });
 
+  it("requeues a replacement DialogueState policy after a terminal legacy outbox event", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-policy-migration-event",
+      clientTurnId: "dialogue-state-policy-migration-turn",
+      text: "The earlier projection failed before the replacement policy was deployed.",
+    });
+    const legacy = buildComposition();
+    await expect(
+      legacy.dialogueStateRepository.queueEligible({
+        now: fixedResponseClock(),
+        policy: {
+          modelConfigVersion: "dialogue-state-model:v1",
+          policyVersion: "dialogue-state:v1",
+          promptVersion: "dialogue-state-prompt:v1",
+        },
+      }),
+    ).resolves.toBe(1);
+
+    await database.pool.query(
+      `UPDATE dialogue_state_commands
+       SET status = 'failed', last_error_code = 'dialogue_state_generation_failed'
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    await database.pool.query(
+      `UPDATE outbox_events
+       SET status = 'dispatched', lease_owner = 'legacy-workflow',
+           lease_expires_at = $2, workflow_receipt_id = 'legacy-receipt'
+       WHERE aggregate_type = 'daily_session'
+         AND aggregate_id = $1
+         AND event_type = 'dialogue_state_requested'`,
+      [dailySessionId, new Date("2026-08-12T16:01:00.000Z")],
+    );
+
+    const replacement = buildComposition();
+    await expect(replacement.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 1,
+    });
+    const events = await database.pool.query<{
+      policy_version: string;
+      status: string;
+    }>(
+      `SELECT payload->>'policyVersion' AS policy_version, status
+       FROM outbox_events
+       WHERE aggregate_type = 'daily_session'
+         AND aggregate_id = $1
+         AND event_type = 'dialogue_state_requested'
+       ORDER BY policy_version`,
+      [dailySessionId],
+    );
+    expect(events.rows).toEqual([
+      { policy_version: "dialogue-state:v1", status: "dispatched" },
+      { policy_version: "dialogue-state:v2", status: "pending" },
+    ]);
+  });
+
+  it("does not run replacement DialogueState policies concurrently with a legacy event", async () => {
+    const dailySessionId = await submitConversation({
+      clientEventId: "dialogue-state-policy-in-flight-event",
+      clientTurnId: "dialogue-state-policy-in-flight-turn",
+      text: "The older projection is still in flight and must finish before replacement.",
+    });
+    const legacy = buildComposition();
+    await expect(
+      legacy.dialogueStateRepository.queueEligible({
+        now: fixedResponseClock(),
+        policy: {
+          modelConfigVersion: "dialogue-state-model:v1",
+          policyVersion: "dialogue-state:v1",
+          promptVersion: "dialogue-state-prompt:v1",
+        },
+      }),
+    ).resolves.toBe(1);
+
+    const replacement = buildComposition();
+    await expect(replacement.dialogueStateService.scanPending()).resolves.toEqual({
+      queued: 0,
+    });
+    const commands = await database.pool.query(
+      `SELECT COUNT(*)::int AS count
+       FROM dialogue_state_commands
+       WHERE daily_session_id = $1`,
+      [dailySessionId],
+    );
+    expect(commands.rows[0]!.count).toBe(1);
+  });
+
   it("fails closed to raw Events when DialogueState generation fails", async () => {
     const dailySessionId = await submitConversation({
       clientEventId: "dialogue-state-failure-event",
