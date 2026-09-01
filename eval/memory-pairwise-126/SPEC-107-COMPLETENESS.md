@@ -48,9 +48,9 @@ consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe �
 
 | AC | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 35 | 确定性硬门禁全 locale 100% 零容忍 | ⏸ **待 Luke 裁定**（ce9b0bd：7 违规 = required_recall_missing ×3 [全部 objective-\*「命名事实回声」契约/门禁 gap，非生产缺陷] + too_many_questions ×4 [多为复合单问/回声，需按 FP 台账逐条裁定]；#8–#16 + recall-framing v2 + pack v3.3 已修，9→7） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json` @ ce9b0bd）+ `tiered-checks` FP 台账 |
-| 36 | memory 盲评 vs Memory-off 孪生 | ⏸ 已就绪**待 Luke 盲评**（ON 臂 v3.3 现已真实注入，双臂行为差异化；15 场景、种子 1260，含 memory-objective-zh/en） | `run-twins-{on,off}` @ ce9b0bd → `build-memory-pairs` → `pairs-run/` 评审页 → `unblind` 门槛 |
-| 37 | 45 场景机械复跑 | ⏸ **待裁定**：too_many_questions ×4（good-news-mix t1 真双问；objective-en t1 / impression-en t4 / temporal-zh t4 为复合单问/回声，需按 FP 台账逐条裁定） | `run-twins-on/findings-v2.json` @ ce9b0bd |
+| 35 | 确定性硬门禁全 locale 100% 零容忍 | ✅ **Luke 已裁定**（2026-08-31）：3 条 required_recall_missing（objective-\*「命名事实回声」）判 **FP**（契约允许「清楚指向」，requiredTokens 对背景专名过严，同 v3.1「朋友」措辞方差类）；SPEC AC35 枚举的其余零容忍项（wrong Entity / 无证据人格判断 / fence·budget·deadline / 非注入引用 / 遗忘复活）全部零违规。too_many_questions 属 45-pack 通用回合门禁、不属 AC35 枚举清单，归 AC37 裁定 | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json` @ ce9b0bd）+ 判定包 `/tmp/sayhear-126-ac35-fp-candidate.md` |
+| 36 | memory 盲评 vs Memory-off 孪生 | ⏸ **整体/语言门槛过，post_forget 净 -1 待 Luke 裁定**。unblind（2026-09-01，`pairs-run/results.json`）：整体 candidate 10/2/3 净 **+7** ✅；en +2 / zh +5 / mix 0 ✅；受保护类别 objective 0 / impression +3 / continuity +2 / temporal +1 / post_correction +2 / **post_forget −1 ❌**。根因=生产缺陷 #17：fast-path `validFromPrecision` 枚举透传撞 CHECK → temporal-mix t1/t2 整批候选丢弃 → t3 forget `target_not_found` → 如实回「没找到记录」（盲评显「没记忆+出戏」）；输的是 bug 不是记忆设计行为，但本跑 forget 路径未被真实演练（由 #119 系测 + #124 数据集 + rollback demo 背书）。裁定包 `/tmp/sayhear-126-post-forget-adjudication.md`（A=已裁定 miss 不阻塞+立票 / B=修 #17 单场景重验） | `pairs-run/{scores,results}.json`（sampleSeed 1260） |
+| 37 | 45 场景机械复跑 | ⏸ **too_many_questions ×4 待 Luke 逐条裁定**（incumbent 基线 0）。逐条复核（`countFollowUpQuestions`=数字符）：good-news-mix t1 边缘（吧-情绪确认+真追问，恰为 task-instruction v3 修复复发案例，且在 45-pack 范围内）；objective-en t1（tag "doesn't it?"）/ impression-en t4（引号回声用户问号）/ temporal-zh t4（修辞自问）3 条 FP 候选、均为 v3 新场景不在 45 范围。4 例均只现于 ON 臂 | `run-twins-on/findings-v2.json` @ ce9b0bd + 裁定包 §四 |
 | 38 | 检索精度会计基线（fence/budget/deadline 绝对零，无阈值） | ✅ #125 | `eval/retrieval-precision-v1/run/baseline-2026-08-28/`（本次复验纯侧测试绿） |
 | 39 | trust-action 选择数据集门禁 | ✅ #124 | `eval/action-selection/memory-trust-actions:v1/`（本次复验 verify-pack OK） |
 | 40 | 合并范围保护 | ✅ 45 migrations + 148 源文件扫描零命中，champion 簇与 incumbent 逐字节一致 | `scope-protection.json`（迁移史 + 源码扫描 + incumbent champion 簇逐字节对比） |
@@ -74,10 +74,42 @@ consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe �
 - #111：registry mapping-eval 的 CI workflow 小票（矩阵测试已在套件内常绿）与
   真实旧版本回放。
 - #109：`validUntil` 时钟相对化小票（backup policy 证据的 clock-relative 处理）。
+- bridges 收归 registry（Luke 2026-08-31 拍板选 A）；registry v2 en 标签改
+  "Friendship"；scope-none admission 两处重复；ranking `split("|")` canonical-key
+  解析缺 key-version 检查。
+- **#17（本包根因，待立票）**：fast-path `validFromPrecision`/`validToPrecision`
+  枚举透传——prompt 未枚举合法值 + `normalizeExtractBatch` 不校验，模型返回
+  枚举外值即整批候选丢弃（`journal-role-provider-registry.ts:143` +
+  `fast-path-extraction.ts:1441`，slow path 已有 `BOUNDARY_PRECISIONS` 校验可参照）。
+- **trust-action 确认措辞暴露内部机制**（待立票）：temporal-zh t3 correction
+  成功仍说「后台的旧记录我还在重新核对」、temporal-mix t3「没找到…记录」——
+  Luke 盲评两次点名「多余/出戏」。
+- **fast-path 无谓词空值候选被丢弃**（待立票）：`.filter(isRelationship || typed!=="")`
+  使延迟关系概念（干亲/邻居类 predicateId=null + typedValue=""）绕过 SPEC AC8
+  `unmapped → review` 治理路径（本跑未触发，mapping-eval 在 registry 层仍覆盖）。
+
+### 会话 9 复核记录（2026-09-01，code review + unblind）
+
+- **Code review（双轴子代理 + 本人复核）**：standards 无硬违规（无新依赖、词汇
+  合规、无 ADR 覆写）；judgement 级：`unblind.ts` 受保护类别改由 run 自带
+  sampling 声明（#79 v1 路径不受影响、run-79-v2 自带 sampling）、
+  `readNdjson`/`joinDeltas` 三处重复、`normalizeExtractBatch` 文档挂错函数。
+- **披露偏差（版本化 + 有动机记录，写入 PR）**：task-instruction-decision v2→v3
+  改动 incumbent 对话提示词（0cb4bb5，双问缺陷修复；双臂同用故 pairwise 内部
+  一致；45-pack 机械复跑已带 v3 跑过——AC37 的 4 条发现正是它捕获的；但
+  「taste sample 不重跑因 identity 层未变」的理由被削弱，persona/locale 包本体
+  未动）；retrieval v2 截断扩展 `entityAnchored`/`object-elided canonical`
+  （67ea21b；SPEC §156 枚举之外，impression ≥2 独立信号地板保留完好）。
+- **AC 1–34 抽查**：台账引用的系测文件全部存在且覆盖如述；pins-report @ HEAD
+  含角色指纹与运行时 t_auto 互证；AC38/39/40 证据复核如前。
+- 测试基线：`ce9b0bd` 处 1025/1025 + typecheck + verify-pack v3.3 绿；
+  `18cbda4` 较 `ce9b0bd` 仅增评测证据文件，基线仍有效（未重跑，按停止微调协议）。
 
 ## 结论
 
-功能面（AC 1–34）与两项已交付证据（AC 38/39）全部落地且当前 commit 复验绿；
-剩余 AC 35/36/37/40 与 pin/rollback 证据由 #126 的工具链 + 本次运行产出，唯一
-人工步骤是 Luke 的 15 场景盲评（ADR-0110：misses 由 Internal Owner 裁定，不自
-我豁免）。若出口条件未满足，切片不合入、继续迭代（SPEC merge sentence）。
+功能面（AC 1–34）与 AC 38/39/40 + pin/rollback 证据全部落地；AC 35 经 Luke
+FP 裁定后通过；AC 36 整体/语言门槛大幅通过、唯 post_forget 净 -1 待裁定
+（根因=缺陷 #17，非设计行为）；AC 37 唯 too_many_questions ×4 待逐条裁定。
+两项裁定（ADR-0110，不可自我豁免）见
+`/tmp/sayhear-126-post-forget-adjudication.md`；裁定后即可收口（PR 已建，
+合并等裁定）。若出口条件未满足，切片不合入、继续迭代（SPEC merge sentence）。
