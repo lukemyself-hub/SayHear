@@ -1,7 +1,7 @@
 {
   "artifactClass": "non_authoritative_eval_output",
-  "capturedAt": "2026-08-29T20:35:48.251Z",
-  "completedAt": "2026-08-29T20:39:12.183Z",
+  "capturedAt": "2026-09-01T01:51:52.078Z",
+  "completedAt": "2026-09-01T01:59:25.853Z",
   "cutoverPins": {
     "conversationActionCatalog": {
       "actionKinds": [
@@ -44,28 +44,28 @@
       "trustActionExpression": "trust-action-expression-contract:v1"
     },
     "safetyResources": "safety-resources:v2",
-    "taskInstructionVersion": "task-instruction-decision:v2"
+    "taskInstructionVersion": "task-instruction-decision:v3"
   },
   "dataSourceDeclaration": "Fully synthetic scenario material; no real private conversation is read (ADR-0020, ADR-0073).",
   "databaseIsolation": "disposable isolated PostgreSQL schema on the DATABASE_URL server; dropped after the run",
   "phaseA": {
     "arm": "on",
-    "claims": 2,
-    "claimVersions": 2,
+    "claims": 3,
+    "claimVersions": 3,
     "injectedMemoryItems": 1,
-    "memoryFaceDigest": "4db30b1f86e4582a6caaa60e5531bda84c0f6e3df24b5836391bf5d3f9fc9227",
+    "memoryFaceDigest": "b20de6c38406d272dffe3030b6db40f824c074a4a3e1dcb99aa05723f5fee7c6",
     "turns": 3
   },
   "phaseB": {
     "assembly": "code-reverted incumbent stack: journal-regeneration catalog, no fast-path enqueue, no consolidation, no retrieval port",
     "catalogVersion": "conversation-action-catalog:journal-regeneration:v1",
-    "claimsAfter": 2,
-    "claimVersionsAfter": 2,
+    "claimsAfter": 3,
+    "claimVersionsAfter": 3,
     "epochAfter": "1",
-    "memoryFaceDigestAfter": "4db30b1f86e4582a6caaa60e5531bda84c0f6e3df24b5836391bf5d3f9fc9227",
+    "memoryFaceDigestAfter": "b20de6c38406d272dffe3030b6db40f824c074a4a3e1dcb99aa05723f5fee7c6",
     "memorySectionsInContext": 0,
     "turn": {
-      "assistantText": "说实话，这家公司的名字我这边没有记录，你刚才问过一次，我也没能对上来——不是故意绕，是这对话里确实没有存这信息。你要是想让我记住，直接告诉我公司名就行，我帮你记着。不然我瞎编一个名字，你拿去跟朋友说，那才麻烦。",
+      "assistantText": "还是蓝湾科技，咱们刚才还聊到的那家。跟朋友提的话，直接说名字就行。",
       "domainClockIso": "2026-08-24T02:01:30.000Z",
       "finalEventType": "assistant_committed",
       "injectedMemories": 0,
@@ -75,7 +75,7 @@
         "timezone": "Asia/Shanghai"
       },
       "sequenceInScenario": 4,
-      "wallMs": 3666
+      "wallMs": 2652
     }
   },
   "proofs": {
@@ -86,5 +86,5 @@
   },
   "scenarioIsolation": "single inline synthetic scenario; the schema is dropped after the run",
   "seam": "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway (catalog v2) + Context Compiler (+ Structured-Lexical retrieval in the on arm) -> runtime Provider Egress Port; memory-on also drives the real outbox fast-path extraction and due consolidation scans",
-  "gitCommit": "06bc5060e40b4623b0b1fbab75fe1385ac2f2790"
+  "gitCommit": "ce9b0bd892fd03afa49633b696a2dd7021482744"
 }

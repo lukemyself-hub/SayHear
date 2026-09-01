@@ -1,8 +1,8 @@
 {
   "artifactClass": "non_authoritative_eval_output",
   "arm": "on",
-  "capturedAt": "2026-08-31T06:02:08.420Z",
-  "completedAt": "2026-08-31T08:20:22.748Z",
+  "capturedAt": "2026-08-31T23:18:36.602Z",
+  "completedAt": "2026-09-01T01:30:05.790Z",
   "cutoverPins": {
     "conversationActionCatalog": {
       "actionKinds": [
@@ -54,7 +54,12 @@
     "memoryConsolidation": true,
     "memoryRetrieval": true
   },
-  "dispatchFailures": [],
+  "dispatchFailures": [
+    {
+      "event": "fast_path_extraction_requested",
+      "reason": "new row for relation \"memory_candidates\" violates check constraint \"memory_candidates_proposed_valid_from_precision_check\""
+    }
+  ],
   "roleConfigurations": [
     {
       "configVersion": "conversation-text-champion:v1:memory-extract",
@@ -82,7 +87,7 @@
   "scenarioFile": {
     "path": "eval/scenario-pack-v3/scenarios.json",
     "scenarioCount": 54,
-    "sha256": "de75781f78ed660892634d0ad885c4819196876980f67607b8bbad0895316988"
+    "sha256": "9a427eda02d907fc2d296f9b72660975e090b6a3f5beba32ce470c1e612fbae6"
   },
   "seam": "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway (catalog v2) + Context Compiler (+ Structured-Lexical retrieval in the on arm) -> runtime Provider Egress Port; memory-on also drives the real outbox fast-path extraction and due consolidation scans",
   "systemVersions": {
@@ -143,5 +148,5 @@
       "type": "responses-api"
     }
   },
-  "gitCommit": "0cb4bb5ee344c1f728be23ca6c9135e0528b1432"
+  "gitCommit": "ce9b0bd892fd03afa49633b696a2dd7021482744"
 }

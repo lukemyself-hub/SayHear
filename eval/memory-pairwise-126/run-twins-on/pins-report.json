@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-08-30T07:35:20.737Z",
+  "checkedAt": "2026-09-01T01:51:09.082Z",
   "issues": [],
   "manifest": "eval/memory-pairwise-126/run-twins-on/manifest.json",
   "pass": true,
@@ -20,7 +20,7 @@
       "tAuto": 0.9
     },
     "evalChannel": {
-      "scenarioPack": "scenario-pack:v3",
+      "scenarioPack": "scenario-pack:v3.3",
       "tieredChecks": "tiered-checks:v3"
     },
     "fastPathExtractionPolicyVersion": "fast-path-extraction:v1",
@@ -50,13 +50,13 @@
     },
     "roleChampionConfigs": {
       "entityResolve": {
-        "promptFingerprint": "entity-resolve:gate:v1"
+        "promptFingerprint": "entity-resolve:gate:v2"
       },
       "memoryConsolidate": {
         "promptFingerprint": "memory-consolidate:diffs:v1"
       },
       "memoryExtract": {
-        "promptFingerprint": "memory-extract:propose:v2"
+        "promptFingerprint": "memory-extract:propose:v3"
       }
     },
     "safetyResources": "safety-resources:v2"

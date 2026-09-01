@@ -1,8 +1,8 @@
 {
   "artifactClass": "non_authoritative_eval_output",
   "arm": "off",
-  "capturedAt": "2026-08-29T18:40:13.537Z",
-  "completedAt": "2026-08-29T18:54:41.814Z",
+  "capturedAt": "2026-09-01T01:31:25.033Z",
+  "completedAt": "2026-09-01T01:47:56.851Z",
   "cutoverPins": {
     "conversationActionCatalog": {
       "actionKinds": [
@@ -45,7 +45,7 @@
       "trustActionExpression": "trust-action-expression-contract:v1"
     },
     "safetyResources": "safety-resources:v2",
-    "taskInstructionVersion": "task-instruction-decision:v2"
+    "taskInstructionVersion": "task-instruction-decision:v3"
   },
   "dataSourceDeclaration": "Fully synthetic scenario material (see the pack file); no real private conversation is read (ADR-0020 Initial Replay, ADR-0071 / ADR-0073 explicit non-authoritative Replay — never production shadowing).",
   "databaseIsolation": "disposable isolated PostgreSQL schema on the DATABASE_URL server; dropped after the run",
@@ -54,19 +54,20 @@
     "memoryConsolidation": false,
     "memoryRetrieval": false
   },
+  "dispatchFailures": [],
   "roleConfigurations": [
     {
       "configVersion": "conversation-text-champion:v1:memory-extract",
       "model": "deepseek-v4-flash",
       "policyVersion": "memory-extraction:v1",
-      "promptFingerprint": "memory-extract:propose:v1",
+      "promptFingerprint": "memory-extract:propose:v3",
       "role": "memory.extract"
     },
     {
       "configVersion": "conversation-text-champion:v1:entity-resolve",
       "model": "deepseek-v4-flash",
       "policyVersion": "entity-resolve-gate:v1",
-      "promptFingerprint": "entity-resolve:gate:v1",
+      "promptFingerprint": "entity-resolve:gate:v2",
       "role": "entity.resolve"
     },
     {
@@ -81,7 +82,7 @@
   "scenarioFile": {
     "path": "eval/scenario-pack-v3/scenarios.json",
     "scenarioCount": 54,
-    "sha256": "0b14bccf90f7f550bfe186ed1ee997539b611fd3a9434d47871a1a7aeb53cb73"
+    "sha256": "9a427eda02d907fc2d296f9b72660975e090b6a3f5beba32ce470c1e612fbae6"
   },
   "seam": "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway (catalog v2) + Context Compiler (+ Structured-Lexical retrieval in the on arm) -> runtime Provider Egress Port; memory-on also drives the real outbox fast-path extraction and due consolidation scans",
   "systemVersions": {
@@ -121,7 +122,7 @@
       "personaBehaviorAnchorsVersion": "persona-behavior-anchors:v2",
       "personaContractInvariantVersion": "persona-contract-invariant:v1",
       "productPolicyVersion": "product-policy:v1",
-      "taskInstructionVersion": "task-instruction-decision:v2",
+      "taskInstructionVersion": "task-instruction-decision:v3",
       "provider": "deepseek",
       "providerPolicyVersion": "deepseek-conversation-text:v1",
       "relationshipPolicyVersion": "relationship-boundary:v1",
@@ -138,9 +139,9 @@
     },
     "providerTransport": {
       "baseUrl": "https://api.deepseek.com",
-      "timeoutMs": 60000,
+      "timeoutMs": 180000,
       "type": "responses-api"
     }
   },
-  "gitCommit": "35e94a14e144418f287fb56b24f36770f1a8b06f"
+  "gitCommit": "ce9b0bd892fd03afa49633b696a2dd7021482744"
 }

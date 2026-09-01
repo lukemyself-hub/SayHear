@@ -27,20 +27,30 @@ consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe �
 
 ## AC 35–40：合并门证据（#126）
 
-> **会话 7 进展（2026-08-31，`753a721` + `2e16e32`）**：分层定位完成——「6 场景零注入」
-> 拆解为三类：continuity×3 = 生产缺陷 #16（multiple-cardinality 候选的标量值在 admission
-> 被判 typed_value_invalid，claim 结构性不可建立；已修：标量包装为单元素集合）；
-> objective-en = 抽取采样方差（隔离复跑链路全通）；impression-en/mix = 检索查询零信号
-> （t4 措辞不携带已发布别名；已按 fixture 修订原则改 pack v3.2 携带 be direct / 直接，
-> mix t2 调近 registry 正例）。单场景验证 5/5 PASS（continuity×3 注入+token 命中；
-> impression×2 注入）。**AC 35 正式复判待第 3 层 54 场景 v3.2 全量**（DeepSeek 余额
-> 不足，待充值后执行；此后 OFF 臂同源重跑 → AC 36 盲评、AC 37 findings-v2）。
+> **会话 8 进展（2026-08-31，`ce9b0bd`）**：DeepSeek 充值后（余额 ¥116+）完成第 3 层
+> 54 场景 v3.3 全量（ON `--arm on --force`，54/54 exit 0，manifest.gitCommit===HEAD
+> `ce9b0bd`）+ OFF 臂同源重跑（54/54 exit 0，memoryWriteSwitches 全 false）。
+> 复判 AC35：hardGateViolations **9 → 7**（required_recall_missing 9→3 [v3.3 修好
+> continuity×3 / temporal-en / temporal-zh 等 5 个]，too_many_questions 3→4）。
+> 剩余 3 条 required_recall_missing 全部集中在 **objective-\* 场景的「命名事实回声」**：
+> 注入正确、`retrieval_text` 带名字（Brightline / 启明）、模型却用「你的 offer / 项目」
+> 泛指而非点名——**经单场景 diag 全管线 dump 确认这不是检索/注入/渲染缺陷**，而是
+> 「recall-experience-contract 允许『清楚指向』、fixture requiredTokens 却要求字面点名」
+> 的**契约/门禁 gap**（同 v3.1「朋友」措辞方差类别），按 ADR-0110 交 **Luke 裁定**
+> （A=评分类 FP 降级读法 / B=产品级缺陷另立票）。客观场景的 t4 还叠加基础模型
+> 对话常识错误（「offer 签了，还是还在谈？」）——与记忆无关，属模型质量，另立。
+> 与此同时 3 条 required 门禁场景（temporal 系）与 3 条双问场景，其注入 / 词面命中
+> 已稳定。**AC 36 盲评样本已重建**（`pairs-run/`，15 场景、sampleSeed 1260，
+> 含 memory-objective-zh/en 供 Luke 味觉判定）；pins 全绿（`pins-report.json` pass:true）；
+> scope-protection 全绿（45 migrations + 148 源文件零命中）；rollback-demo @
+> `ce9b0bd` 重跑 OK（Phase A 3 claims 1 injected；Phase B memory sections=0、claims
+> 冻结、epoch 冻结）。**唯一剩余 = Luke 两裁定**：AC35 判 A/B + 15 场景盲评（AC 36）。
 
 | AC | 内容 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 35 | 确定性硬门禁全 locale 100% 零容忍 | ❌ **未满足**（0cb4bb5 证据：9 违规 = required_recall_missing ×8 + too_many_questions ×1；#16 修复后待 v3.2 全量复判） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json`） |
-| 36 | memory 盲评 vs Memory-off 孪生 | ⏸ 暂缓：ON 臂 0 注入 → 双臂行为等价，盲评无意义；待召回迭代后重跑 | `run-twins-{on,off}` → `build-memory-pairs`（15 场景、种子 1260）→ 评审页 → `unblind` 门槛 |
-| 37 | 45 场景机械复跑 | ❌ **未满足**：too_many_questions ×2 为新违规（good-news-mix t1 真双问；topic-change-mix t2 复合单问 FP 候选，待 FP 台账裁定） | `run-twins-on/findings-v2.json` |
+| 35 | 确定性硬门禁全 locale 100% 零容忍 | ⏸ **待 Luke 裁定**（ce9b0bd：7 违规 = required_recall_missing ×3 [全部 objective-\*「命名事实回声」契约/门禁 gap，非生产缺陷] + too_many_questions ×4 [多为复合单问/回声，需按 FP 台账逐条裁定]；#8–#16 + recall-framing v2 + pack v3.3 已修，9→7） | Memory-on 臂转录 → `tiered-checks:v3` 报告（`run-twins-on/findings.json` @ ce9b0bd）+ `tiered-checks` FP 台账 |
+| 36 | memory 盲评 vs Memory-off 孪生 | ⏸ 已就绪**待 Luke 盲评**（ON 臂 v3.3 现已真实注入，双臂行为差异化；15 场景、种子 1260，含 memory-objective-zh/en） | `run-twins-{on,off}` @ ce9b0bd → `build-memory-pairs` → `pairs-run/` 评审页 → `unblind` 门槛 |
+| 37 | 45 场景机械复跑 | ⏸ **待裁定**：too_many_questions ×4（good-news-mix t1 真双问；objective-en t1 / impression-en t4 / temporal-zh t4 为复合单问/回声，需按 FP 台账逐条裁定） | `run-twins-on/findings-v2.json` @ ce9b0bd |
 | 38 | 检索精度会计基线（fence/budget/deadline 绝对零，无阈值） | ✅ #125 | `eval/retrieval-precision-v1/run/baseline-2026-08-28/`（本次复验纯侧测试绿） |
 | 39 | trust-action 选择数据集门禁 | ✅ #124 | `eval/action-selection/memory-trust-actions:v1/`（本次复验 verify-pack OK） |
 | 40 | 合并范围保护 | ✅ 45 migrations + 148 源文件扫描零命中，champion 簇与 incumbent 逐字节一致 | `scope-protection.json`（迁移史 + 源码扫描 + incumbent champion 簇逐字节对比） |

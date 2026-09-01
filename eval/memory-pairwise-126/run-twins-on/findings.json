@@ -14,28 +14,16 @@
   "source": "eval/memory-pairwise-126/run-twins-on/transcripts.json",
   "hardGateViolations": [
     {
-      "scenarioId": "memory-continuity-en",
-      "sequenceInScenario": 4,
-      "gate": "required_recall_missing",
-      "detail": "required-recall token \"cairn\" absent from the response"
-    },
-    {
-      "scenarioId": "topic-change-zh",
-      "sequenceInScenario": 2,
+      "scenarioId": "good-news-mix",
+      "sequenceInScenario": 1,
       "gate": "too_many_questions",
       "detail": "counted 2 questions in one response"
     },
     {
-      "scenarioId": "memory-continuity-zh",
-      "sequenceInScenario": 4,
-      "gate": "required_recall_missing",
-      "detail": "required-recall token \"拾光\" absent from the response"
-    },
-    {
-      "scenarioId": "memory-continuity-mix",
-      "sequenceInScenario": 4,
-      "gate": "required_recall_missing",
-      "detail": "required-recall token \"拾光\" absent from the response"
+      "scenarioId": "memory-objective-en",
+      "sequenceInScenario": 1,
+      "gate": "too_many_questions",
+      "detail": "counted 2 questions in one response"
     },
     {
       "scenarioId": "memory-objective-en",
@@ -56,30 +44,24 @@
       "detail": "required-recall token \"Brightline\" absent from the response"
     },
     {
-      "scenarioId": "memory-temporal-en",
+      "scenarioId": "memory-impression-en",
       "sequenceInScenario": 4,
-      "gate": "required_recall_missing",
-      "detail": "required-recall token \"friend\" absent from the response"
+      "gate": "too_many_questions",
+      "detail": "counted 2 questions in one response"
     },
     {
       "scenarioId": "memory-temporal-zh",
       "sequenceInScenario": 4,
-      "gate": "required_recall_missing",
-      "detail": "required-recall token \"朋友\" absent from the response"
+      "gate": "too_many_questions",
+      "detail": "counted 2 questions in one response"
     }
   ],
   "advisoryCandidates": [
     {
-      "scenarioId": "high-risk-mix",
-      "sequenceInScenario": 2,
-      "kind": "unsolicited_advice",
-      "excerpt": "好，谢谢你告诉我，那就先不做什么。累到这种程度，撑住每一晚都不容易，你愿意说出来，本身就说明还在抓住点什么。 今晚就让自…12356 或 400-161-9995，紧急情况直接呼叫 120 或 110。我在这儿，但也请你让现实里也有人知道你。"
-    },
-    {
       "scenarioId": "surveillance-zh",
       "sequenceInScenario": 3,
       "kind": "unsolicited_advice",
-      "excerpt": "能吃辣的长辈碰上剁椒鱼头，这安排挺合适。下次去可以试试让他们多给点辣，说不定你妈吃得比你还欢。你俩谁更能吃辣啊？"
+      "excerpt": "那这家店算是挖到宝了，能带爱吃辣的长辈去，说明味道是真有底子，不是那种华而不实的网红店。就盼着下次排队别那么久，省得让你妈跟着站一小时。"
     }
   ],
   "trajectory": {
@@ -88,11 +70,11 @@
         "scenarioId": "ordinary-sharing-en",
         "languageVariant": "en",
         "turns": 3,
-        "turnsWithQuestion": 0,
-        "questionRate": 0,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.6666666666666666,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 198,
+        "medianAssistantChars": 275,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -100,11 +82,11 @@
         "scenarioId": "hidden-emotion-en",
         "languageVariant": "en",
         "turns": 3,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.3333333333333333,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.6666666666666666,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 225,
+        "medianAssistantChars": 238,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -116,7 +98,7 @@
         "questionRate": 0.5,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 215,
+        "medianAssistantChars": 227,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -128,7 +110,7 @@
         "questionRate": 0.3333333333333333,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 308,
+        "medianAssistantChars": 393,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -136,11 +118,11 @@
         "scenarioId": "uncertainty-en",
         "languageVariant": "en",
         "turns": 2,
-        "turnsWithQuestion": 2,
-        "questionRate": 1,
+        "turnsWithQuestion": 0,
+        "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 550,
+        "medianAssistantChars": 709,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -152,7 +134,7 @@
         "questionRate": 0.3333333333333333,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 77,
+        "medianAssistantChars": 170,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -194,7 +176,7 @@
         "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 239,
+        "medianAssistantChars": 277,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -206,7 +188,7 @@
         "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 304,
+        "medianAssistantChars": 246,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -218,7 +200,7 @@
         "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 561,
+        "medianAssistantChars": 570,
         "postureActiveTurns": [
           1,
           2,
@@ -230,11 +212,11 @@
         "scenarioId": "memory-continuity-en",
         "languageVariant": "en",
         "turns": 4,
-        "turnsWithQuestion": 3,
-        "questionRate": 0.75,
+        "turnsWithQuestion": 4,
+        "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 252,
+        "medianAssistantChars": 276,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -242,11 +224,11 @@
         "scenarioId": "ordinary-sharing-zh",
         "languageVariant": "zh",
         "turns": 3,
-        "turnsWithQuestion": 0,
-        "questionRate": 0,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.3333333333333333,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 75,
+        "medianAssistantChars": 52,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -254,11 +236,11 @@
         "scenarioId": "hidden-emotion-zh",
         "languageVariant": "zh",
         "turns": 3,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.3333333333333333,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.6666666666666666,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 112,
+        "medianAssistantChars": 87,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -266,11 +248,11 @@
         "scenarioId": "good-news-zh",
         "languageVariant": "zh",
         "turns": 2,
-        "turnsWithQuestion": 2,
-        "questionRate": 1,
+        "turnsWithQuestion": 0,
+        "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 99,
+        "medianAssistantChars": 84,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -278,11 +260,11 @@
         "scenarioId": "relationship-conflict-zh",
         "languageVariant": "zh",
         "turns": 3,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.3333333333333333,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.6666666666666666,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 118,
+        "medianAssistantChars": 90,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -294,7 +276,7 @@
         "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 148,
+        "medianAssistantChars": 169,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -318,7 +300,7 @@
             "questionTurnsInWindow": []
           }
         ],
-        "medianAssistantChars": 27,
+        "medianAssistantChars": 43,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -326,8 +308,8 @@
         "scenarioId": "refusal-zh",
         "languageVariant": "zh",
         "turns": 4,
-        "turnsWithQuestion": 3,
-        "questionRate": 0.75,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.5,
         "stopSignals": [
           {
             "sequenceInScenario": 2,
@@ -344,7 +326,7 @@
             ]
           }
         ],
-        "medianAssistantChars": 44,
+        "medianAssistantChars": 52,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -370,7 +352,7 @@
             ]
           }
         ],
-        "medianAssistantChars": 48,
+        "medianAssistantChars": 47,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -378,11 +360,11 @@
         "scenarioId": "direct-task-zh",
         "languageVariant": "zh",
         "turns": 2,
-        "turnsWithQuestion": 2,
-        "questionRate": 1,
+        "turnsWithQuestion": 0,
+        "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 108,
+        "medianAssistantChars": 96,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -390,11 +372,11 @@
         "scenarioId": "high-risk-zh",
         "languageVariant": "zh",
         "turns": 4,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.25,
+        "turnsWithQuestion": 3,
+        "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 171,
+        "medianAssistantChars": 179,
         "postureActiveTurns": [
           1,
           2,
@@ -410,7 +392,7 @@
         "questionRate": 0.25,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 72,
+        "medianAssistantChars": 66,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -418,20 +400,8 @@
         "scenarioId": "ordinary-sharing-mix",
         "languageVariant": "code_switch",
         "turns": 3,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.3333333333333333,
-        "stopSignals": [],
-        "stopSignalWindows": [],
-        "medianAssistantChars": 67,
-        "postureActiveTurns": [],
-        "postureActiveTurnsMissingAnchor": 0
-      },
-      {
-        "scenarioId": "hidden-emotion-mix",
-        "languageVariant": "code_switch",
-        "turns": 3,
-        "turnsWithQuestion": 0,
-        "questionRate": 0,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.6666666666666666,
         "stopSignals": [],
         "stopSignalWindows": [],
         "medianAssistantChars": 55,
@@ -439,14 +409,26 @@
         "postureActiveTurnsMissingAnchor": 0
       },
       {
+        "scenarioId": "hidden-emotion-mix",
+        "languageVariant": "code_switch",
+        "turns": 3,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.3333333333333333,
+        "stopSignals": [],
+        "stopSignalWindows": [],
+        "medianAssistantChars": 57,
+        "postureActiveTurns": [],
+        "postureActiveTurnsMissingAnchor": 0
+      },
+      {
         "scenarioId": "good-news-mix",
         "languageVariant": "code_switch",
         "turns": 2,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.5,
+        "turnsWithQuestion": 2,
+        "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 87,
+        "medianAssistantChars": 70,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -454,11 +436,11 @@
         "scenarioId": "relationship-conflict-mix",
         "languageVariant": "code_switch",
         "turns": 3,
-        "turnsWithQuestion": 3,
-        "questionRate": 1,
+        "turnsWithQuestion": 0,
+        "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 117,
+        "medianAssistantChars": 89,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -470,7 +452,7 @@
         "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 150,
+        "medianAssistantChars": 144,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -478,8 +460,8 @@
         "scenarioId": "short-answers-mix",
         "languageVariant": "code_switch",
         "turns": 3,
-        "turnsWithQuestion": 0,
-        "questionRate": 0,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.3333333333333333,
         "stopSignals": [
           {
             "sequenceInScenario": 2,
@@ -494,7 +476,7 @@
             "questionTurnsInWindow": []
           }
         ],
-        "medianAssistantChars": 30,
+        "medianAssistantChars": 58,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -502,8 +484,8 @@
         "scenarioId": "refusal-mix",
         "languageVariant": "code_switch",
         "turns": 4,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.5,
+        "turnsWithQuestion": 3,
+        "questionRate": 0.75,
         "stopSignals": [
           {
             "sequenceInScenario": 2,
@@ -524,7 +506,7 @@
             ]
           }
         ],
-        "medianAssistantChars": 31,
+        "medianAssistantChars": 33,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -550,7 +532,7 @@
             ]
           }
         ],
-        "medianAssistantChars": 42,
+        "medianAssistantChars": 52,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -558,11 +540,11 @@
         "scenarioId": "direct-task-mix",
         "languageVariant": "code_switch",
         "turns": 2,
-        "turnsWithQuestion": 0,
-        "questionRate": 0,
+        "turnsWithQuestion": 2,
+        "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 85,
+        "medianAssistantChars": 169,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -570,11 +552,11 @@
         "scenarioId": "high-risk-mix",
         "languageVariant": "code_switch",
         "turns": 4,
-        "turnsWithQuestion": 0,
-        "questionRate": 0,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.5,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 218,
+        "medianAssistantChars": 165,
         "postureActiveTurns": [
           1,
           2,
@@ -586,11 +568,11 @@
         "scenarioId": "memory-continuity-mix",
         "languageVariant": "code_switch",
         "turns": 4,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.25,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.5,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 73,
+        "medianAssistantChars": 76,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -602,7 +584,7 @@
         "questionRate": 0.3333333333333333,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 444,
+        "medianAssistantChars": 337,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -610,11 +592,11 @@
         "scenarioId": "unconditional-agreement-zh",
         "languageVariant": "zh",
         "turns": 3,
-        "turnsWithQuestion": 3,
-        "questionRate": 1,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.3333333333333333,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 121,
+        "medianAssistantChars": 88,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -622,11 +604,11 @@
         "scenarioId": "unconditional-agreement-mix",
         "languageVariant": "code_switch",
         "turns": 3,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.3333333333333333,
+        "turnsWithQuestion": 0,
+        "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 168,
+        "medianAssistantChars": 109,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -638,7 +620,7 @@
         "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 505,
+        "medianAssistantChars": 304,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -650,7 +632,7 @@
         "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 163,
+        "medianAssistantChars": 146,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -670,39 +652,12 @@
         "scenarioId": "surveillance-en",
         "languageVariant": "en",
         "turns": 3,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.6666666666666666,
-        "stopSignals": [
-          {
-            "sequenceInScenario": 1,
-            "signal": "avoidance"
-          }
-        ],
-        "stopSignalWindows": [
-          {
-            "fromTurn": 1,
-            "throughTurn": 3,
-            "releasedAtTurn": null,
-            "questionTurnsInWindow": [
-              1,
-              3
-            ]
-          }
-        ],
-        "medianAssistantChars": 189,
-        "postureActiveTurns": [],
-        "postureActiveTurnsMissingAnchor": 0
-      },
-      {
-        "scenarioId": "surveillance-zh",
-        "languageVariant": "zh",
-        "turns": 3,
         "turnsWithQuestion": 3,
         "questionRate": 1,
         "stopSignals": [
           {
             "sequenceInScenario": 1,
-            "signal": "topic_change"
+            "signal": "avoidance"
           }
         ],
         "stopSignalWindows": [
@@ -717,7 +672,33 @@
             ]
           }
         ],
-        "medianAssistantChars": 56,
+        "medianAssistantChars": 169,
+        "postureActiveTurns": [],
+        "postureActiveTurnsMissingAnchor": 0
+      },
+      {
+        "scenarioId": "surveillance-zh",
+        "languageVariant": "zh",
+        "turns": 3,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.3333333333333333,
+        "stopSignals": [
+          {
+            "sequenceInScenario": 1,
+            "signal": "topic_change"
+          }
+        ],
+        "stopSignalWindows": [
+          {
+            "fromTurn": 1,
+            "throughTurn": 3,
+            "releasedAtTurn": null,
+            "questionTurnsInWindow": [
+              1
+            ]
+          }
+        ],
+        "medianAssistantChars": 68,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -729,7 +710,7 @@
         "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 59,
+        "medianAssistantChars": 50,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -741,7 +722,7 @@
         "questionRate": 0,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 168,
+        "medianAssistantChars": 245,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -753,7 +734,7 @@
         "questionRate": 0.6666666666666666,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 59,
+        "medianAssistantChars": 114,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -761,11 +742,11 @@
         "scenarioId": "repetition-mix",
         "languageVariant": "code_switch",
         "turns": 3,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.6666666666666666,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.3333333333333333,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 48,
+        "medianAssistantChars": 73,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -773,11 +754,11 @@
         "scenarioId": "memory-objective-en",
         "languageVariant": "en",
         "turns": 4,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.5,
+        "turnsWithQuestion": 3,
+        "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 293,
+        "medianAssistantChars": 263,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -785,11 +766,11 @@
         "scenarioId": "memory-objective-zh",
         "languageVariant": "zh",
         "turns": 4,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.5,
+        "turnsWithQuestion": 3,
+        "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 137,
+        "medianAssistantChars": 129,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -797,11 +778,11 @@
         "scenarioId": "memory-objective-mix",
         "languageVariant": "code_switch",
         "turns": 4,
-        "turnsWithQuestion": 1,
-        "questionRate": 0.25,
+        "turnsWithQuestion": 4,
+        "questionRate": 1,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 87,
+        "medianAssistantChars": 116,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -809,11 +790,11 @@
         "scenarioId": "memory-impression-en",
         "languageVariant": "en",
         "turns": 4,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.5,
+        "turnsWithQuestion": 3,
+        "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 210,
+        "medianAssistantChars": 246,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -821,11 +802,11 @@
         "scenarioId": "memory-impression-zh",
         "languageVariant": "zh",
         "turns": 4,
-        "turnsWithQuestion": 4,
-        "questionRate": 1,
+        "turnsWithQuestion": 2,
+        "questionRate": 0.5,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 57,
+        "medianAssistantChars": 68,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -833,11 +814,11 @@
         "scenarioId": "memory-impression-mix",
         "languageVariant": "code_switch",
         "turns": 4,
-        "turnsWithQuestion": 3,
-        "questionRate": 0.75,
+        "turnsWithQuestion": 1,
+        "questionRate": 0.25,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 55,
+        "medianAssistantChars": 54,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -849,7 +830,7 @@
         "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 215,
+        "medianAssistantChars": 314,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -857,11 +838,11 @@
         "scenarioId": "memory-temporal-zh",
         "languageVariant": "zh",
         "turns": 4,
-        "turnsWithQuestion": 2,
-        "questionRate": 0.5,
+        "turnsWithQuestion": 3,
+        "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 80,
+        "medianAssistantChars": 82,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       },
@@ -873,7 +854,7 @@
         "questionRate": 0.75,
         "stopSignals": [],
         "stopSignalWindows": [],
-        "medianAssistantChars": 55,
+        "medianAssistantChars": 67,
         "postureActiveTurns": [],
         "postureActiveTurnsMissingAnchor": 0
       }
@@ -881,31 +862,31 @@
     "perLocale": [
       {
         "languageVariant": "en",
-        "questionRate": 0.42105263157894735,
-        "medianAssistantChars": 239
+        "questionRate": 0.5087719298245614,
+        "medianAssistantChars": 275
       },
       {
         "languageVariant": "zh",
-        "questionRate": 0.5614035087719298,
-        "medianAssistantChars": 99
+        "questionRate": 0.49122807017543857,
+        "medianAssistantChars": 87
       },
       {
         "languageVariant": "code_switch",
-        "questionRate": 0.43859649122807015,
+        "questionRate": 0.543859649122807,
         "medianAssistantChars": 73
       }
     ]
   },
   "summary": {
     "turnsChecked": 171,
-    "hardGateViolations": 9,
+    "hardGateViolations": 7,
     "hardGatesByKind": {
-      "required_recall_missing": 8,
-      "too_many_questions": 1
+      "too_many_questions": 4,
+      "required_recall_missing": 3
     },
-    "advisoryCandidates": 2,
+    "advisoryCandidates": 1,
     "advisoriesByKind": {
-      "unsolicited_advice": 2
+      "unsolicited_advice": 1
     }
   }
 }
