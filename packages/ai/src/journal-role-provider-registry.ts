@@ -16,7 +16,12 @@ import type {
   MemoryRoleInvocationConfiguration,
   RollingSummaryModel,
 } from "@sayhear/application";
-import { normalizeJournalDiagnosticFindings, ProviderDispatchError, asConversationEventRevisionId } from "@sayhear/application";
+import {
+  asConversationEventRevisionId,
+  normalizeJournalDiagnosticFindings,
+  normalizeMemoryExtractBoundaryPrecision,
+  ProviderDispatchError,
+} from "@sayhear/application";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
 export type JournalModelRole =
@@ -56,6 +61,10 @@ export type JournalRoleProviderRegistry = Readonly<{
  * keeps role selection, prompt fingerprints, and source-text handling out of
  * web, workflow, and persistence callers.
  */
+const MEMORY_EXTRACT_PROMPT_VERSION = "memory-extract:propose:v4";
+const MEMORY_EXTRACT_TEMPORAL_PRECISION_INSTRUCTIONS =
+  "Temporal precision fields validFromPrecision and validToPrecision must each be one of 'exact', 'month', 'year', 'approximate', or 'unknown'; use 'unknown' when a boundary is unavailable or uncertain.";
+
 /**
  * Deterministic normalization of provider extraction output: shapes the
  * deterministic validators treat as structural errors but that carry no
@@ -68,10 +77,13 @@ export type JournalRoleProviderRegistry = Readonly<{
  * concrete value (dropped: there is nothing to admit). Null structural
  * scalars (scopeKey, typedValue, a mention's surfaceForm) are null-vs-empty
  * spellings of the same no-information shape — scope-none for scopeKey,
- * drop-for-value — and are normalized rather than crashing the validator
+ * drop-for-value — and enum-out temporal precision values are normalized
+ * rather than crashing the validator or violating the candidate CHECK
+ * constraint.
  * (issue #126 evidence runs: `"scopeKey": null` failed whole revisions as
  * `unknown_error`).
  */
+
 function normalizeQualifierProposals(
   qualifiers: unknown,
 ): readonly Record<string, unknown>[] {
@@ -140,10 +152,12 @@ function normalizeExtractBatch(
                 // when the boundary itself is unknown.
                 temporal: {
                   ...candidate.temporal,
-                  validFromPrecision:
-                    candidate.temporal.validFromPrecision ?? "unknown",
-                  validToPrecision:
-                    candidate.temporal.validToPrecision ?? "unknown",
+                  validFromPrecision: normalizeMemoryExtractBoundaryPrecision(
+                    candidate.temporal.validFromPrecision,
+                  ),
+                  validToPrecision: normalizeMemoryExtractBoundaryPrecision(
+                    candidate.temporal.validToPrecision,
+                  ),
                 },
               }),
         };
@@ -220,9 +234,16 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
     invocation?: MemoryRoleInvocationConfiguration,
   ): Promise<unknown> => {
     let output = "";
+    const promptVersion =
+      invocation?.promptVersion ?? configuration(role).promptFingerprint;
+    const effectiveInstructions =
+      role === "memory.extract" &&
+      promptVersion === MEMORY_EXTRACT_PROMPT_VERSION
+        ? `${instructions} ${MEMORY_EXTRACT_TEMPORAL_PRECISION_INSTRUCTIONS}`
+        : instructions;
     try {
       for await (const event of model.stream({
-        instructions,
+        instructions: effectiveInstructions,
         locale: "en-US",
         model: invocation?.modelVersion ?? configuration(role).model,
         messages: [{

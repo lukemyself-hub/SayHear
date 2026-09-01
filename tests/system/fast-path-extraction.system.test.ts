@@ -554,6 +554,72 @@ describe("Fast-path extraction workflow system seam", () => {
     expect(await countRows("memory_candidates")).toBe(2);
   });
 
+  it("preserves candidates when the provider returns invalid temporal precision enums", async () => {
+    // Deliberately violate the provider port's static enum to exercise the
+    // runtime normalization boundary that protects the PostgreSQL CHECK.
+    const invalidPrecisions = [
+      ["day", "week"],
+      ["arbitrary", "not-a-precision"],
+      ["calendar-quarter", "decade"],
+    ] as const;
+    extractScript = (revisions) =>
+      revisions.map((revision) => {
+        const span = `0:${revision.text.length}`;
+        return {
+          revisionId: revision.revisionId,
+          evidence: [{ locatorKey: span, role: "factual_support" as const }],
+          mentions: [],
+          candidates: invalidPrecisions.map(([validFromPrecision, validToPrecision], index) => ({
+            basis: "directly_stated" as const,
+            candidateKind: "objective" as const,
+            predicateId: "sh.place.residence",
+            proposedConcept: null,
+            typedValue: `${revision.text}-${index}`,
+            scopeKey: "",
+            subjectMentionIndex: null,
+            objectMentionIndex: null,
+            evidenceLocatorKeys: [span],
+            qualifiers: [],
+            temporal: {
+              temporalStatus: "current" as const,
+              validFrom: null,
+              validFromPrecision: validFromPrecision as never,
+              validTo: null,
+              validToPrecision: validToPrecision as never,
+            },
+            itemClass: "event",
+            itemSummary: `candidate ${index}`,
+          })),
+          clarifications: [],
+        };
+      });
+
+    const turn = await submitTurn("我最近在准备跳槽。");
+    const outcome = await dispatch();
+    expect(outcome.dispatched).toBe(1);
+
+    const run = await database.pool.query<{ status: string; error_code: string | null }>(
+      "SELECT status, error_code FROM fast_path_extraction_runs WHERE event_revision_id = $1",
+      [turn.revisionId],
+    );
+    expect(run.rows[0]).toEqual({ status: "extracted", error_code: null });
+
+    const candidates = await database.pool.query<{
+      proposed_valid_from_precision: string;
+      proposed_valid_to_precision: string;
+    }>(
+      `SELECT proposed_valid_from_precision, proposed_valid_to_precision
+       FROM memory_candidates WHERE user_id = $1
+       ORDER BY created_at, memory_candidate_id`,
+      [OWNER],
+    );
+    expect(candidates.rows).toEqual([
+      { proposed_valid_from_precision: "unknown", proposed_valid_to_precision: "unknown" },
+      { proposed_valid_from_precision: "unknown", proposed_valid_to_precision: "unknown" },
+      { proposed_valid_from_precision: "unknown", proposed_valid_to_precision: "unknown" },
+    ]);
+  });
+
   it("resolves deterministically first and commits the entity.resolve gate only on match ∧ confidence ≥ t_auto", async () => {
     // 上海 turn introduces 妈妈 as a named new person → unresolved Entity with
     // label 妈妈. 身体 turn mentions 媽媽 twice (traditional form) — homophone
