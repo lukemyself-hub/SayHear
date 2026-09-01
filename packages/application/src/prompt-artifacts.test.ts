@@ -18,6 +18,7 @@ import {
   resolveSafetyPostureReducedPersona,
   RECALL_EXPERIENCE_CONTRACT_VERSION,
   SAFETY_POSTURE_REDUCED_PERSONA_VERSION,
+  PREVIOUS_TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
   resolveTrustActionExpressionContract,
   TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
 } from "./prompt-artifacts";
@@ -473,18 +474,21 @@ describe("recall experience contract (issue #118, ADR-0116 / ADR-0117)", () => {
   });
 });
 
-describe("trust-action expression contract (issue #119, P1-P6)", () => {
+describe("trust-action expression contract (issues #119/#146, P1-P6)", () => {
   it("resolves the P1-P6 principles per locale and carries every principle", () => {
     const en = resolveTrustActionExpressionContract({
       locale: "en-US",
       version: TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
     });
     expect(en).toContain("P1 Confirmation");
-    expect(en.toLowerCase()).toContain("won't bring this up");
-    expect(en.toLowerCase()).toContain("in progress");
+    expect(en.toLowerCase()).toContain("updated that");
+    expect(en.toLowerCase()).toContain("won't bring that up anymore");
+    expect(en.toLowerCase()).toContain("did not happen");
+    expect(en.toLowerCase()).toContain("nothing changed");
     expect(en.toLowerCase()).toContain("never list");
     expect(en.toLowerCase()).toContain("can't verify");
     expect(en.toLowerCase()).toContain("friend-like tone");
+    expect(en).not.toMatch(/background|bookkeeping|re-check|record stays/i);
 
     const zh = resolveTrustActionExpressionContract({
       locale: "zh-CN",
@@ -492,10 +496,28 @@ describe("trust-action expression contract (issue #119, P1-P6)", () => {
     });
     expect(zh).toContain("P1 确认");
     expect(zh).toContain("停止，不是删除");
-    expect(zh).toContain("「以后不提了」".replace("「", "").replace("」", ""));
-    expect(zh).toContain("处理中");
+    expect(zh).toContain("已经照你说的改好了");
+    expect(zh).toContain("以后不提了");
+    expect(zh).toContain("没有改动");
     expect(zh).toContain("绝不列出");
     expect(zh).toContain("无法核实");
+    expect(zh).not.toMatch(/后台|旧记录|核对|存储/);
+  });
+
+  it("keeps the previous expression contract available for rollback", () => {
+    const current = resolveTrustActionExpressionContract({
+      locale: "en-US",
+      version: TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
+    });
+    const previous = resolveTrustActionExpressionContract({
+      locale: "en-US",
+      version: PREVIOUS_TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
+    });
+
+    expect(current).toContain("trust-action-expression-contract:v2");
+    expect(previous).toContain("trust-action-expression-contract:v1");
+    expect(previous.toLowerCase()).toContain("in progress");
+    expect(previous).not.toBe(current);
   });
 
   it("fails closed when the expression contract version cannot be resolved", () => {

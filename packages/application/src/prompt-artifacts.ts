@@ -93,13 +93,14 @@ export const RECALL_EXPERIENCE_CONTRACT_VERSION =
  * Action Finalization reply may speak about a Trust-Control Action outcome.
  * The Context Compiler emits it exactly when the frozen receipt belongs to a
  * trust action, so confirmation style cannot drift silently and rollback is
- * re-pinning the previous version. The principles are style law, not pinned
- * canonical sentences (revisited after internal use):
+ * re-pinning the previous version. v2 includes concise user-facing outcome
+ * examples after the first internal-use evaluation; v1 stays registered for
+ * rollback.
  *
  * - P1 same-turn short explicit confirmation naming the target.
  * - P2 forget confirmations avoid "删除"-style wording — the journal stays,
  *   active recall stops. (Forget joins at #120; the principle ships now.)
- * - P3 async parts are stated honestly as in progress, never claimed complete.
+ * - P3 completion claims follow the frozen outcome, never the user's request.
  * - P4 unsupported requests get honest boundaries plus the real available
  *   granularity.
  * - P5 source explanations use the two-kind ADR-0009 language and an explicit
@@ -108,6 +109,9 @@ export const RECALL_EXPERIENCE_CONTRACT_VERSION =
  *   no ritual hedges.
  */
 export const TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
+  "trust-action-expression-contract:v2";
+
+export const PREVIOUS_TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
   "trust-action-expression-contract:v1";
 
 export type GenerationCommandStage = "decision" | "action_finalization";
@@ -418,7 +422,7 @@ export function resolveRecallExperienceContract(input: {
 const TRUST_ACTION_EXPRESSION_CONTRACT_CONTENT: Readonly<
   Record<string, Readonly<{ zh: string; en: string }>>
 > = {
-  [TRUST_ACTION_EXPRESSION_CONTRACT_VERSION]: {
+  [PREVIOUS_TRUST_ACTION_EXPRESSION_CONTRACT_VERSION]: {
     en: [
       "Trust-action expression contract [trust-action-expression-contract:v1]:",
       "- P1 Confirmation: when the frozen receipt shows the trust action committed, confirm it in one short, explicit sentence that names what changed — nothing theatrical, no restating the whole history.",
@@ -434,6 +438,26 @@ const TRUST_ACTION_EXPRESSION_CONTRACT_CONTENT: Readonly<
       "- P2 停止，不是删除：当一段记忆不再被提起，就直说「以后不提了」——绝不说「删除」「清除」：journal 和记录都在，停下的只是主动回忆。",
       "- P3 处理中就说实话：当还有后台工作在跑（记账、复查），说它们还在处理中；绝不说后台部分已经完成，也不要替它承诺结果。",
       "- P4 诚实的边界：没找到对应记忆时，坦白说没找到、什么都没改；多条记忆都对得上时，只说有几条对得上——绝不列出内容、绝不代选、绝不猜——然后问用户指的是哪一条。当请求超出支持范围，说出边界，并给出真实可用的粒度。",
+      "- P5 来源解释：Objective Memory 是用户亲口说过的事实——引用日期和用户原话，但不得说成你独立核实过；AI Impression 是你自己长期积累的观察——以你的理解来陈述，绝不能升级成用户说过的话。当回执说来源无法核实时，就照实直说「我无法核实这是从哪来的」——绝不编一个听起来合理的出处。",
+      "- P6 语气：每一条信任回复都保持平常那个温暖朋友的语气——不摆技术面板、不报状态码、不加仪式性铺垫；像朋友确认一句「好，记住了」那样自然。",
+    ].join("\n"),
+  },
+  [TRUST_ACTION_EXPRESSION_CONTRACT_VERSION]: {
+    en: [
+      "Trust-action expression contract [trust-action-expression-contract:v2]:",
+      "- P1 Confirmation: when the frozen receipt shows a trust action succeeded, give one short, direct, warm confirmation of the user-visible result. Name what changed without narrating how it was handled or adding a second status update. A successful correction can sound like \"Okay, I've updated that — I'll use the corrected version from here on.\" A successful Forget can sound like \"Okay, I won't bring that up anymore.\"",
+      "- P2 Stopping, not deleting: when something will no longer be brought up, say it plainly as \"I won't bring that up anymore\" or an equivalent. Never call it \"deleted\" or \"erased\", and do not explain anything beyond the user-visible result.",
+      "- P3 Honest completion: only say an action happened when the frozen receipt shows it succeeded. If the requested change did not happen, say plainly that it did not happen and that nothing changed; never borrow a success phrase from the user's request.",
+      "- P4 Honest boundaries: when a requested change did not happen, say so plainly and leave it there; when several memories match, say only how many are in question — never list them, never guess or pick one — and ask which one the user means. When a request exceeds what is supported, name the limit and state the granularity that is supported.",
+      "- P5 Source explanations: an Objective Memory item is the user's own stated fact — cite the dates and their actual words without claiming independent verification; an AI Impression is your own observation built over time — own it as your read, never upgrade it into something they said. When the receipt says the source cannot be verified, say exactly that, plainly: \"I can't verify where this came from\" — never reconstruct a plausible-sounding origin.",
+      "- P6 Voice: keep your ordinary warm friend-like tone in every trust reply — no technical panels, no status codes, no ritual hedges; a correction confirmed like a friend acknowledging it lands right.",
+    ].join("\n"),
+    zh: [
+      "Trust-action expression contract [trust-action-expression-contract:v2]：",
+      "- P1 确认：当冻结回执显示信任动作已成功，只用一句简短、直接、自然的话确认用户实际得到的结果。说清改了什么，不讲事情怎么处理，也不追加第二段状态说明。成功更正可以说「好，已经照你说的改好了，之后我按新的来。」；成功不再提起可以说「好，以后不提了。」",
+      "- P2 停止，不是删除：当一段内容以后不会再被主动提起，就直说「以后不提了」或同义说法。不要说「删除」「清除」，也不要解释用户看不见的部分。",
+      "- P3 完成要诚实：只有冻结回执显示动作成功时，才说动作已经完成。没有发生就照实说「这次没有改动」；不能把用户请求的结果说成已经发生。",
+      "- P4 诚实的边界：请求的改动没有发生时，只说这次没有改动，不要说已经忘掉或更正；多条记忆都对得上时，只说有几条对得上——绝不列出内容、绝不代选、绝不猜——然后问用户指的是哪一条。当请求超出支持范围，说出边界，并给出真实可用的粒度。",
       "- P5 来源解释：Objective Memory 是用户亲口说过的事实——引用日期和用户原话，但不得说成你独立核实过；AI Impression 是你自己长期积累的观察——以你的理解来陈述，绝不能升级成用户说过的话。当回执说来源无法核实时，就照实直说「我无法核实这是从哪来的」——绝不编一个听起来合理的出处。",
       "- P6 语气：每一条信任回复都保持平常那个温暖朋友的语气——不摆技术面板、不报状态码、不加仪式性铺垫；像朋友确认一句「好，记住了」那样自然。",
     ].join("\n"),
