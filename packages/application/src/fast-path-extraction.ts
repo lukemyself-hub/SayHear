@@ -149,6 +149,26 @@ export type MemoryExtractTemporalProposal = Readonly<{
   validToPrecision: "exact" | "month" | "year" | "approximate" | "unknown";
 }>;
 
+const MEMORY_EXTRACT_BOUNDARY_PRECISIONS = new Set<
+  MemoryExtractTemporalProposal["validFromPrecision"]
+>(["exact", "month", "year", "approximate", "unknown"]);
+
+/**
+ * Provider output is untrusted at the persistence boundary. Keep an invalid
+ * temporal precision attached to its candidate, but coerce it to the only
+ * value that preserves the memory-candidate CHECK constraint.
+ */
+export function normalizeMemoryExtractBoundaryPrecision(
+  value: unknown,
+): MemoryExtractTemporalProposal["validFromPrecision"] {
+  return typeof value === "string" &&
+    MEMORY_EXTRACT_BOUNDARY_PRECISIONS.has(
+      value as MemoryExtractTemporalProposal["validFromPrecision"],
+    )
+    ? (value as MemoryExtractTemporalProposal["validFromPrecision"])
+    : "unknown";
+}
+
 /**
  * One Relationship Qualifier assertion inside a candidate proposal (#115,
  * ADR-0033). `roleSide` is candidate-relative — deterministic admission
@@ -192,6 +212,26 @@ export type MemoryExtractRevisionResult = Readonly<{
   candidates: readonly MemoryExtractCandidateProposal[];
   clarifications: readonly MemoryExtractClarificationProposal[];
 }>;
+
+function normalizeMemoryExtractRevisionResult(
+  result: MemoryExtractRevisionResult,
+): MemoryExtractRevisionResult {
+  return {
+    ...result,
+    candidates: result.candidates.map((candidate) => ({
+      ...candidate,
+      temporal: {
+        ...candidate.temporal,
+        validFromPrecision: normalizeMemoryExtractBoundaryPrecision(
+          candidate.temporal.validFromPrecision,
+        ),
+        validToPrecision: normalizeMemoryExtractBoundaryPrecision(
+          candidate.temporal.validToPrecision,
+        ),
+      },
+    })),
+  };
+}
 
 /** The configuration a Provider call dispatches under (champion or fallback). */
 export type MemoryRoleInvocationConfiguration = Readonly<{
@@ -1082,7 +1122,10 @@ export async function runFastPathExtraction(input: {
         ),
       dependencies.memoryExtractConfiguration,
     );
-    extractResults = attempted.result;
+    // Provider output is normalized again at the application boundary before
+    // validation and candidate writes. This protects scripted/custom ports as
+    // well as the AI registry from values that violate the database enum CHECK.
+    extractResults = attempted.result.map(normalizeMemoryExtractRevisionResult);
     roleFallbackUsed = attempted.roleFallbackUsed;
   } catch (error) {
     await recordFailure(dependencies, command, lineage, error);

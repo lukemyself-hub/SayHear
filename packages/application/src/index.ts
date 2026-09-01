@@ -387,6 +387,7 @@ export {
   callWithRoleFallback,
   evaluatePriorClarification,
   itemDedupeKey,
+  normalizeMemoryExtractBoundaryPrecision,
   planClarificationCommit,
   planGateCommit,
   runFastPathExtraction,
