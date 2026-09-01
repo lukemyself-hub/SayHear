@@ -8,6 +8,11 @@ Status: Working evidence ledger — 2026-08-29，基于 `feature/126-memory-pair
 验证基线：`pnpm test` 全绿（1021 tests，双 DB env）；`pnpm typecheck` 绿；
 `verify-pack`（v3）绿；#124 dataset verify-pack 绿（本次复验）。
 
+> 证据边界：本台账及 `run-twins-on/` 下的运行产物记录的是
+> `scenario-pack:v3.3` 在 `ce9b0bd` 的历史 provider 运行。Issue #148 将当前 fixture
+> 更新为 v3.4，但只做 required token 的 FP 裁定落地，没有重新运行 provider；因此
+> v3.3 的 findings、pins 和 transcript 不代表 v3.4 的运行结果。
+
 **会话重要发现**：#126 证据运行是两速管线第一次真实 provider 跑通，连环暴露并修复
 了 5 个生产缺陷（memory.extract 数组契约 / 空字段省略 TypeError / 谓词表未传递 /
 consolidation proposal 缺省崩溃 / unresolved-entity fence 误杀 + dedupe 丢命中词）。
