@@ -721,6 +721,153 @@ describe("Context Compiler", () => {
   });
 });
 
+describe("Context Compiler — trust-action finalization wording (#146)", () => {
+  const userId = asUserId("01984477-59a9-7d20-9d97-e588769566f0");
+  const inputRevisionId = asConversationEventRevisionId(
+    "01984477-59a9-7d20-9d97-e588769566f1",
+  );
+  const generationCommandId = asGenerationCommandId(
+    "01984477-59a9-7d20-9d97-e588769566f2",
+  );
+  const interactionTurnId = asInteractionTurnId(
+    "01984477-59a9-7d20-9d97-e588769566f3",
+  );
+  const policyVersions: ContextPolicyVersions = {
+    canonicalPersonaVersion: "canonical-persona:v1",
+    localePolicyVersion: "locale-pack-en:v1",
+    outputFormatVersion: "conversation-output:v1",
+    personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+    personaContractInvariantVersion: "persona-contract-invariant:v1",
+    productPolicyVersion: "product-policy:v1",
+    relationshipPolicyVersion: "relationship-boundary:v1",
+    safetyPolicyVersion: "minimum-high-risk-response:v1",
+    taskInstructionVersion: "task-instruction-action-finalization:v1",
+  };
+
+  function createCompilerWithReceipt(
+    receipt: NonNullable<ContextSourceSnapshot["actionFinalizationReceipt"]>,
+  ) {
+    let saved:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-09-01T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "trust-action-wording-secret",
+      rawEventTokenBudget: 4_000,
+      repository: {
+        async loadContextSource() {
+          return {
+            actionFinalizationReceipt: receipt,
+            dailySession: {
+              activityState: "active" as const,
+              closurePolicyVersion: "daily-session-inactivity:v1",
+              continuousExchangeNo: 1,
+              id: asDailySessionId(
+                "01984477-59a9-7d20-9d97-e588769566f4",
+              ),
+            },
+            dialogueRevision: 1,
+            events: [
+              {
+                actor: "user" as const,
+                locale: "en-US",
+                revisionId: inputRevisionId,
+                sequence: 1,
+                text: "Please handle this trust action.",
+              },
+            ],
+            generationStage: "action_finalization" as const,
+            inputRevisionId,
+            locale: "en-US",
+            policyVersions,
+            sourceRevision: 1,
+          };
+        },
+        async saveCompiledContext(input) {
+          saved = input;
+          return {
+            degradedReason: input.degradedReason,
+            dialogueRevision: input.dialogueRevision,
+            id: asCompiledContextId(
+              "01984477-59a9-7d20-9d97-e588769566f5",
+            ),
+            locale: input.locale,
+            referencedRevisionIds: input.referencedEvents.map(
+              (event) => event.revisionId,
+            ),
+            sourceRevision: input.sourceRevision,
+            statistics: {
+              rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+              selectedEventCount: input.referencedEvents.length,
+              totalTokens: input.totalTokens,
+            },
+          };
+        },
+      } satisfies ContextCompilerRepository,
+    });
+    return {
+      compiler,
+      saved: () => saved,
+    };
+  }
+
+  async function renderInstructions(
+    receipt: NonNullable<ContextSourceSnapshot["actionFinalizationReceipt"]>,
+  ): Promise<string> {
+    const { compiler, saved } = createCompilerWithReceipt(receipt);
+    await compiler.compile({
+      generationCommandId,
+      interactionTurnId,
+      userId,
+    });
+    const manifest = saved();
+    if (!manifest) throw new Error("The test manifest was not captured.");
+
+    return compiler.renderPermittedPayload({
+      ...manifest,
+      actionFinalizationReceipt: receipt,
+      generationStage: "action_finalization",
+    }).instructions;
+  }
+
+  it("renders the v2 user-facing rule for a committed correction", async () => {
+    const receipt = {
+      actionKind: "memory_correction",
+      admission: "accepted" as const,
+      disposition: "committed_in_transaction",
+      execution: "succeeded" as const,
+      sequence: 1,
+    };
+    const instructions = await renderInstructions(receipt);
+
+    expect(instructions).toContain(
+      "trust-action-expression-contract:v2",
+    );
+    expect(instructions).toContain("user-visible change");
+    expect(instructions).not.toContain("background re-checks");
+    expect(instructions).not.toContain("targeted Journal revalidation");
+  });
+
+  it("renders an honest no-change rule for a zero-hit Forget", async () => {
+    const receipt = {
+      actionKind: "memory_forget_request",
+      admission: "clarification_required" as const,
+      disposition: "target_not_found",
+      execution: "not_started" as const,
+      sequence: 1,
+    };
+    const instructions = await renderInstructions(receipt);
+
+    expect(instructions).toContain(
+      "the requested Forget did not happen",
+    );
+    expect(instructions).toContain("nothing changed");
+    expect(instructions).not.toContain("no matching memory was changed");
+    expect(instructions).not.toContain("could not find such a memory");
+  });
+});
+
 describe("Context Compiler identity-layer fail-closed resolution", () => {
   const inputRevisionId = asConversationEventRevisionId(
     "01984477-59a9-7d20-9d97-e588769566d1",

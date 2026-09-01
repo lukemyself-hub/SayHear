@@ -22,7 +22,7 @@ ADR-0091、ADR-0092、ADR-0096、ADR-0099、ADR-0101、ADR-0110 和 ADR-0118。
 | dataset | `memory-trust-actions:v1` |
 | catalog | `conversation-action-catalog:memory-trust-actions:v2` |
 | harness policy | `conversation-harness:v3` |
-| prompt / expression contract | `trust-action-expression-contract:v1` |
+| prompt / expression contract | `trust-action-expression-contract:v2` |
 | fixture cap | 80 |
 | committed fixtures | 76 |
 | reserved headroom | 4 |

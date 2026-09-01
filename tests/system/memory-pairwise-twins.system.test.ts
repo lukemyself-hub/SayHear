@@ -13,6 +13,7 @@ import {
   MEMORY_CONSOLIDATION_POLICY_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
+  TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
   type ConversationTextChampion,
 } from "@sayhear/application";
 import { buildMemoryRoleRegistry } from "../../eval/memory-pairwise-126/shared";
@@ -277,7 +278,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
         memoryConsolidationPolicyVersion: MEMORY_CONSOLIDATION_POLICY_VERSION,
         promptArtifacts: {
           groundingGuardAndOpenerPermission: "recall-experience-contract:v1",
-          trustActionExpression: "trust-action-expression-contract:v1",
+          trustActionExpression: TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
         },
         harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
         persona: {

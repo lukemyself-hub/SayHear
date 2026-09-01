@@ -230,7 +230,7 @@ export function sectionVersionLabel(
       );
     case "trust_action_expression":
       // #119: the P1–P6 trust-action expression contract version sits in the
-      // rendered content ("[trust-action-expression-contract:v1]").
+      // rendered content ("[trust-action-expression-contract:v2]").
       return (
         section.reference.match(
           /\[(trust-action-expression-contract:[^\]]+)\]/,
