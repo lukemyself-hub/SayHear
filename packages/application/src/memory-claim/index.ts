@@ -1,5 +1,6 @@
 export {
   addDays,
+  admittedClaimIdentityFor,
   canonicalValueSet,
   claimCanonicalKey,
   countEvidenceIndependence,
@@ -8,6 +9,7 @@ export {
   impressionEvidenceFloor,
   candidateSemanticTarget,
   mergeRelationshipQualifiers,
+  parseClaimCanonicalKey,
   planClaimAdmission,
   planImpressionDormancy,
   planRejectionDisposition,

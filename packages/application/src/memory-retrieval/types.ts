@@ -30,7 +30,7 @@ export const MEMORY_RETRIEVAL_POLICY_VERSION = "memory-retrieval:v1";
 
 /** Versioned query-construction rules (sources, term policy, stop list). */
 export const RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION =
-  "memory-retrieval-query:v2";
+  "memory-retrieval-query:v3";
 
 /** Versioned claim-retrieval projection rules (text + lexical term policy). */
 export const CLAIM_RETRIEVAL_PROJECTION_POLICY_VERSION =
@@ -159,9 +159,7 @@ export type RetrievalQuerySourceRef =
       kind: "current_topic";
       dialogueRevision: number;
     }>
-  | Readonly<{ kind: "registry_lexical_alias"; registryVersion: number }>
-  /** v2: determiner-modified broad compounds bridged to predicate candidates. */
-  | Readonly<{ kind: "broad_context_bridge" }>;
+  | Readonly<{ kind: "registry_lexical_alias"; registryVersion: number }>;
 
 export type ResolvedQueryEntity = Readonly<{
   entityId: string;

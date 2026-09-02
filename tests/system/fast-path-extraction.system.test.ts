@@ -554,6 +554,75 @@ describe("Fast-path extraction workflow system seam", () => {
     expect(await countRows("memory_candidates")).toBe(2);
   });
 
+  it("routes a predicate-less proposed concept to predicate review without creating a Claim (#147)", async () => {
+    extractScript = (revisions) =>
+      revisions.map((revision) => {
+        const span = `0:${revision.text.length}`;
+        return {
+          revisionId: revision.revisionId,
+          evidence: [{ locatorKey: span, role: "factual_support" as const }],
+          mentions: [],
+          candidates: [
+            {
+              basis: "directly_stated" as const,
+              candidateKind: "objective" as const,
+              predicateId: null,
+              proposedConcept: "neighbor relationship",
+              typedValue: "",
+              scopeKey: "",
+              subjectMentionIndex: null,
+              objectMentionIndex: null,
+              evidenceLocatorKeys: [span],
+              qualifiers: [],
+              temporal: {
+                temporalStatus: "current" as const,
+                validFrom: null,
+                validFromPrecision: "unknown" as const,
+                validTo: null,
+                validToPrecision: "unknown" as const,
+              },
+              itemClass: "open",
+              itemSummary: "neighbor relationship",
+            },
+          ],
+          clarifications: [],
+        };
+      });
+
+    await submitTurn("My neighbor is kind.", "en-US");
+    const outcome = await dispatch();
+    expect(outcome).toMatchObject({ dispatched: 1, failed: 0 });
+
+    const candidates = await database.pool.query<{
+      status: string;
+      predicate_resolution_status: string;
+      predicate_id: string | null;
+      proposed_concept: string | null;
+      proposed_object_value: string;
+      review_due_at: Date;
+    }>(
+      `SELECT status, predicate_resolution_status, predicate_id,
+              proposed_concept, proposed_object_value::text,
+              review_due_at
+       FROM memory_candidates WHERE user_id = $1`,
+      [OWNER],
+    );
+    expect(candidates.rows).toHaveLength(1);
+    const candidate = candidates.rows[0]!;
+    expect(candidate).toMatchObject({
+      status: "needs_predicate_review",
+      predicate_resolution_status: "unmapped",
+      predicate_id: null,
+      proposed_concept: "neighbor relationship",
+    });
+    expect(JSON.parse(candidate.proposed_object_value)).toBe("");
+    expect(candidate.review_due_at.toISOString()).toBe(
+      new Date(BASE_TIME + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    );
+    expect(await countRows("memory_claims")).toBe(0);
+    expect(await countRows("fast_path_extraction_runs")).toBe(1);
+  });
+
   it("preserves candidates when the provider returns invalid temporal precision enums", async () => {
     // Deliberately violate the provider port's static enum to exercise the
     // runtime normalization boundary that protects the PostgreSQL CHECK.

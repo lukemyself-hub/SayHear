@@ -37,6 +37,7 @@ import {
   PORTRAIT_SELECTION_POLICY_VERSION,
   RECALL_EXPERIENCE_CONTRACT_VERSION,
   RECALL_FRAMING_POLICY_VERSION,
+  RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION,
   SAFETY_RESOURCE_WHITELIST_VERSION,
   TRUST_ACTION_EXPRESSION_CONTRACT_VERSION,
   loadPredicateRegistrySnapshot,
@@ -65,11 +66,10 @@ export function expectedPinList(): Record<string, unknown> {
       tAuto: ENTITY_RESOLVE_T_AUTO,
     },
     evalChannel: {
-      // v3.2: the #126 layer-2 diagnosis (2026-08-31) moved the impression
-      // en/mix day-3 recall probes onto published stated_style surfaces so
-      // the deterministic query has a matchable signal; checker semantics
-      // stay tiered-checks:v3.
-      scenarioPack: "scenario-pack:v3.3",
+      // v3.4 (#148): objective background company-name expectations moved to
+      // the advisory semantic tier; continuity and temporal token gates stay
+      // hard gates. Checker semantics stay tiered-checks:v3.
+      scenarioPack: "scenario-pack:v3.4",
       tieredChecks: TIERED_CHECKS_VERSION,
     },
     fastPathExtractionPolicyVersion: FAST_PATH_EXTRACTION_POLICY_VERSION,
@@ -83,6 +83,7 @@ export function expectedPinList(): Record<string, unknown> {
       memoryBudgets: MEMORY_BUDGETS_POLICY_VERSION,
       policyVersion: MEMORY_RETRIEVAL_POLICY_VERSION,
       portraitSelection: PORTRAIT_SELECTION_POLICY_VERSION,
+      queryConstruction: RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION,
     },
     persona: {
       anchors: PERSONA_BEHAVIOR_ANCHORS_VERSION,

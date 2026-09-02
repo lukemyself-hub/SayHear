@@ -52,6 +52,20 @@ const counterpartDenoter = (
 
 const V = 1;
 
+/**
+ * Registry-owned retrieval aliases for the #126 work-context probes. These
+ * are published lexical surfaces, not inferred synonyms; the same surfaces
+ * are intentionally owned by both work predicates so retrieval preserves the
+ * former bridge candidate set.
+ */
+const WORK_CONTEXT_RETRIEVAL_ALIASES_ZH = Object.freeze([
+  peer("zh", "新工作"),
+  peer("zh", "换工作"),
+  peer("zh", "工作的事"),
+  peer("zh", "新 work"),
+]);
+const WORK_CONTEXT_RETRIEVAL_ALIASES_EN = Object.freeze([peer("en", "new job")]);
+
 export function buildLocalizationsV1(): readonly PredicateLocalization[] {
   const locs: Loc[] = [
     // ── sh.relationship.partner_of ────────────────────────────────────────
@@ -572,6 +586,7 @@ export function buildLocalizationsV1(): readonly PredicateLocalization[] {
         peer("zh", "东家"),
         peer("zh", "离职", "former"),
         peer("zh", "跳槽", "former"),
+        ...WORK_CONTEXT_RETRIEVAL_ALIASES_ZH,
       ],
     },
     {
@@ -594,6 +609,7 @@ export function buildLocalizationsV1(): readonly PredicateLocalization[] {
         peer("en", "joined"),
         peer("en", "employer"),
         peer("en", "left", "former"),
+        ...WORK_CONTEXT_RETRIEVAL_ALIASES_EN,
       ],
     },
 
@@ -617,6 +633,7 @@ export function buildLocalizationsV1(): readonly PredicateLocalization[] {
         peer("zh", "头衔"),
         peer("zh", "岗位"),
         peer("zh", "title"),
+        ...WORK_CONTEXT_RETRIEVAL_ALIASES_ZH,
       ],
     },
     {
@@ -637,6 +654,7 @@ export function buildLocalizationsV1(): readonly PredicateLocalization[] {
         peer("en", "title"),
         peer("en", "work as"),
         peer("en", "position"),
+        ...WORK_CONTEXT_RETRIEVAL_ALIASES_EN,
       ],
     },
 

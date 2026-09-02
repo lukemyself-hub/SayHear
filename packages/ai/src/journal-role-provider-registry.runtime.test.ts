@@ -255,6 +255,81 @@ describe("Journal runtime role provider messages", () => {
     }
   });
 
+  it("keeps unmapped proposals with a non-empty concept when typed value is empty (#147)", async () => {
+    const sourceText = "My neighbor is kind.";
+    mockOutput.current = JSON.stringify([
+      {
+        revisionId: "rev-1",
+        evidence: [
+          { locatorKey: `0:${sourceText.length}`, role: "factual_support" },
+        ],
+        mentions: [],
+        candidates: [
+          {
+            basis: "directly_stated",
+            candidateKind: "objective",
+            predicateId: null,
+            proposedConcept: "neighbor relationship",
+            typedValue: "",
+            scopeKey: "",
+            subjectMentionIndex: null,
+            objectMentionIndex: null,
+            evidenceLocatorKeys: [`0:${sourceText.length}`],
+            qualifiers: [],
+            temporal: {
+              temporalStatus: "current",
+              validFrom: null,
+              validFromPrecision: "unknown",
+              validTo: null,
+              validToPrecision: "unknown",
+            },
+            itemClass: "open",
+            itemSummary: "neighbor relationship",
+          },
+          {
+            predicateId: null,
+            proposedConcept: "  ",
+            typedValue: "",
+          },
+        ],
+        clarifications: [],
+      },
+    ]);
+    try {
+      const registry = createRuntimeJournalRoleProviderRegistry({
+        adapter: { type: "responses-api", apiKey: "test", baseUrl: "https://example.test", timeoutMs: 1000 },
+        roles,
+      });
+      const results = await registry.memoryExtractor.extract(
+        {
+          predicateIds: [],
+          relationshipPredicateIds: [],
+          revisions: [
+            {
+              revisionId: "rev-1",
+              sequenceNo: 1,
+              locale: "en-US",
+              text: sourceText,
+            },
+          ],
+        },
+        {
+          configVersion: "test",
+          modelVersion: "test",
+          promptVersion: "test",
+        },
+      );
+      expect(results[0]?.candidates).toHaveLength(1);
+      expect(results[0]?.candidates[0]).toMatchObject({
+        predicateId: null,
+        proposedConcept: "neighbor relationship",
+        typedValue: "",
+      });
+    } finally {
+      mockOutput.current = DEFAULT_DELTA;
+    }
+  });
+
   it("coerces invalid temporal precision values to unknown without dropping candidates", async () => {
     mockOutput.current = JSON.stringify([
       {

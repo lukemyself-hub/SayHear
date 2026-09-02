@@ -40,6 +40,19 @@ function sources(
 
 const registryMaterial = registry;
 
+const WORK_CONTEXT_ALIASES = [
+  "新工作",
+  "换工作",
+  "工作的事",
+  "new job",
+  "新 work",
+] as const;
+
+const WORK_PREDICATE_IDS = [
+  "sh.work.employer",
+  "sh.work.role_title",
+].sort();
+
 describe("buildRetrievalQuery", () => {
   it("resolves entities through uniquely matching current labels", () => {
     const query = buildRetrievalQuery({
@@ -149,6 +162,58 @@ describe("buildRetrievalQuery", () => {
     });
   });
 
+  it.each(WORK_CONTEXT_ALIASES)(
+    "uses the published work-context alias %s for both work predicates",
+    (alias) => {
+      const query = buildRetrievalQuery({
+        sources: sources({
+          currentInput: { revisionId: "rev-current", text: alias },
+        }),
+        registry: registryMaterial,
+      });
+
+      expect(
+        query.predicateCandidates
+          .filter(
+            (candidate) =>
+              candidate.surface === alias.toLowerCase() &&
+              WORK_PREDICATE_IDS.includes(candidate.predicateId),
+          )
+          .map((candidate) => candidate.predicateId)
+          .sort(),
+      ).toEqual(WORK_PREDICATE_IDS);
+      expect(query.lexicalTerms).toContain(alias.toLowerCase());
+      expect(query.sourceRefs).toContainEqual({
+        kind: "registry_lexical_alias",
+        registryVersion: registrySnapshot.registryVersion,
+      });
+      expect(query.sourceRefs).not.toContainEqual({
+        kind: "broad_context_bridge",
+      });
+    },
+  );
+
+  it.each(["工作", "job", "work"])(
+    "does not publish a broad work term as a retrieval alias (%s)",
+    (term) => {
+      const query = buildRetrievalQuery({
+        sources: sources({
+          currentInput: { revisionId: "rev-current", text: term },
+        }),
+        registry: registryMaterial,
+      });
+
+      expect(query.predicateCandidates).not.toContainEqual({
+        predicateId: "sh.work.employer",
+        surface: term,
+      });
+      expect(query.predicateCandidates).not.toContainEqual({
+        predicateId: "sh.work.role_title",
+        surface: term,
+      });
+    },
+  );
+
   it("computes canonical keys for self-subject predicates with resolved object entities", () => {
     const colleague = queryWithText("我同事小王帮我搬家");
     expect(colleague.canonicalKeys.length).toBeGreaterThan(0);
@@ -220,6 +285,9 @@ describe("buildRetrievalQuery", () => {
       sources: sources(),
       registry: registryMaterial,
     });
+    expect(RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION).toBe(
+      "memory-retrieval-query:v3",
+    );
     expect(query.policyVersion).toBe(RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION);
   });
 });

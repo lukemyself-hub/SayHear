@@ -35,6 +35,12 @@
  * leaving the employer claim structurally unreachable by the t4 新工作 bridge
  * vocabulary. The mix variant (「入职 Brightline」 with no future modifier
  * between surface and company) maps reliably and is unchanged.
+ *
+ * v3.4 (#148, AC35 FP ruling 2026-09-01): objective recall t4 expectations no
+ * longer require literal background company-name tokens. The semantic tier
+ * still requires a clear reference to the recalled job or offer; the company
+ * name is optional wording. Continuity and temporal required tokens remain
+ * hard gates.
  */
 import { readFile, writeFile } from "node:fs/promises";
 
@@ -314,8 +320,7 @@ const newScenarios: NewScenario[] = [
         {
           atTurn: 4,
           semantic:
-            "The response may naturally use the injected Objective Memory, with source attribution (\"you mentioned...\") allowed but never implying independent verification (ADR-0009).",
-          requiredTokens: ["Brightline"],
+            "The response must clearly point to the injected job or offer, with source attribution (\"you mentioned...\") allowed; naming Brightline is optional, and the response must never imply independent verification (ADR-0009).",
         },
       ],
       forbiddenMentions: [
@@ -372,8 +377,7 @@ const newScenarios: NewScenario[] = [
         {
           atTurn: 4,
           semantic:
-            "回应可自然使用注入的 Objective Memory，可以用「你之前说过…」来源归属，但不得表述为独立核验过的事实（ADR-0009）。",
-          requiredTokens: ["启明"],
+            "回应须清楚指向注入的工作或 offer，可以用「你之前说过…」来源归属；点名启明不是必需措辞，但不得表述为独立核验过的事实（ADR-0009）。",
         },
       ],
       forbiddenMentions: [
@@ -426,8 +430,7 @@ const newScenarios: NewScenario[] = [
         {
           atTurn: 4,
           semantic:
-            "回应可自然召回并来源归属（\"你之前说过…\" / \"you mentioned…\"），不得表述为独立核验过的事实；code-switch 跟随用户的夹杂方式。",
-          requiredTokens: ["Brightline"],
+            "回应须清楚指向注入的工作或 offer，并可来源归属（\"你之前说过…\" / \"you mentioned…\"）；点名 Brightline 不是必需措辞，不得表述为独立核验过的事实；code-switch 跟随用户的夹杂方式。",
         },
       ],
       forbiddenMentions: [
@@ -914,9 +917,9 @@ async function main(): Promise<void> {
   ];
 
   const pack = {
-    version: "scenario-pack:v3.3",
+    version: "scenario-pack:v3.4",
     generatedFrom:
-      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接); v3.3 (#126, postmortem 2026-08-31) rewords the objective-zh day-1 joining statement into the registry employer positive-example shape (perfective 入职了 + company) — the v3.2 future-tense phrasing sat on the sh.plan.life_change / sh.work.employer mapping boundary and the full run rolled the plan side twice (zero injection, unreachable by the 新工作 bridge vocabulary)",
+      "scenario-pack:v2.1 (#61 pack + #63 additions + #77 fixtures) with #118 v3 memory fixtures and 9 new multi-day recall scenarios; v3.1 (#126, Luke's 2026-08-30 fixture ruling) rewrites the continuity day-1 theme to a registry-carriable named-project milestone and adds the day-1 second name mention to the temporal en/zh fixtures; v3.2 (#126, layer-2 diagnosis 2026-08-31) moves the impression en/mix day-3 recall probes onto published stated_style surfaces (be direct / 直接); v3.3 (#126, postmortem 2026-08-31) rewords the objective-zh day-1 joining statement into the registry employer positive-example shape (perfective 入职了 + company) — the v3.2 future-tense phrasing sat on the sh.plan.life_change / sh.work.employer mapping boundary and the full run rolled the plan side twice (zero injection, unreachable by the 新工作 bridge vocabulary); v3.4 (#148, AC35 FP ruling 2026-09-01) moves objective background company-name expectations to the advisory semantic tier while retaining continuity and temporal hard tokens",
     syntheticNotice:
       "Every persona, name, event, and utterance in this file is fully fictional synthetic material authored for evaluation (issues #61, #63, #77, #118, #126). No real private conversation is used or reproduced.",
     defaults: source.defaults,

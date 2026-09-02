@@ -10,6 +10,11 @@ production shadowing。规则权威在
 [`docs/evaluation/01-behavior-contract-and-rubric.md`](../../docs/evaluation/01-behavior-contract-and-rubric.md)
 与 ADR-0110 / ADR-0114。
 
+> 证据版本边界：`run-twins-on/` 下的 findings、pins 和 transcript 产物是
+> `scenario-pack:v3.3` 在 `ce9b0bd` 的历史运行快照。#148 只把 objective 背景公司名
+> 的 required token 降为 advisory 语义期望，当前 fixture 已升为 v3.4；本票没有重新
+> 调用 provider，因此这些旧产物不能当作 v3.4 的运行证据。
+
 ## TL;DR
 
 - `capture-twins.ts --arm on|off`：把冻结的场景包（默认
@@ -22,8 +27,9 @@ production shadowing。规则权威在
 - `verify-cutover-pins.ts`：SPEC pin list 机械校验——manifest 记录的每个 pin
   必须与生产代码解析出的常量逐项相等（manifest 不能漂移），且每轮
   CompiledContext 的 retrieval manifest 记录的选择策略版本
-  （portrait-selection / memory-budgets / recall-framing）一致；eval 侧
-  scenario-pack:v3 + tiered-checks:v3 一并核对。
+  （portrait-selection / memory-budgets / recall-framing）一致；query-construction
+  另由 cutover pin 与 retrieval run manifest 版本互证；eval 侧 scenario-pack:v3
+  + tiered-checks:v3 一并核对。
 - `build-memory-pairs.ts`：ADR-0114 memory 扩展的 15 场景分层抽样
   （8 en / 5 zh / 2 code-switch，固定种子），强制覆盖 Objective Memory、
   Portrait / AI Impression、跨日连续性、post-Correction 与 post-Forget

@@ -91,7 +91,241 @@ export function claimCanonicalKey(input: {
     input.relationshipDirection === "symmetric" && input.objectEntityId
       ? [input.subjectEntityId, input.objectEntityId].sort().join("+")
       : `${input.subjectEntityId}>${input.objectEntityId ?? ""}`;
-  return `v1|${input.predicateId}|${pair}|${input.scopeKey}`;
+  return `${CLAIM_CANONICAL_KEY_VERSION}|${input.predicateId}|${pair}|${input.scopeKey}`;
+}
+
+const CLAIM_CANONICAL_KEY_VERSION = "v1";
+
+/** Structured components of a well-formed v1 canonical key. */
+export type ParsedClaimCanonicalKey = Readonly<{
+  version: typeof CLAIM_CANONICAL_KEY_VERSION;
+  predicateId: string;
+  /** Symmetric keys carry the producer's sorted Entity-pair order. */
+  relationshipDirection: "directed" | "symmetric";
+  subjectEntityId: string;
+  /** Null for non-relationship claims (the empty `>` tail of the pair). */
+  objectEntityId: string | null;
+  scopeKey: string;
+}>;
+
+/**
+ * Inverse of `claimCanonicalKey` — the single reverse-parse of the Claim
+ * canonical-key syntax (#152). A string parses only when re-synthesizing its
+ * components reproduces it exactly, so any key the producer cannot emit —
+ * wrong segment count, unknown version prefix, unsorted symmetric pair —
+ * fails closed as null instead of being silently misread after a key-version
+ * upgrade.
+ */
+export function parseClaimCanonicalKey(
+  canonicalKey: string,
+): ParsedClaimCanonicalKey | null {
+  const parts = canonicalKey.split("|");
+  if (parts.length !== 4) return null;
+  const version = parts[0]!;
+  const predicateId = parts[1]!;
+  const pair = parts[2]!;
+  const scopeKey = parts[3]!;
+  if (version !== CLAIM_CANONICAL_KEY_VERSION) return null;
+  let parsed: ParsedClaimCanonicalKey;
+  if (pair.includes("+")) {
+    const entities = pair.split("+");
+    if (entities.length !== 2) return null;
+    parsed = {
+      version,
+      predicateId,
+      relationshipDirection: "symmetric",
+      subjectEntityId: entities[0]!,
+      objectEntityId: entities[1]!,
+      scopeKey,
+    };
+  } else {
+    const separator = pair.indexOf(">");
+    if (separator < 0) return null;
+    const objectPart = pair.slice(separator + 1);
+    parsed = {
+      version,
+      predicateId,
+      relationshipDirection: "directed",
+      subjectEntityId: pair.slice(0, separator),
+      objectEntityId: objectPart === "" ? null : objectPart,
+      scopeKey,
+    };
+  }
+  return (
+    claimCanonicalKey({
+      predicateId: parsed.predicateId,
+      subjectEntityId: parsed.subjectEntityId,
+      objectEntityId: parsed.objectEntityId,
+      scopeKey: parsed.scopeKey,
+      relationshipDirection: parsed.relationshipDirection,
+    }) === canonicalKey
+      ? parsed
+      : null
+  );
+}
+
+/**
+ * Shared candidate-record projection into the proposal shape the admission
+ * planner consumes (SPEC #107). Used by the Memory Claim service and the
+ * consolidation run executor.
+ */
+export function candidateRecordToLineage(
+  candidate: MemoryCandidateRecord,
+): MemoryCandidateProposal["lineage"] {
+  return {
+    extractionPolicyVersion: candidate.extractionPolicyVersion,
+    generationCommandId: candidate.generationCommandId,
+    authoritativeModelAttemptId: candidate.authoritativeModelAttemptId,
+    modelVersion: candidate.modelVersion,
+    promptVersion: candidate.promptVersion,
+    sourceReflectionVersionId: candidate.sourceReflectionVersionId,
+  };
+}
+
+function candidateRecordToProposal(
+  candidate: MemoryCandidateRecord,
+  evidenceItemIds: readonly string[],
+): MemoryCandidateProposal {
+  return {
+    userId: candidate.userId,
+    candidateKind: candidate.candidateKind,
+    basis: candidate.basis,
+    resolution:
+      candidate.resolutionStatus === "mapped"
+        ? {
+            status: "mapped",
+            predicateId: candidate.predicateId!,
+            registryVersion: candidate.predicateRegistryVersion!,
+            typedValue: candidate.proposedObjectValue,
+            mappingConfidence: candidate.mappingConfidence,
+          }
+        : {
+            status: candidate.resolutionStatus,
+            proposedConcept: candidate.proposedConcept ?? "",
+          },
+    subjectEntityId: candidate.subjectEntityId,
+    subjectEntityMentionId: null,
+    objectEntityId: candidate.objectEntityId,
+    objectEntityMentionId: null,
+    scopeKey: candidate.proposedScopeKey,
+    temporal: candidate.temporal,
+    qualifiers: candidate.proposedQualifiers,
+    evidenceItemIds,
+    lineage: candidateRecordToLineage(candidate),
+  };
+}
+
+/**
+ * #151: the single scope-none admission rule — scope identity is
+ * registry-owned, never model-chosen. A scope-none entry's claim identity is
+ * predicate + entities + empty scope; a provider-proposed scope (observed:
+ * "new_job") would fragment logical claims across re-statements and break
+ * canonical-key recall (issue #126 evidence runs). Both the Memory Claim
+ * service and the consolidation run executor consume this derivation, so a
+ * new `scopeSchema.kind` can never miss a call site.
+ */
+export function admittedClaimIdentityFor(
+  candidate: MemoryCandidateRecord,
+  registryEntry: Pick<PredicateRegistryEntry, "scopeSchema" | "relationshipSemantics">,
+  evidenceItemIds: readonly string[],
+): Readonly<{ proposal: MemoryCandidateProposal; canonicalKey: string }> {
+  const admittedScopeKey =
+    registryEntry.scopeSchema.kind === "none" ? "" : candidate.proposedScopeKey;
+  return {
+    proposal: {
+      ...candidateRecordToProposal(candidate, evidenceItemIds),
+      scopeKey: admittedScopeKey,
+    },
+    canonicalKey: claimCanonicalKey({
+      predicateId: candidate.predicateId!,
+      subjectEntityId: candidate.subjectEntityId ?? "",
+      objectEntityId: candidate.objectEntityId,
+      scopeKey: admittedScopeKey,
+      relationshipDirection: registryEntry.relationshipSemantics?.direction ?? null,
+    }),
+  };
+}
+
+/**
+ * Shared candidate-record projection into the proposal shape the admission
+ * planner consumes (SPEC #107). Used by the Memory Claim service and the
+ * consolidation run executor.
+ */
+export function candidateRecordToLineage(
+  candidate: MemoryCandidateRecord,
+): MemoryCandidateProposal["lineage"] {
+  return {
+    extractionPolicyVersion: candidate.extractionPolicyVersion,
+    generationCommandId: candidate.generationCommandId,
+    authoritativeModelAttemptId: candidate.authoritativeModelAttemptId,
+    modelVersion: candidate.modelVersion,
+    promptVersion: candidate.promptVersion,
+    sourceReflectionVersionId: candidate.sourceReflectionVersionId,
+  };
+}
+
+function candidateRecordToProposal(
+  candidate: MemoryCandidateRecord,
+  evidenceItemIds: readonly string[],
+): MemoryCandidateProposal {
+  return {
+    userId: candidate.userId,
+    candidateKind: candidate.candidateKind,
+    basis: candidate.basis,
+    resolution:
+      candidate.resolutionStatus === "mapped"
+        ? {
+            status: "mapped",
+            predicateId: candidate.predicateId!,
+            registryVersion: candidate.predicateRegistryVersion!,
+            typedValue: candidate.proposedObjectValue,
+            mappingConfidence: candidate.mappingConfidence,
+          }
+        : {
+            status: candidate.resolutionStatus,
+            proposedConcept: candidate.proposedConcept ?? "",
+          },
+    subjectEntityId: candidate.subjectEntityId,
+    subjectEntityMentionId: null,
+    objectEntityId: candidate.objectEntityId,
+    objectEntityMentionId: null,
+    scopeKey: candidate.proposedScopeKey,
+    temporal: candidate.temporal,
+    qualifiers: candidate.proposedQualifiers,
+    evidenceItemIds,
+    lineage: candidateRecordToLineage(candidate),
+  };
+}
+
+/**
+ * #151: the single scope-none admission rule — scope identity is
+ * registry-owned, never model-chosen. A scope-none entry's claim identity is
+ * predicate + entities + empty scope; a provider-proposed scope (observed:
+ * "new_job") would fragment logical claims across re-statements and break
+ * canonical-key recall (issue #126 evidence runs). Both the Memory Claim
+ * service and the consolidation run executor consume this derivation, so a
+ * new `scopeSchema.kind` can never miss a call site.
+ */
+export function admittedClaimIdentityFor(
+  candidate: MemoryCandidateRecord,
+  registryEntry: Pick<PredicateRegistryEntry, "scopeSchema" | "relationshipSemantics">,
+  evidenceItemIds: readonly string[],
+): Readonly<{ proposal: MemoryCandidateProposal; canonicalKey: string }> {
+  const admittedScopeKey =
+    registryEntry.scopeSchema.kind === "none" ? "" : candidate.proposedScopeKey;
+  return {
+    proposal: {
+      ...candidateRecordToProposal(candidate, evidenceItemIds),
+      scopeKey: admittedScopeKey,
+    },
+    canonicalKey: claimCanonicalKey({
+      predicateId: candidate.predicateId!,
+      subjectEntityId: candidate.subjectEntityId ?? "",
+      objectEntityId: candidate.objectEntityId,
+      scopeKey: admittedScopeKey,
+      relationshipDirection: registryEntry.relationshipSemantics?.direction ?? null,
+    }),
+  };
 }
 
 /**
