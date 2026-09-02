@@ -10,8 +10,9 @@ import {
 } from "@sayhear/domain";
 
 import {
+  admittedClaimIdentityFor,
+  candidateRecordToLineage,
   candidateSemanticTarget,
-  claimCanonicalKey,
   dedupeFingerprint,
   planClaimAdmission,
   planImpressionDormancy,
@@ -605,23 +606,9 @@ export function createMemoryClaimService(dependencies: {
       }
       const evidenceItemIds = await repository.listCandidateEvidenceItemIds(userId, candidateId);
       const evidence = await requireEvidence(userId, evidenceItemIds);
-      // Scope identity is registry-owned, never model-chosen: a scope-none
-      // entry's claim identity is predicate + entities + empty scope. A
-      // provider-proposed scope (observed: "new_job") would fragment logical
-      // claims across re-statements and break canonical-key recall (issue
-      // #126 evidence runs).
-      const admittedScopeKey =
-        registryEntry.scopeSchema.kind === "none"
-          ? ""
-          : candidate.proposedScopeKey;
-      const canonicalKey = claimCanonicalKey({
-        predicateId: candidate.predicateId,
-        subjectEntityId: candidate.subjectEntityId ?? "",
-        objectEntityId: candidate.objectEntityId,
-        scopeKey: admittedScopeKey,
-        relationshipDirection: registryEntry.relationshipSemantics?.direction ?? null,
-      });
-      const existingClaim = await repository.findClaimByCanonicalKey(userId, canonicalKey);
+      // Scope identity is registry-owned; see admittedClaimIdentityFor (#151).
+      const admitted = admittedClaimIdentityFor(candidate, registryEntry, evidenceItemIds);
+      const existingClaim = await repository.findClaimByCanonicalKey(userId, admitted.canonicalKey);
       const currentVersion = existingClaim?.currentVersionId
         ? await repository.loadClaimVersion(userId, existingClaim.currentVersionId)
         : null;
@@ -655,16 +642,13 @@ export function createMemoryClaimService(dependencies: {
       const retrievalProjection = retrievalProjectionInputsFor(registry, registryEntry);
 
       const plan = planClaimAdmission({
-        proposal: {
-          ...candidateRecordToProposal(candidate, evidenceItemIds),
-          scopeKey: admittedScopeKey,
-        },
+        proposal: admitted.proposal,
         registryEntry,
         registryVersion: registry.registryVersion(),
         selfEntityId: selfEntity.entityId,
         entityVersions,
         existingClaim: existingClaim
-          ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey }
+          ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey: admitted.canonicalKey }
           : null,
         currentVersion,
         currentVersionQualifiers,
@@ -988,51 +972,5 @@ export function relationshipHintInputsFor(
     entry,
     projections: registry.relationshipProjectionsFor(entry.predicateId),
     localizations: registry.predicateLocalizationsFor(entry.predicateId),
-  };
-}
-
-function candidateRecordToProposal(
-  candidate: MemoryCandidateRecord,
-  evidenceItemIds: readonly string[],
-): MemoryCandidateProposal {
-  return {
-    userId: candidate.userId,
-    candidateKind: candidate.candidateKind,
-    basis: candidate.basis,
-    resolution:
-      candidate.resolutionStatus === "mapped"
-        ? {
-            status: "mapped",
-            predicateId: candidate.predicateId!,
-            registryVersion: candidate.predicateRegistryVersion!,
-            typedValue: candidate.proposedObjectValue,
-            mappingConfidence: candidate.mappingConfidence,
-          }
-        : {
-            status: candidate.resolutionStatus,
-            proposedConcept: candidate.proposedConcept ?? "",
-          },
-    subjectEntityId: candidate.subjectEntityId,
-    subjectEntityMentionId: null,
-    objectEntityId: candidate.objectEntityId,
-    objectEntityMentionId: null,
-    scopeKey: candidate.proposedScopeKey,
-    temporal: candidate.temporal,
-    qualifiers: candidate.proposedQualifiers,
-    evidenceItemIds,
-    lineage: candidateRecordToLineage(candidate),
-  };
-}
-
-function candidateRecordToLineage(
-  candidate: MemoryCandidateRecord,
-): MemoryCandidateProposal["lineage"] {
-  return {
-    extractionPolicyVersion: candidate.extractionPolicyVersion,
-    generationCommandId: candidate.generationCommandId,
-    authoritativeModelAttemptId: candidate.authoritativeModelAttemptId,
-    modelVersion: candidate.modelVersion,
-    promptVersion: candidate.promptVersion,
-    sourceReflectionVersionId: candidate.sourceReflectionVersionId,
   };
 }

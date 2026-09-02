@@ -1,11 +1,11 @@
 import {
   type AdmissionRejectionCode,
+  admittedClaimIdentityFor,
   MEMORY_ADMISSION_POLICY_VERSION,
   addDaysToDateString,
   asUserId,
   type AdmissibleEvidence,
   type ClaimAdmissionPlan,
-  claimCanonicalKey,
   type ConsolidationCandidateEvidenceView,
   type ConsolidationCandidateView,
   type ConsolidationClaimView,
@@ -1192,25 +1192,12 @@ async function admitCandidateWithin(
       claimIdOfDiff,
     );
   }
-  // Scope identity is registry-owned: a scope-none entry admits with the
-  // empty scope regardless of the provider-proposed scope, mirroring the
-  // claim-service admission path (issue #126 evidence runs — a model-chosen
-  // scope fragmented logical claims and broke canonical-key recall).
-  const admittedScopeKey =
-    registryEntry.scopeSchema.kind === "none"
-      ? ""
-      : (candidate.proposedScopeKey ?? "");
-  const canonicalKey = claimCanonicalKey({
-    predicateId: candidate.predicateId,
-    subjectEntityId: candidate.subjectEntityId ?? "",
-    objectEntityId: candidate.objectEntityId,
-    scopeKey: admittedScopeKey,
-    relationshipDirection: registryEntry.relationshipSemantics?.direction ?? null,
-  });
+  // Registry-owned scope identity; see admittedClaimIdentityFor (#151).
+  const admitted = admittedClaimIdentityFor(candidate, registryEntry, evidenceItemIds);
   const existingClaim = await findClaimByCanonicalKeyWithin(
     client,
     context.userId,
-    canonicalKey,
+    admitted.canonicalKey,
   );
   const currentVersion = existingClaim?.currentVersionId
     ? await loadClaimVersionWithin(
@@ -1262,16 +1249,13 @@ async function admitCandidateWithin(
   );
 
   const plan = planClaimAdmission({
-    proposal: {
-      ...candidateRecordToProposal(candidate, evidenceItemIds),
-      scopeKey: admittedScopeKey,
-    },
+    proposal: admitted.proposal,
     registryEntry,
     registryVersion: context.registry.registryVersion(),
     selfEntityId: selfEntity.entityId,
     entityVersions,
     existingClaim: existingClaim
-      ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey }
+      ? { memoryClaimId: existingClaim.memoryClaimId, canonicalKey: admitted.canonicalKey }
       : null,
     currentVersion,
     currentVersionQualifiers,
@@ -1465,46 +1449,6 @@ function semanticTargetOfProposal(proposal: MemoryCandidateProposal): string {
     subjectEntityId: proposal.subjectEntityId,
     objectEntityId: proposal.objectEntityId,
   });
-}
-
-function candidateRecordToProposal(
-  candidate: MemoryCandidateRecord,
-  evidenceItemIds: readonly string[],
-): MemoryCandidateProposal {
-  return {
-    userId: candidate.userId,
-    candidateKind: candidate.candidateKind,
-    basis: candidate.basis,
-    resolution:
-      candidate.resolutionStatus === "mapped"
-        ? {
-            status: "mapped",
-            predicateId: candidate.predicateId!,
-            registryVersion: candidate.predicateRegistryVersion!,
-            typedValue: candidate.proposedObjectValue,
-            mappingConfidence: candidate.mappingConfidence,
-          }
-        : {
-            status: candidate.resolutionStatus,
-            proposedConcept: candidate.proposedConcept ?? "",
-          },
-    subjectEntityId: candidate.subjectEntityId,
-    subjectEntityMentionId: null,
-    objectEntityId: candidate.objectEntityId,
-    objectEntityMentionId: null,
-    scopeKey: candidate.proposedScopeKey ?? "",
-    temporal: candidate.temporal,
-    qualifiers: candidate.proposedQualifiers,
-    evidenceItemIds,
-    lineage: {
-      extractionPolicyVersion: candidate.extractionPolicyVersion,
-      generationCommandId: candidate.generationCommandId,
-      authoritativeModelAttemptId: candidate.authoritativeModelAttemptId,
-      modelVersion: candidate.modelVersion,
-      promptVersion: candidate.promptVersion,
-      sourceReflectionVersionId: candidate.sourceReflectionVersionId,
-    },
-  };
 }
 
 
