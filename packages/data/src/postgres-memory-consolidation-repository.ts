@@ -1192,9 +1192,7 @@ async function admitCandidateWithin(
       claimIdOfDiff,
     );
   }
-  // Scope identity is registry-owned: the shared admission rule (#151)
-  // derives the admitted scope and canonical Claim identity in one place,
-  // mirroring the claim-service admission path.
+  // Registry-owned scope identity; see admittedClaimIdentityFor (#151).
   const admitted = admittedClaimIdentityFor(candidate, registryEntry, evidenceItemIds);
   const existingClaim = await findClaimByCanonicalKeyWithin(
     client,
