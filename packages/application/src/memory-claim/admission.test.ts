@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  asMemoryCandidateId,
   asMemoryClaimId,
   asMemoryClaimVersionId,
   asMemoryClaimVersionQualifierId,
@@ -13,6 +14,7 @@ import {
 } from "../predicate-registry";
 import {
   addDays,
+  admittedClaimIdentityFor,
   canonicalValueSet,
   claimCanonicalKey,
   dedupeFingerprint,
@@ -33,6 +35,7 @@ import {
   type AdmissibleEvidence,
   type ClaimAdmissionPlan,
   type ClaimVersionQualifierRecord,
+  type MemoryCandidateRecord,
   type MemoryClaimVersionRecord,
   type RegistryEntryLookup,
 } from "./types";
@@ -1533,5 +1536,170 @@ describe("relationship admission (#115: ADR-0027 / 0029 / 0030 / 0033 / 0036)", 
       relationshipDirection: "directed",
     });
     expect(parentClaim).not.toBe(childClaim);
+  });
+});
+
+describe("admittedClaimIdentityFor", () => {
+  function candidateRecord(
+    overrides: Partial<MemoryCandidateRecord> = {},
+  ): MemoryCandidateRecord {
+    return {
+      memoryCandidateId: asMemoryCandidateId("01984477-31e1-7595-92c6-0688a0d00003"),
+      userId: USER,
+      candidateKind: "objective",
+      basis: "directly_stated",
+      subjectEntityId: SELF,
+      objectEntityId: null,
+      resolutionStatus: "mapped",
+      predicateId: RESIDENCE,
+      predicateRegistryVersion: 1,
+      proposedConcept: null,
+      mappingConfidence: 0.95,
+      proposedObjectValue: "上海",
+      proposedScopeKey: "",
+      temporal: {
+        temporalStatus: "current",
+        validFrom: null,
+        validFromPrecision: "unknown",
+        validTo: null,
+        validToPrecision: "unknown",
+      },
+      proposedQualifiers: [],
+      extractionPolicyVersion: "extraction-test",
+      generationCommandId: null,
+      authoritativeModelAttemptId: null,
+      modelVersion: null,
+      promptVersion: null,
+      sourceReflectionVersionId: null,
+      status: "proposed",
+      reviewDueAt: null,
+      registryReleaseDueAt: null,
+      dispositionReasonCode: null,
+      dispositionPolicyVersion: null,
+      decidedAt: null,
+      terminalEffectiveAt: null,
+      terminalContentExpiresAt: null,
+      reproposalPolicy: null,
+      predecessorCandidateId: null,
+      successorTrigger: null,
+      materialChangeReasonCodes: null,
+      createdAt: NOW,
+      ...overrides,
+    };
+  }
+
+  it("forces the empty scope for scope-none entries regardless of the proposed scope", () => {
+    const { proposal, canonicalKey } = admittedClaimIdentityFor(
+      candidateRecord({ proposedScopeKey: "new_job" }),
+      { scopeSchema: { kind: "none" }, relationshipSemantics: null },
+      ["e1", "e2"],
+    );
+    expect(proposal.scopeKey).toBe("");
+    expect(canonicalKey).toBe(
+      claimCanonicalKey({
+        predicateId: RESIDENCE,
+        subjectEntityId: SELF,
+        objectEntityId: null,
+        scopeKey: "",
+        relationshipDirection: null,
+      }),
+    );
+  });
+
+  it("keeps the proposed scope for scope-carrying entries", () => {
+    const { proposal, canonicalKey } = admittedClaimIdentityFor(
+      candidateRecord({
+        predicateId: PREDICATE_IDS.lifeChange,
+        proposedScopeKey: "career",
+      }),
+      {
+        scopeSchema: { kind: "enum", values: [] },
+        relationshipSemantics: null,
+      },
+      ["e1", "e2"],
+    );
+    expect(proposal.scopeKey).toBe("career");
+    expect(canonicalKey).toBe(
+      claimCanonicalKey({
+        predicateId: PREDICATE_IDS.lifeChange,
+        subjectEntityId: SELF,
+        objectEntityId: null,
+        scopeKey: "career",
+        relationshipDirection: null,
+      }),
+    );
+  });
+
+  it("uses the registry relationship direction for the canonical pair", () => {
+    const { canonicalKey } = admittedClaimIdentityFor(
+      candidateRecord({
+        predicateId: PARTNER,
+        subjectEntityId: SELF,
+        objectEntityId: MOM,
+      }),
+      {
+        scopeSchema: { kind: "none" },
+        relationshipSemantics: {
+          direction: "symmetric",
+          views: ["symmetric"],
+          qualifierAxes: [],
+        },
+      },
+      ["e1", "e2"],
+    );
+    expect(canonicalKey).toBe(
+      claimCanonicalKey({
+        predicateId: PARTNER,
+        subjectEntityId: SELF,
+        objectEntityId: MOM,
+        scopeKey: "",
+        relationshipDirection: "symmetric",
+      }),
+    );
+  });
+
+  it("projects the candidate record onto the admission proposal with the admitted scope", () => {
+    const candidate = candidateRecord({
+      proposedObjectValue: "上海",
+      proposedScopeKey: "new_job",
+      temporal: {
+        temporalStatus: "current",
+        validFrom: NOW,
+        validFromPrecision: "exact",
+        validTo: null,
+        validToPrecision: "unknown",
+      },
+    });
+    const { proposal } = admittedClaimIdentityFor(
+      candidate,
+      { scopeSchema: { kind: "none" }, relationshipSemantics: null },
+      ["e1", "e2"],
+    );
+    expect(proposal).toMatchObject({
+      userId: USER,
+      candidateKind: "objective",
+      basis: "directly_stated",
+      resolution: {
+        status: "mapped",
+        predicateId: RESIDENCE,
+        registryVersion: 1,
+        typedValue: "上海",
+        mappingConfidence: 0.95,
+      },
+      subjectEntityId: SELF,
+      objectEntityId: null,
+      scopeKey: "",
+      temporal: candidate.temporal,
+      evidenceItemIds: ["e1", "e2"],
+      qualifiers: [],
+      lineage: {
+        extractionPolicyVersion: "extraction-test",
+        generationCommandId: null,
+        authoritativeModelAttemptId: null,
+        modelVersion: null,
+        promptVersion: null,
+        sourceReflectionVersionId: null,
+      },
+    });
   });
 });

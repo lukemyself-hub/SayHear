@@ -592,6 +592,7 @@ export {
   MemoryClaimNotFoundError,
   SelfEntityMissingError,
   addDays,
+  admittedClaimIdentityFor,
   canonicalValueSet,
   candidateSemanticTarget,
   claimCanonicalKey,
