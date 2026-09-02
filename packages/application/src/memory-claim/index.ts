@@ -1,5 +1,6 @@
 export {
   addDays,
+  admittedClaimIdentityFor,
   canonicalValueSet,
   claimCanonicalKey,
   countEvidenceIndependence,
