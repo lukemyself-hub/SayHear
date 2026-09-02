@@ -27,8 +27,9 @@ production shadowing。规则权威在
 - `verify-cutover-pins.ts`：SPEC pin list 机械校验——manifest 记录的每个 pin
   必须与生产代码解析出的常量逐项相等（manifest 不能漂移），且每轮
   CompiledContext 的 retrieval manifest 记录的选择策略版本
-  （portrait-selection / memory-budgets / recall-framing）一致；eval 侧
-  scenario-pack:v3 + tiered-checks:v3 一并核对。
+  （portrait-selection / memory-budgets / recall-framing）一致；query-construction
+  另由 cutover pin 与 retrieval run manifest 版本互证；eval 侧 scenario-pack:v3
+  + tiered-checks:v3 一并核对。
 - `build-memory-pairs.ts`：ADR-0114 memory 扩展的 15 场景分层抽样
   （8 en / 5 zh / 2 code-switch，固定种子），强制覆盖 Objective Memory、
   Portrait / AI Impression、跨日连续性、post-Correction 与 post-Forget
