@@ -20,7 +20,10 @@ import {
   type MemoryCandidateProposal,
   type RegistryEntryLookup,
 } from "./memory-claim/types";
-import { loadPredicateRegistrySnapshot } from "./predicate-registry";
+import {
+  loadPredicateRegistrySnapshot,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
+} from "./predicate-registry";
 
 /**
  * The released predicate ids the provider may choose from — the same
@@ -30,7 +33,9 @@ import { loadPredicateRegistrySnapshot } from "./predicate-registry";
  * evidence runs exposed this: every real responses-api proposal invented
  * ids like `sh.predicate.employment` and never reached a recallable Claim).
  */
-const PREDICATE_REGISTRY_SNAPSHOT = loadPredicateRegistrySnapshot(1);
+const PREDICATE_REGISTRY_SNAPSHOT = loadPredicateRegistrySnapshot(
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
+);
 const RELEASED_PREDICATE_IDS: readonly string[] =
   PREDICATE_REGISTRY_SNAPSHOT.entries.map((entry) => entry.predicateId);
 /**

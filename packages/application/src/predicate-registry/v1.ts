@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type {
+  LexicalSurface,
   ObjectValueSchema,
   PredicateRegistrySnapshot,
 } from "./types";
@@ -39,7 +40,17 @@ export const PREDICATE_IDS = Object.freeze({
   considerationStyle: "sh.decision.consideration_style",
 } as const);
 
-export const PREDICATE_REGISTRY_VERSIONS = Object.freeze({ 1: true } as const);
+export const PREDICATE_REGISTRY_VERSIONS = Object.freeze({
+  1: true,
+  2: true,
+} as const);
+
+/**
+ * Runtime callers stay pinned to v1 until an explicit production cutover.
+ * Published v2 is addressed by its snapshot so governance replay cannot
+ * change the version used by an already deployed extraction path.
+ */
+export const PREDICATE_REGISTRY_RUNTIME_VERSION = 1 as const;
 
 const snapshots = new Map<number, PredicateRegistrySnapshot>();
 
@@ -50,20 +61,118 @@ export function loadPredicateRegistrySnapshot(
   if (cached) {
     return cached;
   }
-  if (registryVersion !== 1) {
+  if (registryVersion !== 1 && registryVersion !== 2) {
     throw new Error(
       `Unknown predicate registry_version ${registryVersion}: only published versions ${Object.keys(PREDICATE_REGISTRY_VERSIONS).join(", ")} can be loaded. Mapping against an unknown version must fail closed.`,
     );
   }
-  const snapshot = deepFreeze({
-    registryVersion,
-    entries: buildRegistryV1Entries(),
-    localizations: buildLocalizationsV1(),
-    relationshipProjections: buildProjectionsV1(),
-    relations: buildRelationsV1List(),
-  }) satisfies PredicateRegistrySnapshot;
+  const snapshot = deepFreeze(
+    registryVersion === 1
+      ? {
+          registryVersion,
+          entries: buildRegistryV1Entries(),
+          localizations: buildLocalizationsV1(),
+          relationshipProjections: buildProjectionsV1(),
+          relations: buildRelationsV1List(),
+        }
+      : buildRegistryV2Snapshot(),
+  ) satisfies PredicateRegistrySnapshot;
   snapshots.set(registryVersion, snapshot);
   return snapshot;
+}
+
+/**
+ * Registry v2 is a copy-on-write release. The machine vocabulary and all v1
+ * material remain available under their original version; only the English
+ * Friendship material and its state-oriented projections change here. Keeping
+ * the release derived from the frozen v1 snapshot makes accidental historical
+ * drift visible in the v2 fingerprint and keeps old replay inputs addressable.
+ */
+function buildRegistryV2Snapshot(): PredicateRegistrySnapshot {
+  const v1 = loadPredicateRegistrySnapshot(1);
+
+  const entries = v1.entries.map((entry) => {
+    if (entry.predicateId !== PREDICATE_IDS.friendOf) {
+      return { ...entry, registryVersion: 2 };
+    }
+    const relationshipSemantics = entry.relationshipSemantics;
+    return {
+      ...entry,
+      registryVersion: 2,
+      relationshipSemantics: relationshipSemantics
+        ? {
+            ...relationshipSemantics,
+            qualifierAxes: relationshipSemantics.qualifierAxes.map((axis) =>
+              axis.axisId === "relation_origin"
+                ? { ...axis, neutralFallbackEn: "friendship" }
+                : axis,
+            ),
+          }
+        : null,
+    };
+  });
+
+  const localizations = v1.localizations.map((localization) => {
+    if (
+      localization.predicateId !== PREDICATE_IDS.friendOf ||
+      localization.locale !== "en"
+    ) {
+      return localization;
+    }
+    const friendshipSurfaces: readonly LexicalSurface[] = [
+      {
+        text: "friendship",
+        locale: "en",
+        roleSide: "peer",
+        form: "current",
+      },
+      {
+        text: "friends",
+        locale: "en",
+        roleSide: "peer",
+        form: "current",
+      },
+      ...localization.lexicalSurfaces,
+    ];
+    return {
+      ...localization,
+      label: "Friendship",
+      definition:
+        "Symmetric Friendship between the user and another person. State phrasing such as friends and friendship maps here; stated closeness (bestie/best friend, good/close friend, casual friend) remains a qualifier. An origin mention alone (for example, neighbor) never states Friendship.",
+      positiveExamples: [
+        "Alex and I are friends from college; our friendship has lasted for years.",
+        "Jamie is my friend, and our friendship is steady and easy.",
+      ],
+      lexicalSurfaces: friendshipSurfaces,
+      localizationVersion: 2,
+    };
+  });
+
+  const relationshipProjections = v1.relationshipProjections.map((projection) => {
+    if (
+      projection.predicateId !== PREDICATE_IDS.friendOf ||
+      projection.locale !== "en"
+    ) {
+      return projection;
+    }
+    return {
+      ...projection,
+      templates: [
+        "{subject} and {object} share a friendship",
+        "{subject} and {object} are friends",
+      ],
+      formerTemplates: ["{subject} and {object} used to be friends"],
+      roleProjectionVersion: 2,
+    };
+  });
+
+  return {
+    registryVersion: 2,
+    entries,
+    localizations,
+    relationshipProjections,
+    relations: v1.relations,
+  };
 }
 
 /**

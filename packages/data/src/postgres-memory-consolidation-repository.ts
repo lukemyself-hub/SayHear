@@ -34,7 +34,7 @@ import {
   planImpressionDormancy,
   planRejectionDisposition,
   planStaleDisposition,
-  PREDICATE_REGISTRY_VERSIONS,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
   weekStartDate,
   candidateSemanticTarget,
   asMemoryCandidateId,
@@ -586,9 +586,7 @@ async function readCommandWithin(
     userId: commandRow.subject_id,
     kind,
     anchorDate,
-    registryVersion: Math.max(
-      ...Object.keys(PREDICATE_REGISTRY_VERSIONS).map(Number),
-    ),
+    registryVersion: PREDICATE_REGISTRY_RUNTIME_VERSION,
   });
 
   return {

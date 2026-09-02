@@ -750,6 +750,7 @@ export {
   loadPredicateRegistrySnapshot,
   normalizeTypedValue,
   PREDICATE_IDS,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
   PREDICATE_REGISTRY_VERSIONS,
   predicateRegistryFingerprint,
 } from "./predicate-registry/index";

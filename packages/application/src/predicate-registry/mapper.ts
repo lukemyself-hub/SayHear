@@ -1,6 +1,7 @@
 import {
   normalizeTypedValue,
   PREDICATE_IDS,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
   SENTIMENT_POLARITY_TABLES,
 } from "./v1";
 import { loadPredicateRegistrySnapshot } from "./v1";
@@ -117,7 +118,9 @@ const DEFERRED_CONCEPTS: readonly {
 ];
 
 export function mapUtterance(input: MappingInput): MappingOutcome {
-  const snapshot = input.snapshot ?? loadPredicateRegistrySnapshot(1);
+  const snapshot =
+    input.snapshot ??
+    loadPredicateRegistrySnapshot(PREDICATE_REGISTRY_RUNTIME_VERSION);
   const text = input.text.normalize("NFC");
   const locale = input.locale;
   const clauses = splitClauses(text);
@@ -501,7 +504,11 @@ function assignPerson(
   // apply only on their latin-facing edges.
   const L = /^[\u4e00-\u9fa5]/.test(surface) ? "" : "\\b";
   // plural-tolerant tail: “my colleagues / direct reports” stay frame legal
-  const R = /[\u4e00-\u9fa5]$/.test(surface) ? "" : "(?:s|es)?\\b";
+  const R = /[\u4e00-\u9fa5]$/.test(surface)
+    ? ""
+    : /(?:s|es)$/i.test(surface)
+      ? "\\b"
+      : "(?:s|es)?\\b";
   const GAP = `(?:[^\\s,.;:!?，。、！？]+\\s+){0,2}`;
   let m = new RegExp(
     `${L}([A-Z][\\w .'-]{0,18}) (?:is|are|was) (?:my|our) ${GAP}${esc}${R}`,

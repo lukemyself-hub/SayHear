@@ -26,14 +26,16 @@ import {
  *
  * Forward: ≥2 positive examples per predicate × 3 input modes
  * (zh / en / code-switch), asserted down to predicate ID + normalized typed
- * value + direction canonicalization.
+ * value + direction canonicalization. The current matrix is pinned to v2;
+ * the historical v1 snapshot is exercised explicitly by the replay test below.
  * Reverse: zero-tolerance gates at 100% — confusable-pair separation, illegal
  * values, closure-language no-claim, unknown concepts → `unmapped` with a
  * proposed concept, deprecated IDs fail closed, and old-version replay
  * identity. No LLM judge anywhere: every gate is deterministic.
  */
 
-const v1 = loadPredicateRegistrySnapshot(1);
+const registry = loadPredicateRegistrySnapshot(2);
+const legacyV1 = loadPredicateRegistrySnapshot(1);
 
 describe("mapping-eval forward assertions (≥2 × zh/en/cs per predicate)", () => {
   const MODES = ["zh", "en", "cs"] as const;
@@ -54,7 +56,7 @@ describe("mapping-eval forward assertions (≥2 × zh/en/cs per predicate)", () 
       // §9 seed depth: every locale carries ≥2 machine-checked negative seeds
       // feeding the reverse gate families asserted at 100% below.
       for (const locale of ["zh", "en"] as const) {
-        const loc = v1.localizations.find(
+        const loc = registry.localizations.find(
           (l) => l.predicateId === id && l.locale === locale,
         );
         expect(loc, `${id}:${locale}`).toBeDefined();
@@ -89,7 +91,7 @@ describe("mapping-eval forward assertions (≥2 × zh/en/cs per predicate)", () 
       expect(outcome.predicateId).toBe(c.expect.predicateId);
       // claim kind must be one the entry allows (objective for all v1
       // relationship/value entries; impression-only for §5 impression lanes)
-      const entry = v1.entries.find((e) => e.predicateId === c.expect.predicateId)!;
+      const entry = registry.entries.find((e) => e.predicateId === c.expect.predicateId)!;
       expect(entry.allowedClaimKinds).toContain(outcome.claimKind);
       if (c.expect.typedValue !== undefined) {
         expect(outcome.typedValue).toBe(c.expect.typedValue);
@@ -119,7 +121,7 @@ describe("mapping-eval forward assertions (≥2 × zh/en/cs per predicate)", () 
 
   /** true when a reverse row's text carries one of this entry's surfaces. */
   function mentionsSurfaceOwnedBy(predicateId: string, text: string): boolean {
-    return v1.localizations.some(
+    return registry.localizations.some(
       (l) =>
         l.predicateId === predicateId &&
         l.lexicalSurfaces.some((sf) =>
@@ -178,8 +180,8 @@ describe("reverse zero-tolerance gates — 100% required", () => {
           break;
         }
         case "illegal_value_fail_closed": {
-          const result = validateMappingProposal(v1, {
-            registryVersion: 1,
+          const result = validateMappingProposal(registry, {
+            registryVersion: 2,
             predicateId: IDS.careerStage,
             typedValueRaw: c.text,
             claimKind: "objective",
@@ -195,12 +197,14 @@ describe("reverse zero-tolerance gates — 100% required", () => {
   }
 
   function resolveCsAware(mode: ReverseCase["mode"], text: string): MappingOutcome {
-    return mode === "cs" ? mapUtteranceCodeSwitch(text) : mapUtterance({ text, locale: mode });
+    return mode === "cs"
+      ? mapUtteranceCodeSwitch(text, { snapshot: registry })
+      : mapUtterance({ text, locale: mode, snapshot: registry });
   }
 
   it("rejects non-members of closed enums even with fluent spelling (validator)", () => {
-    const result = validateMappingProposal(v1, {
-      registryVersion: 1,
+    const result = validateMappingProposal(registry, {
+      registryVersion: 2,
       predicateId: IDS.relationshipHorizon,
       typedValueRaw: "short_term_flings",
       claimKind: "objective",
@@ -231,20 +235,30 @@ describe("reverse zero-tolerance gates — 100% required", () => {
   });
 
   it("old-version replay identity: repeated loads, frozen snapshots, JSON round-trip", () => {
-    const sample = FORWARD.filter((c) => c.mode !== "cs").map((c) => c.text);
+    const sample = FORWARD.filter(
+      (c) => c.mode !== "cs" && (c.minimumRegistryVersion ?? 1) <= 1,
+    ).map((c) => c.text);
     const runOne = () =>
       sample.map((text) =>
-        JSON.parse(JSON.stringify(mapUtterance({ text, locale: text.match(/[\u4e00-\u9fa5]/) ? "zh" : "en" }))),
+        JSON.parse(
+          JSON.stringify(
+            mapUtterance({
+              text,
+              locale: text.match(/[\u4e00-\u9fa5]/) ? "zh" : "en",
+              snapshot: legacyV1,
+            }),
+          ),
+        ),
       );
     const first = runOne() as unknown[];
     const second = runOne() as unknown[];
     expect(second).toEqual(first);
     // pinned fingerprint stability across loads
     expect(predicateRegistryFingerprint(loadPredicateRegistrySnapshot(1))).toBe(
-      predicateRegistryFingerprint(v1),
+      predicateRegistryFingerprint(legacyV1),
     );
     // snapshots are deeply frozen: mutation attempts fail closed
-    const entry = v1.entries[0]!;
+    const entry = legacyV1.entries[0]!;
     expect(() => {
       (entry as { status: string }).status = "retired";
     }).toThrow();
@@ -261,10 +275,9 @@ describe("reverse zero-tolerance gates — 100% required", () => {
     });
     expect(rejected.valid).toBe(false);
     // and today's snapshot never grew that surface
-    const surfaces = v1.localizations.flatMap((l) =>
+    const surfaces = registry.localizations.flatMap((l) =>
       l.lexicalSurfaces.map((s) => s.text.toLowerCase()),
     );
     expect(surfaces.includes("sh.work.company")).toBe(false);
   });
 });
-

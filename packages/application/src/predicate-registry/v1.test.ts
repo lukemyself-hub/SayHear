@@ -362,7 +362,7 @@ describe("Predicate Registry v1 integrity", () => {
     expect(predicateRegistryFingerprint(loadPredicateRegistrySnapshot(1))).toBe(
       predicateRegistryFingerprint(v1),
     );
-    expect(() => loadPredicateRegistrySnapshot(2)).toThrow(/registry_version/i);
+    expect(() => loadPredicateRegistrySnapshot(3)).toThrow(/registry_version/i);
   });
 });
 
