@@ -606,8 +606,7 @@ export function createMemoryClaimService(dependencies: {
       }
       const evidenceItemIds = await repository.listCandidateEvidenceItemIds(userId, candidateId);
       const evidence = await requireEvidence(userId, evidenceItemIds);
-      // Scope identity is registry-owned; the shared admission rule (#151)
-      // derives the admitted scope and canonical Claim identity in one place.
+      // Scope identity is registry-owned; see admittedClaimIdentityFor (#151).
       const admitted = admittedClaimIdentityFor(candidate, registryEntry, evidenceItemIds);
       const existingClaim = await repository.findClaimByCanonicalKey(userId, admitted.canonicalKey);
       const currentVersion = existingClaim?.currentVersionId
