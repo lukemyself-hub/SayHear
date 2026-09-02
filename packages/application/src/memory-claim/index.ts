@@ -9,6 +9,7 @@ export {
   impressionEvidenceFloor,
   candidateSemanticTarget,
   mergeRelationshipQualifiers,
+  parseClaimCanonicalKey,
   planClaimAdmission,
   planImpressionDormancy,
   planRejectionDisposition,
