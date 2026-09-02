@@ -1,3 +1,4 @@
+import { claimCanonicalKey, parseClaimCanonicalKey } from "../memory-claim/admission";
 import {
   RETRIEVAL_BROAD_TERM_STOP_LIST,
   RETRIEVAL_LANE_PRIORITY,
@@ -299,19 +300,27 @@ export function applyRelevanceCutoffs(input: {
     // Single-valued self-subject predicates make the predicate-level key
     // unambiguous, so the elided form is a sound exact signal (issue #126
     // evidence runs: the bridged employer probe reached the claim and was
-    // still rejected as "insufficient signals").
+    // still rejected as "insufficient signals"). The reverse parse is owned
+    // by the key-syntax owner and fails closed on non-v1 keys (#152).
     const canonicalKeyObjectElided = canonicalKeyExact
       ? false
       : (() => {
-          const parts = candidate.claim.canonicalKey.split("|");
-          if (parts.length !== 4) return false;
-          const pair = parts[2]!;
-          if (pair.includes("+")) return false; // symmetric pair: never elide
-          const separator = pair.indexOf(">");
-          if (separator < 0) return false;
-          if (pair.slice(separator + 1) === "") return false;
+          const parsed = parseClaimCanonicalKey(candidate.claim.canonicalKey);
+          if (
+            parsed === null ||
+            parsed.relationshipDirection !== "directed" ||
+            parsed.objectEntityId === null
+          ) {
+            return false;
+          }
           return input.query.canonicalKeys.includes(
-            `${parts[0]}|${parts[1]}|${pair.slice(0, separator + 1)}|${parts[3]}`,
+            claimCanonicalKey({
+              predicateId: parsed.predicateId,
+              subjectEntityId: parsed.subjectEntityId,
+              objectEntityId: null,
+              scopeKey: parsed.scopeKey,
+              relationshipDirection: "directed",
+            }),
           );
         })();
     const entityPredicateJoint =

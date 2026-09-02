@@ -20,6 +20,7 @@ import {
   dedupeFingerprint,
   evaluateMaterialChange,
   candidateSemanticTarget,
+  parseClaimCanonicalKey,
   planClaimAdmission,
   planImpressionDormancy,
   planRejectionDisposition,
@@ -231,6 +232,80 @@ describe("claimCanonicalKey", () => {
       relationshipDirection: "directed",
     });
     expect(motherToChild).not.toBe(childToMother);
+  });
+});
+
+describe("parseClaimCanonicalKey", () => {
+  it("inverts the producer for a directed non-relationship key", () => {
+    const key = claimCanonicalKey({
+      predicateId: RESIDENCE,
+      subjectEntityId: SELF,
+      objectEntityId: null,
+      scopeKey: "",
+      relationshipDirection: null,
+    });
+    expect(parseClaimCanonicalKey(key)).toEqual({
+      version: "v1",
+      predicateId: RESIDENCE,
+      relationshipDirection: "directed",
+      subjectEntityId: SELF,
+      objectEntityId: null,
+      scopeKey: "",
+    });
+  });
+
+  it("inverts the producer for a directed key with a bound object and scope", () => {
+    const key = claimCanonicalKey({
+      predicateId: EMPLOYER,
+      subjectEntityId: SELF,
+      objectEntityId: MOM,
+      scopeKey: "career",
+      relationshipDirection: null,
+    });
+    expect(parseClaimCanonicalKey(key)).toEqual({
+      version: "v1",
+      predicateId: EMPLOYER,
+      relationshipDirection: "directed",
+      subjectEntityId: SELF,
+      objectEntityId: MOM,
+      scopeKey: "career",
+    });
+  });
+
+  it("inverts the producer for a symmetric normalized pair", () => {
+    const key = claimCanonicalKey({
+      predicateId: PREDICATE_IDS.roommateOf,
+      subjectEntityId: SELF,
+      objectEntityId: MOM,
+      scopeKey: "",
+      relationshipDirection: "symmetric",
+    });
+    const [first, second] = [SELF, MOM].sort();
+    expect(parseClaimCanonicalKey(key)).toEqual({
+      version: "v1",
+      predicateId: PREDICATE_IDS.roommateOf,
+      relationshipDirection: "symmetric",
+      subjectEntityId: first,
+      objectEntityId: second,
+      scopeKey: "",
+    });
+  });
+
+  it("fails closed on a non-v1 key version", () => {
+    expect(parseClaimCanonicalKey(`v2|${RESIDENCE}|${SELF}>|`)).toBeNull();
+  });
+
+  it("fails closed on malformed keys", () => {
+    expect(parseClaimCanonicalKey("v1|only|three")).toBeNull();
+    expect(parseClaimCanonicalKey(`v1|${RESIDENCE}|five|parts|`)).toBeNull();
+    expect(parseClaimCanonicalKey(`v1|${RESIDENCE}|no-separator|`)).toBeNull();
+    // A symmetric pair not in the producer's sorted order is not a v1 key.
+    const [first, second] = [SELF, MOM].sort();
+    expect(
+      parseClaimCanonicalKey(
+        `v1|${PREDICATE_IDS.roommateOf}|${second}+${first}|`,
+      ),
+    ).toBeNull();
   });
 });
 

@@ -91,7 +91,83 @@ export function claimCanonicalKey(input: {
     input.relationshipDirection === "symmetric" && input.objectEntityId
       ? [input.subjectEntityId, input.objectEntityId].sort().join("+")
       : `${input.subjectEntityId}>${input.objectEntityId ?? ""}`;
-  return `v1|${input.predicateId}|${pair}|${input.scopeKey}`;
+  return `${CLAIM_CANONICAL_KEY_VERSION}|${input.predicateId}|${pair}|${input.scopeKey}`;
+}
+
+const CLAIM_CANONICAL_KEY_VERSION = "v1";
+
+/** Structured components of a well-formed v1 canonical key. */
+export type ParsedClaimCanonicalKey = Readonly<{
+  version: "v1";
+  predicateId: string;
+  /** Symmetric keys carry the producer's sorted Entity-pair order. */
+  relationshipDirection: "directed" | "symmetric";
+  subjectEntityId: string;
+  /** Null for non-relationship claims (the empty `>` tail of the pair). */
+  objectEntityId: string | null;
+  scopeKey: string;
+}>;
+
+function claimCanonicalKeyOf(parsed: {
+  predicateId: string;
+  relationshipDirection: "directed" | "symmetric";
+  subjectEntityId: string;
+  objectEntityId: string | null;
+  scopeKey: string;
+}): string {
+  return claimCanonicalKey({
+    predicateId: parsed.predicateId,
+    subjectEntityId: parsed.subjectEntityId,
+    objectEntityId: parsed.objectEntityId,
+    scopeKey: parsed.scopeKey,
+    relationshipDirection: parsed.relationshipDirection,
+  });
+}
+
+/**
+ * Inverse of `claimCanonicalKey` — the single reverse-parse of the Claim
+ * canonical-key syntax (#152). A string parses only when re-synthesizing its
+ * components reproduces it exactly, so any key the producer cannot emit —
+ * wrong segment count, unknown version prefix, unsorted symmetric pair —
+ * fails closed as null instead of being silently misread after a key-version
+ * upgrade.
+ */
+export function parseClaimCanonicalKey(
+  canonicalKey: string,
+): ParsedClaimCanonicalKey | null {
+  const parts = canonicalKey.split("|");
+  if (parts.length !== 4) return null;
+  const version = parts[0]!;
+  const predicateId = parts[1]!;
+  const pair = parts[2]!;
+  const scopeKey = parts[3]!;
+  if (version !== CLAIM_CANONICAL_KEY_VERSION) return null;
+  let parsed: ParsedClaimCanonicalKey;
+  if (pair.includes("+")) {
+    const entities = pair.split("+");
+    if (entities.length !== 2) return null;
+    parsed = {
+      version,
+      predicateId,
+      relationshipDirection: "symmetric",
+      subjectEntityId: entities[0]!,
+      objectEntityId: entities[1]!,
+      scopeKey,
+    };
+  } else {
+    const separator = pair.indexOf(">");
+    if (separator < 0) return null;
+    const objectPart = pair.slice(separator + 1);
+    parsed = {
+      version,
+      predicateId,
+      relationshipDirection: "directed",
+      subjectEntityId: pair.slice(0, separator),
+      objectEntityId: objectPart === "" ? null : objectPart,
+      scopeKey,
+    };
+  }
+  return claimCanonicalKeyOf(parsed) === canonicalKey ? parsed : null;
 }
 
 /**

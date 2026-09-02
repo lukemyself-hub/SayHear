@@ -561,4 +561,72 @@ describe("applyRelevanceCutoffs", () => {
       "relevance_cutoff_insufficient_signals",
     );
   });
+
+  describe("object-elided canonical-key match (#152)", () => {
+    const rankByCanonicalKey = (
+      claim: RetrievalCandidateClaimState,
+    ): import("./types").RankedCandidate => ({
+      claim,
+      lane: "structured_exact" as const,
+      matchedFields: ["canonical_key"],
+      matchedTerms: [],
+      rankComponents: {
+        entity_match: 0,
+        predicate_match: 0,
+        temporal_fit: 1,
+        lexical_coverage: 0,
+        fts_rank: null,
+        trust_kind: "objective" as const,
+        last_observed_at: claim.lastObservedAt,
+        stable_id: claim.versionId,
+      },
+      finalRank: 1,
+      cutoffPassed: true,
+      selectionReasonCodes: [],
+      rejectionReasonCodes: [],
+    });
+
+    it("matches a v1 scope-none claim whose bound object is elided from the query key", () => {
+      const claim = claimState({
+        versionId: "v-elided",
+        canonicalKey: "v1|sh.work.employer|entity-self>entity-company|",
+        subjectEntityId: "entity-self",
+        objectEntityId: "entity-company",
+        predicateId: "sh.work.employer",
+      });
+      const result = applyRelevanceCutoffs({
+        ranked: [rankByCanonicalKey(claim)],
+        query: query({
+          canonicalKeys: ["v1|sh.work.employer|entity-self>|"],
+        }),
+      });
+      expect(result[0]!.cutoffPassed).toBe(true);
+      expect(result[0]!.selectionReasonCodes).toContain(
+        "relevance_cutoff_canonical_key_object_elided",
+      );
+    });
+
+    it("does not trigger object-elided matching for a non-v1 key version", () => {
+      const claim = claimState({
+        versionId: "v-future",
+        canonicalKey: "v2|sh.work.employer|entity-self>entity-company|",
+        subjectEntityId: "entity-self",
+        objectEntityId: "entity-company",
+        predicateId: "sh.work.employer",
+      });
+      const result = applyRelevanceCutoffs({
+        ranked: [rankByCanonicalKey(claim)],
+        query: query({
+          canonicalKeys: ["v2|sh.work.employer|entity-self>|"],
+        }),
+      });
+      expect(result[0]!.cutoffPassed).toBe(false);
+      expect(result[0]!.selectionReasonCodes).not.toContain(
+        "relevance_cutoff_canonical_key_object_elided",
+      );
+      expect(result[0]!.rejectionReasonCodes).toContain(
+        "relevance_cutoff_insufficient_signals",
+      );
+    });
+  });
 });
