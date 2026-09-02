@@ -28,7 +28,8 @@
     "memoryRetrieval": {
       "memoryBudgets": "memory-budgets:v1",
       "policyVersion": "memory-retrieval:v1",
-      "portraitSelection": "portrait-selection:v1"
+      "portraitSelection": "portrait-selection:v1",
+      "queryConstruction": "memory-retrieval-query:v3"
     },
     "persona": {
       "anchors": "persona-behavior-anchors:v2",
@@ -41,7 +42,7 @@
     },
     "promptArtifacts": {
       "groundingGuardAndOpenerPermission": "recall-experience-contract:v1",
-      "trustActionExpression": "trust-action-expression-contract:v1"
+      "trustActionExpression": "trust-action-expression-contract:v2"
     },
     "safetyResources": "safety-resources:v2",
     "taskInstructionVersion": "task-instruction-decision:v3"

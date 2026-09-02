@@ -1,5 +1,4 @@
 import { claimCanonicalKey } from "../memory-claim/admission";
-import type { LexicalSurface } from "../predicate-registry/types";
 import {
   normalizeRetrievalTerm,
   RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION,
@@ -26,42 +25,6 @@ function surfaceInText(surface: string, normalizedText: string): boolean {
   }
   return normalizedText.includes(surface);
 }
-
-/**
- * v2 broad-context bridges: the one deterministic extension over v1's
- * alias-only vocabulary (issue #126 evidence runs — the natural probes
- * "新工作的事…跟主管说" / "about the new job" carry no published alias, so
- * admitted employer claims were unreachable). A bridge fires only on a
- * determiner-modified compound — the bare broad terms (工作 / job / work)
- * stay broad and bridge nothing — and contributes the same predicate
- * candidates a published alias would, so canonical-key precision and the
- * relevance cutoffs apply unchanged.
- */
-export const RETRIEVAL_BROAD_CONTEXT_BRIDGES: readonly {
-  readonly compound: string;
-  readonly predicateIds: readonly string[];
-}[] = Object.freeze([
-  {
-    compound: "新工作",
-    predicateIds: ["sh.work.employer", "sh.work.role_title"],
-  },
-  {
-    compound: "换工作",
-    predicateIds: ["sh.work.employer", "sh.work.role_title"],
-  },
-  {
-    compound: "工作的事",
-    predicateIds: ["sh.work.employer", "sh.work.role_title"],
-  },
-  {
-    compound: "new job",
-    predicateIds: ["sh.work.employer", "sh.work.role_title"],
-  },
-  {
-    compound: "新 work",
-    predicateIds: ["sh.work.employer", "sh.work.role_title"],
-  },
-]);
 
 /**
  * Deterministic query construction (SPEC story 44, architecture §10.2): the
@@ -141,30 +104,22 @@ export function buildRetrievalQuery(input: {
 
   // --- registry lexical aliases found in the user-side text.
   const predicateCandidates: QueryPredicateCandidate[] = [];
-  const aliasSurfaces: readonly LexicalSurface[] =
-    registry.localizations.flatMap((localization) =>
-      localization.lexicalSurfaces,
-    );
-  const seenPredicates = new Set<string>();
-  for (const surface of aliasSurfaces) {
-    const normalized = normalizeRetrievalTerm(surface.text);
-    if (normalized === "" || !surfaceInText(normalized, combined)) continue;
-    const key = `${surface.text}\u0000${normalized}`;
-    if (seenPredicates.has(key)) continue;
-    seenPredicates.add(key);
-    // The surface belongs to one localization row; alias text is unique
-    // enough that any localization carrying the same text is the same word.
-    const localization = registry.localizations.find((candidate) =>
-      candidate.lexicalSurfaces.some(
-        (candidateSurface) =>
-          normalizeRetrievalTerm(candidateSurface.text) === normalized,
-      ),
-    );
-    if (!localization) continue;
-    predicateCandidates.push({
-      predicateId: localization.predicateId,
-      surface: normalized,
-    });
+  const seenPredicateAliases = new Set<string>();
+  for (const localization of registry.localizations) {
+    for (const surface of localization.lexicalSurfaces) {
+      const normalized = normalizeRetrievalTerm(surface.text);
+      if (normalized === "" || !surfaceInText(normalized, combined)) continue;
+      // A published surface can intentionally belong to more than one
+      // predicate. Keep the localization owner instead of resolving the
+      // surface back to the first matching row.
+      const key = `${localization.predicateId}\u0000${normalized}`;
+      if (seenPredicateAliases.has(key)) continue;
+      seenPredicateAliases.add(key);
+      predicateCandidates.push({
+        predicateId: localization.predicateId,
+        surface: normalized,
+      });
+    }
   }
   predicateCandidates.sort((a, b) =>
     a.predicateId.localeCompare(b.predicateId, "en"),
@@ -174,29 +129,6 @@ export function buildRetrievalQuery(input: {
       kind: "registry_lexical_alias",
       registryVersion: registry.registryVersion,
     });
-  }
-
-  // --- v2 broad-context bridges: modified compounds whose bare term is on
-  // the broad stop list contribute the associated predicate candidates and
-  // join the lexical term set themselves (they are not broad as compounds).
-  const bridgedTerms: string[] = [];
-  for (const bridge of RETRIEVAL_BROAD_CONTEXT_BRIDGES) {
-    if (!surfaceInText(bridge.compound, combined)) continue;
-    bridgedTerms.push(bridge.compound);
-    for (const predicateId of bridge.predicateIds) {
-      const alreadyPresent = predicateCandidates.some(
-        (candidate) => candidate.predicateId === predicateId,
-      );
-      if (alreadyPresent) continue;
-      if (!registry.entryFor(predicateId)) continue;
-      predicateCandidates.push({ predicateId, surface: bridge.compound });
-    }
-  }
-  if (bridgedTerms.length > 0) {
-    predicateCandidates.sort((a, b) =>
-      a.predicateId.localeCompare(b.predicateId, "en"),
-    );
-    sourceRefs.push({ kind: "broad_context_bridge" });
   }
 
   // --- canonical keys: self-subject claims whose predicate and (for
@@ -247,7 +179,6 @@ export function buildRetrievalQuery(input: {
     ...new Set([
       ...resolvedEntities.map((entity) => entity.surface),
       ...predicateCandidates.map((candidate) => candidate.surface),
-      ...bridgedTerms,
       ...(usedTopic !== null ? [usedTopic] : []),
     ]),
   ].sort((a, b) => a.localeCompare(b, "en"));
