@@ -302,7 +302,10 @@ describe("old-version replay determinism gate", () => {
       "我从美团离职了。",
     ];
     const runA = cases.map(
-      (text) => JSON.parse(JSON.stringify(mapUtterance({ text, locale: "zh" }))) as MappingOutcome,
+      (text) =>
+        JSON.parse(
+          JSON.stringify(mapUtterance({ text, locale: "zh", snapshot: v1 })),
+        ) as MappingOutcome,
     );
     const again = loadPredicateRegistrySnapshot(1);
     const runB = cases.map(

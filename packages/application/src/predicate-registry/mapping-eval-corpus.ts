@@ -1,18 +1,9 @@
 import {
   type MappingOutcome,
+  type PredicateRegistrySnapshot,
   PREDICATE_IDS as IDS,
   loadPredicateRegistrySnapshot,
 } from "./index";
-
-/**
- * Cross-locale mapping-eval corpus (#93 §8): the authoritative fixture set for
- * Predicate Registry v1. Consumed by BOTH the CI matrix suite
- * (mapping-eval.matrix.test.ts) and the frozen-model replay script
- * (eval/predicate-registry-v1/replay.mts), so a reviewed release replays the
- * exact bytes CI gates on.
- */
-
-const v1 = loadPredicateRegistrySnapshot(1);
 
 import {
   canonicalRelationshipKey,
@@ -21,9 +12,21 @@ import {
   validateMappingProposal,
 } from "./mapper";
 
+/**
+ * Cross-locale mapping-eval corpus (#93 §8): the authoritative fixture set for
+ * Predicate Registry v2. Consumed by BOTH the CI matrix suite
+ * (mapping-eval.matrix.test.ts) and the frozen-model replay script
+ * (eval/predicate-registry-v1/replay.mts). The replay script can pin the
+ * historical v1 subset so the old release remains reproducible.
+ */
+
+const v2 = loadPredicateRegistrySnapshot(2);
+
 export type ForwardCase = {
   mode: "zh" | "en" | "cs";
   text: string;
+  /** Cases added after v1 are excluded from the v1 compatibility replay. */
+  minimumRegistryVersion?: number;
   expect: {
     predicateId: string;
     typedValue?: string;
@@ -864,7 +867,27 @@ export const FORWARD: readonly ForwardCase[] = [
       typedValue: "我做决定 making decisions 之前一定先问家人的想法考虑清楚",
     },
   },
+  // Registry v2 adds state-noun English positives instead of forcing the
+  // singular person noun used by the v1 fixture. These cases are intentionally
+  // v2-only so a v1 replay cannot silently claim coverage it never shipped.
+  {
+    mode: "en",
+    text: "Alex and I are friends from college.",
+    minimumRegistryVersion: 2,
+    expect: { predicateId: IDS.friendOf },
+  },
+  {
+    mode: "en",
+    text: "Our friendship goes back years.",
+    minimumRegistryVersion: 2,
+    expect: { predicateId: IDS.friendOf },
+  },
 ];
+
+/** The v1 corpus view used by the frozen historical replay. */
+export const FORWARD_V1: readonly ForwardCase[] = Object.freeze(
+  FORWARD.filter((c) => (c.minimumRegistryVersion ?? 1) <= 1),
+);
 
 /** Negatives feeding the reverse zero-tolerance gates (#93 §8). */
 type ReverseGate =
@@ -944,9 +967,12 @@ export const REVERSE: readonly ReverseCase[] = [
 ];
 
 /** Resolve one forward case through the deterministic pipeline. */
-export function resolve(c: ForwardCase): MappingOutcome {
+export function resolve(
+  c: ForwardCase,
+  snapshot: PredicateRegistrySnapshot = v2,
+): MappingOutcome {
   if (c.mode === "cs") {
-    return mapUtteranceCodeSwitch(c.text);
+    return mapUtteranceCodeSwitch(c.text, { snapshot });
   }
-  return mapUtterance({ text: c.text, locale: c.mode });
+  return mapUtterance({ text: c.text, locale: c.mode, snapshot });
 }

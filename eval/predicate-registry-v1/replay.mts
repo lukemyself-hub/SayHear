@@ -2,10 +2,10 @@
  * Frozen-model replay for the Predicate Registry mapping-eval corpus
  * (grilling #93 §8; ADR-0061 developer-judged promotion; SPEC #107 AC 8).
  *
- * Replays every forward and reverse case of the authoritative corpus
- * (packages/application/src/predicate-registry/mapping-eval-corpus.ts — the
- * same bytes CI gates on) against an injected mapper and writes a reviewable
- * findings manifest under run/<stamp>/findings.json.
+ * Replays a selected registry version's forward cases and every reverse case
+ * of the authoritative corpus against an injected mapper and writes a
+ * reviewable findings manifest under run/<stamp>/findings.json. The default
+ * selection is the historical v1-compatible subset.
  *
  * Mappers:
  *  - deterministic (default): the registry's own resolver, the behavior CI runs;
@@ -18,13 +18,14 @@
  * README.md.
  *
  * Usage:
- *   pnpm tsx eval/predicate-registry-v1/replay.ts [--out DIR]
+ *   pnpm tsx eval/predicate-registry-v1/replay.mts [--registry-version 1|2] [--out DIR]
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  type PredicateRegistrySnapshot,
   loadPredicateRegistrySnapshot,
   PREDICATE_IDS as IDS,
   type MappingOutcome,
@@ -32,13 +33,12 @@ import {
 } from "@sayhear/application";
 import {
   FORWARD,
+  FORWARD_V1,
   REVERSE,
   resolve,
   type ForwardCase,
 } from "../../packages/application/src/predicate-registry/mapping-eval-corpus";
 import { validateMappingProposal } from "@sayhear/application";
-
-const v1 = loadPredicateRegistrySnapshot(1);
 
 type CaseFinding = {
   id: string;
@@ -50,16 +50,32 @@ type CaseFinding = {
 
 type Mapper = (input: { text: string; mode: "zh" | "en" | "cs" }) => MappingOutcome;
 
-const MAPPER_IMPLEMENTATIONS: Record<string, Mapper> = {
-  deterministic: ({ text, mode }) => resolve({ text, mode, expect: {} as never }),
+type MapperFactory = (snapshot: PredicateRegistrySnapshot) => Mapper;
+
+const MAPPER_IMPLEMENTATIONS: Record<string, MapperFactory> = {
+  deterministic: (snapshot) => ({ text, mode }) =>
+    resolve({ text, mode, expect: {} as never }, snapshot),
 };
 
+function requestedRegistryVersion(): 1 | 2 {
+  const index = process.argv.indexOf("--registry-version");
+  const raw = index >= 0 ? process.argv[index + 1] : "1";
+  const version = Number(raw);
+  if (version !== 1 && version !== 2) {
+    throw new Error(`Unknown registry version "${raw}". Expected 1 or 2.`);
+  }
+  return version;
+}
+
 async function main() {
+  const registryVersion = requestedRegistryVersion();
+  const registry = loadPredicateRegistrySnapshot(registryVersion);
+  const forward = registryVersion === 1 ? FORWARD_V1 : FORWARD;
   const mapperName =
     process.argv.includes("--mapper")
       ? process.argv[process.argv.indexOf("--mapper") + 1]!
       : "deterministic";
-  const mapper = MAPPER_IMPLEMENTATIONS[mapperName];
+  const mapper = MAPPER_IMPLEMENTATIONS[mapperName]?.(registry);
   if (!mapper) {
     throw new Error(
       `Unknown mapper "${mapperName}". Available: ${Object.keys(MAPPER_IMPLEMENTATIONS).join(", ")}.`,
@@ -74,8 +90,8 @@ async function main() {
 
   const findings: CaseFinding[] = [];
 
-  for (let i = 0; i < FORWARD.length; i += 1) {
-    const c: ForwardCase = FORWARD[i]!;
+  for (let i = 0; i < forward.length; i += 1) {
+    const c: ForwardCase = forward[i]!;
     const outcome = mapper({ text: c.text, mode: c.mode });
     let status: CaseFinding["status"] = "pass";
     let detail: string | undefined;
@@ -145,8 +161,8 @@ async function main() {
         break;
       }
       case "illegal_value_fail_closed": {
-        const result = validateMappingProposal(v1, {
-          registryVersion: 1,
+        const result = validateMappingProposal(registry, {
+          registryVersion,
           predicateId: IDS.careerStage,
           typedValueRaw: c.text,
           claimKind: "objective",
@@ -171,10 +187,10 @@ async function main() {
     });
   }
 
-  // Corpus-level old-version replay identity: whole-corpus determinism across
-  // two consecutive passes over BOTH passes' outputs (pinned by fingerprint).
-  const replayA = JSON.stringify(FORWARD.map((c) => resolve(c)));
-  const replayB = JSON.stringify(FORWARD.map((c) => resolve(c)));
+  // Corpus-level replay identity: whole-corpus determinism across two
+  // consecutive passes over both outputs (pinned by fingerprint).
+  const replayA = JSON.stringify(forward.map((c) => resolve(c, registry)));
+  const replayB = JSON.stringify(forward.map((c) => resolve(c, registry)));
   findings.push({
     id: "old-version-replay-identity",
     mode: "-",
@@ -189,9 +205,9 @@ async function main() {
     replayKind: "predicate-registry-frozen-model-replay",
     generatedAt: new Date().toISOString(),
     mapper: mapperName,
-    registryVersion: v1.registryVersion,
+    registryVersion: registry.registryVersion,
     /** Pin the reviewed release by this hash (see README step 3). */
-    registryFingerprint: predicateRegistryFingerprint(v1),
+    registryFingerprint: predicateRegistryFingerprint(registry),
     humanReview: {
       required: true,
       reviewer: null as string | null,

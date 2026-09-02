@@ -1,4 +1,7 @@
-import { loadPredicateRegistrySnapshot } from "@sayhear/application";
+import {
+  loadPredicateRegistrySnapshot,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
+} from "@sayhear/application";
 
 import {
   PostgresPredicateRegistryRepository,
@@ -15,7 +18,9 @@ const pool = createPostgresPool({
 });
 
 try {
-  const registry = loadPredicateRegistrySnapshot(1);
+  const registry = loadPredicateRegistrySnapshot(
+    PREDICATE_REGISTRY_RUNTIME_VERSION,
+  );
   const repository = new PostgresPredicateRegistryRepository(pool);
   const result = await repository.syncPredicateRegistry(registry, new Date());
   console.log(

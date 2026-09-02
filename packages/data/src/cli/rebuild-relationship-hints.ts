@@ -1,6 +1,9 @@
 import { asMemoryClaimId, asUserId } from "@sayhear/domain";
 
-import { loadPredicateRegistrySnapshot } from "@sayhear/application";
+import {
+  loadPredicateRegistrySnapshot,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
+} from "@sayhear/application";
 
 import { createPostgresPool } from "../pool";
 import {
@@ -21,7 +24,9 @@ const pool = createPostgresPool({
 try {
   const repository = new PostgresMemoryClaimRepository(pool);
   const claims = await repository.listRelationshipClaims();
-  const snapshot = loadPredicateRegistrySnapshot(1);
+  const snapshot = loadPredicateRegistrySnapshot(
+    PREDICATE_REGISTRY_RUNTIME_VERSION,
+  );
   const userId = asUserId(requiredEnvironment("SAYHEAR_INTERNAL_OWNER_USER_ID"));
   let rebuiltRows = 0;
   for (const claim of claims) {

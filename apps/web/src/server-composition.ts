@@ -40,6 +40,7 @@ import {
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
   loadPredicateRegistrySnapshot,
+  PREDICATE_REGISTRY_RUNTIME_VERSION,
   createMemoryConsolidationScanService,
   type FastPathExtractionEntrypointDependencies,
   type MemoryConsolidationEntrypointDependencies,
@@ -174,7 +175,9 @@ export function createServerComposition() {
   });
   const fastPathExtractionRepository =
     new PostgresFastPathExtractionRepository(pool);
-  const predicateRegistrySnapshot = loadPredicateRegistrySnapshot(1);
+  const predicateRegistrySnapshot = loadPredicateRegistrySnapshot(
+    PREDICATE_REGISTRY_RUNTIME_VERSION,
+  );
   const predicateRegistryLookup = {
     entryFor(predicateId: string) {
       return (
