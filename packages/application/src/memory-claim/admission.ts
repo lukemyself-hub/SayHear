@@ -98,7 +98,7 @@ const CLAIM_CANONICAL_KEY_VERSION = "v1";
 
 /** Structured components of a well-formed v1 canonical key. */
 export type ParsedClaimCanonicalKey = Readonly<{
-  version: "v1";
+  version: typeof CLAIM_CANONICAL_KEY_VERSION;
   predicateId: string;
   /** Symmetric keys carry the producer's sorted Entity-pair order. */
   relationshipDirection: "directed" | "symmetric";
@@ -107,22 +107,6 @@ export type ParsedClaimCanonicalKey = Readonly<{
   objectEntityId: string | null;
   scopeKey: string;
 }>;
-
-function claimCanonicalKeyOf(parsed: {
-  predicateId: string;
-  relationshipDirection: "directed" | "symmetric";
-  subjectEntityId: string;
-  objectEntityId: string | null;
-  scopeKey: string;
-}): string {
-  return claimCanonicalKey({
-    predicateId: parsed.predicateId,
-    subjectEntityId: parsed.subjectEntityId,
-    objectEntityId: parsed.objectEntityId,
-    scopeKey: parsed.scopeKey,
-    relationshipDirection: parsed.relationshipDirection,
-  });
-}
 
 /**
  * Inverse of `claimCanonicalKey` — the single reverse-parse of the Claim
@@ -167,7 +151,17 @@ export function parseClaimCanonicalKey(
       scopeKey,
     };
   }
-  return claimCanonicalKeyOf(parsed) === canonicalKey ? parsed : null;
+  return (
+    claimCanonicalKey({
+      predicateId: parsed.predicateId,
+      subjectEntityId: parsed.subjectEntityId,
+      objectEntityId: parsed.objectEntityId,
+      scopeKey: parsed.scopeKey,
+      relationshipDirection: parsed.relationshipDirection,
+    }) === canonicalKey
+      ? parsed
+      : null
+  );
 }
 
 /**
