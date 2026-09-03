@@ -16,14 +16,21 @@ Install and validate from the repository root:
 
 ```sh
 pnpm install
-TEST_DATABASE_URL=postgresql://localhost/postgres pnpm validate
+TEST_DATABASE_URL=postgresql://localhost/postgres \
+TEST_PURGE_MARKER_DATABASE_URL=postgresql://localhost/purge_marker \
+pnpm validate
 ```
 
 The full validation command includes the PostgreSQL system seam. It requires
-`TEST_DATABASE_URL` and creates a disposable schema. To run only that suite:
+`TEST_DATABASE_URL` and creates a disposable schema. The purge suites
+(`internal-access`, `owner-full-purge`) also require
+`TEST_PURGE_MARKER_DATABASE_URL`, which must point to a separate database
+outside the business backup domain. To run only that suite:
 
 ```sh
-TEST_DATABASE_URL=postgresql://localhost/postgres pnpm test:system
+TEST_DATABASE_URL=postgresql://localhost/postgres \
+TEST_PURGE_MARKER_DATABASE_URL=postgresql://localhost/purge_marker \
+pnpm test:system
 ```
 
 ## Internal Owner setup
