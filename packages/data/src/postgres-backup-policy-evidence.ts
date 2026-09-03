@@ -24,12 +24,12 @@ export async function findLatestBackupPolicyEvidence(
   }>(`
     SELECT
       configuration_fingerprint,
-      database_retention_days,
+      database_retention_days::float8 AS database_retention_days,
       evidence_reference,
-      longest_known_window_days,
+      longest_known_window_days::float8 AS longest_known_window_days,
       policy_version,
-      pitr_retention_days,
-      snapshot_retention_days,
+      pitr_retention_days::float8 AS pitr_retention_days,
+      snapshot_retention_days::float8 AS snapshot_retention_days,
       valid_until,
       verification_status,
       verified_at

@@ -44,6 +44,28 @@ describe("private-write backup gate", () => {
     ).toEqual({ allowed: false, reason: "backup_evidence_unknown" });
   });
 
+  it("opens for a fractional PITR window recorded in days", () => {
+    expect(
+      evaluatePrivateWriteGate({
+        evidence: {
+          configurationFingerprint: "sha256:expected",
+          databaseRetentionDays: 7,
+          evidenceReference: "synthetic evidence",
+          longestKnownWindowDays: 7,
+          policyVersion: "neon-production-v1",
+          pitrRetentionDays: 0.25,
+          snapshotRetentionDays: 0,
+          status: "verified",
+          validUntil: new Date("2027-08-27T16:00:00.000Z"),
+          verifiedAt: new Date("2026-07-27T15:00:00.000Z"),
+        },
+        expectedConfigurationFingerprint: "sha256:expected",
+        expectedPolicyVersion: "neon-production-v1",
+        now,
+      }),
+    ).toEqual({ allowed: true, reason: "backup_evidence_current" });
+  });
+
   it.each([
     {
       evidence: {

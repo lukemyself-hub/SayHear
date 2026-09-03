@@ -6,11 +6,11 @@ export function requiredEnvironment(name: string): string {
   return value;
 }
 
-export function requiredIntegerEnvironment(name: string): number {
+export function requiredNonNegativeNumberEnvironment(name: string): number {
   const value = requiredEnvironment(name);
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isSafeInteger(parsed) || parsed < 0) {
-    throw new Error(`${name} must be a non-negative integer.`);
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative number.`);
   }
   return parsed;
 }
