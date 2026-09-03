@@ -1,0 +1,70 @@
+name: Backup Evidence Renewal
+
+on:
+  schedule:
+    - cron: "13 4 1 * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: backup-evidence-renewal
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NEON_PROJECT_ID: flat-feather-50323407
+      EXPECTED_HISTORY_RETENTION_SECONDS: "21600"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Neon PITR history window
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          response=$(curl --silent --show-error --fail --max-time 60 \
+            --header "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")
+          actual=$(printf '%s' "$response" | jq --raw-output '.project.history_retention_seconds // empty')
+          if [ -z "$actual" ]; then
+            printf '%s' "$response" | jq '.project | keys' >&2
+            echo "::error::Neon project response has no history_retention_seconds field; not renewing backup evidence"
+            exit 1
+          fi
+          echo "history_retention_seconds=${actual}"
+          if [ "$actual" != "$EXPECTED_HISTORY_RETENTION_SECONDS" ]; then
+            echo "::error::Neon history_retention_seconds is ${actual}, expected ${EXPECTED_HISTORY_RETENTION_SECONDS}; not renewing backup evidence, the private-write gate will block when the current evidence expires"
+            exit 1
+          fi
+
+      - name: Record renewed backup evidence (+30 days)
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          SAYHEAR_BACKUP_POLICY_VERSION: "1"
+          SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: neon-free-6h-pitr-1gb-limit
+          SAYHEAR_DATABASE_RETENTION_DAYS: "7"
+          SAYHEAR_PITR_RETENTION_DAYS: "0.25"
+          SAYHEAR_SNAPSHOT_RETENTION_DAYS: "0"
+        run: |
+          set -euo pipefail
+          verified_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          valid_until=$(date -u --date "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+          export SAYHEAR_BACKUP_VERIFIED_AT="$verified_at"
+          export SAYHEAR_BACKUP_VALID_UNTIL="$valid_until"
+          export SAYHEAR_BACKUP_EVIDENCE_REFERENCE="neon-api-verify-${NEON_PROJECT_ID}-history-${EXPECTED_HISTORY_RETENTION_SECONDS}s-${verified_at}"
+          echo "evidence_reference=${SAYHEAR_BACKUP_EVIDENCE_REFERENCE}"
+          pnpm db:record-backup
