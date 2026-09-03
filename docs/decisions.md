@@ -51,6 +51,7 @@ Accepted
 - [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md)：删除能力随数据面扩展
 - [`0104`](adr/0104-purge-marker-owns-backup-recovery-authority.md)：Purge Marker 是备份恢复防复活的权威来源
 - [`0106`](adr/0106-github-actions-schedules-the-internal-owner-recovery-scan.md)：Internal Owner 阶段由 GitHub Actions schedule 调用 Recovery Scan
+- [`0119`](adr/0119-backup-evidence-renewal-is-monthly-fail-closed-automation.md)：Backup evidence 由 fail-closed 自动化每月续期，窗口漂移时停止续期让 gate 到期阻塞
 - [`0107`](adr/0107-journal-diagnostics-do-not-block-publication.md)：Journal Diagnostic Finding 不阻止 Journal 发布
 - [`0070`](adr/0070-user-audio-is-not-retained-long-term.md)：正式用户音频不长期保留，内部 opt-in 以 72 小时为访问边界
 - [`0090`](adr/0090-one-conversation-action-represents-one-semantic-intent.md)：一次 Conversation Action 表达一个语义意图，可确定性传播到多个对象
