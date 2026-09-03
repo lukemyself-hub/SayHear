@@ -3,8 +3,8 @@ import { randomUUIDv7 } from "node:crypto";
 import { createPostgresPool } from "../pool";
 import { PostgresInternalOwnerAccessRepository } from "../postgres-internal-owner-access-repository";
 import {
-  requiredIntegerEnvironment,
   requiredEnvironment,
+  requiredNonNegativeNumberEnvironment,
 } from "./environment";
 
 const verifiedAt = new Date(requiredEnvironment("SAYHEAR_BACKUP_VERIFIED_AT"));
@@ -32,17 +32,17 @@ try {
     configurationFingerprint: requiredEnvironment(
       "SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT",
     ),
-    databaseRetentionDays: requiredIntegerEnvironment(
+    databaseRetentionDays: requiredNonNegativeNumberEnvironment(
       "SAYHEAR_DATABASE_RETENTION_DAYS",
     ),
     evidenceReference: requiredEnvironment(
       "SAYHEAR_BACKUP_EVIDENCE_REFERENCE",
     ),
-    pitrRetentionDays: requiredIntegerEnvironment(
+    pitrRetentionDays: requiredNonNegativeNumberEnvironment(
       "SAYHEAR_PITR_RETENTION_DAYS",
     ),
     policyVersion: requiredEnvironment("SAYHEAR_BACKUP_POLICY_VERSION"),
-    snapshotRetentionDays: requiredIntegerEnvironment(
+    snapshotRetentionDays: requiredNonNegativeNumberEnvironment(
       "SAYHEAR_SNAPSHOT_RETENTION_DAYS",
     ),
     status: "verified",

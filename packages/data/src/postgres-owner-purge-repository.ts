@@ -647,7 +647,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         longest_known_window_days: number | null;
       }>(
         `
-          SELECT longest_known_window_days
+          SELECT longest_known_window_days::float8 AS longest_known_window_days
           FROM backup_policy_versions
           WHERE verification_status = 'verified'
           ORDER BY created_at DESC
@@ -655,9 +655,12 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         `,
       );
       const windowDays = backup.rows[0]?.longest_known_window_days ?? null;
-      const backupRetentionUntil = windowDays
-        ? new Date(input.now.getTime() + windowDays * 24 * 60 * 60 * 1_000)
-        : null;
+      const backupRetentionUntil =
+        windowDays === null
+          ? null
+          : new Date(
+              input.now.getTime() + Number(windowDays) * 24 * 60 * 60 * 1_000,
+            );
 
       await client.query(
         `UPDATE owner_purge_orders
