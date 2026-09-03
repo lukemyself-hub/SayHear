@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-03T09:29:56.218Z",
+  "incumbent": "/Users/lukemyself/Projects/SayHear-agent-wayfinder-issue-166/eval/incumbent-baseline/run/manifest.json",
+  "issues": [],
+  "pass": true,
+  "scanned": {
+    "codeFiles": 148,
+    "migrations": 47
+  },
+  "twin": "/Users/lukemyself/Projects/SayHear-agent-wayfinder-issue-166/eval/incumbent-baseline-1a3a/run/manifest.json"
+}
