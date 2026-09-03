@@ -1,10 +1,14 @@
-# Conversation Text 现任基线(1A.2P merged run,issue #79)
+# Conversation Text 前任基线(1A.2P merged run,issue #79;已归档)
 
 ## Status
 
-Frozen — 1A.3a 起的比较现任基线(baseline chain 见
+Frozen — archived（superseded）。1A.3a cut-over 后由新鲜冻结的 1A.3a 现任基线取代
+（[`eval/incumbent-baseline-1a3a/`](../incumbent-baseline-1a3a/)，issue #166；基线链
+与取代规则见
 [`docs/evaluation/01-behavior-contract-and-rubric.md`](../../docs/evaluation/01-behavior-contract-and-rubric.md)
 §八:基线 = 当前最佳已接受策略的冻结运行;策略升级合入后由新冻结运行取代,旧基线归档可追溯)。
+本目录归档保留、不删除：#126 rollback demo 与 scope-protection 仍引用本目录
+manifest 作为 champion 簇对照。
 
 ## TL;DR
 

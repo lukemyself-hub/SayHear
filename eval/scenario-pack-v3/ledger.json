@@ -41,6 +41,26 @@
       "evidence": "The response clearly addressed the recalled offer and new-job decision but did not repeat the injected company name Brightline.",
       "ruling": "Scorer defect (FP, Luke's AC35 ruling): Objective Memory is recalled when the response clearly points to the specific thing; a background company name is optional wording.",
       "action": "Downgraded this fixture expectation to the advisory semantic tier in scenario-pack:v3.4; temporal and continuity token gates remain active."
+    },
+    {
+      "date": "2026-09-03",
+      "checker": "tiered-checks:v3",
+      "check": "too_many_questions",
+      "scenarioId": "memory-impression-en",
+      "sequenceInScenario": 4,
+      "evidence": "The response quotes the user's own words back (\"The \\\"It's how I am?\\\" at the end is the interesting part.\") and then asks exactly one real question (\"Was she asking like it bothered her, or more like she was curious about you?\"); the counter saw two question marks.",
+      "ruling": "Scorer defect (FP, Luke's 2026-09-03 ruling on the #166 fresh incumbent run): 引号回声问号 — the quoted mark echoes the user's own words and does not demand an answer; the turn asks one question.",
+      "action": "Recorded under the #126 settled FP class (引号回声问号 / 吧-句情绪确认 / tag 问句 / 修辞自问均不计为第二追问)."
+    },
+    {
+      "date": "2026-09-03",
+      "checker": "tiered-checks:v3",
+      "check": "too_many_questions",
+      "scenarioId": "memory-temporal-mix",
+      "sequenceInScenario": 4,
+      "evidence": "The response opens with the surprised echo 「5.9 第一次就拿下了？」 and then asks one compound follow-up about the shaking hands before closing with 「到顶那一下什么感觉啊？」; the counter saw two question marks.",
+      "ruling": "Scorer defect (FP, Luke's 2026-09-03 ruling on the #166 fresh incumbent run): the leading fragment is a surprised echo, not a follow-up demanding an answer; the remainder asks one compound question (复合单问) — same shape as the 2026-08-29 topic-change-mix t2 ruling, now applied to this instance.",
+      "action": "Recorded as a known false positive; no checker revision this round."
     }
   ],
   "falseNegatives": [],
