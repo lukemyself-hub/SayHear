@@ -302,7 +302,7 @@ S3 Lifecycle 的 eligibility 和执行都不是精确时钟，因此不能把 96
 | --- | --- | --- |
 | Foundation / 1A.1 | stable `user_id`、`data_epoch`、owner / active / epoch 读取与 Egress fence、deletion-compatible lineage、日志脱敏、传输与静态加密、已核验 `backup_policy_version` | 删除 API、通用 deletion workflow、完整 ledger、恢复演练、消费者 UI |
 | 1A.2 | operator-only Internal Owner Full Purge；撤销 session / Egress、增加 epoch、清理 Conversation、Evidence、Summary、DialogueState、Conversation Action envelope / payload / Execution / Receipt 与 Journal，生成 active-system receipts；在业务 DB 备份之外保存单 owner 最小 purge marker | 单条 Conversation / Journal 删除、消费者账号生命周期、对所有未来数据类型预建 handler |
-| 1A.3a | Full Purge 扩展到 Entity、Memory、Embedding 与相关索引 | 提前建设 Replay 或 Voice 删除 |
+| 1A.3a | Full Purge 扩展到 Entity、Memory 与相关索引；按 ADR-0115 本阶段不产生 Embedding 数据面，向量派生物在证据触发引入 Embedding 的阶段并入该阶段的扩展覆盖 | 提前建设 Replay 或 Voice 删除 |
 | 1A.3b | Full Purge 扩展到 Episode、Open Loop、Proactive Follow-up State、Reflection、Profile 与相关索引 | 提前建设 Replay 或 Voice 删除 |
 | 1A.4 | Full Purge 扩展到 Replay input / output 与相关 eval artifact | 提前建设 Voice 删除 |
 | 1B.1 | Full Purge 扩展到 AudioAsset、Transcript revision / segment、Voice runtime metadata 与临时对象 | 提前建设 delivered-prefix buffer |
