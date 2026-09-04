@@ -352,6 +352,10 @@ _Avoid_: Claim status, Exact timeline, Evidence date
 SayHear 根据用户表达形成、但并非用户直接陈述的主观观察或推断；其认识状态属于 inferred，默认至少需要来自两个 Daily Session 的两条独立 User Evidence 才能进入长期 Memory。召回时可以用自然、朋友式的语言直接表达这一理解；不确定性的措辞可以使用，但不是每次召回的强制要求。
 _Avoid_: Objective Memory, Personality fact
 
+**Predicate Registry**:
+SayHear 自有的版本化受控语义词表，定义每个 Predicate 的准入边界、schema 与本地化表达；模型只能把用户表达映射到已有条目，不能创建或修改它，新条目只随代码库 release 发布。
+_Avoid_: Topic list, Model-editable vocabulary, Prompt dictionary
+
 **Sensitive Memory Predicate**:
 医疗健康、性取向、宗教或政治身份、创伤、法律或财务等高影响私人领域的 Predicate；敏感领域可以进入长期 Memory，但每个 Predicate 必须分别限定允许的 Claim kind，不能因话题敏感或重要就取得推断权限。
 _Avoid_: Prohibited topic, Sensitive topic filter
@@ -375,6 +379,18 @@ _Avoid_: Valuable Predicate, Approved Memory Candidate
 **Predicate Review Deadline**:
 Predicate Review Eligible Candidate 进入 `needs_predicate_review` 后最多等待人工处理 30 天；到期仍未获得明确处置时转为 stale，并失去继续晋升为 Claim 的资格。
 _Avoid_: Indefinite Review Queue, Memory Retention Period
+
+**Internal Candidate Review Tool**:
+Internal Core 的 Web 开发者工具中，供授权人工查看 Predicate Review 队列、检查 Evidence 并提交处置命令的受控界面；它不是消费者 Review Inbox，也不是 Registry、Proposal 或 Claim 的直接写入口。
+_Avoid_: Review Inbox, Registry editor, User-facing memory page
+
+**Candidate Review Module**:
+Internal Candidate Review Tool 背后统一执行 Candidate 处置的应用层深 Module；它集中校验 capability、step-up、期限与并发并写 access audit，但既不能发布 Registry，也不能直接创建 Claim。
+_Avoid_: Review Tool, Direct table write, Registry publisher
+
+**Predicate Registry Governance Module**:
+独立拥有 Predicate Change Proposal 版本、代码库 Registry release、mapping tests 与 migration 的应用层深 Module；它接受 Candidate Review Module 的委托创建不含用户内容的 Proposal，但发布只由代码 release 驱动，Web 不能直接调用它发布。
+_Avoid_: Candidate Review Module, Web-publishable surface, Runtime registry writer
 
 **Predicate Change Proposal**:
 授权人工对一个通用 Predicate 概念作出产品治理决定后形成的版本化提案；它可以等待发布、被产品级拒绝、发布或取消，并关联多个 Candidate，但不能包含用户 Evidence 或具体私人值，也不是 active Registry Entry。

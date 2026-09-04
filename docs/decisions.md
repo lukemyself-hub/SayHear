@@ -112,6 +112,7 @@ Accepted
 - [`0051`](adr/0051-terminal-candidate-content-expires-after-seven-days.md)：Terminal Candidate 派生语义 7 天后清除
 - [`0052`](adr/0052-only-materially-new-evidence-creates-successor-candidates.md)：只有 Materially New Evidence 可以创建 successor Candidate
 - [`0053`](adr/0053-product-value-rejection-is-a-proposal-version.md)：概念级产品拒绝保存为无用户内容的 Proposal version
+- [`0122`](adr/0122-candidate-review-commands-are-synchronous-and-fail-closed.md)：Candidate review 处置是同步 CAS 命令，人工处置以 `decided_at <= review_due_at` fail closed；取消 Proposal 立即终局等待中的候选人；Proposal 无用户内容由 schema 结构排除保证
 
 ### Core Flow 实现边界
 
