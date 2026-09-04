@@ -1009,19 +1009,20 @@
       '<h3>' + esc(sc.title) + '</h3><p>' + esc(sc.intro) + '</p>'
       + '<p class="stepdesc"><strong>看什么：</strong>' + esc(sc.watch) + '</p>';
     var stepsEl = document.getElementById('scenarioSteps');
-    var nextDisabled = false;
     stepsEl.innerHTML = sc.steps.map(function (step, i) {
       var desc;
       if (step.kind === 'new_exchange') desc = '→ 开启新 Continuous Exchange';
       else if (step.kind === 'advance_day') desc = '推进一天';
       else desc = '你说：' + step.utterance;
-      var disabled = nextDisabled;
-      nextDisabled = true; // only the immediately-next step is active
-      var cls = i < stepsDone ? 'done' : '';
-      return '<button data-i="' + i + '" ' + (disabled || i !== stepsDone ? 'disabled' : '') + ' class="' + cls + '">'
-        + (i < stepsDone ? '✓ ' : '') + '步骤 ' + (i + 1) + ' · ' + esc(desc)
-        + (disabled ? ' <span class="stepdesc">（按顺序来）</span>' : '') + '</button>';
-    }).join('');
+      var isDone = i < stepsDone;
+      var isNext = i === stepsDone;
+      return '<button data-i="' + i + '" ' + (isNext ? '' : 'disabled') + ' class="' + (isDone ? 'done' : '') + '">'
+        + (isDone ? '✓ ' : '') + '步骤 ' + (i + 1) + ' · ' + esc(desc)
+        + (isNext ? '' : ' <span class="stepdesc">（' + (isDone ? '已完成' : '按顺序来') + '）</span>') + '</button>';
+    }).join('')
+      + (stepsDone >= sc.steps.length
+        ? '<p class="stepdesc">本场景走完了。可以换下一个标签，或开盲评对比。</p>'
+        : '');
     Array.prototype.forEach.call(stepsEl.querySelectorAll('button[data-i]'), function (b) {
       b.addEventListener('click', function () {
         var i = +b.getAttribute('data-i');
