@@ -262,6 +262,26 @@ _Avoid_: Data cleanup question, Intake question
 由 User Evidence 支撑、具有明确现实事件锚点并可跨 Turn 或 Session 持续补充的一段版本化生活事件，例如一次旅行、一次搬家或一个项目阶段；它不是 Conversation、话题或情绪分类。只有 Evidence 能安全指向同一现实事件时才续接原 Episode，身份不确定时保持未绑定或在明确为不同事件时新建。
 _Avoid_: Conversation, Daily Session, Topic cluster
 
+**Episode Kind**:
+对现实事件进行粗粒度分组的闭集代码版本化分类，由少量携带 typed anchor schema 的具体 kind 与一个 `other` 兜底 kind 构成；模型不能自造或自由分类 kind，未映射提案确定性降级为 `other`，目录扩张只是可选的代码 release，不是覆盖用户多样性的前提。
+_Avoid_: Model-invented kind, Topic tag, Free-form classification
+
+**Episode Candidate**:
+模型从具体 EvidenceItem 提出的非权威 Episode 提案；身份判定（new / matched / unresolved）与生命周期（proposed / accepted / rejected / stale）是两个正交维度，只有确定性代码校验 Evidence、现实事件锚与连续性后才创建或续接 Episode，rejected 与 stale 是终局状态。
+_Avoid_: Episode, EpisodeVersion, Draft Episode
+
+**Episode Temporal Anchor**:
+Episode 时间边界上由 User Evidence 支撑的描述；每个边界保留 exact / month / year / approximate / unknown 精度，并携带只由 Evidence 推导的 planned / ongoing / completed / unknown 阶段，系统不得把缺失或近似时间补成精确日期。
+_Avoid_: Exact timeline, Evidence date, System-filled date
+
+**Episode Builder**:
+每日在冻结 Evidence snapshot 上运行的 Episode 派生流程；模型只产出类型化提案，new / matched / unresolved 与准入由确定性 validator 决定，其失败或缺失不阻止 Understanding Response、Journal 或基础 Memory Claim。
+_Avoid_: Online extraction, Model-authored episode, Episode
+
+**Episode Impact Review**:
+Entity merge / split 或底层 Evidence correction 后，通过反向血缘只对引用受影响 Entity 或 Evidence 的 EpisodeVersion 执行的定向重验证；受影响版本暂停 enrichment 使用，直到重新验证或被新版本取代。
+_Avoid_: Full episode scan, Automatic episode rewrite
+
 ## Memory 与用户控制
 
 **Reflection**:
