@@ -545,21 +545,131 @@ Forget 后的重新开放遵循显式 Memory Forget Reversal：
 
 Open Loop 与长期 Memory / Profile 分开：
 
-1. 只从 direct User Evidence 提取具体 `upcoming_event` 或 `awaited_outcome`
-   Candidate；普通未聊完话题、情绪或模型想以后追问的内容不合格；
-2. 代码验证现实 pending anchor，并要求 `expires_at` 来自用户时间表达或版本化
-   policy；没有有限期限的 Candidate 不创建；
+1. 模型只从 direct User Evidence 提出瞬时 `OpenLoopProposal`，不创建或持久化
+   Candidate；Proposal 可以包含 kind、Evidence locator、pending anchor、用户时间
+   表达与可选 source reference；
+2. 代码确定性验证一个可独立关闭的 pending state、封闭 kind、非任务边界、现实
+   pending anchor、唯一 source binding、dedupe identity，并要求 `expires_at` 来自
+   用户时间表达或版本化 policy；任一 gate 未通过只记录结构化 skip reason，
+   不保存 Proposal 语义、不进入 Context，也不主动澄清；
+   expected time 以形成时冻结的 start / exclusive end、精度与 IANA timezone 保存；
+   exact instant 不伪造 end，date-only / bounded range 按 source Daily Session timezone
+   做 calendar 解析，approximate / unknown 不伪造边界；`expires_at` 表示 selector
+   最晚可用时间，有范围时从 exclusive end、exact instant 从 start、无时间 anchor
+   时从 Evidence 时间增加版本化有限期限；
+   bounded range 超过 31 个当地日历日时不创建 Open Loop；模糊自然语言只有命中
+   版本化 lexical near-term allowlist 才按无 anchor policy 继续，模型不能自行放宽；
+   v1 的 anchored grace 为 upcoming 7 日 / awaited 14 日，无 anchor 两类都为 14 日，
+   且 `expires_at` 不得晚于 Evidence time + 360 个当地日历日；超过 horizon 的 Proposal
+   不创建，policy 更新也不重算历史 Version；
+   anchored upcoming 的 `followup_eligible_from_at` 是 expected start 前 14 日，
+   anchored awaited 是 expected start，无 anchor 两类都是 Evidence time；到达该时间
+   只开放 selector 资格，不形成询问配额；
 3. 同一事项已有 time-bound Objective Claim 或 Episode 时，OpenLoopVersion
-   引用其 current Version，不复制第二条事实；
-4. 用户明确表达完成、取消或结果已出时，创建新的 completed / canceled Version；
-   到期任务创建 expired Version，`open_loop_id + source_revision + target_status`
-   保证幂等；
-5. 只有 current Version 为 open、尚未过期，且当前 Turn 已有新 User Event 时，
+   始终保留自己的 direct Evidence，并引用精确表达同一事实的 active Objective
+   ClaimVersion 与安全绑定的 EpisodeVersion；两个引用可以同时存在但不继承其
+   其他 Evidence / 推断，缺少 enrichment 也不阻止形成；`localized_summary` 只作
+   可重建 rendering，不复制第二条事实；
+4. 到达 expected time / range 不改变状态；用户明确表达 upcoming event 已发生时创建
+   `occurred` Version，awaited outcome 的结果已出时创建 `resolved` Version，事项取消
+   时创建 `canceled` Version；kind 与 terminal status 不匹配时拒绝。terminal status
+   不编码成功、失败、结果好坏或满意度；
+   closure Evidence 可以是明确终态陈述，或只有终态成立才可能知道的亲历内容；
+   假设、可能、未来、条件表达、时间到达、沉默或 Assistant / System 内容均拒绝，
+   `canceled` 必须由明确取消、撤回、放弃或确定未发生支持；
+   如果 resolver 返回多个合理 target，则关闭零个，为全部候选提交
+   `ambiguous_closure` suppression，并只记录 Evidence / candidate ID、proposed status、
+   policy version 与 disposition 的无正文 audit；closure workflow 不强制追问；
+   读路径在 `now >= expires_at` 时立即 fail closed；全局 recovery scanner 查询到期
+   open Version，以 `open_loop_id + expiring_version_id + expired + policy_version`
+   保证幂等并创建 expired Version；`terminal_effective_at=expires_at`，`processed_at`
+   记录实际提交时间；
+5. 只有 current Version 为 open、已经到达 `followup_eligible_from_at`、尚未过期，
+   且当前 Turn 已有新 User Event 时，
    Context Compiler 才能选入；它可以支持 Assistant 在本轮主动询问进展，不要求
    utterance 已先提到相同话题。closed / expired Loop 不进入当前 Context；
 6. Open Loop 不进入 Profile；用户没有发起当前对话时不创建消息或通知，也不形成
    目标、任务列表、完成率或催促式输出；
 7. 关闭不删除底层 Evidence、Objective Claim、Episode 或历史 Journal。
+
+通过全部 gate 的 Proposal 必须在同一 owner `data_epoch` 与 source-revision fence
+事务中创建 logical Open Loop 和首个 Version。单条不合格 Proposal 不阻止同一 run
+中的其他合格 Proposal。新的 User Evidence 可以在后续 run 中重新提出。
+
+同一 `event_revision_id + proposal_index + extraction_policy_version` 的 formation 必须
+幂等。跨 Evidence resolver 先用 Episode、Entity、时间与语义相似召回 candidate，但
+只有明确唯一的 existing-loop reference，或同一 canonical Objective Claim + 同 kind +
+兼容时间，才创建 existing logical Loop 的新 Version。没有 candidate 通过时创建新
+Loop；相似 candidate 存在但无法唯一证明时记录 `ambiguous_loop_identity` 并跳过。
+
+expiry scanner 复用全局 recovery route，不为每个 owner / Loop 创建 Cron。它按稳定
+顺序分批领取 `status=open AND expires_at <= now`，用 row lock / CAS 在事务内重验
+owner、`data_epoch`、current Version、status 与 deadline；失败留给下轮补捞。scanner
+只物化 Version 与 current pointer，不能创建 GenerationCommand、Assistant Event、
+消息、通知或任务输出。
+
+Closure / expiry 并发由 Closure Evidence Event 的 `committed_at < expires_at` 唯一裁决。
+边界前 Event 即使处理较晚，也可以通过 CAS 为 scanner 先写的 expired Version 创建
+kind-specific terminal successor；expired 中间 Version 保留历史。边界后 Event 不改写
+expired Loop，只继续其他 Evidence 派生流程。closure 的 `terminal_effective_at` 使用
+Event committed time，`processed_at` 使用实际提交时间；worker 顺序与模型解析的现实
+发生时间都不能改变结果。
+
+source revision、Forget / deletion fence 或 identity binding 失效后，所有读取先立即
+fail closed，再由幂等 impact command revalidate。corrected Evidence 仍支持同一
+pending state 时，为同一 logical Loop 创建新 open Version 并重新计算时间、eligibility、
+expiry 与 enrichment references；不再支持、变成 Task / 宽范围或仍有歧义时创建
+`retracted` Version。Claim / Episode Version 变化不能直接决定 Loop 状态，只能触发
+基于直接 Evidence 的 revalidation。失败保持 fenced；Full Purge走删除流程而非 retraction。
+
+现实终态 `occurred / resolved / canceled` 永不 reopen；之后的新事件或结果等待创建新
+logical Loop。`expired / retracted` 只在新 direct User Evidence 唯一重申同一 pending
+state 且通过当前全部 gate 时，才为同一 logical Loop 创建新 open Version，并用新
+Evidence / policy 重新计算所有时间字段。kind 变化始终创建新 Loop；旧 Evidence、时间、
+confidence、repair 与 reconciliation 都不能复活 terminal Version。
+
+Version 退出 current open 后，以 supersede time 或 terminal effective time 开始 30 日
+Content Grace；sweeper 清除 `localized_summary` 并保留受保护的结构化 lineage。
+grace 内正文不进入 Context，只供受控排错与仍有权限的精确 Replay；清理后 Replay
+fail closed。Forget不延长 grace，source deletion立即清除受影响正文、时间、关联与
+fingerprint，Full Purge删除整个 Open Loop 数据面。恢复旧备份时先重放 retention /
+purge state，过期正文清理完成前不能开放读取。
+
+Failure policy：
+
+- provider timeout / transport error / 顶层 Schema 无法解析：run=`retryable_failed`，
+  不提交 Proposal；
+- response 合法但单条 Proposal 语义不合格：只记录结构化 skip reason，其他合格条目
+  继续；
+- 合格条目的领域写入与 run settlement 在同一 source-revision-fenced transaction提交，
+  事务失败全部回滚并幂等重试；
+- owner / `data_epoch` / source revision 变化：`stale_source`，旧输入不重试；
+- source revalidation失败：保持旧 Version read-fenced；expiry scanner失败：读取仍按
+  deadline fail closed并由下轮补捞；
+- 超过 retry threshold：保持 fenced / ineligible，发出无正文 operator alert，不猜
+  terminal或默认状态。
+
+selector 只有在 snapshot 前全部 final / corrected User Event 的 formation / closure均
+settled且无 pending source invalidation时运行；否则本轮 Open Loop lane整体为空，不能
+复用 stale output。基础 Conversation、Journal 与独立 Memory lane 继续。恢复只从
+authoritative Event / Version重算，失败模型输出不得续用。
+
+同一 User Event 的 multi-effect processing 按固定顺序执行：
+
+1. 冻结并验证 source、owner与 `data_epoch`；
+2. 应用 Correction、Forget与 source invalidation；
+3. 只对事务开始前已存在的 open Loop解析 closure并写 terminal或 ambiguous suppression；
+4. 基于更新后的 current state 执行新 formation 与 dedupe；
+5. 把全部通过 gate 的 effects和 run settlement原子提交。
+
+新形成的 Loop 不能成为同一 Event closure candidate。独立 Proposal 语义失败只 skip 该条；
+事务失败则所有 effects回滚。若 closure唯一但新 awaited outcome身份歧义，可以只提交
+closure；不能把两个 independently closable pending state原地改成同一 Loop的 kind变化。
+
+formation capacity 在 closure / retraction 后计算：每 Event 最多 4 个新 Loop，每 user
+最多 128 个 current open Loop，suppressed open 也计入。超出 per-Event cap 时按 eligibility、
+expiry、Evidence locator升序保留；达到 user cap时新条目以 `capacity` skip。不得让模型
+决定 importance，不得因容量驱逐或伪造 terminal state，也不自动重试或通知用户。
 
 Proactive Follow-up 的停止信号通过 Conversation Behavior projection 提交：
 
@@ -568,6 +678,8 @@ Proactive Follow-up 的停止信号通过 Conversation Behavior projection 提�
 - 后续 selector 必须同时检查 target current Version 与 Follow-up State Version；
 - 用户主动重提同一事项，或新的相关 User Evidence 推进 target Version 时，
   创建 eligible State Version；后台时间经过和模型 confidence 不能解除抑制；
+- `ambiguous_closure` 只有新的唯一识别 Evidence 才能关闭目标并释放已证明为非目标的
+  候选；未澄清候选保持 suppressed 直到各自 expiry；
 - 同一 `daily_session_id + continuous_exchange_no` 已有 committed Assistant
   Event 使用 Proactive Follow-up 时，本段交流不再选择第二个 target。
 

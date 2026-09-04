@@ -100,7 +100,7 @@ Accepted
 - [`0039`](adr/0039-ai-impressions-require-cross-session-evidence.md)：AI Impression 需要跨 Session 独立 Evidence
 - [`0040`](adr/0040-memory-conflict-is-a-last-resort-state.md)：先解释时间与 scope，无法消解时才 contested
 - [`0041`](adr/0041-only-ai-impressions-use-time-based-dormancy.md)：只有 AI Impression 使用按时间复核的 dormancy
-- [`0042`](adr/0042-open-loops-are-expiring-context-projections.md)：Open Loop 是有期限的短期 Context projection
+- [`0042`](adr/0042-open-loops-are-expiring-context-projections.md)：Open Loop 是有期限的 Context projection
 - [`0043`](adr/0043-proactive-follow-up-starts-inside-user-initiated-conversations.md)：主动关心先限定在用户已发起的对话内
 - [`0044`](adr/0044-proactive-follow-up-stops-on-user-signals.md)：主动关心让位于当前诉求并尊重停止信号
 - [`0045`](adr/0045-sensitive-memory-allows-stated-facts-not-inferred-labels.md)：敏感事实可记，敏感标签不可由 AI 推断

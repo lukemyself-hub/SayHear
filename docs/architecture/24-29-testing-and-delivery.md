@@ -210,8 +210,57 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | 用户说“我明天有面试” | 可创建 time-bound Objective Claim，并从同一 Evidence / ClaimVersion 派生一个有 `expires_at` 的 Open Loop；不复制第二条事实 |
 | 用户说“这件事让我一直很纠结” | 不创建 Open Loop；情绪或未聊完话题不是具体 pending 事项 |
 | 模型想下次继续追问某个话题 | 不创建 Open Loop；Assistant intent 不是 User Evidence |
-| 用户说“检查结果出来了”并能唯一绑定待确认结果 | 创建 completed OpenLoopVersion；底层 Evidence 与可能的 Episode / Claim 保留 |
+| 用户说“检查结果出来了”并能唯一绑定待确认结果 | 为 `awaited_outcome` 创建 `resolved` OpenLoopVersion；底层 Evidence 与可能的 Episode / Claim 保留 |
+| 用户说“面试结束了，但发挥得不好”并能唯一绑定 upcoming event | 创建 `occurred` OpenLoopVersion；status 不编码成功、失败或评价 |
+| 用户说“面试官一直追问我的空窗期”并能唯一绑定 upcoming event | 亲历内容直接蕴含事件已发生，创建 `occurred` Version，不要求固定关闭关键词 |
+| 用户说“医生说指标都正常”并能唯一绑定 awaited outcome | 结果内容直接蕴含结果已出，创建 `resolved` Version；结果好坏不影响终态 |
+| 用户说“面试应该已经结束了吧”或只到达 expected time | 不构成 Closure Evidence；保持 open，不能由模型常识补全 |
+| 用户没有再提预约 | 不推断 canceled；只有明确取消、撤回、放弃或确定未发生才创建 `canceled` Version |
+| 用户有两场 open 面试，只说“面试结束了，比想象中难” | 两场都不关闭；最小 audit 记为 ambiguous，并对两个合理候选创建 `ambiguous_closure` suppression |
+| 用户随后说明“是 Google 那场” | 唯一绑定并关闭 Google Loop；释放已证明为非目标的另一候选，不复用原歧义猜测 |
+| ambiguous closure 后用户不澄清或转换话题 | 不强制追问；候选保持 open + suppressed，直到新的唯一识别 Evidence 或各自 expiry |
+| 尝试为 awaited outcome 写 `occurred`，或为 upcoming event 写 `resolved` | validator 拒绝；kind-specific terminal status 不得互换 |
 | Open Loop 到达 `expires_at`，用户没有再提 | 幂等创建 expired Version；停止进入 Context，不发送提醒 |
+| `expires_at` 已到但 scanner 尚未运行 | 读路径立即 fail closed；不得因 current pointer 仍指向 open Version 而进入 Context |
+| expiry scanner 延迟 45 分钟后提交 | `terminal_effective_at` 仍等于原 `expires_at`，`processed_at` 记录实际提交时间 |
+| 两个 worker 同时领取同一到期 Version | row lock / CAS 与 idempotency identity 只允许一个 expired successor |
+| Closure Evidence Event 在 `expires_at` 前提交，但 extraction 晚于 scanner | closure 最终创建 kind-specific terminal successor；竞态 expired Version 保留为不可变中间历史 |
+| Closure Evidence Event 在 `expires_at` 边界或之后提交 | Open Loop 保持 expired；Evidence 仍可进入回应、Claim、Episode 或 Journal |
+| 用户在 expiry 后说“其实九点就结束了” | 不按模型解析的现实时间追溯改写；竞态只看 authoritative Event `committed_at` |
+| closure 与 expiry worker 相反顺序重放 | 最终 current status 相同；调度顺序不影响裁决 |
+| “我周五有面试”被 corrected 为“是下周五” | 旧 Version 立即 fail closed；同一 logical Loop 创建新 open Version并重算时间与 source reference |
+| 原表达被 corrected 为“不是面试，只是要回邮件” | 创建 `retracted` Version；不得把 Task 保留为 Open Loop |
+| linked EpisodeVersion 重建，但直接 Evidence 仍支持 Loop | revalidate并更新或移除 Episode reference；不从 Episode 自动复制状态 |
+| active Forget fence 覆盖 Loop 内容 | 读取立即停止，旧 Evidence 不能通过 Open Loop 绕过 Forget；impact processing 幂等 retract或重建 |
+| source revalidation worker失败 | 保持 read-fenced；不得继续使用旧 open Version或靠 confidence 保活 |
+| Internal Owner Full Purge | 删除 Open Loop、Versions、proactive state、audit 与索引；不创建 `retracted` 代替删除 |
+| expired awaited outcome 后用户明确说“我还在等同一个结果” | identity 唯一且当前 gate 通过时，在同一 logical Loop 创建新 open Version并重算时间 |
+| retracted Loop 后新的直接 Evidence 再次明确支持同一事项 | 通过当前 formation / Forget gate 后，在同一 logical Loop 创建新 open Version；不复活旧 Version |
+| occurred / resolved / canceled 后用户描述新的预约、事件或结果等待 | 创建新的 logical Open Loop；现实终态永不 reopen |
+| upcoming event 后来进入 awaited outcome | 创建新的 logical Loop；kind 变化表示另一 independently closable pending state |
+| 只有旧 Evidence、时间经过、confidence 或 repair | 不 reopen expired / retracted Loop |
+| OpenLoopVersion 被 supersede 或进入 terminal | 从语义退出 current open 的时间开始 30 日 Content Grace；正文不再进入 Context |
+| Content Grace 到期 | 清除 `localized_summary` 并写 `content_purged_at`；保留受保护的结构化 lineage |
+| Replay引用已清理的 Open Loop正文 | 明确 fail closed；不得用 current Version近似重建 |
+| source deletion发生在 Content Grace 内 | 立即清除正文、时间、关联与 fingerprint，不等待 30 日 |
+| 从旧备份恢复出已过 grace 的 summary | 保持不可读，先重放 retention/purge并清理，完成前不开放流量 |
+| provider timeout、transport error 或顶层 Open Loop response Schema 损坏 | run=`retryable_failed`；不提交任何 Proposal，幂等重试 |
+| response合法但一条 Proposal语义不合格 | 该条记录结构化 skip；同一 response内其他合格 Proposal仍可原子提交 |
+| Open Loop事务中途失败 | 本 source revision 的领域写入全部回滚；不留 partial Loop / Version / link |
+| owner、`data_epoch` 或 source revision在处理前变化 | `stale_source`；旧输入不重试、不写状态 |
+| source revalidation持续失败 | 旧 Version保持 read-fenced；超过阈值发无正文 operator alert，不猜 terminal状态 |
+| snapshot前存在未 settled formation / closure或 pending invalidation | 整个 Open Loop section为空；基础回应、Journal与独立 Memory lane继续 |
+| Open Loop lane恢复 | 只从 authoritative Event / Version重算；不得复用失败模型输出或 stale cache |
+| 检查 Open Loop错误日志与指标 | 只含 ID、revision、stage、reason、attempt与 latency；0 用户正文、summary或 Evidence quote |
+| 用户说“面试结束了，现在等结果”且两个 target都唯一 | 同一事务将既有 upcoming Loop推进为 `occurred`，并形成新的 open awaited Loop |
+| 同一 Event中新 awaited Proposal不合格 | 已独立通过的 occurred closure仍提交；不把 old Loop原地改 kind |
+| multi-effect事务在formation写入时失败 | closure与formation全部回滚；重试后原子收敛，不留下半状态 |
+| 新 formation与既有 closure语义相似 | closure resolver只看事务开始前的 open snapshot；新 Loop不能被同一 Event立即关闭 |
+| 一个 Event包含 6 个合格 Open Loop | 只形成排序最前的 4 个；其余以无正文 `capacity` skip，不建 Candidate |
+| user已有 128 个 current open Loop | 先应用同事务 closure / retraction；仍满额则不形成新 Loop，也不驱逐旧 Loop |
+| 128 个中包含 suppressed open Loop | suppressed仍计入容量；行为 suppression不等于 terminal state |
+| 模型给 Proposal附 importance score | admission忽略；只按 eligibility、expiry、Evidence locator确定性排序 |
+| capacity policy后来提高 | 只影响新的 User Evidence；不重放旧 capacity skip或重算历史 |
 | closed Open Loop 与当前话题语义相似 | Context Compiler fail closed；不能恢复或询问进度 |
 | 用户以“你好”发起新 Turn，存在合适的 open / unexpired Open Loop | Assistant 本轮可以主动询问该事项进展，不要求 utterance 已先提到相同话题 |
 | 到期扫描或后台 Workflow 发现 open Open Loop，但没有新 User Event | 不创建 GenerationCommand、Assistant Event、消息或通知 |

@@ -232,7 +232,9 @@ Claim、Embedding、Summary、Transcript finalization 和 Replay。
   引用已删除 Evidence 的 active Journal、未完成 deletion request、已接受但缺少
   后续进展的 ActionExecution，以及 Receipt 与 current projection 不一致；
 - 1A.3：重复 current ReflectionVersion、无源 Embedding、引用已删除 Evidence
-  的 active Claim / Reflection、无有效 Mention / Evidence 的 active Entity label；
+  的 active Claim / Reflection、无有效 Mention / Evidence 的 active Entity label，
+  到达 `expires_at` 但尚未物化 expired Version 的 current open Open Loop，以及 source /
+  Forget / identity fence 已失效但尚未 revalidate 或 retract 的 Open Loop；
 - 1A.4：已失效 source 的 Replay；
 - 1B.1：过期未删除音频、卡住的 Transcript finalization 和 Voice runtime cleanup；
 - 1B.2：卡住或无法收敛的 delivery receipt / buffer。

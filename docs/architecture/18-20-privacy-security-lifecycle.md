@@ -19,7 +19,7 @@ Proposed
 | 级别 | 示例 | 处理 |
 | --- | --- | --- |
 | Highly Sensitive Content | 对话、Journal、Profile、Memory、音频、Replay 输出、临时 Action payload | 严格权限、加密、禁止普通日志 |
-| Sensitive Derived Data | Embedding、Summary、Episode、Memory Candidate 语义、分类结果 | 与源数据同等删除和访问控制 |
+| Sensitive Derived Data | Embedding、Summary、Episode、Open Loop、Proactive Follow-up State、Memory Candidate 语义、分类结果 | 与源数据同等删除和访问控制 |
 | Operational Metadata | ID、状态、延迟、token、错误类别 | 可进入脱敏观测 |
 | Public / Static | 产品策略版本、无用户内容 Schema | 正常版本管理 |
 
@@ -458,6 +458,25 @@ Account Deletion 清除。
 先重新应用当前 deadline 与 purge state；已过期正文保持不可读并再次清理，完成前
 不能开放流量。
 
+#### 20.4.2 Open Loop 历史内容过期
+
+current open OpenLoopVersion 保留 `localized_summary`。Version 被 supersede 或进入
+`occurred / resolved / canceled / expired / retracted` 后，从 supersede time 或
+`terminal_effective_at` 起最多保留 30 日，且只能用于受控排错与仍具全部权限的精确
+Replay；任何 terminal / non-current 正文都不能重新进入 Context。到期 sweeper 清除
+`localized_summary` 并写 `content_purged_at`，依赖该内容的 Replay必须 fail closed。
+
+清理后保留的结构化 lineage 仍属于 Sensitive Derived Data，包括 identity、revision、
+kind / status、policy、supersedes、仍有效 source reference、expected window、timezone、
+eligibility / expiry 与 terminal / processing timestamps。Forget立即 read-fence / retract，
+但不把保留期延长到 30 日之后。单条 source deletion 不等 grace，立即清除受影响正文、
+时间窗口、对象关联、locator / fingerprint，只保留 fencing 所需的最小无正文 envelope。
+Internal Owner Full Purge删除 Open Loop logical row、全部 Version / envelope、closure audit、
+Proactive Follow-up State 与索引。
+
+30 日是 active system content grace，不是数据库备份物理过期承诺。恢复旧备份时必须先
+重新应用 deadline 与 purge state，已过期内容保持不可读并再次清理，完成前不开放流量。
+
 单条 Event / Revision 删除时使用确定性传播规则：
 
 1. 先使该 source revision、EvidenceItem、EntityMention 和所有 typed evidence link
@@ -478,7 +497,7 @@ Account Deletion 清除。
    再用剩余事件生成 superseding version；不得只删除 evidence edge 后保留原正文；
 7. 任何 ReflectionStatement 引用失效 Evidence 时，整个 ReflectionVersion
    停止驱动 Candidate / Profile，并从剩余 Evidence 重建新版本；
-8. 相关 SummaryVersion 和 EpisodeVersion 整体失效并重建；
+8. 相关 SummaryVersion、EpisodeVersion 与 OpenLoopVersion 整体失效并重建或 retract；
 9. 相关 Embedding 先删除，再从仍有效的新版本生成；
 10. Profile Projection、Compiled Context snapshot、Replay input / output 和 cache
    按 lineage 同步失效；
@@ -496,7 +515,7 @@ Append-only 与 privacy erasure 的边界：
   Journal Version / Statement、Reflection Version / Statement、Memory Claim Version /
   Relationship Qualifier Assertion / evidence link、localized projection、
   Relationship Resolver Hint、
-  Summary、Episode、Profile Projection、Compiled Context snapshot、Replay、Draft、
+  Summary、Episode、Open Loop、Proactive Follow-up State、Profile Projection、Compiled Context snapshot、Replay、Draft、
   Validation artifact、可选 Voice delivery buffer 和 model artifact；
 - 可以保留无正文的 identity envelope、revision number、状态、purged lineage 和
   `content_purged_at`，用于证明删除和防止旧任务复活；

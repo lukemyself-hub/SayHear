@@ -381,11 +381,18 @@ Context Compiler 是正式应用服务，不是散落在 API handler 中的字�
 11. 实时客户端信号（1B）；
 12. 输出格式，以及当前版本化 Conversation Action Catalog 中允许的高层 Action 定义。
 
-Open Loop 只读取 current Version 为 open 且尚未超过 `expires_at` 的少量
+Open Loop 只读取 current Version 为 open 且
+`followup_eligible_from_at <= now < expires_at` 的少量
 projection。当前 Turn 已有新提交的 User Event 时，selector 可以选出一个合适的
 Open Loop，让 Assistant 在本轮主动询问进展，不要求 utterance 已先提到相同话题。
 没有新 User Event 时，Open Loop 不得单独创建 GenerationCommand、消息或通知；
-它也不能触发任务型输出。过期或关闭的 Loop fail closed。
+它也不能触发任务型输出。`now >= expires_at` 时立即 fail closed，不等待 scanner
+物化 expired Version；其他关闭状态同样 fail closed。
+
+Open Loop section 还要求 snapshot 前所有 final / corrected User Event 的 formation /
+closure processing均已 settled，且不存在 pending source invalidation。watermark有 gap、
+timeout 或 unresolved error 时整个 section 为空，不使用 stale cache；Conversation、Journal
+与独立 Memory section继续。恢复后只从 authoritative Event / Version重算。
 
 Person Portrait（1A.3a+，ADR-0111）是每轮重新选择的“用户是怎样的人”选集。版本化
 selector 只接收适合长期影响理解与交流的 person-describing Predicate，例如性格特质、
@@ -477,8 +484,9 @@ Proactive Memory Follow-up selector 在 1A.3b+ 必须 fail closed：
 1. 当前 Turn 必须有新 User Event，且同一
    `daily_session_id + continuous_exchange_no` 尚未提交 Proactive Follow-up；
 2. `current_request_requires_focus=true`、明确直接任务、紧急或高风险状态时不选；
-3. target 必须是 active / open、未过期、非 contested、非 dormant、未被 Forget，
-   且 current ProactiveFollowupStateVersion 为 eligible；
+3. target 必须是 active / open、已经到达 `followup_eligible_from_at`、未过期、
+   非 contested、非 dormant、未被 Forget，且 current
+   ProactiveFollowupStateVersion 为 eligible；
 4. 问候、开放式开场或自然空档可以选出零或一个 target；没有合适 target 时不为
    满足配额强行生成；
 5. Generator 必须先回应当前 User Event，再以最多一个温和问题使用 target；
