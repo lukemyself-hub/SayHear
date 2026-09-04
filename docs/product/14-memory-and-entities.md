@@ -308,13 +308,109 @@ Objective Memory 与 AI Impression 使用不同的时间策略：
 Open Loop 只承接用户直接提到的具体待发生事项或待确认结果，例如即将到来的面试、
 预约，或正在等待的检查结果：
 
+- v1 使用封闭的两类 catalog：`upcoming_event` 表示已经安排或预计会发生并具有独立
+  现实事件锚点的事项；`awaited_outcome` 表示用户正在等待且尚未确定的外部结果；
+- 用户需要完成的动作、义务或待办不是 `upcoming_event`，即使用户给出了日期；判断
+  依据是 pending state 是否拥有独立于 SayHear 跟踪行为的现实事件或外部结果；
 - 普通未聊完的话题、一次情绪，以及模型想在未来继续追问的内容都不能创建
   Open Loop；
 - Open Loop 是引用 User Evidence、可选 time-bound Objective Claim 或 Episode
-  的短期派生状态，不是第二条 Memory Claim，也不进入 Profile；
+  的有期限派生状态，不是第二条 Memory Claim，也不进入 Profile；
+- 每个 OpenLoopVersion 始终直接引用自己的 User Evidence。精确表达同一事实的 active
+  Objective ClaimVersion 与安全绑定的 EpisodeVersion 可以同时作为不同角色的
+  source reference；它们不替 Open Loop 拥有 pending lifecycle，也不把各自其他
+  Evidence、推断或属性自动带入 Loop；
+- Claim / Episode enrichment 尚不存在或未解析时，只要直接 Evidence 与其他 gate
+  足够，Open Loop 仍形成；`localized_summary` 只是可重建呈现，不能成为第二份事实
+  或增加 source 中没有的信息；
+- 同一 extraction proposal 的技术重试必须幂等。跨 Evidence 只有用户表达被唯一
+  resolver 绑定到已有 Open Loop，或绑定同一个 canonical Objective Claim、kind
+  相同且时间不冲突时，才复用 logical Open Loop；
+- Episode、Entity、时间窗口与语义相似只能用于召回候选，不能单独授权 merge。
+  没有候选通过时创建新 Loop；存在相似候选但身份无法唯一证明时 fail closed，既不
+  merge，也不创建可能重复的新 Loop；
 - 每个 Open Loop 必须有确定的 `expires_at`。用户未给出明确日期时，只能使用
   Registry / policy 定义并可追溯的有限期限，不能无限保持 open；
-- 用户明确表示事项完成、取消或结果已出时关闭；到期后也确定性转为 expired；
+- expected window 保留用户认为事件发生或结果出现的时间及原始精度；`expires_at`
+  表示 SayHear 最晚仍适合主动关心的时间。两者不能混用，时间到达本身也不表示事项
+  已完成或取消；
+- expected time 使用形成时冻结的 start / exclusive end、精度与 IANA timezone 表示；
+  exact instant 不伪造 end，date-only 与有界自然语言范围按当时 timezone 解析为半开
+  区间，模糊或缺失时间保持为空。之后的 timezone 变化不重新解释历史窗口，用户
+  纠正或细化时间时从新 Evidence 创建新 Version；
+- v1 只有宽度不超过 31 个当地日历日的 expected window 才能形成 anchored Open
+  Loop；更宽的“今年晚些时候”“明年夏天”等范围不创建 Loop，只保留独立合格的
+  Objective Memory / Episode，直到新的 User Evidence 给出更精确时间；
+- “快了”“最近几天”等模糊表达只有在版本化 lexical policy 明确判为 near-term 时，
+  才能按无锚点 14 日 policy 创建；模型不能自行扩大 near-term；
+- 有用户时间锚点时，`expires_at` 从该时间范围末端增加版本化的有限 follow-up
+  grace period；没有时间锚点时，从 Evidence 时间增加 kind-specific 有限期限；
+- v1 对 `upcoming_event` 使用 7 个当地日历日的 anchored grace，对
+  `awaited_outcome` 使用 14 日；两类无时间锚点时都从 Evidence 时间起保留 14 日；
+  任一 Open Loop 从 Evidence 时间到 `expires_at` 最长 360 日，超过则不创建；
+- Open Loop 形成不等于立即适合主动询问。有时间锚点的 `upcoming_event` 从 expected
+  window 前 14 日取得 follow-up eligibility；有时间锚点的 `awaited_outcome` 从
+  expected window 开始时取得；无锚点两类都从 Evidence 时间立即取得；
+- eligibility 只开放 selector 资格，不形成询问配额，也不能覆盖用户停止信号产生的
+  target-level suppression。用户主动提起尚未 eligible 的事项时仍正常回应；
+- 这些期限属于 `projection_policy_version`，新 policy 不重算历史 Version；
+- selector 只在 `followup_eligible_from_at <= now < expires_at` 时读取 Loop；到达
+  `expires_at` 立即 fail closed，不等待后台任务写入 expired Version。scanner 只补写
+  历史状态，延迟或失败不能延长主动询问资格，也不能创建消息或通知；
+- 用户明确表示 upcoming event 已发生时转为 `occurred`，awaited outcome 的结果已出时
+  转为 `resolved`；两类都可以因事项取消转为 `canceled`，或到期后确定性转为
+  `expired`；
+- `occurred / resolved` 只表示 pending state 已结束，不表达成功、失败、结果好坏或
+  用户满意度；事件经过或结果内容由 Evidence、Objective Claim、Episode 或 Journal
+  独立表达，Open Loop status 不编码评价；
+- closure 必须由 final / corrected User Evidence 直接支持。用户可以明确说终态，也
+  可以描述只有事件已发生或结果已出现才可能知道的亲历内容；不要求固定关键词；
+- 假设、可能、未来时、条件句、时间到达、用户沉默以及 Assistant / System 内容都不
+  构成 closure Evidence；`canceled` 还要求用户明确表达取消、撤回、放弃或确定未发生；
+- Closure Evidence 足以证明终态但不能唯一绑定 target 时，不关闭任何 Loop，也不选择
+  最相似者；所有合理候选以 `ambiguous_closure` 暂停主动询问，直到新 User Evidence
+  唯一识别并关闭目标、释放非目标候选，或候选各自到期；
+- closure workflow 不为维护数据强制澄清。只有歧义实质影响当前理解或回应时，
+  Conversation Model 才能按普通 Follow-up Question 规则自然问一次；不回答、回避或
+  转话题时不重复；
+- closure 与 expiry 并发只按 Closure Evidence 所属 User Event 的 authoritative
+  `committed_at < expires_at` 裁决。边界前已提交但处理较晚的 closure 最终胜出；
+  边界后提交的结果不追溯改写 expired Loop，但仍可进入回应、Claim、Episode 或
+  Journal。worker 完成顺序和用户事后描述的现实发生时间都不参与该裁决；
+- source Evidence、Forget、删除或 identity fence 失效时，旧 open Version 在读取处
+  立即 fail closed。corrected Evidence 仍支持同一个 pending state 时，为同一 logical
+  Loop 创建新的 open Version 并更新时间与 source reference；不再支持、变成 Task / 宽
+  时间范围或仍有身份歧义时，创建系统终态 `retracted`；
+- `retracted` 只表示派生依据已撤回或不再合格，不表示现实事项取消、未发生或结果为
+  假。Claim / Episode Version 变化只触发从直接 Evidence revalidate，不自动把其状态
+  复制给 Loop；Full Purge 删除整个 Open Loop 数据面，不用 `retracted` 代替；
+- `occurred / resolved / canceled` 永不 reopen；后续新的事件、重新预约或新的等待结果
+  创建新的 logical Open Loop，可以引用同一 Episode，但不能改写旧终态；
+- `expired / retracted` 只有在新的直接 User Evidence 唯一重申同一个 pending state，
+  且通过当前 formation 与 Forget gate 时，才为同一 logical Loop 创建新的 open Version；
+  旧 Evidence、时间、模型 confidence、相似表达或 repair 都不能自动复活；
+- 新 open Version 使用新 Evidence 与当前 policy 重新计算时间、eligibility 和 expiry。
+  kind 变化表示新的可独立关闭 pending state，必须创建新的 logical Loop；
+- current open Version 保留呈现正文；Version 被 supersede 或进入任一 terminal status
+  后，`localized_summary` 只保留 30 日 Content Grace 供受控排错与仍有权限的精确
+  Replay，且从退出 current open 的语义时间起算，不因 sweeper 延迟延长；
+- grace 结束后只留受保护的结构化 lineage，依赖被清理正文的 Replay 明确 fail closed。
+  Forget 立即停止使用并按不超过 30 日清理；source deletion 立即清除受影响正文、时间与
+  对象关联；Full Purge删除全部 Loop、Version、envelope、audit、state 与索引；
+- Open Loop 是可独立降级 lane。当前 snapshot 前任一 final / corrected User Event 的
+  formation / closure 尚未 settled，或仍有 source invalidation gap 时，本轮整个 Open
+  Loop section 为空，不复用 stale cache；基础回应、Journal 与独立 Memory lane 继续；
+- provider / Schema、事务、stale source、revalidation 与 scanner failure 必须按版本化
+  reason code fail closed并幂等恢复；错误日志只含 ID、revision、stage、reason、attempt
+  与 latency，不保存用户正文、summary 或 Evidence quote；
+- 同一 User Event 可以同时关闭一个既有 upcoming event并形成一个新的 awaited
+  outcome，例如“面试结束了，现在等结果”；两者仍是独立 logical Loop。系统先处理
+  source invalidation 与既有 closure，再形成新 Loop，并把全部合格效果原子提交；
+- v1 每个 User Event 最多接受 4 个新 Loop，每个用户最多有 128 个 current open Loop；
+  suppressed open Loop 同样计入。事务先处理 closure / retraction 再计算容量；
+- 超额 Proposal 按 `followup_eligible_from_at`、`expires_at`、Evidence locator 顺序确定性
+  选择，容量满时以 `capacity` skip。系统不因容量驱逐、retract、expire或覆盖旧 Loop，
+  不使用模型 importance，不自动重试，也不通知用户；新 Evidence 可以以后重新提出；
 - 关闭或到期不删除底层 Evidence。事件本身仍可按独立规则保留为 Objective
   Memory、Episode 或历史 Journal；
 - 用户已经发起一轮对话后，SayHear 可以选择一个合适的 Open Loop 主动询问进展，

@@ -381,15 +381,83 @@ _Avoid_: Temporal change, Memory Correction, Multiple allowed values
 _Avoid_: Forgotten Memory, Contested Memory Claim, Deleted Claim
 
 **Open Loop**:
-由直接 User Evidence 支撑、具有明确到期边界的具体待发生事项或待确认结果的短期派生状态；它不属于 Memory Claim 或 Profile。用户已经进入对话后，SayHear 可以据此主动表达关心，但不能在对话外发送消息、监督进度或形成任务管理。
+由直接 User Evidence 支撑、具有明确到期边界且可被独立关闭的一个具体待发生事项或待确认结果的有期限派生状态；它不属于 Memory Claim 或 Profile。同一现实事件中的多个里程碑只有在各自有直接 User Evidence 且可以独立关闭时才形成不同 Open Loop。用户已经进入对话后，SayHear 可以据此主动表达关心，但不能在对话外发送消息、监督进度或形成任务管理。
 _Avoid_: Unfinished topic, Goal, Reminder, Task
+
+**Upcoming Event Open Loop**:
+Open Loop 的一种，表示已经安排或预计会发生并具有独立现实事件锚点的事项；用户需要完成的动作、义务或待办即使带有日期也不属于这一类。
+_Avoid_: Task, Deadline Task, Commitment
+
+**Awaited Outcome Open Loop**:
+Open Loop 的一种，表示用户正在等待且尚未确定的外部结果，例如检查结果、申请答复或他人的决定。
+_Avoid_: Goal, Expected Progress, Assistant Prediction
+
+**Open Loop Proposal**:
+模型从一条 User Event 中提出的瞬时、结构化 Open Loop 建议；它不是 Open Loop 或持久化 Candidate，只有确定性代码验证 Evidence、pending state、类型、期限、来源绑定与去重身份后才能成为 Open Loop。
+_Avoid_: Open Loop Candidate, Draft Open Loop, Pending Task
+
+**Open Loop Source Binding**:
+OpenLoopVersion 到直接 User Evidence 以及可选 Objective ClaimVersion / EpisodeVersion 的版本化引用；Evidence 永远是事实根，Claim 与 Episode 可以同时作为不同角色的 enrichment，但都不拥有 Open Loop 的 pending lifecycle。
+_Avoid_: Copied Memory, Inherited Evidence, Open Loop Ownership
+
+**Open Loop Identity**:
+一个可独立关闭 pending state 的稳定 logical identity；跨 Evidence 只有明确唯一引用，或相同 canonical Objective Claim、相同 kind 且时间不冲突时才能复用。Episode、时间、Entity 或文本相似只能召回候选，不能单独证明身份；无法唯一判断时不 merge，也不创建可能重复的新 Loop。
+_Avoid_: Similar Event, Episode Membership, Semantic Match
+
+**Open Loop Expected Time**:
+用户认为 Open Loop 对应事件会发生或结果会出现的冻结时间窗口；它保留 User Evidence 的原始精度和形成时 IANA timezone，可以未知，也不表示事项已经完成。v1 只有不超过 31 个当地日历日的窗口才能作为 anchored Open Loop；更宽范围留在 Objective Memory 或 Episode，直到新的 User Evidence 提供足够精度。用户后来纠正或细化时间时创建新的 OpenLoopVersion，不重新解释或改写旧窗口。
+_Avoid_: Open Loop Expiry, Due Date, Completion Time
+
+**Open Loop Expiry**:
+一个 Open Loop 最晚仍有资格进入 Proactive Memory Follow-up 选择的确定性时间边界；只有 `now < expires_at` 才有效，读取在边界处立即 fail closed，后台 scanner 只幂等物化 expired 历史。v1 的有锚点 grace period 对 Upcoming Event 为 7 日、Awaited Outcome 为 14 日，无锚点两类均为 14 日，最长 open horizon 为 360 日。它不是现实事件时间、任务截止时间或完成判断。
+_Avoid_: Open Loop Expected Time, Due Date, Automatic Completion
+
+**Open Loop Terminal Status**:
+Open Loop 的 pending state 或派生资格如何结束：Upcoming Event 使用 `occurred` 表示事件已发生，Awaited Outcome 使用 `resolved` 表示结果已出现，两类都可以 `canceled` 或 `expired`；source Evidence、Forget 或 identity fence 失效且没有合格替代依据时使用系统终态 `retracted`。这些状态不表达成功、失败、结果好坏或用户满意度，`retracted` 也不表示现实事项取消、未发生或为假。
+_Avoid_: Completed Task, Successful Outcome, Result Evaluation
+
+**Retracted Open Loop**:
+因 source Evidence、Forget、删除或 identity fence 失效而不再具备派生资格的 Open Loop；它立即停止进入 Context，但不声称现实事项已取消、未发生或为假。Full Purge 删除整个数据面，不以 Retracted Open Loop 代替。
+_Avoid_: Canceled Open Loop, Expired Open Loop, Deleted Open Loop
+
+**Open Loop Re-formation**:
+Expired 或 Retracted Open Loop 在新的直接 User Evidence 唯一重申同一 pending state、并通过当前全部 formation 与 Forget gate 后，于同一 logical identity 上形成新的 open Version；它不是旧 Version 复活。Occurred、Resolved 与 Canceled Open Loop 永不重新打开，新的现实事项使用新的 logical Open Loop。
+_Avoid_: Automatic Reopen, Revived Version, Reused Closure
+
+**Open Loop Content Grace**:
+OpenLoopVersion 退出 current open 状态后，其 `localized_summary` 最多保留 30 日供受控排错与仍有权限的精确 Replay，期间也不能重新进入 Context；到期后只留受保护的结构化 lineage。Source deletion 立即清理受影响内容，Full Purge 删除整个 Open Loop 数据面，两者都优先于 grace。
+_Avoid_: Context Eligibility, Indefinite Replay Retention, Backup Expiry Promise
+
+**Open Loop Processing Watermark**:
+一个 Context snapshot 之前所有 final / corrected User Event 的 Open Loop formation 与 closure 均已 settled、且没有未完成 source invalidation 的完整性边界；未达到时整个 Open Loop lane 为空，基础对话与独立 Journal / Memory lane 继续。
+_Avoid_: Stale Cache, Best-Effort Partial Context, Conversation Failure
+
+**Open Loop Capacity**:
+v1 每个 User Event 最多形成 4 个、每个用户最多保留 128 个 current open Open Loop 的确定性边界；满额时跳过新 formation，不驱逐、retract、expire 或覆盖已有 Loop。排序只使用 eligibility、expiry 与 Evidence locator，不使用模型 importance。
+_Avoid_: Task List Capacity, Model Importance Ranking, Capacity Eviction
+
+**Open Loop Closure Evidence**:
+直接且必然表明 Upcoming Event 已发生、Awaited Outcome 已有结果或事项已取消的 final / corrected User Evidence；它可以是明确终态陈述，也可以是只有终态成立才可能知道的亲历内容。假设、可能、未来或条件表达，时间到达、用户沉默以及 Assistant / System 内容都不是 Closure Evidence。
+_Avoid_: Expected Time, Inferred Completion, Assistant Assumption
+
+**Ambiguous Open Loop Closure**:
+Closure Evidence 足以证明某个 pending state 已结束，但无法唯一绑定到一个 current open Open Loop 的状态；它不关闭任何 Loop，而是暂时 suppress 所有合理候选，直到新的 User Evidence 唯一识别目标或各自到期。
+_Avoid_: Close All Matches, Best-Guess Closure, Required Clarification
+
+**Open Loop Terminal Arbitration**:
+Closure 与 expiry 并发时只以 Closure Evidence 所属 User Event 的 authoritative `committed_at < expires_at` 判断先后；边界前已提交但处理较晚的 Closure Evidence 最终胜出，边界后到达则保留 `expired`。用户描述的现实发生时间和 worker 提交顺序都不能改变该裁决。
+_Avoid_: Worker-Wins Race, Model-Inferred Event Time, Retroactive Reopening
+
+**Open Loop Follow-up Eligibility**:
+Open Loop 在时间上最早可以进入 Proactive Memory Follow-up 选择的确定性边界；有时间锚点的 Upcoming Event 从 expected window 前 14 日开始，有时间锚点的 Awaited Outcome 从 expected window 开始，无锚点则从 Evidence 时间开始。它只表示可以参与选择，不要求询问，也不能覆盖用户触发的 Proactive Follow-up suppression。
+_Avoid_: Reminder Time, Notification Schedule, Follow-up Quota
 
 **Proactive Memory Follow-up**:
 用户已经发起当前 Continuous Exchange 后，SayHear 主动选择最多一个合适的过去事项表达关心；它必须让位于用户当前诉求，并在用户简短带过、回避、拒绝或转换话题后停止并抑制重复询问。
 _Avoid_: Notification, Progress tracking, Repeated probing
 
 **Proactive Follow-up State**:
-针对一个 Open Loop 或 Memory Claim，记录 Proactive Memory Follow-up 当前是否 eligible 或因用户停止信号被 suppressed 的版本化行为投影；它不是用户事实、Memory 或任务，只有用户主动重提或新的相关 User Evidence 才能解除抑制。
+针对一个 Open Loop 或 Memory Claim，记录 Proactive Memory Follow-up 当前是否 eligible，或因用户停止信号、Ambiguous Open Loop Closure 被 suppressed 的版本化行为投影；它不是用户事实、Memory 或任务。用户停止信号只有用户主动重提或新的相关 User Evidence 才能解除；ambiguous closure 只有新的唯一识别 Evidence 才能关闭目标并释放非目标候选。
 _Avoid_: Proactive Memory Follow-up, Memory Claim, Task state
 
 **Conversation Action**:
