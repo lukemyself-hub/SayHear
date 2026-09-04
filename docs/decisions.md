@@ -127,6 +127,7 @@ Accepted
 - [`0059`](adr/0059-text-fallback-handover-precedes-visible-output.md)：Text 只在零可见输出前串行 fallback，并固定到当前连续交流
 - [`0060`](adr/0060-background-fallback-is-explicit-per-role.md)：后台 fallback 按 role 显式开放，每个 command 最多一次
 - [`0061`](adr/0061-model-promotion-is-developer-judged.md)：模型替换由开发者根据适合该 role 的评测判断，不增加早期正式门禁
+- [`0121`](adr/0121-narrative-grounding-validation-is-one-shared-role.md)：Reflection 与 Profile 共用同一个 `narrative.validate` grounding-validator 模型角色，按 artifact kind 冻结 Prompt 与校验 policy 版本
 - [`0067`](adr/0067-livekit-agents-is-the-realtime-media-and-voice-session-layer.md)：LiveKit Agents 是正式实时媒体与 Voice Session 层
 - [`0071`](adr/0071-model-comparison-uses-explicit-replay-not-shadowing.md)：模型比较使用显式 Replay，不自动 Shadow 私人对话
 - [`0073`](adr/0073-replay-is-non-authoritative-and-cannot-write-product-state.md)：Replay 永不写回正式产品状态
