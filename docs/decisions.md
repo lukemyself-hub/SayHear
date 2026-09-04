@@ -169,6 +169,7 @@ Accepted
 ### Episode
 
 - [`0037`](adr/0037-episodes-require-real-world-event-anchors.md)：Episode 必须有现实事件锚点并保守续接
+- [`0120`](adr/0120-episode-kinds-are-a-closed-typed-catalog-with-a-catch-all.md)：Episode kind 是闭集代码版本化 typed catalog 加 `other` 兜底，模型不得自由分类，不走运行时治理队列
 
 ## 归档架构 v0.1 迁移映射
 
