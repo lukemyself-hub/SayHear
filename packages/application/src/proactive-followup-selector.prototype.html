@@ -526,12 +526,16 @@
         }
       }
       if (turn.forms) {
-        s.targets.push(makeTarget(turn.forms, s.day, s.day + 14));
-        var nt = s.targets[s.targets.length - 1];
-        nt.formedAtDay = s.day;
-        if (s.exchange.mentioned.indexOf(turn.forms) === -1) s.exchange.mentioned.push(turn.forms);
-        changed.push(turn.forms);
-        trail.push('同一个 pending state 的另一面 → 为它形成新的 Open Loop「' + labelOf(turn.forms, 'zh') + '」（今天起有资格，但今天刚形成的不追问，且你刚自己提过）。');
+        if (findTarget(s, turn.forms)) {
+          trail.push('「' + labelOf(turn.forms, 'zh') + '」已在看板上 → 同一 pending state 不重复形成（原型把这条证据视为一次性）。');
+        } else {
+          s.targets.push(makeTarget(turn.forms, s.day, s.day + 14));
+          var nt = s.targets[s.targets.length - 1];
+          nt.formedAtDay = s.day;
+          if (s.exchange.mentioned.indexOf(turn.forms) === -1) s.exchange.mentioned.push(turn.forms);
+          changed.push(turn.forms);
+          trail.push('同一个 pending state 的另一面 → 为它形成新的 Open Loop「' + labelOf(turn.forms, 'zh') + '」（今天起有资格，但今天刚形成的不追问，且你刚自己提过）。');
+        }
       }
       if (turn.releases) {
         var lt = findTarget(s, turn.releases);
@@ -946,6 +950,11 @@
       card.addEventListener('click', function () {
         policyKey = card.getAttribute('data-k');
         renderPolicyCards();
+        if (view === 'walk' && !blindMode) {
+          stepsDone = 0;
+          resetWalkStates();
+        }
+        renderAll();
       });
     });
   }
@@ -961,6 +970,7 @@
         var r = P.runTurn(fpState, { kind: 'turn', type: t.type, utterance: t.utterance, main: t.main, lang: 'zh' }, P.POLICIES[policyKey]);
         fpState = r.state;
         lastOut = { trail: r.out.trail, changed: r.out.changed };
+        view = 'free';
         renderAll();
       });
     });
@@ -1081,7 +1091,7 @@
     box.innerHTML = '<div class="verdictbox"><strong>这段走查，哪一边更像「被记挂」？</strong>'
       + '<div class="vbtns">'
       + '<button data-p="甲" class="' + (v.pick === '甲' ? 'on' : '') + '">甲更像被记挂</button>'
-      + '<button data-p="tie" class="' + (v.pick === 'tie' ? 'on' : '') + '">持平</button>'
+      + '<button data-p="持平" class="' + (v.pick === '持平' ? 'on' : '') + '">持平</button>'
       + '<button data-p="乙" class="' + (v.pick === '乙' ? 'on' : '') + '">乙更像被记挂</button>'
       + '</div>'
       + '<div style="margin-top:8px">一句话备注：<input type="text" id="verdictNote" value="' + esc(v.note || '') + '" placeholder="（可空）比如：乙补的那句让我不舒服"></div>'
@@ -1090,6 +1100,7 @@
       b.addEventListener('click', function () {
         verdicts[activeScenario.id] = verdicts[activeScenario.id] || {};
         verdicts[activeScenario.id].pick = b.getAttribute('data-p');
+        verdicts[activeScenario.id].pairKey = pair[0] + '/' + pair[1];
         var noteEl = document.getElementById('verdictNote');
         if (noteEl) verdicts[activeScenario.id].note = noteEl.value;
         renderVerdict();
@@ -1112,10 +1123,14 @@
     if (!Object.keys(verdicts).length) { box.textContent = '（还没有记录。）'; return; }
     var lines = ['#171 盲评记录（原型 proactive-followup-selector.prototype.html）'];
     lines.push('');
+    var pairKeyNow = pair[0] + '/' + pair[1];
     SCENARIOS.forEach(function (sc) {
       var v = verdicts[sc.id];
       if (v && v.pick) {
-        lines.push('- ' + sc.title + '：' + v.pick + (v.note ? ' —— ' + v.note : ''));
+        var stale = v.pairKey && v.pairKey !== pairKeyNow
+          ? '（旧对照：甲=策略' + v.pairKey[0] + '，乙=策略' + v.pairKey[2] + '）'
+          : '';
+        lines.push('- ' + sc.title + '：' + v.pick + (stale ? ' ' + stale : '') + (v.note ? ' —— ' + v.note : ''));
       }
     });
     lines.push('');
@@ -1150,6 +1165,7 @@
     }, P.POLICIES[policyKey]);
     fpState = r.state;
     lastOut = { trail: r.out.trail, changed: r.out.changed };
+    view = 'free';
     renderAll();
   });
 
@@ -1162,6 +1178,7 @@
     }, P.POLICIES[policyKey]);
     fpState = r.state;
     lastOut = { trail: r.out.trail, changed: r.out.changed };
+    view = 'free';
     renderAll();
   });
 
@@ -1173,6 +1190,7 @@
     }, P.POLICIES[policyKey]);
     fpState = r.state;
     lastOut = { trail: r.out.trail, changed: r.out.changed };
+    view = 'free';
     renderAll();
   });
 
@@ -1180,6 +1198,7 @@
     var r = P.runTurn(fpState, { kind: 'advance_day' }, P.POLICIES[policyKey]);
     fpState = r.state;
     lastOut = { trail: r.out.trail, changed: [] };
+    view = 'free';
     renderAll();
   });
 
@@ -1187,6 +1206,7 @@
     var r = P.runTurn(fpState, { kind: 'new_exchange' }, P.POLICIES[policyKey]);
     fpState = r.state;
     lastOut = { trail: r.out.trail, changed: [] };
+    view = 'free';
     renderAll();
   });
 
