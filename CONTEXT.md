@@ -292,6 +292,22 @@ _Avoid_: Memory Claim, Primary evidence, Journal
 Internal Core 的 Web 开发者工具中用于只读查看 ReflectionVersion、Evidence lineage 及其下游影响的诊断界面；它不是用户式 Reflection 页面、Candidate Review Tool 或第二写入口。
 _Avoid_: Reflection page, Candidate Review Tool, Reflection editor
 
+**Daily Reflection**:
+对一个已关闭本地日期内全部有效 User Evidence 形成的当日版本化 Reflection；当天没有交流时不生成任何记录或占位。
+_Avoid_: Daily summary, Journal draft
+
+**Weekly Reflection**:
+对一个本地周窗口（截至最后已关闭本地日的连续七天）的 Evidence 与结构化 Claim 基线形成的跨日主题、趋势与变化 Reflection；它只提出 Memory Candidate，不执行 Claim 生命周期操作，也不拥有任何 Profile 派生。
+_Avoid_: Weekly report, Profile refresh trigger
+
+**Reflection Statement**:
+Reflection 中一条带类型观察类别的单元，由原子命题组成；其认识论支持只能是 EvidenceItem，对照理解时引用的 baseline Claim 只是比较锚点，永远不是证据。
+_Avoid_: Memory Claim, JournalStatement
+
+**Reflection Builder**:
+按日 / 按周运行的 Reflection 派生流程；模型只产出结构化提案，确定性代码冻结输入、验证并提交版本，其失败或缺失对用户可见体验零影响。
+_Avoid_: Online extraction, Reflection editor
+
 **Profile Projection**:
 SayHear 以全部当前有效 Memory Claim 为语义输入，并以自身观察视角讲述用户及其相关经历、关系、情感与价值观的自然语言 Bio；它追求语义忠实而非逐条复述，任何可独立成立的新判断必须先成为合格的 Objective Memory 或 AI Impression。
 _Avoid_: Memory database, Claim list, User-authored bio
