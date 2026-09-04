@@ -262,6 +262,26 @@ _Avoid_: Data cleanup question, Intake question
 由 User Evidence 支撑、具有明确现实事件锚点并可跨 Turn 或 Session 持续补充的一段版本化生活事件，例如一次旅行、一次搬家或一个项目阶段；它不是 Conversation、话题或情绪分类。只有 Evidence 能安全指向同一现实事件时才续接原 Episode，身份不确定时保持未绑定或在明确为不同事件时新建。
 _Avoid_: Conversation, Daily Session, Topic cluster
 
+**Episode Kind**:
+对现实事件进行粗粒度分组的闭集代码版本化分类，由少量携带 typed anchor schema 的具体 kind 与一个 `other` 兜底 kind 构成；模型不能自造或自由分类 kind，未映射提案确定性降级为 `other`，目录扩张只是可选的代码 release，不是覆盖用户多样性的前提。
+_Avoid_: Model-invented kind, Topic tag, Free-form classification
+
+**Episode Candidate**:
+模型从具体 EvidenceItem 提出的非权威 Episode 提案；身份判定（new / matched / unresolved）与生命周期（proposed / accepted / rejected / stale）是两个正交维度，只有确定性代码校验 Evidence、现实事件锚与连续性后才创建或续接 Episode，rejected 与 stale 是终局状态。
+_Avoid_: Episode, EpisodeVersion, Draft Episode
+
+**Episode Temporal Anchor**:
+Episode 时间边界上由 User Evidence 支撑的描述；每个边界保留 exact / month / year / approximate / unknown 精度，并携带只由 Evidence 推导的 planned / ongoing / completed / unknown 阶段，系统不得把缺失或近似时间补成精确日期。
+_Avoid_: Exact timeline, Evidence date, System-filled date
+
+**Episode Builder**:
+每日在冻结 Evidence snapshot 上运行的 Episode 派生流程；模型只产出类型化提案，new / matched / unresolved 与准入由确定性 validator 决定，其失败或缺失不阻止 Understanding Response、Journal 或基础 Memory Claim。
+_Avoid_: Online extraction, Model-authored episode, Episode
+
+**Episode Impact Review**:
+Entity merge / split 或底层 Evidence correction 后，通过反向血缘只对引用受影响 Entity 或 Evidence 的 EpisodeVersion 执行的定向重验证；受影响版本暂停 enrichment 使用，直到重新验证或被新版本取代。
+_Avoid_: Full episode scan, Automatic episode rewrite
+
 ## Memory 与用户控制
 
 **Reflection**:
@@ -271,6 +291,22 @@ _Avoid_: Memory Claim, Primary evidence, Journal
 **Reflection Inspector**:
 Internal Core 的 Web 开发者工具中用于只读查看 ReflectionVersion、Evidence lineage 及其下游影响的诊断界面；它不是用户式 Reflection 页面、Candidate Review Tool 或第二写入口。
 _Avoid_: Reflection page, Candidate Review Tool, Reflection editor
+
+**Daily Reflection**:
+对一个已关闭本地日期内全部有效 User Evidence 形成的当日版本化 Reflection；当天没有交流时不生成任何记录或占位。
+_Avoid_: Daily summary, Journal draft
+
+**Weekly Reflection**:
+对一个本地周窗口（截至最后已关闭本地日的连续七天）的 Evidence 与结构化 Claim 基线形成的跨日主题、趋势与变化 Reflection；它只提出 Memory Candidate，不执行 Claim 生命周期操作，也不拥有任何 Profile 派生。
+_Avoid_: Weekly report, Profile refresh trigger
+
+**Reflection Statement**:
+Reflection 中一条带类型观察类别的单元，由原子命题组成；其认识论支持只能是 EvidenceItem，对照理解时引用的 baseline Claim 只是比较锚点，永远不是证据。
+_Avoid_: Memory Claim, JournalStatement
+
+**Reflection Builder**:
+按日 / 按周运行的 Reflection 派生流程；模型只产出结构化提案，确定性代码冻结输入、验证并提交版本，其失败或缺失对用户可见体验零影响。
+_Avoid_: Online extraction, Reflection editor
 
 **Profile Projection**:
 SayHear 以全部当前有效 Memory Claim 为语义输入，并以自身观察视角讲述用户及其相关经历、关系、情感与价值观的自然语言 Bio；它追求语义忠实而非逐条复述，任何可独立成立的新判断必须先成为合格的 Objective Memory 或 AI Impression。
@@ -316,6 +352,10 @@ _Avoid_: Claim status, Exact timeline, Evidence date
 SayHear 根据用户表达形成、但并非用户直接陈述的主观观察或推断；其认识状态属于 inferred，默认至少需要来自两个 Daily Session 的两条独立 User Evidence 才能进入长期 Memory。召回时可以用自然、朋友式的语言直接表达这一理解；不确定性的措辞可以使用，但不是每次召回的强制要求。
 _Avoid_: Objective Memory, Personality fact
 
+**Predicate Registry**:
+SayHear 自有的版本化受控语义词表，定义每个 Predicate 的准入边界、schema 与本地化表达；模型只能把用户表达映射到已有条目，不能创建或修改它，新条目只随代码库 release 发布。
+_Avoid_: Topic list, Model-editable vocabulary, Prompt dictionary
+
 **Sensitive Memory Predicate**:
 医疗健康、性取向、宗教或政治身份、创伤、法律或财务等高影响私人领域的 Predicate；敏感领域可以进入长期 Memory，但每个 Predicate 必须分别限定允许的 Claim kind，不能因话题敏感或重要就取得推断权限。
 _Avoid_: Prohibited topic, Sensitive topic filter
@@ -339,6 +379,18 @@ _Avoid_: Valuable Predicate, Approved Memory Candidate
 **Predicate Review Deadline**:
 Predicate Review Eligible Candidate 进入 `needs_predicate_review` 后最多等待人工处理 30 天；到期仍未获得明确处置时转为 stale，并失去继续晋升为 Claim 的资格。
 _Avoid_: Indefinite Review Queue, Memory Retention Period
+
+**Internal Candidate Review Tool**:
+Internal Core 的 Web 开发者工具中，供授权人工查看 Predicate Review 队列、检查 Evidence 并提交处置命令的受控界面；它不是消费者 Review Inbox，也不是 Registry、Proposal 或 Claim 的直接写入口。
+_Avoid_: Review Inbox, Registry editor, User-facing memory page
+
+**Candidate Review Module**:
+Internal Candidate Review Tool 背后统一执行 Candidate 处置的应用层深 Module；它集中校验 capability、step-up、期限与并发并写 access audit，但既不能发布 Registry，也不能直接创建 Claim。
+_Avoid_: Review Tool, Direct table write, Registry publisher
+
+**Predicate Registry Governance Module**:
+独立拥有 Predicate Change Proposal 版本、代码库 Registry release、mapping tests 与 migration 的应用层深 Module；它接受 Candidate Review Module 的委托创建不含用户内容的 Proposal，但发布只由代码 release 驱动，Web 不能直接调用它发布。
+_Avoid_: Candidate Review Module, Web-publishable surface, Runtime registry writer
 
 **Predicate Change Proposal**:
 授权人工对一个通用 Predicate 概念作出产品治理决定后形成的版本化提案；它可以等待发布、被产品级拒绝、发布或取消，并关联多个 Candidate，但不能包含用户 Evidence 或具体私人值，也不是 active Registry Entry。

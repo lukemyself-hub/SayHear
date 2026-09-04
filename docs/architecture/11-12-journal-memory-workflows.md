@@ -310,8 +310,9 @@ Profile 需要更新就把一次用户纠正拆成三个 Action。
 1A.3b 再增加 Reflection 与 Profile 派生：
 
 - Daily 运行 Episode Builder，并创建新的 Daily ReflectionVersion；
-- Weekly 创建新的 Weekly ReflectionVersion、识别趋势和变化，并重建 Profile
-  Projection；
+- Weekly 创建新的 Weekly ReflectionVersion、识别趋势和变化，并把新理解送入
+  Candidate 层；Profile Projection 的重建由 §12.6 的 Profile workflow 独立拥有，
+  不由 Weekly Reflection 触发或等待；
 - Reflection 可以从底层 Evidence 提出额外 MemoryCandidate，但不是 Candidate
   创建、Memory admission 或 Claim promotion 的必经步骤；
 - Reflection 提出的 Candidate 保存 `reflection_version_id` 作为可空 lineage，

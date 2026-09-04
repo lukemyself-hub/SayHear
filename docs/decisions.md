@@ -112,6 +112,7 @@ Accepted
 - [`0051`](adr/0051-terminal-candidate-content-expires-after-seven-days.md)：Terminal Candidate 派生语义 7 天后清除
 - [`0052`](adr/0052-only-materially-new-evidence-creates-successor-candidates.md)：只有 Materially New Evidence 可以创建 successor Candidate
 - [`0053`](adr/0053-product-value-rejection-is-a-proposal-version.md)：概念级产品拒绝保存为无用户内容的 Proposal version
+- [`0122`](adr/0122-candidate-review-commands-are-synchronous-and-fail-closed.md)：Candidate review 处置是同步 CAS 命令，人工处置以 `decided_at <= review_due_at` fail closed；取消 Proposal 立即终局等待中的候选人；Proposal 无用户内容由 schema 结构排除保证
 
 ### Core Flow 实现边界
 
@@ -127,6 +128,7 @@ Accepted
 - [`0059`](adr/0059-text-fallback-handover-precedes-visible-output.md)：Text 只在零可见输出前串行 fallback，并固定到当前连续交流
 - [`0060`](adr/0060-background-fallback-is-explicit-per-role.md)：后台 fallback 按 role 显式开放，每个 command 最多一次
 - [`0061`](adr/0061-model-promotion-is-developer-judged.md)：模型替换由开发者根据适合该 role 的评测判断，不增加早期正式门禁
+- [`0121`](adr/0121-narrative-grounding-validation-is-one-shared-role.md)：Reflection 与 Profile 共用同一个 `narrative.validate` grounding-validator 模型角色，按 artifact kind 冻结 Prompt 与校验 policy 版本
 - [`0067`](adr/0067-livekit-agents-is-the-realtime-media-and-voice-session-layer.md)：LiveKit Agents 是正式实时媒体与 Voice Session 层
 - [`0071`](adr/0071-model-comparison-uses-explicit-replay-not-shadowing.md)：模型比较使用显式 Replay，不自动 Shadow 私人对话
 - [`0073`](adr/0073-replay-is-non-authoritative-and-cannot-write-product-state.md)：Replay 永不写回正式产品状态
@@ -169,6 +171,7 @@ Accepted
 ### Episode
 
 - [`0037`](adr/0037-episodes-require-real-world-event-anchors.md)：Episode 必须有现实事件锚点并保守续接
+- [`0120`](adr/0120-episode-kinds-are-a-closed-typed-catalog-with-a-catch-all.md)：Episode kind 是闭集代码版本化 typed catalog 加 `other` 兜底，模型不得自由分类，不走运行时治理队列
 
 ## 归档架构 v0.1 迁移映射
 
