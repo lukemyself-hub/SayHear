@@ -446,3 +446,487 @@ h1 {
   font-size: 0.85rem;
   margin: 0;
 }
+
+.pbioShell {
+  width: min(760px, calc(100% - 40px));
+  padding-bottom: 160px;
+}
+
+.pbioMuted {
+  color: #756f63;
+  font-size: 0.92rem;
+}
+
+.pbioBanner {
+  border-radius: 14px;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 1.6rem;
+  padding: 0.85rem 1.1rem;
+}
+
+.pbioToneinfo {
+  background: #efece4;
+  color: #625d54;
+}
+
+.pbioToneerror {
+  background: #f6e3df;
+  color: #8f2d20;
+}
+
+.pbioTonewarn {
+  background: #f7efd9;
+  color: #7c611c;
+}
+
+.pbioLetter {
+  padding-top: 48px;
+}
+
+.pbioLetterEyebrow {
+  color: #756f63;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.pbioLetterTitle {
+  font-size: clamp(1.9rem, 6vw, 3rem);
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  margin: 12px 0 20px;
+}
+
+.pbioLetterBody {
+  font-size: 1.12rem;
+  line-height: 1.78;
+}
+
+.pbioLetterBody p {
+  margin: 0 0 1.15em;
+}
+
+.pbioLetterSignature {
+  color: #756f63;
+  font-style: italic;
+  margin: 2rem 0 1.2rem;
+}
+
+.pbioLetterMeta {
+  border-top: 1px solid #d7d0c4;
+  color: #756f63;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 0.35rem 1.4rem;
+  padding-top: 1rem;
+}
+
+.pbioRefreshQuiet button {
+  background: none;
+  border: 0;
+  color: #22211f;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pbioCorrection {
+  margin-top: 1.4rem;
+}
+
+.pbioCorrection > button,
+.pbioChapterFooter button,
+.pbioPulseMeta button {
+  background: none;
+  border: 0;
+  color: #625d54;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pbioCorrectionPanel {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 14px;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin-top: 0.8rem;
+  max-width: 560px;
+  padding: 1rem 1.2rem;
+}
+
+.pbioCorrectionPanel p {
+  margin: 0 0 0.6rem;
+}
+
+.pbioCorrectionNote {
+  color: #8f6f4a;
+  font-size: 0.8rem;
+}
+
+.pbioFile {
+  padding-top: 48px;
+}
+
+.pbioFileHeader {
+  border-bottom: 1px solid #d7d0c4;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 1fr auto;
+  margin-bottom: 1.6rem;
+  padding-bottom: 1.2rem;
+}
+
+.pbioFileHeader h1 {
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  letter-spacing: -0.03em;
+  margin: 4px 0 0;
+}
+
+.pbioStatusChip {
+  align-self: start;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.3rem 0.75rem;
+  white-space: nowrap;
+}
+
+.pbioStatuscurrent {
+  background: #e4efe7;
+  color: #3e6b4f;
+}
+
+.pbioStatusupdating {
+  background: #f7efd9;
+  color: #7c611c;
+}
+
+.pbioStatusunavailable {
+  background: #f6e3df;
+  color: #8f2d20;
+}
+
+.pbioFileMeta {
+  color: #756f63;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 0.35rem 1.2rem;
+  grid-column: 1 / -1;
+}
+
+.pbioFileActions {
+  grid-column: 1 / -1;
+}
+
+.pbioRefreshButton {
+  background: #22211f;
+  border: 0;
+  border-radius: 999px;
+  color: #fffdf9;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 0.65rem 1.2rem;
+}
+
+.pbioRefreshButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.pbioFileSections {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.pbioChapter {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 20px;
+  padding: 1.35rem 1.5rem;
+}
+
+.pbioChapter h2 {
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.7rem;
+}
+
+.pbioChapter p {
+  font-size: 1rem;
+  line-height: 1.65;
+  margin: 0 0 0.9rem;
+}
+
+.pbioChapterFooter {
+  display: flex;
+  gap: 1.4rem;
+}
+
+.pbioBasisList {
+  background: #f4f2ed;
+  border-radius: 12px;
+  color: #625d54;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  list-style: none;
+  margin: 0.8rem 0 0;
+  padding: 0.8rem 1rem;
+}
+
+.pbioBasisList li + li {
+  border-top: 1px solid #e0d9cc;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+}
+
+.pbioClaimStatement {
+  color: #22211f;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+.pbioClaimQuote {
+  color: #494540;
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.55;
+  margin-top: 0.15rem;
+}
+
+.pbioQuoteDate {
+  color: #8a8375;
+  font-style: normal;
+}
+
+.pbioClaimMeta {
+  color: #8a8375;
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
+.pbioSensitiveTag {
+  color: #7c611c;
+}
+
+.pbioStateBlock {
+  border-radius: 20px;
+  margin-top: 1.6rem;
+  padding: 2rem;
+}
+
+.pbioStateupdating {
+  background: #f7efd9;
+  border: 1px solid #e5d5a5;
+}
+
+.pbioStateunavailable {
+  background: #f6e3df;
+  border: 1px solid #e3b7b0;
+}
+
+.pbioStateBlock h2 {
+  margin: 0 0 0.6rem;
+}
+
+.pbioStateBlock p {
+  line-height: 1.6;
+  margin: 0;
+}
+
+.pbioPulse {
+  padding-top: 48px;
+}
+
+.pbioPulseHeader {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-bottom: 1.4rem;
+}
+
+.pbioPulseHeader h1 {
+  font-size: clamp(1.8rem, 6vw, 2.8rem);
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+
+.pbioPulseCard {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 20px;
+  padding: 1.5rem 1.6rem;
+}
+
+.pbioPulseSnapshot {
+  font-size: 1.06rem;
+  line-height: 1.7;
+  margin: 0 0 1em;
+}
+
+.pbioPulseCard h2 {
+  border-top: 1px solid #d7d0c4;
+  font-size: 0.95rem;
+  margin: 1.2rem 0 0.8rem;
+  padding-top: 1rem;
+}
+
+.pbioChangeList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pbioChangeList li {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.96rem;
+  gap: 0.5rem;
+  line-height: 1.5;
+  padding: 0.35rem 0;
+}
+
+.pbioChangeBadge {
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.55rem;
+  text-transform: uppercase;
+}
+
+.pbioBadgeNew {
+  background: #e4efe7;
+  color: #3e6b4f;
+}
+
+.pbioBadgeChanged {
+  background: #f7efd9;
+  color: #7c611c;
+}
+
+.pbioBadgeSteady {
+  background: #efece4;
+  color: #625d54;
+}
+
+.pbioSourceChip {
+  color: #756f63;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.pbioPulseControls {
+  margin-top: 1.4rem;
+}
+
+.pbioPulseMeta {
+  align-items: baseline;
+  color: #756f63;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  gap: 0.35rem 1.2rem;
+  margin-top: 0.9rem;
+}
+
+.pbioSwitcher {
+  align-items: center;
+  background: #22211f;
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(34, 33, 31, 0.35);
+  color: #fffdf9;
+  display: flex;
+  gap: 0.4rem;
+  left: 50%;
+  padding: 0.4rem 0.6rem;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
+.pbioSwitcher button {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.35rem 0.55rem;
+}
+
+.pbioSwitcherLabel {
+  font-size: 0.88rem;
+  font-weight: 650;
+  min-width: 9.5rem;
+  text-align: center;
+}
+
+.pbioSwitcher select {
+  background: #3a3833;
+  border: 0;
+  border-radius: 999px;
+  color: #fffdf9;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.pbioLegend {
+  background: #fffdf9;
+  border: 1px solid #d7d0c4;
+  border-radius: 20px;
+  bottom: 76px;
+  box-shadow: 0 8px 24px rgba(34, 33, 31, 0.18);
+  font-size: 0.88rem;
+  left: 50%;
+  line-height: 1.55;
+  max-height: min(60vh, 480px);
+  max-width: min(680px, calc(100% - 40px));
+  overflow-y: auto;
+  padding: 1.2rem 1.4rem;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+
+.pbioLegend h3 {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  margin: 1.1rem 0 0.3rem;
+  text-transform: uppercase;
+}
+
+.pbioLegend h3:first-child {
+  margin-top: 0;
+}
+
+.pbioLegend p,
+.pbioLegend ul {
+  color: #625d54;
+  margin: 0 0 0.5rem;
+}
+
+.pbioLegend ul {
+  list-style: none;
+  padding: 0;
+}
+
+.pbioLegend li {
+  margin-bottom: 0.45rem;
+}
