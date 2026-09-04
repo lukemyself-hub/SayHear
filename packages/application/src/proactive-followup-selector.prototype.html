@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 · Proactive Memory Follow-up：选谁，怎么开口</title>
+<!--
+  THROWAWAY PROTOTYPE for lukemyself-hub/SayHear#171 — do not ship.
+  The pure module in the first <script> block (window.PFPure) is the liftable part;
+  this HTML shell is disposable.
+-->
+<style>
+  :root {
+    --accent: #0f766e;
+    --accent-soft: #ccfbf1;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --card: #ffffff;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.65;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 36px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 15px; margin: 18px 0 8px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0; }
+  .note { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 14px; }
+  .law { border-left: 4px solid var(--accent); padding: 2px 0 2px 12px; color: var(--muted); font-size: 14px; }
+  button {
+    font: inherit; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; cursor: pointer; color: var(--ink);
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.pill { border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  .bubble { border-radius: 10px; padding: 9px 12px; margin: 6px 0; max-width: 92%; }
+  .bubble.user { background: #eef2ff; }
+  .bubble.assistant { background: var(--accent-soft); }
+  .bubble .who { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+  .followup { border-top: 1px dashed var(--accent); margin-top: 8px; padding-top: 8px; }
+  .followup .tag { font-size: 12px; color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .blind-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .blind-cols .cell { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+  .blind-cols .cell .head { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .trail { font-size: 13px; color: var(--muted); }
+  .trail li { margin: 2px 0; }
+  .targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .tcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; }
+  .tcard.changed { outline: 2px dashed var(--accent); outline-offset: 2px; }
+  .tcard .tlabel { font-weight: 700; }
+  .tcard .tmeta { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .badge { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 9px; margin-left: 8px; vertical-align: 1px; }
+  .b-ok { background: #ecfdf5; color: #047857; }
+  .b-sup { background: #fffbeb; color: #b45309; }
+  .b-closed { background: #f1f5f9; color: #475569; }
+  .b-exp { background: #f5f5f5; color: #94a3b8; text-decoration: line-through; }
+  .policy-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .pcard { border: 2px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fff; cursor: pointer; }
+  .pcard.active { border-color: var(--accent); background: #f0fdfa; }
+  .pcard .pname { font-weight: 700; }
+  .pcard .pdesc { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .steps button { display: block; width: 100%; text-align: left; margin: 6px 0; }
+  .steps button.done { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent); }
+  .stepdesc { font-size: 13px; color: var(--muted); }
+  select, input[type=text] { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  input[type=text] { width: 240px; }
+  pre.record { background: #0f172a; color: #d1fae5; border-radius: 10px; padding: 14px; overflow-x: auto; font-size: 12.5px; line-height: 1.6; }
+  .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+  .verdictbox { border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; margin-top: 10px; background: #f0fdfa; }
+  .verdictbox .vbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .verdictbox button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .divider { height: 1px; background: var(--line); margin: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+
+  <h1>主动追问原型 · 选谁，以及怎么开口</h1>
+  <p class="sub">Throwaway prototype for <a href="https://github.com/lukemyself-hub/SayHear/issues/171">SayHear#171</a> · part of the 1A.3b map #163 · 不进产品分支</p>
+
+  <div class="note">
+    <p><strong>这一页回答的问题：</strong>当 SayHear 可以在你已发起的一段对话里，主动提起一件它记着的事——面对同样合格的一组候选（Open Loop / Memory Claim）——<strong>选谁、用什么口气</strong>，才让你觉得「被记挂」，而不是被盯着、被打断、被盘问？</p>
+    <p><strong>怎么用：</strong>下面的「引导走查」每个标签是一段设定好的小场景，按顺序按按钮即可；「自由试」里可以随便戳。看不懂某个选择为什么发生时，看「选择过程」一栏。</p>
+  </div>
+
+  <div class="law">
+    <strong>已定的产品法（四种策略共享，不是比较对象）：</strong>
+    每段 Continuous Exchange 最多主动追问一次，且不设必须追问的配额；只允许问候、开放式开场、自然空档优先（实质话题 / 直接任务是否允许「答完再补一句」正是要测的分歧点）；只使用 active、未过期、非 contested、非 dormant、未被 Forget 的目标；你简短带过、回避、拒绝或转换话题后，该事项立即被抑制——只有你主动重提或新的相关证据才能解除，时间不会自动解除；敏感事项必须措辞温和、允许不回答；紧急 / 高风险永远先于一切主动关心。
+  </div>
+
+  <div class="law">
+    <strong>脚手架说明：</strong>「先接住你当前表达」的那句主回应是固定脚本，<em>不参与比较</em>；比较对象只有「⤷」标出的那句主动关心，或它的缺席。回合类型（问候 / 实质话题 / 任务 / 停止信号……）由页面直接给定——DialogueState 的识别不在本原型问题内。
+  </div>
+
+  <h2 id="hConvo">对话现场</h2>
+  <div class="panel" id="transcriptPanel"></div>
+  <div class="panel">
+    <strong>选择过程</strong> <span class="sub">（确定性门与排序，按发生顺序）</span>
+    <ul class="trail" id="trailPanel"></ul>
+  </div>
+
+  <h2>目标看板</h2>
+  <div class="panel">
+    <div class="sub" id="boardHint"></div>
+    <div class="targets" id="board"></div>
+  </div>
+
+  <h2>自由试</h2>
+  <div class="panel">
+    <p class="sub">先选一个策略（走查里也用它；盲评在走查区单独开）。然后随便点：每点一次，SayHear 会先完整回应你「说」的话，再决定要不要补一句主动关心。</p>
+    <div class="policy-cards" id="policyCards"></div>
+    <div class="divider"></div>
+    <h3>你这一回合说什么</h3>
+    <div id="freeplayButtons" class="row"></div>
+    <div class="divider"></div>
+    <div class="row">
+      <span>重提 / 新证据的对象：</span>
+      <select id="fpTargetSelect"></select>
+      <button id="fpReopen">用户重提该事项</button>
+      <button id="fpEvidence">新证据：它的最新情况</button>
+      <button id="fpCloseForm">新证据：面试结束，改等结果</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="fpDay">推进一天</button>
+      <button id="fpNewExchange">开启新 Continuous Exchange</button>
+      <button id="fpReset">重置自由试</button>
+    </div>
+  </div>
+
+  <h2>引导走查</h2>
+  <div class="panel">
+    <p class="toggle">
+      <label><input type="checkbox" id="blindToggle"> 盲评模式（甲 / 乙两个策略并排跑同一段场景，隐藏名字）</label>
+      &nbsp;&nbsp;甲 <select id="pairA"></select>
+      乙 <select id="pairB"></select>
+      &nbsp;<button id="revealBtn" class="pill">揭晓编号对照</button>
+    </p>
+    <div class="tabs" id="scenarioTabs"></div>
+    <div id="scenarioIntro"></div>
+    <div class="steps" id="scenarioSteps"></div>
+    <div id="blindVerdictBox"></div>
+  </div>
+
+  <h2>盲评记录</h2>
+  <div class="panel">
+    <p class="sub">每段走查在盲评模式下走完（或走到你有感觉的那一步），就在场景末尾选一次「更像被记挂」。以下文本可直接粘进 Issue #171 的评论。</p>
+    <button id="copyRecord">复制记录</button>
+    <button id="clearRecord">清空记录</button>
+    <pre class="record" id="recordBox">（还没有记录）</pre>
+  </div>
+
+</main>
+
+<script>
+/* ============================================================
+   BEGIN liftable pure module — window.PFPure
+   Proactive Memory Follow-up selector (prototype seed for the
+   future 1A.3b selector). Pure data in, pure data out; no DOM.
+   ============================================================ */
+(function () {
+  'use strict';
+
+  // ---------- turn taxonomy ----------
+  // admit: base = 问候/开放式/空档，天然允许；focused = 用户专注当下，慷慨策略可在完整回应后附加；
+  //        never = 高风险，绝不；stop = 停止信号，走抑制；reopen = 用户重提，走解除。
+  var TURN = {
+    greeting:     { zh: '开场问候',       admit: 'base' },
+    open_start:   { zh: '开放式开场',     admit: 'base' },
+    pause:        { zh: '自然空档',       admit: 'base' },
+    share:        { zh: '实质性当前话题', admit: 'focused' },
+    task:         { zh: '直接任务',       admit: 'focused' },
+    evidence:     { zh: '新证据',         admit: 'focused' },
+    urgent:       { zh: '紧急 / 高风险',  admit: 'never' },
+    short:        { zh: '简短带过',       admit: 'stop' },
+    evade:        { zh: '回避',           admit: 'stop' },
+    refuse:       { zh: '拒绝',           admit: 'stop' },
+    topic_change: { zh: '转换话题',       admit: 'stop' },
+    reopen:       { zh: '用户重提',       admit: 'reopen' },
+  };
+  var STOP_TYPES = ['short', 'evade', 'refuse', 'topic_change'];
+  var STOP_WORD = { short: '简短带过', evade: '回避了', refuse: '明确拒绝', topic_change: '转开了话题' };
+  var STOP_REASON = {
+    short: '你简短带过',
+    evade: '你回避了这个话题',
+    refuse: '你明确拒绝聊这个',
+    topic_change: '你转开了话题',
+  };
+
+  // ---------- policies under taste comparison ----------
+  var POLICIES = {
+    A: { code: 'A', name: '挂心优先', rank: 'salience', attach: 'strict', style: 'soft', sensitive: 'deprioritize',
+         desc: '谁在你心里分量重就先关心谁；你专注眼前事时绝不插话；问得轻，留口子。' },
+    B: { code: 'B', name: '时间优先', rank: 'deadline', attach: 'generous', style: 'direct', sensitive: 'normal',
+         desc: '有现实时钟的事先问（面试、结果、聚会）；你专注时，答完你的事可以补一句；问得直。' },
+    C: { code: 'C', name: '轻声路过', rank: 'rotation', attach: 'strict', style: 'noq', sensitive: 'deprioritize',
+         desc: '换着事关心，不盯着一件问；你专注眼前事时绝不插话；只说「我记着」，不问问题。' },
+    D: { code: 'D', name: '自然老友', rank: 'salience', attach: 'generous', style: 'direct', sensitive: 'deprioritize',
+         desc: '谁分量重先关心谁；你专注时，答完可以补一句；像老朋友一样自然直接——印象可以说「我一直觉得」。' },
+  };
+
+  // ---------- candidate cast (synthetic, bilingual) ----------
+  var TARGET_DEFS = {
+    interview: {
+      kind: 'upcoming_event', sensitivity: 'normal', salience: 3,
+      zh: { label: '周三的面试', memory: '你说过周三要去一家公司面试产品岗' },
+      en: { label: 'Wednesday interview', memory: 'You mentioned a product-role interview this Wednesday' },
+      phrase: {
+        zh: {
+          direct: '对了，你上次说的周三面试我记着呢——准备得怎么样了？',
+          soft: '周三面试的事我一直记着。想聊两句准备的事就聊，不聊也没关系。',
+          noq: '周三的面试我一直放在心上。加油。',
+        },
+        en: {
+          direct: "By the way — I remember the interview you mentioned. How's the prep going?",
+          soft: "I've been keeping your interview in mind. Happy to talk prep if you feel like it — no pressure either way.",
+          noq: "Still thinking about your interview this week. You've got this.",
+        },
+      },
+    },
+    results: {
+      kind: 'awaited_outcome', sensitivity: 'normal', salience: 4,
+      zh: { label: '面试结果', memory: '面试结束了，你正在等结果' },
+      en: { label: 'Interview results', memory: 'The interview is done and you are waiting for the result' },
+      phrase: {
+        zh: {
+          direct: '面试那边有消息了吗？',
+          soft: '面试结果的事我记着呢。有消息想说就说说，还在等也没关系。',
+          noq: '一直记着你在等面试结果。不管出什么结果，先照顾好自己。',
+        },
+        en: {
+          direct: 'Any news from the interview yet?',
+          soft: "I'm keeping the interview results in mind — share whenever there's news, or not, up to you.",
+          noq: "Still thinking about you waiting on those results. Whatever comes, be kind to yourself first.",
+        },
+      },
+    },
+    therapy: {
+      kind: 'objective_memory', sensitivity: 'sensitive', salience: 5,
+      zh: { label: '心理咨询', memory: '你三个月前告诉过我，你在做抑郁方面的心理咨询' },
+      en: { label: 'Counseling', memory: 'Three months ago you told me you have been seeing a counselor for depression' },
+      phrase: {
+        zh: {
+          direct: '你之前跟我说过你在做心理咨询——最近那边还好吗？不方便展开也完全没关系。',
+          soft: '你之前提过的咨询的事，我一直记着，也想问问你最近怎么样。不想说就不说，我在。',
+          noq: '你之前说的咨询的事，我一直放在心上。想说的时候，我在。',
+        },
+        en: {
+          direct: "You told me a while back you've been seeing a counselor — how are things going there? Totally fine if you'd rather not go into it.",
+          soft: "I've kept what you told me about counseling in mind, and I do wonder how you're doing. Say as much or as little as you want — I'm here.",
+          noq: "What you told me about counseling stays with me. Whenever you feel like talking, I'm here.",
+        },
+      },
+    },
+    argument: {
+      kind: 'objective_memory', sensitivity: 'normal', salience: 4,
+      zh: { label: '和 S 的争吵', memory: '两周前你提过和 S 吵了一架，当时挺难受' },
+      en: { label: 'The falling-out with S', memory: 'Two weeks ago you mentioned things got tense with S, and it hit you hard' },
+      phrase: {
+        zh: {
+          direct: '对了，上次你说和 S 吵了一架——后来怎么样了？',
+          soft: '上次你们吵架的事我还记着。想说说后来吗？不聊也完全行。',
+          noq: '你和 S 那次的事，我一直记着。',
+        },
+        en: {
+          direct: 'By the way — last time you mentioned the falling-out with S. How are things now?',
+          soft: "I remember what you told me about things being tense with S. Want to tell me how it went? No worries if not.",
+          noq: "What happened with S is still on my mind. Hoping it's been easing up.",
+        },
+      },
+    },
+    guitar: {
+      kind: 'objective_memory', sensitivity: 'normal', salience: 2,
+      zh: { label: '学吉他', memory: '你上个月开始学吉他' },
+      en: { label: 'Learning guitar', memory: 'You started learning guitar last month' },
+      phrase: {
+        zh: {
+          direct: '对了，你的吉他练得怎么样了？',
+          soft: '想起来你的吉他了——最近还弹吗？不聊也没关系。',
+          noq: '你学吉他的事我一直记得，挺替你高兴的。',
+        },
+        en: {
+          direct: "By the way — how's the guitar coming along?",
+          soft: "Been thinking about your guitar — still playing? No pressure to get into it.",
+          noq: "I remember you picking up the guitar. Genuinely glad you did.",
+        },
+      },
+    },
+    honesty: {
+      kind: 'ai_impression', sensitivity: 'normal', salience: 3,
+      zh: { label: '在意诚实（印象）', memory: '（AI Impression）你在合作里更在意诚实，而不是快' },
+      en: { label: 'You prize honesty (impression)', memory: '(AI Impression) In working with people you care about honesty more than speed' },
+      phrase: {
+        zh: {
+          direct: '最近工作里，是不是又碰到什么让你觉得「不够实在」的事？我一直觉得，你最看重的就是这个。没有也完全没关系。',
+          soft: '我印象里你特别在意「实在」这件事。最近是不是又有这种感觉了？想说就说，没有也完全没关系。',
+          noq: '我一直觉得，你在意的是实在，不是热闹。这话放这儿，不占用你时间。',
+        },
+        en: {
+          direct: "Did something at work feel off again lately? I keep noticing that what you care about most is honesty. If not, no need to dig.",
+          soft: "My sense is you really prize honesty. Has something been rubbing you that way again? Only if you want to say.",
+          noq: "For what it's worth, I keep thinking you value honesty over polish. That's all — no need to respond.",
+        },
+      },
+    },
+    birthday: {
+      kind: 'upcoming_event', sensitivity: 'normal', salience: 2,
+      zh: { label: '给朋友过生日', memory: '你周六要给好朋友办一个小生日聚会' },
+      en: { label: "Friend's birthday", memory: 'You are throwing a small birthday party for a good friend on Saturday' },
+      phrase: {
+        zh: {
+          direct: '周六给朋友过生日的事定好了吗？',
+          soft: '周六的生日小聚我还记着呢。想聊聊怎么安排就聊，不聊也行。',
+          noq: '周六的生日聚会我记着呢，到时候替我玩得开心点。',
+        },
+        en: {
+          direct: 'Is the birthday thing for Saturday all set?',
+          soft: "I remember the little birthday plan for Saturday — happy to brainstorm if you like, or not.",
+          noq: "I've got your friend's birthday on my mind. Have a good one on Saturday.",
+        },
+      },
+    },
+    cold: {
+      kind: 'objective_memory', sensitivity: 'normal', salience: 1, expired: true,
+      zh: { label: '上次的感冒', memory: '之前你说过感冒了' },
+      en: { label: 'That cold', memory: 'You had a cold a while back' },
+      phrase: {
+        zh: { direct: '上次你说的感冒，后来好利索了吗？', soft: '上次的感冒我还记着。现在彻底好了吧？不聊也行。', noq: '上次的感冒我一直记着，希望早就好了。' },
+        en: { direct: "How's that cold — all gone now?", soft: 'Still remembering that cold of yours. All better now? No need to answer.', noq: 'Hoping that cold is long gone.' },
+      },
+    },
+  };
+
+  // ---------- state ----------
+  function makeTarget(defId, eligibleFrom, expires, seedStatus, seedReason) {
+    var def = TARGET_DEFS[defId];
+    return {
+      defId: defId,
+      eligibleFrom: eligibleFrom,
+      expires: expires,
+      status: seedStatus || (def.expired ? 'expired' : 'eligible'),
+      reason: seedReason || null,
+      lastFollowupDay: null,
+      formedAtDay: null,
+    };
+  }
+
+  function initState(spec) {
+    return {
+      day: spec.day,
+      targets: spec.targets.map(function (t) {
+        if (Array.isArray(t)) return makeTarget(t[0], t[1], t[2]);
+        return makeTarget(t.defId, t.eligibleFrom, t.expires, t.status, t.reason);
+      }),
+      exchange: { n: 1, usedTargetId: null, mentioned: [] },
+      pendingTargetId: null,
+      transcript: [],
+    };
+  }
+
+  function clone(state) { return JSON.parse(JSON.stringify(state)); }
+
+  function findTarget(state, defId) {
+    for (var i = 0; i < state.targets.length; i++) {
+      if (state.targets[i].defId === defId) return state.targets[i];
+    }
+    return null;
+  }
+
+  function labelOf(defId, lang) {
+    var def = TARGET_DEFS[defId];
+    var l = lang === 'en' && def.en ? def.en : def.zh;
+    return l.label;
+  }
+
+  function statusWord(t) {
+    if (t.status === 'eligible') return '合格';
+    if (t.status === 'suppressed') return '被抑制';
+    if (t.status === 'occurred') return '已闭环（事件已发生）';
+    if (t.status === 'resolved') return '已闭环（结果已出）';
+    if (t.status === 'expired') return '已过期';
+    return t.status;
+  }
+
+  // ---------- ranking (the taste axis: who gets picked) ----------
+  function rankCandidates(ok, state, policy) {
+    var arr = ok.slice();
+    var moved = [];
+    if (policy.sensitive === 'deprioritize') {
+      moved = arr.filter(function (t) { return TARGET_DEFS[t.defId].sensitivity === 'sensitive'; })
+        .map(function (t) { return labelOf(t.defId, 'zh'); });
+    }
+    var key = function (t) {
+      var def = TARGET_DEFS[t.defId];
+      var isLoop = def.kind === 'upcoming_event' || def.kind === 'awaited_outcome';
+      var sensPenalty = (policy.sensitive === 'deprioritize' && def.sensitivity === 'sensitive') ? 1 : 0;
+      if (policy.rank === 'salience') {
+        return [sensPenalty, -def.salience, isLoop ? t.eligibleFrom : 9999, t.defId];
+      }
+      if (policy.rank === 'deadline') {
+        return [sensPenalty, isLoop ? 0 : 1, isLoop ? t.eligibleFrom : 0, -def.salience, t.defId];
+      }
+      // rotation
+      var lfu = t.lastFollowupDay === null ? -Infinity : t.lastFollowupDay;
+      return [sensPenalty, lfu, -def.salience, t.defId];
+    };
+    arr.sort(function (a, b) {
+      var ka = key(a), kb = key(b);
+      for (var i = 0; i < ka.length; i++) {
+        if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+      }
+      return 0;
+    });
+    return { ranked: arr, sensitiveMoved: moved };
+  }
+
+  function eligibleSet(state, policy) {
+    var ok = [], excluded = [];
+    state.targets.forEach(function (t) {
+      if (t.status === 'suppressed') { excluded.push([t, '被抑制：' + t.reason]); return; }
+      if (t.status === 'occurred' || t.status === 'resolved') { excluded.push([t, '已闭环']); return; }
+      if (t.status === 'expired') { excluded.push([t, '已过最晚追问时间']); return; }
+      if (state.day < t.eligibleFrom) { excluded.push([t, '还没到可追问的日期']); return; }
+      if (state.day >= t.expires) { excluded.push([t, '已过最晚追问时间']); return; }
+      if (state.exchange.mentioned.indexOf(t.defId) !== -1) {
+        excluded.push([t, '你本段交流刚提过——归正常对话管，不算主动追问']); return;
+      }
+      if (t.formedAtDay === state.day) {
+        excluded.push([t, '今天刚形成的事项不追问，留给以后']); return;
+      }
+      ok.push(t);
+    });
+    var r = rankCandidates(ok, state, policy);
+    return { ok: ok, excluded: excluded, ranked: r.ranked, sensitiveMoved: r.sensitiveMoved };
+  }
+
+  function phraseFor(t, policy, lang) {
+    var def = TARGET_DEFS[t.defId];
+    var langKey = (lang === 'en' && def.phrase.en) ? 'en' : 'zh';
+    var table = def.phrase[langKey];
+    return table[policy.style] || def.phrase.zh[policy.style] || def.phrase.zh.direct;
+  }
+
+  // ---------- the selector itself ----------
+  // action:
+  //   { kind:'turn', type, utterance, main, lang?, aboutTargetId?, closes?, forms?, releases? }
+  //   { kind:'advance_day' } | { kind:'new_exchange' }
+  function runTurn(prev, action, policy) {
+    var s = clone(prev);
+    var trail = [];
+    var changed = [];
+
+    if (action.kind === 'advance_day') {
+      s.day += 1;
+      trail.push('时间推进到第 ' + s.day + ' 天（资格窗口按读取时刻判定）');
+      return { state: s, out: { main: null, followup: null, trail: trail, changed: [] } };
+    }
+    if (action.kind === 'new_exchange') {
+      s.exchange = { n: s.exchange.n + 1, usedTargetId: null, mentioned: [] };
+      s.pendingTargetId = null;
+      trail.push('开启新的 Continuous Exchange（第 ' + s.exchange.n + ' 段）→ 主动追问资格重新计算');
+      return { state: s, out: { main: null, followup: null, trail: trail, changed: [] } };
+    }
+
+    var turn = action;
+    s.transcript.push({ who: 'user', text: turn.utterance });
+
+    // user mentioned a target -> it becomes current topic (not proactive anymore)
+    if (turn.aboutTargetId && s.exchange.mentioned.indexOf(turn.aboutTargetId) === -1) {
+      s.exchange.mentioned.push(turn.aboutTargetId);
+    }
+
+    // -- stop signals: suppress the deflected target --
+    if (STOP_TYPES.indexOf(turn.type) !== -1) {
+      var tid = turn.aboutTargetId || s.pendingTargetId;
+      if (tid) {
+        var t = findTarget(s, tid);
+        t.status = 'suppressed';
+        t.reason = STOP_REASON[turn.type] + '（第 ' + s.exchange.n + ' 段交流）';
+        changed.push(tid);
+        trail.push('你' + STOP_WORD[turn.type] + ' → 「' + labelOf(tid, 'zh') + '」被抑制。只有你主动重提或新的相关证据才能解除；时间不会自动解除。');
+      } else {
+        trail.push('这句话没有指向被追问的事项，也没有悬着的追问 → 不触发抑制。');
+      }
+      s.pendingTargetId = null;
+      s.transcript.push({ who: 'assistant', text: turn.main, followup: null });
+      return { state: s, out: { main: turn.main, followup: null, trail: trail, changed: changed } };
+    }
+
+    // -- user reopens: release suppression; normal conversation, not proactive --
+    if (turn.type === 'reopen') {
+      var rt = turn.aboutTargetId ? findTarget(s, turn.aboutTargetId) : null;
+      if (rt && rt.status === 'suppressed') {
+        rt.status = 'eligible';
+        rt.reason = null;
+        changed.push(rt.defId);
+        trail.push('你主动重提 → 「' + labelOf(rt.defId, 'zh') + '」抑制解除。');
+      }
+      trail.push('这件事现在是当前话题 → 由正常对话规则接住，不占主动追问名额，也不是主动追问。');
+      s.pendingTargetId = null;
+      s.transcript.push({ who: 'assistant', text: turn.main, followup: null });
+      return { state: s, out: { main: turn.main, followup: null, trail: trail, changed: changed } };
+    }
+
+    // -- new evidence: may close an old loop, form a new one, release a suppressed target --
+    if (turn.type === 'evidence') {
+      if (turn.closes) {
+        var ct = findTarget(s, turn.closes);
+        if (ct && (ct.status === 'eligible' || ct.status === 'suppressed')) {
+          ct.status = TARGET_DEFS[ct.defId].kind === 'upcoming_event' ? 'occurred' : 'resolved';
+          changed.push(ct.defId);
+          trail.push('这条证据直接支持闭环 → 「' + labelOf(ct.defId, 'zh') + '」转为 ' + ct.status + '。状态只表示事项已结束，不表达好坏。');
+        }
+      }
+      if (turn.forms) {
+        s.targets.push(makeTarget(turn.forms, s.day, s.day + 14));
+        var nt = s.targets[s.targets.length - 1];
+        nt.formedAtDay = s.day;
+        if (s.exchange.mentioned.indexOf(turn.forms) === -1) s.exchange.mentioned.push(turn.forms);
+        changed.push(turn.forms);
+        trail.push('同一个 pending state 的另一面 → 为它形成新的 Open Loop「' + labelOf(turn.forms, 'zh') + '」（今天起有资格，但今天刚形成的不追问，且你刚自己提过）。');
+      }
+      if (turn.releases) {
+        var lt = findTarget(s, turn.releases);
+        if (lt && lt.status === 'suppressed') {
+          lt.status = 'eligible';
+          lt.reason = null;
+          changed.push(lt.defId);
+          trail.push('新的相关 User Evidence → 「' + labelOf(lt.defId, 'zh') + '」抑制解除。');
+        }
+      }
+    }
+
+    // -- urgent: safety first, all policies --
+    if (turn.type === 'urgent') {
+      trail.push('高风险信号 → 安全优先，本回合绝不主动追问（所有策略共享的硬边界）。');
+      s.transcript.push({ who: 'assistant', text: turn.main, followup: null });
+      return { state: s, out: { main: turn.main, followup: null, trail: trail, changed: changed } };
+    }
+
+    // -- attachment gate: does this turn even admit a proactive follow-up? --
+    var admit = TURN[turn.type].admit;
+    if (admit === 'focused') {
+      if (policy.attach === 'generous') {
+        trail.push('你正专注当下的事 → 先完整回应你；答完之后，' + policy.name + ' 允许补一句主动关心（这正是要你裁定的差异）。');
+      } else {
+        trail.push('你正专注当下的事 → 完整回应优先，' + policy.name + ' 不插入旧事（严格让位）。');
+        s.transcript.push({ who: 'assistant', text: turn.main, followup: null });
+        return { state: s, out: { main: turn.main, followup: null, trail: trail, changed: changed } };
+      }
+    } else {
+      trail.push('这是' + TURN[turn.type].zh + ' → 允许选一个目标主动关心（先回应你，再补一句）。');
+    }
+
+    // -- per-exchange quota (hard) --
+    if (s.exchange.usedTargetId) {
+      trail.push('本段交流已经主动追问过「' + labelOf(s.exchange.usedTargetId, 'zh') + '」→ 每段最多一次（硬边界）。');
+      s.transcript.push({ who: 'assistant', text: turn.main, followup: null });
+      return { state: s, out: { main: turn.main, followup: null, trail: trail, changed: changed } };
+    }
+
+    // -- candidates --
+    var sel = eligibleSet(s, policy);
+    sel.excluded.forEach(function (e) { trail.push('「' + labelOf(e[0].defId, 'zh') + '」不参与：' + e[1] + '。'); });
+    if (sel.sensitiveMoved.length) {
+      trail.push('敏感目标按规则排到最后（不禁止，但不抢先）：' + sel.sensitiveMoved.join('、') + '。');
+    }
+    if (!sel.ranked.length) {
+      trail.push('没有此刻合适的目标 → 本回合不主动追问（零同样是完整而积极的回应）。');
+      s.transcript.push({ who: 'assistant', text: turn.main, followup: null });
+      return { state: s, out: { main: turn.main, followup: null, trail: trail, changed: changed } };
+    }
+
+    // -- pick + phrase --
+    var pick = sel.ranked[0];
+    var orderNote = sel.ok.length > 1 ? ('（合格 ' + sel.ok.length + ' 个，' + policy.name + ' 排序第一）') : '';
+    var text = phraseFor(pick, policy, turn.lang || 'zh');
+    if (TARGET_DEFS[pick.defId].sensitivity === 'sensitive') {
+      trail.push('选中敏感目标「' + labelOf(pick.defId, 'zh') + '」→ 无论哪种表达风格，都必须温和、允许不回答（产品法）。' + orderNote);
+    } else {
+      trail.push('选中「' + labelOf(pick.defId, 'zh') + '」' + orderNote + '。');
+    }
+    pick.lastFollowupDay = s.day;
+    s.exchange.usedTargetId = pick.defId;
+    s.pendingTargetId = pick.defId;
+    changed.push(pick.defId);
+    s.transcript.push({ who: 'assistant', text: turn.main, followup: { defId: pick.defId, text: text } });
+    return { state: s, out: { main: turn.main, followup: { defId: pick.defId, text: text }, trail: trail, changed: changed } };
+  }
+
+  var API = {
+    TURN: TURN,
+    STOP_TYPES: STOP_TYPES,
+    POLICIES: POLICIES,
+    TARGET_DEFS: TARGET_DEFS,
+    initState: initState,
+    runTurn: runTurn,
+    clone: clone,
+    labelOf: labelOf,
+    statusWord: statusWord,
+  };
+  if (typeof window !== 'undefined') window.PFPure = API;
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+})();
+/* ============================================================
+   END liftable pure module
+   ============================================================ */
+</script>
+
+<script>
+/* ============================================================
+   Throwaway page shell — drives PFPure, renders state.
+   ============================================================ */
+(function () {
+  'use strict';
+  var P = window.PFPure;
+
+  // ---------- canned free-play turns ----------
+  var FREE_TURNS = [
+    { label: '问候开场', type: 'greeting', utterance: '早。', main: '早。今天想从哪儿开始都行。', lang: 'zh' },
+    { label: '开放式开场', type: 'open_start', utterance: '最近没什么大事，随便聊聊。', main: '好呀，我听着。', lang: 'zh' },
+    { label: '深入说一件事', type: 'share', utterance: '今天开会被领导当着所有人批评了，挺郁闷的。', main: '被当众批评这件事本身就够呛。想说哪一段，我听着。', lang: 'zh' },
+    { label: '提直接任务', type: 'task', utterance: '把我刚说的整理成今天的 journal 草稿。', main: '整理好了，三句话都在草稿里，要改哪句直接说。', lang: 'zh' },
+    { label: '紧急 / 高风险', type: 'urgent', utterance: '我现在特别难受，有点撑不住了。', main: '先停一下，我陪着你。你现在安全吗？', lang: 'zh' },
+    { label: '轻轻应一声（空档）', type: 'pause', utterance: '嗯嗯。', main: '嗯，我在。', lang: 'zh' },
+    { label: '简短带过', type: 'short', utterance: '嗯嗯。', main: '嗯。', lang: 'zh' },
+    { label: '打岔回避', type: 'evade', utterance: '哈哈，说来话长，先不聊这个了吧。', main: '好，那不聊这个。', lang: 'zh' },
+    { label: '明确拒绝', type: 'refuse', utterance: '这个我不想聊。', main: '好，不聊。它就在这儿，你想说的时候我都在。', lang: 'zh' },
+    { label: '转换话题', type: 'topic_change', utterance: '不说这个啦，晚上吃点什么好？', main: '晚饭啊……想吃点热的，别糊弄自己。', lang: 'zh' },
+  ];
+
+  // ---------- walkthrough scenarios (13 required cases) ----------
+  var SCENARIOS = [
+    {
+      id: 's1', title: '1 · 开场问候', lang: 'zh',
+      intro: '一早上你只发来一个「早」。SayHear 记着几件事：此刻要不要开口、问谁、怎么问。',
+      watch: '看四个策略分别选了谁：分量最重的是心理咨询，但敏感会被三个策略压到最后，落到你和 S 的争吵；只有时间优先按现实时钟先问面试。同选一个目标时，比较口气：问得轻还是问得直。',
+      seed: { day: 2, targets: [['interview', 0, 12], ['therapy', 0, 30], ['argument', 0, 60]] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。今天有自己的节奏，想从哪儿开始都行。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's2', title: '2 · 自然空档', lang: 'zh',
+      intro: '你先说了句很轻的近况，又轻轻应了一声。这两句之间，哪里算「自然空档」。',
+      watch: '「嗯嗯。」在没有悬着的追问时按空档处理（不触发抑制），策略们会借这个空档开口。若它是接在一句追问后面的「嗯嗯」，就变成简短带过 → 见走查 8。',
+      seed: { day: 0, targets: [['interview', 0, 12], ['guitar', 0, 90], ['birthday', 0, 12]] },
+      steps: [
+        { type: 'share', utterance: '今天上班没什么特别的，就是有点累。', main: '累的时候别硬撑。想说什么说什么，不想说也没事。', lang: 'zh' },
+        { type: 'pause', utterance: '嗯嗯。', main: '嗯，我在。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's3', title: '3 · 实质性当前话题', lang: 'zh',
+      intro: '你正在讲一件当下情绪很重的事。主动关心该不该在这里出现。',
+      watch: '严格让位的策略（挂心优先 / 轻声路过）在这里完全不出手；时间优先 / 自然老友会在完整回应你之后补一句。哪种像关心，哪种像插播？',
+      seed: { day: 0, targets: [['interview', 0, 12], ['therapy', 0, 30], ['argument', 0, 60]] },
+      steps: [
+        { type: 'share', utterance: '今天开会被领导当着所有人批评了，挺郁闷的。', main: '被当众批评这件事本身就够呛。想说哪一段，我听着。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's4', title: '4 · 直接任务', lang: 'zh（code-switch）',
+      intro: '你让 SayHear 做一件具体的事。它答完之后，那句主动关心还来不来。',
+      watch: '先看任务答案本身没有被打共情拖延；再看答完之后：两个慷慨策略补的那一句，是「顺手惦记」还是「哪壶不开提哪壶」。',
+      seed: { day: 0, targets: [['interview', 0, 12], ['argument', 0, 60]] },
+      steps: [
+        { type: 'task', utterance: '帮我把我刚才说的整理一下，存进今天的 journal 草稿？', main: '整理好了，三句话，已在草稿里。要改哪句直接说。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's5', title: '5 · 敏感目标', lang: 'zh',
+      intro: '候选里有一件敏感的事：你三个月前亲口告诉过 SayHear，你在做抑郁方面的心理咨询。还有一件你和 S 的争吵。',
+      watch: '敏感不禁止，但必须有直接证据、必须允许不回答——这是法律，四种策略都守。差别在敢不敢选它：三个策略把敏感压到最后（落到你和 S 那件），只有时间优先把它排进正常顺序。看它被说出口的那一句——像被记挂，还是像被盯着病历。',
+      seed: { day: 0, targets: [['therapy', 0, 30], ['argument', 0, 60]] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's6', title: '6 · 多候选', lang: 'en',
+      intro: 'Six eligible candidates at once: an interview, therapy, a falling-out, guitar, an impression about honesty, and a birthday party.',
+      watch: 'This is the ranking decision in its purest form. Each policy shows its full sort order in the trail: salience-first picks the heaviest thing, deadline-first picks the soonest clock, rotation picks the least-recently-asked. Sensitive deprioritization moves therapy to the back for A, C and D — but not B.',
+      seed: {
+        day: 1,
+        targets: [['interview', 0, 12], ['therapy', 0, 30], ['argument', 0, 60], ['guitar', 0, 90], ['honesty', 0, 90], ['birthday', 0, 12]],
+      },
+      steps: [
+        { type: 'open_start', utterance: "Nothing much going on — thought I'd just check in with you.", main: "Sure — I'm here.", lang: 'en' },
+      ],
+    },
+    {
+      id: 's7', title: '7 · 本段交流已用过', lang: 'zh',
+      intro: '主动追问已经在本段交流里用过一次。第二次还来不来。',
+      watch: '每段最多一次是硬边界：第二步所有策略都沉默，没有任何例外。开一段新交流后，资格重新计算——注意「轻声路过」这次换了一个目标。',
+      seed: { day: 0, targets: [['interview', 0, 12], ['argument', 0, 60]] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。今天想从哪儿开始都行。', lang: 'zh' },
+        { type: 'open_start', utterance: '嗯，随便聊聊天气吧。', main: '好啊。今天的云走得挺快。', lang: 'zh' },
+        { kind: 'new_exchange' },
+        { type: 'open_start', utterance: '那就接着聊天气。', main: '嗯，你说。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's8', title: '8 · 简短带过', lang: 'zh',
+      intro: 'SayHear 主动问了面试，你只回了「嗯嗯。」',
+      watch: '一句短促回应，目标立即被抑制。第三步就算换了新话题，被抑制的事项也不会再被主动问——抑制不靠时间解除。',
+      seed: { day: 0, targets: [['interview', 0, 12]] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。今天想从哪儿开始都行。', lang: 'zh' },
+        { type: 'short', utterance: '嗯嗯。', main: '嗯。', lang: 'zh' },
+        { type: 'open_start', utterance: '嗯，随便聊聊。', main: '嗯，我听着呢。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's9', title: '9 · 回避', lang: 'zh',
+      intro: 'SayHear 主动提起你和 S 的那次争吵，你笑着岔开了。',
+      watch: '回避和拒绝不同：没有明确说「不聊」，但方向已经躲开了。同样立即抑制。解除方式只有两种——你重提（走查 12）或新证据（走查 13）；睡一觉也不解除。',
+      seed: { day: 0, targets: [['argument', 0, 60]] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。', lang: 'zh' },
+        { type: 'evade', utterance: '哈哈，说来话长，先不聊这个了吧。', main: '好，那不聊这个。', lang: 'zh' },
+        { kind: 'advance_day' },
+        { type: 'open_start', utterance: '睡了一觉，起来啦。', main: '嗯，早。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's10', title: '10 · 拒绝', lang: 'en',
+      intro: 'SayHear asks about the falling-out with S; you say no outright.',
+      watch: 'A refusal suppresses only that target ("we don\'t talk about this" closes this topic, not all questions). The graceful backing-off in the main response is scripted — watch instead that no policy sneaks the topic back in, and that suppression is per-target, not global.',
+      seed: { day: 0, targets: [['argument', 0, 60]] },
+      steps: [
+        { type: 'greeting', utterance: 'Morning.', main: "Morning. What's the day look like for you?", lang: 'en' },
+        { type: 'refuse', utterance: "I'd rather not get into that.", main: "Okay — we don't have to. I'm around whenever you want to.", lang: 'en' },
+      ],
+    },
+    {
+      id: 's11', title: '11 · 转换话题', lang: 'zh',
+      intro: 'SayHear 主动问起面试，你把话头引去了晚饭。',
+      watch: '转换话题 = 对该事项的停止信号。注意主回应认真接了你的新话题——停止信号之后不立刻换一个问题维持对话，是法律。',
+      seed: { day: 0, targets: [['interview', 0, 12]] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。今天想从哪儿开始都行。', lang: 'zh' },
+        { type: 'topic_change', utterance: '不说这个啦——晚上吃点什么好？', main: '晚饭啊……想吃点热的，别糊弄自己。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's12', title: '12 · 用户重提', lang: 'zh',
+      intro: '「和 S 的争吵」此刻已被抑制（设定：你上次回避了）。开场后没有任何可追的目标。',
+      watch: '第一步所有策略都沉默——被抑制的唯一候选不参与。第二步你自己重提：抑制立即解除，但注意这轮已属于正常对话，不再算主动追问，也不占任何名额。',
+      seed: { day: 0, targets: [{ defId: 'argument', eligibleFrom: 0, expires: 60, status: 'suppressed', reason: '上次你回避了这个话题（走查设定）' }] },
+      steps: [
+        { type: 'greeting', utterance: '早。', main: '早。', lang: 'zh' },
+        { type: 'reopen', aboutTargetId: 'argument', utterance: '对了，跟 S 那件事，我们前天把话说开了，现在和好了。', main: '太好了，真为你们高兴。', lang: 'zh' },
+      ],
+    },
+    {
+      id: 's13', title: '13 · 新证据', lang: 'zh',
+      intro: '你带来一条新证据：「面试结束了！答得还行，现在等结果。」——一句话，关掉旧事项，长出新事项。',
+      watch: '同一时刻：旧 Loop 闭环、新 Loop 形成、但被抑制的「和 S 的争吵」不因此解除（只有它自己的证据能解除它）。新长出的「面试结果」先由正常对话接住，下一段交流才轮到主动追问——每段最多一次仍然有效。',
+      seed: {
+        day: 0,
+        targets: [['interview', 0, 12], { defId: 'argument', eligibleFrom: 0, expires: 60, status: 'suppressed', reason: '上次你回避了这个话题（走查设定）' }],
+      },
+      steps: [
+        { type: 'evidence', closes: 'interview', forms: 'results', utterance: '面试结束了！答得还行，现在等结果。', main: '辛苦了。不管结果怎样，你都把它走完了。', lang: 'zh' },
+        { type: 'open_start', utterance: '嗯，随便聊聊。', main: '嗯，我听着呢。', lang: 'zh' },
+        { kind: 'new_exchange' },
+        { type: 'open_start', utterance: '接着聊。', main: '嗯，你说。', lang: 'zh' },
+      ],
+    },
+  ];
+
+  // ---------- shell state ----------
+  var view = 'free'; // 'free' | 'walk'
+  var policyKey = 'A';
+  var blindMode = false;
+  var pair = ['A', 'B'];
+  var revealed = false;
+  var activeScenario = SCENARIOS[0];
+  var stepsDone = 0;
+  var fpState = P.initState({
+    day: 0,
+    targets: [
+      ['interview', 0, 12], ['therapy', 0, 30], ['argument', 0, 60],
+      ['guitar', 0, 90], ['honesty', 0, 90], ['birthday', 0, 12],
+      { defId: 'cold', eligibleFrom: 0, expires: 1, status: 'expired' },
+    ],
+  });
+  var walkState = null;      // single-mode walkthrough state
+  var blindState = null;     // { A: state, B: state } keyed by pair entries
+  var verdicts = {};         // { sid: { pick: '甲'|'乙'|'tie', note: '' } }
+  var lastOut = null;        // { trail, changed } for rendering
+
+  // ---------- helpers ----------
+  function esc(x) {
+    return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function jumpToConvo() {
+    var h = document.getElementById('hConvo');
+    if (h) h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function scenarioSeedState(sc) {
+    return P.initState(sc.seed);
+  }
+  function currentStates() {
+    // returns { states: [ {key,label,state}, ... ], sharedUser: bool }
+    if (view === 'free') return { states: [{ key: policyKey, label: '策略 ' + policyKey, state: fpState }], trailOut: lastOut };
+    if (blindMode) {
+      return {
+        states: [
+          { key: pair[0], label: '甲', state: blindState[pair[0]] },
+          { key: pair[1], label: '乙', state: blindState[pair[1]] },
+        ],
+        trailOut: lastOut,
+      };
+    }
+    return { states: [{ key: policyKey, label: '策略 ' + policyKey, state: walkState }], trailOut: lastOut };
+  }
+
+  // ---------- render: transcript ----------
+  // 盲评模式下甲乙两条 transcript 结构完全同构（每一步都同样推进一步），
+  // 所以同一下标 i 的事件在两边一一对应，直接按下标配对渲染。
+  function renderTranscript() {
+    var el = document.getElementById('transcriptPanel');
+    var cs = currentStates();
+    var base = cs.states.length ? cs.states[0].state.transcript : [];
+    if (!base.length) {
+      el.innerHTML = '<p class="sub">（还没有对话。先点一个「你这一回合说什么」按钮，或进引导走查。）</p>';
+      return;
+    }
+    var blind = cs.states.length > 1;
+    var html = '';
+    var turnNo = 0;
+    for (var i = 0; i < base.length; i++) {
+      var entry = base[i];
+      if (entry.who === 'user') {
+        turnNo += 1;
+        html += '<div class="bubble user"><span class="who">你（第 ' + turnNo + ' 回合）</span>' + esc(entry.text) + '</div>';
+        continue;
+      }
+      if (!blind) {
+        html += assistantBubble(entry, cs.states[0].label);
+        continue;
+      }
+      var cells = '';
+      for (var j = 0; j < cs.states.length; j++) {
+        var st = cs.states[j];
+        var ent = (j === 0) ? entry : (st.state.transcript[i] || entry);
+        var fu = ent.followup
+          ? '<div class="followup"><span class="tag">⤷ 主动关心</span>' + esc(ent.followup.text) + '</div>'
+          : '<div class="followup" style="border:none;padding-top:4px;color:#94a3b8;font-size:12.5px">（没有补主动关心）</div>';
+        cells += '<div class="cell"><div class="head">' + esc(st.label) + '</div>' + esc(ent.text) + fu + '</div>';
+      }
+      html += '<div class="blind-cols">' + cells + '</div>';
+    }
+    el.innerHTML = html;
+
+    function assistantBubble(a, label) {
+      var follow = a.followup
+        ? '<div class="followup"><span class="tag">⤷ 主动关心</span>' + esc(a.followup.text) + '</div>'
+        : '<div class="followup" style="border:none;padding-top:4px;color:#94a3b8;font-size:12.5px">（没有补主动关心）</div>';
+      return '<div class="bubble assistant"><span class="who">' + esc(label) + ' · SayHear</span>' + esc(a.text) + follow + '</div>';
+    }
+  }
+
+  // ---------- render: trail ----------
+  function renderTrail() {
+    var el = document.getElementById('trailPanel');
+    var cs = currentStates();
+    if (blindMode && view === 'walk') {
+      var html = '';
+      cs.states.forEach(function (st) {
+        var out = lastOut && lastOut[st.key];
+        html += '<li><strong>' + esc(st.label) + '</strong>' + (out && out.trail && out.trail.length
+          ? '<ul class="trail">' + out.trail.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
+          : '<span>（暂无）</span>') + '</li>';
+      });
+      el.innerHTML = html || '<li>（还没有动作。）</li>';
+      return;
+    }
+    var out = cs.trailOut;
+    el.innerHTML = out && out.trail && out.trail.length
+      ? out.trail.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('')
+      : '<li>（还没有动作。）</li>';
+  }
+
+  // ---------- render: board ----------
+  function renderBoard() {
+    var el = document.getElementById('board');
+    var hint = document.getElementById('boardHint');
+    var cs = currentStates();
+    if (!cs.states.length || !cs.states[0].state.targets.length) { el.innerHTML = ''; return; }
+    var st = cs.states[0];
+    var changedSet = {};
+    if (blindMode && view === 'walk' && lastOut && lastOut[st.key]) {
+      (lastOut[st.key].changed || []).forEach(function (d) { changedSet[d] = true; });
+    } else if (lastOut && lastOut.changed) {
+      lastOut.changed.forEach(function (d) { changedSet[d] = true; });
+    }
+    hint.textContent = (view === 'walk' ? '走查局面（' + st.label + '）· ' : '自由试局面 · ') +
+      '第 ' + st.state.day + ' 天 · Continuous Exchange 第 ' + st.state.exchange.n + ' 段 · 已用主动追问：' +
+      (st.state.exchange.usedTargetId ? '「' + P.labelOf(st.state.exchange.usedTargetId, 'zh') + '」' : '还没用') +
+      ' · 悬着的追问：' + (st.state.pendingTargetId ? '「' + P.labelOf(st.state.pendingTargetId, 'zh') + '」' : '无');
+    el.innerHTML = st.state.targets.map(function (t) {
+      var def = P.TARGET_DEFS[t.defId];
+      var zh = def.zh;
+      var kindWord = { upcoming_event: 'Upcoming Event Loop', awaited_outcome: 'Awaited Outcome Loop', objective_memory: 'Objective Memory', ai_impression: 'AI Impression' }[def.kind];
+      var badge = t.status === 'eligible' ? 'b-ok' : t.status === 'suppressed' ? 'b-sup'
+        : (t.status === 'occurred' || t.status === 'resolved') ? 'b-closed' : 'b-exp';
+      return '<div class="tcard' + (changedSet[t.defId] ? ' changed' : '') + '">'
+        + '<span class="tlabel">' + esc(zh.label) + '</span>'
+        + '<span class="badge ' + badge + '">' + esc(P.statusWord(t)) + '</span>'
+        + '<div class="tmeta">' + esc(kindWord) + ' · 情感分量 ' + def.salience + (def.sensitivity === 'sensitive' ? ' · 敏感（直接证据）' : '') + '</div>'
+        + '<div class="tmeta">' + esc(zh.memory) + '</div>'
+        + '<div class="tmeta">可追问窗口：第 ' + t.eligibleFrom + ' 天起 ~ 第 ' + t.expires + ' 天止'
+        + (t.lastFollowupDay !== null ? ' · 上次追问：第 ' + t.lastFollowupDay + ' 天' : '')
+        + (t.status === 'suppressed' && t.reason ? '<br><strong>抑制原因：</strong>' + esc(t.reason) : '')
+        + '</div></div>';
+    }).join('');
+  }
+
+  // ---------- free play ----------
+  function renderPolicyCards() {
+    var el = document.getElementById('policyCards');
+    el.innerHTML = ['A', 'B', 'C', 'D'].map(function (k) {
+      var p = P.POLICIES[k];
+      return '<div class="pcard' + (k === policyKey ? ' active' : '') + '" data-k="' + k + '">'
+        + '<div class="pname">策略 ' + k + ' · ' + esc(p.name) + '</div>'
+        + '<div class="pdesc">' + esc(p.desc) + '</div></div>';
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.pcard'), function (card) {
+      card.addEventListener('click', function () {
+        policyKey = card.getAttribute('data-k');
+        renderPolicyCards();
+      });
+    });
+  }
+
+  function renderFreeButtons() {
+    var el = document.getElementById('freeplayButtons');
+    el.innerHTML = FREE_TURNS.map(function (t, i) {
+      return '<button data-i="' + i + '">' + esc(t.label) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () {
+        var t = FREE_TURNS[+b.getAttribute('data-i')];
+        var r = P.runTurn(fpState, { kind: 'turn', type: t.type, utterance: t.utterance, main: t.main, lang: 'zh' }, P.POLICIES[policyKey]);
+        fpState = r.state;
+        lastOut = { trail: r.out.trail, changed: r.out.changed };
+        renderAll();
+      });
+    });
+  }
+
+  function renderFpSelect() {
+    var sel = document.getElementById('fpTargetSelect');
+    var opts = fpState.targets.map(function (t) {
+      return '<option value="' + esc(t.defId) + '">' + esc(P.TARGET_DEFS[t.defId].zh.label) + '（' + esc(P.statusWord(t)) + '）</option>';
+    }).join('');
+    sel.innerHTML = opts;
+  }
+
+  // ---------- walkthroughs ----------
+  function renderTabs() {
+    var el = document.getElementById('scenarioTabs');
+    el.innerHTML = SCENARIOS.map(function (sc) {
+      return '<button class="' + (sc.id === activeScenario.id ? 'on' : '') + '" data-id="' + sc.id + '">' + esc(sc.title) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () {
+        activeScenario = SCENARIOS.filter(function (s) { return s.id === b.getAttribute('data-id'); })[0];
+        stepsDone = 0;
+        view = 'walk';
+        resetWalkStates();
+        renderAll();
+      });
+    });
+  }
+
+  function resetWalkStates() {
+    var seed = scenarioSeedState(activeScenario);
+    if (blindMode) {
+      blindState = {};
+      blindState[pair[0]] = P.clone(seed);
+      blindState[pair[1]] = P.clone(seed);
+    } else {
+      walkState = seed;
+    }
+    lastOut = null;
+  }
+
+  function renderScenario() {
+    var sc = activeScenario;
+    document.getElementById('scenarioIntro').innerHTML =
+      '<h3>' + esc(sc.title) + '</h3><p>' + esc(sc.intro) + '</p>'
+      + '<p class="stepdesc"><strong>看什么：</strong>' + esc(sc.watch) + '</p>';
+    var stepsEl = document.getElementById('scenarioSteps');
+    var nextDisabled = false;
+    stepsEl.innerHTML = sc.steps.map(function (step, i) {
+      var desc;
+      if (step.kind === 'new_exchange') desc = '→ 开启新 Continuous Exchange';
+      else if (step.kind === 'advance_day') desc = '推进一天';
+      else desc = '你说：' + step.utterance;
+      var disabled = nextDisabled;
+      nextDisabled = true; // only the immediately-next step is active
+      var cls = i < stepsDone ? 'done' : '';
+      return '<button data-i="' + i + '" ' + (disabled || i !== stepsDone ? 'disabled' : '') + ' class="' + cls + '">'
+        + (i < stepsDone ? '✓ ' : '') + '步骤 ' + (i + 1) + ' · ' + esc(desc)
+        + (disabled ? ' <span class="stepdesc">（按顺序来）</span>' : '') + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(stepsEl.querySelectorAll('button[data-i]'), function (b) {
+      b.addEventListener('click', function () {
+        var i = +b.getAttribute('data-i');
+        if (i !== stepsDone) return;
+        var step = activeScenario.steps[i];
+        stepsDone = i + 1;
+        doStep(step);
+      });
+    });
+  }
+
+  function doStep(step) {
+    if (step.kind === 'new_exchange' || step.kind === 'advance_day') {
+      var act = { kind: step.kind };
+      if (blindMode) {
+        lastOut = {};
+        [pair[0], pair[1]].forEach(function (k) {
+          var r = P.runTurn(blindState[k], act, P.POLICIES[k]);
+          blindState[k] = r.state;
+          lastOut[k] = { trail: r.out.trail, changed: r.out.changed };
+        });
+      } else {
+        var r1 = P.runTurn(walkState, act, P.POLICIES[policyKey]);
+        walkState = r1.state;
+        lastOut = { trail: r1.out.trail, changed: r1.out.changed };
+      }
+      renderAll();
+      jumpToConvo();
+      return;
+    }
+    var action = {
+      kind: 'turn', type: step.type, utterance: step.utterance, main: step.main,
+      lang: step.lang, aboutTargetId: step.aboutTargetId, closes: step.closes, forms: step.forms, releases: step.releases,
+    };
+    if (blindMode) {
+      lastOut = {};
+      [pair[0], pair[1]].forEach(function (k) {
+        var r = P.runTurn(blindState[k], action, P.POLICIES[k]);
+        blindState[k] = r.state;
+        lastOut[k] = { trail: r.out.trail, changed: r.out.changed };
+      });
+    } else {
+      var r2 = P.runTurn(walkState, action, P.POLICIES[policyKey]);
+      walkState = r2.state;
+      lastOut = { trail: r2.out.trail, changed: r2.out.changed };
+    }
+    renderAll();
+    jumpToConvo();
+  }
+
+  // ---------- blind verdict ----------
+  function renderVerdict() {
+    var box = document.getElementById('blindVerdictBox');
+    if (!blindMode) { box.innerHTML = ''; return; }
+    var v = verdicts[activeScenario.id] || {};
+    box.innerHTML = '<div class="verdictbox"><strong>这段走查，哪一边更像「被记挂」？</strong>'
+      + '<div class="vbtns">'
+      + '<button data-p="甲" class="' + (v.pick === '甲' ? 'on' : '') + '">甲更像被记挂</button>'
+      + '<button data-p="tie" class="' + (v.pick === 'tie' ? 'on' : '') + '">持平</button>'
+      + '<button data-p="乙" class="' + (v.pick === '乙' ? 'on' : '') + '">乙更像被记挂</button>'
+      + '</div>'
+      + '<div style="margin-top:8px">一句话备注：<input type="text" id="verdictNote" value="' + esc(v.note || '') + '" placeholder="（可空）比如：乙补的那句让我不舒服"></div>'
+      + '</div>';
+    Array.prototype.forEach.call(box.querySelectorAll('button[data-p]'), function (b) {
+      b.addEventListener('click', function () {
+        verdicts[activeScenario.id] = verdicts[activeScenario.id] || {};
+        verdicts[activeScenario.id].pick = b.getAttribute('data-p');
+        var noteEl = document.getElementById('verdictNote');
+        if (noteEl) verdicts[activeScenario.id].note = noteEl.value;
+        renderVerdict();
+        renderRecord();
+      });
+    });
+    var noteEl = document.getElementById('verdictNote');
+    if (noteEl) {
+      noteEl.addEventListener('change', function () {
+        verdicts[activeScenario.id] = verdicts[activeScenario.id] || {};
+        verdicts[activeScenario.id].note = noteEl.value;
+        renderRecord();
+      });
+    }
+  }
+
+  // ---------- record ----------
+  function renderRecord() {
+    var box = document.getElementById('recordBox');
+    if (!Object.keys(verdicts).length) { box.textContent = '（还没有记录。）'; return; }
+    var lines = ['#171 盲评记录（原型 proactive-followup-selector.prototype.html）'];
+    lines.push('');
+    SCENARIOS.forEach(function (sc) {
+      var v = verdicts[sc.id];
+      if (v && v.pick) {
+        lines.push('- ' + sc.title + '：' + v.pick + (v.note ? ' —— ' + v.note : ''));
+      }
+    });
+    lines.push('');
+    if (revealed) {
+      lines.push('编号对照：① = 策略A「' + P.POLICIES.A.name + '」，② = 策略B「' + P.POLICIES.B.name
+        + '」，③ = 策略C「' + P.POLICIES.C.name + '」，④ = 策略D「' + P.POLICIES.D.name + '」'
+        + '；本次走查：甲 = 策略' + pair[0] + '「' + P.POLICIES[pair[0]].name + '」，乙 = 策略' + pair[1] + '「' + P.POLICIES[pair[1]].name + '」');
+    } else {
+      lines.push('编号对照：（未揭晓——确认记录后可先粘贴，再揭晓补一行对照）');
+    }
+    box.textContent = lines.join('\n');
+  }
+
+  // ---------- wiring ----------
+  function renderAll() {
+    renderTranscript();
+    renderTrail();
+    renderBoard();
+    renderFpSelect();
+    renderTabs();
+    renderScenario();
+    renderVerdict();
+    renderRecord();
+  }
+
+  document.getElementById('fpReopen').addEventListener('click', function () {
+    var defId = document.getElementById('fpTargetSelect').value;
+    var r = P.runTurn(fpState, {
+      kind: 'turn', type: 'reopen', aboutTargetId: defId,
+      utterance: '对了，说起「' + P.TARGET_DEFS[defId].zh.label + '」——',
+      main: '好啊，说给我听听。', lang: 'zh',
+    }, P.POLICIES[policyKey]);
+    fpState = r.state;
+    lastOut = { trail: r.out.trail, changed: r.out.changed };
+    renderAll();
+  });
+
+  document.getElementById('fpEvidence').addEventListener('click', function () {
+    var defId = document.getElementById('fpTargetSelect').value;
+    var r = P.runTurn(fpState, {
+      kind: 'turn', type: 'evidence', releases: defId,
+      utterance: '跟你说一下「' + P.TARGET_DEFS[defId].zh.label + '」的最新情况。',
+      main: '记下了，谢谢你告诉我。', lang: 'zh',
+    }, P.POLICIES[policyKey]);
+    fpState = r.state;
+    lastOut = { trail: r.out.trail, changed: r.out.changed };
+    renderAll();
+  });
+
+  document.getElementById('fpCloseForm').addEventListener('click', function () {
+    var r = P.runTurn(fpState, {
+      kind: 'turn', type: 'evidence', closes: 'interview', forms: 'results',
+      utterance: '面试结束了！答得还行，现在等结果。',
+      main: '辛苦了。不管结果怎样，你都把它走完了。', lang: 'zh',
+    }, P.POLICIES[policyKey]);
+    fpState = r.state;
+    lastOut = { trail: r.out.trail, changed: r.out.changed };
+    renderAll();
+  });
+
+  document.getElementById('fpDay').addEventListener('click', function () {
+    var r = P.runTurn(fpState, { kind: 'advance_day' }, P.POLICIES[policyKey]);
+    fpState = r.state;
+    lastOut = { trail: r.out.trail, changed: [] };
+    renderAll();
+  });
+
+  document.getElementById('fpNewExchange').addEventListener('click', function () {
+    var r = P.runTurn(fpState, { kind: 'new_exchange' }, P.POLICIES[policyKey]);
+    fpState = r.state;
+    lastOut = { trail: r.out.trail, changed: [] };
+    renderAll();
+  });
+
+  document.getElementById('fpReset').addEventListener('click', function () {
+    fpState = P.initState({
+      day: 0,
+      targets: [
+        ['interview', 0, 12], ['therapy', 0, 30], ['argument', 0, 60],
+        ['guitar', 0, 90], ['honesty', 0, 90], ['birthday', 0, 12],
+        { defId: 'cold', eligibleFrom: 0, expires: 1, status: 'expired' },
+      ],
+    });
+    lastOut = null;
+    view = 'free';
+    renderAll();
+  });
+
+  document.getElementById('blindToggle').addEventListener('change', function (e) {
+    blindMode = e.target.checked;
+    stepsDone = 0;
+    resetWalkStates();
+    renderAll();
+  });
+
+  function renderPairSelects() {
+    var a = document.getElementById('pairA'), b = document.getElementById('pairB');
+    var labels = { A: '策略 ①', B: '策略 ②', C: '策略 ③', D: '策略 ④' };
+    [a, b].forEach(function (sel) {
+      sel.innerHTML = ['A', 'B', 'C', 'D'].map(function (k) {
+        return '<option value="' + k + '"' + (k === (sel === a ? pair[0] : pair[1]) ? ' selected' : '') + '>' + labels[k] + '</option>';
+      }).join('');
+    });
+  }
+  document.getElementById('pairA').addEventListener('change', function (e) {
+    pair[0] = e.target.value;
+    revealed = false;
+    stepsDone = 0;
+    resetWalkStates();
+    renderAll();
+  });
+  document.getElementById('pairB').addEventListener('change', function (e) {
+    pair[1] = e.target.value;
+    revealed = false;
+    stepsDone = 0;
+    resetWalkStates();
+    renderAll();
+  });
+  document.getElementById('revealBtn').addEventListener('click', function () {
+    revealed = !revealed;
+    renderRecord();
+  });
+
+  document.getElementById('copyRecord').addEventListener('click', function () {
+    var text = document.getElementById('recordBox').textContent;
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (err) { /* ignore */ }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(fallback);
+    } else { fallback(); }
+  });
+
+  document.getElementById('clearRecord').addEventListener('click', function () {
+    verdicts = {};
+    renderAll();
+  });
+
+  // ---------- boot ----------
+  renderPolicyCards();
+  renderFreeButtons();
+  renderPairSelects();
+  view = 'walk';
+  resetWalkStates();
+  renderAll();
+})();
+</script>
+</body>
+</html>
