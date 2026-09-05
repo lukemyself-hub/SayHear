@@ -775,7 +775,7 @@
     {
       id: 's13', title: '13 · 新证据', lang: 'zh',
       intro: '你带来一条新证据：「面试结束了！答得还行，现在等结果。」——一句话，关掉旧事项，长出新事项。',
-      watch: '同一时刻：旧 Loop 闭环、新 Loop 形成、但被抑制的「和 S 的争吵」不因此解除（只有它自己的证据能解除它）。新长出的「面试结果」先由正常对话接住，下一段交流才轮到主动追问——每段最多一次仍然有效。',
+      watch: '同一时刻：旧 Loop 闭环、新 Loop 形成、但被抑制的「和 S 的争吵」不因此解除（只有它自己的证据能解除它）。新事项今天不追问——你刚自己提过它，而且它今天刚形成；推进一天、开一段新交流后，它才第一次被主动关心。最后一步比较四种策略对同一件事的问法差异。',
       seed: {
         day: 0,
         targets: [['interview', 0, 12], { defId: 'argument', eligibleFrom: 0, expires: 60, status: 'suppressed', reason: '上次你回避了这个话题（走查设定）' }],
@@ -784,6 +784,7 @@
         { type: 'evidence', closes: 'interview', forms: 'results', utterance: '面试结束了！答得还行，现在等结果。', main: '辛苦了。不管结果怎样，你都把它走完了。', lang: 'zh' },
         { type: 'open_start', utterance: '嗯，随便聊聊。', main: '嗯，我听着呢。', lang: 'zh' },
         { kind: 'new_exchange' },
+        { kind: 'advance_day' },
         { type: 'open_start', utterance: '接着聊。', main: '嗯，你说。', lang: 'zh' },
       ],
     },
@@ -807,7 +808,7 @@
   });
   var walkState = null;      // single-mode walkthrough state
   var blindState = null;     // { A: state, B: state } keyed by pair entries
-  var verdicts = {};         // { sid: { pick: '甲'|'乙'|'tie', note: '' } }
+  var verdicts = {};         // { '<场景id>|<甲>/<乙>': { pick, note, pairKey } }
   var lastOut = null;        // { trail, changed } for rendering
 
   // ---------- helpers ----------
@@ -1088,7 +1089,7 @@
   function renderVerdict() {
     var box = document.getElementById('blindVerdictBox');
     if (!blindMode) { box.innerHTML = ''; return; }
-    var v = verdicts[activeScenario.id] || {};
+    var v = verdicts[verdictKey()] || {};
     box.innerHTML = '<div class="verdictbox"><strong>这段走查，哪一边更像「被记挂」？</strong>'
       + '<div class="vbtns">'
       + '<button data-p="甲" class="' + (v.pick === '甲' ? 'on' : '') + '">甲更像被记挂</button>'
@@ -1099,11 +1100,12 @@
       + '</div>';
     Array.prototype.forEach.call(box.querySelectorAll('button[data-p]'), function (b) {
       b.addEventListener('click', function () {
-        verdicts[activeScenario.id] = verdicts[activeScenario.id] || {};
-        verdicts[activeScenario.id].pick = b.getAttribute('data-p');
-        verdicts[activeScenario.id].pairKey = pair[0] + '/' + pair[1];
+        var key = verdictKey();
+        verdicts[key] = verdicts[key] || {};
+        verdicts[key].pick = b.getAttribute('data-p');
+        verdicts[key].pairKey = pair[0] + '/' + pair[1];
         var noteEl = document.getElementById('verdictNote');
-        if (noteEl) verdicts[activeScenario.id].note = noteEl.value;
+        if (noteEl) verdicts[key].note = noteEl.value;
         renderVerdict();
         renderRecord();
       });
@@ -1111,11 +1113,19 @@
     var noteEl = document.getElementById('verdictNote');
     if (noteEl) {
       noteEl.addEventListener('change', function () {
-        verdicts[activeScenario.id] = verdicts[activeScenario.id] || {};
-        verdicts[activeScenario.id].note = noteEl.value;
+        var key = verdictKey();
+        verdicts[key] = verdicts[key] || {};
+        verdicts[key].pairKey = pair[0] + '/' + pair[1];
+        verdicts[key].note = noteEl.value;
         renderRecord();
       });
     }
+  }
+
+  // verdicts live per (scenario × 甲/乙 pair): comparing scenario 6 under
+  // ①/② and then ③/④ keeps both judgments in the record.
+  function verdictKey() {
+    return activeScenario.id + '|' + pair[0] + '/' + pair[1];
   }
 
   // ---------- record ----------
@@ -1126,17 +1136,18 @@
     lines.push('');
     var pairKeyNow = pair[0] + '/' + pair[1];
     SCENARIOS.forEach(function (sc) {
-      var v = verdicts[sc.id];
-      if (v && v.pick) {
+      Object.keys(verdicts).forEach(function (key) {
+        if (key.indexOf(sc.id + '|') !== 0) return;
+        var v = verdicts[key];
         var tag = '';
         if (revealed && v.pairKey) {
           var ka = v.pairKey[0], kb = v.pairKey[2];
           tag = '（甲=策略' + ka + '「' + P.POLICIES[ka].name + '」，乙=策略' + kb + '「' + P.POLICIES[kb].name + '」）';
-        } else if (!revealed && v.pairKey && v.pairKey !== pairKeyNow) {
+        } else if (!revealed && v.pairKey !== pairKeyNow) {
           tag = '（旧对照：甲=策略' + v.pairKey[0] + '，乙=策略' + v.pairKey[2] + '）';
         }
         lines.push('- ' + sc.title + '：' + v.pick + (tag ? ' ' + tag : '') + (v.note ? ' —— ' + v.note : ''));
-      }
+      });
     });
     lines.push('');
     if (revealed) {
