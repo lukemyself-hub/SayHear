@@ -131,9 +131,10 @@
       <span>重提 / 新证据的对象：</span>
       <select id="fpTargetSelect"></select>
       <button id="fpReopen">用户重提该事项</button>
-      <button id="fpEvidence">新证据：它的最新情况</button>
-      <button id="fpCloseForm">新证据：面试结束，改等结果</button>
+      <button id="fpEvidence">新证据：它有新进展</button>
+      <button id="fpCloseForm">新证据：面试结束，改等结果（闭环 + 新 Loop）</button>
     </div>
+    <p class="stepdesc">「重提」和「新证据」作用于左侧选中的事项。「新证据：它有新进展」对 Open Loop 是闭环（Upcoming Event → 已发生，Awaited Outcome → 结果已出），对 Memory Claim 是解除抑制 / 记录更新；下面那个专用按钮演示一条证据同时关旧、开新的完整链。</p>
     <div class="row" style="margin-top:10px">
       <button id="fpDay">推进一天</button>
       <button id="fpNewExchange">开启新 Continuous Exchange</button>
@@ -1127,10 +1128,14 @@
     SCENARIOS.forEach(function (sc) {
       var v = verdicts[sc.id];
       if (v && v.pick) {
-        var stale = v.pairKey && v.pairKey !== pairKeyNow
-          ? '（旧对照：甲=策略' + v.pairKey[0] + '，乙=策略' + v.pairKey[2] + '）'
-          : '';
-        lines.push('- ' + sc.title + '：' + v.pick + (stale ? ' ' + stale : '') + (v.note ? ' —— ' + v.note : ''));
+        var tag = '';
+        if (revealed && v.pairKey) {
+          var ka = v.pairKey[0], kb = v.pairKey[2];
+          tag = '（甲=策略' + ka + '「' + P.POLICIES[ka].name + '」，乙=策略' + kb + '「' + P.POLICIES[kb].name + '」）';
+        } else if (!revealed && v.pairKey && v.pairKey !== pairKeyNow) {
+          tag = '（旧对照：甲=策略' + v.pairKey[0] + '，乙=策略' + v.pairKey[2] + '）';
+        }
+        lines.push('- ' + sc.title + '：' + v.pick + (tag ? ' ' + tag : '') + (v.note ? ' —— ' + v.note : ''));
       }
     });
     lines.push('');
@@ -1171,11 +1176,19 @@
 
   document.getElementById('fpEvidence').addEventListener('click', function () {
     var defId = document.getElementById('fpTargetSelect').value;
-    var r = P.runTurn(fpState, {
-      kind: 'turn', type: 'evidence', releases: defId,
-      utterance: '跟你说一下「' + P.TARGET_DEFS[defId].zh.label + '」的最新情况。',
-      main: '记下了，谢谢你告诉我。', lang: 'zh',
-    }, P.POLICIES[policyKey]);
+    var def = P.TARGET_DEFS[defId];
+    var t = null;
+    fpState.targets.forEach(function (x) { if (x.defId === defId) t = x; });
+    var isLoop = def.kind === 'upcoming_event' || def.kind === 'awaited_outcome';
+    var closable = t && isLoop && (t.status === 'eligible' || t.status === 'suppressed');
+    var action = { kind: 'turn', type: 'evidence' };
+    if (closable) action.closes = defId;
+    else action.releases = defId;
+    action.utterance = closable
+      ? '跟你说一下「' + def.zh.label + '」——这件事已经有结果了，结束了。'
+      : '跟你说一下「' + def.zh.label + '」的最新情况。';
+    action.main = '记下了，谢谢你告诉我。';
+    var r = P.runTurn(fpState, action, P.POLICIES[policyKey]);
     fpState = r.state;
     lastOut = { trail: r.out.trail, changed: r.out.changed };
     view = 'free';
