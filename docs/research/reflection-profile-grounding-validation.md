@@ -59,7 +59,7 @@ Reflection 和叙事 Profile，并验证结果。
   （[CONTEXT.md](../../CONTEXT.md)、
   [知识数据模型 §7.9](../architecture/07-07-12-knowledge-data-model.md)、
   [ADR-0087](../adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md)）。
-- Profile Projection 是从全部 eligible ClaimVersion 生成的可重建叙事，不是 Memory
+- Bio 是从全部 eligible ClaimVersion 生成的可重建叙事，不是 Memory
   真源。事实判断只能由 active Objective Memory 支持；可独立成立的心理、情感和
   价值观判断只能由 active AI Impression 支持
   （[ADR-0055](../adr/0055-profile-is-an-llm-written-semantic-projection.md)）。
@@ -247,7 +247,7 @@ artifact_draft
 - schema、ID、locale、版本和 required field 有效；
 - 每个 support ID 都属于冻结输入，且版本完全一致；
 - Reflection support 只能是有效 EvidenceItem，Profile support 只能是 eligible
-  ClaimVersion；任何 ReflectionVersion、ProfileProjectionVersion、JournalVersion、
+  ClaimVersion；任何 ReflectionVersion、BioVersion、JournalVersion、
   Assistant / System Event 作为事实 source 都拒绝；
 - support 能展开到未被删除、final / corrected User Event Revision；
 - Profile 的 fact proposition 只能用 Objective support，impression proposition 只能用
@@ -374,7 +374,7 @@ Bio，不能靠其余维度高分抵消。反过来，结构正确但像数据�
 - 与 generator 同模型、同模型家族和异模型时的差异。
 
 在某类错误达到可接受证据前，该 checker 只能作 advisory finding 或把结果送人工
-review，不能静默批准。规则升级必须重放冻结 gold set；旧 ProfileVersion 保留当时的
+review，不能静默批准。规则升级必须重放冻结 gold set；旧 BioVersion 保留当时的
 validator version，不能按新规则假装它从未发布。
 
 ## 6. 对 1A.3b SPEC 的直接含义

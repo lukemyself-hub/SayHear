@@ -48,6 +48,16 @@ auth_sessions(id, user_id, expires_at, revoked_at)
   仍需独立 capability check，不能因只有一个用户而绕过；
 - 查看完整对话、Candidate review 中的完整 Evidence、下载音频、创建真实 Replay
   需要 10 分钟内完成的 step-up reauthentication，并写 access audit；
+- Bio 与按需展开的 Bio Basis 使用当前 Internal Owner database session 和
+  服务端 owner-scope authorization，不因展开一条依据重复要求 step-up。API 不接受
+  客户端 owner ID；Basis 原话不随 Bio 初始 payload 批量返回，只在展开时读取，
+  不进入共享 cache 或普通日志。完整 Evidence 读取仍适用上一条 step-up 与 audit
+  边界；Correction / Forget 仍通过既有 Conversation Action 授权与 receipt 执行；
+- 每次 Bio Basis 展开写入不含正文的 access audit，记录 actor、BioVersion、
+  proposition、发生时间与读取结果；普通日志仍不记录用户原话；
+- Bio Basis 只返回 narrative-support Claim 下仍有效 EvidenceItem 的精确 segment 或
+  text span，保留原语言，并显示所属 Daily Session 的本地日期；不能扩大到整个 User
+  Event，也不能由模型改写成“原话”。locator 或 source fence 失效时拒绝返回；
 - Candidate review audit 至少记录 reviewer、Candidate、Evidence revision、
   disposition、reason、policy version、Proposal ID、predecessor Candidate、
   successor trigger 与时间，但不复制私人正文；
@@ -387,7 +397,7 @@ Qualifier-level Forget 还会阻止同一旧 Evidence 继续支撑具体角色�
 Profile、Embedding、Context 与 repair，不能因派生物重建而失效；Replay 对历史
 source 的只读授权仍遵循其既有隔离规则，不能写回正式 Memory。
 Forget fence 提交时，任何 narrative-support link 命中该内容的 current
-ProfileVersion 必须立即停止展示，并自动触发不受普通刷新间隔限制的安全重建；
+BioVersion 必须立即停止展示，并自动触发不受普通刷新间隔限制的安全重建；
 重建失败时保持 Profile 不可用，不能等每周 Cron 或恢复旧 Bio。
 Memory Forget Reversal 使用同一个 final / corrected User Event 作为新 Evidence
 并创建新 ClaimVersion；旧 Evidence exclusion 继续有效，不能通过备份恢复、Replay、
@@ -415,7 +425,7 @@ content deletion 的设计目标，不属于 Internal Core 或当前 External MV
 - Memory Candidate / Claim / Claim localized projection / Relationship Resolver Hint；
 - Predicate Change Proposal 与 Candidate 的 link；不含任何用户内容的 Proposal
   identity、通用定义和治理版本不属于 owner-scoped purge；
-- Profile Projection；
+- Bio；
 - Embedding；
 - Context snapshot；
 - Conversation Action Proposal envelope、临时 payload、Execution、Receipt 与 typed
@@ -496,10 +506,10 @@ Proactive Follow-up State 与索引。
 6. 任何 JournalStatement 引用失效 Evidence 时，整个 JournalVersion 立即停止展示，
    再用剩余事件生成 superseding version；不得只删除 evidence edge 后保留原正文；
 7. 任何 ReflectionStatement 引用失效 Evidence 时，整个 ReflectionVersion
-   停止驱动 Candidate / Profile，并从剩余 Evidence 重建新版本；
+   停止驱动 Candidate，并从剩余 Evidence 重建新版本；
 8. 相关 SummaryVersion、EpisodeVersion 与 OpenLoopVersion 整体失效并重建或 retract；
 9. 相关 Embedding 先删除，再从仍有效的新版本生成；
-10. Profile Projection、Compiled Context snapshot、Replay input / output 和 cache
+10. Bio、Compiled Context snapshot、Replay input / output 和 cache
    按 lineage 同步失效；
 11. InteractionTurn 没有剩余内容 Event 时删除；仍有审计必要时只留无正文 envelope；
 12. 所有新版本和重建任务仍受 `data_epoch + source_revision` fencing。
@@ -515,7 +525,8 @@ Append-only 与 privacy erasure 的边界：
   Journal Version / Statement、Reflection Version / Statement、Memory Claim Version /
   Relationship Qualifier Assertion / evidence link、localized projection、
   Relationship Resolver Hint、
-  Summary、Episode、Open Loop、Proactive Follow-up State、Profile Projection、Compiled Context snapshot、Replay、Draft、
+  Summary、Episode、Open Loop、Proactive Follow-up State、Bio、Bio Basis access
+  audit、Compiled Context snapshot、Replay、Draft、
   Validation artifact、可选 Voice delivery buffer 和 model artifact；
 - 可以保留无正文的 identity envelope、revision number、状态、purged lineage 和
   `content_purged_at`，用于证明删除和防止旧任务复活；

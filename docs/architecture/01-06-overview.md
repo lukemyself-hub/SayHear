@@ -311,7 +311,7 @@ Semantic Layer
   Entity / EpisodeVersion / ClaimVersion
 
 Artifact & Projection Layer
-  JournalVersion / ReflectionVersion / ProfileProjectionVersion
+  JournalVersion / ReflectionVersion / BioVersion
 ```
 
 ```mermaid
@@ -336,7 +336,7 @@ flowchart LR
     RV -. "proposes only" .-> MC["MemoryCandidate"]
     MC --> CV
 
-    CV --> PP["ProfileProjectionVersion"]
+    CV --> PP["BioVersion"]
 ```
 
 这不是一条 `Turn → Claim → Entity → Journal` 的单线流水线：

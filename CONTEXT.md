@@ -312,13 +312,37 @@ _Avoid_: Memory Claim, JournalStatement
 按日 / 按周运行的 Reflection 派生流程；模型只产出结构化提案，确定性代码冻结输入、验证并提交版本，其失败或缺失对用户可见体验零影响。
 _Avoid_: Online extraction, Reflection editor
 
-**Profile Projection**:
-SayHear 以全部当前有效 Memory Claim 为语义输入，并以自身观察视角讲述用户及其相关经历、关系、情感与价值观的自然语言 Bio；它追求语义忠实而非逐条复述，任何可独立成立的新判断必须先成为合格的 Objective Memory 或 AI Impression。
-_Avoid_: Memory database, Claim list, User-authored bio
+**User Profile**:
+Objective Memory 与 active AI Impression 共同构成的两层长期理解；它是 Bio 的权威语义输入，但不是一篇叙事正文、对话 Context 或可直接编辑的用户身份声明。
+_Avoid_: Bio, Person Portrait, Account profile
 
-**Profile Refresh Policy**:
+**Bio**:
+SayHear 以全部当前有效 User Profile Claim 为语义输入，并以自身观察视角讲述用户及其相关经历、关系、情感与价值观的自然语言作品；它追求语义忠实而非逐条复述，任何可独立成立的新判断必须先成为合格的 Objective Memory 或 AI Impression。
+_Avoid_: Profile Projection, User Profile, Memory database, Claim list, User-authored bio
+
+**BioVersion**:
+同一个 Bio logical identity 下的一次不可变、可审计叙事版本；只有通过验证与 fenced commit 的版本可以成为 current。
+_Avoid_: ProfileVersion, ProfileProjectionVersion, Bio draft
+
+**Bio Coverage Unit**:
+版本化 Bio Coverage Policy 从完整 eligible Claim set 确定性形成的可独立核查语义单位；默认对应一个 logical Claim 的 current ClaimVersion，只有 Predicate Registry 明确允许且主体、时间与认识类型兼容时才能确定性合并。它记录组成 ClaimVersion 与 coverage class，模型只能忠实表达或压缩，不能自行决定哪些内容不重要。
+_Avoid_: Model-selected highlight, Bio paragraph, Claim summary
+
+**Bio Coverage Class**:
+Predicate Registry 为 Bio Coverage Unit 发布的 `required`、`compressible` 或 `background` 约束；它决定本版 coverage plan 的稳定优先级，已进入计划的前两类必须分别被明确表达或可验证地包含，篇幅不足时 policy 可以把未选单元记为 `deferred_by_budget`，敏感性不改变分类。
+_Avoid_: Importance score, Model priority, Sensitivity filter
+
+**Bio Basis**:
+用户按需展开的一条 Bio 正文依据，以人可理解的 Claim 表达、用户原话、日期与认识类型解释该叙事判断；它不是技术化 Citation 面板、完整 Evidence 查看器或 Bio 编辑入口。
+_Avoid_: Claim Inspector, Evidence export, Bio editor
+
+**Bio Refresh Policy**:
 Bio 的普通重写由受频率限制的用户手动刷新与每周自动刷新触发；新 Bio 验证通过后直接成为 current，不进入用户预览、批准或正文编辑。Correction、Forget、contested、dormant、Entity 失效或删除等信任边界变化会立即使旧 Bio 不可用并自动重建，不等待普通刷新节奏。
-_Avoid_: Daily Profile regeneration, Bio approval workflow, Stale Bio fallback
+_Avoid_: Profile Refresh Policy, Daily Bio regeneration, Bio approval workflow, Stale Bio fallback
+
+**Bio Trust Rebuild**:
+信任边界变化后抢占普通刷新、先隐藏旧 Bio 再按最新有效 User Profile 重建的 fail-closed 流程；它可以与首次生成复用用户提示，但必须保持独立内部状态、绕过普通限流，失败时不能恢复失效 BioVersion。
+_Avoid_: Ordinary refresh, Stale Bio fallback, Profile repair
 
 **Person Portrait**:
 每轮对话 Context 都会编译、但条目会随当前话题重新选择的严格限量“用户是怎样的人”选集；版本化策略从当前有效、适合长期影响理解与交流的 Objective Memory 与 active AI Impression 中，先按话题相关性，再按理解价值、跨情境稳定性与 Evidence 强度逐条选择，不设 Objective-first 规则。每条携带 claim 版本、Evidence 与对应认识类型；相关观察可以被 AI 用自然、朋友式语言主动表达，不强制来源前缀或仪式化保留语。条目逐条适用 Correction、Forget、contested 与 dormant fence；没有合格或相关内容时选集为空，不编造画像。敏感推断、临时情绪、一次性事件和短期安排不进入 Person Portrait；叙事版 Profile 不进入对话 Context。

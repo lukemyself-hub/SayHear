@@ -311,7 +311,7 @@ Profile 需要更新就把一次用户纠正拆成三个 Action。
 
 - Daily 运行 Episode Builder，并创建新的 Daily ReflectionVersion；
 - Weekly 创建新的 Weekly ReflectionVersion、识别趋势和变化，并把新理解送入
-  Candidate 层；Profile Projection 的重建由 §12.6 的 Profile workflow 独立拥有，
+  Candidate 层；Bio 重建由 §12.6 的 Bio workflow 独立拥有，
   不由 Weekly Reflection 触发或等待；
 - Reflection 可以从底层 Evidence 提出额外 MemoryCandidate，但不是 Candidate
   创建、Memory admission 或 Claim promotion 的必经步骤；
@@ -352,7 +352,7 @@ ReflectionVersion。Daily 与 Weekly Reflection 使用不同 logical Reflection 
 不得互相覆盖。
 
 Reflection Inspector 只读取已保留的 ReflectionVersion、Evidence lineage、
-Candidate disposition，以及 Candidate 经有效 ClaimVersion 对 Profile Projection
+Candidate disposition，以及 Candidate 经有效 ClaimVersion 对 Bio
 产生或未产生的影响。它可以展示 draft / stale / superseded 状态供诊断，但不能推进
 current pointer、触发 Memory promotion 或绕过 Candidate Review Module 写入处置。
 
@@ -726,7 +726,7 @@ Memory Claim 会主动进入未来回应，因此 Entity merge、split 或身份
 
 1. EntityVersion 变化提交后，Retrieval 立即排除引用旧或不再有效
    `subject_entity_version_id / object_entity_version_id` 的 ClaimVersion；
-   Profile Projection 同样只读取 EntityVersion 仍有效的 Claim；
+   Bio 同样只读取 EntityVersion 仍有效的 Claim；
 2. 通过反向 Entity / Claim / Evidence link 只定位受影响的 current ClaimVersion，
    创建版本化 impact command，不扫描全部 Memory；
 3. 对每个受影响 logical Claim 创建新的 `review_due` ClaimVersion 并 CAS
@@ -748,7 +748,7 @@ Memory Claim 会主动进入未来回应，因此 Entity merge、split 或身份
 8. 仍无法确定身份时，current ClaimVersion 保持 `review_due`，继续排除 Recall、
    Profile、Embedding 和 cross-day narrative；
 9. 通过验证的新 ClaimVersion 提交后，重建 localized projection、Embedding 和
-   Profile Projection，再允许 Recall；
+   Bio，再允许 Recall；
 10. 所有提交仍受 `data_epoch + EntityVersion + Evidence revision` fencing；
     晚到 Workflow 不能把旧 Entity 绑定重新激活。
 
@@ -761,16 +761,16 @@ claim-identity-impact/<claim-id>/<entity-version-id>/<evidence-revision>/<policy
 影响检查只读取底层 User Evidence。Reflection、Journal、Profile 和模型自己的旧回答
 不能用于证明 Claim 在新 Entity 身份下仍然成立。
 
-### 12.6 Profile Projection Workflow
+### 12.6 Bio Workflow
 
-Profile Refresh Policy 区分三种 trigger：
+Bio Refresh Policy 区分三种 trigger：
 
 1. `manual`：由用户在前端发起；服务端按版本化最短间隔接受或返回
    `next_manual_refresh_at`；
-2. `weekly_scheduled`：全局 Cron / scheduler 每周扫描到期 Profile，幂等创建重写
+2. `weekly_scheduled`：全局 Cron / scheduler 每周扫描到期 Bio，幂等创建重写
    command，并推进用户可见的 `next_scheduled_refresh_at`；
 3. `trust_boundary`：Correction、Forget、`contested`、`dormant`、Entity 失效或
-   删除立即使 current ProfileVersion 不可展示，并创建绕过普通限流的安全重建
+   删除立即使 current BioVersion 不可展示，并创建绕过普通限流的安全重建
    command。
 
 普通 Claim 变化不单独触发日内自动重写；manual 与 weekly trigger 会读取触发时最新
@@ -779,9 +779,9 @@ eligible Claim set。`trust_boundary` trigger 的失效必须在读取路径同�
 
 `manual` 只表达用户请求重新生成，不创建发布审批。三种 trigger 都使用同一验证与
 fenced commit 契约：生成结果只有在验证通过且提交成功后才原子成为 current
-ProfileProjectionVersion；Workflow 不等待用户预览、批准、正文编辑或候选版本选择。
+BioVersion；Workflow 不等待用户预览、批准、正文编辑或候选版本选择。
 
-Profile Projection 重建遵循：
+Bio 重建遵循：
 
 1. 冻结全部当前有效 ClaimVersion 组成的 eligible input 与 selection policy version；
 2. 排除 Candidate、`contested`、`review_due`、`dormant`、被 Forget 的内容、
@@ -792,18 +792,44 @@ Profile Projection 重建遵循：
    Memory 支撑，心理、情感与价值观判断由 active AI Impression 支撑，正文可展开
    到底层 User Evidence，且没有改变 confirmed / inferred 认识状态；
 5. 记录 Prompt、model attempt、selection policy 与
-   `profile_projection_claim_links` 的 eligible-input / narrative-support role，
+   `bio_claim_links` 的 eligible-input / narrative-support role，
    再以 `source_claim_set_revision + data_epoch` fence 提交新的
-   ProfileProjectionVersion，并在同一提交中推进 current pointer；
+   BioVersion，并在同一提交中推进 current pointer；
 6. 模型可以语义压缩而不逐条复述，但不能与 active Memory 实质矛盾或遗漏到形成
-   失真人物画像；普通 refresh 失败时保留上一有效 Profile，不用条目列表降级替代；
-   trust-boundary rebuild 失败时保持 Profile 不可用，不能恢复旧版本。
+   失真人物画像；普通 refresh 失败时保留上一有效 Bio，不用条目列表降级替代；
+   trust-boundary rebuild 失败时保持 Bio 不可用，不能恢复旧版本。
 
-Profile 写作可以组织和深入表达 Claim 已支撑的用户经历、关系、情感与价值观，但
+Bio 写作可以组织和深入表达 Claim 已支撑的用户经历、关系、情感与价值观，但
 不能从叙事连贯性反向创造只存在于 Bio 的推断，也不能把 Profile 正文作为下一轮
 Memory Evidence。用户认为内容不准确时，写操作进入底层 Memory Correction 或
-Memory Forget Request，再由 trust-boundary workflow 重建 Profile；不存在直接修改
-Profile 正文的写路径。
+Memory Forget Request，再由 trust-boundary workflow 重建 Bio；不存在直接修改
+Bio 正文的写路径。
+
+Manual 与 weekly command 在相同 source revision 下复用；trust-boundary intent 抢占
+普通刷新，普通 command 不能解除 `trust_invalidated`。Weekly schedule 以 timezone、
+schedule policy version 与 local-week key 计算；扫描恢复时只补最近一次到期任务，
+多个漏跑周合并为一次基于最新 User Profile 的生成，不追跑历史 Bio。用户 timezone
+改变只重算下一个未来时间，已经成功处理的 local week 不重复。
+
+三类 intent 使用不同幂等身份：manual 复用 Conversation Action 的 ActionExecution
+ID；weekly 使用 `user_id + local_week_key + schedule_policy_version`；
+trust-boundary 使用 `user_id + trust_invalidation_revision`。三者都冻结
+`bio_source_revision`，但 source revision 不是 manual 唯一键，因为同一 User
+Profile 在 24 小时后允许再次改写。
+
+Self Entity canonical label 或用户明确声明的代词发生变化时，旧 Bio 立即
+trust-invalidated 并安全重建。展示 locale 变化只触发普通 Bio 重建。
+
+每个 policy release 声明 `existing_bio_effect = none / stale / trust_invalidate`。
+文风、模型或普通 Prompt 改进通常只标记 stale，旧 Bio 保持可读并等待普通刷新；新的
+eligibility、coverage 或 validation 规则若说明旧 Bio 可能含不再允许的内容，发布者
+必须选择 trust invalidate，并批量隐藏与重建受影响 Bio。
+
+成功发布后 manual 冷却 24 小时。没有成功发布时，每个 owner 在滚动 24 小时内最多
+接受 3 个 manual GenerationCommand；命令内部的技术 retry 和 bounded repair 不另计
+用户次数。网络、429、5xx 或结果未知 timeout 最多新增一次同模型技术 attempt；鉴权、
+配置、确定性 Schema 或业务 fence 错误不重试。一次技术 retry 与一次 semantic repair
+分别计数，单个 command 最多发生三次模型调用。
 
 ## References
 
