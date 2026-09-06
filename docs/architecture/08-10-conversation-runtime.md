@@ -156,16 +156,19 @@ GenerationCommand；只有新回答完整成功后才创建 Assistant Event，UI
 2. 恰好一个 typed Conversation Action proposal。
 
 这两种结果由 Conversation Agent Harness 组织，但执行权限不属于 Harness 或模型。
-当前冻结的 Conversation Harness Policy 最多允许两次逻辑模型判断：第一次返回普通
-回复或一个 Action proposal；只有 Action Gateway 已返回 receipt 时，才允许第二次
-在工具关闭状态下生成最终回复。普通回复不产生第二次调用；技术重试仍只增加
-ModelRunAttempt，不增加 Action 或自主 step。
+当前冻结的 Conversation Harness Policy 的第一阶段返回普通主回应或一个 Action proposal。
+Action 路径只有在 Action Gateway 已返回 receipt 时，才允许一个 tools-disabled 的 Finalization
+判断。普通回应路径只有在 1A.3b 当前状态与主动关心门禁通过时，才允许一个 tools-disabled 的
+Proactive Follow-up Segment 判断；两条第二阶段路径互斥，普通回应没有合格 target 时不产生第二次
+调用。技术重试仍只增加各自 Command 下的 ModelRunAttempt，不增加 Action 或自主 step。
 
-这两个模型阶段不能共享一个 GenerationCommand：
+这些不同生成意图不能共享一个 GenerationCommand：
 
 - Conversation Decision Command 以原始 User Event 与冻结 Context 为 source；
 - Action Finalization Command 以创建时最新的已提交 Conversation Action Receipt 为
   新增 source，使用不同 Prompt / Schema 并冻结 `tools_disabled=true`；
+- Proactive Follow-up Segment Command 以冻结主回应、current DialogueState、target 与 reservation
+  为 source，使用窄 Prompt / Schema 并冻结 `tools_disabled=true`；
 - 两个 Command 都引用同一 InteractionTurn，各自拥有 ModelRunAttempt；
 - Finalization 不得伪装成 Decision 的 technical retry、schema repair 或 fallback；
 - Action 已提交但 Finalization 中断时，从 receipt 恢复，不重新执行 Action。
@@ -469,30 +472,81 @@ user_willing_to_elaborate
 ```
 
 `advice_explicitly_requested` 用于落实“默认倾听，只有用户主动询问才给建议”；
-`current_request_requires_focus` 是 Proactive Memory Follow-up 选择器的确定性
-判据。DialogueState 只用于当前 Session，不能直接晋升为长期 Profile。
+`current_request_requires_focus` 是由模型派生、由 Proactive Memory Follow-up 选择器
+确定性消费的判据。`true` 拒绝选择；`false` 只通过这一道门。字段为 `null`、
+未引用当前 User Event、版本落后或低于版本化置信门槛时，selector fail closed。
+DialogueState 只用于当前 Session，不能直接晋升为长期 Profile。
 
 确定性领域投影不经模型生成：Safety Posture（见 9.6）、
 `proactive_followup_used_in_exchange`，以及 Curiosity Stop Signal 停止投影——
 模型可以带证据提出“用户已回避 / 拒绝 / 转换某方向”，由确定性代码提交并记录
-被停止的追问方向；解除只由用户主动重提或提供新的实质内容触发。单方向停止在
-当天 Session 内持续，全量“别再问问题”停止按术语定义限于当前 Continuous
-Exchange。
+被停止的追问方向；解除服从版本化冷却、用户主动重提、新的实质直接 Evidence 或
+target-specific permission。单方向停止可以跨 Session 持续；全量“别再问问题”停止按术语定义
+限于当前 Continuous Exchange。
 
-Proactive Memory Follow-up selector 在 1A.3b+ 必须 fail closed：
+Proactive Memory Follow-up selector 不扫描全部 Memory。它合并两类候选：
+
+- 全部当前 eligible OpenLoopVersion；
+- 本轮 Person Portrait 或 query retrieval 已选入、或已明确命中且通过全部
+  trust fence 的 current ClaimVersion，按 logical Claim 去重。
+
+裸问候没有 Memory 信号时，Memory 候选可以为空，selector 不为表现连续性另建全量
+扫描。两条候选 lane 都必须提供完整、当前 watermark；任一启用 lane 超时、失败或无法证明完整时，
+整个 selector 返回零 target。不改用另一条 lane，也不复用上一轮候选或缓存。它在 1A.3b+ 必须
+fail closed：
 
 1. 当前 Turn 必须有新 User Event，且同一
    `daily_session_id + continuous_exchange_no` 尚未提交 Proactive Follow-up；
-2. `current_request_requires_focus=true`、明确直接任务、紧急或高风险状态时不选；
+2. 实质性当前话题、明确直接任务、紧急或高风险状态时不选；
+   `current_request_requires_focus=true`、`null`、未绑定当前 User Event、版本落后或低于
+   policy confidence 时同样不选；
 3. target 必须是 active / open、已经到达 `followup_eligible_from_at`、未过期、
-   非 contested、非 dormant、未被 Forget，且 current
-   ProactiveFollowupStateVersion 为 eligible；
+   非 contested、非 dormant、未被 Forget；没有 `ProactiveFollowupState` row 时按
+   `never_suppressed` 通过此门，有 row 时 current ProactiveFollowupStateVersion 必须在
+   read-time 冷却解释后为 eligible；
 4. 问候、开放式开场或自然空档可以选出零或一个 target；没有合适 target 时不为
    满足配额强行生成；
-5. Generator 必须先回应当前 User Event，再以最多一个温和问题使用 target；
-6. 用户简短带过、回避、拒绝或转换话题后，提交 suppressed state。只有用户主动
-   重提 target，或新的相关 User Evidence 推进 target version 时才解除；
-7. 敏感 target 必须有 direct User Evidence，并生成允许不回答的 framing。
+5. 用户已在当前 Continuous Exchange 主动提到的 target 不参与；当前 User Event 新形成的
+   Open Loop 最早从后续 Turn 参与；
+6. Generator 必须先回应当前 User Event，再以一个自然问题或不带问题的关心表达
+   使用 target。两种都消耗本段交流唯一一次使用额度；问句与普通 Follow-up Question 共享
+   每轮一个问题的硬上限，主回应已有普通追问时本轮不得附加关心陈述；
+7. 用户简短带过、回避、拒绝或转换话题后，按 `proactive-followup-suppression:v1` 提交
+   suppressed state。未达硬停止上限的 `topic_changed / short_response / evaded` 可在各自冷却边界后
+   重新参与选择；`refused`、`ambiguous_closure` 与达到上限的软停止不随时间解除；
+8. 敏感 target 必须有 direct User Evidence，并生成简短、允许不回答的 framing。
+
+`proactive-followup-selection:v1` 不使用模型生成的 salience 分数或加权总分。全部候选先按
+敏感性分为非敏感、敏感两层，只有前一层为空时才读后一层：
+
+- 问候 / 开放式开场：Open Loop 优先于 Memory Claim。Open Loop 按有时间锚点优先、
+  `expected_start_at ASC NULLS LAST`、`expires_at ASC`、source Evidence time、stable ID 排序；
+  没有 Open Loop 时按 Claim 在本轮 Person Portrait / retrieval 的 source rank 排序；
+- 自然空档：Memory Claim 优先于 Open Loop。Claim 直接复用当前 Person Portrait 的话题
+  相关性、理解价值、跨情境稳定性、Evidence 强度字典序，或 query retrieval 的 final rank；
+  没有 Claim 时按上述 Open Loop 顺序选择。
+
+两套 profile 的同层候选再按从未提交 use 优先、最久未 use、source Evidence time、stable
+ID 排序。这些字段、顺序与方向均由 selection policy version 冻结；后续调整创建新版本，
+不重解释旧 CompiledContext。
+
+Conversation Decision 的主 CompiledContext 不含 proactive target。其主回应与当前 User Event 的
+DialogueState projection 并发进行；主回应完成时只检查一次已经提交的 current-Event state，不额外等待。
+缺失、`null`、低于 confidence、source / version 不匹配或尚未就绪时，本轮以
+`state_not_ready_at_main_completion` 返回零 target。
+
+状态就绪、全部门禁通过且主回应没有普通问题时，selector 用 CAS 创建唯一 Command-scoped
+reservation，唯一范围是 `(user_id, daily_session_id, continuous_exchange_no)`。并发 loser 以零 target
+结束选择。reservation 不是 use，不改变 ProactiveFollowupStateVersion，也不使用可被另一 live
+Command 抢占的时间租约。只有持有它的 Proactive Follow-up Segment Command 进入 terminal state，
+或 reconciler 证明该 Command 已废弃时才释放。
+
+selector 随后创建一个只供 Proactive Follow-up Segment Command 使用的窄 CompiledContext。它冻结
+主回应 result / HMAC、current DialogueStateVersion、target Version、reservation、epistemic kind、
+sensitive framing 与 policy bundle；该 Command 强制 tools disabled，只能生成隔离片段，不能改写
+主回应。片段失败、过期或重验失败时只提交主回应。成功时服务端把两者合成一个 Complete Assistant
+Response；Assistant Event lineage 同时引用 main Decision Command 和 Segment Command，typed use 只引用
+Segment Command。Retry 创建新的 Decision Command，并重新取得 state、selection、reservation 与 segment。
 
 ### 9.2 输出
 
@@ -517,10 +571,48 @@ total_tokens
 degraded_reason
 proactive_followup_target_ref
 proactive_followup_state_version_id
+proactive_followup_policy_bundle_version
 proactive_followup_selection_policy_version
+proactive_followup_selection_manifest
+proactive_followup_reservation_id
 content_hmac
 created_at
 ```
+
+这些 proactive 字段只存在于 Segment Command 的窄 CompiledContext；Conversation Decision 的主
+CompiledContext 中为 null / omitted。`proactive_followup_state_version_id` 可以为 null，此时 manifest
+必须记录 `never_suppressed`，不得为此预建 eligible state row。
+
+Segment Generator 的结构化结果是一个与主回应分离的 `proactive_followup_segment`：
+
+```text
+target_ref
+expression_kind                    # question / acknowledgment
+content
+```
+
+Selector 只选 target，不决定 `expression_kind`。Segment Generator 在版本化 Prompt / Policy 下
+选择形式：Open Loop 通常使用简短问题；Memory Claim 默认使用 acknowledgment，只有 Evidence
+支持一个具体、自然可回答的新进展时才使用问句。AI Impression 不得虚构“最近又发生”的
+相似事件来构造问题。运行时不设问句占比或机械轮换；两种形式都必须在实现验收场景出现，
+并由轨迹指标与 Internal Owner 盲评决定是否调整 policy。
+
+主回应可以正常流式展示，但不得主动提及未进入普通对话的 target；segment 在生成期间不展示。
+服务端组合最终正文并生成 content locator 前，重验 reservation owner、target current Version、expiry、
+trust fence、问题上限与敏感 framing。验证失败时不展示 segment，主回应仍可完成。验证成功后，
+在一个事务中写入 Assistant Event revision、typed use
+与 exchange usage marker。没有这个原子提交就没有使用；流式 token、interrupted response、
+failed / result-unknown Attempt 和模型自报都不消耗额度。Retry 必须新建 Command、重新编译与选择。
+
+selection manifest 或 reservation 未能权威提交时，本轮 selector 为零。Inspector 自身读取或展示失败不阻塞
+对话，但必须产生不含用户正文的运维告警。suppression / release 提交失败时，受影响 target 保持
+fail closed；只有 response disposition 未 settled 时封锁该单个 target，不封锁其他 target。
+
+提交 use 后，用户的下一个 User Event 必须得到唯一 response disposition。模型只能以该 Event
+的 locator 提议 `short_response / evaded / refused / topic_changed`；确定性代码重验 owner、Event 顺序、
+use 和 target Version 后才能提交 suppression。简短但完整的回答仍属于 `short_response`；用户未接
+该表达而继续其他内容属于 `topic_changed`。分类缺失、冲突或处理中时，该 target 临时
+fail closed，直到唯一 disposition 提交；不伪造 suppression reason，也不允许继续主动提及。
 
 1A.3a 的 `retrieval_manifest` 至少包含：
 
@@ -549,6 +641,57 @@ degraded_reasons[]
 Manifest 不复制 User Event、Evidence quote 或完整 retrieval text；它保存稳定引用、
 结构化 reason code、必要 keyed HMAC 与非正文指标，并随 CompiledContext lineage、
 retention 和删除传播处理。
+
+1A.3b 的 `proactive_followup_selection_manifest` 至少包含：
+
+```text
+policy_bundle_version
+opportunity_policy_version
+selection_policy_version
+suppression_policy_version
+use_schema_version
+expression_prompt_version
+expression_policy_version
+reason_code_schema_version
+opportunity_mode
+current_request_requires_focus       # value + confidence + source revision + freshness
+opportunity_gate_results[]
+lane_watermarks[]                     # lane + source revision + completeness + timing + degraded reason
+candidates[]
+  target_kind
+  target_id
+  target_version_id
+  sensitivity
+  source_lane
+  source_rank
+  trust_fence_results[]
+  mentioned_in_exchange
+  formed_from_current_event
+  suppression_reason
+  proactive_followup_state_version_id
+  eligibility_reason                 # never_suppressed / eligible / suppressed
+  consecutive_soft_suppression_count
+  suppressed_until_at
+  last_use_at
+  rank_tuple
+  selection_reason_codes[]
+  rejection_reason_codes[]
+selected_target_ref
+stable_tie_break
+reservation_id
+reservation_status
+```
+
+Inspector 还要把 selection manifest 与后续的 expression kind / locator、pre-display revalidation、committed
+Assistant Event / use、response disposition proposal / result 和 release reason 连成同一条轨迹。Manifest 只保存
+引用、枚举、时间、数值、版本和必要 keyed HMAC；Evidence 正文继续通过已有的受权限 source
+展开路径读取。
+
+`proactive-followup-policy-bundle:v1` 引用 opportunity、selection、suppression、use schema、
+expression Prompt / Policy 与 reason-code schema 的精确版本。组件变化只升级该组件，但必须同时发布
+新 bundle；CompiledContext、reservation、use 与 disposition 都冻结 bundle 及所用组件。旧记录不重算。
+Internal Core 直接切换整套 bundle，不 dual-write、Shadow selector 或做运行时 A/B；首次上线前无可回退
+的旧 selector，因此回滚使用 deployment rollback，不新增长期 feature flag。
 
 Context Compiler 在受控 application boundary 内读取源数据，把引用清单以及必要的
 加密 rendered payload 写入 `compiled_contexts`，向 Turn、Workflow 和 Replay
@@ -582,6 +725,11 @@ Person Portrait 条目及 claim 版本、Safety Posture 当前状态与干净 tu
 Entity / Evidence version、query source、lane、matched fields / terms、trust fence、
 rank components、selection / rejection reason、预算与 timing。Evidence 原文只通过
 既有受权限控制的 source 展开路径读取，Inspector manifest 本身不保存副本。
+
+1A.3b 继续展示 Proactive Follow-up 的 opportunity mode / gates、DialogueState freshness、lane
+watermark、全部候选与完整 rank tuple、suppression 计数 / 冷却、reservation、选中 / 淘汰 reason、
+expression / locator / pre-display 重验、committed use、response disposition 与 release。该页只读，
+失败只告警，不作为另一个 selector 或状态写入口。
 
 ### 9.3 Token Budget
 

@@ -18,6 +18,12 @@ Conversation Action：模型先返回普通回复或一个 Action proposal；Act
 生成最终回复。技术重试仍服从 GenerationCommand、ModelRunAttempt 与可见输出规则，
 不形成自主工具链。
 
+1A.3b 对非 Action、非直接任务的普通回复增加一个更窄的例外：主回应完成时，若当前
+Event 的 DialogueState 已就绪且 Proactive Memory Follow-up 门禁选中 target，Harness
+可以创建一个 tools-disabled 的 Proactive Follow-up Segment Command。它只渲染隔离片段，
+不能改写主回应、调用工具或触发状态型 Action；片段失败时主回应照常完成。因此它不扩大
+“最多一次改变状态的 Conversation Action”，也不改变 Action Finalization 路径。
+
 Harness 的 Interface 由 SayHear application layer 拥有。调用方只提交冻结的
 InteractionTurn、GenerationCommand 与 CompiledContext reference，并接收可展示的
 最终回复 stream 和 terminal result reference；Provider message、原始 tool-call

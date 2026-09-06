@@ -117,9 +117,14 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | --- | --- |
 | 同一客户端 Event 提交 10 次 | 只有一个 Conversation Event |
 | 同一 `client_turn_id` 通过 Text / Voice 重试提交 | 只有一个 InteractionTurn；VoiceTurn 只作运行映射 |
-| 普通对话由 Harness 直接生成回复 | 一次逻辑模型调用、0 个 Action、0 次 receipt 后模型调用 |
+| 普通对话由 Harness 直接生成回复且未进入 proactive stage | 一次逻辑模型调用、0 个 Action、0 次 receipt 后模型调用 |
 | Harness 收到一个合法 Action proposal | Action Gateway 最多创建一个 ActionExecution，并只追加一条合法 Receipt 序列；有 committed Receipt 后才允许一次 tools-disabled 最终回复调用 |
 | Decision 产生普通 Final Response | 同一 InteractionTurn 只有一个 Conversation Decision Command；不存在 Action Finalization Command |
+| 主回应完成时 current-Event DialogueState 未就绪、null、低 confidence 或 source / version 不匹配 | 不等待、不创建 reservation 或 Segment Command；proactive target 为 0，并记录 `state_not_ready_at_main_completion` |
+| 主回应无普通问题且门禁选中 proactive target | 新建独立、`tools_disabled=true` 的 Proactive Follow-up Segment Command；其 CompiledContext 冻结主回应、state、target、reservation 与 policy bundle |
+| Proactive Follow-up Segment 失败、过期或 pre-display 重验失败 | 主回应仍提交；0 个 typed use，0 个 suppression，且 segment 不展示 |
+| Proactive Follow-up Segment 成功 | main 与 segment 合成一个 Complete Assistant Response；Assistant Event 同时引用两个 Commands，typed use 只引用 Segment Command |
+| proactive Retry | 创建新的 Decision Command 并重新取得 state、selection 与 reservation；旧 state / reservation / segment 0 次继承 |
 | Decision 产生 Action Proposal 并提交 receipt | 同一 InteractionTurn 恰有一个 Decision Command 和一个引用 receipt、`tools_disabled=true` 的 Finalization Command；两者分别拥有 ModelRunAttempt |
 | Finalization Provider 调用需要技术重试 | 只在 Finalization Command 下新增 ModelRunAttempt；不重新运行 Decision 或 Action |
 | 实现尝试把 Finalization 记为 Decision 的 retry / fallback Attempt | Schema 与 invariant 拒绝；不同 source、Prompt、Schema 和意图不能共享 GenerationCommand |
@@ -268,9 +273,10 @@ Catalog version、dataset / rubric version、model config、测试结果、审�
 | 同一 Continuous Exchange 已主动询问一个过去事项 | 后续 Turn 不再主动选择第二个 target；没有追问配额 |
 | 用户提出直接任务，另有高分 Open Loop | 先完成当前任务，不插入无关旧事 |
 | 用户出现紧急或高风险信号 | 暂停 Proactive Follow-up，执行相应安全回应 |
-| 用户讲具体事情，selector 仍选择相关过去事项 | Assistant 先回应当前表达，随后最多问一个温和问题 |
-| 用户对主动询问简短带过、回避、拒绝或转换话题 | 为该 target 创建 suppressed State Version；后续交流不重复主动询问 |
-| 用户后来主动重提该事项，或出现新的相关 User Evidence | 创建 eligible State Version；可按正常门禁重新候选 |
+| 用户讲实质性当前话题，另有合格过去事项 | selector 返回零 target；Assistant 只回应当前表达 |
+| 用户对主动询问简短带过、回避、拒绝或转换话题 | 为该 target 创建带类型、连续次数和可选冷却边界的 suppressed State Version |
+| 有限冷却到期 | read path 恢复选择资格；不创建 Assistant Event，也不要求 selector 必须使用 target |
+| 用户后来主动重提、增加实质 User Evidence 或明确给出 target-specific 许可 | 创建 eligible State Version、清零软停止次数；当前 Event 不算 proactive use |
 | target 已 contested、dormant、expired、Forgotten 或 suppressed | selector fail closed；模型高 confidence 不能覆盖 |
 | 当前没有真正合适的过去事项 | 不主动追问；不得为完成行为配额强行选取 |
 | 用户说“最近工作很累” | 不创建 Episode；表达仍可进入回应、Journal 与 Memory Evidence |
@@ -781,8 +787,27 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - 主动 Memory / Open Loop follow-up 100% 发生在已有新 User Event 的当前 Turn；
   0 个后台任务、到期扫描或仅因时间到达创建 Assistant Event、消息或通知；
 - 每个 `daily_session_id + continuous_exchange_no` 最多一个 Proactive Follow-up；
-  直接任务、紧急 / 高风险状态和无合格 target 时 0 个强制追问；用户停止信号
-  100% 创建 target-level suppression，只有用户重提或新相关 Evidence 才解除；
+  直接任务、实质性当前话题、紧急 / 高风险状态和无合格 target 时 0 个主动关心；
+  问候 / 开放式开场与自然空档分别重放 time-first / Memory-first 排序，敏感 target 100%
+  位于非敏感 target 之后，稳定 tie-break 在重放中 100% 一致；
+- 普通 Follow-up Question 与 proactive question 共享每轮最多一个问题；已有普通追问时 0 个
+  acknowledgment 绕过让位；question / acknowledgment 在实现验收样本中都出现；
+- 没有 `ProactiveFollowupState` row 的 target 100% 以 `never_suppressed + null state Version`
+  通过该门，不 backfill 或预建 eligible row；committed use 0 次创建 state，第一次 suppression
+  才惰性创建 suppressed lineage；
+- 主回应与 current-Event DialogueState 并发；主回应完成时 state 未就绪、null、低 confidence 或
+  source / version 不匹配均 0 个 target 且不等待。合格路径只由独立 Segment Command 生成片段；
+  segment 失败时主回应 100% 保留，成功时只提交一个引用 main / segment Commands 的 Assistant Event；
+- `topic_changed` 的 1 / 7 / 30 日及第四次硬停止、`short_response` 的 7 / 30 日及第三次
+  硬停止、`evaded` 的 30 日及第二次硬停止、`refused` 无时间解除都在边界前 / 边界时
+  100% 重放；用户重提、实质新 Evidence 与 target-specific permission 的释放各至少一个场景；
+- 并发 Command 对同一 exchange 只有一个 reservation winner；Retry 重新编译；在 generation 期间
+  Correction、Forget、closure、expiry 或 Version 替换的 target，proactive segment 0 次展示且主回应继续；
+- Open Loop / Memory 任一启用 lane 或 watermark 失败、selection manifest / reservation 失败时
+  proactive target 为 0，不复用缓存；suppression / release 失败只封锁受影响 target；
+- 主动关心的确定性、lineage、privacy、safety 门禁 100% 通过，不被味觉结果抵消。
+  #171 作为设计依据；实现后对当前 1A.3a incumbent 做针对性 A / 持平 / B 盲评，由 Internal Owner
+  终审自然度与被关心感。精确样本数、抽样与合并门槛由 #178 定义；
 - Profile eligible set 100% 只含当前有效、active、未被 Forget 且 EntityVersion
   有效的 ClaimVersion；Candidate、`contested`、`review_due`、`dormant`、
   Open Loop 与 Reflection 原文 0% 进入 Profile；100% active sensitive Claim

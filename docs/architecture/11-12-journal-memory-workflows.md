@@ -674,15 +674,50 @@ expiry、Evidence locator升序保留；达到 user cap时新条目以 `capacity
 
 Proactive Follow-up 的停止信号通过 Conversation Behavior projection 提交：
 
+- User Event 同时启动普通 Conversation Decision 与 current-Event DialogueState projection；Decision 的
+  主 CompiledContext 不含 proactive target，主回应可以正常流式生成；
+- 主回应完成时只读取一次已提交 DialogueState，不额外等待。未就绪、null、低 confidence 或 source /
+  version 不匹配时以 `state_not_ready_at_main_completion` 返回零 target；
+- 状态和门禁通过、且主回应没有普通问题时，selector 以 CAS 为当前 Continuous Exchange 取得唯一
+  Command-scoped reservation；并发 loser 不选 target。没有 Follow-up State row 的候选按
+  `never_suppressed` 通过，不为此 backfill 或预建 eligible row；
+- selector 创建独立、tools-disabled 的 Proactive Follow-up Segment Command 及窄 CompiledContext；它只
+  读取冻结主回应、DialogueState、target、reservation、framing 与 policy bundle，不能改写主回应；
+- segment 失败或 pre-display 重验失败时只提交主回应；成功时合成一个 Complete Assistant Response，
+  Assistant Event 引用 main 与 Segment Command，typed use 引用 Segment Command；Retry 从新的 main
+  Decision Command 重新开始，不继承旧 state、reservation 或 segment；
+- reservation 只能由 Segment Command terminal transition 或证明 Command 已废弃的 recovery
+  reconciliation 释放，不用时间租约重新分配；
+- 只有 committed Complete Assistant Response 的 typed use 才建立待观察的 target；选中 Context、
+  流式输出、interrupted response 或 failed Attempt 都不建立 use；
+- use 之后的首个 User Event 由模型提议带 locator 的 response disposition，确定性代码验证
+  owner、Event 顺序、target current Version 与 locator；在 disposition 唯一提交前 target fail closed；
 - 用户对主动问题简短带过、回避、拒绝或转换话题时，为该 Open Loop / Memory
-  target 创建 suppressed ProactiveFollowupStateVersion；
+  target 创建 suppressed ProactiveFollowupStateVersion；缺少 logical state 时第一次 suppression
+  惰性创建它，release 只追加新的 eligible Version；
+- 简短但完整的回答仍使用 `short_response`；未接主动表达而继续其他内容使用
+  `topic_changed`；全量停止问题信号在当前 Continuous Exchange 另行提交 Curiosity Stop Signal，
+  如同时回应该 target 则也提交 `refused` suppression；
 - 后续 selector 必须同时检查 target current Version 与 Follow-up State Version；
-- 用户主动重提同一事项，或新的相关 User Evidence 推进 target Version 时，
-  创建 eligible State Version；后台时间经过和模型 confidence 不能解除抑制；
+- `topic_changed` 按 1 / 7 / 30 当地日历日递增冷却，第四次后不再按时间解除；
+  `short_response` 按 7 / 30 日递增，第三次后不再按时间解除；`evaded` 首次 30 日，
+  第二次后不再按时间解除；`refused` 不设时间解除；
+- 有限冷却到期在 read path 立即恢复选择资格；scanner 只幂等补写 eligible 历史，不生成
+  Command、Assistant Event 或消息。用户主动且唯一地重提、新的实质直接 User Evidence 推进
+  仍 eligible 的 target Version，或 target-specific 询问许可会立即创建 eligible Version 并清零软停止
+  次数；当前 Event 本身仍不作为 proactive use；
+- 普通 Version / policy / index / rendering 变化、技术 Entity 修复、单纯 Correction / Forget / Reversal
+  与模型 confidence 都不能释放或清零；全量询问许可只解除 exchange-wide Curiosity Stop
+  Signal，不清除 target-level suppression；
 - `ambiguous_closure` 只有新的唯一识别 Evidence 才能关闭目标并释放已证明为非目标的
   候选；未澄清候选保持 suppressed 直到各自 expiry；
 - 同一 `daily_session_id + continuous_exchange_no` 已有 committed Assistant
   Event 使用 Proactive Follow-up 时，本段交流不再选择第二个 target。
+
+合并 selector 的 Open Loop / Memory 任一启用 lane 缺少当前完整 watermark，或候选构造、
+排序、reservation、selection manifest 失败时，本轮返回零 target，不用健康 lane 或旧缓存
+替代。Conversation、Journal 与其他独立 Memory 路径继续。Inspector 展示失败只告警；权威 manifest
+未提交则不得选 target。
 
 ### 12.5 Entity 身份变化的 Claim 影响检查
 

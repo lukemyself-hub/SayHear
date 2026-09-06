@@ -1342,16 +1342,97 @@ proactive_followup_state_versions
   target_version_id
   eligibility_status            # eligible / suppressed
   suppression_reason            # short_response / evaded / refused / topic_changed / ambiguous_closure
+  consecutive_soft_suppression_count
+  suppressed_until_at           # nullable; null for non-time-releasable suppression
+  release_reason                # nullable; cooldown / user_reopened / material_evidence / target_permission / ambiguity_resolved
   last_prompt_daily_session_id
   last_prompt_continuous_exchange_no
   last_prompt_assistant_event_revision_id
   last_response_user_event_revision_id
   release_trigger_event_revision_id
-  policy_version
+  policy_bundle_version
+  suppression_policy_version
   supersedes_version_id
   created_at
   content_purged_at
+
+proactive_followup_selection_reservations
+  id
+  user_id
+  daily_session_id
+  continuous_exchange_no
+  main_generation_command_id
+  segment_generation_command_id          # nullable until Segment Command is created
+  target_kind                       # open_loop / memory_claim
+  target_id
+  target_version_id
+  policy_bundle_version
+  selection_policy_version
+  status                            # active / committed / released / abandoned
+  created_at
+  terminal_at
+
+proactive_followup_uses
+  id
+  user_id
+  daily_session_id
+  continuous_exchange_no
+  assistant_event_revision_id       # unique; only a committed Complete Assistant Response
+  main_generation_command_id
+  segment_generation_command_id
+  compiled_context_id
+  selection_reservation_id
+  target_kind                       # open_loop / memory_claim
+  target_id
+  target_version_id
+  expression_kind                   # question / acknowledgment
+  content_locator                   # segment/span inside the committed Assistant Event
+  policy_bundle_version
+  selection_policy_version
+  expression_prompt_version
+  expression_policy_version
+  created_at
+
+proactive_followup_response_dispositions
+  id
+  proactive_followup_use_id
+  response_user_event_revision_id
+  disposition                       # no_stop_signal / short_response / evaded / refused / topic_changed
+  evidence_locator
+  policy_bundle_version
+  suppression_policy_version
+  created_at
 ```
+
+`proactive_followup_uses` 以 `(user_id, daily_session_id, continuous_exchange_no)` 为唯一使用边界，并与
+Assistant Event revision、exchange usage marker 在同一事务提交。它保存真实 target identity / Version，
+不把 Command-scoped Handle 当成持久对象身份，也不复制 Assistant 正文。
+
+`proactive_followup_selection_reservations` 对 `(user_id, daily_session_id, continuous_exchange_no)` 只允许一个
+active row。它冻结 main / Segment Command 和 target Version，不表示已使用，不创建 suppression，也不以普通时间
+过期。持有 reservation 的 Segment Command terminal transition 或 recovery reconciliation 是唯一释放权威；
+提交 use 时将它原子转为 `committed`。
+
+没有 `proactive_followup_states` row 的 target 解释为 `never_suppressed`，选择门禁通过并在 manifest
+记录 null state Version；系统不 backfill 或预建 eligible row，committed use 也不创建它。第一次有效
+suppression 才惰性创建 logical state 与 suppressed Version；后续 release 追加 eligible Version。若并发
+第一次 suppression，logical target 唯一约束与 CAS 只允许一条 current lineage。
+
+一个 use 之后的首个 User Event 在 response disposition 未 settled 前，该 target 在 selector 中临时
+fail closed。`no_stop_signal` 只表示本 Event 没有产生 target suppression，不是用户生活事实。
+`short_response / evaded / refused / topic_changed` 必须与新的 suppressed State Version 原子提交。
+
+`proactive-followup-suppression:v1` 按 logical target 计算连续软停止次数。`topic_changed` 的前三次
+分别冻结 1 / 7 / 30 个当地日历日，第四次 `suppressed_until_at=null`；`short_response` 前两次
+分别冻结 7 / 30 日，第三次为 null；`evaded` 首次冻结 30 日，第二次为 null；`refused`
+与 `ambiguous_closure` 始终为 null。null 表示不可由时间解除，不表示没有 suppression。
+
+对有限冷却，read path 在 `now >= suppressed_until_at` 时将它视为恢复选择资格，不等待 scanner。
+后台 scanner 只用 CAS 幂等补写 `release_reason=cooldown` 的 eligible Version，不创建 GenerationCommand、
+Assistant Event 或消息。Open Loop expiry / terminal fence 始终优先。用户主动且唯一地重提、实质新
+Evidence 推进仍 eligible 的 target，或 target-specific 询问许可时，创建 eligible Version 并清零
+软停止次数。普通 Version / policy / index / rendering 变化、技术 Entity 修复与单纯 trust-control
+Action 都不能释放或清零。
 
 每个 OpenLoopVersion 必须直接引用 final / corrected User Event 对应的 EvidenceItem。
 模型只能提出瞬时 OpenLoopProposal；代码只有在 Evidence 明确表达具体待发生事项或待确认结果，
@@ -1556,8 +1637,9 @@ status、resolver / policy version 与 `ambiguous` disposition，不复制 User 
 
 `proactive_followup_states` 是行为 projection，不是新的用户事实。用户简短带过、
 回避、拒绝或转换话题后，对该 target 创建 suppressed Version；后续 Context
-Compiler 必须 fail closed。只有用户主动重新提起同一事项，或新的相关 User
-Evidence 使 target version 推进时，才能创建新的 eligible Version。每段
+Compiler 必须按 `proactive-followup-suppression:v1` 的冷却或硬停止边界 fail closed。有限冷却
+到期、用户主动且唯一地重新提起同一事项、新的实质 User Evidence 推进仍 eligible 的
+target Version，或 target-specific 询问许可可以创建新的 eligible Version。每段
 Continuous Exchange 是否已经提交过 Proactive Memory Follow-up，以带 target
 reference 的 committed Assistant Event 及其冻结
 `daily_session_id + continuous_exchange_no` 为准，不能仅依赖模型自报。
@@ -1801,6 +1883,7 @@ model_run_attempts
 
 ```text
 conversation-decision/<interaction-turn-id>
+proactive-followup-segment/<interaction-turn-id>/<reservation-id>
 conversation-action-finalization/<interaction-turn-id>/<action-receipt-id>
 conversation-retry/<retry-request-id>
 journal-eligibility/<daily-session-id>/<source-revision>/<policy-version>
@@ -1811,12 +1894,19 @@ entity-resolve/<event-revision-id>/<policy-version>
 memory-extract/<event-revision-id>/<policy-version>
 ```
 
-Conversation Decision 与 Action Finalization 是两个逻辑生成意图，因此必须创建两个
+Conversation Decision、可选 Proactive Follow-up Segment 与 Action Finalization 是不同逻辑生成意图，
+因此必须创建不同的
 GenerationCommand。Decision 直接生成普通回复时不会创建 Finalization。Decision
 生成 Action Proposal 时，只有 Action Gateway 已提交 immutable receipt，才能以
 `interaction_turn_id + action_receipt_id` 唯一创建 Finalization；该 Command 必须
 引用 Decision predecessor 并冻结 `tools_mode=disabled`。两者由 InteractionTurn
 组织，不新增 `AgentRun` 表。
+
+普通主回应只有在当前 Event DialogueState 于主回应完成时已经就绪、确定性 selector 已取得
+reservation 且不存在普通问题时，才能以 `interaction_turn_id + reservation_id` 唯一创建 Segment
+Command。它引用 Decision predecessor，冻结窄 CompiledContext 与 `tools_mode=disabled`。Action Proposal
+路径因直接任务门禁不创建 Segment。合并后的 Assistant Event 以 Decision 为 primary Command，并通过
+`conversation_event_generation_command_links` 同时引用 Segment；Action 路径仍以 Finalization 为 primary。
 
 `conversation_action_proposals` 是无重复正文的长期 envelope：
 

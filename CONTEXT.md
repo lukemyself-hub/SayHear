@@ -76,6 +76,10 @@ _Avoid_: ModelRunAttempt, Action Finalization Command, Agent plan
 Action Gateway 已提交 Conversation Action Receipt 后才创建的第二阶段 GenerationCommand；它引用创建时最新的 committed Receipt、强制 tools disabled，并只负责生成用户可见的最终回复。
 _Avoid_: Technical retry, Action execution, Second tool round
 
+**Proactive Follow-up Segment Command**:
+Conversation Decision 的主回应已经完成、当前 Event 的 DialogueState 已就绪且确定性门禁选中 target 后，创建的可选 GenerationCommand；它只根据冻结的主回应、target 与 framing 生成一个隔离的 Proactive Memory Follow-up 片段，不能调用工具、改写主回应或产生独立 Assistant Event。
+_Avoid_: Conversation Decision Command, Action Finalization Command, Background message
+
 ## 对话行为
 
 **Canonical Persona**:
@@ -505,11 +509,12 @@ Open Loop 在时间上最早可以进入 Proactive Memory Follow-up 选择的确
 _Avoid_: Reminder Time, Notification Schedule, Follow-up Quota
 
 **Proactive Memory Follow-up**:
-用户已经发起当前 Continuous Exchange 后，SayHear 主动选择最多一个合适的过去事项表达关心；它必须让位于用户当前诉求，并在用户简短带过、回避、拒绝或转换话题后停止并抑制重复询问。
+用户已经发起当前 Continuous Exchange 后，SayHear 主动选择最多一个合适的过去事项，以自然问题或不带问题的关心表达来连接当下。它必须让位于用户当前诉求；两种表达都算一次使用，用户简短带过、回避、拒绝或转换话题后停止并抑制重复主动提及。
 _Avoid_: Notification, Progress tracking, Repeated probing
 
 **Proactive Follow-up State**:
-针对一个 Open Loop 或 Memory Claim，记录 Proactive Memory Follow-up 当前是否 eligible，或因用户停止信号、Ambiguous Open Loop Closure 被 suppressed 的版本化行为投影；它不是用户事实、Memory 或任务。用户停止信号只有用户主动重提或新的相关 User Evidence 才能解除；ambiguous closure 只有新的唯一识别 Evidence 才能关闭目标并释放非目标候选。
+针对一个 Open Loop 或 Memory Claim，记录 Proactive Memory Follow-up 当前 eligible 或 suppressed 的版本化行为投影；它保留停止类型、连续软停止次数和可选冷却边界，不是用户事实、Memory 或任务。`topic_changed`、`short_response` 与 `evaded` 可按版本化递增冷却恢复选择资格；`refused`、达到上限的软停止与 Ambiguous Open Loop Closure 不随时间解除。
+没有该 logical target 的 State row 表示 `never_suppressed`，不要求预建 eligible row；第一次 suppression 才惰性创建 State 与 suppressed Version。
 _Avoid_: Proactive Memory Follow-up, Memory Claim, Task state
 
 **Conversation Action**:

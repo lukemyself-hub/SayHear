@@ -286,6 +286,15 @@ created_at
 deleted_at
 ```
 
+`conversation_event_generation_command_links` 补充一个 Assistant Event 的完整生成 lineage：
+
+```text
+conversation_event_id
+generation_command_id
+role                      # main_response / proactive_segment / action_finalization
+created_at
+```
+
 `conversation_event_revisions` 是 append-only 正文历史：
 
 ```text
@@ -308,7 +317,10 @@ content_purged_at
 - 唯一键：`conversation_event_id + revision`；
 - 唯一键：`daily_session_id + sequence_no`；
 - 每个 User / Assistant Event 必须属于一个 InteractionTurn；
-- Assistant Event 的 `generation_command_id` 唯一；
+- Assistant Event 的 `generation_command_id` 是主回应或 Action Finalization 的 primary Command，
+  且保持唯一；普通回复附加 Proactive Follow-up Segment 时，link 表必须同时记录
+  `main_response` 与 `proactive_segment`，Segment Command 不能单独创建 Event；
+- `conversation_event_id + role` 与 `generation_command_id` 在 link 表中唯一；
 - `sequence_no` 必须在锁定 Daily Session row 的同一事务中单调分配；
 - 客户端重试不能创建重复 event；
 - Event 信封只允许通过 compare-and-set 更新 `current_revision_id`；

@@ -67,7 +67,7 @@ AI 在绝大多数情况下：
 提醒不是目标追踪，不用于监督完成情况。
 
 用户已经发起一轮对话后，SayHear 可以主动选择一个合适的 Open Loop 或过去事项，
-自然询问最新情况；这属于表达关心，不要求用户先提到相同话题。SayHear 仍不能在
+用自然问题或不带问题的关心表达连接当下；这属于表达关心，不要求用户先提到相同话题。SayHear 仍不能在
 用户缺席时因为 Memory / Open Loop 发送消息或通知，也不能催促完成、生成任务列表
 或衡量完成率。
 
@@ -75,14 +75,46 @@ Proactive Memory Follow-up 遵循：
 
 - 每段 Continuous Exchange 最多一次，不设必须主动追问的配额；
 - 用户只有问候、开放式开场或交流出现自然空档时，可以主动选择过去事项；
-- 用户正在表达具体事情、提出直接任务，或出现紧急 / 高风险信号时，先完整处理
-  当前内容，不插入无关旧事；
+- 用户正在表达实质性当前话题、提出直接任务，或出现紧急 / 高风险信号时，
+  本轮不选择过去事项，不在处理完当前内容后附加无关旧事；
+- `current_request_requires_focus=true` 时不选择；该字段为 `null`、未引用当前
+  User Event、版本落后或未达版本化置信门槛时，本轮同样 fail closed。
+  `false` 只表示这一道门通过，不代表必须主动表达关心；
 - 只能使用 active、未过期、非 contested、非 dormant、未被 Forget 的 Memory
-  或 Open Loop；
-- 先回应用户当前表达，再以最多一个自然问题表达关心；
-- 用户简短带过、回避、拒绝或转换话题后立即停止。同一事项保持主动询问抑制，
-  直到用户自己重新提起或出现新的相关 User Evidence；
-- 敏感事项不一律禁止，但必须有直接 User Evidence，并使用温和、允许不回答的问法。
+  或 Open Loop；没有 Proactive Follow-up State 记录表示此前从未被抑制，可以通过该门，
+  不需要预建一条 eligible 记录；
+- Open Loop 候选来自全部当前 eligible Loop；Memory Claim 候选只复用本轮
+  Person Portrait 或 query retrieval 已选入、或已明确命中且通过 trust fence 的
+  ClaimVersion，不另建面向全部 Memory 的隐式扫描；
+- 用户已在当前 Continuous Exchange 主动提到的 target 由普通对话处理，不再算
+  Proactive Memory Follow-up；当前 User Event 新形成的 Open Loop 最早从后续
+  Turn 参与选择；
+- 问候或开放式开场先选最近的非敏感 Open Loop，没有时才选 Memory Claim；
+  自然空档先按现有 Person Portrait / retrieval 顺序选非敏感 Memory Claim，没有时
+  才选 Open Loop。敏感 target 只在没有非敏感候选时参与；同层候选优先从未主动
+  使用、其次最久未使用的 target；
+- 先回应用户当前表达，再以一个自然问题或不带问题的关心表达使用 target；
+  两种表达都消耗本段交流的唯一一次使用额度。问句与普通 Follow-up Question 共享每轮
+  最多一个问题的硬上限；主回应已有普通追问时，本轮不得再用关心陈述绕过让位规则；
+- Open Loop 通常用简短问题询问未知后续；Memory Claim 默认使用关心陈述，只有 Evidence
+  指向具体、自然可回答的新进展时才提问。AI Impression 不得为了生成问题而假设最近又发生
+  了类似事件；不设问句占比或机械交替，由实现后盲评观察自然度；
+- 用户简短带过、回避、拒绝或转换话题后立即停止。`topic_changed` 依次冷却
+  1 / 7 / 30 个当地日历日，第四次后不再按时间解除；`short_response` 依次冷却
+  7 / 30 日，第三次后不再按时间解除；`evaded` 首次冷却 30 日，第二次后不再
+  按时间解除；`refused` 和 `ambiguous_closure` 不设时间解除；
+- 冷却结束只恢复选择资格，不产生必须追问的配额。用户主动且唯一地重提、新的直接 User
+  Evidence 为同一 target 增加实质状态，或明确给出 target-specific 询问许可时，清零软停止
+  次数并恢复后续资格；当前 User Event 仍由普通对话处理；
+- 普通 Version、policy、索引或文案变化，Entity 技术修复，以及单纯 Correction / Forget /
+  Reversal 控制不恢复资格或清零次数。“可以再问问题了”只解除当前 Continuous Exchange
+  的 Curiosity Stop Signal，不清除 target-level suppression；
+- 用户的回应是否形成停止信号尚未得到唯一处理结果时，该 target 暂时不再参与选择，
+  不因分类延迟或失败继续主动提及；
+- Open Loop 或 Memory 候选集本轮无法证明完整时，整个主动选择 fail closed，基础对话继续；
+  不只从正常的另一类候选中改选，也不复用旧候选或上一轮选择；
+- 敏感事项不一律禁止，但必须有直接 User Evidence，并使用温和、明确允许不回答的
+  简短表达。
 
 ### 15.4 幽默与玩心
 
