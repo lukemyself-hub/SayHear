@@ -358,7 +358,7 @@ reflection_statements
   也不能假定能精确重建；
 - Internal Core 的 Reflection Inspector 通过只读 query 展示 Daily / Weekly
   ReflectionVersion、状态、source revision、Statement Evidence lineage，以及
-  Candidate 经 admitted ClaimVersion 到 ProfileProjectionVersion 的下游影响；
+  Candidate 经 admitted ClaimVersion 到 BioVersion 的下游影响；
 - Inspector 必须明确区分 current authoritative version 与 draft / stale /
   superseded version，不能直接写 Reflection、Candidate、Claim 或 Profile，也不成为
   新的权威来源。
@@ -384,9 +384,14 @@ claim_localized_projections
 claim_retrieval_projections
 claim_evidence_links
 relationship_resolver_hints
-profile_projections
-profile_projection_versions
-profile_projection_claim_links
+bios
+bio_versions
+bio_statements
+bio_atomic_propositions
+bio_claim_links
+bio_coverage_units
+bio_coverage_members
+bio_validation_findings
 retrieval_runs
 retrieval_run_candidates
 ```
@@ -914,9 +919,11 @@ Relationship ClaimVersion 生成，不执行多边传递推导。
 - 模型只能提出 candidate 或 diff；
 - 代码执行 claim promote、supersede、retract；
 - 模型遗漏旧 Claim 不得产生删除；
-- Profile Projection 只读取有效 Claim，可随时重建。
+- Bio 只读取有效 Claim，可随时重建。
 
-Profile Projection 是 LLM based、可重建的叙事投影，不是 Memory Claim 的完整导出：
+Bio 是 LLM based、可重建的叙事产物，不是 User Profile 或 Memory Claim 的完整导出；
+不可变版本统一称为 BioVersion。每个 owner 的单调 `bio_source_revision` 在 Bio
+eligibility 或解释 eligible Claim 所需内容发生提交变化时推进：
 
 - Projection Worker 先按版本化 policy 冻结 eligible set，只包含 current、active、
   未被 Forget 且 EntityVersion 仍有效的 ClaimVersion；
@@ -926,21 +933,52 @@ Profile Projection 是 LLM based、可重建的叙事投影，不是 Memory Clai
   不创建第二层 Profile authorization，也不能仅因敏感而从输入集合中排除；
 - LLM 基于版本化 Prompt 对完整 eligible set 做语义压缩和叙事组织，形成对用户、
   经历、关系、情感与价值观的自然语言讲述；
-- `profile_projection_claim_links` 使用 `link_role=eligible_input /
+- 每个 GenerationCommand 冻结一个 `presentation_locale`、Self Entity version、
+  canonical display label 与可选的用户明确声明代词；没有明确代词时生成器必须重复
+  名字或改写，不能推断性别。一个 BioVersion 只保存一种已生成并校验的 locale，
+  Basis quotation 保留原语言；
+- `bio_claim_links` 使用 `link_role=eligible_input /
   narrative_support`，同时冻结完整输入集合和正文实际依赖的 ClaimVersion；
   validator 拒绝 eligible set 外的引用，并检查正文陈述能由 narrative support
   Claim 展开到底层 User Evidence；
+- 版本化 Bio Coverage Policy 将每个 eligible ClaimVersion 确定性映射到一个 Bio
+  Coverage Unit，并根据 Predicate Registry metadata 与 current temporal scope 标注
+  `required`、`compressible` 或 `background`；未发布 class 默认 `required`，敏感性
+  不改变 class。一个 logical Claim 的 current ClaimVersion 默认形成一个 unit；只有
+  共享已发布 `bio_composition_key`，且 subject、Entity、时间与认识类型兼容时可
+  合并，Objective 与 Impression 不合并，composite 采用最严格 class。`required`
+  决定本版 coverage plan 的稳定优先级。进入计划的 `required` 必须有可独立定位的
+  忠实表达，`compressible` 必须能从更宽的 supported proposition 推得；
+  `background` 可携带 policy reason 显式 absent。完整 User Profile 超出可读预算
+  时，policy 把未选 unit 记为 `deferred_by_budget`，不让 Bio 生成失败；只有计划内
+  前两类缺失才是 `material_absence`。生成器返回 statement、atomic
+  proposition、Claim support 与 coverage disposition，`narrative.validate` 独立重拆
+  最终正文并比较 manifest，实质差异不能发布；
+- 一个 proposition 可以由多条 Claim 联合支持，也允许一条 Claim 支持多个
+  proposition；每个 link 必须有实际贡献，支持集合必须联合充分，validator 拒绝无关
+  padding link，并允许多个等价的最小充分集合；
+- active Claim 之间存在叙事张力但未进入 contested 时，Bio 保留双方；只有 active AI
+  Impression 可以支持进一步的动机或人格解释。无法由时间、scope 或认识类型解释的
+  直接矛盾阻止发布，Bio 不得自行选择一边；
 - Prompt、model config、generation command、authoritative attempt 与 selection
-  policy version 必须随 ProfileProjectionVersion 可审计；
+  policy version 必须随 BioVersion 可审计；
 - 语义压缩不要求每条 eligible Claim 逐条出现在正文中，但不能与 active Memory
   实质矛盾或遗漏到形成失真的人物画像；压缩不改变 Claim lifecycle、
   Recall eligibility 或 Memory identity；
 - 每个可独立成立的事实判断必须由 active Objective Memory 支撑，每个可独立成立的
-  心理、情感或价值观判断必须由 active AI Impression 支撑；LLM 不能在 Profile
+  心理、情感或价值观判断必须由 active AI Impression 支撑；LLM 不能在 Bio
   内创建只存在于 Bio 的新推断、修改认识状态或把叙事文本写回 Claim；
-- ProfileProjectionVersion 不能成为 Journal、Reflection 或 Memory 的 Evidence。
+- BioVersion 不能成为 Journal、Reflection 或 Memory 的 Evidence。
 
-`profile_projections` 还必须记录 Profile Refresh Policy 的当前状态：
+eligible set 为空时不调用模型，也不创建空 BioVersion。存在至少一条 eligible Claim
+时允许生成短 Bio，但不能为了填满章节补写人格判断。
+
+第一条 eligible Claim 不自动触发模型调用；有 Claim 但无 Bio 时 aggregate 为
+`ready_to_build`，manual 首次生成不受成功发布冷却限制，weekly 仍可创建首版。
+章节、标题、statement 与 proposition identity 只在所属 BioVersion 内稳定，标题中的
+用户判断也进入 proposition 与 support 校验。
+
+Bio aggregate 还必须记录 Bio Refresh Policy 的当前状态：
 
 ```text
 refresh_state                 # current / regenerating / trust_invalidated
@@ -950,25 +988,45 @@ next_scheduled_refresh_at
 refresh_policy_version
 trust_invalidated_at
 trust_invalidation_revision
+bio_source_revision
 ```
+
+`bio_versions` 保存正文、locale、冻结 source revision 与 manifest hash、Self Entity
+version、display label、可选 declared pronoun、GenerationCommand、authoritative
+ModelRunAttempt，以及 Prompt、Schema、generation、validation、coverage、refresh 和
+schedule policy versions。`bio_statements`、`bio_atomic_propositions`、
+`bio_claim_links`、`bio_coverage_units`、`bio_coverage_members` 与
+`bio_validation_findings` 保存 validator 接受的 typed structure；产品读取不解析
+ModelRunAttempt 原始 JSON。
 
 - 普通 active Claim 增加或更新只推进 eligible Claim-set revision，不立即使当前 Bio
   不可见；用户手动刷新或每周 schedule 读取最新 eligible set 重建；
 - 手动 refresh command 由服务端以 `next_manual_refresh_at` 和 policy version 限流，
   前端只镜像服务端允许时间，不能成为唯一控制；
-- `manual` 与 `weekly_scheduled` 生成结果通过 Profile validator 和提交 fence 后，
-  原子创建新的 ProfileProjectionVersion 并推进 current pointer；数据模型不增加
+- `manual` 与 `weekly_scheduled` 生成结果通过 Bio validator 和提交 fence 后，
+  原子创建新的 BioVersion 并推进 current pointer；数据模型不增加
   `awaiting_approval`、用户编辑稿或多候选版本选择状态；
 - 一个全局 Cron / scheduler 扫描到期的 `next_scheduled_refresh_at`，按用户本地
   schedule policy 创建幂等 weekly refresh command，不为每个用户维护独立 Cron；
 - Correction、Forget、`contested`、`dormant`、Entity 失效或删除提交时，必须同步
-  标记受影响 Profile `trust_invalidated`；读取路径也要复核 narrative-support
+  标记受影响 Bio `trust_invalidated`；读取路径也要复核 narrative-support
   ClaimVersion 仍有效，不能依赖异步任务及时性；
-- trust-invalidated Profile 没有可展示的旧版本，安全重建绕过普通手动间隔与 weekly
-  schedule；失败时保持不可用，不能回退到包含失效内容的 ProfileVersion。
+- trust-invalidated Bio 没有可展示的旧版本，安全重建绕过普通手动间隔与 weekly
+  schedule；失败时保持不可用，不能回退到包含失效内容的 BioVersion。
 
-Profile 没有用户直接写正文的命令。用户对 Bio 内容的 Correction 或 Forget 必须先
-作用于底层 Memory Claim，再由 trust-boundary rebuild 生成新的 Projection。
+Manual 与 weekly trigger 冻结同一个 `bio_source_revision` 时复用一个
+GenerationCommand，并分别保留 trigger 记录。Trust-boundary transaction 在同一提交
+中隐藏 current Bio、推进 source revision 并创建幂等 rebuild intent；普通 command
+不能替代 trust rebuild。读取路径每次复核 owner、data epoch、current pointer、
+BioVersion readable state 与所有 narrative-support ClaimVersion fence，失效时同步
+拒绝返回并幂等补发 rebuild intent。普通新增 Claim 只使 Bio 变旧，不使它不可读。
+
+发布后被 supersede 的 BioVersion 与 typed lineage 保留到 Full Purge，但普通产品读取
+只返回 current。失败、stale 或 `needs_review` draft 的正文、proposition、support
+与 finding 最多保留七天，之后只留不含内容的 command、attempt、错误类别与时间。
+
+Bio 没有用户直接写正文的命令。用户对 Bio 内容的 Correction 或 Forget 必须先
+作用于底层 Memory Claim，再由 trust-boundary rebuild 生成新的 BioVersion。
 
 #### 7.10.1 Predicate Registry
 
@@ -1578,7 +1636,7 @@ open_loop_versions
 proactive_followup_states
 proactive_followup_state_versions
 profile_projections
-profile_projection_versions
+bio_versions
 ```
 
 `session_summary_versions` 和 `dialogue_state_versions` 从 1A.2 开始创建；1A.1
@@ -1655,7 +1713,7 @@ content_purged_at
 ```
 
 EpisodeVersion 必须通过 EvidenceItem 展开到底层 User Event Revision，不能只引用 Summary。
-Profile Projection Version 必须引用具体 Memory Claim Version。
+BioVersion 必须引用具体 Memory Claim Version。
 
 派生对象分为：
 
@@ -1672,7 +1730,7 @@ Prompt、policy、随机性和用户确认影响，必须保留原 Version ID �
 Episode、Open Loop、Proactive Follow-up State、Journal、Reflection、Claim 和
 Profile 的具体 version / identity ID。这是全部消费者的并集：对话 Context 只引用
 对话输入层（08-10 §9.1）声明的对象，Profile、Journal、Reflection 只在各自派生
-workflow 的 Context 中被引用。Profile Projection 不进入对话 Context；对话中的
+workflow 的 Context 中被引用。Bio 不进入对话 Context；对话中的
 “用户是怎样的人”由 Person Portrait 逐条 Claim 承载（ADR-0111）。
 需要向 Conversation Functions 暴露已有对象 target 时，CompiledContext 另外保存
 Command-scoped Action Reference manifest。每个 Handle 通过 typed link 指向同一

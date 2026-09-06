@@ -38,7 +38,7 @@ Proposed
 | RelationshipResolverHint | Entity Resolver Projection | Claim 派生的非权威称呼索引 | 是 | 随 ClaimVersion 失效并重建 |
 | OpenLoop / OpenLoopVersion | Context Projection Worker | 有期限的待发生事项 / 待结果 Context projection，不是事实源 | 否；历史按引用保留 | 随 Evidence / Claim / Episode 失效 |
 | ProactiveFollowupStateVersion | Conversation Behavior Projection | 主动关心资格与停止信号，不是用户事实 | 可从版本化行为结果重建 | 随 target 与 Event 删除 |
-| ProfileProjectionVersion | Projection Worker | 可重建投影 | 是 | 从有效 ClaimVersion 重建 |
+| BioVersion | Bio Worker | 可重建叙事产物 | 是 | 从有效 ClaimVersion 重建 |
 | VectorIndex | Embedding Worker | 可重建索引 | 是 | 立即停止检索并删除向量 |
 | WorkflowRun | Workflow Service | 运行元数据 | 否 | 正文不应存在于其中 |
 | GenerationCommand | Application Service | 运行意图元数据 | 否 | 随主体失效，不保存正文 |

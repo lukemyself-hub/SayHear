@@ -183,7 +183,7 @@ Vercel Workflows v4 原生 keyed concurrency 不作为前提。
 
 | Policy | 适用 | Commit 条件 |
 | --- | --- | --- |
-| `exact_head` | Journal publish、current Reflection、current Profile Projection | aggregate head 必须仍等于 expected revision |
+| `exact_head` | Journal publish、current Reflection、current Bio | aggregate head 必须仍等于 expected revision |
 | `source_still_valid` | Evidence / EntityMention extraction、Event Memory extraction、Embedding、Assistant delivery、frozen Episode | 所有具体 source version 仍有效；aggregate head 可以前进 |
 | `monotonic_projection` | Rolling Summary、DialogueState | 冻结覆盖区间仍有效，且 current pointer 只能向更高 coverage / revision 前进 |
 

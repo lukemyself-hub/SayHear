@@ -205,14 +205,24 @@ disposition、successor trigger 与 material-change reason，但不能为了方�
 查看完整 Evidence 必须使用 Internal Owner 的独立诊断 capability、step-up
 reauthentication 与 access audit。
 
-### 14.2 Profile 展现方式
+### 14.2 Bio 展现方式
 
-User Profile 以一篇自然语言 Bio 呈现。它是 SayHear 对用户及其相关经历、关系与
-记忆的讲述，而不是数据库、关键词、表格或全部 Memory Claim 的逐条转写。
+User Profile 与 Bio 是两个概念。User Profile 是 Objective Memory 与 active AI
+Impression 构成的两层长期理解；Bio 是 SayHear 基于它写出的自然语言作品，是对用户
+及其相关经历、关系与记忆的讲述，而不是数据库、关键词、表格或全部 Memory Claim
+的逐条转写。领域和实现统一使用 `Bio` 与 `BioVersion`，不再使用
+`Profile Projection`、`ProfileVersion` 或 `ProfileProjectionVersion` 指代它。
 
 其表达方式接近：
 
 > “如果有人问我，这个人是谁，我会这样介绍他。”
+
+Bio 采用 #173 选定的章节式结构，并以第三人称、按名字叙述；页面标题、状态、刷新与
+纠错控件仍以第二人称面对用户。名字来自 current Self Entity 的 canonical label，
+代词只采用用户明确声明的值；没有已声明代词时重复名字或改写句子，不能根据名字、
+语言或经历推断。每个 BioVersion 只生成并校验一种冻结的展示 locale；Bio Basis 中
+的用户原话保留原语言，正文只在名称、固定表达或对用户确有意义的
+原话处自然 code-switch。用户改变展示 locale 时走普通重建，不构成信任边界失效。
 
 Profile 使用 LLM based 写作。版本化 Prompt 负责叙事视角、语义压缩、结构、语气和
 不确定性表达；全部当前有效 ClaimVersion 都进入 eligible input，包括
@@ -220,6 +230,28 @@ Profile 使用 LLM based 写作。版本化 Prompt 负责叙事视角、语义�
 “忠实映射全部 Memory”指语义完整，而不是要求每条 Claim 在正文中逐条出现。LLM
 可以连接、压缩和组织 Claim 已支撑的经历、关系、情感与价值观，但不能通过省略或
 改写形成与 active Memory 实质相反的人物画像。
+
+版本化 Bio Coverage Policy 必须把每个 eligible ClaimVersion 确定性归入一个 Bio
+Coverage Unit，并根据 Predicate Registry 发布的 coverage class 与 current temporal
+scope 标明 `required`、`compressible` 或 `background`。一个 logical Claim 的
+current ClaimVersion 默认形成一个 unit；只有 Predicate Registry 明确发布相同
+`bio_composition_key`，且 subject、Entity、时间范围和认识类型兼容时才可合并。
+Objective Memory 与 AI Impression 不合并为同一 unit，合并后的 coverage class 取最
+严格值。未发布 coverage class 的 Predicate 默认 `required`；模型不能自行决定某个
+输入不重要，也不能因为敏感性降低 materiality。
+
+`required` 与 `compressible` 决定 coverage plan 的优先级；进入本版计划后，前者
+必须有可独立定位的忠实表达，后者可以被更宽的 supported proposition 包含，但
+validator 仍须证明其语义得到表达。`background` 可以按 policy reason 省略。User
+Profile 超出可读篇幅时，确定性 policy 按 class 与稳定顺序形成本版 coverage plan，
+未选 unit 记录为 `deferred_by_budget` 并向用户提示本版有所取舍，不让整个 Bio
+生成失败。计划内的前两类缺失才是 `material_absence`。两个 active Claim 存在叙事
+张力但不构成 contested 时，Bio
+必须保留双方；只有 active AI Impression 支撑时才能解释其动机或人格意义，不能为了
+故事连贯选择其中一边。
+生成器同时返回正文、statement、atomic proposition、Claim support 与 coverage
+disposition；独立 validator 从最终正文重新拆解 proposition，两份结果存在实质差异
+时不能发布。
 
 Profile 应该明确区分：
 
@@ -236,27 +268,73 @@ Bio 可以深入剖析和共情用户的内心、情感、深层价值观与世�
 支撑。Profile 写作发现但尚未通过准入的新洞察不能出现在当前 Bio，也不能以叙事
 连贯性绕过跨 Session Evidence、敏感推断、Correction、Forget 或 dormancy。
 
-### 14.2.1 Profile 更新
+每章可以按需展开 Bio Basis。默认先显示 validator 接受的一个最小充分 support set，
+组内每条都显示人可理解的 Claim 表达、用户原话与日期，以及低调的 Objective /
+Impression 认识标签；不显示 Claim ID、Evidence ID、Prompt、模型或 policy 等技术
+引用。存在多个等价 support set 时按稳定规则选择一个，用户可以继续展开其他依据，
+但初始请求不批量返回全部。页面底部只有一个纠错入口，刷新与 Correction / Forget
+始终是不同操作。
+
+### 14.2.1 Bio 更新
 
 普通 Bio 更新采用低频、用户可理解的节奏：
 
 - 用户可以在 Profile 前端手动发起重写；
-- 前端显示最早可再次刷新时间，后端以版本化 policy 强制执行相同的最短间隔，
-  具体时长在实现与内部验证中确定；
+- 前端显示最早可再次刷新时间，后端以版本化 policy 强制执行相同的最短间隔；默认在
+  新 current Bio 成功发布后 24 小时才允许再次手动刷新，技术失败不推进冷却时间；
 - 系统默认每周通过后台 Cron 自动重写一次，不做每日或每次 Memory 变化后的普通
   自动重写；
-- 前端显示预计下次自动更新时间；具体星期与本地时间由版本化 schedule policy
-  决定。
+- 前端显示预计下次自动更新时间；默认 schedule 是每周一用户当地时间 04:00，
+  schedule policy 在 DST 跳时、重复时段、漏扫与重试下保证每个本地周最多成功推进
+  一次。
 
-手动刷新表示请 SayHear 根据最新有效 Memory 重新理解并讲述用户，不是创建等待用户
-发布的 Bio 草稿。手动与每周生成的新 Bio 通过 Profile 校验后直接替换 current
+Profile 页面按钮与对话中的 `regenerate_bio` 使用同一个 owner-scoped handler、source
+snapshot、24 小时 rate policy、幂等边界、validator 与 publish 语义。对话 Context
+只暴露这个高层 Action，不注入 Bio 或 Bio Basis。
+
+页面底部的 “Not quite right?” 只打开 Talk，不附带 Bio、段落、proposition 或隐藏
+摘要。用户用自己的话说明错误，这个新 User Event 才成为 Correction / Forget 的
+Evidence。用户只说“第二段不对”时，SayHear 请其描述具体理解，不能为了猜目标而把
+Bio 读入 Conversation Context。
+
+eligible set 为空时不调用模型，也不创建空 Bio；页面说明 SayHear 还没有足够的了解。
+存在至少一条 eligible Claim 时可以生成短 Bio，不凑章节或补写人格判断。信任边界
+失效后如果 eligible set 为空，旧 Bio 仍不可恢复。
+
+第一条 eligible Claim 出现时不自动调用模型。已有 Claim 但没有 Bio 时显示
+`ready_to_build`，用户可以立即生成且不受“上次成功发布后 24 小时”限制；用户不
+操作时由下一次 weekly schedule 生成。章节数随内容变化且最多 6 章，不设最低章节
+数；章节、标题、statement 和 proposition identity 只在所属 BioVersion 内稳定。
+标题表达用户判断时同样进入 proposition 与 support 校验。
+
+用户可见状态区分：
+
+- `empty`：没有 eligible Claim，也没有生成任务；
+- `ready_to_build`：已有 eligible Claim，但尚未生成第一篇 Bio；
+- `building`：没有 current Bio，首次或普通生成进行中；
+- `current`：Bio 可读；
+- `refreshing`：安全旧版继续可读，新版生成中；
+- `generation_unavailable`：普通生成失败，且没有可读旧版；
+- `trust_rebuilding`：旧版因信任边界变化被隐藏，安全重建中；
+- `trust_unavailable`：安全重建失败，Bio 继续不可读。
+
+`building` 与 `trust_rebuilding` 可以复用“Bio 正在更新，稍后再回来看看”一类用户
+提示，不向用户暴露内部安全原因；后端必须保留两种状态，因为 trust rebuild 绕过普通
+限流，失败后也不能恢复旧 Bio。`needs_review` 只供内部诊断，不是用户状态。
+
+页面显示上次更新时间与下次自动更新时间。普通 Claim 变化使 current Bio 落后但仍
+安全时，显示“新的理解会在下次更新中加入”，并按 rate policy 提供刷新入口；不使用
+“错误”“不安全”或内部 `stale` 状态。
+
+手动刷新表示请 SayHear 根据最新有效 User Profile 重新理解并讲述用户，不是创建等待用户
+发布的 Bio 草稿。手动与每周生成的新 Bio 通过 Bio 校验后直接替换 current
 版本；产品不提供发布前预览、批准、正文编辑、候选版本选择或连续抽卡式重写。用户
 认为 Bio 内容不准确时，通过对话中的 Memory Correction 或 Memory Forget Request
-修正底层 Memory，而不是直接编辑 Profile 正文。
+修正底层 Memory，而不是直接编辑 Bio 正文。
 
 信任边界变化不等待上述节奏。Memory Correction、Memory Forget Request、Claim
 进入 `contested` / `dormant`、Entity 失效或内容删除时，包含受影响内容的当前
-ProfileVersion 立即停止展示，并绕过普通刷新间隔自动重建。重建失败时显示
+BioVersion 立即停止展示，并绕过普通刷新间隔自动重建。重建失败时显示
 “Bio 正在更新”或暂时不可用，不能继续展示含有失效内容的旧 Bio。
 
 用户在同一句话中提出多个独立要求时，SayHear 不静默挑选其中一部分执行。唯一、
@@ -463,7 +541,7 @@ Web 开发者工具必须提供只读的 Reflection Inspector，使 Internal Own
 - Daily / Weekly ReflectionVersion、版本状态与 source revision；
 - ReflectionStatement 的底层 Evidence lineage；
 - Reflection 提出的 Candidate 及其 admission / terminal disposition；
-- Candidate 经有效 ClaimVersion 对当前 Profile Projection 产生或未产生的影响。
+- Candidate 经有效 ClaimVersion 对当前 Bio 产生或未产生的影响。
 
 Reflection Inspector 只用于内部验证与诊断，不能创建、编辑、发布或覆盖
 ReflectionVersion，不能批准 Candidate、写入 Claim 或直接修改 Profile。独立的

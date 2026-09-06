@@ -23,8 +23,11 @@ Version mutation 工具。
 接受任意文风、第一人称、指定正文或删除有 Evidence 支撑的事件。意图只表达“不满意”
 且无法区分事实理解错误与表达质量时，先自然澄清一次。
 
-现有 Profile manual refresh 服从相同架构语义，但有自己的 source、schedule 与 rate
-policy。未来其他 Derived Artifact 只有显式加入版本化 Catalog 并实现对应 handler 后
+Bio manual refresh 服从相同架构语义，但有自己的 source、schedule 与 rate policy。
+Profile 页面按钮与对话中的 `regenerate_bio` Action 进入同一个 owner-scoped handler，
+使用同一 source snapshot、24 小时 rate policy、幂等边界、validator 与 publish
+语义；Conversation Context 只暴露高层 Action，不注入 Bio 或 Bio Basis。未来其他
+Derived Artifact 只有显式加入版本化 Catalog 并实现对应 handler 后
 才获得 regeneration 能力；不能因为属于派生产物就自动开放。
 
 本 ADR 只取代 ADR-0003 对所有用户请求 regeneration 的绝对禁止。Journal 不可自由

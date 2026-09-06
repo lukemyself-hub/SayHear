@@ -37,7 +37,7 @@ AI-written Profile 的可见性也不能等同于 Memory 的完整可见性。Ch
 
 **[推断] “可见摘要”与“完整控制面”必须分开命名。** SayHear 的 Bio 是叙事投影，不是 Claim 清单。页面可以显示更新时间和状态，也可以提供“为什么这样写”或“这不准确”的对话入口；它不应让一个漂亮的 Bio 冒充完整 Memory Inspector。ADR-0008 已经选择 conversational source explanation，本研究没有发现需要新增逐句 citation UI 的外部证据。
 
-**[推断] 手动 refresh 不能承担纠错语义。** 如果用户只是点刷新，系统只能依据当前 eligible Claim set 重写；它不应期待 LLM 猜出哪条底层事实错了。真正的纠错需要先修改或 Forget 对应 Memory，再让 Profile Projection 重建。这比“直接编辑摘要文字”多一步，但保持了 Bio、Recall 和未来派生结果的一致性。
+**[推断] 手动 refresh 不能承担纠错语义。** 如果用户只是点刷新，系统只能依据当前 eligible Claim set 重写；它不应期待 LLM 猜出哪条底层事实错了。真正的纠错需要先修改或 Forget 对应 Memory，再让 Bio 重建。这比“直接编辑摘要文字”多一步，但保持了 Bio、Recall 和未来派生结果的一致性。
 
 ### 3. 可见层和实际个性化层不一致，是应明确拒绝的模式
 
@@ -95,4 +95,3 @@ AI-written Profile 的可见性也不能等同于 Memory 的完整可见性。Ch
 - Google 和 OpenAI 没有公开 Proactive Follow-up selector、停止状态或敏感 target policy。本研究对措辞和状态机的建议属于基于 SayHear 已接受边界的推断。
 - Replika 的帮助页没有发布日期。它能证明当前公开说明，但不能证明 deeper system 的具体实现或删除语义。
 - 本研究没有评估 outbound notification 的体验，也没有重复 #91 的通用 Memory UI、来源解释光谱或竞品全量盘点。
-

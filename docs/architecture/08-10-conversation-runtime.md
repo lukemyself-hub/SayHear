@@ -139,7 +139,7 @@ GenerationCommand；只有新回答完整成功后才创建 Assistant Event，UI
 - Journal；
 - Daily Reflection；
 - Weekly Consolidation；
-- Profile Projection；
+- Bio；
 - 全量 Embedding 重建；
 - Replay；
 - 删除 reconciliation。
@@ -404,8 +404,8 @@ Evidence 强度。当前有效的 Objective Memory 与 active AI Impression 平�
 排序，不设 Objective-first 规则；`kind + epistemic_status` 只决定召回措辞，不直接
 决定名次。同级再以最新有效 Evidence 和 stable ID 打破平局。每条携带
 `claim_version_id + evidence_id`，并逐条适用 Correction、Forget、contested 与
-dormant fence。叙事版 Profile Projection 不进入对话 Context，Profile 只作为用户
-可见产物存在；没有合格或相关条目时该 section 为空，不编造画像。
+dormant fence。Bio 不进入对话 Context，只作为用户可见产物存在；没有合格或相关
+条目时该 section 为空，不编造画像。
 
 Person Portrait 不只是隐藏提示。当前 User Event 与 selected trait / value 明确呼应且
 表达该观察能增加理解或共情时，Conversation Model 可以主动用自然、朋友式语言连接，

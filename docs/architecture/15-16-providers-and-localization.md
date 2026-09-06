@@ -130,12 +130,35 @@ entity.resolve
 episode.build
 memory.extract
 memory.consolidate
-profile.project
+bio.write
 embedding
 stt
 tts
 safety
 ```
+
+`bio.write` 与 Reflection 共用 `narrative.validate` grounding-validator role，但各自
+冻结 artifact-specific Prompt、Schema 与 validation policy。1A.3b 不为
+`bio.write` 或 `narrative.validate` 启用 provider / model fallback；同模型技术
+retry 与 Bio 一次 bounded repair 不能改变 frozen command 语义。正式 role fallback
+留给 1A.4 policy。
+
+1A.3b 为 `narrative.validate` 配置一次独立模型调用，负责重新拆解 Bio、判断
+support、contradiction 与 coverage；确定性代码仍独立检查 Schema、ID、epistemic
+kind、lifecycle、data epoch 与 source revision。首版不增加 NLI、QA checker 或新
+依赖；该 role 不能通过 Bio 发布验收时保持 rollout disabled。
+
+首版发布验收使用约 18 个固定、可重放案例：中文、英文、code-switch 各 6 个，同时
+覆盖 Reflection 与 Bio，并让每个已知 blocking error class 至少出现一次。Luke 逐例
+判断；任何危险错误漏检都阻止发布。首版不建设分桶 precision / recall、置信区间或
+加权总分，新发现的失败加入回归集。确定性 schema、lineage、lifecycle、epoch 与
+Context-isolation gates 仍须全部通过。
+
+#174 只冻结 `bio.write` role、输入、Prompt / Schema / policy 与无 fallback 边界，
+不指定 Provider 或模型。#178 使用冻结 fixtures 比较候选，再发布首个 Model Routing
+Policy；评测分别报告自然度、coverage、unsupported inference 与中文、英文、
+code-switch 表现。一个模型可以赢得多个 role，但不能因已用于 Conversation 或
+Reflection 而跳过 Bio 评测。
 
 模型名称存在配置和数据库中，不硬编码进领域逻辑。Capability Registry 的
 `enabled_roles` 只声明能力匹配候选；是否允许 fallback 由人工发布的 Model Routing
@@ -206,7 +229,7 @@ fallback。Provider timeout 或结果未知只允许对同一冻结 model config
 
 开发期 Model Promotion Evaluation 按 role 选择合适证据，但不建设独立审批系统：
 
-- `conversation.text`、`journal.draft`、`profile.project` 等用户可感知 role，必须
+- `conversation.text`、`journal.draft`、`bio.write` 等用户可感知 role，必须
   在 `zh-CN`、`en-US` 与 code-switching 样本上比较被理解感、人格一致性、非说教、
   事实与推断边界及 Memory 召回语言；
 - `evidence.extract`、`entity.resolve`、`episode.build`、`memory.extract`、

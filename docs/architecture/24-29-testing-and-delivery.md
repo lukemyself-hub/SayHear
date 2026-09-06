@@ -727,7 +727,7 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - Predicate Registry 治理：Internal Candidate Review Tool、Predicate Change
   Proposal、terminal Candidate 7 天内容期限与无正文 audit envelope；
 - Reflection role Champion config；
-- LLM based Profile Projection、版本化 Profile Prompt、Claim lineage 与
+- LLM based Bio、版本化 Bio Prompt、Claim lineage 与
   manual / weekly / trust-boundary refresh；
 - Full Purge 扩展到 Episode、Open Loop、Proactive Follow-up State、
   Reflection、Profile 与相关索引。
@@ -744,7 +744,7 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - Entity、Claim、Reflection 的 logical ID 与 Version ID 不混用；
 - Reflection Inspector 100% 能区分 Daily / Weekly 与 current / non-current
   ReflectionVersion，展开 Statement 到底层 User Evidence，并追踪 Candidate
-  disposition 及其经有效 ClaimVersion 对 Profile Projection 的影响；Inspector
+  disposition 及其经有效 ClaimVersion 对 Bio 的影响；Inspector
   0 个 Reflection、Candidate、Claim 或 Profile 写入口，Phase 1 不建设独立的
   用户式 Reflection 页面；
 - `ambiguous / unmapped` Candidate 100% 由版本化确定性 policy 判断是否
@@ -787,7 +787,7 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
   有效的 ClaimVersion；Candidate、`contested`、`review_due`、`dormant`、
   Open Loop 与 Reflection 原文 0% 进入 Profile；100% active sensitive Claim
   与其他 active Claim 使用同一 eligible-input 规则，不要求第二层授权；
-- 每个 ProfileProjectionVersion 100% 记录完整 eligible input、实际 narrative
+- 每个 BioVersion 100% 记录完整 eligible input、实际 narrative
   support ClaimVersion、Prompt、model attempt 与 selection policy；事实判断
   100% 由 active Objective Memory 支撑，心理、情感与价值观判断 100% 由 active
   AI Impression 支撑，0 个只存在于 Bio 的新推断；
@@ -957,11 +957,11 @@ Talk
 - 每个 Journal 绑定 source revision；
 - JournalStatement、ReflectionStatement 和每个高置信度 Claim 都有 typed Evidence；
 - 生活事实 Evidence 最终只来自 final / corrected User Event Revision；
-- Reflection / Journal / Profile 不会成为 Claim 自证来源；
+- Reflection / Journal / Bio 不会成为 Claim 自证来源；
 - Entity label、语言和 external mapping 变化不改变 Entity ID；
 - Claim 的 localized Statement 变化不改变 Claim identity；
 - 推断与事实不会互相升级；
-- Profile Projection 可以重建；
+- Bio 可以重建；
 - Provider Session 不是长期状态。
 
 ### 26.3 可靠性
