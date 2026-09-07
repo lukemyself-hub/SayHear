@@ -35,6 +35,9 @@ Accepted
 - [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
 - [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework
 - [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision 与 Action Finalization 使用独立 GenerationCommand
+- [`0133`](adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)：Bio 写作与验证使用独立 GenerationCommand 和可计算的 attempt 预算，repair 后必须重新验证
+- [`0136`](adr/0136-1a3b-model-pins-are-evidence-outputs.md)：1A.3b SPEC 固定角色评测合同，生产模型 pin 由冻结验收证据产生而不是提前指定
+- [`0138`](adr/0138-1a3b-formal-acceptance-uses-synthetic-data.md)：1A.3b 正式验收只使用固定合成数据，准确 release manifest 必须通过完整 purge 与旧备份恢复 drill
 - [`0098`](adr/0098-conversation-actions-use-descriptors-gateway-and-typed-handlers.md)：Conversation Action 通过 descriptor、统一 Gateway 与 typed deep handler 扩展
 - [`0099`](adr/0099-conversation-actions-separate-admission-from-execution-state.md)：Conversation Action 分离受理状态与执行状态，并以不可变 Receipt 驱动当前投影
 - [`0100`](adr/0100-current-conversation-actions-require-no-secondary-confirmation.md)：当前 Agent Catalog 只允许无需二次确认的安全 Action
@@ -88,6 +91,7 @@ Accepted
 - [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除（已被 0112 取代）
 - [`0112`](adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)：Persona 安全姿态按 Daily Session 存活，连续干净 turn 自动解除
 - [`0113`](adr/0113-persona-and-safety-precedes-memory-recall.md)：1A.2P Persona & Safety 先于 Memory & Recall 交付，原 1A.3 拆为 1A.3a / 1A.3b，后续编号不变
+- [`0134`](adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)：1A.3b 分三阶段直接切换，已确认的正确性失败立即回滚受影响阶段
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语
 - [`0117`](adr/0117-narrow-opener-permission-precedes-open-loop-selector.md)：1A.3a 只以提示词级许可回应已注入记忆（含开场），零信号开场不表现连续性属正确行为，完整 Open Loop 选择器仍归 1A.3b
@@ -96,6 +100,8 @@ Accepted
 
 - [`0110`](adr/0110-human-taste-is-authoritative-in-behavior-evaluation.md)：行为评测的最终权威是人工味觉裁定，机械检查与 LLM judge 只做结构预筛
 - [`0114`](adr/0114-low-fatigue-pairwise-evaluation-sampling.md)：后续盲评使用分层随机抽样与 A / 持平 / B 三选一，降低单评审疲劳
+- [`0135`](adr/0135-1a3b-acceptance-does-not-grandfather-hard-failures.md)：1A.3b 不继承 incumbent 的硬门禁豁免，Continuation、Bio 和确定性正确性证据互不抵消
+- [`0137`](adr/0137-narrative-validator-acceptance-weights-bio.md)：`narrative.validate` 首版 18 例按每语言 4 个 Bio 与 2 个 Reflection 分配，不替代 Bio 自然度盲评
 
 ### Memory 准入与认识状态
 
@@ -138,6 +144,7 @@ Accepted
 - [`0060`](adr/0060-background-fallback-is-explicit-per-role.md)：后台 fallback 按 role 显式开放，每个 command 最多一次
 - [`0061`](adr/0061-model-promotion-is-developer-judged.md)：模型替换由开发者根据适合该 role 的评测判断，不增加早期正式门禁
 - [`0121`](adr/0121-narrative-grounding-validation-is-one-shared-role.md)：Reflection 与 Profile 共用同一个 `narrative.validate` grounding-validator 模型角色，按 artifact kind 冻结 Prompt 与校验 policy 版本
+- [`0132`](adr/0132-1a3b-model-roles-fail-independently.md)：1A.3b 的七个模型角色独立冻结、失败与回滚，不因共用模型而合并合同
 - [`0067`](adr/0067-livekit-agents-is-the-realtime-media-and-voice-session-layer.md)：LiveKit Agents 是正式实时媒体与 Voice Session 层
 - [`0071`](adr/0071-model-comparison-uses-explicit-replay-not-shadowing.md)：模型比较使用显式 Replay，不自动 Shadow 私人对话
 - [`0073`](adr/0073-replay-is-non-authoritative-and-cannot-write-product-state.md)：Replay 永不写回正式产品状态

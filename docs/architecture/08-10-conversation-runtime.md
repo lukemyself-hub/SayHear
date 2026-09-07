@@ -583,7 +583,9 @@ created_at
 CompiledContext 中为 null / omitted。`proactive_followup_state_version_id` 可以为 null，此时 manifest
 必须记录 `never_suppressed`，不得为此预建 eligible state row。
 
-Segment Generator 的结构化结果是一个与主回应分离的 `proactive_followup_segment`：
+Segment Generator 使用独立的 `proactive.followup` role，不继承
+`conversation.text` 的 Prompt、Schema、model config 或失败语义。它的结构化结果是一个
+与主回应分离的 `proactive_followup_segment`：
 
 ```text
 target_ref
@@ -603,6 +605,8 @@ trust fence、问题上限与敏感 framing。验证失败时不展示 segment�
 在一个事务中写入 Assistant Event revision、typed use
 与 exchange usage marker。没有这个原子提交就没有使用；流式 token、interrupted response、
 failed / result-unknown Attempt 和模型自报都不消耗额度。Retry 必须新建 Command、重新编译与选择。
+`proactive.followup` 自身不执行技术 retry；segment 失败、超时或过期时直接省略，
+用户只在显式 Retry 当前 Turn 时才进入新的 Decision Command 和新的选择。
 
 selection manifest 或 reservation 未能权威提交时，本轮 selector 为零。Inspector 自身读取或展示失败不阻塞
 对话，但必须产生不含用户正文的运维告警。suppression / release 提交失败时，受影响 target 保持

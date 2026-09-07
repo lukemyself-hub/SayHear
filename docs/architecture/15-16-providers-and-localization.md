@@ -116,7 +116,8 @@ Catalog 外 Function 或 Finalization 阶段 tool call 均 fail closed。
 ### 15.3 Role-based Model Registry
 
 从 1A.2 开始，Journal 与 Evidence 职责出现后引入 Role-based Model Registry；
-1A.3a 再随 Entity 和 Memory 消费者、1A.3b 随 Reflection 消费者增加对应 role：
+1A.3a 再随 Entity 和 Memory 消费者、1A.3b 随 Episode、Open Loop、
+Reflection、Bio 与 Proactive Memory Follow-up 增加对应 role：
 
 ```text
 conversation.text
@@ -125,40 +126,59 @@ journal.draft
 journal.validate
 reflection.daily
 reflection.weekly
+narrative.validate
 evidence.extract
 entity.resolve
 episode.build
+open_loop.extract
 memory.extract
 memory.consolidate
 bio.write
+proactive.followup
 embedding
 stt
 tts
 safety
 ```
 
-`bio.write` 与 Reflection 共用 `narrative.validate` grounding-validator role，但各自
-冻结 artifact-specific Prompt、Schema 与 validation policy。1A.3b 不为
-`bio.write` 或 `narrative.validate` 启用 provider / model fallback；同模型技术
-retry 与 Bio 一次 bounded repair 不能改变 frozen command 语义。正式 role fallback
-留给 1A.4 policy。
+1A.3b 的七个新 role 是 `episode.build`、`open_loop.extract`、
+`reflection.daily`、`reflection.weekly`、`bio.write`、
+`narrative.validate` 与 `proactive.followup`。Open Loop 不借用
+`memory.extract`，Proactive Segment 不借用 `conversation.text`。多个 role 可以
+经评测选中同一模型，但必须各自冻结 Prompt、Schema、policy、model
+config、失败状态与回滚 pin，不因共用模型而合并合同。
 
-1A.3b 为 `narrative.validate` 配置一次独立模型调用，负责重新拆解 Bio、判断
+`bio.write` 与 Reflection 共用 `narrative.validate` grounding-validator role，但各自
+冻结 artifact-specific Prompt、Schema 与 validation policy。1A.3b 的七个新
+role 都不启用 provider / model fallback；正式 role fallback 留给 1A.4 policy。
+除 `proactive.followup` 外，新 role 对 timeout、429、5xx 或 result-unknown 最多
+进行一次同模型技术 retry。`proactive.followup` 失败、超时或过期时直接
+省略 segment，不为一句迟到的关心重试。鉴权、配置、Schema 不兼容、确定性
+业务 fence、stale source 与 Data Epoch 不匹配均不 retry；语义失败进入
+对应领域状态，不改写为技术失败。
+
+1A.3b 为每份可能发布的 Bio draft 创建独立的 `narrative.validate`
+GenerationCommand，负责重新拆解 Bio、判断
 support、contradiction 与 coverage；确定性代码仍独立检查 Schema、ID、epistemic
 kind、lifecycle、data epoch 与 source revision。首版不增加 NLI、QA checker 或新
 依赖；该 role 不能通过 Bio 发布验收时保持 rollout disabled。
 
-首版发布验收使用约 18 个固定、可重放案例：中文、英文、code-switch 各 6 个，同时
-覆盖 Reflection 与 Bio，并让每个已知 blocking error class 至少出现一次。Luke 逐例
+首版发布验收使用 18 个固定、可重放案例：中文、英文、code-switch 各 6 个，
+每种语言内为 4 个 Bio 与 2 个 Reflection，总计 12 个 Bio 与 6 个
+Reflection。每个 artifact 与 locale 组合都覆盖，并让每个已知 blocking error
+class 至少出现一次。Luke 逐例
 判断；任何危险错误漏检都阻止发布。首版不建设分桶 precision / recall、置信区间或
-加权总分，新发现的失败加入回归集。确定性 schema、lineage、lifecycle、epoch 与
-Context-isolation gates 仍须全部通过。
+加权总分，新发现的失败加入回归集。这 18 例不兼任 Bio 自然度盲评。
+确定性 schema、lineage、lifecycle、epoch 与 Context-isolation gates 仍须全部通过。
 
 #174 只冻结 `bio.write` role、输入、Prompt / Schema / policy 与无 fallback 边界，
-不指定 Provider 或模型。#178 使用冻结 fixtures 比较候选，再发布首个 Model Routing
-Policy；评测分别报告自然度、coverage、unsupported inference 与中文、英文、
-code-switch 表现。一个模型可以赢得多个 role，但不能因已用于 Conversation 或
-Reflection 而跳过 Bio 评测。
+不指定 Provider 或模型。#178 固定角色选择合同，不提前写死赢家：只有已实现
+adapter 且现场 Provider Egress / credential check 成功的配置可以参评；验收
+manifest 冻结确切 provider、model snapshot、参数、Prompt、Schema 与 policy。
+`proactive.followup` 和 `bio.write` 必须各比较至少两个完整冻结配置；
+结构化 role 只有一个可用配置时，仍可在通过全部标注集与确定性绝对门禁后
+发布。候选不可用要如实记录，不算作落败，也不静默换模型。评测分别报告
+自然度、coverage、unsupported inference 与中文、英文、code-switch 表现。
 
 模型名称存在配置和数据库中，不硬编码进领域逻辑。Capability Registry 的
 `enabled_roles` 只声明能力匹配候选；是否允许 fallback 由人工发布的 Model Routing
@@ -196,8 +216,9 @@ Policy 按 role 显式决定，默认 `disabled`。
 
 1A.1 只从中配置一个 `conversation.text` Champion，不同时实现 Challenger adapter。
 Journal / Evidence role 从 1A.2 开始，Entity / Memory role 从 1A.3a 开始、
-Reflection role 从 1A.3b 开始；Challenger 比较从 1A.4 Replay 开始。这只是
-评估起点，不是永久供应商决定。
+1A.3b 的七个新 role 按 #178 用固定合成 fixtures 做首次配置选择；这不引入
+runtime Challenger、私人 Replay 或自动 promotion。通用 Challenger / Replay 比较仍从
+1A.4 开始。上表只是历史评估起点，不是已实现 adapter 清单或永久供应商决定。
 
 ### 15.5 Champion / Challenger 规则
 
@@ -502,3 +523,6 @@ authorization 表、线性化协议和审计契约；通用 Worker 业务代码�
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)
 - [在线对话、Context 与检索](08-10-conversation-runtime.md)
 - [隐私、安全与生命周期](18-20-privacy-security-lifecycle.md)
+- [1A.3b 模型角色独立失败](../adr/0132-1a3b-model-roles-fail-independently.md)
+- [1A.3b 模型 pin 是验收证据产物](../adr/0136-1a3b-model-pins-are-evidence-outputs.md)
+- [Narrative validator 验收向 Bio 倾斜](../adr/0137-narrative-validator-acceptance-weights-bio.md)

@@ -180,9 +180,9 @@ _Avoid_: Complete Assistant Response, Resumable delivery
 
 ## 行为评测
 
-**Taste Score**:
-由唯一权威评审（Internal Core 阶段即 Internal Owner 本人）在盲评 pairwise 中对六个味觉维度打的 1–5 分；只在对比时对决策相关的场景子集打分，只做相对比较，永不加权成总分，也不设绝对分数线。
-_Avoid_: Composite score, Automated grading, Judge score
+**Blind Pairwise Judgment**:
+由唯一权威评审（Internal Core 阶段即 Internal Owner 本人）在盲评中对每个可比回合和完整场景作出 A 更好 / 持平 / B 更好的相对判断；场景整体判断用于汇总，六个味觉维度只在争议场景中定向诊断，不加权成总分，也不设绝对分数线。
+_Avoid_: Taste Score, Composite score, Automated grading, Judge score
 
 **生命力**:
 回应让用户感到是在对一个真实在场、当下投入的倾听者说话，而不是在处理一条输入；由措辞、节奏与情绪命中共同构成。

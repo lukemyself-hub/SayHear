@@ -186,6 +186,31 @@ policy-gap FP 台账裁定增补 911）：美国危机热线 988 与紧急号码
   3. per-locale 独立判定（ADR-0072）：en、zh、code-switch 的场景整体净偏好均不
      得为负，不许用 en 拉平均。15 个样本是筛查证据，不等同于统计显著性证明。
 
+### 8.1 1A.3b 独立证据组
+
+1A.3b 将 Continuation 体验、Bio 叙事自然度与 fidelity、确定性 Internal
+correctness 分成三组互不抵消的证据。任何一组失败都阻止最终接受；延迟、
+Provider 错误率、成功率、token、成本与安全降级次数只记账，不补分。正式验收
+只使用固定合成测试数据；真实 Internal Owner 数据只作上线后观察，不进入评测
+artifact，也不是发布门禁。
+
+Continuation 使用独立的 15 场景分层盲评，继续采用 8 en / 5 zh / 2
+code-switch 和 A / 持平 / B；candidate 的场景整体净偏好必须严格为正，每种
+locale 与受保护类别均不得净回退。候选池覆盖 Open Loop 问句、Memory Claim
+陈述式关心、问候 / 开放式开场 / 自然停顿、当前话题与直接任务下的正确零选择、
+高风险让位、敏感 target、停止后持续抑制、不完整 lane 的 fail-closed、监控感、
+重复与双问边界。
+
+Bio 自然度使用另一套 15 场景盲评，比较至少两个完整冻结配置。相对胜出后，
+Luke 逐份检查胜出配置的固定样本；任意一份明显不能作为产品正文的 Bio 都阻止
+开放。`narrative.validate` 使用独立的 18 例危险错误验收集：每种语言 4 个
+Bio 与 2 个 Reflection，总计 12 / 6，覆盖所有已知 blocking class。这组结果不
+代替 Bio 自然度判断。
+
+冻结 incumbent 仍用于相对归因，但其已裁定硬门失败不构成发布豁免。正式
+candidate 必须为零已确认确定性硬失败；若既有失败仍复现，先独立修复并冻结
+干净的继任基线，再开始 1A.3b 单变量比较。
+
 ## 九、边界与后续
 
 - 本契约不修改生产 validator；`packages/application/src/conversation-behavior.ts`
@@ -204,6 +229,9 @@ policy-gap FP 台账裁定增补 911）：美国危机热线 988 与紧急号码
   [0108](../adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md) ·
   [0110](../adr/0110-human-taste-is-authoritative-in-behavior-evaluation.md) ·
   [0114](../adr/0114-low-fatigue-pairwise-evaluation-sampling.md) ·
+  [0135](../adr/0135-1a3b-acceptance-does-not-grandfather-hard-failures.md) ·
+  [0137](../adr/0137-narrative-validator-acceptance-weights-bio.md) ·
+  [0138](../adr/0138-1a3b-formal-acceptance-uses-synthetic-data.md) ·
   [0111](../adr/0111-persona-and-conversation-state-inputs-are-compiled-versioned-contracts.md) ·
   [0112](../adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)
 - 证据：[#61 基线](../../eval/conversation-text-baseline/analysis.md) · #62 盲评（issue 评论）
