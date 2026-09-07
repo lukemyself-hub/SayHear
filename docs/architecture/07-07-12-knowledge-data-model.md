@@ -358,10 +358,34 @@ reflection_statements
   也不能假定能精确重建；
 - Internal Core 的 Reflection Inspector 通过只读 query 展示 Daily / Weekly
   ReflectionVersion、状态、source revision、Statement Evidence lineage，以及
-  Candidate 经 admitted ClaimVersion 到 BioVersion 的下游影响；
-- Inspector 必须明确区分 current authoritative version 与 draft / stale /
-  superseded version，不能直接写 Reflection、Candidate、Claim 或 Profile，也不成为
-  新的权威来源。
+  Candidate 经 admitted ClaimVersion 进入 User Profile 的资格，再到具体 BioVersion
+  的 eligible input、coverage disposition 与 narrative support；没有显式持久 lineage
+  时只显示无记录，不能用文本相似度推测影响；
+- Inspector 必须明确区分 current committed version 与 draft / stale /
+  superseded version；其领域查询在数据库只读事务中执行，且不持有 Reflection、
+  Candidate、Claim、Proposal、Registry 或 Bio 的写能力。敏感 Evidence 访问所需的
+  无正文 access audit 由独立写入能力追加，不把 Inspector 变成领域状态写入口；
+- current committed 正文默认可读；validated-but-uncommitted / draft / stale /
+  superseded 正文只能主动展开，并持续标记为非当前。`content_purged_at` 存在时只返回
+  tombstone，不允许从其他派生产物恢复正文；
+- Candidate predecessor 与 successor 是两个独立分页方向；successor 保留自身 identity、
+  trigger 与 materially-new-evidence 理由，不能显示成 predecessor disposition 被改写；
+- owner-scope authorization 后使用 `target_not_found`、`content_purged`、
+  `source_invalidated` 与 `access_denied` 区分失败；鉴权失败先于目标探测。
+- Inspector 只读取 typed Reflection、validation finding 与 lineage rows；展示冻结的
+  Prompt / Schema / policy / model config、GenerationCommand 和 authoritative
+  ModelRunAttempt identity，但不返回 Provider 原始请求或响应。每个 atomic proposition
+  单独展开自己的 Evidence support，不能把整条 Statement 的 Evidence 合并成模糊集合；
+- User Profile 影响只由当前有效 ClaimVersion eligibility 表达；Bio 影响只由具体
+  BioVersion 的 eligible-input、coverage disposition 与 narrative-support link 表达。
+  两段状态分别返回，不能合并成一个推测性布尔值。
+- logical Reflection 没有 current committed version 时返回带原因的
+  `no_current_version`，不能选择 superseded 或 draft 正文作为替代。固定 failure / empty
+  outcome 由 Portal 映射文案，不接受模型生成的错误说明。
+- 每条 lineage edge 分别返回 persisted-at-the-time outcome 与 current validity；后续
+  supersede、Forget、dormancy、Entity invalidation 或 Bio 替换不能改写历史 outcome。
+  未持久化 Candidate identity 的 generator output 是 Memory Candidate Proposal，只能作为
+  该 ReflectionVersion 的诊断输出，不能连接 disposition、Claim 或 Bio lineage。
 
 ### 7.10 Memory
 

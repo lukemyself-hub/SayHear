@@ -533,18 +533,90 @@ Memory Claim 开始成立。
 ### 14.3.1 Reflection 可见性
 
 Phase 1 不建设独立的用户式 Reflection 页面。Reflection 继续作为 1A.3 的非权威
-派生层，用于提出 Memory Candidate 和支持 Profile Consolidation；Conversation、
-Journal 与 Profile 保持为体验面。
+派生层，只用于提出 Memory Candidate；Candidate 经独立准入成为有效 Claim 后，才可能
+间接进入 User Profile 与 Bio。Reflection 不拥有、触发或阻塞 Bio 生成；Conversation、
+Journal 与 Bio 保持为体验面。
 
 Web 开发者工具必须提供只读的 Reflection Inspector，使 Internal Owner 可以查看：
 
 - Daily / Weekly ReflectionVersion、版本状态与 source revision；
 - ReflectionStatement 的底层 Evidence lineage；
 - Reflection 提出的 Candidate 及其 admission / terminal disposition；
-- Candidate 经有效 ClaimVersion 对当前 Bio 产生或未产生的影响。
+- Candidate 是否经有效 ClaimVersion 进入 User Profile；
+- 该 ClaimVersion 是否进入具体 BioVersion 的 eligible input、coverage plan 与
+  narrative support，以及没有影响 Bio 的明确原因。
+
+主列表以逻辑 Reflection 为一项，默认显示当前已提交 ReflectionVersion，历史版本在该项下
+展开。Daily 与 Weekly 使用同一时间列表和筛选器，但保持各自独立的逻辑身份；Daily
+显示本地日期，Weekly 显示完整七天范围和本地周编号。
+
+当前已提交版本默认显示正文。validated 但未提交、draft、stale 与 superseded 版本默认
+折叠，Internal Owner 主动展开后可以查看仍在保留期内的正文，但界面必须持续标明该版本
+不能代表当前理解。正文已经清除时只显示无正文状态和时间，不能从其他版本、模型或摘要
+恢复内容。
+
+主列表、历史版本、Statement、Evidence、Candidate 与 Bio 影响分别按需分页加载，
+每层默认返回 25 项、硬上限 100 项，并使用不透明 cursor 提供继续加载入口；单次请求不能
+展开整棵 lineage。一次列表翻页冻结同一个查询 snapshot，后续 cursor 不能混入新提交；
+详情读取重新检查 current pointer 与 source fence，状态已经变化时返回 `state_changed`，
+不能把新旧状态拼成一条 trace。当前 Internal Owner database session 加上默认授予该身份的
+`reflection_inspection:read` capability，可以直接读取 Reflection 正文，不重复要求 step-up。
+展开底层 Evidence 时只返回实际支撑该 Statement 的原文 segment / text span、原始语言、
+Daily Session 本地日期和 revision 状态，不能扩大到完整 User Event。查看完整上下文必须
+另行进入既有敏感对话查看能力。每次 Evidence 展开尝试，无论成功、拒绝还是目标不存在，
+都需要 10 分钟内完成的 step-up reauthentication，并写不含正文的 access audit；普通
+列表、Reflection 正文和 lineage 状态读取不写访问记录。
+
+Candidate lineage 分别支持向前查看 predecessor 和向后查看 successor，并显示 disposition、
+reason、deadline、successor trigger 与 materially-new-evidence 原因。每个方向独立分页；
+Candidate 内容已清除时只显示允许保留的 ID、状态、原因和时间，不能把 successor 表述为
+原 Candidate 复活。
+
+列表可以按 Daily / Weekly、scope 本地日期范围与版本状态筛选，也可以用准确的
+Reflection ID、ReflectionVersion ID 或 Candidate ID 定位；不提供 Reflection 或 Evidence
+正文关键词搜索。Reflection 按 scope 结束时间从新到旧排列，相同时间以 logical ID
+稳定排序；历史版本按 revision 从新到旧，Statement 按 `statement_index` 从小到大。
+cursor 绑定 owner、筛选条件、稳定排序与读取上限，条件变化后必须从第一页重新读取。
+
+每个版本显示冻结的 Prompt、Schema、generation / validation policy、模型配置、
+GenerationCommand、authoritative ModelRunAttempt，以及确定性检查和 `narrative.validate`
+结果。Inspector 只读 typed rows 和检查结果，不直接展示 Provider 原始请求或响应。
+Statement 先展开为 atomic proposition，每个 proposition 分别显示自己的 Evidence support；
+不能只给整条 Statement 挂一组无法分辨用途的 Evidence。
+
+Profile 影响分两段展示。第一段说明 Candidate 是否形成当前有效 ClaimVersion，并列出未进入
+User Profile 的具体生命周期原因。第二段按相关 BioVersion 展示该 ClaimVersion 是 eligible
+input、`deferred_by_budget`、有理由省略的 background、未成为 narrative support，还是实际
+支撑了某个 Bio proposition；不能压成一个“影响了 / 没影响”结论。
+
+每段 lineage 同时显示不可改写的“当时记录”和重新检查得到的“现在是否仍有效”。例如，
+Candidate 当时成功 admission、但 ClaimVersion 后来被 supersede 时，Inspector 保留原
+admission 结果并单独显示当前失效原因；历史 BioVersion 当时使用过该 Claim，也不能被描述为
+当前 Bio 仍在使用。
+
+非 current ReflectionVersion 的结构化输出可以显示尚未提交的 Memory Candidate Proposal，
+但必须标明它没有 Candidate ID，也没有 disposition 或后续 lineage。只有真实持久化的
+MemoryCandidate 才能进入 Candidate、Claim 与 Bio trace。
+
+Inspector 可以提供到独立 Candidate Review Tool、Bio 页面和完整对话查看工具的只读导航；
+目标工具重新执行自己的权限检查。Inspector 内不提供批准、拒绝、修复、重新生成、刷新或
+清理按钮，也不因发现缺失、过期或失效状态而触发 command、workflow、reconciliation 或
+purge。#177 决定保留时长、清理任务与 Full Purge 覆盖，Inspector 只解释其持久结果。
+
+已通过 owner-scope authorization 后，Inspector 必须区分 `target_not_found`、
+`content_purged`、`source_invalidated` 与 `access_denied`。前两者只返回允许保留的无正文
+状态；没有 current committed version 时显示 `no_current_version` 及 `building`、
+`failed_draft_only`、`source_invalidated` 或 `content_purged` 原因，不能回退到旧的
+superseded version。鉴权失败时不得先透露对象是否存在。空字符串或空列表不能代替这些
+结果。其他固定结果至少包括 `authentication_required`、`step_up_required`、
+`step_up_expired`、`invalid_request`、`invalid_cursor`、`page_size_exceeded` 和
+`state_changed`；Portal 负责映射自然语言，模型不能生成错误文案。
 
 Reflection Inspector 只用于内部验证与诊断，不能创建、编辑、发布或覆盖
-ReflectionVersion，不能批准 Candidate、写入 Claim 或直接修改 Profile。独立的
+ReflectionVersion，不能批准 Candidate、写入 Claim、Proposal 或 Registry，也不能直接
+修改 User Profile 或 Bio。业务查询只读；敏感 Evidence 读取所需的 access audit 是唯一
+允许追加的记录，必须通过独立、受限的 audit 写入能力完成。audit 提交失败时 Evidence
+读取 fail closed，不能先返回原话再补记。独立的
 用户式 Reflection 体验只有在内部验证证明其具有独立用户价值后才重新评估。
 
 ### 14.4 后台工作流

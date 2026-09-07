@@ -349,12 +349,47 @@ Profile 需要更新就把一次用户纠正拆成三个 Action。
 
 同一 `reflection_id + source_revision + policy_version` 最多一个 current
 ReflectionVersion。Daily 与 Weekly Reflection 使用不同 logical Reflection ID，
-不得互相覆盖。
+不得互相覆盖。Inspector 的主列表以 logical Reflection 为单位，默认返回其 current
+committed ReflectionVersion；draft / stale / superseded 版本只从该项的历史版本读取。
 
 Reflection Inspector 只读取已保留的 ReflectionVersion、Evidence lineage、
-Candidate disposition，以及 Candidate 经有效 ClaimVersion 对 Bio
-产生或未产生的影响。它可以展示 draft / stale / superseded 状态供诊断，但不能推进
+Candidate disposition，以及 Candidate 经有效 ClaimVersion 进入 User Profile 后对
+Bio 产生或未产生的影响。它可以展示 draft / stale / superseded 状态供诊断，但不能推进
 current pointer、触发 Memory promotion 或绕过 Candidate Review Module 写入处置。
+
+Inspector 不用一个响应返回整棵 lineage。逻辑 Reflection 列表、历史版本、Statement、
+Evidence、Candidate 与 Bio 影响使用独立的有界分页读取；用户展开一层时才读取下一层。
+每层默认 25 项、最大 100 项，通过绑定查询条件与稳定排序的不透明 cursor 继续加载。
+Daily 项显示本地日期，Weekly 项显示完整七天范围与本地周编号。
+
+主列表支持 kind、scope 本地日期范围与版本状态筛选，以及 Reflection、
+ReflectionVersion 或 Candidate opaque ID 精确定位；不建立正文搜索索引。Reflection 按
+scope 结束时间降序再按 logical ID 稳定排序，历史版本按 revision 降序，Statement 按
+statement index 升序。cursor 必须绑定 owner、全部筛选条件、排序与 limit；任一条件改变
+都使旧 cursor 无效。第一页冻结一个 query snapshot，后续 cursor 只读取该 snapshot 内的
+稳定集合；详情在新的只读事务中复核 current pointer 与 source fence，发现变化时返回
+`state_changed` 并要求刷新，不能拼接跨 revision trace。
+
+Evidence 展开只读取对应 EvidenceItem 的精确 segment / text span、原始语言、本地日期与
+revision 状态，不自动读取完整 User Event。Candidate predecessor 与 successor 分方向分页，
+保留 terminal disposition 与 successor trigger。正文已清除、source 已失效和对象不存在
+使用不同 typed outcome，不能都折叠为空列表或 404。
+
+版本详情只返回 typed generation / validation metadata、atomic proposition 与持久 lineage，
+不返回 Provider 原始 payload。Profile trace 先返回 ClaimVersion 的当前 eligibility，再按
+BioVersion 返回 eligible-input、coverage 与 narrative-support 结果；两层都没有显式 link 时
+只能返回无记录。
+
+Inspector 需要 owner-scoped `reflection_inspection:read` capability；Internal Owner 默认
+拥有，不产生额外交互。固定 outcome 至少覆盖 authentication / capability、step-up、请求 /
+cursor / limit、target missing、content purged、source invalidated、no current version 与
+state changed。无 current committed version 时不回退到任何历史正文。
+
+每个 Candidate、Claim 与 Bio lineage hop 同时返回历史提交结果和当前有效性，读取不能用
+当前状态覆盖历史。未产生持久 Candidate ID 的 Reflection `candidates[]` 输出统一作为
+Memory Candidate Proposal 展示，不进入 disposition trace。Inspector 可以生成到 Candidate
+Review、Bio 或完整对话查看 route 的导航目标，但不调用这些模块的 command，也不触发生成、
+repair、reconciliation、retention sweep 或 purge；生命周期动作由各自 owner 与 #177 合同负责。
 
 ### 12.3 更新规则
 
