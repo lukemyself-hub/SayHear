@@ -586,7 +586,8 @@ Forget 后的重新开放遵循显式 Memory Forget Reversal：
 
 Open Loop 与长期 Memory / Profile 分开：
 
-1. 模型只从 direct User Evidence 提出瞬时 `OpenLoopProposal`，不创建或持久化
+1. 独立的 `open_loop.extract` role 只从 direct User Evidence 提出瞬时
+   `OpenLoopProposal`，不借用 `memory.extract`，也不创建或持久化
    Candidate；Proposal 可以包含 kind、Evidence locator、pending anchor、用户时间
    表达与可选 source reference；
 2. 代码确定性验证一个可独立关闭的 pending state、封闭 kind、非任务边界、现实
@@ -867,12 +868,19 @@ eligibility、coverage 或 validation 规则若说明旧 Bio 可能含不再允�
 
 成功发布后 manual 冷却 24 小时。没有成功发布时，每个 owner 在滚动 24 小时内最多
 接受 3 个 manual GenerationCommand；命令内部的技术 retry 和 bounded repair 不另计
-用户次数。网络、429、5xx 或结果未知 timeout 最多新增一次同模型技术 attempt；鉴权、
-配置、确定性 Schema 或业务 fence 错误不重试。一次技术 retry 与一次 semantic repair
-分别计数，单个 command 最多发生三次模型调用。
+用户次数。
+
+`bio.write` 与 `narrative.validate` 使用两个独立 GenerationCommand 和 attempt
+ledger。Writer command 允许首次调用、最多一次同模型技术 retry 与最多一次
+semantic repair。每份可能发布的 draft，包括 repair 后的 draft，都必须创建新的
+validator command；每个 validator command 对网络、429、5xx 或 result-unknown 最多
+进行一次同模型技术 retry。鉴权、配置、Schema 不兼容、确定性业务 fence、
+stale source 与 Data Epoch 不匹配均不 retry。整条 workflow 最坏为七次
+Provider 调用，不再使用“最多三次模型调用”描述整条 Bio workflow。
 
 ## References
 
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)
 - [Session 与 Journal 产品规则](../product/12-13-session-and-journal.md)
 - [Memory 与 Entity 产品规则](../product/14-memory-and-entities.md)
+- [Bio 写作与验证独立计算 command 预算](../adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)

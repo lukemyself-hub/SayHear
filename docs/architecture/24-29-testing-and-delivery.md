@@ -858,7 +858,9 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
   proactive target 为 0，不复用缓存；suppression / release 失败只封锁受影响 target；
 - 主动关心的确定性、lineage、privacy、safety 门禁 100% 通过，不被味觉结果抵消。
   #171 作为设计依据；实现后对当前 1A.3a incumbent 做针对性 A / 持平 / B 盲评，由 Internal Owner
-  终审自然度与被关心感。精确样本数、抽样与合并门槛由 #178 定义；
+  终审自然度与被关心感。#178 定义独立 15 场景样本：8 en / 5 zh /
+  2 code-switch，candidate 总体场景净偏好严格为正，每种 locale 与受保护类别不得
+  净回退；全量确定性门禁独立运行；
 - Profile eligible set 100% 只含当前有效、active、未被 Forget 且 EntityVersion
   有效的 ClaimVersion；Candidate、`contested`、`review_due`、`dormant`、
   Open Loop 与 Reflection 原文 0% 进入 Profile；100% active sensitive Claim
@@ -879,8 +881,46 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - Correction、Forget、`contested`、`dormant`、Entity 失效或删除 100% 在读取路径
   立即阻止旧 Profile 展示，并自动触发绕过普通间隔的安全重建；重建失败时 0 个含
   失效内容的旧 Bio 回退展示；
-- Full Purge 演练覆盖全部 1A.3 数据面（含 Episode、Open Loop、Reflection、
-  Profile），旧 Claim、Embedding 或 Workflow 结果不能复活。
+- Full Purge 演练覆盖全部 1A.3 数据面（含 Episode、Open Loop、Reflection 与
+  Bio），旧 Claim 或 Workflow 结果不能复活；1A.3b 不产生 Embedding 数据面。
+
+#### 1A.3b rollout 与验收收口
+
+1A.3b 使用三个可独立合入和回滚的直接切换阶段，不做 dual write、私人数据
+Shadow、runtime A/B 或永久 feature flag：
+
+1. schema、Episode、Reflection、Predicate governance 与 Reflection Inspector；
+2. Open Loop 与 Proactive Memory Follow-up 完整 policy bundle；
+3. Bio，且 `narrative.validate` 危险错误验收与 Bio 自然度均已通过。
+
+每个阶段的 release manifest 冻结准确 main commit、schema / migration、Prompt、
+Schema、policy、model config、provider / model snapshot、bundle、fixture、抽样与盲化 seed、
+命令、artifact hash、确定性门禁与人工裁定结果。正式验收只用固定合成
+数据；真实 Internal Owner 数据只作上线后观察，不是 release gate。历史
+Conversation 不 backfill；真实数据不自动进入 Replay 或验收 artifact。
+
+每个准确 release manifest 至少完成一次覆盖 Purge Surface Registry 全部
+`delete` / `content_purge` surface 的 seeded-canary purge，以及一次“备份快照早于
+purge”的 restore drill。Episode、Open Loop、Reflection、Bio、Proactive、Candidate、
+Workflow 与 Provider result 的在途竞态均以受控方式覆盖 purge 先提交与结果先
+返回两种顺序。Registry entry、Schema、clear / verify handler 或外部 integration 改变
+即使证据失效并要求整套重跑；不用任意重复相同确定性运行凑次数。
+
+回滚先停止受影响阶段的新 command admission 并撤销 active rollout pins。任何冻结
+旧 pins 的在途结果均不得成为 current、进入 Context 或展示。Typed rows 保留为
+历史，不改写、删除或重新解释；Bio 重新开放前使用新 pins 重生成和验证；
+Proactive suppression 与 use 历史跨回滚保持有效。新 Schema / policy 不兼容旧 row
+时继续 fail closed，不拿旧内容凑 current。
+
+一次经人工确认的 privacy、lineage、Data Epoch、Full Purge、旧内容复活、错误 Bio
+发布、stop signal 或其他确定性硬门失败，立即回滚受影响阶段，不等待观察窗口。
+Timeout、429 / 5xx、生成成功率、延迟、token 和成本只记账，不自动回滚；这些指标
+只能引发 Internal Owner 人工判断能力是否已不可用。
+
+Core Flow 1A.3b 只在三个阶段均已切换，准确 main commit 与生产 pins 的全量
+回归、Continuation 体验、Bio 自然度与 fidelity、确定性 Internal correctness 全部
+通过，且没有未解决的已确认硬失败时才算接受。任何一组失败都不得被其他
+体验结果、延迟、成本、token 或安全降级数据抵消。
 
 ### Core Flow 1A.4：Replay
 
@@ -1219,3 +1259,6 @@ auto-bind 阈值 `t_auto` 在 `entity.resolve` 闸门处控制（夹具定标的
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)
 - [产品范围与路线](../product/18-and-26-scope-and-roadmap.md)
 - [正式 ADR 索引](../decisions.md)
+- [1A.3b 分阶段切换与正确性回滚](../adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)
+- [1A.3b 不继承 incumbent 硬失败豁免](../adr/0135-1a3b-acceptance-does-not-grandfather-hard-failures.md)
+- [1A.3b 正式验收只使用合成数据](../adr/0138-1a3b-formal-acceptance-uses-synthetic-data.md)
