@@ -48,6 +48,21 @@ auth_sessions(id, user_id, expires_at, revoked_at)
   仍需独立 capability check，不能因只有一个用户而绕过；
 - 查看完整对话、Candidate review 中的完整 Evidence、下载音频、创建真实 Replay
   需要 10 分钟内完成的 step-up reauthentication，并写 access audit；
+- Reflection Inspector 的列表、版本状态与 Reflection 正文只需当前 Internal Owner
+  database session 和 `reflection_inspection:read` capability，不重复要求 step-up；该
+  capability 默认授予 Internal Owner，但不因未来新增已登录身份而自动授予。展开
+  ReflectionStatement 的底层用户原话仍按完整 Evidence 读取处理，需要 10 分钟内 step-up。
+  每次展开尝试无论允许、拒绝或目标不存在都写不含正文的 access audit；audit 只保存
+  actor、auth session、ReflectionVersion、Statement、Evidence ID、访问结果、失败原因、
+  capability 与时间，不保存正文、摘要或正文 fingerprint。audit 必须先提交成功，才能返回
+  Evidence 原话；普通列表、Reflection 正文与 lineage 状态读取不写访问记录；
+- Reflection Inspector 不提供正文关键词搜索，不返回 Provider 原始请求 / 响应，也不把
+  Reflection、atomic proposition、Evidence 原话或 Bio 内容写入普通日志、Trace、共享
+  cache 或分析事件；
+- Internal Owner Full Purge 先撤销 auth session、step-up credential 与 Inspector
+  capability；旧 Inspector 链接必须先返回 `authentication_required`，不能探测旧对象是否
+  存在。非 Full Purge 的内容到期清理如果仍保留无正文 envelope，已授权 Inspector 返回
+  `content_purged` tombstone，不返回正文；
 - Bio 与按需展开的 Bio Basis 使用当前 Internal Owner database session 和
   服务端 owner-scope authorization，不因展开一条依据重复要求 step-up。API 不接受
   客户端 owner ID；Basis 原话不随 Bio 初始 payload 批量返回，只在展开时读取，

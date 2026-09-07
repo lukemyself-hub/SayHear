@@ -293,7 +293,7 @@ SayHear 基于近期 User Evidence 形成的版本化、非权威派生观察；
 _Avoid_: Memory Claim, Primary evidence, Journal
 
 **Reflection Inspector**:
-Internal Core 的 Web 开发者工具中用于只读查看 ReflectionVersion、Evidence lineage 及其下游影响的诊断界面；它不是用户式 Reflection 页面、Candidate Review Tool 或第二写入口。
+Internal Core 的 Web 开发者工具中，以一条逻辑 Reflection 为主项，只读查看其当前已提交 ReflectionVersion、历史版本、Evidence lineage，以及 Candidate 进入 User Profile 后对 Bio 产生或未产生的影响；它不是用户式 Reflection 页面、Candidate Review Tool 或第二写入口。
 _Avoid_: Reflection page, Candidate Review Tool, Reflection editor
 
 **Daily Reflection**:
@@ -391,6 +391,10 @@ _Avoid_: Prohibited topic, Sensitive topic filter
 **Sensitive Interpretive Impression**:
 敏感领域中只描述某项经历对用户的意义、影响、支持或压力来源、交流偏好的 AI Impression；它不能把用户未直接明确陈述的诊断、身份或风险归类写成长期 Memory。
 _Avoid_: Sensitive classification, Diagnosis, Identity inference
+
+**Memory Candidate Proposal**:
+Reflection 等派生流程在尚未提交 MemoryCandidate 前输出的结构化长期记忆建议；它没有 Candidate identity、不能进入准入或治理 lineage，也不能作为已经创建的 Memory Candidate 展示。
+_Avoid_: Memory Candidate, Draft Memory, Pending Claim
 
 **Memory Candidate**:
 SayHear 从 User Evidence 提出的、尚待 Entity、Predicate、Evidence policy、冲突与用户控制边界校验的非权威长期记忆提案；快速或慢速路径都可以创建它，但通过准入前不能作为 Memory Claim、Recall、Person Portrait、Profile 或 Embedding 使用。

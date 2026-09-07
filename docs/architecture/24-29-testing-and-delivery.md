@@ -750,9 +750,38 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 - Entity、Claim、Reflection 的 logical ID 与 Version ID 不混用；
 - Reflection Inspector 100% 能区分 Daily / Weekly 与 current / non-current
   ReflectionVersion，展开 Statement 到底层 User Evidence，并追踪 Candidate
-  disposition 及其经有效 ClaimVersion 对 Bio 的影响；Inspector
-  0 个 Reflection、Candidate、Claim 或 Profile 写入口，Phase 1 不建设独立的
-  用户式 Reflection 页面；
+  disposition、predecessor / successor lineage、有效 ClaimVersion 的 User Profile
+  资格及其对 Bio 的影响；每层读取默认 25 项、最大 100 项，0 个请求无界展开整棵
+  lineage；Evidence 只返回精确 segment / text span，0 个普通展开批量读取完整 User
+  Event；Inspector 0 个 Reflection、Candidate、Claim、Proposal、Registry、User
+  Profile 或 Bio 写入口，唯一写入是敏感 Evidence 读取通过独立能力追加的无正文 access
+  audit；Phase 1 不建设独立的用户式 Reflection 页面；
+- Reflection Inspector 的 route inventory 0 个领域写路由，应用服务 0 个 Reflection、
+  Candidate、Claim、Proposal、Registry、User Profile 或 Bio writer dependency，领域查询
+  100% 在数据库 `REPEATABLE READ READ ONLY` 事务中执行；系统测试对成功、拒绝、不存在和
+  多页读取前后的全部相关领域表做快照比较，0 个领域 row 变化，只有符合规则的无正文
+  access audit 可以追加；
+- Reflection Inspector 100% 以 atomic proposition 逐项展示 Evidence support，0 个
+  Provider 原始 payload 或正文搜索索引；User Profile eligibility 与 BioVersion 的
+  eligible-input / coverage / narrative-support 作为两段 typed trace 分开验收，0 个文本
+  相似度推测影响；
+- Reflection Inspector 100% 要求 owner-scoped `reflection_inspection:read` capability，
+  Internal Owner 默认获得且 0 次额外交互；Evidence audit 提交失败时 0 byte 原文返回，
+  成功 / 拒绝 / 不存在尝试 100% 写入只含 allowlist 字段的 audit；
+- cursor 翻页 100% 固定 query snapshot，详情发现 current pointer 或 source fence 变化时
+  100% 返回 `state_changed`，0 个跨 revision 混合 trace；没有 current committed version
+  时 0 次回退 superseded 或 draft 正文；Full Purge 撤销授权后，旧链接 0 次透露对象是否
+  曾经存在；
+- Reflection Inspector 验收矩阵至少覆盖 Daily / Weekly，current / validated-uncommitted /
+  draft / stale / superseded / purged，无 current version，Evidence allow / step-up / audit-fail /
+  source-invalid / missing，Candidate admitted / rejected / stale / awaiting-registry-release /
+  predecessor / successor，Claim current / superseded / forgotten / contested / dormant /
+  Entity-invalid，以及 Bio narrative-support / deferred-by-budget / background-absent /
+  eligible-without-support / superseded / trust-rebuilding；#178 决定组合与样本数，不能删除这些
+  行为类别；
+- 未持久化 Candidate ID 的 Reflection output 100% 标为 Memory Candidate Proposal，0 个
+  disposition / Claim / Bio lineage；Inspector 到其他内部工具只生成导航，0 个内嵌 command，
+  0 个读取触发 repair、regeneration、reconciliation、retention sweep 或 purge；
 - `ambiguous / unmapped` Candidate 100% 由版本化确定性 policy 判断是否
   Predicate Review Eligible；LLM 0% 批准 eligibility、Predicate Entry 或
   Registry release，人工批准后的 Candidate 100% 重新通过正常 mapping 与 admission；

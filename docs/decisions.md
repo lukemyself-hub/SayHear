@@ -30,6 +30,7 @@ Accepted
 - [`0069`](adr/0069-internal-core-does-not-add-python-redis-or-temporal.md)：Internal Core 不增加 Python Worker、Redis 或 Temporal
 - [`0072`](adr/0072-internal-core-validates-bilingual-and-code-switched-use.md)：Internal Core 验收英文、中文与 code-switching，不建设中国大陆部署
 - [`0078`](adr/0078-internal-web-uses-authjs-github-oauth-and-database-sessions.md)：内部 Web 使用 Auth.js、GitHub OAuth 与 database session
+- [`0129`](adr/0129-reflection-prose-uses-owner-auth-and-evidence-excerpts-require-step-up.md)：Reflection Inspector 正文使用 owner session 与专门 capability，底层 Evidence 原话仍需 step-up 与访问审计
 - [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md)：真实私人数据写入前核验最长备份窗口
 - [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
 - [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework
