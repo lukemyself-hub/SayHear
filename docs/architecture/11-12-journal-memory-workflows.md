@@ -356,6 +356,11 @@ Reflection Inspector 只读取已保留的 ReflectionVersion、Evidence lineage�
 Candidate disposition，以及 Candidate 经有效 ClaimVersion 进入 User Profile 后对
 Bio 产生或未产生的影响。它可以展示 draft / stale / superseded 状态供诊断，但不能推进
 current pointer、触发 Memory promotion 或绕过 Candidate Review Module 写入处置。
+current committed ReflectionVersion 在保持 current 时保留正文；superseded committed
+版本从 supersede time 起保留 30 日，draft、validated-uncommitted、stale、failed 与其他
+未提交正文从对应状态的 effective time 起保留 7 日。到期后 Inspector 只返回无正文
+lineage envelope 与 `content_purged` 状态，不能从 Candidate、Claim、Bio、其他版本或模型
+原始响应重建 Reflection 内容。
 
 Inspector 不用一个响应返回整棵 lineage。逻辑 Reflection 列表、历史版本、Statement、
 Evidence、Candidate 与 Bio 影响使用独立的有界分页读取；用户展开一层时才读取下一层。
