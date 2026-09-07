@@ -637,6 +637,10 @@ _Avoid_: Version number, Timestamp, Revision counter
 每个活跃存储目的地对一个 owner 清除结果的无正文记录；它只回答该目的地的处置与剩余保留窗口，不包含任何被清除内容，也不证明所有保留副本已经物理消失。
 _Avoid_: Deletion ledger, Deletion proof
 
+**Purge Surface Registry**:
+Internal Owner Full Purge 必须覆盖的封闭数据面目录；每项声明 owner 归属、清除或保留处置、内容字段、clear / verify handler、receipt destination、期限与恢复规则，任何未登记的 owner 私人数据面都不能通过发布验收。它只拥有覆盖合同，不保存用户内容，也不取代领域 repository 或删除 workflow。
+_Avoid_: Purge handler, Data catalog, Deletion ledger
+
 **Purge Marker**:
 保存在业务数据库备份域之外的单 owner 无正文清除标记；每位 owner 只保留不可回退的最新清除代际与时间，用于阻止旧备份未经比对直接恢复上线，本身不构成对外可见的删除承诺，也不是多用户删除台账。
 _Avoid_: Tombstone, Deletion ledger, Backup registry

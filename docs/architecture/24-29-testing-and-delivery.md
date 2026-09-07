@@ -741,6 +741,28 @@ ADR-0113 决定在 1A.2 与 1A.3 之间插入本段：先落地 ADR-0111 / ADR-0
 退出条件：
 
 - Episode / Reflection 的历史 revision 可精确读取；
+- 成功提交的 EpisodeVersion 100% 保留 typed 内容与 lineage 到 Full Purge；source deletion
+  与 Full Purge 仍立即清除受影响内容，普通 supersede 不缩短保留期；
+- superseded committed ReflectionVersion 在 30 日 grace 内可由 Inspector 读取，过期后
+  100% 只返回无正文 lineage；draft、validated-uncommitted、stale、failed 与其他未提交
+  Reflection 内容在 7 日后同样不可读；read path 在 deadline 到达时立即拒绝正文，0 次因
+  sweeper 延迟或备份恢复延长保留；
+- 1A.3b 所有 ModelRunAttempt 的 Provider 原始 request / response、解析前文本与 repair
+  正文在 terminal effective time 后最多保留 7 日；长期复现只使用 typed rows、Evidence
+  lineage 和冻结版本，0 个领域 read model 或 Workflow 依赖过期原始 payload；
+- Full Purge 后 allowlisted 无正文 access / security audit、GenerationCommand、ModelRunAttempt、
+  Workflow、egress 与 lifecycle task metadata 100% 在 30 日后从 active read path 和业务库
+  清除；单 owner 阶段 0 次把移除直接 ID 的记录描述为 anonymous；最新 Purge Marker、Purge
+  Order 与 Deletion Receipt 保留且 high-water 0 次回退；
+- `purge-surface-registry:v1` 100% 覆盖每个 owner-scoped table / content row、对象 prefix、
+  cache、index、生成文件、Provider object、access grant 与外部 Processor；新增私人数据面但
+  无 Registry entry 时 migration / integration gate 100% 失败；每项都有 clear、verify、
+  receipt、deadline 与 restore-reapply 合同；
+- seeded canary purge 逐项证明 Registry 中每个 `delete` / `content_purge` surface 不可读且
+  verifier 通过；任一 required active destination 为 unknown 或 handler 缺失时 0 次进入
+  `active_system_deleted`，owner 保持 fail closed；恢复环境发现 schema / integration manifest
+  中存在 Registry 未登记的数据面或缺失 handler 时 100% 返回 `needs_attention`，且不开放私人
+  读写或 Provider Egress；
 - Episode 100% 有明确现实事件 User Evidence；0 个 Episode 由 Conversation、
   Daily Session、一般话题、地点词或情绪自动创建；跨 Session 续接只在 anchor
   唯一时发生，unresolved Candidate 不阻止 Journal 或基础 Memory；

@@ -51,6 +51,8 @@ Accepted
 - [`0004`](adr/0004-account-data-export-is-a-public-release-gate.md)：Account Data Export 是外部发布门槛
 - [`0022`](adr/0022-deletion-capability-expands-with-data-surface.md)：删除能力随数据面扩展
 - [`0104`](adr/0104-purge-marker-owns-backup-recovery-authority.md)：Purge Marker 是备份恢复防复活的权威来源
+- [`0130`](adr/0130-1a3b-retention-separates-domain-history-from-diagnostic-content.md)：Episode 历史版本保留到 Full Purge，Reflection 与模型原始内容采用分级短期保留
+- [`0131`](adr/0131-every-private-data-surface-registers-its-purge-contract.md)：每个 owner 私人数据面必须登记可验证的 Full Purge 合同，未登记的数据面阻断验收
 - [`0106`](adr/0106-github-actions-schedules-the-internal-owner-recovery-scan.md)：Internal Owner 阶段由 GitHub Actions schedule 调用 Recovery Scan
 - [`0119`](adr/0119-backup-evidence-renewal-is-monthly-fail-closed-automation.md)：Backup evidence 由 fail-closed 自动化每月续期，窗口漂移时停止续期让 gate 到期阻塞
 - [`0107`](adr/0107-journal-diagnostics-do-not-block-publication.md)：Journal Diagnostic Finding 不阻止 Journal 发布
@@ -155,6 +157,7 @@ Accepted
 - [`0087`](adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md)：EvidenceItem 是指向 final / corrected User Event Revision 的一等类型化引用
 - [`0088`](adr/0088-entities-are-user-scoped-and-labels-do-not-define-identity.md)：Entity 默认 user-scoped，label 与 external mapping 不决定身份
 - [`0089`](adr/0089-derived-artifacts-are-versioned-and-projections-are-rebuildable.md)：Journal、Reflection、Claim、Episode 版本化，Profile 与索引可重建
+- [`0130`](adr/0130-1a3b-retention-separates-domain-history-from-diagnostic-content.md)：Episode 版本属于长期领域历史；Reflection 非当前正文与模型原始内容按期限清除
 
 ### Entity 与身份变化
 

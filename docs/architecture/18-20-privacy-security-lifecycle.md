@@ -502,6 +502,95 @@ Proactive Follow-up State 与索引。
 30 日是 active system content grace，不是数据库备份物理过期承诺。恢复旧备份时必须先
 重新应用 deadline 与 purge state，已过期内容保持不可读并再次清理，完成前不开放流量。
 
+#### 20.4.3 Episode、Reflection 与模型原始内容
+
+成功提交的 EpisodeVersion 是 SayHear 对同一现实事件随 Evidence 演进的领域历史，typed
+内容、不可变版本和 lineage 保留到 Internal Owner Full Purge。普通 supersede、Correction
+或 Forget 立即使不再有效的版本退出 Builder、Reflection、Open Loop、Context 与其他派生读取，
+但不缩短其内容保留期。source deletion 与 Full Purge 仍立即清除受影响内容和可逆 locator，
+不能因历史版本政策继续保留。
+
+Reflection 属于内部、非权威派生观察，使用更短的分级保留：
+
+- current committed ReflectionVersion 的 typed 内容在其保持 current 时保留；
+- 被有效 successor 取代的 committed ReflectionVersion 从 supersede time 起保留 30 日；
+- draft、validated-uncommitted、stale、failed 或其他从未成为 current committed 的
+  Reflection 内容，从对应状态的 effective time 起保留 7 日；
+- 到期后清除 Reflection prose、Statement / atomic proposition 语义内容、仍未持久化的
+  Memory Candidate Proposal 与可逆 locator，只保留 Reflection / Version ID、revision、
+  kind、状态、policy version、时间、无正文 lineage 与 `content_purged_at`；这些 envelope
+  仍属于 owner-scoped derived data，并在 Full Purge 时删除。
+
+所有 1A.3b 模型角色的 Provider 原始 request / response、解析前文本、repair 输入输出和
+失败正文最多保留到 ModelRunAttempt terminal effective time 后 7 日。长期领域读取只依赖
+已经提交的 typed rows、Evidence lineage 和冻结的 Prompt / Schema / policy / model config，
+不能依赖原始 payload。到期后只允许保留字段白名单内的 command / attempt ID、角色、版本、
+状态、错误代码、token / 费用和时间元数据，并遵循各自独立的有界运营 TTL。
+
+上述期限都在 read path 生效，不等待 sweeper。清理任务使用原 effective time 幂等补写
+`content_purged_at`；停机、重试或从备份恢复不能把期限改为实际清理时间。Full Purge、source
+deletion 和更强的 trust fence 始终优先于内容 grace。
+
+#### 20.4.4 Full Purge 后的无正文运行记录
+
+Internal Owner Full Purge 清除私人内容并移除正常产品读取所需的 owner、subject、source、
+correlation、locator 与 target 关联。为了核查敏感读取、Provider 去向和 purge 故障，以下
+allowlisted 无正文记录可以从 `active_system_deleted_at` 起继续保留 30 日：
+
+- Evidence 与 Bio Basis access audit、安全事件；
+- GenerationCommand 与 ModelRunAttempt 的角色、版本、状态、错误代码、token / 费用和时间；
+- Workflow、outbox、Provider egress 与 lifecycle task 的状态、重试、错误代码和时间。
+
+Internal Core 只有一个 owner，因此这些记录即使移除直接 ID 也仍视为 owner-associated
+Operational Metadata，不能称为 anonymous 或 user-independent。它们不得保留原文、摘要、
+typed value、Evidence / Entity / Claim / Episode / Reflection / Bio ID、可逆 locator、内容
+fingerprint、Provider payload 或可恢复 correlation。read path 在 30 日 deadline 到达时拒绝，
+sweeper 再物理删除；备份恢复先重新应用 deadline。
+
+最新 Purge Marker、Purge Order 与 Deletion Receipt 不使用该 30 日期限。它们与无正文 owner
+envelope 一同保留，用于幂等检查、解释 active-system / retention-pending 状态和防止旧备份
+复活；后续 purge 只能推进 marker high-water，不能删除或回退最新代际。无用户内容且结构上
+排除私人关联的 Predicate Registry 与 Predicate Change Proposal 治理记录属于
+user-independent governance，继续按其治理生命周期保留。
+
+#### 20.4.5 Purge Surface Registry
+
+`purge-surface-registry:v1` 是 Full Purge 覆盖的封闭版本化目录。每个 owner-scoped 数据面，
+包括 PostgreSQL table / content row、对象存储 prefix、cache、index、生成文件、Provider
+显式对象、access grant 与外部 Processor，都必须登记：
+
+```text
+surface_id
+surface_kind
+owner_resolution
+disposition                 # delete / content_purge / retain_owner_envelope / retain_governance
+private_content_fields
+clear_handler
+verify_handler
+receipt_destination
+read_deadline_policy
+restore_reapply_handler
+introduced_by_schema_or_integration
+```
+
+Registry 只拥有覆盖合同，不保存用户内容，也不编排领域删除。Full Purge command 冻结 Registry
+version；各领域 repository 与 destination adapter 在已经推进的 `data_epoch` 下执行幂等 clear，
+再由独立 verifier 检查结果并写无正文 receipt。所有 required active destination 都返回
+`verified_deleted` 或 `not_applicable` 后才能进入 `active_system_deleted`；Provider policy 或
+备份窗口仍可使整体停在 `retention_pending`，但不能让活跃产品重新读取旧代际。
+
+数据库 migration gate 枚举新增或改变 owner ownership 的 table、content row、外键与索引，
+并要求 Registry 出现匹配项；外部 integration gate 要求对象、cache、index、Provider object
+和 Processor destination 有显式 entry。静态 route / schema 检查与系统 seeded-canary purge
+共同证明覆盖，不能只靠文档清单或一次 happy-path 测试。
+
+恢复旧备份时，Recovery Gate 先比较最新 Purge Marker；marker reapply 使用当前可执行的
+Registry 与恢复数据库的 schema / integration manifest。若任一恢复出的 owner 私人数据面
+没有匹配 entry 或 handler，保持 `needs_attention` 且不开放私人读写或 Provider Egress。
+reapply 完成 clear、verify、index / cache rebuild exclusion 与 receipt 后，才允许数据库按
+marker epoch 恢复服务。Purge Marker 仍保持 ADR-0104 的最小 high-water 结构，不为 Registry
+复制一份恢复目录。
+
 单条 Event / Revision 删除时使用确定性传播规则：
 
 1. 先使该 source revision、EvidenceItem、EntityMention 和所有 typed evidence link
