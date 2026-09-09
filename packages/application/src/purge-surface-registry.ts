@@ -411,6 +411,111 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     clearOrder: 27,
   }),
   tableSurface({
+    table: "episode_versions",
+    indexes: [
+      "episode_versions_supersedes_once_idx",
+      "episode_versions_episode_idx",
+      "episode_versions_owner_status_idx",
+      "episode_versions_enrichment_pause_idx",
+    ],
+    ownerResolution: directUser,
+    disposition: "content_purge",
+    privateContentFields: ["label", "content"],
+    clearHandler: "purge_episode_versions",
+    verifyHandler: "verify_episode_versions_purged",
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 40,
+  }),
+  tableSurface({
+    table: "episodes",
+    ownerResolution: directUser,
+    disposition: "content_purge",
+    privateContentFields: ["episode_kind_id", "current_version_id"],
+    clearHandler: "purge_episodes",
+    verifyHandler: "verify_episodes_purged",
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 41,
+  }),
+  tableSurface({
+    table: "episode_candidates",
+    indexes: [
+      "episode_candidates_terminal_fingerprint_idx",
+      "episode_candidates_pending_idx",
+      "episode_candidates_terminal_expiry_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [
+      "proposed_existing_episode_id",
+      "proposed_label",
+      "proposed_temporal_anchor",
+      "proposed_phase",
+      "explicit_continuity_span",
+      "admission_reason_code",
+      "disposition_reason_code",
+      "dedupe_fingerprint",
+      "dedupe_fingerprint_key_version",
+    ],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 42,
+  }),
+  tableSurface({
+    table: "episode_candidate_evidence_links",
+    indexes: ["episode_candidate_evidence_links_candidate_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 43,
+  }),
+  tableSurface({
+    table: "episode_candidate_entity_links",
+    indexes: [
+      "episode_candidate_entity_links_candidate_idx",
+      "episode_candidate_entity_links_entity_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 44,
+  }),
+  tableSurface({
+    table: "episode_evidence_links",
+    indexes: [
+      "episode_evidence_links_version_idx",
+      "episode_evidence_links_evidence_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 45,
+  }),
+  tableSurface({
+    table: "episode_version_entity_links",
+    indexes: [
+      "episode_version_entity_links_version_idx",
+      "episode_version_entity_links_entity_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 46,
+  }),
+  tableSurface({
+    table: "episode_build_runs",
+    indexes: ["episode_build_runs_pending_upgrade_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 47,
+  }),
+  tableSurface({
+    table: "episode_impact_reviews",
+    indexes: ["episode_impact_reviews_pending_idx"],
+    ownerResolution: directUser,
+    privateContentFields: ["trigger_ref_id"],
+    introducedBySchemaOrIntegration: "0045_episode_domain.sql",
+    clearOrder: 48,
+  }),
+  tableSurface({
     table: "compiled_contexts",
     privateContentFields: [
       "content_hmac",
@@ -1171,6 +1276,15 @@ entity_labels|entity_label_id,entity_id,user_id,locale,label,normalized_label,la
 entity_mention_candidates|entity_mention_candidate_id,entity_mention_id,user_id,candidate_entity_id,matched_label,candidate_kind,edit_distance,created_at
 entity_mentions|entity_mention_id,user_id,conversation_event_id,event_revision_id,evidence_id,locator_type,start_offset,end_offset,mention_kind,resolved_entity_id,resolution_status,confidence,resolver_policy_version,created_at,content_purged_at
 entity_resolve_gate_outcomes|entity_resolve_gate_outcome_id,user_id,entity_mention_id,gate_policy_version,resolver_policy_version,t_auto,verdict,selected_entity_id,confidence,candidate_count,committed,not_committed_reason,created_at
+episode_build_runs|episode_build_run_id,user_id,daily_session_id,source_revision,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,candidate_count,accepted_count,unresolved_count,rejected_count,error_code,created_at,updated_at
+episode_candidate_evidence_links|episode_candidate_evidence_link_id,episode_candidate_id,user_id,evidence_item_id,created_at
+episode_candidate_entity_links|episode_candidate_entity_link_id,episode_candidate_id,user_id,entity_id,created_at
+episode_candidates|episode_candidate_id,user_id,daily_session_id,source_revision,proposed_episode_kind_id,proposed_existing_episode_id,proposed_label,proposed_temporal_anchor,proposed_phase,explicit_continuity_span,resolution_status,status,admission_reason_code,policy_version,generation_command_id,model_run_attempt_id,predecessor_candidate_id,successor_trigger,material_change_reason_codes,dedupe_fingerprint,dedupe_fingerprint_key_version,reproposal_policy,disposition_reason_code,disposition_policy_version,decided_at,terminal_effective_at,terminal_content_expires_at,created_at,content_purged_at
+episode_evidence_links|episode_evidence_link_id,episode_version_id,user_id,evidence_item_id,created_at
+episode_impact_reviews|episode_impact_review_id,user_id,episode_version_id,trigger_type,trigger_ref_id,outcome,policy_version,created_at,decided_at
+episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
+episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,label,content,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
+episodes|episode_id,user_id,episode_kind_id,current_version_id,status,created_at,deleted_at
 entity_versions|entity_version_id,entity_id,user_id,revision,entity_kind_id,status,merged_into_entity_id,supersedes_version_id,created_at,content_purged_at
 evidence_items|evidence_item_id,user_id,evidence_source_snapshot_id,source_event_id,source_revision_id,source_actor,source_status,locator_type,locator_key,extraction_policy_version,evidence_role,status,created_at
 evidence_lineage|evidence_item_id,command_id,attempt_id,created_at
@@ -1284,6 +1398,15 @@ entity_labels|entity_label_id,entity_id,user_id,locale,label_kind,is_current,sou
 entity_mention_candidates|entity_mention_candidate_id,entity_mention_id,user_id,candidate_entity_id,candidate_kind,edit_distance,created_at
 entity_mentions|entity_mention_id,user_id,conversation_event_id,event_revision_id,evidence_id,locator_type,start_offset,end_offset,mention_kind,resolved_entity_id,resolution_status,confidence,resolver_policy_version,created_at,content_purged_at
 entity_resolve_gate_outcomes|entity_resolve_gate_outcome_id,user_id,entity_mention_id,gate_policy_version,resolver_policy_version,t_auto,verdict,selected_entity_id,confidence,candidate_count,committed,not_committed_reason,created_at
+episode_build_runs|episode_build_run_id,user_id,daily_session_id,source_revision,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,candidate_count,accepted_count,unresolved_count,rejected_count,error_code,created_at,updated_at
+episode_candidate_evidence_links|episode_candidate_evidence_link_id,episode_candidate_id,user_id,evidence_item_id,created_at
+episode_candidate_entity_links|episode_candidate_entity_link_id,episode_candidate_id,user_id,entity_id,created_at
+episode_candidates|episode_candidate_id,user_id,daily_session_id,source_revision,proposed_episode_kind_id,resolution_status,status,policy_version,generation_command_id,model_run_attempt_id,predecessor_candidate_id,successor_trigger,material_change_reason_codes,reproposal_policy,disposition_policy_version,decided_at,terminal_effective_at,terminal_content_expires_at,created_at,content_purged_at
+episode_evidence_links|episode_evidence_link_id,episode_version_id,user_id,evidence_item_id,created_at
+episode_impact_reviews|episode_impact_review_id,user_id,episode_version_id,trigger_type,outcome,policy_version,created_at,decided_at
+episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
+episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
+episodes|episode_id,user_id,status,created_at,deleted_at
 entity_versions|entity_version_id,entity_id,user_id,revision,supersedes_version_id,created_at,content_purged_at
 evidence_items|evidence_item_id,user_id,evidence_source_snapshot_id,source_event_id,source_revision_id,source_actor,source_status,locator_type,extraction_policy_version,evidence_role,status,created_at
 evidence_lineage|evidence_item_id,command_id,attempt_id,created_at
@@ -1380,11 +1503,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:7d2f985f:1102",
-    constraintManifestHash: "fnv1a32:6fc60004:570",
+    columnManifestHash: "fnv1a32:194fcdbf:1201",
+    constraintManifestHash: "fnv1a32:9286a1f0:625",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:0558d42b:318",
-    indexManifestHash: "fnv1a32:0868ab6a:75",
+    foreignKeyManifestHash: "fnv1a32:b5aff687:349",
+    indexManifestHash: "fnv1a32:334c5775:91",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,

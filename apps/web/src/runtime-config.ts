@@ -103,6 +103,14 @@ function enabledSwitch(environment: Environment, name: string): boolean {
   throw new Error(`${name} must be true or false.`);
 }
 
+/** Default-off switch: only an explicit `true` opens the capability. */
+function explicitSwitch(environment: Environment, name: string): boolean {
+  const value = environment[name];
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error(`${name} must be true or false.`);
+}
+
 export function loadRuntimeConfiguration(environment: Environment) {
   const deployment = assertSafeRuntimeConfiguration(environment);
   const testNow = environment.SAYHEAR_TEST_NOW
@@ -277,6 +285,13 @@ export function loadRuntimeConfiguration(environment: Environment) {
     journalPublishEnabled: enabledSwitch(
       environment,
       "SAYHEAR_JOURNAL_PUBLISH_ENABLED",
+    ),
+    // 1A.3b stages cut over directly (ADR-0134); the Episode stage stays
+    // closed by default until its release manifest publishes an evaluated
+    // configuration. Only an explicit env switch opens it.
+    episodeBuildEnabled: explicitSwitch(
+      environment,
+      "SAYHEAR_EPISODE_BUILD_ENABLED",
     ),
   });
 

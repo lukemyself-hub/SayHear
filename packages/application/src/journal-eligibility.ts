@@ -300,7 +300,9 @@ export type WorkflowStarter = (input: {
     | "memory_sweeper_requested"
     | "memory_correction_followup_requested"
     | "entity_identity_revalidation_requested"
-    | "model_role_requested";
+    | "model_role_requested"
+    | "episode_build_requested"
+    | "episode_maintenance_requested";
   modelRole?: string;
   generationCommandId?: string;
   modelRunAttemptId?: string;
@@ -521,6 +523,10 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "attemptNo",
   "attemptKind",
   "rolloutPin",
+  "candidateCount",
+  "acceptedCount",
+  "unresolvedCount",
+  "rejectedCount",
 ]);
 
 /**

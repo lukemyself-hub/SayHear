@@ -15,6 +15,7 @@ export async function GET(request: Request): Promise<Response> {
     rollingSummaryService: composition.rollingSummaryService,
     ownerPurgeService: composition.ownerPurgeService,
     memoryConsolidationService: composition.memoryConsolidationService,
+    episodeBuilderScanService: composition.episodeBuilderScanService,
     outboxDispatcherService: composition.outboxDispatcherService,
     scannerSecret: composition.recoveryScannerSecret,
   })(request);

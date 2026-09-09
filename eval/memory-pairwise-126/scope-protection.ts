@@ -30,8 +30,10 @@ const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 type ScopeIssue = Readonly<{ check: string; detail: string }>;
 
 /** Forbidden persisted artifacts (1A.3b and later faces; ADR-0115). */
+// The 1A.3b Stage-1 Episode schema (issue #197, ADR-0037/0120) is an
+// accepted deliverable; vector faces stay forbidden (ADR-0115).
 const FORBIDDEN_TABLE_PATTERN =
-  /(embedding|vector|episode|open_loop|proactive|reflection|profile_projection)/i;
+  /(embedding|vector|open_loop|proactive|reflection|profile_projection)/i;
 
 const FORBIDDEN_EXTENSION_PATTERN = /create\s+extension[^;]*\bvector\b/i;
 

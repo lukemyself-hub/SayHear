@@ -65,3 +65,4 @@ export {
   PostgresModelRoleCommandRepository,
 } from "./postgres-model-role-command-repository";
 export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";
+export { PostgresEpisodeRepository } from "./postgres-episode-repository";

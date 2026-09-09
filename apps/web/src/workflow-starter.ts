@@ -16,6 +16,8 @@ import {
   journalRegenerationWorkflow,
   rollingSummaryWorkflow,
 } from "./workflows/rolling-summary.workflow";
+import { episodeBuildWorkflow } from "./workflows/episode-build.workflow";
+import { episodeMaintenanceWorkflow } from "./workflows/episode-maintenance.workflow";
 
 export function createWorkflowStarter(): WorkflowStarter {
   return async (input) => {
@@ -68,6 +70,10 @@ export function createWorkflowStarter(): WorkflowStarter {
       run = await start(memoryCorrectionFollowupWorkflow, [workflowInput]);
     } else if (input.eventType === "entity_identity_revalidation_requested") {
       run = await start(entityIdentityRevalidationWorkflow, [workflowInput]);
+    } else if (input.eventType === "episode_build_requested") {
+      run = await start(episodeBuildWorkflow, [workflowInput]);
+    } else if (input.eventType === "episode_maintenance_requested") {
+      run = await start(episodeMaintenanceWorkflow, [workflowInput]);
     } else {
       throw new Error(`Unsupported outbox event type: ${input.eventType}`);
     }

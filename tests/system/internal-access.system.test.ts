@@ -173,6 +173,15 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        episode_impact_reviews,
+        episode_build_runs,
+        episode_version_entity_links,
+        episode_evidence_links,
+        episode_candidate_entity_links,
+        episode_candidate_evidence_links,
+        episode_candidates,
+        episode_versions,
+        episodes,
         entity_identity_revalidation_runs,
         journal_identity_review_fences,
         journal_statement_entity_links,
@@ -206,6 +215,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         user_self_entities,
         entity_versions,
         entities,
+        owner_purge_operational_metadata,
         owner_purge_receipts,
         owner_purge_orders,
         conversation_action_payloads,
@@ -625,8 +635,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           FROM information_schema.tables
           WHERE table_schema = current_schema()
             AND table_name ILIKE ANY(ARRAY[
-              'episode%',
-              'reflection%',
+                'reflection%',
               'memory%',
               'profile%',
               'open_loop%',
@@ -4116,6 +4125,10 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       eligibility: {
         commandsCreated: 0,
         evaluated: 0,
+      },
+      episode: {
+        buildsQueued: 0,
+        maintenanceQueued: 0,
       },
       dialogueState: {
         queued: 1,

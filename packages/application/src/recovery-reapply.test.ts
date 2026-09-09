@@ -209,12 +209,17 @@ describe("marker reapply", () => {
           {
             backupRetentionUntil: null,
             destination: "business_database",
-            destinationDisposition: marker.receipts[0]?.destinationDisposition ?? "unknown",
+            destinationDisposition: (marker.receipts[0]?.destinationDisposition ?? "unknown") as
+              | "not_applicable"
+              | "policy_expired"
+              | "retention_pending"
+              | "unknown"
+              | "verified_deleted",
             providerDisposition: null,
-          providerRetentionUntil: marker.receipts[0]?.providerRetentionUntil ?? null,
-          recordedAt: marker.purgedAt,
-        },
-      ],
+            providerRetentionUntil: marker.receipts[0]?.providerRetentionUntil ?? null,
+            recordedAt: marker.purgedAt,
+          },
+        ],
         verifyRecoveryReceipts: async () => true,
       },
     });
