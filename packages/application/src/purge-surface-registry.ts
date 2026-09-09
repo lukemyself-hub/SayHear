@@ -241,7 +241,7 @@ const dailySession = {
 const ownerEnvelope = { kind: "owner_envelope" } as const;
 
 /**
- * All owner-scoped tables currently present through migration 0043. Indexes
+ * All owner-scoped tables currently present through migration 0044. Indexes
  * are attached to their table surface so adding an index is still a checked
  * schema-object change, while the table remains the executable clear unit.
  */
@@ -314,7 +314,7 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
   }),
   tableSurface({
     table: "generation_commands",
-    privateContentFields: [],
+    privateContentFields: ["source_snapshot", "input_manifest"],
     indexes: [
       "generation_commands_recovery_due_idx",
       "generation_commands_action_finalization_idx",
@@ -331,6 +331,84 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     ownerResolution: directUser,
     introducedBySchemaOrIntegration: "0003_complete_assistant_response.sql",
     clearOrder: 880,
+  }),
+  tableSurface({
+    table: "bio_validation_findings",
+    ownerResolution: directUser,
+    privateContentFields: ["finding_code"],
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 20,
+  }),
+  tableSurface({
+    table: "bio_coverage_members",
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 21,
+  }),
+  tableSurface({
+    table: "bio_claim_links",
+    indexes: ["bio_claim_links_owner_version_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 22,
+  }),
+  tableSurface({
+    table: "bio_coverage_units",
+    indexes: ["bio_coverage_units_owner_version_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 23,
+  }),
+  tableSurface({
+    table: "bio_statements",
+    ownerResolution: directUser,
+    privateContentFields: ["statement_text"],
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 24,
+  }),
+  tableSurface({
+    table: "bio_atomic_propositions",
+    ownerResolution: directUser,
+    privateContentFields: ["proposition_text"],
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 25,
+  }),
+  tableSurface({
+    table: "bio_versions",
+    indexes: ["bio_versions_owner_status_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [
+      "source_manifest",
+      "presentation_locale",
+      "content_expires_at",
+    ],
+    clearHandler: "purge_bio_versions",
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 26,
+  }),
+  tableSurface({
+    table: "bios",
+    indexes: ["bios_one_current_version_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [
+      "current_version_id",
+      "current_source_revision",
+      "current_data_epoch",
+    ],
+    clearHandler: "purge_bios",
+    introducedBySchemaOrIntegration:
+      "0044_1a3b_model_roles_and_bio_read_schema.sql",
+    clearOrder: 27,
   }),
   tableSurface({
     table: "compiled_contexts",
@@ -1056,6 +1134,14 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
 const PURGE_SURFACE_REGISTERED_COLUMN_LINES = `
 app_users|user_id,status,data_epoch,created_at,updated_at
 auth_sessions|session_token_hash,user_id,expires_at,created_at,updated_at
+bio_atomic_propositions|bio_atomic_proposition_id,bio_version_id,bio_id,user_id,proposition_key,proposition_text,content_purged_at,created_at
+bio_claim_links|bio_claim_link_id,bio_version_id,bio_id,user_id,memory_claim_version_id,link_role,support_status,source_revision,expected_data_epoch,created_at
+bio_coverage_members|bio_coverage_unit_id,bio_version_id,user_id,memory_claim_version_id,created_at
+bio_coverage_units|bio_coverage_unit_id,bio_version_id,bio_id,user_id,unit_key,disposition,coverage_policy_version,source_revision,expected_data_epoch,created_at
+bio_statements|bio_statement_id,bio_version_id,bio_id,user_id,ordinal,section_key,statement_key,statement_text,content_purged_at,created_at
+bio_validation_findings|bio_validation_finding_id,bio_version_id,bio_id,user_id,bio_statement_id,bio_atomic_proposition_id,finding_code,severity,disposition,created_at
+bio_versions|bio_version_id,bio_id,user_id,revision,status,source_revision,expected_data_epoch,source_manifest,presentation_locale,self_entity_id,self_entity_version_id,generation_command_id,writer_model_run_attempt_id,validator_generation_command_id,validator_model_run_attempt_id,content_expires_at,content_purged_at,created_at
+bios|bio_id,user_id,current_version_id,current_source_revision,current_data_epoch,created_at,updated_at
 claim_evidence_links|claim_evidence_link_id,memory_claim_version_id,user_id,evidence_item_id,link_role,status,created_at
 claim_retrieval_projections|claim_retrieval_projection_id,user_id,memory_claim_id,memory_claim_version_id,locale,view_direction,retrieval_text,lexical_terms,english_search,projection_policy_version,status,created_at,content_purged_at
 compiled_context_revision_refs|compiled_context_id,user_id,conversation_event_revision_id,ordinal,actor,estimated_tokens,sequence_no,section,selection_order
@@ -1092,7 +1178,7 @@ evidence_model_run_attempts|evidence_model_run_attempt_id,evidence_source_snapsh
 evidence_source_snapshots|evidence_source_snapshot_id,user_id,daily_session_id,source_revision,extraction_policy_version,command_id,attempt_id,champion_config_version,champion_provider,champion_model,champion_snapshot,champion_provider_policy_version,created_at
 fast_path_extraction_runs|fast_path_run_id,user_id,daily_session_id,event_revision_id,event_conversation_event_id,extraction_policy_version,workflow_command_id,model_attempt_id,memory_extract_config_version,memory_extract_model_version,memory_extract_prompt_version,entity_resolve_config_version,role_fallback_used,status,event_committed_at,extracted_at,visibility_lag_ms,visibility_target_met,item_count,mention_count,candidate_count,error_code,created_at,updated_at,retired_at
 fast_path_session_items|fast_path_item_id,user_id,daily_session_id,event_revision_id,fast_path_run_id,item_class,summary,memory_candidate_id,entity_mention_id,evidence_item_id,dedupe_key,created_at,retired_at
-generation_commands|generation_command_id,user_id,interaction_turn_id,operation_type,intent_key,subject_type,subject_id,input_revision_kind,input_revision_id,prompt_version,product_policy_version,safety_policy_version,relationship_policy_version,locale_policy_version,locale,provider,model,model_snapshot,model_config_version,freshness_policy,expected_data_epoch,status,compiled_context_id,authoritative_result_id,created_at,settled_at,provider_policy_version,consent_policy_version,output_format_version,persona_version,recovery_policy_version,recovery_status,recovery_checked_at,next_recovery_at,harness_policy_version,conversation_action_catalog_version,generation_stage,action_execution_id,action_receipt_sequence,action_execution_status,persona_contract_invariant_version,canonical_persona_version,persona_behavior_anchors_version
+generation_commands|generation_command_id,user_id,interaction_turn_id,operation_type,intent_key,subject_type,subject_id,input_revision_kind,input_revision_id,prompt_version,product_policy_version,safety_policy_version,relationship_policy_version,locale_policy_version,locale,provider,model,model_snapshot,model_config_version,freshness_policy,expected_data_epoch,status,compiled_context_id,authoritative_result_id,created_at,settled_at,provider_policy_version,consent_policy_version,output_format_version,persona_version,recovery_policy_version,recovery_status,recovery_checked_at,next_recovery_at,harness_policy_version,conversation_action_catalog_version,generation_stage,action_execution_id,action_receipt_sequence,action_execution_status,persona_contract_invariant_version,canonical_persona_version,persona_behavior_anchors_version,model_role,schema_version,role_policy_version,rollout_pin,source_revision,source_snapshot,input_manifest,parameter_snapshot,fallback_mode
 interaction_turns|interaction_turn_id,user_id,daily_session_id,client_turn_id,turn_sequence_no,continuous_exchange_no,status,retry_of_interaction_turn_id,started_at,settled_at,created_at,updated_at
 internal_diagnostic_access_grants|session_token_hash,capability,status,step_up_authenticated_at,updated_at
 internal_owner_identities|owner_slot,issuer,subject,user_id,active,created_at
@@ -1121,8 +1207,8 @@ memory_forget_evidence_exclusions|memory_forget_evidence_exclusion_id,user_id,me
 memory_forget_requests|memory_forget_request_id,user_id,request_event_revision_id,target_claim_id,target_scope,canonical_side,qualifier_key,qualifier_typed_value,status,applied_claim_version_id,forget_policy_version,created_at,target_qualifier_id
 memory_forget_reversals|memory_forget_reversal_id,user_id,memory_forget_request_id,request_event_revision_id,reversal_evidence_id,status,applied_claim_version_id,forget_policy_version,created_at
 memory_impression_vetoes|memory_impression_veto_id,user_id,memory_claim_id,vetoed_claim_version_id,request_event_revision_id,status,impression_correction_policy_version,created_at
-model_run_attempts|model_run_attempt_id,user_id,generation_command_id,attempt_no,operation_type,provider,model,model_snapshot,prompt_version,status,provider_request_id,started_at,first_token_at,completed_at,input_tokens,output_tokens,cost_micros,finish_reason,error_category,created_at,retry_of_model_run_attempt_id,recovery_status,retry_not_before,recovery_claimed_at,provider_completed_at
-outbox_events|outbox_event_id,workflow_command_id,aggregate_type,aggregate_id,aggregate_revision,event_type,status,next_attempt_at,lease_owner,lease_expires_at,attempt_count,workflow_receipt_id,last_error_code,payload,created_at,aggregate_coverage,aggregate_data_epoch,cancelled_reason
+model_run_attempts|model_run_attempt_id,user_id,generation_command_id,attempt_no,operation_type,provider,model,model_snapshot,prompt_version,status,provider_request_id,started_at,first_token_at,completed_at,input_tokens,output_tokens,cost_micros,finish_reason,error_category,created_at,retry_of_model_run_attempt_id,recovery_status,retry_not_before,recovery_claimed_at,provider_completed_at,attempt_kind,source_attempt_id,provider_egress_event_id,error_code
+outbox_events|outbox_event_id,workflow_command_id,aggregate_type,aggregate_id,aggregate_revision,event_type,status,next_attempt_at,lease_owner,lease_expires_at,attempt_count,workflow_receipt_id,last_error_code,payload,created_at,aggregate_coverage,aggregate_data_epoch,cancelled_reason,intent_key
 owner_purge_operational_metadata|owner_purge_operational_metadata_id,owner_purge_order_id,user_id,surface_id,operation_type,status,policy_version,provider,role,error_category,attempt_count,recorded_at
 owner_purge_orders|owner_purge_order_id,user_id,from_data_epoch,data_epoch,status,confirmation,policy_version,requested_at,access_revoked_at,propagating_at,verifying_at,active_system_deleted_at,retention_pending_at,needs_attention_at,needs_attention_reason,backup_retention_until,last_attempt_at,attempt_count,purge_surface_registry_version,external_integration_manifest_version,workflow_subject_manifest_version
 owner_purge_receipts|owner_purge_receipt_id,owner_purge_order_id,destination,destination_disposition,provider_disposition,provider_retention_until,backup_retention_until,recorded_at
@@ -1138,7 +1224,7 @@ safety_posture_alerts|safety_posture_alert_id,user_id,daily_session_id,generatio
 safety_postures|safety_posture_id,user_id,daily_session_id,version_no,source_revision,policy_version,content,committed_generation_command_id,created_at
 sensitive_access_audits|sensitive_access_audit_id,user_id,capability,target_type,target_id,disposition,reason,policy_version,accessed_at
 user_self_entities|user_id,entity_id,created_at
-workflow_commands|workflow_command_id,command_type,subject_type,subject_id,source_revision,policy_version,expected_data_epoch,status,created_at,dispatched_at,coverage_through_sequence_no,cancelled_reason,action_execution_id,purge_surface_registry_version,external_integration_manifest_version,workflow_subject_manifest_version
+workflow_commands|workflow_command_id,command_type,subject_type,subject_id,source_revision,policy_version,expected_data_epoch,status,created_at,dispatched_at,coverage_through_sequence_no,cancelled_reason,action_execution_id,purge_surface_registry_version,external_integration_manifest_version,workflow_subject_manifest_version,intent_key
 `.trim().split("\n");
 
 const PURGE_SURFACE_REGISTERED_COLUMNS = deepFreeze(
@@ -1161,6 +1247,14 @@ const PURGE_SURFACE_REGISTERED_COLUMNS = deepFreeze(
 const PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMN_LINES = `
 app_users|user_id,status,data_epoch,created_at,updated_at
 auth_sessions|user_id,expires_at,created_at,updated_at
+bio_atomic_propositions|bio_atomic_proposition_id,bio_version_id,bio_id,user_id,proposition_key,content_purged_at,created_at
+bio_claim_links|bio_claim_link_id,bio_version_id,bio_id,user_id,memory_claim_version_id,link_role,support_status,source_revision,expected_data_epoch,created_at
+bio_coverage_members|bio_coverage_unit_id,bio_version_id,user_id,memory_claim_version_id,created_at
+bio_coverage_units|bio_coverage_unit_id,bio_version_id,bio_id,user_id,unit_key,disposition,coverage_policy_version,source_revision,expected_data_epoch,created_at
+bio_statements|bio_statement_id,bio_version_id,bio_id,user_id,ordinal,section_key,statement_key,content_purged_at,created_at
+bio_validation_findings|bio_validation_finding_id,bio_version_id,bio_id,user_id,bio_statement_id,bio_atomic_proposition_id,severity,disposition,created_at
+bio_versions|bio_version_id,bio_id,user_id,revision,status,source_revision,expected_data_epoch,self_entity_id,self_entity_version_id,generation_command_id,writer_model_run_attempt_id,validator_generation_command_id,validator_model_run_attempt_id,content_purged_at,created_at
+bios|bio_id,user_id,created_at,updated_at
 claim_evidence_links|claim_evidence_link_id,memory_claim_version_id,user_id,evidence_item_id,link_role,status,created_at
 claim_retrieval_projections|claim_retrieval_projection_id,user_id,memory_claim_id,memory_claim_version_id,locale,view_direction,projection_policy_version,status,created_at,content_purged_at
 compiled_context_revision_refs|compiled_context_id,user_id,conversation_event_revision_id,ordinal,actor,estimated_tokens,sequence_no,section,selection_order
@@ -1197,7 +1291,7 @@ evidence_model_run_attempts|evidence_model_run_attempt_id,evidence_source_snapsh
 evidence_source_snapshots|evidence_source_snapshot_id,user_id,daily_session_id,source_revision,extraction_policy_version,command_id,attempt_id,champion_config_version,champion_provider,champion_model,champion_provider_policy_version,created_at
 fast_path_extraction_runs|fast_path_run_id,user_id,daily_session_id,event_revision_id,event_conversation_event_id,extraction_policy_version,workflow_command_id,model_attempt_id,memory_extract_config_version,memory_extract_model_version,memory_extract_prompt_version,entity_resolve_config_version,role_fallback_used,status,event_committed_at,extracted_at,visibility_lag_ms,visibility_target_met,item_count,mention_count,candidate_count,error_code,created_at,updated_at,retired_at
 fast_path_session_items|fast_path_item_id,user_id,daily_session_id,event_revision_id,fast_path_run_id,item_class,memory_candidate_id,entity_mention_id,evidence_item_id,dedupe_key,created_at,retired_at
-generation_commands|generation_command_id,user_id,interaction_turn_id,operation_type,intent_key,subject_type,subject_id,input_revision_kind,input_revision_id,prompt_version,product_policy_version,safety_policy_version,relationship_policy_version,locale_policy_version,locale,provider,model,model_snapshot,model_config_version,freshness_policy,expected_data_epoch,status,compiled_context_id,authoritative_result_id,created_at,settled_at,provider_policy_version,consent_policy_version,output_format_version,persona_version,recovery_policy_version,recovery_status,recovery_checked_at,next_recovery_at,harness_policy_version,conversation_action_catalog_version,generation_stage,action_execution_id,action_receipt_sequence,action_execution_status,persona_contract_invariant_version,canonical_persona_version,persona_behavior_anchors_version
+generation_commands|generation_command_id,user_id,interaction_turn_id,operation_type,intent_key,subject_type,subject_id,input_revision_kind,input_revision_id,prompt_version,product_policy_version,safety_policy_version,relationship_policy_version,locale_policy_version,locale,provider,model,model_snapshot,model_config_version,freshness_policy,expected_data_epoch,status,compiled_context_id,authoritative_result_id,created_at,settled_at,provider_policy_version,consent_policy_version,output_format_version,persona_version,recovery_policy_version,recovery_status,recovery_checked_at,next_recovery_at,harness_policy_version,conversation_action_catalog_version,generation_stage,action_execution_id,action_receipt_sequence,action_execution_status,persona_contract_invariant_version,canonical_persona_version,persona_behavior_anchors_version,model_role,schema_version,role_policy_version,rollout_pin,source_revision,parameter_snapshot,fallback_mode
 interaction_turns|interaction_turn_id,user_id,daily_session_id,client_turn_id,turn_sequence_no,continuous_exchange_no,status,retry_of_interaction_turn_id,started_at,settled_at,created_at,updated_at
 internal_diagnostic_access_grants|capability,status,step_up_authenticated_at,updated_at
 internal_owner_identities|owner_slot,issuer,subject,user_id,active,created_at
@@ -1226,8 +1320,8 @@ memory_forget_evidence_exclusions|memory_forget_evidence_exclusion_id,user_id,me
 memory_forget_requests|memory_forget_request_id,user_id,request_event_revision_id,target_claim_id,target_scope,status,applied_claim_version_id,forget_policy_version,created_at,target_qualifier_id
 memory_forget_reversals|memory_forget_reversal_id,user_id,memory_forget_request_id,request_event_revision_id,reversal_evidence_id,status,applied_claim_version_id,forget_policy_version,created_at
 memory_impression_vetoes|memory_impression_veto_id,user_id,memory_claim_id,vetoed_claim_version_id,request_event_revision_id,status,impression_correction_policy_version,created_at
-model_run_attempts|model_run_attempt_id,user_id,generation_command_id,attempt_no,operation_type,provider,model,model_snapshot,prompt_version,status,provider_request_id,started_at,first_token_at,completed_at,input_tokens,output_tokens,cost_micros,finish_reason,error_category,created_at,retry_of_model_run_attempt_id,recovery_status,retry_not_before,recovery_claimed_at,provider_completed_at
-outbox_events|outbox_event_id,workflow_command_id,aggregate_type,aggregate_id,aggregate_revision,event_type,status,next_attempt_at,lease_owner,lease_expires_at,attempt_count,workflow_receipt_id,last_error_code,payload,created_at,aggregate_coverage,aggregate_data_epoch,cancelled_reason
+model_run_attempts|model_run_attempt_id,user_id,generation_command_id,attempt_no,operation_type,provider,model,model_snapshot,prompt_version,status,provider_request_id,started_at,first_token_at,completed_at,input_tokens,output_tokens,cost_micros,finish_reason,error_category,created_at,retry_of_model_run_attempt_id,recovery_status,retry_not_before,recovery_claimed_at,provider_completed_at,attempt_kind,source_attempt_id,provider_egress_event_id,error_code
+outbox_events|outbox_event_id,workflow_command_id,aggregate_type,aggregate_id,aggregate_revision,event_type,status,next_attempt_at,lease_owner,lease_expires_at,attempt_count,workflow_receipt_id,last_error_code,payload,created_at,aggregate_coverage,aggregate_data_epoch,cancelled_reason,intent_key
 owner_purge_operational_metadata|owner_purge_operational_metadata_id,owner_purge_order_id,user_id,surface_id,operation_type,status,policy_version,provider,role,error_category,attempt_count,recorded_at
 owner_purge_orders|owner_purge_order_id,user_id,from_data_epoch,data_epoch,status,confirmation,policy_version,requested_at,access_revoked_at,propagating_at,verifying_at,active_system_deleted_at,retention_pending_at,needs_attention_at,needs_attention_reason,backup_retention_until,last_attempt_at,attempt_count,purge_surface_registry_version,external_integration_manifest_version,workflow_subject_manifest_version
 owner_purge_receipts|owner_purge_receipt_id,owner_purge_order_id,destination,destination_disposition,provider_disposition,provider_retention_until,backup_retention_until,recorded_at
@@ -1243,7 +1337,7 @@ safety_posture_alerts|safety_posture_alert_id,user_id,daily_session_id,generatio
 safety_postures|safety_posture_id,user_id,daily_session_id,version_no,source_revision,policy_version,committed_generation_command_id,created_at
 sensitive_access_audits|sensitive_access_audit_id,user_id,capability,disposition,reason,policy_version,accessed_at
 user_self_entities|user_id,entity_id,created_at
-workflow_commands|workflow_command_id,command_type,subject_type,subject_id,source_revision,policy_version,expected_data_epoch,status,created_at,dispatched_at,coverage_through_sequence_no,cancelled_reason,action_execution_id,purge_surface_registry_version,external_integration_manifest_version,workflow_subject_manifest_version
+workflow_commands|workflow_command_id,command_type,subject_type,subject_id,source_revision,policy_version,expected_data_epoch,status,created_at,dispatched_at,coverage_through_sequence_no,cancelled_reason,action_execution_id,purge_surface_registry_version,external_integration_manifest_version,workflow_subject_manifest_version,intent_key
 `.trim().split("\n");
 
 const PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS = deepFreeze(
@@ -1286,11 +1380,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:431f1003:1009",
-    constraintManifestHash: "fnv1a32:86d047af:518",
+    columnManifestHash: "fnv1a32:7d2f985f:1102",
+    constraintManifestHash: "fnv1a32:9290f606:569",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:84e397a4:299",
-    indexManifestHash: "fnv1a32:2f52c4af:71",
+    foreignKeyManifestHash: "fnv1a32:0558d42b:318",
+    indexManifestHash: "fnv1a32:0868ab6a:75",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,

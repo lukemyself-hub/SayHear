@@ -11,6 +11,11 @@ declare const workflowCommandIdBrand: unique symbol;
 declare const outboxEventIdBrand: unique symbol;
 declare const evidenceItemIdBrand: unique symbol;
 declare const entityIdBrand: unique symbol;
+declare const bioIdBrand: unique symbol;
+declare const bioVersionIdBrand: unique symbol;
+declare const bioStatementIdBrand: unique symbol;
+declare const bioAtomicPropositionIdBrand: unique symbol;
+declare const bioCoverageUnitIdBrand: unique symbol;
 
 export type UserId = string & { readonly [userIdBrand]: "UserId" };
 export type DailySessionId = string & {
@@ -48,6 +53,19 @@ export type EvidenceItemId = string & {
 };
 export type EntityId = string & {
   readonly [entityIdBrand]: "EntityId";
+};
+export type BioId = string & { readonly [bioIdBrand]: "BioId" };
+export type BioVersionId = string & {
+  readonly [bioVersionIdBrand]: "BioVersionId";
+};
+export type BioStatementId = string & {
+  readonly [bioStatementIdBrand]: "BioStatementId";
+};
+export type BioAtomicPropositionId = string & {
+  readonly [bioAtomicPropositionIdBrand]: "BioAtomicPropositionId";
+};
+export type BioCoverageUnitId = string & {
+  readonly [bioCoverageUnitIdBrand]: "BioCoverageUnitId";
 };
 export type MemoryClaimId = string & {
   readonly [memoryClaimIdBrand]: "MemoryClaimId";
@@ -153,6 +171,29 @@ export function asEvidenceItemId(value: string): EvidenceItemId {
 
 export function asEntityId(value: string): EntityId {
   return asOpaqueUuidV7(value, "EntityId") as EntityId;
+}
+
+export function asBioId(value: string): BioId {
+  return asOpaqueUuidV7(value, "BioId") as BioId;
+}
+
+export function asBioVersionId(value: string): BioVersionId {
+  return asOpaqueUuidV7(value, "BioVersionId") as BioVersionId;
+}
+
+export function asBioStatementId(value: string): BioStatementId {
+  return asOpaqueUuidV7(value, "BioStatementId") as BioStatementId;
+}
+
+export function asBioAtomicPropositionId(value: string): BioAtomicPropositionId {
+  return asOpaqueUuidV7(
+    value,
+    "BioAtomicPropositionId",
+  ) as BioAtomicPropositionId;
+}
+
+export function asBioCoverageUnitId(value: string): BioCoverageUnitId {
+  return asOpaqueUuidV7(value, "BioCoverageUnitId") as BioCoverageUnitId;
 }
 
 export function asMemoryClaimId(value: string): MemoryClaimId {

@@ -299,7 +299,14 @@ export type WorkflowStarter = (input: {
     | "weekly_consolidation_requested"
     | "memory_sweeper_requested"
     | "memory_correction_followup_requested"
-    | "entity_identity_revalidation_requested";
+    | "entity_identity_revalidation_requested"
+    | "model_role_requested";
+  modelRole?: string;
+  generationCommandId?: string;
+  modelRunAttemptId?: string;
+  attemptNo?: number;
+  attemptKind?: string;
+  rolloutPin?: string;
   actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId:
@@ -379,9 +386,28 @@ export function createOutboxDispatcherService(dependencies: {
               | "journal_regeneration_requested"
               | "fast_path_extraction_requested"
               | "memory_correction_followup_requested"
-              | "entity_identity_revalidation_requested",
+              | "entity_identity_revalidation_requested"
+              | "model_role_requested",
             ...(typeof event.payload.actionExecutionId === "string"
               ? { actionExecutionId: event.payload.actionExecutionId }
+              : {}),
+            ...(typeof event.payload.modelRole === "string"
+              ? { modelRole: event.payload.modelRole }
+              : {}),
+            ...(typeof event.payload.generationCommandId === "string"
+              ? { generationCommandId: event.payload.generationCommandId }
+              : {}),
+            ...(typeof event.payload.modelRunAttemptId === "string"
+              ? { modelRunAttemptId: event.payload.modelRunAttemptId }
+              : {}),
+            ...(typeof event.payload.attemptNo === "number"
+              ? { attemptNo: event.payload.attemptNo }
+              : {}),
+            ...(typeof event.payload.attemptKind === "string"
+              ? { attemptKind: event.payload.attemptKind }
+              : {}),
+            ...(typeof event.payload.rolloutPin === "string"
+              ? { rolloutPin: event.payload.rolloutPin }
               : {}),
             workflowCommandId: event.workflowCommandId,
             subjectId: event.aggregateId,
@@ -489,6 +515,12 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "dormantCount",
   "staledCount",
   "purgedCount",
+  "modelRole",
+  "generationCommandId",
+  "modelRunAttemptId",
+  "attemptNo",
+  "attemptKind",
+  "rolloutPin",
 ]);
 
 /**

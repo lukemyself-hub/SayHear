@@ -295,6 +295,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "purge_memory_claim_version_qualifiers",
     "purge_ordinary_entities",
     "purge_ordinary_entity_versions",
+    "purge_bio_versions",
+    "purge_bios",
     "redact_sensitive_access_audits",
     "capture_owner_purge_operational_metadata",
     "record_provider_retention",
@@ -1081,6 +1083,29 @@ export async function clearPurgeSurface(
              WHERE binding.user_id = $1 AND binding.entity_id = version.entity_id
            )`,
         [context.userId, context.now],
+      );
+      return;
+    case "purge_bio_versions":
+      // The current Bio pointer is a composite foreign key into the version
+      // row. Clear it before deleting the owner's version history so the
+      // aggregate can be removed without leaving a private pointer behind.
+      await client.query(
+        `UPDATE bios
+         SET current_version_id = NULL
+         WHERE user_id = $1`,
+        [context.userId],
+      );
+      await client.query(
+        `DELETE FROM ${table}
+         WHERE user_id = $1`,
+        [context.userId],
+      );
+      return;
+    case "purge_bios":
+      await client.query(
+        `DELETE FROM ${table}
+         WHERE user_id = $1`,
+        [context.userId],
       );
       return;
     case "redact_sensitive_access_audits":

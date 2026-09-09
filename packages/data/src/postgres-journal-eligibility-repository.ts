@@ -119,13 +119,14 @@ export class PostgresJournalEligibilityRepository
             policy_version,
             expected_data_epoch,
             coverage_through_sequence_no,
+            intent_key,
             status,
             created_at
           )
-          VALUES ($1, 'journal_eligibility', 'daily_session', $2, $3, $4, $5, 0, 'created', $6)
+          VALUES ($1, 'journal_eligibility', 'daily_session', $2, $3, $4, $5, 0, '', 'created', $6)
           ON CONFLICT
             (command_type, subject_type, subject_id, source_revision, policy_version,
-             expected_data_epoch, coverage_through_sequence_no)
+             expected_data_epoch, coverage_through_sequence_no, intent_key)
           DO UPDATE SET workflow_command_id = workflow_commands.workflow_command_id
           RETURNING workflow_command_id,
             (xmax = 0) AS inserted

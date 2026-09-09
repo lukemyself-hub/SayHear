@@ -121,6 +121,13 @@ const CLAIM_CORRECTION_ID = "22222222-2222-7222-8222-222222222226";
 const IMPRESSION_VETO_ID = "22222222-2222-7222-8222-222222222227";
 const SAFETY_POSTURE_ID = "22222222-2222-7222-8222-222222222228";
 const SAFETY_POSTURE_ALERT_ID = "22222222-2222-7222-8222-222222222229";
+const BIO_ID = "22222222-2222-7222-8222-222222222230";
+const BIO_VERSION_ID = "22222222-2222-7222-8222-222222222231";
+const BIO_STATEMENT_ID = "22222222-2222-7222-8222-222222222232";
+const BIO_PROPOSITION_ID = "22222222-2222-7222-8222-222222222233";
+const BIO_COVERAGE_UNIT_ID = "22222222-2222-7222-8222-222222222234";
+const BIO_CLAIM_LINK_ID = "22222222-2222-7222-8222-222222222235";
+const BIO_FINDING_ID = "22222222-2222-7222-8222-222222222236";
 const ACTION_HANDLE = "purge-test-memory-handle";
 const OTHER_OWNER = "33333333-3333-7333-8333-333333333301";
 const OTHER_SESSION = "33333333-3333-7333-8333-333333333302";
@@ -1321,6 +1328,96 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     ).resolves.toEqual({ deleted: operationalMetadataBeforeSweep + 1 });
     expect(await countRows("SELECT 1 FROM sensitive_access_audits")).toBe(0);
     expect(await countRows("SELECT 1 FROM owner_purge_operational_metadata")).toBe(0);
+  });
+
+  it("clears the typed Bio aggregate and every owner-scoped Bio child surface", async () => {
+    const createdAt = BASE_TIME.toISOString();
+    await database.pool.query(`
+      INSERT INTO bios (
+        bio_id, user_id, current_source_revision, current_data_epoch,
+        created_at, updated_at
+      ) VALUES (
+        '${BIO_ID}', '${OWNER}', 8, 1, '${createdAt}', '${createdAt}'
+      );
+      INSERT INTO bio_versions (
+        bio_version_id, bio_id, user_id, revision, status, source_revision,
+        expected_data_epoch, source_manifest, presentation_locale,
+        generation_command_id, writer_model_run_attempt_id,
+        validator_generation_command_id, validator_model_run_attempt_id,
+        created_at
+      ) VALUES (
+        '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}', 1, 'published', 8, 1,
+        '{"source":"synthetic"}'::jsonb, 'en-US', '${G1}', '${M1}',
+        '${G1}', '${M1}', '${createdAt}'
+      );
+      UPDATE bios
+      SET current_version_id = '${BIO_VERSION_ID}'
+      WHERE bio_id = '${BIO_ID}' AND user_id = '${OWNER}';
+      INSERT INTO bio_statements (
+        bio_statement_id, bio_version_id, bio_id, user_id, ordinal,
+        section_key, statement_key, statement_text, created_at
+      ) VALUES (
+        '${BIO_STATEMENT_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        0, 'identity', 'synthetic.identity', 'Synthetic statement', '${createdAt}'
+      );
+      INSERT INTO bio_atomic_propositions (
+        bio_atomic_proposition_id, bio_version_id, bio_id, user_id,
+        proposition_key, proposition_text, created_at
+      ) VALUES (
+        '${BIO_PROPOSITION_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        'synthetic.proposition', 'Synthetic proposition', '${createdAt}'
+      );
+      INSERT INTO bio_claim_links (
+        bio_claim_link_id, bio_version_id, bio_id, user_id,
+        memory_claim_version_id, link_role, support_status,
+        source_revision, expected_data_epoch, created_at
+      ) VALUES (
+        '${BIO_CLAIM_LINK_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        '${MEMORY_CLAIM_VERSION_ID}', 'support', 'eligible', 8, 1, '${createdAt}'
+      );
+      INSERT INTO bio_coverage_units (
+        bio_coverage_unit_id, bio_version_id, bio_id, user_id, unit_key,
+        disposition, coverage_policy_version, source_revision,
+        expected_data_epoch, created_at
+      ) VALUES (
+        '${BIO_COVERAGE_UNIT_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        'synthetic.background', 'covered', 'bio-coverage:v1', 8, 1, '${createdAt}'
+      );
+      INSERT INTO bio_coverage_members (
+        bio_coverage_unit_id, bio_version_id, user_id,
+        memory_claim_version_id, created_at
+      ) VALUES (
+        '${BIO_COVERAGE_UNIT_ID}', '${BIO_VERSION_ID}', '${OWNER}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${createdAt}'
+      );
+      INSERT INTO bio_validation_findings (
+        bio_validation_finding_id, bio_version_id, bio_id, user_id,
+        bio_statement_id, bio_atomic_proposition_id, finding_code,
+        severity, disposition, created_at
+      ) VALUES (
+        '${BIO_FINDING_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        '${BIO_STATEMENT_ID}', '${BIO_PROPOSITION_ID}', 'synthetic.warning',
+        'warning', 'open', '${createdAt}'
+      );
+    `);
+
+    const { order } = await startPurgeOrder();
+    await expect(
+      purgeService.propagate({ ownerPurgeOrderId: order.ownerPurgeOrderId }),
+    ).resolves.toMatchObject({ status: "retention_pending" });
+
+    for (const table of [
+      "bios",
+      "bio_versions",
+      "bio_statements",
+      "bio_atomic_propositions",
+      "bio_claim_links",
+      "bio_coverage_units",
+      "bio_coverage_members",
+      "bio_validation_findings",
+    ]) {
+      expect(await countRows(`SELECT 1 FROM ${table}`)).toBe(0);
+    }
   });
 
   it("purges the Entity, Memory, fast-path, relationship, retrieval, and Inspector data face while retaining only contentless identity envelopes", async () => {

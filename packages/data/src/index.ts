@@ -60,3 +60,8 @@ export {
   verifyPurgeSurface,
   verifyPurgeSurfaceIntegration,
 } from "./postgres-purge-surface-adapters";
+export {
+  ModelRoleAdmissionRejectedError,
+  PostgresModelRoleCommandRepository,
+} from "./postgres-model-role-command-repository";
+export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";

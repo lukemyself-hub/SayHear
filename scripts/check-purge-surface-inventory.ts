@@ -104,14 +104,20 @@ function inferForeignKeyConstraintName(
     }
   }
 
-  // PostgreSQL names an unnamed FK after its table and first referencing
-  // column. This covers both table-level FOREIGN KEY declarations and the
+  // PostgreSQL names an unnamed FK after its table and all referencing
+  // columns. This covers both table-level FOREIGN KEY declarations and the
   // inline `column ... REFERENCES ...` form used by these migrations.
   const tableLevel = [...beforeReference.matchAll(
-    /\bFOREIGN\s+KEY\s*\(\s*([a-z][a-z0-9_]*)/gi,
+    /\bFOREIGN\s+KEY\s*\(\s*([^)]*)\)/gi,
   )].at(-1)?.[1];
   if (tableLevel) {
-    return `${table}_${tableLevel}_fkey`;
+    const columns = tableLevel
+      .split(",")
+      .map((column) => column.trim())
+      .filter(Boolean);
+    if (columns.length > 0) {
+      return `${table}_${columns.join("_")}_fkey`.slice(0, 63);
+    }
   }
   const column = beforeReference
     .slice(beforeReference.lastIndexOf(",") + 1)
