@@ -22,6 +22,7 @@ import {
   normalizeMemoryExtractBoundaryPrecision,
   ProviderDispatchError,
 } from "@sayhear/application";
+import { assertRuntimeProviderEgressIntegration } from "./runtime-provider-egress";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
 export type JournalModelRole =
@@ -232,6 +233,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
   }
 
   const adapter = input.adapter;
+  assertRuntimeProviderEgressIntegration("provider-egress.responses-api");
   const model = createResponsesApiConversationTextModel(adapter);
   const askJson = async (
     role: JournalModelRole,

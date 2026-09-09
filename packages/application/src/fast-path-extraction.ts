@@ -10,6 +10,7 @@ import {
   normalizeEntityLabel,
 } from "./entity";
 import { assertWorkflowSafe } from "./journal-eligibility";
+import type { RecoveryGate } from "./recovery-gate";
 import {
   candidateSemanticTarget,
   dedupeFingerprint,
@@ -993,6 +994,7 @@ export type FastPathExtractionEntrypointDependencies = Readonly<{
     providerPolicyVersion: string;
   }>;
   dedupeFingerprintSecret: string;
+  recoveryGate?: RecoveryGate;
   workflowReceiptId: string;
 }>;
 
@@ -1082,6 +1084,7 @@ export async function runFastPathExtraction(input: {
     };
   }
   const command = read.command;
+  await dependencies.recoveryGate?.requireOpen(asUserId(command.userId));
 
   const lineage = {
     modelAttemptId: `${command.workflowCommandId}:memory-extract`,
@@ -1132,6 +1135,9 @@ export async function runFastPathExtraction(input: {
           invocation,
         ),
       dependencies.memoryExtractConfiguration,
+      async () => {
+        await dependencies.recoveryGate?.requireOpen(asUserId(command.userId));
+      },
     );
     // Provider output is normalized again at the application boundary before
     // validation and candidate writes. This protects scripted/custom ports as
@@ -1232,6 +1238,7 @@ export type { CommitLineage };
 export async function callWithRoleFallback<T>(
   call: (invocation: MemoryRoleInvocationConfiguration) => Promise<T>,
   configuration: MemoryRoleConfiguration,
+  beforeAttempt?: () => Promise<void>,
 ): Promise<Readonly<{ result: T; roleFallbackUsed: boolean }>> {
   const primary = {
     configVersion: configuration.configVersion,
@@ -1239,11 +1246,13 @@ export async function callWithRoleFallback<T>(
     promptVersion: configuration.promptVersion,
   };
   try {
+    await beforeAttempt?.();
     return { result: await call(primary), roleFallbackUsed: false };
   } catch (primaryError) {
     if (configuration.fallback.mode === "disabled") {
       throw primaryError;
     }
+    await beforeAttempt?.();
     const result = await call({
       configVersion: configuration.fallback.configVersion,
       modelVersion: configuration.fallback.modelVersion,
@@ -1338,6 +1347,7 @@ async function extractOneRevision(input: {
       userId: command.userId,
       eventRevisionId: revision.revisionId,
       proposals: mentionProposals,
+      expectedDataEpoch: command.expectedDataEpoch,
     });
   } catch (error) {
     await recordFailure(dependencies, command, lineage, error);
@@ -1370,6 +1380,9 @@ async function extractOneRevision(input: {
             invocation,
           ),
         dependencies.entityResolveConfiguration,
+        async () => {
+          await dependencies.recoveryGate?.requireOpen(asUserId(command.userId));
+        },
       );
       response = attempted.result;
       lineage.roleFallbackUsed =
@@ -1419,7 +1432,10 @@ async function extractOneRevision(input: {
     boundEntityByMentionIndex.set(mentionIndex, entityId);
   }
 
-  const self = await entityService.ensureSelfEntity({ userId: command.userId });
+  const self = await entityService.ensureSelfEntity({
+    expectedDataEpoch: command.expectedDataEpoch,
+    userId: command.userId,
+  });
   const candidates: CommittedCandidateWrite[] = result.candidates.map(
     (candidate) => {
       const subjectEntityId =

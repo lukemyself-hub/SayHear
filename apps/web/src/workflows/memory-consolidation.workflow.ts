@@ -17,8 +17,8 @@ import { createServerComposition } from "../server-composition";
  * owns the model call, the deterministic validators, and the transactional
  * commit. Step input/output carries only IDs, versions, outcomes, and
  * counters — never conversation text (architecture 13.3). Routing happens
- * through the shared createWorkflowStarter router in
- * rolling-summary.workflow.ts (event types `daily_consolidation_requested`,
+ * through the shared createWorkflowStarter router in workflow-starter.ts
+ * (event types `daily_consolidation_requested`,
  * `weekly_consolidation_requested`, `memory_sweeper_requested`).
  */
 export async function memoryConsolidationWorkflow(input: {

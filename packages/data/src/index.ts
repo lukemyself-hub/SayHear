@@ -51,6 +51,16 @@ export { PostgresRollingSummaryRepository } from "./postgres-rolling-summary-rep
 export { PostgresOwnerPurgeRepository } from "./postgres-owner-purge-repository";
 export { PostgresPurgeMarkerRepository } from "./postgres-purge-marker-repository";
 export {
+  assertPurgeSurfaceAdapterCoverage,
+  assertPurgeSurfaceDatabaseInventory,
+  clearPurgeSurface,
+  clearPurgeSurfaceIntegration,
+  OWNER_WORKFLOW_COMMAND_SCOPE,
+  sweepExpiredPurgeSurface,
+  verifyPurgeSurface,
+  verifyPurgeSurfaceIntegration,
+} from "./postgres-purge-surface-adapters";
+export {
   ModelRoleAdmissionRejectedError,
   PostgresModelRoleCommandRepository,
 } from "./postgres-model-role-command-repository";

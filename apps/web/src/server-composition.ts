@@ -87,7 +87,7 @@ import {
 
 import { createAuthOptions } from "./auth";
 import { loadRuntimeConfiguration } from "./runtime-config";
-import { createWorkflowStarter } from "./workflows/rolling-summary.workflow";
+import { createWorkflowStarter } from "./workflow-starter";
 
 const globalPool = globalThis as typeof globalThis & {
   sayHearPool?: ReturnType<typeof createPostgresPool>;
@@ -118,9 +118,11 @@ export function createServerComposition() {
 
   const accessRepository = new PostgresInternalOwnerAccessRepository(pool);
   const purgeMarkerRepository = new PostgresPurgeMarkerRepository(purgeMarkerPool);
+  const purgeRepository = new PostgresOwnerPurgeRepository(pool);
   const recoveryGate = createRecoveryGate({
     businessStateRepository: accessRepository,
     markerRepository: purgeMarkerRepository,
+    purgeStateRepository: purgeRepository,
   });
   const inspectionRepository = new PostgresInternalInspectionRepository(pool);
   const conversationRepository =
@@ -272,6 +274,7 @@ export function createServerComposition() {
           configuration.provider.champion.providerPolicyVersion,
       },
       dedupeFingerprintSecret: configuration.contextHmacSecret,
+      recoveryGate,
       workflowReceiptId,
     };
   };
@@ -304,6 +307,7 @@ export function createServerComposition() {
       registry: predicateRegistryLookup,
       policy: { version: MEMORY_CONSOLIDATION_POLICY_VERSION },
       dedupeFingerprintSecret: configuration.contextHmacSecret,
+      recoveryGate,
       workflowReceiptId,
     };
   };
@@ -639,7 +643,7 @@ export function createServerComposition() {
       },
       markerRepository: purgeMarkerRepository,
       providerRetentionDays: configuration.ownerPurge.providerRetentionDays,
-      repository: new PostgresOwnerPurgeRepository(pool),
+      repository: purgeRepository,
     }),
     authOptions: createAuthOptions({ configuration, pool }),
     clock: configuration.clock,
@@ -658,7 +662,7 @@ export function createServerComposition() {
       clock: configuration.clock,
       gate: recoveryGate,
       markerRepository: purgeMarkerRepository,
-      repository: new PostgresOwnerPurgeRepository(pool),
+      repository: purgeRepository,
     }),
     outboxDispatcherService,
     modelRoleCommandService,

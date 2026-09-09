@@ -1,4 +1,4 @@
-import { asWorkflowCommandId } from "@sayhear/domain";
+import { asUserId, asWorkflowCommandId } from "@sayhear/domain";
 
 import { assertWorkflowSafe } from "./journal-eligibility";
 import {
@@ -15,6 +15,7 @@ import {
   type RegistryEntryLookup,
 } from "./memory-claim";
 import type { UserId } from "@sayhear/domain";
+import type { RecoveryGate } from "./recovery-gate";
 
 /**
  * Slow-path consolidation (SPEC #107 "Two-speed pipeline", issue #114,
@@ -616,6 +617,7 @@ export type MemoryConsolidationEntrypointDependencies = Readonly<{
   registry: RegistryEntryLookup;
   policy: Readonly<{ version: string }>;
   dedupeFingerprintSecret: string;
+  recoveryGate?: RecoveryGate;
   workflowReceiptId: string;
 }>;
 
@@ -679,6 +681,7 @@ export async function runMemoryConsolidation(input: {
     };
   }
   const command = read.command;
+  await dependencies.recoveryGate?.requireOpen(asUserId(command.userId));
 
   const lineage = {
     modelAttemptId: `${command.workflowCommandId}:memory-consolidate`,
@@ -706,6 +709,9 @@ export async function runMemoryConsolidation(input: {
           (invocation) =>
             dependencies.memoryConsolidate.consolidate(modelInput, invocation),
           dependencies.memoryConsolidateConfiguration,
+          async () => {
+            await dependencies.recoveryGate?.requireOpen(asUserId(command.userId));
+          },
         );
         validateConsolidateResult(attempted.result, modelInput);
         diffs = attempted.result.diffs;

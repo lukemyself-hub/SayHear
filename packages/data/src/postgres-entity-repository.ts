@@ -71,10 +71,20 @@ export class PostgresEntityRepository implements EntityRepository {
   public async ensureSelfEntity(input: {
     userId: string;
     now: Date;
+    expectedDataEpoch?: number;
   }): Promise<SelfEntityBinding> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (input.expectedDataEpoch !== undefined) {
+        const epoch = await lockActiveOwnerEpoch(client, input.userId);
+        if (epoch === null || epoch !== input.expectedDataEpoch) {
+          await client.query("ROLLBACK");
+          throw new Error(
+            "Entity self binding was fenced by the owner data epoch.",
+          );
+        }
+      }
       const binding = await ensureSelfEntityWithin(client, input.userId, input.now);
       await client.query("COMMIT");
       return binding;
@@ -120,10 +130,20 @@ export class PostgresEntityRepository implements EntityRepository {
     proposals: readonly EntityMentionProposal[];
     resolverPolicyVersion: string;
     now: Date;
+    expectedDataEpoch?: number;
   }): Promise<readonly EntityMentionResolution[]> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (input.expectedDataEpoch !== undefined) {
+        const epoch = await lockActiveOwnerEpoch(client, input.userId);
+        if (epoch === null || epoch !== input.expectedDataEpoch) {
+          await client.query("ROLLBACK");
+          throw new Error(
+            "Entity mention resolution was fenced by the owner data epoch.",
+          );
+        }
+      }
       const results = await resolveMentionsWithin(client, input);
       await client.query("COMMIT");
       return results;

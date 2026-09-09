@@ -4,10 +4,38 @@ import type {
   OwnerPurgeOrderStatus,
   OwnerPurgeReceipt,
   OwnerPurgeRepository,
-} from "@sayhear/application";
-import { PurgeVerificationError } from "@sayhear/application";
+  PurgeAttentionReason,
+} from "@sayhear/application/owner-purge";
+import {
+  PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+  PURGE_EXTERNAL_INTEGRATION_MANIFEST_LEGACY_VERSION,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+  assertPurgeSurfaceRegistry,
+  PURGE_SURFACE_REGISTRY_SNAPSHOT,
+  PURGE_SURFACE_REGISTRY_LEGACY_VERSION,
+  PURGE_SURFACE_REGISTRY_VERSION,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST_LEGACY_VERSION,
+  PurgeSurfaceRegistryError,
+  type PurgeSurfaceEntry,
+} from "@sayhear/application/purge-surface-registry";
+import {
+  isPurgeAttentionReason,
+  PurgeVerificationError,
+} from "@sayhear/application/owner-purge";
 import { asUserId, type UserId } from "@sayhear/domain";
-import type { Pool, QueryResultRow } from "pg";
+import type { Pool, PoolClient, QueryResultRow } from "pg";
+
+import {
+  assertPurgeSurfaceAdapterCoverage,
+  assertPurgeSurfaceDatabaseInventory,
+  clearPurgeSurface,
+  clearPurgeSurfaceIntegration,
+  OWNER_WORKFLOW_COMMAND_SCOPE,
+  sweepExpiredPurgeSurface,
+  verifyPurgeSurface,
+  verifyPurgeSurfaceIntegration,
+} from "./postgres-purge-surface-adapters";
 
 type OrderRow = Readonly<{
   owner_purge_order_id: string;
@@ -16,6 +44,9 @@ type OrderRow = Readonly<{
   data_epoch: string;
   status: string;
   policy_version: string;
+  purge_surface_registry_version: string;
+  external_integration_manifest_version: string;
+  workflow_subject_manifest_version: string;
   requested_at: Date;
   access_revoked_at: Date | null;
   propagating_at: Date | null;
@@ -36,6 +67,78 @@ type ReceiptRow = Readonly<{
   recorded_at: Date;
 }>;
 
+function assertCurrentPurgeVersions(
+  row: Pick<
+    OrderRow,
+    | "purge_surface_registry_version"
+    | "external_integration_manifest_version"
+    | "workflow_subject_manifest_version"
+  >,
+): void {
+  if (row.purge_surface_registry_version !== PURGE_SURFACE_REGISTRY_VERSION) {
+    throw new PurgeVerificationError("purge_surface_registry_version_mismatch");
+  }
+  if (
+    row.external_integration_manifest_version !==
+    PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION
+  ) {
+    throw new PurgeVerificationError(
+      "external_integration_manifest_version_mismatch",
+    );
+  }
+  if (
+    row.workflow_subject_manifest_version !==
+    PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION
+  ) {
+    throw new PurgeVerificationError(
+      "workflow_subject_manifest_version_mismatch",
+    );
+  }
+}
+
+const LEGACY_PURGE_VERSIONS = {
+  externalIntegrationManifestVersion:
+    PURGE_EXTERNAL_INTEGRATION_MANIFEST_LEGACY_VERSION,
+  purgeSurfaceRegistryVersion: PURGE_SURFACE_REGISTRY_LEGACY_VERSION,
+  workflowSubjectManifestVersion:
+    PURGE_WORKFLOW_SUBJECT_MANIFEST_LEGACY_VERSION,
+} as const;
+
+function isCurrentPurgeVersions(
+  row: Pick<
+    OrderRow,
+    | "purge_surface_registry_version"
+    | "external_integration_manifest_version"
+    | "workflow_subject_manifest_version"
+  >,
+): boolean {
+  return (
+    row.purge_surface_registry_version === PURGE_SURFACE_REGISTRY_VERSION &&
+    row.external_integration_manifest_version ===
+      PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION &&
+    row.workflow_subject_manifest_version ===
+      PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION
+  );
+}
+
+function isLegacyPurgeVersions(
+  row: Pick<
+    OrderRow,
+    | "purge_surface_registry_version"
+    | "external_integration_manifest_version"
+    | "workflow_subject_manifest_version"
+  >,
+): boolean {
+  return (
+    row.purge_surface_registry_version ===
+      LEGACY_PURGE_VERSIONS.purgeSurfaceRegistryVersion &&
+    row.external_integration_manifest_version ===
+      LEGACY_PURGE_VERSIONS.externalIntegrationManifestVersion &&
+    row.workflow_subject_manifest_version ===
+      LEGACY_PURGE_VERSIONS.workflowSubjectManifestVersion
+  );
+}
+
 function mapOrder(row: OrderRow): OwnerPurgeOrder {
   return {
     ownerPurgeOrderId: row.owner_purge_order_id,
@@ -44,6 +147,10 @@ function mapOrder(row: OrderRow): OwnerPurgeOrder {
     dataEpoch: Number(row.data_epoch),
     status: row.status as OwnerPurgeOrderStatus,
     policyVersion: row.policy_version,
+    purgeSurfaceRegistryVersion: row.purge_surface_registry_version,
+    externalIntegrationManifestVersion:
+      row.external_integration_manifest_version,
+    workflowSubjectManifestVersion: row.workflow_subject_manifest_version,
     requestedAt: row.requested_at,
     accessRevokedAt: row.access_revoked_at,
     propagatingAt: row.propagating_at,
@@ -51,7 +158,12 @@ function mapOrder(row: OrderRow): OwnerPurgeOrder {
     activeSystemDeletedAt: row.active_system_deleted_at,
     retentionPendingAt: row.retention_pending_at,
     needsAttentionAt: row.needs_attention_at,
-    needsAttentionReason: row.needs_attention_reason,
+    needsAttentionReason:
+      row.needs_attention_reason === null
+        ? null
+        : isPurgeAttentionReason(row.needs_attention_reason)
+          ? row.needs_attention_reason
+          : "unknown_error",
     backupRetentionUntil: row.backup_retention_until,
   };
 }
@@ -69,227 +181,218 @@ function mapReceipt(row: ReceiptRow): OwnerPurgeReceipt {
 
 const ORDER_COLUMNS = `
   owner_purge_order_id, user_id, from_data_epoch::text, data_epoch::text,
-  status, policy_version, requested_at, access_revoked_at, propagating_at,
+  status, policy_version, purge_surface_registry_version, requested_at,
+  external_integration_manifest_version,
+  workflow_subject_manifest_version,
+  access_revoked_at, propagating_at,
   verifying_at, active_system_deleted_at, retention_pending_at,
   needs_attention_at, needs_attention_reason, backup_retention_until
 `;
 
-// workflow_commands is deliberately polymorphic: its subject has no foreign
-// key because the command vocabulary spans tables introduced over time. Keep
-// this scope expression in one place so every purge delete and its immediate
-// verification use the same owner-bound subject set.
-const OWNER_WORKFLOW_COMMAND_SCOPE = `(
-  (
-    command.subject_type = 'daily_session'
-    AND command.subject_id IN (
-      SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-    )
-  )
-  OR (
-    command.subject_type = 'conversation_event_revision'
-    AND command.subject_id IN (
-      SELECT conversation_event_revision_id
-      FROM conversation_event_revisions WHERE user_id = $1
-    )
-  )
-  OR (
-    command.subject_type = 'memory_claim'
-    AND command.subject_id IN (
-      SELECT memory_claim_id FROM memory_claims WHERE user_id = $1
-    )
-  )
-  OR (
-    command.subject_type = 'entity'
-    AND command.subject_id IN (
-      SELECT entity_id FROM entities WHERE user_id = $1
-    )
-  )
-  OR (
-    command.subject_type = 'app_user'
-    AND command.subject_id = $1
-  )
-)`;
+const REQUIRED_PURGE_RECEIPT_DESTINATIONS = new Set([
+  "business_database",
+  "purge_marker_store",
+  ...PURGE_SURFACE_REGISTRY_SNAPSHOT.surfaces
+    .map((surface) => surface.receiptDestination)
+    .filter((destination) => !destination.startsWith("provider:")),
+]);
 
-/**
- * Every owner-scoped surface present through 1A.3a that the Full Purge clears,
- * with the count query verification uses. Conversation Event Revisions are
- * intentionally absent: they survive as content-free tombstoned envelopes
- * (content_purged_at + empty canonical_text) per the issue #27 clearing
- * strategy.
- */
-const CLEARED_SURFACES: ReadonlyArray<Readonly<{
-  label: string;
-  params?: string[];
-  sql: string;
-}>> = [
-  { label: "daily_sessions", sql: "SELECT count(*) FROM daily_sessions WHERE user_id = $1" },
-  { label: "interaction_turns", sql: "SELECT count(*) FROM interaction_turns WHERE user_id = $1" },
-  { label: "conversation_events", sql: "SELECT count(*) FROM conversation_events WHERE user_id = $1" },
-  { label: "generation_commands", sql: "SELECT count(*) FROM generation_commands WHERE user_id = $1" },
-  { label: "model_run_attempts", sql: "SELECT count(*) FROM model_run_attempts WHERE user_id = $1" },
-  { label: "bios", sql: "SELECT count(*) FROM bios WHERE user_id = $1" },
-  { label: "bio_versions", sql: "SELECT count(*) FROM bio_versions WHERE user_id = $1" },
-  { label: "bio_statements", sql: "SELECT count(*) FROM bio_statements WHERE user_id = $1" },
-  { label: "bio_atomic_propositions", sql: "SELECT count(*) FROM bio_atomic_propositions WHERE user_id = $1" },
-  { label: "bio_claim_links", sql: "SELECT count(*) FROM bio_claim_links WHERE user_id = $1" },
-  { label: "bio_coverage_units", sql: "SELECT count(*) FROM bio_coverage_units WHERE user_id = $1" },
-  { label: "bio_coverage_members", sql: "SELECT count(*) FROM bio_coverage_members WHERE user_id = $1" },
-  { label: "bio_validation_findings", sql: "SELECT count(*) FROM bio_validation_findings WHERE user_id = $1" },
-  { label: "compiled_contexts", sql: "SELECT count(*) FROM compiled_contexts WHERE user_id = $1" },
-  { label: "compiled_context_revision_refs", sql: "SELECT count(*) FROM compiled_context_revision_refs WHERE user_id = $1" },
-  { label: "provider_egress_dispositions", sql: "SELECT count(*) FROM provider_egress_dispositions WHERE user_id = $1" },
-  { label: "provider_egress_consents", sql: "SELECT count(*) FROM provider_egress_consents WHERE user_id = $1" },
-  { label: "continuous_exchange_inactivity_evaluations", sql: "SELECT count(*) FROM continuous_exchange_inactivity_evaluations WHERE user_id = $1" },
-  { label: "evidence_source_snapshots", sql: "SELECT count(*) FROM evidence_source_snapshots WHERE user_id = $1" },
-  { label: "evidence_items", sql: "SELECT count(*) FROM evidence_items WHERE user_id = $1" },
-  { label: "evidence_lineage", sql: "SELECT count(*) FROM evidence_lineage WHERE evidence_item_id IN (SELECT evidence_item_id FROM evidence_items WHERE user_id = $1)" },
-  { label: "evidence_model_run_attempts", sql: "SELECT count(*) FROM evidence_model_run_attempts WHERE evidence_source_snapshot_id IN (SELECT evidence_source_snapshot_id FROM evidence_source_snapshots WHERE user_id = $1)" },
-  { label: "journals", sql: "SELECT count(*) FROM journals WHERE user_id = $1" },
-  { label: "journal_versions", sql: "SELECT count(*) FROM journal_versions WHERE user_id = $1" },
-  { label: "journal_diagnostic_findings", sql: "SELECT count(*) FROM journal_diagnostic_findings WHERE journal_statement_id IN (SELECT journal_statement_id FROM journal_statements WHERE user_id = $1)" },
-  { label: "journal_statements", sql: "SELECT count(*) FROM journal_statements WHERE user_id = $1" },
-  { label: "journal_statement_evidence_links", sql: "SELECT count(*) FROM journal_statement_evidence_links WHERE user_id = $1" },
-  { label: "journal_statement_entity_links", sql: "SELECT count(*) FROM journal_statement_entity_links WHERE user_id = $1" },
-  { label: "journal_identity_review_fences", sql: "SELECT count(*) FROM journal_identity_review_fences WHERE user_id = $1" },
-  { label: "entity_identity_corrections", sql: "SELECT count(*) FROM entity_identity_corrections WHERE user_id = $1" },
-  { label: "entity_identity_revalidation_runs", sql: "SELECT count(*) FROM entity_identity_revalidation_runs WHERE user_id = $1" },
-  { label: "journal_validation_results", sql: "SELECT count(*) FROM journal_validation_results WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
-  { label: "journal_generation_commands", sql: "SELECT count(*) FROM journal_generation_commands WHERE user_id = $1" },
-  { label: "journal_model_run_attempts", sql: "SELECT count(*) FROM journal_model_run_attempts WHERE generation_command_id IN (SELECT generation_command_id FROM journal_generation_commands WHERE user_id = $1)" },
-  { label: "journal_workflow_outcomes", sql: "SELECT count(*) FROM journal_workflow_outcomes WHERE user_id = $1" },
-  { label: "rolling_summary_commands", sql: "SELECT count(*) FROM rolling_summary_commands WHERE user_id = $1" },
-  { label: "rolling_summary_versions", sql: "SELECT count(*) FROM rolling_summary_versions WHERE user_id = $1" },
-  { label: "current_rolling_summaries", sql: "SELECT count(*) FROM current_rolling_summaries WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
-  { label: "dialogue_state_commands", sql: "SELECT count(*) FROM dialogue_state_commands WHERE user_id = $1" },
-  { label: "dialogue_state_versions", sql: "SELECT count(*) FROM dialogue_state_versions WHERE user_id = $1" },
-  { label: "current_dialogue_states", sql: "SELECT count(*) FROM current_dialogue_states WHERE daily_session_id IN (SELECT daily_session_id FROM daily_sessions WHERE user_id = $1)" },
-  { label: "daily_session_date_outcomes", sql: "SELECT count(*) FROM daily_session_date_outcomes WHERE user_id = $1" },
-  { label: "auth_sessions", sql: "SELECT count(*) FROM auth_sessions WHERE user_id = $1" },
-  { label: "entity_labels", sql: "SELECT count(*) FROM entity_labels WHERE user_id = $1" },
-  { label: "entity_mentions", sql: "SELECT count(*) FROM entity_mentions WHERE user_id = $1" },
-  { label: "entity_mention_candidates", sql: "SELECT count(*) FROM entity_mention_candidates WHERE user_id = $1" },
-  { label: "memory_candidates", sql: "SELECT count(*) FROM memory_candidates WHERE user_id = $1" },
-  { label: "memory_candidate_evidence_links", sql: "SELECT count(*) FROM memory_candidate_evidence_links WHERE user_id = $1" },
-  { label: "memory_forget_requests", sql: "SELECT count(*) FROM memory_forget_requests WHERE user_id = $1" },
-  { label: "memory_forget_evidence_exclusions", sql: "SELECT count(*) FROM memory_forget_evidence_exclusions WHERE user_id = $1" },
-  { label: "memory_forget_reversals", sql: "SELECT count(*) FROM memory_forget_reversals WHERE user_id = $1" },
-  { label: "relationship_resolver_hints", sql: "SELECT count(*) FROM relationship_resolver_hints WHERE user_id = $1" },
-  { label: "claim_evidence_links", sql: "SELECT count(*) FROM claim_evidence_links WHERE user_id = $1" },
-  { label: "memory_claim_version_qualifier_evidence", sql: "SELECT count(*) FROM memory_claim_version_qualifier_evidence WHERE user_id = $1" },
-  { label: "claim_retrieval_projections", sql: "SELECT count(*) FROM claim_retrieval_projections WHERE user_id = $1" },
-  { label: "retrieval_run_candidates", sql: "SELECT count(*) FROM retrieval_run_candidates WHERE user_id = $1" },
-  { label: "retrieval_runs", sql: "SELECT count(*) FROM retrieval_runs WHERE user_id = $1" },
-  { label: "fast_path_session_items", sql: "SELECT count(*) FROM fast_path_session_items WHERE user_id = $1" },
-  { label: "entity_resolve_gate_outcomes", sql: "SELECT count(*) FROM entity_resolve_gate_outcomes WHERE user_id = $1" },
-  { label: "entity_clarification_proposals", sql: "SELECT count(*) FROM entity_clarification_proposals WHERE user_id = $1" },
-  { label: "fast_path_extraction_runs", sql: "SELECT count(*) FROM fast_path_extraction_runs WHERE user_id = $1" },
-  { label: "memory_consolidation_diffs", sql: "SELECT count(*) FROM memory_consolidation_diffs WHERE user_id = $1" },
-  { label: "memory_consolidation_runs", sql: "SELECT count(*) FROM memory_consolidation_runs WHERE user_id = $1" },
-  { label: "memory_claim_corrections", sql: "SELECT count(*) FROM memory_claim_corrections WHERE user_id = $1" },
-  { label: "memory_impression_vetoes", sql: "SELECT count(*) FROM memory_impression_vetoes WHERE user_id = $1" },
-  { label: "memory_correction_followups", sql: "SELECT count(*) FROM memory_correction_followups WHERE user_id = $1" },
-  { label: "conversation_action_handles", sql: "SELECT count(*) FROM conversation_action_handles WHERE user_id = $1" },
-  { label: "conversation_action_payloads", sql: "SELECT count(*) FROM conversation_action_payloads WHERE action_execution_id IN (SELECT action_execution_id FROM conversation_action_executions WHERE user_id = $1)" },
-  { label: "conversation_action_receipts", sql: "SELECT count(*) FROM conversation_action_receipts WHERE action_execution_id IN (SELECT action_execution_id FROM conversation_action_executions WHERE user_id = $1)" },
-  { label: "conversation_action_executions", sql: "SELECT count(*) FROM conversation_action_executions WHERE user_id = $1" },
-  // Source-ref tables have no user_id and are cleared by ON DELETE CASCADE
-  // from their commands; verification asserts no orphans survived.
-  { label: "rolling_summary_command_source_refs", params: [], sql: "SELECT count(*) FROM rolling_summary_command_source_refs ref LEFT JOIN rolling_summary_commands command ON command.rolling_summary_command_id = ref.rolling_summary_command_id WHERE command.rolling_summary_command_id IS NULL" },
-  { label: "dialogue_state_command_source_refs", params: [], sql: "SELECT count(*) FROM dialogue_state_command_source_refs ref LEFT JOIN dialogue_state_commands command ON command.dialogue_state_command_id = ref.dialogue_state_command_id WHERE command.dialogue_state_command_id IS NULL" },
-];
+const FULL_PURGE_COMMAND_TYPE = PURGE_WORKFLOW_SUBJECT_MANIFEST.commandType;
+const FULL_PURGE_EVENT_TYPE = PURGE_WORKFLOW_SUBJECT_MANIFEST.eventType;
+const FULL_PURGE_SUBJECT_TYPE =
+  PURGE_WORKFLOW_SUBJECT_MANIFEST.subjectTypes.appUser;
 
-/**
- * Immutable EntityVersion / ClaimVersion rows cannot be deleted without
- * breaking their history contract. Full Purge therefore leaves only their
- * contentless tombstone markers; no current pointer or readable owner row may
- * survive. The Self Entity's active envelope is deliberately excluded.
- */
-const PURGED_MEMORY_SURFACES: ReadonlyArray<Readonly<{
-  label: string;
-  sql: string;
-}>> = [
-  {
-    label: "memory_claims_not_purged",
-    sql: `
-      SELECT count(*)
-      FROM memory_claims claim
-      WHERE claim.user_id = $1
-        AND (
-          claim.current_version_id IS NOT NULL
-          OR claim.deleted_at IS NULL
-          OR claim.content_purged_at IS NULL
-        )
-    `,
-  },
-  {
-    label: "memory_claim_versions_not_purged",
-    sql: `
-      SELECT count(*)
-      FROM memory_claim_versions version
-      WHERE version.user_id = $1
-        AND version.content_purged_at IS NULL
-    `,
-  },
-  {
-    label: "memory_claim_version_qualifiers_not_purged",
-    sql: `
-      SELECT count(*)
-      FROM memory_claim_version_qualifiers qualifier
-      WHERE qualifier.user_id = $1
-        AND qualifier.content_purged_at IS NULL
-    `,
-  },
-  {
-    label: "ordinary_entities_not_purged",
-    sql: `
-      SELECT count(*)
-      FROM entities entity
-      WHERE entity.user_id = $1
-        AND NOT EXISTS (
-          SELECT 1
-          FROM user_self_entities binding
-          WHERE binding.user_id = $1
-            AND binding.entity_id = entity.entity_id
-        )
-        AND (
-          entity.current_version_id IS NOT NULL
-          OR entity.deleted_at IS NULL
-        )
-    `,
-  },
-  {
-    label: "ordinary_entity_versions_not_purged",
-    sql: `
-      SELECT count(*)
-      FROM entity_versions version
-      WHERE version.user_id = $1
-        AND version.content_purged_at IS NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM user_self_entities binding
-          WHERE binding.user_id = $1
-            AND binding.entity_id = version.entity_id
-        )
-    `,
-  },
-];
+function assertRecoveryMarkerReceipts(
+  receipts: readonly Readonly<{
+    destination: string;
+    destinationDisposition: string;
+    providerRetentionUntil: Date | null;
+  }>[],
+): void {
+  const seen = new Set<string>();
+  let businessReceiptCount = 0;
+  for (const receipt of receipts) {
+    if (seen.has(receipt.destination)) {
+      throw new PurgeVerificationError("recovery_marker_duplicate_receipt");
+    }
+    seen.add(receipt.destination);
+    if (receipt.destination === "business_database") {
+      businessReceiptCount += 1;
+      if (
+        !["verified_deleted", "not_applicable"].includes(
+          receipt.destinationDisposition,
+        ) ||
+        receipt.providerRetentionUntil !== null
+      ) {
+        throw new PurgeVerificationError(
+          "recovery_marker_business_receipt_invalid",
+        );
+      }
+      continue;
+    }
+    if (
+      !receipt.destination.startsWith("provider:") ||
+      receipt.destination.length <= "provider:".length ||
+      ![
+        "retention_pending",
+        "verified_deleted",
+        "policy_expired",
+        "not_applicable",
+      ].includes(receipt.destinationDisposition) ||
+      (["retention_pending", "policy_expired"].includes(
+        receipt.destinationDisposition,
+      ) &&
+        receipt.providerRetentionUntil === null)
+    ) {
+      throw new PurgeVerificationError("recovery_marker_receipt_invalid");
+    }
+    if (
+      receipt.providerRetentionUntil !== null &&
+      Number.isNaN(receipt.providerRetentionUntil.getTime())
+    ) {
+      throw new PurgeVerificationError("recovery_marker_receipt_invalid");
+    }
+  }
+  if (businessReceiptCount !== 1) {
+    throw new PurgeVerificationError("recovery_marker_business_receipt_missing");
+  }
+}
+
+async function assertCompletePurgeReceipts(
+  client: PoolClient,
+  input: Readonly<{
+    ownerPurgeOrderId: string;
+    userId: string;
+    now: Date;
+  }>,
+): Promise<void> {
+  const result = await client.query<{
+    destination: string;
+    destination_disposition: string;
+    provider_disposition: string | null;
+    provider_retention_until: Date | null;
+  }>(
+    `SELECT destination, destination_disposition, provider_disposition,
+            provider_retention_until
+     FROM owner_purge_receipts
+     WHERE owner_purge_order_id = $1`,
+    [input.ownerPurgeOrderId],
+  );
+  const receipts = new Map(
+    result.rows.map((receipt) => [receipt.destination, receipt]),
+  );
+  const allowedDispositions = new Set([
+    "retention_pending",
+    "verified_deleted",
+    "policy_expired",
+    "not_applicable",
+  ]);
+  for (const receipt of result.rows) {
+    const isProviderReceipt =
+      receipt.destination.startsWith("provider:") &&
+      receipt.destination.length > "provider:".length;
+    if (
+      !(
+        REQUIRED_PURGE_RECEIPT_DESTINATIONS.has(receipt.destination) ||
+        isProviderReceipt
+      ) ||
+      !allowedDispositions.has(receipt.destination_disposition) ||
+      (receipt.provider_disposition !== null &&
+        !allowedDispositions.has(receipt.provider_disposition)) ||
+      (isProviderReceipt && receipt.provider_disposition === null) ||
+      (!isProviderReceipt && receipt.provider_disposition !== null) ||
+      (isProviderReceipt &&
+        receipt.provider_disposition !== receipt.destination_disposition) ||
+      (isProviderReceipt &&
+        ["retention_pending", "policy_expired"].includes(
+          receipt.destination_disposition,
+        ) &&
+        receipt.provider_retention_until === null) ||
+      (isProviderReceipt &&
+        receipt.provider_disposition !== null &&
+        ["retention_pending", "policy_expired"].includes(
+          receipt.provider_disposition,
+        ) &&
+        receipt.provider_retention_until === null)
+    ) {
+      throw new PurgeVerificationError("owner_purge_receipt_invalid");
+    }
+  }
+  for (const destination of REQUIRED_PURGE_RECEIPT_DESTINATIONS) {
+    const receipt = receipts.get(destination);
+    if (
+      !receipt ||
+      !["verified_deleted", "not_applicable"].includes(
+        receipt.destination_disposition,
+      ) ||
+      receipt.provider_disposition !== null
+    ) {
+      throw new PurgeVerificationError("owner_purge_receipts_incomplete");
+    }
+  }
+  for (const integration of PURGE_SURFACE_REGISTRY_SNAPSHOT.externalIntegrations) {
+    await verifyPurgeSurfaceIntegration(client, integration, {
+      now: input.now,
+      ownerPurgeOrderId: input.ownerPurgeOrderId,
+      userId: input.userId,
+    });
+  }
+}
 
 export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
-  public constructor(private readonly pool: Pool) {}
+  private readonly purgeRegistry = PURGE_SURFACE_REGISTRY_SNAPSHOT;
+  private readonly purgeSurfaces: readonly PurgeSurfaceEntry[];
+
+  public constructor(private readonly pool: Pool) {
+    const registry = assertPurgeSurfaceRegistry();
+    assertPurgeSurfaceAdapterCoverage(registry);
+    this.purgeSurfaces = registry.surfaces;
+  }
 
   public async startOrder(input: {
     userId: UserId;
     confirmation: "PURGE";
     policyVersion: string;
+    purgeSurfaceRegistryVersion?: string;
+    externalIntegrationManifestVersion?: string;
+    workflowSubjectManifestVersion?: string;
     now: Date;
   }): Promise<
     | Readonly<{ outcome: "started"; order: OwnerPurgeOrder; created: boolean }>
     | Readonly<{ outcome: "owner_not_active" }>
     | Readonly<{ outcome: "inconsistent_owner_state" }>
   > {
+    const purgeSurfaceRegistryVersion =
+      input.purgeSurfaceRegistryVersion ?? PURGE_SURFACE_REGISTRY_VERSION;
+    const externalIntegrationManifestVersion =
+      input.externalIntegrationManifestVersion ??
+      PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION;
+    const workflowSubjectManifestVersion =
+      input.workflowSubjectManifestVersion ??
+      PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION;
+    if (purgeSurfaceRegistryVersion !== PURGE_SURFACE_REGISTRY_VERSION) {
+      throw new PurgeVerificationError("purge_surface_registry_version_mismatch");
+    }
+    if (
+      externalIntegrationManifestVersion !==
+      PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION
+    ) {
+      throw new PurgeVerificationError(
+        "external_integration_manifest_version_mismatch",
+      );
+    }
+    if (
+      workflowSubjectManifestVersion !==
+      PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION
+    ) {
+      throw new PurgeVerificationError(
+        "workflow_subject_manifest_version_mismatch",
+      );
+    }
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
       const owner = await client.query<{
         status: string;
         data_epoch: string;
@@ -335,13 +438,25 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         `
           INSERT INTO owner_purge_orders (
             owner_purge_order_id, user_id, from_data_epoch, data_epoch,
-            status, confirmation, policy_version, requested_at, last_attempt_at
+            status, confirmation, policy_version, purge_surface_registry_version,
+            external_integration_manifest_version,
+            workflow_subject_manifest_version, requested_at, last_attempt_at
           )
-          VALUES ($1, $2, $3, $4, 'requested', 'PURGE', $5, $6, $6)
+          VALUES ($1, $2, $3, $4, 'requested', 'PURGE', $5, $6, $7, $8, $9, $9)
           ON CONFLICT (user_id, from_data_epoch) DO NOTHING
           RETURNING ${ORDER_COLUMNS}
         `,
-        [orderId, input.userId, fromDataEpoch, dataEpoch, input.policyVersion, input.now],
+        [
+          orderId,
+          input.userId,
+          fromDataEpoch,
+          dataEpoch,
+          input.policyVersion,
+          purgeSurfaceRegistryVersion,
+          externalIntegrationManifestVersion,
+          workflowSubjectManifestVersion,
+          input.now,
+        ],
       );
       if (inserted.rows[0] === undefined) {
         // Defensive convergence: an in-flight order already owns this epoch.
@@ -385,11 +500,22 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
           INSERT INTO workflow_commands (
             workflow_command_id, command_type, subject_type, subject_id,
             source_revision, policy_version, expected_data_epoch, status,
-            created_at
+            created_at, purge_surface_registry_version,
+            external_integration_manifest_version,
+            workflow_subject_manifest_version
           )
-          VALUES ($1, 'owner_full_purge', 'app_user', $2, 0, $3, $4, 'created', $5)
+          VALUES ($1, '${FULL_PURGE_COMMAND_TYPE}', '${FULL_PURGE_SUBJECT_TYPE}', $2, 0, $3, $4, 'created', $5, $6, $7, $8)
         `,
-        [workflowCommandId, input.userId, input.policyVersion, dataEpoch, input.now],
+        [
+          workflowCommandId,
+          input.userId,
+          input.policyVersion,
+          dataEpoch,
+          input.now,
+          purgeSurfaceRegistryVersion,
+          externalIntegrationManifestVersion,
+          workflowSubjectManifestVersion,
+        ],
       );
       await client.query(
         `
@@ -400,7 +526,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
             aggregate_data_epoch
           )
           VALUES (
-            $1, $2, 'app_user', $3, 0, 'owner_full_purge_requested', 'pending',
+            $1, $2, '${FULL_PURGE_SUBJECT_TYPE}', $3, 0, '${FULL_PURGE_EVENT_TYPE}', 'pending',
             $4, 0, $5::jsonb, $4, 0, $6
           )
         `,
@@ -411,10 +537,18 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
           input.now,
           JSON.stringify({
             workflowCommandId,
-            subjectType: "app_user",
+            subjectType: FULL_PURGE_SUBJECT_TYPE,
             subjectId: input.userId,
             expectedDataEpoch: dataEpoch,
-            eventType: "owner_full_purge_requested",
+            purgeSurfaceRegistryVersion:
+              input.purgeSurfaceRegistryVersion ?? PURGE_SURFACE_REGISTRY_VERSION,
+            externalIntegrationManifestVersion:
+              input.externalIntegrationManifestVersion ??
+              PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+            workflowSubjectManifestVersion:
+              input.workflowSubjectManifestVersion ??
+              PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+            eventType: FULL_PURGE_EVENT_TYPE,
             status: "pending",
           }),
           dataEpoch,
@@ -478,6 +612,66 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
     return result.rows.map(mapReceipt);
   }
 
+  public async verifyRecoveryReceipts(input: {
+    ownerPurgeOrderId: string;
+    userId: UserId;
+    dataEpoch: number;
+  }): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      try {
+        await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
+        const order = await client.query<{
+          user_id: string;
+          data_epoch: string;
+          status: string;
+        }>(
+          `SELECT user_id, data_epoch::text, status
+           FROM owner_purge_orders
+           WHERE owner_purge_order_id = $1
+           FOR SHARE`,
+          [input.ownerPurgeOrderId],
+        );
+        const row = order.rows[0];
+        if (
+          !row ||
+          row.user_id !== input.userId ||
+          Number(row.data_epoch) !== input.dataEpoch ||
+          !["active_system_deleted", "retention_pending"].includes(row.status)
+        ) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+        await assertCompletePurgeReceipts(client, {
+          now: new Date(),
+          ownerPurgeOrderId: input.ownerPurgeOrderId,
+          userId: input.userId,
+        });
+      } catch (error) {
+        if (
+          error instanceof PurgeVerificationError ||
+          error instanceof PurgeSurfaceRegistryError
+        ) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+        throw error;
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // Preserve the original database error.
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   public async markAttemptStarted(input: {
     ownerPurgeOrderId: string;
     now: Date;
@@ -500,6 +694,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
       const order = await client.query<OrderRow>(
         `SELECT ${ORDER_COLUMNS} FROM owner_purge_orders
          WHERE owner_purge_order_id = $1 FOR UPDATE`,
@@ -513,6 +708,78 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         await client.query("ROLLBACK");
         return { outcome: "not_applicable" };
       }
+      if (isLegacyPurgeVersions(row)) {
+        await client.query(
+          `UPDATE owner_purge_orders
+           SET purge_surface_registry_version = $2,
+               external_integration_manifest_version = $3,
+               workflow_subject_manifest_version = $4
+           WHERE owner_purge_order_id = $1`,
+          [
+            input.ownerPurgeOrderId,
+            PURGE_SURFACE_REGISTRY_VERSION,
+            PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+            PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+          ],
+        );
+        await client.query(
+          `UPDATE workflow_commands command
+           SET purge_surface_registry_version = $2,
+               external_integration_manifest_version = $3,
+               workflow_subject_manifest_version = $4
+           WHERE command.command_type = $5
+             AND command.subject_type = $6
+             AND command.subject_id = $1
+             AND command.expected_data_epoch = $7`,
+          [
+            row.user_id,
+            PURGE_SURFACE_REGISTRY_VERSION,
+            PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+            PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+            FULL_PURGE_COMMAND_TYPE,
+            FULL_PURGE_SUBJECT_TYPE,
+            Number(row.data_epoch),
+          ],
+        );
+        await client.query(
+          `UPDATE outbox_events event
+           SET payload = jsonb_set(
+             jsonb_set(
+               jsonb_set(
+                 event.payload,
+                 '{purgeSurfaceRegistryVersion}',
+                 to_jsonb($2::text),
+                 true
+               ),
+               '{externalIntegrationManifestVersion}',
+               to_jsonb($3::text),
+               true
+             ),
+             '{workflowSubjectManifestVersion}',
+             to_jsonb($4::text),
+             true
+           )
+           WHERE event.workflow_command_id IN (
+             SELECT command.workflow_command_id
+             FROM workflow_commands command
+             WHERE command.command_type = $5
+               AND command.subject_type = $6
+               AND command.subject_id = $1
+               AND command.expected_data_epoch = $7
+           )`,
+          [
+            row.user_id,
+            PURGE_SURFACE_REGISTRY_VERSION,
+            PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+            PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+            FULL_PURGE_COMMAND_TYPE,
+            FULL_PURGE_SUBJECT_TYPE,
+            Number(row.data_epoch),
+          ],
+        );
+      } else {
+        assertCurrentPurgeVersions(row);
+      }
       await client.query(
         `UPDATE owner_purge_orders
          SET status = 'access_revoked',
@@ -522,9 +789,8 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         [input.ownerPurgeOrderId, input.now],
       );
 
-      // Batch-cancel every executable command owned by this owner's Daily
-      // Sessions. The purge's own app_user-subject command is excluded by the
-      // subject_type filter and keeps driving propagation.
+      // Batch-cancel every executable command owned by this owner. The purge's
+      // own app_user-subject command is excluded and keeps driving propagation.
       const cancelledLeases = await client.query<{ workflow_receipt_id: string | null }>(
         `
           UPDATE outbox_events
@@ -534,11 +800,9 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
               lease_expires_at = NULL
           WHERE status IN ('pending', 'leased')
             AND workflow_command_id IN (
-              SELECT workflow_command_id FROM workflow_commands
-              WHERE subject_type = 'daily_session'
-                AND subject_id IN (
-                  SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-                )
+              SELECT workflow_command_id FROM workflow_commands command
+              WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
+                AND command.command_type <> 'owner_full_purge'
             )
           RETURNING workflow_receipt_id
         `,
@@ -546,13 +810,11 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       );
       await client.query(
         `
-          UPDATE workflow_commands
+          UPDATE workflow_commands command
           SET status = 'cancelled', cancelled_reason = 'owner_purged'
           WHERE status IN ('created', 'dispatched')
-            AND subject_type = 'daily_session'
-            AND subject_id IN (
-              SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-            )
+            AND ${OWNER_WORKFLOW_COMMAND_SCOPE}
+            AND command.command_type <> 'owner_full_purge'
         `,
         [row.user_id],
       );
@@ -572,7 +834,14 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
 
   public async transitionToPropagatingAndClear(input: {
     ownerPurgeOrderId: string;
-    providerRetentionUntil: Date;
+    providerRetentionUntil?: Date;
+    effectivePurgeAt?: Date;
+    backupRetentionUntil?: Date | null;
+    providerReceipts?: readonly Readonly<{
+      destination: string;
+      destinationDisposition: string;
+      providerRetentionUntil: Date | null;
+    }>[];
     now: Date;
   }): Promise<
     | Readonly<{ outcome: "cleared" } & OwnerPurgeClearResult>
@@ -591,7 +860,31 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         await client.query("ROLLBACK");
         return { outcome: "not_applicable" };
       }
+      assertCurrentPurgeVersions(row);
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
       const userId = row.user_id;
+      const durableProviderReceipts =
+        row.propagating_at === null
+          ? undefined
+          : (
+              await client.query<{
+                destination: string;
+                destination_disposition: string;
+                provider_retention_until: Date | null;
+              }>(
+                `SELECT destination, destination_disposition,
+                        provider_retention_until
+                 FROM owner_purge_receipts
+                 WHERE owner_purge_order_id = $1
+                   AND destination LIKE 'provider:%'
+                 ORDER BY destination`,
+                [input.ownerPurgeOrderId],
+              )
+            ).rows.map((receipt) => ({
+              destination: receipt.destination,
+              destinationDisposition: receipt.destination_disposition,
+              providerRetentionUntil: receipt.provider_retention_until,
+            }));
 
       // Purge pass: the transaction-local flag plus the trigger-side
       // in-progress-order verification. Normal-path immutability stays
@@ -599,56 +892,6 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       await client.query("SELECT set_config('sayhear.purge_pass', $1, true)", [
         input.ownerPurgeOrderId,
       ]);
-
-      // Capture provider roles BEFORE the deletes so receipts reflect what
-      // actually received owner data (issue #27, architecture 18.4).
-      const roles = new Set<string>();
-      const conversationRole = await client.query(
-        "SELECT 1 FROM provider_egress_dispositions WHERE user_id = $1 LIMIT 1",
-        [userId],
-      );
-      if (conversationRole.rowCount) {
-        roles.add("conversation.text");
-      }
-      const journalRoles = await client.query<{ role: string }>(
-        `
-          SELECT DISTINCT attempt.role
-          FROM journal_model_run_attempts attempt
-          INNER JOIN journal_generation_commands command
-            ON command.generation_command_id = attempt.generation_command_id
-          WHERE command.user_id = $1
-        `,
-        [userId],
-      );
-      for (const attempt of journalRoles.rows) {
-        roles.add(attempt.role);
-      }
-      const evidenceRole = await client.query(
-        `
-          SELECT 1 FROM evidence_model_run_attempts attempt
-          INNER JOIN evidence_source_snapshots snapshot
-            ON snapshot.evidence_source_snapshot_id = attempt.evidence_source_snapshot_id
-          WHERE snapshot.user_id = $1 LIMIT 1
-        `,
-        [userId],
-      );
-      if (evidenceRole.rowCount) {
-        roles.add("evidence.extract");
-      }
-      const summaryRole = await client.query(
-        "SELECT 1 FROM rolling_summary_versions WHERE user_id = $1 LIMIT 1",
-        [userId],
-      );
-      if (summaryRole.rowCount) {
-        roles.add("summary.compress");
-      }
-      const dialogueRole = await client.query(
-        "SELECT 1 FROM dialogue_state_versions WHERE user_id = $1 LIMIT 1",
-        [userId],
-      );
-      if (dialogueRole.rowCount) {
-        roles.add("dialogue.state");
-      }
 
       // Backup retention horizon from the latest verified window.
       const backup = await client.query<{
@@ -663,12 +906,20 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         `,
       );
       const windowDays = backup.rows[0]?.longest_known_window_days ?? null;
-      const backupRetentionUntil =
+      const computedBackupRetentionUntil =
         windowDays === null
           ? null
           : new Date(
               input.now.getTime() + Number(windowDays) * 24 * 60 * 60 * 1_000,
             );
+      const backupRetentionUntil =
+        row.propagating_at !== null
+          ? row.backup_retention_until
+          : input.backupRetentionUntil === undefined
+            ? computedBackupRetentionUntil
+            : input.backupRetentionUntil;
+      const effectivePurgeAt =
+        row.propagating_at ?? input.effectivePurgeAt ?? input.now;
 
       await client.query(
         `UPDATE owner_purge_orders
@@ -677,18 +928,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
              backup_retention_until = $3,
              needs_attention_reason = NULL
          WHERE owner_purge_order_id = $1`,
-        [input.ownerPurgeOrderId, input.now, backupRetentionUntil],
-      );
-
-      // Tombstone Conversation Event Revision content (Foundation-designed
-      // transition; readers already fail closed on content_purged_at).
-      await client.query(
-        `
-          UPDATE conversation_event_revisions
-          SET content_purged_at = $2, canonical_text = ''
-          WHERE user_id = $1 AND content_purged_at IS NULL
-        `,
-        [userId, input.now],
+        [input.ownerPurgeOrderId, effectivePurgeAt, backupRetentionUntil],
       );
 
       // Break circular references before the hard DELETEs.
@@ -709,208 +949,9 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
            AND (current_revision_id IS NOT NULL OR generation_command_id IS NOT NULL)`,
         [userId],
       );
-
-      // Memory logical identities and immutable history retain only the
-      // content-free envelopes allowed by ADR-0074. Clear every current
-      // pointer first so no reader can reach a purged version while the
-      // dependent projections are being removed. The Self Entity envelope
-      // and its one-to-one binding are intentionally excluded.
-      await client.query(
-        `UPDATE memory_claims
-         SET current_version_id = NULL
-         WHERE user_id = $1 AND current_version_id IS NOT NULL`,
-        [userId],
-      );
-      await client.query(
-        `UPDATE entities entity
-         SET current_version_id = NULL
-         WHERE entity.user_id = $1
-           AND entity.current_version_id IS NOT NULL
-           AND NOT EXISTS (
-             SELECT 1 FROM user_self_entities binding
-             WHERE binding.user_id = $1 AND binding.entity_id = entity.entity_id
-           )`,
-        [userId],
-      );
-      await client.query(
-        `UPDATE memory_claims
-         SET deleted_at = COALESCE(deleted_at, $2),
-             content_purged_at = COALESCE(content_purged_at, $2)
-         WHERE user_id = $1`,
-        [userId, input.now],
-      );
-      await client.query(
-        `UPDATE memory_claim_versions
-         SET content_purged_at = $2,
-             typed_value = NULL
-         WHERE user_id = $1 AND content_purged_at IS NULL`,
-        [userId, input.now],
-      );
-      await client.query(
-        `UPDATE memory_claim_version_qualifiers
-         SET content_purged_at = $2,
-             typed_value = NULL
-         WHERE user_id = $1 AND content_purged_at IS NULL`,
-        [userId, input.now],
-      );
-      await client.query(
-        `UPDATE entity_versions version
-         SET content_purged_at = $2
-         WHERE version.user_id = $1
-           AND version.content_purged_at IS NULL
-           AND NOT EXISTS (
-             SELECT 1 FROM user_self_entities binding
-             WHERE binding.user_id = $1 AND binding.entity_id = version.entity_id
-           )`,
-        [userId, input.now],
-      );
-      await client.query(
-        `UPDATE entities entity
-         SET deleted_at = COALESCE(deleted_at, $2)
-         WHERE entity.user_id = $1
-           AND entity.deleted_at IS NULL
-           AND NOT EXISTS (
-             SELECT 1 FROM user_self_entities binding
-             WHERE binding.user_id = $1 AND binding.entity_id = entity.entity_id
-           )`,
-        [userId, input.now],
-      );
-
-      // Hard-DELETE every other owner-scoped surface, FK-safe order.
-      await client.query(
-        "DELETE FROM entity_identity_revalidation_runs WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM journal_identity_review_fences WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM journal_statement_entity_links WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM entity_identity_corrections WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_correction_followups WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_claim_corrections WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_impression_vetoes WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_consolidation_diffs WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_consolidation_runs WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM fast_path_session_items WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM entity_resolve_gate_outcomes WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM entity_clarification_proposals WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM fast_path_extraction_runs WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM retrieval_run_candidates WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM retrieval_runs WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM relationship_resolver_hints WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM claim_retrieval_projections WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_claim_version_qualifier_evidence WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM claim_evidence_links WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_candidate_evidence_links WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM memory_candidates WHERE user_id = $1", [userId]);
-      await client.query(
-        "DELETE FROM memory_forget_reversals WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_forget_evidence_exclusions WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM memory_forget_requests WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM entity_mention_candidates WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM entity_mentions WHERE user_id = $1", [userId]);
-      await client.query("DELETE FROM entity_labels WHERE user_id = $1", [userId]);
-
-      // F2 typed Bio rows are private read-model content. Clear their child
-      // links before the shared GenerationCommand / ModelRunAttempt ledger so
-      // the FK lineage is removed in the same owner purge transaction.
-      await client.query(
-        "DELETE FROM bio_validation_findings WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM bio_claim_links WHERE user_id = $1", [
-        userId,
-      ]);
-      await client.query(
-        "DELETE FROM bio_coverage_members WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM bio_coverage_units WHERE user_id = $1", [
-        userId,
-      ]);
-      await client.query("DELETE FROM bio_statements WHERE user_id = $1", [
-        userId,
-      ]);
-      await client.query(
-        "DELETE FROM bio_atomic_propositions WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "UPDATE bios SET current_version_id = NULL WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM bio_versions WHERE user_id = $1", [userId]);
-      await client.query("DELETE FROM bios WHERE user_id = $1", [userId]);
-
-      // These action rows carry typed Claim / Qualifier / Entity references.
-      // Remove every owner workflow and outbox record first, then the
-      // content-bearing action envelope, before the old 1A.2 tables below.
+      // Action finalization rows point back to the action execution from
+      // three command surfaces. Break those nullable back-references before
+      // the registry reaches the action execution surface.
       await client.query(
         `UPDATE generation_commands
          SET action_execution_id = NULL
@@ -924,222 +965,42 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         [userId],
       );
       await client.query(
-        `DELETE FROM outbox_events
-         WHERE workflow_command_id IN (
-           SELECT workflow_command_id
-           FROM workflow_commands command
-           WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
-           AND command.command_type <> 'owner_full_purge'
-         )`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM workflow_commands command
+        `UPDATE workflow_commands command
+         SET action_execution_id = NULL
          WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
-         AND command.command_type <> 'owner_full_purge'`,
+           AND command.action_execution_id IS NOT NULL`,
         [userId],
       );
-      const remainingWorkflowCommands = await client.query<{ count: string }>(
-        `SELECT count(*) AS count
-         FROM workflow_commands command
-         WHERE ${OWNER_WORKFLOW_COMMAND_SCOPE}
-           AND command.command_type <> 'owner_full_purge'`,
-        [userId],
-      );
-      if (Number(remainingWorkflowCommands.rows[0]?.count ?? 0) > 0) {
-        throw new PurgeVerificationError("workflow_commands_not_cleared");
-      }
-      await client.query(
-        "DELETE FROM conversation_action_handles WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM conversation_action_receipts receipt
-         USING conversation_action_executions execution
-         WHERE receipt.action_execution_id = execution.action_execution_id
-           AND execution.user_id = $1`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM conversation_action_payloads payload
-         USING conversation_action_executions execution
-         WHERE payload.action_execution_id = execution.action_execution_id
-           AND execution.user_id = $1`,
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM conversation_action_executions WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM journal_statement_evidence_links WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM journal_diagnostic_findings
-         WHERE journal_statement_id IN (
-           SELECT journal_statement_id FROM journal_statements WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query("DELETE FROM journal_statements WHERE user_id = $1", [userId]);
-      await client.query(
-        `DELETE FROM journal_validation_results
-         WHERE daily_session_id IN (
-           SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query("DELETE FROM journal_versions WHERE user_id = $1", [userId]);
-      await client.query("DELETE FROM journals WHERE user_id = $1", [userId]);
-      await client.query(
-        `DELETE FROM journal_model_run_attempts
-         WHERE generation_command_id IN (
-           SELECT generation_command_id FROM journal_generation_commands
-           WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM journal_generation_commands WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM journal_workflow_outcomes WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM evidence_lineage
-         WHERE evidence_item_id IN (
-           SELECT evidence_item_id FROM evidence_items WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query("DELETE FROM evidence_items WHERE user_id = $1", [userId]);
-      await client.query(
-        `DELETE FROM evidence_model_run_attempts
-         WHERE evidence_source_snapshot_id IN (
-           SELECT evidence_source_snapshot_id FROM evidence_source_snapshots
-           WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM evidence_source_snapshots WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM daily_session_date_outcomes WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM current_rolling_summaries
-         WHERE daily_session_id IN (
-           SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM rolling_summary_versions WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM rolling_summary_commands WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM current_curiosity_stop_signals
-        WHERE daily_session_id IN (
-          SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-        )`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM curiosity_stop_signals WHERE user_id = $1`,
-        [userId],
-      );
-      await client.query(
-        `DELETE FROM current_dialogue_states
-         WHERE daily_session_id IN (
-           SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-         )`,
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM dialogue_state_versions WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM dialogue_state_commands WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM continuous_exchange_inactivity_evaluations WHERE user_id = $1",
-        [userId],
-      );
-      await client.query(
-        "DELETE FROM compiled_context_revision_refs WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM compiled_contexts WHERE user_id = $1", [userId]);
-      await client.query(
-        "DELETE FROM provider_egress_dispositions WHERE user_id = $1",
-        [userId],
-      );
-      await client.query("DELETE FROM model_run_attempts WHERE user_id = $1", [userId]);
-      await client.query("DELETE FROM generation_commands WHERE user_id = $1", [userId]);
-      await client.query(
-        `DELETE FROM outbox_events
-         WHERE workflow_command_id IN (
-           SELECT workflow_command_id FROM workflow_commands
-           WHERE subject_type = 'daily_session'
-             AND subject_id IN (
-               SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-             )
-         )`,
-        [userId],
-      );
-      await client.query(
-        `
-          DELETE FROM workflow_commands
-          WHERE subject_type = 'daily_session'
-            AND subject_id IN (
-              SELECT daily_session_id FROM daily_sessions WHERE user_id = $1
-            )
-        `,
-        [userId],
-      );
-      await client.query("DELETE FROM conversation_events WHERE user_id = $1", [userId]);
-      await client.query("DELETE FROM interaction_turns WHERE user_id = $1", [userId]);
-      await client.query("DELETE FROM daily_sessions WHERE user_id = $1", [userId]);
-      // Egress authorization was revoked in the opening transaction; clear the
-      // rows with the rest of the epoch's data.
-      await client.query("DELETE FROM provider_egress_consents WHERE user_id = $1", [
-        userId,
-      ]);
 
-      // Content-free Provider receipts: documented retention policy only —
-      // no Provider deletion API calls exist in 1A.2 (ADR-0022).
-      for (const role of roles) {
-        await client.query(
-          `
-            INSERT INTO owner_purge_receipts (
-              owner_purge_receipt_id, owner_purge_order_id, destination,
-              destination_disposition, provider_disposition,
-              provider_retention_until, recorded_at
-            )
-            VALUES (
-              gen_random_uuid(), $1, $2, 'retention_pending', 'retention_pending',
-              $3, $4
-            )
-            ON CONFLICT (owner_purge_order_id, destination) DO NOTHING
-          `,
-          [
-            input.ownerPurgeOrderId,
-            `provider:${role}`,
-            input.providerRetentionUntil,
-            input.now,
-          ],
+      // The registry is the closed coverage boundary. The pointer updates
+      // above break circular/back-reference foreign keys; every owner surface
+      // is then cleared by its registered adapter in deterministic FK order.
+      for (const surface of [...this.purgeSurfaces].sort(
+        (left, right) => left.clearOrder - right.clearOrder,
+      )) {
+        await clearPurgeSurface(client, surface, {
+          now: effectivePurgeAt,
+          ownerPurgeOrderId: input.ownerPurgeOrderId,
+          userId,
+        });
+      }
+
+      const providerRoles = [] as string[];
+      for (const integration of this.purgeRegistry.externalIntegrations) {
+        const providerReceipts =
+          input.providerReceipts ?? durableProviderReceipts;
+        providerRoles.push(
+          ...(await clearPurgeSurfaceIntegration(client, integration, {
+            now: effectivePurgeAt,
+            ownerPurgeOrderId: input.ownerPurgeOrderId,
+            userId,
+          }, {
+            ...(providerReceipts === undefined ? {} : { providerReceipts }),
+            ...(providerReceipts === undefined &&
+            input.providerRetentionUntil !== undefined
+              ? { providerRetentionUntil: input.providerRetentionUntil }
+              : {}),
+          })),
         );
       }
 
@@ -1147,7 +1008,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       return {
         outcome: "cleared",
         backupRetentionUntil,
-        providerRoles: [...roles].sort(),
+        providerRoles: [...new Set(providerRoles)].sort(),
       };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -1177,35 +1038,27 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         await client.query("ROLLBACK");
         return { outcome: "not_applicable" };
       }
+      assertCurrentPurgeVersions(row);
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
       const userId = row.user_id;
 
-      for (const surface of CLEARED_SURFACES) {
-        const count = await client.query<{ count: string }>(
-          surface.sql,
-          surface.params ?? [userId],
-        );
-        if (Number(count.rows[0]?.count ?? 0) > 0) {
-          await client.query("ROLLBACK");
-          throw new PurgeVerificationError(`${surface.label}_not_empty`);
-        }
+      // Verification is a distinct dispatch from clearing: no clear adapter
+      // may report its own success. Every registered surface is checked by
+      // its independent verifier, including retained owner/governance
+      // envelopes and the newly added safety/audit surfaces.
+      for (const surface of this.purgeSurfaces) {
+        await verifyPurgeSurface(client, surface, {
+          now: input.now,
+          ownerPurgeOrderId: input.ownerPurgeOrderId,
+          userId,
+        });
       }
-      for (const surface of PURGED_MEMORY_SURFACES) {
-        const count = await client.query<{ count: string }>(surface.sql, [userId]);
-        if (Number(count.rows[0]?.count ?? 0) > 0) {
-          await client.query("ROLLBACK");
-          throw new PurgeVerificationError(`${surface.label}`);
-        }
-      }
-      const unpurged = await client.query<{ count: string }>(
-        `
-          SELECT count(*) AS count FROM conversation_event_revisions
-          WHERE user_id = $1 AND content_purged_at IS NULL
-        `,
-        [userId],
-      );
-      if (Number(unpurged.rows[0]?.count ?? 0) > 0) {
-        await client.query("ROLLBACK");
-        throw new PurgeVerificationError("revisions_not_purged");
+      for (const integration of this.purgeRegistry.externalIntegrations) {
+        await verifyPurgeSurfaceIntegration(client, integration, {
+          now: input.now,
+          ownerPurgeOrderId: input.ownerPurgeOrderId,
+          userId,
+        });
       }
       await client.query(
         `UPDATE owner_purge_orders
@@ -1228,6 +1081,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
   public async transitionToActiveSystemDeleted(input: {
     ownerPurgeOrderId: string;
     backupRetentionUntil: Date | null;
+    effectivePurgeAt?: Date;
     now: Date;
   }): Promise<
     | Readonly<{ outcome: "active_system_deleted" }>
@@ -1244,10 +1098,21 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       const row = order.rows[0];
       if (
         !row ||
-        !["verifying", "needs_attention", "active_system_deleted"].includes(row.status)
+        !["verifying", "active_system_deleted"].includes(row.status)
       ) {
         await client.query("ROLLBACK");
         return { outcome: "not_applicable" };
+      }
+      assertCurrentPurgeVersions(row);
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
+      if (row.status === "active_system_deleted") {
+        await assertCompletePurgeReceipts(client, {
+          now: input.now,
+          ownerPurgeOrderId: row.owner_purge_order_id,
+          userId: row.user_id,
+        });
+        await client.query("COMMIT");
+        return { outcome: "active_system_deleted" };
       }
       const backupRetentionUntil =
         row.backup_retention_until ?? input.backupRetentionUntil;
@@ -1268,6 +1133,11 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
           [input.ownerPurgeOrderId, destination, backupRetentionUntil, input.now],
         );
       }
+      await assertCompletePurgeReceipts(client, {
+        now: input.now,
+        ownerPurgeOrderId: input.ownerPurgeOrderId,
+        userId: row.user_id,
+      });
       await client.query(
         `UPDATE owner_purge_orders
          SET status = 'active_system_deleted',
@@ -1275,7 +1145,11 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
              backup_retention_until = $3,
              needs_attention_reason = NULL
          WHERE owner_purge_order_id = $1`,
-        [input.ownerPurgeOrderId, input.now, backupRetentionUntil],
+        [
+          input.ownerPurgeOrderId,
+          input.effectivePurgeAt ?? input.now,
+          backupRetentionUntil,
+        ],
       );
       await client.query("COMMIT");
       return { outcome: "active_system_deleted" };
@@ -1331,12 +1205,12 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       const purgeCommands = await client.query<{ workflow_command_id: string }>(
         `
           SELECT workflow_command_id FROM workflow_commands
-          WHERE command_type = 'owner_full_purge'
-            AND subject_type = 'app_user'
+          WHERE command_type = $3
+            AND subject_type = $4
             AND subject_id = $1
             AND expected_data_epoch = $2
         `,
-        [row.user_id, row.data_epoch],
+        [row.user_id, row.data_epoch, FULL_PURGE_COMMAND_TYPE, FULL_PURGE_SUBJECT_TYPE],
       );
       for (const command of purgeCommands.rows) {
         await client.query(
@@ -1360,9 +1234,13 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
 
   public async markNeedsAttention(input: {
     ownerPurgeOrderId: string;
-    reason: string;
+    reason: PurgeAttentionReason;
     now: Date;
+    expectedStatus?: OwnerPurgeOrder["status"];
   }): Promise<void> {
+    if (!isPurgeAttentionReason(input.reason)) {
+      throw new Error("Purge attention reason must be an allowlisted error code.");
+    }
     await this.pool.query<QueryResultRow>(
       `
         UPDATE owner_purge_orders
@@ -1371,8 +1249,12 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
             needs_attention_reason = $3
         WHERE owner_purge_order_id = $1
           AND status <> 'retention_pending'
+          AND (
+            ($4::text IS NOT NULL AND status = $4)
+            OR ($4::text IS NULL AND status <> 'active_system_deleted')
+          )
       `,
-      [input.ownerPurgeOrderId, input.now, input.reason],
+      [input.ownerPurgeOrderId, input.now, input.reason, input.expectedStatus ?? null],
     );
   }
 
@@ -1397,15 +1279,45 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
     return result.rows.map(mapOrder);
   }
 
+  public async sweepExpiredMetadata(input: {
+    now: Date;
+  }): Promise<Readonly<{ deleted: number }>> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
+      let deleted = 0;
+      for (const surface of this.purgeSurfaces) {
+        deleted += await sweepExpiredPurgeSurface(client, surface, input.now);
+      }
+      await client.query("COMMIT");
+      return { deleted };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   public async reapplyMarker(input: {
     userId: UserId;
     dataEpoch: number;
+    purgedAt: Date;
+    backupRetentionUntil: Date | null;
+    receipts: readonly Readonly<{
+      destination: string;
+      destinationDisposition: string;
+      providerRetentionUntil: Date | null;
+    }>[];
     now: Date;
   }): Promise<Readonly<{ outcome: "reapplied" }>> {
     const client = await this.pool.connect();
     let orderId: string;
     try {
       await client.query("BEGIN");
+      await assertPurgeSurfaceDatabaseInventory(client, this.purgeRegistry);
+      assertRecoveryMarkerReceipts(input.receipts);
       const owner = await client.query<{
         data_epoch: string;
         status: "active" | "deleting" | "disabled";
@@ -1419,25 +1331,90 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
         throw new Error("recovery_marker_is_older_than_business_database");
       }
 
-      const existing = await client.query<{ owner_purge_order_id: string }>(
-        `SELECT owner_purge_order_id
+      const existing = await client.query<{
+        owner_purge_order_id: string;
+        status: string;
+        purge_surface_registry_version: string;
+        external_integration_manifest_version: string;
+        workflow_subject_manifest_version: string;
+      }>(
+        `SELECT owner_purge_order_id, status, purge_surface_registry_version,
+                external_integration_manifest_version,
+                workflow_subject_manifest_version
          FROM owner_purge_orders
          WHERE user_id = $1 AND data_epoch = $2
          ORDER BY requested_at DESC LIMIT 1`,
         [input.userId, input.dataEpoch],
       );
       orderId = existing.rows[0]?.owner_purge_order_id ?? crypto.randomUUID();
-      if (!existing.rows[0]) {
-        const fromDataEpoch = Math.max(1, Number(ownerRow.data_epoch));
+      if (existing.rows[0]) {
+        if (
+          !isCurrentPurgeVersions(existing.rows[0]) &&
+          !isLegacyPurgeVersions(existing.rows[0])
+        ) {
+          throw new PurgeVerificationError(
+            "recovery_marker_purge_versions_unrecognized",
+          );
+        }
+        // A restored database may contain the terminal order from the backup
+        // that produced the marker. Reopen that order for a real clear pass;
+        // the explicit recovery action upgrades legacy provenance to the
+        // current executable manifests. Keeping the original active timestamp
+        // prevents a reapply from extending the metadata read window.
+        await client.query(
+          `UPDATE owner_purge_orders
+           SET status = 'access_revoked',
+               purge_surface_registry_version = $4,
+               external_integration_manifest_version = $5,
+               workflow_subject_manifest_version = $6,
+               access_revoked_at = COALESCE(access_revoked_at, $2),
+               propagating_at = NULL,
+               verifying_at = NULL,
+               retention_pending_at = NULL,
+               needs_attention_at = NULL,
+               needs_attention_reason = NULL,
+               backup_retention_until = $3,
+               last_attempt_at = $2
+           WHERE owner_purge_order_id = $1`,
+          [
+            orderId,
+            input.now,
+            input.backupRetentionUntil,
+            PURGE_SURFACE_REGISTRY_VERSION,
+            PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+            PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+          ],
+        );
+      } else {
+        const fromDataEpoch = Math.max(1, input.dataEpoch - 1);
         await client.query(
           `INSERT INTO owner_purge_orders (
              owner_purge_order_id, user_id, from_data_epoch, data_epoch,
-             status, confirmation, policy_version, requested_at, last_attempt_at
+             status, confirmation, policy_version,
+             purge_surface_registry_version,
+             external_integration_manifest_version,
+             workflow_subject_manifest_version, requested_at, last_attempt_at
            ) VALUES ($1, $2, $3, $4, 'requested', 'PURGE',
-             'recovery-marker-reapply:v1', $5, $5)`,
-          [orderId, input.userId, fromDataEpoch, input.dataEpoch, input.now],
+             'recovery-marker-reapply:v1', $5, $6, $7, $8, $8)`,
+          [
+            orderId,
+            input.userId,
+            fromDataEpoch,
+            input.dataEpoch,
+            PURGE_SURFACE_REGISTRY_VERSION,
+            PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+            PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+            input.now,
+          ],
         );
       }
+      // The restored order's old receipts are not authoritative. The marker
+      // is the recovery source of truth; the reapply pass recreates local
+      // business/provider receipts from it and then verifies them independently.
+      await client.query(
+        "DELETE FROM owner_purge_receipts WHERE owner_purge_order_id = $1",
+        [orderId],
+      );
       await client.query(
         `UPDATE app_users
          SET status = 'deleting', data_epoch = $2, updated_at = $3
@@ -1465,13 +1442,18 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
     try {
       await this.transitionToAccessRevoked({ ownerPurgeOrderId: orderId!, now });
       await this.transitionToPropagatingAndClear({
+        backupRetentionUntil: input.backupRetentionUntil,
+        effectivePurgeAt: input.purgedAt,
         ownerPurgeOrderId: orderId!,
-        providerRetentionUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1_000),
+        providerReceipts: input.receipts.filter((receipt) =>
+          receipt.destination.startsWith("provider:"),
+        ),
         now,
       });
       await this.transitionToVerifying({ ownerPurgeOrderId: orderId!, now });
       await this.transitionToActiveSystemDeleted({
-        backupRetentionUntil: null,
+        backupRetentionUntil: input.backupRetentionUntil,
+        effectivePurgeAt: input.purgedAt,
         ownerPurgeOrderId: orderId!,
         now,
       });

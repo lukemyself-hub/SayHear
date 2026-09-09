@@ -1,16 +1,16 @@
 import type { UserId } from "@sayhear/domain";
 
+import {
+  PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+  PURGE_SURFACE_REGISTRY_VERSION,
+} from "./purge-surface-registry";
+
 /**
- * Operator-only Internal Owner Full Purge across the active 1A.2 data
- * surface (issue #27, ADR-0022, architecture 20).
- *
- * Conversation Action surfaces are intentionally NOT cleared here as tables:
- * the 1A.2 schema shipped only frozen version columns on generation_commands
- * plus the in-memory Action Catalog (issue #26) — no Action envelope /
- * payload / execution / receipt tables exist yet, so that acceptance
- * criterion closes as N/A. The Catalog itself contains no deletion
- * operations, which is why natural-language Conversation requests can never
- * reach this purge.
+ * Operator-only Internal Owner Full Purge across the closed 1A.3b surface
+ * registry (Issue #194, ADR-0131, architecture 20). The application owns
+ * the state-machine port and version fences; PostgreSQL owns the registered
+ * clear and independent verification adapters.
  */
 
 // ---- Purge order state machine (1A.2 subset, architecture 20.2) -----------
@@ -24,6 +24,31 @@ export type OwnerPurgeOrderStatus =
   | "retention_pending"
   | "needs_attention";
 
+export const PURGE_ATTENTION_REASONS = [
+  "database_timeout",
+  "network_error",
+  "unknown_error",
+  "verification_failed",
+  "purge_marker_missing",
+  "purge_marker_epoch_mismatch",
+  "purge_marker_invalid",
+  "purge_marker_receipts_mismatch",
+  "verification_failed:purge_marker_missing",
+  "verification_failed:purge_marker_epoch_mismatch",
+  "verification_failed:purge_marker_invalid",
+  "verification_failed:purge_marker_receipts_mismatch",
+  "recovery_reapply_failed",
+  "purge_surface_registry_reconciliation_required",
+] as const;
+
+export type PurgeAttentionReason = (typeof PURGE_ATTENTION_REASONS)[number];
+
+export function isPurgeAttentionReason(
+  value: string,
+): value is PurgeAttentionReason {
+  return (PURGE_ATTENTION_REASONS as readonly string[]).includes(value);
+}
+
 export type OwnerPurgeOrder = Readonly<{
   ownerPurgeOrderId: string;
   userId: UserId;
@@ -31,6 +56,9 @@ export type OwnerPurgeOrder = Readonly<{
   dataEpoch: number;
   status: OwnerPurgeOrderStatus;
   policyVersion: string;
+  purgeSurfaceRegistryVersion: string;
+  externalIntegrationManifestVersion: string;
+  workflowSubjectManifestVersion: string;
   requestedAt: Date;
   accessRevokedAt: Date | null;
   propagatingAt: Date | null;
@@ -38,7 +66,7 @@ export type OwnerPurgeOrder = Readonly<{
   activeSystemDeletedAt: Date | null;
   retentionPendingAt: Date | null;
   needsAttentionAt: Date | null;
-  needsAttentionReason: string | null;
+  needsAttentionReason: PurgeAttentionReason | null;
   backupRetentionUntil: Date | null;
 }>;
 
@@ -47,12 +75,25 @@ export type OwnerPurgeReceipt = Readonly<{
   destinationDisposition:
     | "verified_deleted"
     | "retention_pending"
+    | "policy_expired"
     | "not_applicable"
     | "unknown";
-  providerDisposition: "retention_pending" | "unknown" | null;
+  providerDisposition:
+    | "retention_pending"
+    | "verified_deleted"
+    | "policy_expired"
+    | "not_applicable"
+    | "unknown"
+    | null;
   providerRetentionUntil: Date | null;
   backupRetentionUntil: Date | null;
   recordedAt: Date;
+}>;
+
+export type PurgeMarkerReceipt = Readonly<{
+  destination: string;
+  destinationDisposition: string;
+  providerRetentionUntil: Date | null;
 }>;
 
 export type PurgeMarkerSnapshot = Readonly<{
@@ -60,11 +101,7 @@ export type PurgeMarkerSnapshot = Readonly<{
   status: "active_system_deleted" | "retention_pending";
   purgedAt: Date;
   backupRetentionUntil: Date | null;
-  receipts: readonly Readonly<{
-    destination: string;
-    destinationDisposition: string;
-    providerRetentionUntil: Date | null;
-  }>[];
+  receipts: readonly PurgeMarkerReceipt[];
   writtenAt: Date;
 }>;
 
@@ -90,6 +127,9 @@ export type OwnerPurgeRepository = Readonly<{
     userId: UserId;
     confirmation: "PURGE";
     policyVersion: string;
+    purgeSurfaceRegistryVersion?: string;
+    externalIntegrationManifestVersion?: string;
+    workflowSubjectManifestVersion?: string;
     now: Date;
   }): Promise<
     | Readonly<{ outcome: "started"; order: OwnerPurgeOrder; created: boolean }>
@@ -133,7 +173,10 @@ export type OwnerPurgeRepository = Readonly<{
    */
   transitionToPropagatingAndClear(input: {
     ownerPurgeOrderId: string;
-    providerRetentionUntil: Date;
+    providerRetentionUntil?: Date;
+    effectivePurgeAt?: Date;
+    backupRetentionUntil?: Date | null;
+    providerReceipts?: readonly PurgeMarkerReceipt[];
     now: Date;
   }): Promise<
     | Readonly<{ outcome: "cleared" } & OwnerPurgeClearResult>
@@ -156,6 +199,7 @@ export type OwnerPurgeRepository = Readonly<{
   transitionToActiveSystemDeleted(input: {
     ownerPurgeOrderId: string;
     backupRetentionUntil: Date | null;
+    effectivePurgeAt?: Date;
     now: Date;
   }): Promise<Readonly<{ outcome: "active_system_deleted" }> | Readonly<{ outcome: "not_applicable" }>>;
   /**
@@ -169,8 +213,9 @@ export type OwnerPurgeRepository = Readonly<{
   }): Promise<Readonly<{ outcome: "retention_pending" }> | Readonly<{ outcome: "not_applicable" }>>;
   markNeedsAttention(input: {
     ownerPurgeOrderId: string;
-    reason: string;
+    reason: PurgeAttentionReason;
     now: Date;
+    expectedStatus?: OwnerPurgeOrderStatus;
   }): Promise<void>;
   /**
    * Orders not yet at `retention_pending` whose last attempt is older than the
@@ -182,6 +227,10 @@ export type OwnerPurgeRepository = Readonly<{
     staleAfterMs: number;
     limit: number;
   }): Promise<readonly OwnerPurgeOrder[]>;
+  /** Sweep only registry-declared, read-deadline-bound owner metadata. */
+  sweepExpiredMetadata?(input: {
+    now: Date;
+  }): Promise<Readonly<{ deleted: number }>>;
   /**
    * Recovery-only marker reapply. The adapter advances the restored database
    * directly to the marker epoch and reuses the purge verification walker;
@@ -190,6 +239,9 @@ export type OwnerPurgeRepository = Readonly<{
   reapplyMarker?(input: {
     userId: UserId;
     dataEpoch: number;
+    purgedAt: Date;
+    backupRetentionUntil: Date | null;
+    receipts: readonly PurgeMarkerReceipt[];
     now: Date;
   }): Promise<Readonly<{ outcome: "reapplied" }>>;
 }>;
@@ -204,11 +256,7 @@ export type PurgeMarkerRepository = Readonly<{
     dataEpoch: number;
     purgedAt: Date;
     backupRetentionUntil: Date | null;
-    receipts: readonly Readonly<{
-      destination: string;
-      destinationDisposition: string;
-      providerRetentionUntil: Date | null;
-    }>[];
+    receipts: readonly PurgeMarkerReceipt[];
   }): Promise<void>;
   /** Recovery always reads the latest marker; it never guesses an epoch. */
   findLatestMarker(input: { userId: UserId }): Promise<PurgeMarkerSnapshot | null>;
@@ -253,7 +301,7 @@ export class PurgeVerificationError extends Error {
 
 export class OwnerPurgePropagationError extends Error {
   public constructor(
-    public readonly reason: string,
+    public readonly reason: PurgeAttentionReason,
     public readonly status: OwnerPurgeOrderStatus,
   ) {
     super(`Full Purge propagation failed: ${reason}`);
@@ -261,9 +309,17 @@ export class OwnerPurgePropagationError extends Error {
   }
 }
 
-function sanitizePurgeReason(error: unknown): string {
+function sanitizePurgeReason(error: unknown): PurgeAttentionReason {
   if (error instanceof PurgeVerificationError) {
-    return `verification_failed:${error.violation}`;
+    switch (error.violation) {
+      case "purge_marker_missing":
+      case "purge_marker_epoch_mismatch":
+      case "purge_marker_invalid":
+      case "purge_marker_receipts_mismatch":
+        return `verification_failed:${error.violation}`;
+      default:
+        return "verification_failed";
+    }
   }
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
@@ -275,6 +331,147 @@ function sanitizePurgeReason(error: unknown): string {
     }
   }
   return "unknown_error";
+}
+
+function isMarkerReconciliationRequired(order: OwnerPurgeOrder): boolean {
+  const reason = order.needsAttentionReason ?? "";
+  return (
+    order.status === "needs_attention" &&
+    [
+      "purge_marker_missing",
+      "purge_marker_epoch_mismatch",
+      "purge_marker_invalid",
+      "purge_marker_receipts_mismatch",
+      "verification_failed:purge_marker_missing",
+      "verification_failed:purge_marker_epoch_mismatch",
+      "verification_failed:purge_marker_invalid",
+      "verification_failed:purge_marker_receipts_mismatch",
+    ].includes(reason)
+  );
+}
+
+export function isValidPurgeMarkerSnapshot(
+  marker: PurgeMarkerSnapshot,
+): boolean {
+  const seen = new Set<string>();
+  const businessReceipts = marker.receipts.filter(
+    (receipt) => receipt.destination === "business_database",
+  );
+  if (
+    !["active_system_deleted", "retention_pending"].includes(marker.status) ||
+    Number.isNaN(marker.purgedAt.getTime()) ||
+    Number.isNaN(marker.writtenAt.getTime())
+  ) {
+    return false;
+  }
+  for (const receipt of marker.receipts) {
+    if (seen.has(receipt.destination)) {
+      return false;
+    }
+    seen.add(receipt.destination);
+    if (receipt.destination === "business_database") {
+      if (
+        !["verified_deleted", "not_applicable"].includes(
+          receipt.destinationDisposition,
+        ) ||
+        receipt.providerRetentionUntil !== null
+      ) {
+        return false;
+      }
+      continue;
+    }
+    if (
+      !receipt.destination.startsWith("provider:") ||
+      receipt.destination.length <= "provider:".length ||
+      ![
+        "retention_pending",
+        "verified_deleted",
+        "policy_expired",
+        "not_applicable",
+      ].includes(receipt.destinationDisposition) ||
+      (["retention_pending", "policy_expired"].includes(
+        receipt.destinationDisposition,
+      ) &&
+        receipt.providerRetentionUntil === null)
+    ) {
+      return false;
+    }
+  }
+  if (businessReceipts.length !== 1 || !seen.has("business_database")) {
+    return false;
+  }
+  if (
+    marker.dataEpoch <= 0 ||
+    !Number.isInteger(marker.dataEpoch) ||
+    (marker.backupRetentionUntil !== null &&
+      Number.isNaN(marker.backupRetentionUntil.getTime())) ||
+    marker.writtenAt.getTime() < marker.purgedAt.getTime()
+  ) {
+    return false;
+  }
+  return marker.receipts.every(
+    (receipt) =>
+      receipt.providerRetentionUntil === null ||
+      !Number.isNaN(receipt.providerRetentionUntil.getTime()),
+  );
+}
+
+export function markerReceiptsMatchLocalReceipts(
+  marker: PurgeMarkerSnapshot,
+  receipts: readonly OwnerPurgeReceipt[],
+): boolean {
+  const toKey = (receipt: Readonly<{
+    destination: string;
+    destinationDisposition: string;
+    providerDisposition?: string | null;
+    providerRetentionUntil: Date | null;
+  }>): string | null => {
+    const isProvider = receipt.destination.startsWith("provider:");
+    if (isProvider) {
+      const providerDisposition = receipt.providerDisposition;
+      if (
+        (providerDisposition !== undefined && providerDisposition === null) ||
+        (providerDisposition !== undefined && providerDisposition === "unknown") ||
+        (providerDisposition !== undefined &&
+          providerDisposition !== receipt.destinationDisposition) ||
+        (providerDisposition === undefined &&
+          receipt.destinationDisposition === "unknown")
+      ) {
+        return null;
+      }
+    } else if (receipt.providerDisposition !== undefined && receipt.providerDisposition !== null) {
+      return null;
+    }
+    return [
+      receipt.destination,
+      receipt.destinationDisposition,
+      isProvider ? receipt.destinationDisposition : "",
+      receipt.providerRetentionUntil?.getTime() ?? "",
+    ].join("|");
+  };
+  const localBusinessReceipt = receipts.find(
+    (receipt) => receipt.destination === "business_database",
+  );
+  if (
+    localBusinessReceipt &&
+    localBusinessReceipt.backupRetentionUntil?.getTime() !==
+      marker.backupRetentionUntil?.getTime()
+  ) {
+    return false;
+  }
+  const local = receipts
+    .filter((receipt) => receipt.destination !== "purge_marker_store")
+    .map(toKey);
+  const external = marker.receipts.map(toKey);
+  if (local.some((receipt) => receipt === null) || external.some((receipt) => receipt === null)) {
+    return false;
+  }
+  const sortedLocal = local.filter((receipt): receipt is string => receipt !== null).sort();
+  const sortedExternal = external.filter((receipt): receipt is string => receipt !== null).sort();
+  return (
+    sortedLocal.length === sortedExternal.length &&
+    sortedLocal.every((receipt, index) => receipt === sortedExternal[index])
+  );
 }
 
 // ---- Service ----------------------------------------------------------------
@@ -308,10 +505,14 @@ export type OwnerFullPurgeService = Readonly<{
   propagateForOwner(input: {
     userId: UserId;
     expectedDataEpoch: number;
+    purgeSurfaceRegistryVersion?: string;
+    externalIntegrationManifestVersion?: string;
+    workflowSubjectManifestVersion?: string;
   }): Promise<
     | Readonly<{ status: OwnerPurgeOrderStatus }>
     | Readonly<{ outcome: "no_order" }>
     | Readonly<{ outcome: "epoch_mismatch" }>
+    | Readonly<{ outcome: "registry_mismatch" }>
   >;
   /** Recovery-scan entrypoint: auto-retry stuck or needs_attention orders. */
   scanPendingOrders(input: {
@@ -357,6 +558,11 @@ export function createOwnerFullPurgeService(dependencies: {
         confirmation: "PURGE",
         now,
         policyVersion: OWNER_FULL_PURGE_POLICY_VERSION,
+        externalIntegrationManifestVersion:
+          PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+        purgeSurfaceRegistryVersion: PURGE_SURFACE_REGISTRY_VERSION,
+        workflowSubjectManifestVersion:
+          PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
         userId: input.userId,
       });
       if (started.outcome !== "started") {
@@ -409,10 +615,22 @@ export function createOwnerFullPurgeService(dependencies: {
       if (order.status === "retention_pending") {
         return { status: order.status };
       }
+      if (
+        order.status === "active_system_deleted" ||
+        isMarkerReconciliationRequired(order)
+      ) {
+        // An active-system-deleted order is only finalized by the recovery
+        // scanner after it validates the external marker and local receipts.
+        // Marker-related attention states are operator-only for the same
+        // reason; a durable Workflow retry must not mint a replacement marker
+        // or a fresh retention window.
+        return { status: order.status };
+      }
       await dependencies.repository.markAttemptStarted({
         ownerPurgeOrderId: order.ownerPurgeOrderId,
         now: dependencies.clock(),
       });
+      let expectedStatusForErrors: OwnerPurgeOrderStatus = order.status;
       try {
         // Step 1 — access_revoked: cancel owner-scoped commands atomically.
         const revoke =
@@ -430,16 +648,52 @@ export function createOwnerFullPurgeService(dependencies: {
 
         // Step 2 — propagating: one purge-pass transaction clears every
         // owner-scoped surface and captures provider roles for receipts.
-        const providerRetentionUntil = new Date(
-          dependencies.clock().getTime() +
-            dependencies.providerRetentionDays * 24 * 60 * 60 * 1_000,
-        );
+        // Once the clear transaction commits, propagatingAt is the durable
+        // effective purge time. Every retry must reuse it so metadata and
+        // provider retention windows cannot be extended by a new attempt.
+        const requestedEffectivePurgeAt =
+          order.propagatingAt ?? dependencies.clock();
+        const providerRetentionUntil =
+          order.propagatingAt === null
+            ? new Date(
+                requestedEffectivePurgeAt.getTime() +
+                  dependencies.providerRetentionDays * 24 * 60 * 60 * 1_000,
+              )
+            : undefined;
         const clearResult =
           await dependencies.repository.transitionToPropagatingAndClear({
             now: dependencies.clock(),
             ownerPurgeOrderId: order.ownerPurgeOrderId,
-            providerRetentionUntil,
+            effectivePurgeAt: requestedEffectivePurgeAt,
+            ...(providerRetentionUntil !== undefined
+              ? { providerRetentionUntil }
+              : {}),
           });
+
+        // Another propagation attempt may have won the row lock and moved the
+        // order beyond the clear step. Never let this invocation's original
+        // snapshot mint a marker or retention window for that newer state.
+        const currentOrder = await dependencies.repository.findOrder({
+          ownerPurgeOrderId: order.ownerPurgeOrderId,
+        });
+        if (currentOrder === null || currentOrder.dataEpoch !== order.dataEpoch) {
+          throw new PurgeVerificationError("purge_order_epoch_changed");
+        }
+        expectedStatusForErrors = currentOrder.status;
+        if (
+          currentOrder.status === "retention_pending" ||
+          currentOrder.status === "active_system_deleted" ||
+          currentOrder.status === "needs_attention"
+        ) {
+          return { status: currentOrder.status };
+        }
+        if (!(currentOrder.status === "propagating" || currentOrder.status === "verifying")) {
+          throw new PurgeVerificationError(
+            `purge_order_unexpected_status:${currentOrder.status}`,
+          );
+        }
+        const effectivePurgeAt =
+          currentOrder.propagatingAt ?? requestedEffectivePurgeAt;
 
         // Step 3 — purge marker, written to the separate marker database
         // BEFORE the business side claims active_system_deleted. Idempotent,
@@ -447,24 +701,21 @@ export function createOwnerFullPurgeService(dependencies: {
         // When the clear step already committed on a previous attempt, the
         // provider receipts are read back from the durable receipts table so
         // a retry writes the identical marker content.
-        const providerMarkerReceipts =
-          clearResult.outcome === "not_applicable"
-            ? (
-                await dependencies.repository.listReceipts({
-                  ownerPurgeOrderId: order.ownerPurgeOrderId,
-                })
-              )
-                .filter((receipt) => receipt.destination.startsWith("provider:"))
-                .map((receipt) => ({
-                  destination: receipt.destination,
-                  destinationDisposition: receipt.destinationDisposition,
-                  providerRetentionUntil: receipt.providerRetentionUntil,
-                }))
-            : clearResult.providerRoles.map((role) => ({
-                destination: `provider:${role}` as const,
-                destinationDisposition: "retention_pending" as const,
-                providerRetentionUntil,
-              }));
+        const durableReceipts = await dependencies.repository.listReceipts({
+          ownerPurgeOrderId: order.ownerPurgeOrderId,
+        });
+        const providerMarkerReceipts = durableReceipts
+          .filter((receipt) => receipt.destination.startsWith("provider:"))
+          .map((receipt) => ({
+            destination: receipt.destination,
+            destinationDisposition: receipt.destinationDisposition,
+            providerRetentionUntil: receipt.providerRetentionUntil,
+          }));
+        const backupRetentionUntilForMarker =
+          currentOrder.backupRetentionUntil ??
+          (clearResult.outcome === "cleared"
+            ? clearResult.backupRetentionUntil
+            : null);
         const markerReceipts = [
           {
             destination: "business_database",
@@ -473,23 +724,53 @@ export function createOwnerFullPurgeService(dependencies: {
           },
           ...providerMarkerReceipts,
         ];
-        await dependencies.markerRepository.writeMarker({
-          backupRetentionUntil:
-            clearResult.outcome === "not_applicable"
-              ? order.backupRetentionUntil
-              : clearResult.backupRetentionUntil,
-          dataEpoch: order.dataEpoch,
-          purgedAt: dependencies.clock(),
-          receipts: markerReceipts,
-          userId: order.userId,
-        });
+        if (currentOrder.status === "propagating") {
+          await dependencies.markerRepository.writeMarker({
+            backupRetentionUntil: backupRetentionUntilForMarker,
+            dataEpoch: currentOrder.dataEpoch,
+            purgedAt: effectivePurgeAt,
+            receipts: markerReceipts,
+            userId: currentOrder.userId,
+          });
+        }
         const marker = await dependencies.markerRepository.findLatestMarker({
-          userId: order.userId,
+          userId: currentOrder.userId,
         });
-        if (marker === null || marker.dataEpoch !== order.dataEpoch) {
+        if (
+          marker === null ||
+          marker.dataEpoch !== currentOrder.dataEpoch ||
+          !isValidPurgeMarkerSnapshot(marker)
+        ) {
           throw new PurgeVerificationError(
-            marker === null ? "purge_marker_missing" : "purge_marker_epoch_mismatch",
+            marker === null
+              ? "purge_marker_missing"
+              : marker.dataEpoch !== currentOrder.dataEpoch
+                ? "purge_marker_epoch_mismatch"
+                : "purge_marker_invalid",
           );
+        }
+
+        // The marker is written in a separate database. Compare it with the
+        // business receipts before the local state can claim deletion. The
+        // business receipt is inserted by the next CAS transition, so include
+        // its deterministic pre-commit envelope for this comparison.
+        const markerComparisonReceipts = durableReceipts.some(
+          (receipt) => receipt.destination === "business_database",
+        )
+          ? durableReceipts
+          : [
+              ...durableReceipts,
+              {
+                destination: "business_database",
+                destinationDisposition: "verified_deleted" as const,
+                providerDisposition: null,
+                providerRetentionUntil: null,
+                backupRetentionUntil: backupRetentionUntilForMarker,
+                recordedAt: effectivePurgeAt,
+              },
+            ];
+        if (!markerReceiptsMatchLocalReceipts(marker, markerComparisonReceipts)) {
+          throw new PurgeVerificationError("purge_marker_receipts_mismatch");
         }
 
         // Step 4 — verifying: assert no content and no executable work remain.
@@ -500,12 +781,10 @@ export function createOwnerFullPurgeService(dependencies: {
 
         // Step 5 — active_system_deleted + terminal receipts.
         await dependencies.repository.transitionToActiveSystemDeleted({
-          backupRetentionUntil:
-            clearResult.outcome === "not_applicable"
-              ? order.backupRetentionUntil
-              : clearResult.backupRetentionUntil,
+          backupRetentionUntil: backupRetentionUntilForMarker,
           now: dependencies.clock(),
           ownerPurgeOrderId: order.ownerPurgeOrderId,
+          effectivePurgeAt,
         });
 
         // Step 6 — retention_pending + owner revival.
@@ -527,6 +806,7 @@ export function createOwnerFullPurgeService(dependencies: {
           now: dependencies.clock(),
           ownerPurgeOrderId: order.ownerPurgeOrderId,
           reason,
+          expectedStatus: expectedStatusForErrors,
         });
         const parked = await dependencies.repository.findOrder({
           ownerPurgeOrderId: order.ownerPurgeOrderId,
@@ -548,12 +828,32 @@ export function createOwnerFullPurgeService(dependencies: {
       if (order.dataEpoch !== input.expectedDataEpoch) {
         return { outcome: "epoch_mismatch" };
       }
+      if (
+        input.purgeSurfaceRegistryVersion !== undefined &&
+        order.purgeSurfaceRegistryVersion !== input.purgeSurfaceRegistryVersion
+      ) {
+        return { outcome: "registry_mismatch" };
+      }
+      if (
+        input.externalIntegrationManifestVersion !== undefined &&
+        order.externalIntegrationManifestVersion !==
+          input.externalIntegrationManifestVersion
+      ) {
+        return { outcome: "registry_mismatch" };
+      }
+      if (
+        input.workflowSubjectManifestVersion !== undefined &&
+        order.workflowSubjectManifestVersion !== input.workflowSubjectManifestVersion
+      ) {
+        return { outcome: "registry_mismatch" };
+      }
       return await this.propagate({
         ownerPurgeOrderId: order.ownerPurgeOrderId,
       });
     },
 
     async scanPendingOrders(input) {
+      await dependencies.repository.sweepExpiredMetadata?.({ now: input.now });
       const stale = await dependencies.repository.listRetryableOrders({
         limit: scanLimit,
         now: input.now,
@@ -561,26 +861,67 @@ export function createOwnerFullPurgeService(dependencies: {
       });
       let remaining = 0;
       for (const order of stale) {
-        if (order.status === "active_system_deleted") {
+        const markerReconciliationRequired =
+          isMarkerReconciliationRequired(order);
+        if (order.status === "active_system_deleted" || markerReconciliationRequired) {
           let marker: PurgeMarkerSnapshot | null = null;
+          let localReceipts: readonly OwnerPurgeReceipt[] | null = null;
           try {
             marker = await dependencies.markerRepository.findLatestMarker({
               userId: order.userId,
             });
+            if (order.status === "active_system_deleted" && marker !== null) {
+              localReceipts = await dependencies.repository.listReceipts({
+                ownerPurgeOrderId: order.ownerPurgeOrderId,
+              });
+            }
           } catch {
             // The order remains parked until the external recovery authority
             // is reachable and verified.
           }
-          if (marker === null || marker.dataEpoch !== order.dataEpoch) {
+          if (
+            marker === null ||
+            marker.dataEpoch !== order.dataEpoch ||
+            !isValidPurgeMarkerSnapshot(marker) ||
+            (order.status === "active_system_deleted" &&
+              (localReceipts === null ||
+                !markerReceiptsMatchLocalReceipts(marker, localReceipts)))
+          ) {
             await dependencies.repository.markNeedsAttention({
               now: input.now,
               ownerPurgeOrderId: order.ownerPurgeOrderId,
               reason:
                 marker === null
                   ? "purge_marker_missing"
-                  : "purge_marker_epoch_mismatch",
+                  : marker.dataEpoch !== order.dataEpoch
+                    ? "purge_marker_epoch_mismatch"
+                    : "purge_marker_invalid",
+              expectedStatus: order.status,
             });
             remaining += 1;
+            continue;
+          }
+          if (markerReconciliationRequired) {
+            // Marker-related attention states are operator-only. A marker that
+            // appears later is not enough to prove the local order and marker
+            // are a consistent pair, so never mint a replacement marker or
+            // revive the owner from this automatic path.
+            remaining += 1;
+            continue;
+          }
+          // An already verified local purge only needs its marker-backed
+          // retention finalization. Re-entering the normal propagation path
+          // would write a replacement marker and could silently mint a new
+          // retention window.
+          if (order.status === "active_system_deleted") {
+            try {
+              await dependencies.repository.finalizeRetentionPending({
+                now: input.now,
+                ownerPurgeOrderId: order.ownerPurgeOrderId,
+              });
+            } catch {
+              remaining += 1;
+            }
             continue;
           }
         }

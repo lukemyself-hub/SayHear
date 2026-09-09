@@ -13,9 +13,14 @@ import {
   createRollingSummaryService,
   InternalInspectionNotFoundError,
   OwnerPurgeConfirmationError,
+  PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+  PURGE_SURFACE_REGISTRY_VERSION,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+  type PurgeMarkerRepository,
 } from "@sayhear/application";
 import {
   PostgresDialogueStateRepository,
+  PostgresEntityRepository,
   PostgresInternalInspectionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresJournalEligibilityRepository,
@@ -114,6 +119,15 @@ const CORRECTION_OUTBOX_ID = "22222222-2222-7222-8222-222222222224";
 const CORRECTION_FOLLOWUP_ID = "22222222-2222-7222-8222-222222222225";
 const CLAIM_CORRECTION_ID = "22222222-2222-7222-8222-222222222226";
 const IMPRESSION_VETO_ID = "22222222-2222-7222-8222-222222222227";
+const SAFETY_POSTURE_ID = "22222222-2222-7222-8222-222222222228";
+const SAFETY_POSTURE_ALERT_ID = "22222222-2222-7222-8222-222222222229";
+const BIO_ID = "22222222-2222-7222-8222-222222222230";
+const BIO_VERSION_ID = "22222222-2222-7222-8222-222222222231";
+const BIO_STATEMENT_ID = "22222222-2222-7222-8222-222222222232";
+const BIO_PROPOSITION_ID = "22222222-2222-7222-8222-222222222233";
+const BIO_COVERAGE_UNIT_ID = "22222222-2222-7222-8222-222222222234";
+const BIO_CLAIM_LINK_ID = "22222222-2222-7222-8222-222222222235";
+const BIO_FINDING_ID = "22222222-2222-7222-8222-222222222236";
 const ACTION_HANDLE = "purge-test-memory-handle";
 const OTHER_OWNER = "33333333-3333-7333-8333-333333333301";
 const OTHER_SESSION = "33333333-3333-7333-8333-333333333302";
@@ -197,6 +211,26 @@ async function seedOwnerData(pool: IsolatedPostgresSchema["pool"]) {
       '${t0}', '${t1}', 'conversation-output:v1', 'sayhear-persona:v1',
       'conversation-harness:v1', 'conversation-action-catalog:empty:v1',
       'openai-conversation-text:v1'
+    );
+    INSERT INTO safety_postures (
+      safety_posture_id, user_id, daily_session_id, version_no,
+      source_revision, policy_version, content, committed_generation_command_id,
+      created_at
+    ) VALUES (
+      '${SAFETY_POSTURE_ID}', '${OWNER}', '${S1}', 1, 1, 'safety-posture:v1',
+      '{"state":"active","kind":"imminent_danger","cleanTurnCount":0,"evidence":{"activatedUserEventRevisionId":"${R1}","lastTurnUserEventRevisionId":"${R1}"}}'::jsonb,
+      '${G1}', '${t1}'
+    );
+    INSERT INTO current_safety_postures (
+      daily_session_id, safety_posture_id, user_id, source_revision, version_no,
+      updated_at
+    ) VALUES ('${S1}', '${SAFETY_POSTURE_ID}', '${OWNER}', 1, 1, '${t1}');
+    INSERT INTO safety_posture_alerts (
+      safety_posture_alert_id, user_id, daily_session_id, generation_command_id,
+      policy_version, reason, occurred_at, created_at
+    ) VALUES (
+      '${SAFETY_POSTURE_ALERT_ID}', '${OWNER}', '${S1}', '${G1}',
+      'safety-posture:v1', 'detector_failure', '${t1}', '${t1}'
     );
     INSERT INTO compiled_contexts (
       compiled_context_id, user_id, generation_command_id, compiler_version,
@@ -892,6 +926,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         user_self_entities,
         entity_versions,
         entities,
+        owner_purge_operational_metadata,
         owner_purge_receipts,
         owner_purge_orders,
         conversation_action_payloads,
@@ -1003,6 +1038,9 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     expect(order.status).toBe("requested");
     expect(order.fromDataEpoch).toBe(1);
     expect(order.dataEpoch).toBe(2);
+    expect(order.purgeSurfaceRegistryVersion).toBe(
+      PURGE_SURFACE_REGISTRY_VERSION,
+    );
 
     const owner = await database.pool.query<{
       status: string;
@@ -1035,6 +1073,14 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         "SELECT 1 FROM outbox_events WHERE event_type = 'owner_full_purge_requested'",
       ),
     ).toBe(1);
+    const workflowVersion = await database.pool.query<{
+      purge_surface_registry_version: string;
+    }>(
+      "SELECT purge_surface_registry_version FROM workflow_commands WHERE command_type = 'owner_full_purge'",
+    );
+    expect(workflowVersion.rows[0]?.purge_surface_registry_version).toBe(
+      PURGE_SURFACE_REGISTRY_VERSION,
+    );
 
     // Normal reads/writes fail the owner fence: eligibility command creation
     // and journal generation are rejected for a non-active owner.
@@ -1065,6 +1111,35 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         userId: OWNER,
       }),
     ).resolves.toEqual({ accepted: false, generationCommandId: "fence-jg" });
+  });
+
+  it("fails closed when an owner-scoped table is added after the registry is loaded", async () => {
+    await database.pool.query(
+      `CREATE TABLE unregistered_private_surface (
+         unregistered_private_surface_id UUID PRIMARY KEY,
+         user_id UUID NOT NULL REFERENCES app_users(user_id)
+       )`,
+    );
+    try {
+      await expect(
+        purgeRepository.startOrder({
+          confirmation: "PURGE",
+          now: clock(),
+          policyVersion: "owner-full-purge:v1",
+          userId: OWNER,
+        }),
+      ).rejects.toThrow(/database_inventory_mismatch/);
+      await expect(
+        database.pool.query(
+          "SELECT status, data_epoch::text FROM app_users WHERE user_id = $1",
+          [OWNER],
+        ),
+      ).resolves.toMatchObject({
+        rows: [{ status: "active", data_epoch: "1" }],
+      });
+    } finally {
+      await database.pool.query("DROP TABLE unregistered_private_surface");
+    }
   });
 
   it("propagation clears every owner-scoped surface, writes receipts and the external marker, revives the owner, and never claims fully_expired", async () => {
@@ -1109,6 +1184,9 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
       "dialogue_state_versions",
       "current_dialogue_states",
       "daily_session_date_outcomes",
+      "safety_posture_alerts",
+      "current_safety_postures",
+      "safety_postures",
       "workflow_commands",
       "outbox_events",
       "auth_sessions",
@@ -1134,6 +1212,16 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     expect(
       await countRows("SELECT 1 FROM sensitive_access_audits"),
     ).toBeGreaterThan(0);
+    const audit = await database.pool.query<{
+      target_type: string;
+      target_id: string | null;
+    }>(
+      "SELECT target_type, target_id FROM sensitive_access_audits WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(audit.rows).toEqual([
+      { target_type: "purged_owner", target_id: null },
+    ]);
     expect(
       await countRows("SELECT 1 FROM backup_policy_versions"),
     ).toBeGreaterThan(0);
@@ -1206,6 +1294,130 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     expect(finalOrder?.retentionPendingAt).not.toBeNull();
     expect(finalOrder?.activeSystemDeletedAt).not.toBeNull();
     expect(finalOrder?.needsAttentionReason).toBeNull();
+
+    const operationalMetadataBeforeSweep = await countRows(
+      `SELECT 1 FROM owner_purge_operational_metadata
+       WHERE owner_purge_order_id = '${order.ownerPurgeOrderId}'`,
+    );
+    expect(operationalMetadataBeforeSweep).toBeGreaterThan(0);
+    expect(
+      await countRows(
+        `SELECT 1 FROM owner_purge_operational_metadata
+         WHERE owner_purge_order_id = '${order.ownerPurgeOrderId}'
+           AND surface_id IN (
+             'generation_commands', 'model_run_attempts',
+             'workflow_commands', 'outbox_events',
+             'provider_egress_dispositions'
+           )`,
+      ),
+    ).toBeGreaterThan(0);
+
+    // Redacted access envelopes remain readable until the inclusive 30-day
+    // deadline, then the late sweeper removes them using the original purge
+    // effective time.
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1_000;
+    await expect(
+      purgeRepository.sweepExpiredMetadata({
+        now: new Date(BASE_TIME.getTime() + thirtyDaysMs - 1),
+      }),
+    ).resolves.toEqual({ deleted: 0 });
+    await expect(
+      purgeRepository.sweepExpiredMetadata({
+        now: new Date(BASE_TIME.getTime() + thirtyDaysMs),
+      }),
+    ).resolves.toEqual({ deleted: operationalMetadataBeforeSweep + 1 });
+    expect(await countRows("SELECT 1 FROM sensitive_access_audits")).toBe(0);
+    expect(await countRows("SELECT 1 FROM owner_purge_operational_metadata")).toBe(0);
+  });
+
+  it("clears the typed Bio aggregate and every owner-scoped Bio child surface", async () => {
+    const createdAt = BASE_TIME.toISOString();
+    await database.pool.query(`
+      INSERT INTO bios (
+        bio_id, user_id, current_source_revision, current_data_epoch,
+        created_at, updated_at
+      ) VALUES (
+        '${BIO_ID}', '${OWNER}', 8, 1, '${createdAt}', '${createdAt}'
+      );
+      INSERT INTO bio_versions (
+        bio_version_id, bio_id, user_id, revision, status, source_revision,
+        expected_data_epoch, source_manifest, presentation_locale,
+        generation_command_id, writer_model_run_attempt_id,
+        validator_generation_command_id, validator_model_run_attempt_id,
+        created_at
+      ) VALUES (
+        '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}', 1, 'published', 8, 1,
+        '{"source":"synthetic"}'::jsonb, 'en-US', '${G1}', '${M1}',
+        '${G1}', '${M1}', '${createdAt}'
+      );
+      UPDATE bios
+      SET current_version_id = '${BIO_VERSION_ID}'
+      WHERE bio_id = '${BIO_ID}' AND user_id = '${OWNER}';
+      INSERT INTO bio_statements (
+        bio_statement_id, bio_version_id, bio_id, user_id, ordinal,
+        section_key, statement_key, statement_text, created_at
+      ) VALUES (
+        '${BIO_STATEMENT_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        0, 'identity', 'synthetic.identity', 'Synthetic statement', '${createdAt}'
+      );
+      INSERT INTO bio_atomic_propositions (
+        bio_atomic_proposition_id, bio_version_id, bio_id, user_id,
+        proposition_key, proposition_text, created_at
+      ) VALUES (
+        '${BIO_PROPOSITION_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        'synthetic.proposition', 'Synthetic proposition', '${createdAt}'
+      );
+      INSERT INTO bio_claim_links (
+        bio_claim_link_id, bio_version_id, bio_id, user_id,
+        memory_claim_version_id, link_role, support_status,
+        source_revision, expected_data_epoch, created_at
+      ) VALUES (
+        '${BIO_CLAIM_LINK_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        '${MEMORY_CLAIM_VERSION_ID}', 'support', 'eligible', 8, 1, '${createdAt}'
+      );
+      INSERT INTO bio_coverage_units (
+        bio_coverage_unit_id, bio_version_id, bio_id, user_id, unit_key,
+        disposition, coverage_policy_version, source_revision,
+        expected_data_epoch, created_at
+      ) VALUES (
+        '${BIO_COVERAGE_UNIT_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        'synthetic.background', 'covered', 'bio-coverage:v1', 8, 1, '${createdAt}'
+      );
+      INSERT INTO bio_coverage_members (
+        bio_coverage_unit_id, bio_version_id, user_id,
+        memory_claim_version_id, created_at
+      ) VALUES (
+        '${BIO_COVERAGE_UNIT_ID}', '${BIO_VERSION_ID}', '${OWNER}',
+        '${MEMORY_CLAIM_VERSION_ID}', '${createdAt}'
+      );
+      INSERT INTO bio_validation_findings (
+        bio_validation_finding_id, bio_version_id, bio_id, user_id,
+        bio_statement_id, bio_atomic_proposition_id, finding_code,
+        severity, disposition, created_at
+      ) VALUES (
+        '${BIO_FINDING_ID}', '${BIO_VERSION_ID}', '${BIO_ID}', '${OWNER}',
+        '${BIO_STATEMENT_ID}', '${BIO_PROPOSITION_ID}', 'synthetic.warning',
+        'warning', 'open', '${createdAt}'
+      );
+    `);
+
+    const { order } = await startPurgeOrder();
+    await expect(
+      purgeService.propagate({ ownerPurgeOrderId: order.ownerPurgeOrderId }),
+    ).resolves.toMatchObject({ status: "retention_pending" });
+
+    for (const table of [
+      "bios",
+      "bio_versions",
+      "bio_statements",
+      "bio_atomic_propositions",
+      "bio_claim_links",
+      "bio_coverage_units",
+      "bio_coverage_members",
+      "bio_validation_findings",
+    ]) {
+      expect(await countRows(`SELECT 1 FROM ${table}`)).toBe(0);
+    }
   });
 
   it("purges the Entity, Memory, fast-path, relationship, retrieval, and Inspector data face while retaining only contentless identity envelopes", async () => {
@@ -1276,30 +1488,60 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     }
 
     const purgedClaim = await database.pool.query<{
+      canonical_key: string | null;
       content_purged_at: Date | null;
       current_version_id: string | null;
       deleted_at: Date | null;
+      object_entity_id: string | null;
+      predicate_id: string | null;
+      scope_key: string | null;
+      subject_entity_id: string | null;
     }>(
-      `SELECT content_purged_at, current_version_id, deleted_at
+      `SELECT canonical_key, content_purged_at, current_version_id, deleted_at,
+              object_entity_id, predicate_id, scope_key, subject_entity_id
        FROM memory_claims
        WHERE memory_claim_id = $1 AND user_id = $2`,
       [MEMORY_CLAIM_ID, OWNER],
     );
     expect(purgedClaim.rows[0]).toMatchObject({
+      canonical_key: null,
       current_version_id: null,
+      object_entity_id: null,
+      predicate_id: null,
+      scope_key: null,
+      subject_entity_id: null,
     });
     expect(purgedClaim.rows[0]?.content_purged_at).not.toBeNull();
     expect(purgedClaim.rows[0]?.deleted_at).not.toBeNull();
 
     const purgedClaimVersion = await database.pool.query<{
       content_purged_at: Date | null;
+      object_entity_version_id: string | null;
+      subject_entity_version_id: string | null;
+      temporal_status: string | null;
       typed_value: unknown;
+      valid_from: Date | null;
+      valid_from_precision: string | null;
+      valid_to: Date | null;
+      valid_to_precision: string | null;
     }>(
-      `SELECT content_purged_at, typed_value
+      `SELECT content_purged_at, object_entity_version_id,
+              subject_entity_version_id, temporal_status, typed_value,
+              valid_from, valid_from_precision, valid_to, valid_to_precision
        FROM memory_claim_versions
        WHERE memory_claim_version_id = $1 AND user_id = $2`,
       [MEMORY_CLAIM_VERSION_ID, OWNER],
     );
+    expect(purgedClaimVersion.rows[0]).toMatchObject({
+      object_entity_version_id: null,
+      subject_entity_version_id: null,
+      temporal_status: null,
+      typed_value: null,
+      valid_from: null,
+      valid_from_precision: null,
+      valid_to: null,
+      valid_to_precision: null,
+    });
     expect(purgedClaimVersion.rows[0]?.content_purged_at).not.toBeNull();
     expect(purgedClaimVersion.rows[0]?.typed_value).toBeNull();
 
@@ -1416,22 +1658,70 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
 
   it("reapplies an external marker to an old backup without resurrecting memory or Inspector traces", async () => {
     await seedMemoryPurgeData(database.pool);
+    // Model the restored backup carrying the terminal order that originally
+    // produced the marker. Reapply must reopen this order for a fresh clear /
+    // verify pass instead of treating the terminal row as already complete.
+    await database.pool.query(
+      `INSERT INTO owner_purge_orders (
+         owner_purge_order_id, user_id, from_data_epoch, data_epoch,
+         status, confirmation, policy_version,
+         purge_surface_registry_version, external_integration_manifest_version,
+         workflow_subject_manifest_version, requested_at,
+         active_system_deleted_at, retention_pending_at, last_attempt_at
+       ) VALUES (
+         gen_random_uuid(), '${OWNER}', 1, 2, 'retention_pending', 'PURGE',
+         'recovery-marker-reapply:v1', '${PURGE_SURFACE_REGISTRY_VERSION}',
+         '${PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION}',
+         '${PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION}',
+         '${BASE_TIME.toISOString()}', '${BASE_TIME.toISOString()}',
+         '${BASE_TIME.toISOString()}', '${BASE_TIME.toISOString()}'
+       )`,
+    );
+    const providerRetentionUntil = new Date(
+      BASE_TIME.getTime() + 30 * 24 * 60 * 60 * 1_000,
+    );
     await markerRepository.writeMarker({
       userId: OWNER,
       dataEpoch: 2,
       purgedAt: BASE_TIME,
-      backupRetentionUntil: null,
-      receipts: [],
+      backupRetentionUntil: new Date(
+        BASE_TIME.getTime() + 20 * 24 * 60 * 60 * 1_000,
+      ),
+      receipts: [
+        {
+          destination: "business_database",
+          destinationDisposition: "verified_deleted",
+          providerRetentionUntil: null,
+        },
+        ...[
+          "conversation.text",
+          "evidence.extract",
+          "journal.draft",
+          "journal.validate",
+          "summary.compress",
+          "dialogue.state",
+          "memory.extract",
+          "memory.consolidate",
+        ].map((role) => ({
+          destination: `provider:${role}`,
+          destinationDisposition: "retention_pending",
+          providerRetentionUntil,
+        })),
+      ],
     });
     const markerBefore = await markerRepository.findMarker({
       dataEpoch: 2,
       userId: OWNER,
     });
 
+    clockNowMs = BASE_TIME.getTime() + 5 * 24 * 60 * 60 * 1_000;
     await expect(
       purgeRepository.reapplyMarker({
+        backupRetentionUntil: markerBefore?.backupRetentionUntil ?? null,
         userId: OWNER,
         dataEpoch: 2,
+        purgedAt: markerBefore?.purgedAt ?? BASE_TIME,
+        receipts: markerBefore?.receipts ?? [],
         now: clock(),
       }),
     ).resolves.toEqual({ outcome: "reapplied" });
@@ -1442,6 +1732,13 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
          WHERE user_id = '${OWNER}' AND content_purged_at IS NULL`,
       ),
     ).toBe(0);
+    const reappliedOrder = await purgeRepository.findLatestOrder({
+      userId: OWNER,
+    });
+    expect(reappliedOrder?.activeSystemDeletedAt).toEqual(BASE_TIME);
+    expect(reappliedOrder?.backupRetentionUntil).toEqual(
+      new Date(BASE_TIME.getTime() + 20 * 24 * 60 * 60 * 1_000),
+    );
     expect(
       await countRows(
         `SELECT 1 FROM retrieval_run_candidates
@@ -1523,6 +1820,29 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
 
   it("concurrency drill: journal publication and projection current-pointer writes cannot resurrect after the deletion epoch advances", async () => {
     const { order } = await startPurgeOrder();
+
+    // Fast-path entity writes carry the frozen epoch all the way into their
+    // transaction. The owner lock rejects both provisioning and mention
+    // resolution once the purge has advanced the owner out of the active
+    // state, before either path can create a row.
+    const entityRepository = new PostgresEntityRepository(database.pool);
+    await expect(
+      entityRepository.ensureSelfEntity({
+        expectedDataEpoch: 1,
+        now: clock(),
+        userId: OWNER,
+      }),
+    ).rejects.toThrow(/fenced by the owner data epoch/);
+    await expect(
+      entityRepository.resolveMentions({
+        eventRevisionId: R1,
+        expectedDataEpoch: 1,
+        now: clock(),
+        proposals: [],
+        resolverPolicyVersion: "entity-resolution:v2",
+        userId: OWNER,
+      }),
+    ).rejects.toThrow(/fenced by the owner data epoch/);
 
     // In-flight Journal publication frozen at epoch 1 fails the fence.
     const journalRepository = new PostgresJournalRepository(database.pool);
@@ -1658,6 +1978,71 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     expect(await countRows("SELECT 1 FROM workflow_commands")).toBe(0);
   });
 
+  it("concurrent propagation reuses the durable purge time and marker receipts", async () => {
+    const { order } = await startPurgeOrder();
+    let writeCount = 0;
+    let releaseFirstWrite: () => void = () => undefined;
+    let resolveSecondWrite: () => void = () => undefined;
+    const firstWriteBlocked = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    const secondWriteFinished = new Promise<void>((resolve) => {
+      resolveSecondWrite = resolve;
+    });
+    const concurrentMarkerRepository: PurgeMarkerRepository = {
+      findLatestMarker: (input) => markerRepository.findLatestMarker(input),
+      writeMarker: async (input) => {
+        writeCount += 1;
+        if (writeCount === 1) {
+          await firstWriteBlocked;
+        }
+        await markerRepository.writeMarker(input);
+        if (writeCount === 2) {
+          resolveSecondWrite();
+        }
+      },
+    };
+    const concurrentPurgeService = createOwnerFullPurgeService({
+      clock,
+      markerRepository: concurrentMarkerRepository,
+      providerRetentionDays: 30,
+      repository: purgeRepository,
+    });
+
+    const first = concurrentPurgeService.propagate({
+      ownerPurgeOrderId: order.ownerPurgeOrderId,
+    });
+    const second = concurrentPurgeService.propagate({
+      ownerPurgeOrderId: order.ownerPurgeOrderId,
+    });
+    await secondWriteFinished;
+    releaseFirstWrite();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { status: "retention_pending" },
+      { status: "retention_pending" },
+    ]);
+
+    const marker = await markerRepository.findMarker({
+      dataEpoch: order.dataEpoch,
+      userId: OWNER,
+    });
+    expect(marker?.purgedAt).toEqual(BASE_TIME);
+    expect(marker?.backupRetentionUntil).toEqual(
+      new Date(BASE_TIME.getTime() + 30 * 24 * 60 * 60 * 1_000),
+    );
+    expect(marker?.receipts.filter((receipt) =>
+      receipt.destination.startsWith("provider:"),
+    )).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          providerRetentionUntil: new Date(
+            BASE_TIME.getTime() + 30 * 24 * 60 * 60 * 1_000,
+          ),
+        }),
+      ]),
+    );
+  });
+
   it("a crash between the clear transaction and the marker write converges with identical marker receipts", async () => {
     const { order } = await startPurgeOrder();
     // Simulate the crash window: the access-revoke and clear transactions
@@ -1678,12 +2063,26 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
 
     // The retry converges, and the marker mirrors the durable provider
     // receipts written by the earlier clear transaction.
+    clockNowMs = BASE_TIME.getTime() + 5 * 24 * 60 * 60 * 1_000;
     await purgeService.propagate({ ownerPurgeOrderId: order.ownerPurgeOrderId });
     const marker = await markerRepository.findMarker({
       dataEpoch: 2,
       userId: OWNER,
     });
     expect(marker?.status).toBe("retention_pending");
+    expect(marker?.purgedAt).toEqual(BASE_TIME);
+    expect(marker?.backupRetentionUntil).toEqual(
+      new Date(BASE_TIME.getTime() + 30 * 24 * 60 * 60 * 1_000),
+    );
+    expect(marker?.receipts.filter((receipt) => receipt.destination.startsWith("provider:"))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          providerRetentionUntil: new Date(
+            BASE_TIME.getTime() + 30 * 24 * 60 * 60 * 1_000,
+          ),
+        }),
+      ]),
+    );
     const destinations = marker?.receipts.map((receipt) => receipt.destination);
     for (const role of [
       "conversation.text",
@@ -1706,7 +2105,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     await purgeRepository.markNeedsAttention({
       now: clock(),
       ownerPurgeOrderId: order.ownerPurgeOrderId,
-      reason: "verification_failed:drill",
+      reason: "verification_failed",
     });
     const scan = await purgeService.scanPendingOrders({ now: clock() });
     expect(scan.retried).toBe(1);
@@ -1720,6 +2119,23 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     // Terminal orders never regress and are not retried again.
     const idleScan = await purgeService.scanPendingOrders({ now: clock() });
     expect(idleScan.retried).toBe(0);
+  });
+
+  it("rejects non-allowlisted purge attention reasons at the repository boundary", async () => {
+    const { order } = await startPurgeOrder();
+    await expect(
+      purgeRepository.markNeedsAttention({
+        now: clock(),
+        ownerPurgeOrderId: order.ownerPurgeOrderId,
+        reason: "provider response contained private text" as never,
+      }),
+    ).rejects.toThrow("allowlisted error code");
+
+    const unchanged = await purgeRepository.findOrder({
+      ownerPurgeOrderId: order.ownerPurgeOrderId,
+    });
+    expect(unchanged?.status).toBe("requested");
+    expect(unchanged?.needsAttentionReason).toBeNull();
   });
 
   it("sensitive inspection of purged content fails closed even after re-authentication", async () => {
