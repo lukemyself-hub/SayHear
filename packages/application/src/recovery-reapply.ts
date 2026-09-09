@@ -1,6 +1,9 @@
 import type { UserId } from "@sayhear/domain";
 
-import type { PurgeMarkerRepository } from "./owner-purge";
+import type {
+  PurgeMarkerReceipt,
+  PurgeMarkerRepository,
+} from "./owner-purge";
 import {
   RecoveryGateClosedError,
   type RecoveryGate,
@@ -11,6 +14,9 @@ export type RecoveryReapplyRepository = Readonly<{
   reapplyMarker(input: {
     dataEpoch: number;
     now: Date;
+    purgedAt: Date;
+    backupRetentionUntil: Date | null;
+    receipts: readonly PurgeMarkerReceipt[];
     userId: UserId;
   }): Promise<Readonly<{ outcome: "reapplied" }>>;
 }>;
@@ -68,8 +74,11 @@ export function createRecoveryReapplyService(dependencies: {
         });
       }
       await dependencies.repository.reapplyMarker({
+        backupRetentionUntil: marker.backupRetentionUntil,
         dataEpoch: marker.dataEpoch,
         now: dependencies.clock(),
+        purgedAt: marker.purgedAt,
+        receipts: marker.receipts,
         userId: input.userId,
       });
       return dependencies.gate.requireOpen(input.userId);

@@ -15,6 +15,7 @@ import {
 } from "@sayhear/domain";
 import type { EvidenceService } from "./evidence";
 import type { RecoveryGate } from "./recovery-gate";
+import { PURGE_WORKFLOW_SUBJECT_MANIFEST } from "./purge-surface-registry";
 
 // ---- Date outcome -----------------------------------------------------------
 
@@ -291,7 +292,7 @@ export type WorkflowStarter = (input: {
     | "dialogue_state_requested"
     | "journal_eligibility_requested"
     | "rolling_summary_requested"
-    | "owner_full_purge_requested"
+    | typeof PURGE_WORKFLOW_SUBJECT_MANIFEST.eventType
     | "journal_regeneration_requested"
     | "fast_path_extraction_requested"
     | "daily_consolidation_requested"
@@ -310,6 +311,9 @@ export type WorkflowStarter = (input: {
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
+  purgeSurfaceRegistryVersion?: string;
+  externalIntegrationManifestVersion?: string;
+  workflowSubjectManifestVersion?: string;
 }) => Promise<{ workflowReceiptId: string }>;
 
 export type OutboxDispatcherService = Readonly<{
@@ -371,7 +375,7 @@ export function createOutboxDispatcherService(dependencies: {
               | "dialogue_state_requested"
               | "journal_eligibility_requested"
               | "rolling_summary_requested"
-              | "owner_full_purge_requested"
+              | typeof PURGE_WORKFLOW_SUBJECT_MANIFEST.eventType
               | "journal_regeneration_requested"
               | "fast_path_extraction_requested"
               | "memory_correction_followup_requested"
@@ -384,6 +388,26 @@ export function createOutboxDispatcherService(dependencies: {
             sourceRevision: Number(event.aggregateRevision),
             policyVersion: String(event.payload.policyVersion ?? ""),
             expectedDataEpoch: Number(event.payload.expectedDataEpoch ?? 0),
+            ...(typeof event.payload.purgeSurfaceRegistryVersion === "string"
+              ? {
+                  purgeSurfaceRegistryVersion:
+                    event.payload.purgeSurfaceRegistryVersion,
+                }
+              : {}),
+            ...(typeof event.payload.externalIntegrationManifestVersion ===
+            "string"
+              ? {
+                  externalIntegrationManifestVersion:
+                    event.payload.externalIntegrationManifestVersion,
+                }
+              : {}),
+            ...(typeof event.payload.workflowSubjectManifestVersion ===
+            "string"
+              ? {
+                  workflowSubjectManifestVersion:
+                    event.payload.workflowSubjectManifestVersion,
+                }
+              : {}),
           });
           await dependencies.repository.markDispatched({
             outboxEventId: event.outboxEventId,
@@ -445,6 +469,9 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "sourceRevision",
   "policyVersion",
   "expectedDataEpoch",
+  "purgeSurfaceRegistryVersion",
+  "externalIntegrationManifestVersion",
+  "workflowSubjectManifestVersion",
   "eventType",
   "status",
   "errorCode",

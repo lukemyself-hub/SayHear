@@ -1,6 +1,20 @@
 import type { UserId } from "@sayhear/domain";
 
-import type { PurgeMarkerRepository, PurgeMarkerSnapshot } from "./owner-purge";
+import {
+  PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+  PURGE_EXTERNAL_INTEGRATION_MANIFEST_LEGACY_VERSION,
+  PURGE_SURFACE_REGISTRY_VERSION,
+  PURGE_SURFACE_REGISTRY_LEGACY_VERSION,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+  PURGE_WORKFLOW_SUBJECT_MANIFEST_LEGACY_VERSION,
+} from "./purge-surface-registry";
+import {
+  isValidPurgeMarkerSnapshot,
+  markerReceiptsMatchLocalReceipts,
+  type OwnerPurgeRepository,
+  type PurgeMarkerRepository,
+  type PurgeMarkerSnapshot,
+} from "./owner-purge";
 
 export type RecoveryBusinessState = Readonly<{
   dataEpoch: number;
@@ -26,6 +40,52 @@ export type RecoveryBusinessStateRepository = Readonly<{
     userId: UserId,
   ): Promise<RecoveryBusinessState | null>;
 }>;
+
+type RecoveryPurgeStateRepository = Pick<
+  OwnerPurgeRepository,
+  "findLatestOrder" | "listReceipts"
+> & {
+  /**
+   * Re-run the data-layer receipt verifier, including provider-specific
+   * destinations, from a consistent business-database snapshot. Listing
+   * receipts alone is not an independent verification boundary.
+   */
+  verifyRecoveryReceipts(input: {
+    ownerPurgeOrderId: string;
+    userId: UserId;
+    dataEpoch: number;
+  }): Promise<boolean>;
+};
+
+function hasCurrentPurgeVersions(order: {
+  purgeSurfaceRegistryVersion: string;
+  externalIntegrationManifestVersion: string;
+  workflowSubjectManifestVersion: string;
+}): boolean {
+  return (
+    order.purgeSurfaceRegistryVersion === PURGE_SURFACE_REGISTRY_VERSION &&
+    order.externalIntegrationManifestVersion ===
+      PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION &&
+    order.workflowSubjectManifestVersion ===
+      PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION
+  );
+}
+
+function hasLegacyTerminalPurgeVersions(order: {
+  purgeSurfaceRegistryVersion: string;
+  externalIntegrationManifestVersion: string;
+  workflowSubjectManifestVersion: string;
+  status: string;
+}): boolean {
+  return (
+    order.status === "retention_pending" &&
+    order.purgeSurfaceRegistryVersion === PURGE_SURFACE_REGISTRY_LEGACY_VERSION &&
+    order.externalIntegrationManifestVersion ===
+      PURGE_EXTERNAL_INTEGRATION_MANIFEST_LEGACY_VERSION &&
+    order.workflowSubjectManifestVersion ===
+      PURGE_WORKFLOW_SUBJECT_MANIFEST_LEGACY_VERSION
+  );
+}
 
 export type RecoveryGate = Readonly<{
   evaluate(userId: UserId): Promise<RecoveryGateResult>;
@@ -56,6 +116,7 @@ function resultFor(
 export function createRecoveryGate(dependencies: {
   businessStateRepository: RecoveryBusinessStateRepository;
   markerRepository: Pick<PurgeMarkerRepository, "findLatestMarker">;
+  purgeStateRepository?: RecoveryPurgeStateRepository;
 }): RecoveryGate {
   return {
     async evaluate(userId) {
@@ -84,6 +145,9 @@ export function createRecoveryGate(dependencies: {
           marker,
         );
       }
+      if (!isValidPurgeMarkerSnapshot(marker)) {
+        return resultFor("needs_attention", marker);
+      }
       if (state.dataEpoch < marker.dataEpoch) {
         return resultFor("reapply_required", marker);
       }
@@ -92,6 +156,43 @@ export function createRecoveryGate(dependencies: {
       }
       if (state.status !== "active") {
         return resultFor("needs_attention", marker);
+      }
+      if (!dependencies.purgeStateRepository) {
+        return resultFor("needs_attention", marker);
+      }
+      try {
+        const localOrder = await dependencies.purgeStateRepository.findLatestOrder({
+          userId,
+        });
+        if (
+          localOrder === null ||
+          localOrder.dataEpoch !== marker.dataEpoch ||
+          !["active_system_deleted", "retention_pending"].includes(
+            localOrder.status,
+          ) ||
+          (!hasCurrentPurgeVersions(localOrder) &&
+            !hasLegacyTerminalPurgeVersions(localOrder))
+        ) {
+          return resultFor("needs_attention", marker);
+        }
+        const localReceipts =
+          await dependencies.purgeStateRepository.listReceipts({
+            ownerPurgeOrderId: localOrder.ownerPurgeOrderId,
+          });
+        if (!markerReceiptsMatchLocalReceipts(marker, localReceipts)) {
+          return resultFor("needs_attention", marker);
+        }
+        if (
+          !(await dependencies.purgeStateRepository.verifyRecoveryReceipts({
+            dataEpoch: marker.dataEpoch,
+            ownerPurgeOrderId: localOrder.ownerPurgeOrderId,
+            userId,
+          }))
+        ) {
+          return resultFor("needs_attention", marker);
+        }
+      } catch {
+        return resultFor("unavailable", marker);
       }
       return resultFor("open", marker);
     },

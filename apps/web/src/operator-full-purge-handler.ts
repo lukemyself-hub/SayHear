@@ -115,6 +115,10 @@ function serialize(
       fromDataEpoch: order.fromDataEpoch,
       dataEpoch: order.dataEpoch,
       policyVersion: order.policyVersion,
+      purgeSurfaceRegistryVersion: order.purgeSurfaceRegistryVersion,
+      externalIntegrationManifestVersion:
+        order.externalIntegrationManifestVersion,
+      workflowSubjectManifestVersion: order.workflowSubjectManifestVersion,
       requestedAt: order.requestedAt,
       accessRevokedAt: order.accessRevokedAt,
       propagatingAt: order.propagatingAt,

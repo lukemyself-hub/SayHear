@@ -1,12 +1,16 @@
 import type { WorkflowStarter } from "@sayhear/application";
 import { assertWorkflowSafe } from "@sayhear/application/journal-eligibility";
 import { runJournalRegenerationWorkflow } from "@sayhear/application/journal-regeneration";
+import { PURGE_WORKFLOW_SUBJECT_MANIFEST } from "@sayhear/application";
 import { start } from "workflow/api";
 
 import { createServerComposition } from "../server-composition";
 import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
 import { dialogueStateWorkflow } from "./dialogue-state.workflow";
-import { ownerFullPurgeWorkflow } from "./owner-full-purge.workflow";
+import {
+  assertOwnerFullPurgeManifest,
+  ownerFullPurgeWorkflow,
+} from "./owner-full-purge.workflow";
 import { fastPathExtractionWorkflow } from "./fast-path-extraction.workflow";
 import { memoryConsolidationWorkflow } from "./memory-consolidation.workflow";
 import { memoryCorrectionFollowupWorkflow } from "./memory-trust-followup.workflow";
@@ -67,12 +71,17 @@ export function createWorkflowStarter(): WorkflowStarter {
       run = await start(dialogueStateWorkflow, [workflowInput]);
     } else if (input.eventType === "journal_eligibility_requested") {
       run = await start(journalEligibilityWorkflow, [workflowInput]);
-    } else if (input.eventType === "owner_full_purge_requested") {
+    } else if (input.eventType === PURGE_WORKFLOW_SUBJECT_MANIFEST.eventType) {
+      assertOwnerFullPurgeManifest(input);
       run = await start(ownerFullPurgeWorkflow, [
         {
           workflowCommandId: input.workflowCommandId,
           subjectId: input.subjectId,
           expectedDataEpoch: input.expectedDataEpoch,
+          purgeSurfaceRegistryVersion: input.purgeSurfaceRegistryVersion,
+          externalIntegrationManifestVersion:
+            input.externalIntegrationManifestVersion,
+          workflowSubjectManifestVersion: input.workflowSubjectManifestVersion,
         },
       ]);
     } else if (input.eventType === "journal_regeneration_requested") {

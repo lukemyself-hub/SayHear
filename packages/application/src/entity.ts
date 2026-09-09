@@ -164,6 +164,7 @@ export type EntityRepository = Readonly<{
   ensureSelfEntity(input: {
     userId: string;
     now: Date;
+    expectedDataEpoch?: number;
   }): Promise<SelfEntityBinding>;
   findSelfEntity(
     userId: string,
@@ -175,6 +176,7 @@ export type EntityRepository = Readonly<{
     proposals: readonly EntityMentionProposal[];
     resolverPolicyVersion: string;
     now: Date;
+    expectedDataEpoch?: number;
   }): Promise<readonly EntityMentionResolution[]>;
   addVerifiedAlias(input: {
     userId: string;
@@ -201,6 +203,7 @@ export type EntityService = Readonly<{
   /** The owner-backoff entry into the one shared provisioning path. */
   ensureSelfEntity(input: {
     userId: string;
+    expectedDataEpoch?: number;
   }): Promise<SelfEntityBinding>;
   findSelfEntity(
     userId: string,
@@ -209,6 +212,7 @@ export type EntityService = Readonly<{
     userId: string;
     eventRevisionId: string;
     proposals: readonly EntityMentionProposal[];
+    expectedDataEpoch?: number;
   }): Promise<readonly EntityMentionResolution[]>;
   addVerifiedAlias(input: {
     userId: string;
@@ -241,6 +245,9 @@ export function createEntityService(dependencies: {
       return dependencies.repository.ensureSelfEntity({
         userId,
         now: dependencies.clock(),
+        ...(input.expectedDataEpoch !== undefined
+          ? { expectedDataEpoch: input.expectedDataEpoch }
+          : {}),
       });
     },
     findSelfEntity(userId) {
@@ -259,6 +266,9 @@ export function createEntityService(dependencies: {
         proposals: input.proposals,
         resolverPolicyVersion,
         now: dependencies.clock(),
+        ...(input.expectedDataEpoch !== undefined
+          ? { expectedDataEpoch: input.expectedDataEpoch }
+          : {}),
       });
     },
     async addVerifiedAlias(input) {

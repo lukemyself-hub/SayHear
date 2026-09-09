@@ -1,10 +1,41 @@
-import { asUserId, type WorkflowStarter } from "@sayhear/application";
+import {
+  asUserId,
+  assertWorkflowSafe,
+  type WorkflowStarter,
+} from "@sayhear/application";
 import { start } from "workflow/api";
 
 import { createServerComposition } from "../server-composition";
 
+type OwnerFullPurgeManifestInput = {
+  purgeSurfaceRegistryVersion?: unknown;
+  externalIntegrationManifestVersion?: unknown;
+  workflowSubjectManifestVersion?: unknown;
+};
+
+export function assertOwnerFullPurgeManifest(
+  input: OwnerFullPurgeManifestInput,
+): asserts input is OwnerFullPurgeManifestInput & {
+  purgeSurfaceRegistryVersion: string;
+  externalIntegrationManifestVersion: string;
+  workflowSubjectManifestVersion: string;
+} {
+  if (
+    typeof input.purgeSurfaceRegistryVersion !== "string" ||
+    input.purgeSurfaceRegistryVersion.trim().length === 0 ||
+    typeof input.externalIntegrationManifestVersion !== "string" ||
+    input.externalIntegrationManifestVersion.trim().length === 0 ||
+    typeof input.workflowSubjectManifestVersion !== "string" ||
+    input.workflowSubjectManifestVersion.trim().length === 0
+  ) {
+    throw new Error(
+      "Owner Full Purge workflow requires all frozen manifest versions.",
+    );
+  }
+}
+
 /**
- * 1A.2 / issue #27: Internal Owner Full Purge propagation Workflow entrypoint.
+ * 1A.3b / issue #194: Internal Owner Full Purge propagation Workflow entrypoint.
  *
  * The outbox dispatcher leases the `owner_full_purge_requested` event created
  * by the opening transaction and starts this durable wrapper. Its single step
@@ -20,24 +51,49 @@ export async function ownerFullPurgeWorkflow(input: {
   workflowCommandId: string;
   subjectId: string;
   expectedDataEpoch: number;
+  purgeSurfaceRegistryVersion: string;
+  externalIntegrationManifestVersion: string;
+  workflowSubjectManifestVersion: string;
 }): Promise<{
-  outcome: "retention_pending" | "needs_attention" | "no_order" | "epoch_mismatch";
+  outcome:
+    | "retention_pending"
+    | "needs_attention"
+    | "no_order"
+    | "epoch_mismatch"
+    | "registry_mismatch";
 }> {
   "use workflow";
-  return await runPurgeStep(input);
+  assertWorkflowSafe(input, "input");
+  assertOwnerFullPurgeManifest(input);
+  const result = await runPurgeStep(input);
+  assertWorkflowSafe(result, "result");
+  return result;
 }
 
 async function runPurgeStep(input: {
   workflowCommandId: string;
   subjectId: string;
   expectedDataEpoch: number;
+  purgeSurfaceRegistryVersion: string;
+  externalIntegrationManifestVersion: string;
+  workflowSubjectManifestVersion: string;
 }): Promise<{
-  outcome: "retention_pending" | "needs_attention" | "no_order" | "epoch_mismatch";
+  outcome:
+    | "retention_pending"
+    | "needs_attention"
+    | "no_order"
+    | "epoch_mismatch"
+    | "registry_mismatch";
 }> {
   "use step";
+  assertOwnerFullPurgeManifest(input);
   const composition = createServerComposition();
   const result = await composition.ownerPurgeService.propagateForOwner({
     expectedDataEpoch: input.expectedDataEpoch,
+    purgeSurfaceRegistryVersion: input.purgeSurfaceRegistryVersion,
+    externalIntegrationManifestVersion:
+      input.externalIntegrationManifestVersion,
+    workflowSubjectManifestVersion: input.workflowSubjectManifestVersion,
     userId: asUserId(input.subjectId),
   });
   if ("outcome" in result) {
@@ -48,11 +104,16 @@ async function runPurgeStep(input: {
 
 export function createOwnerFullPurgeWorkflowStarter(): WorkflowStarter {
   return async (input) => {
+    assertOwnerFullPurgeManifest(input);
     const run = await start(ownerFullPurgeWorkflow, [
       {
         workflowCommandId: input.workflowCommandId,
         subjectId: input.subjectId,
         expectedDataEpoch: input.expectedDataEpoch,
+        purgeSurfaceRegistryVersion: input.purgeSurfaceRegistryVersion,
+        externalIntegrationManifestVersion:
+          input.externalIntegrationManifestVersion,
+        workflowSubjectManifestVersion: input.workflowSubjectManifestVersion,
       },
     ]);
     return { workflowReceiptId: run.runId };
