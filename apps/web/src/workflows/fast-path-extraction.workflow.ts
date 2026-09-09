@@ -21,7 +21,7 @@ import { createServerComposition } from "../server-composition";
  * Step input/output carries only IDs, revisions, policy versions, outcome,
  * and allowlisted error codes — never conversation text (architecture 13.3).
  * Routing happens through the shared createWorkflowStarter router in
- * rolling-summary.workflow.ts (event type `fast_path_extraction_requested`).
+ * workflow-starter.ts (event type `fast_path_extraction_requested`).
  */
 export async function fastPathExtractionWorkflow(input: {
   workflowCommandId: string;

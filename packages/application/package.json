@@ -4,6 +4,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./ids": "./src/ids.ts",
+    "./owner-purge": "./src/owner-purge.ts",
+    "./purge-surface-registry": "./src/purge-surface-registry.ts",
     "./journal-eligibility": "./src/journal-eligibility.ts",
     "./journal-regeneration": "./src/journal-regeneration.ts",
     "./memory-trust-followup": "./src/memory-trust-followup.ts",

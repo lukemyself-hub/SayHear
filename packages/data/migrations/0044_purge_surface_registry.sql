@@ -73,6 +73,50 @@ ALTER TABLE workflow_commands
     (workflow_subject_manifest_version IS NOT NULL)
   );
 
+-- Purge orders are retained governance metadata. Normalize any pre-registry
+-- free-form reason before enforcing the content-free error-code allowlist.
+UPDATE owner_purge_orders
+SET needs_attention_reason = 'unknown_error'
+WHERE needs_attention_reason IS NOT NULL
+  AND needs_attention_reason NOT IN (
+    'database_timeout',
+    'network_error',
+    'unknown_error',
+    'verification_failed',
+    'purge_marker_missing',
+    'purge_marker_epoch_mismatch',
+    'purge_marker_invalid',
+    'purge_marker_receipts_mismatch',
+    'verification_failed:purge_marker_missing',
+    'verification_failed:purge_marker_epoch_mismatch',
+    'verification_failed:purge_marker_invalid',
+    'verification_failed:purge_marker_receipts_mismatch',
+    'recovery_reapply_failed',
+    'purge_surface_registry_reconciliation_required'
+  );
+
+ALTER TABLE owner_purge_orders
+  ADD CONSTRAINT owner_purge_orders_needs_attention_reason_check
+  CHECK (
+    needs_attention_reason IS NULL
+    OR needs_attention_reason IN (
+      'database_timeout',
+      'network_error',
+      'unknown_error',
+      'verification_failed',
+      'purge_marker_missing',
+      'purge_marker_epoch_mismatch',
+      'purge_marker_invalid',
+      'purge_marker_receipts_mismatch',
+      'verification_failed:purge_marker_missing',
+      'verification_failed:purge_marker_epoch_mismatch',
+      'verification_failed:purge_marker_invalid',
+      'verification_failed:purge_marker_receipts_mismatch',
+      'recovery_reapply_failed',
+      'purge_surface_registry_reconciliation_required'
+    )
+  );
+
 -- Existing in-flight orders were created before the registry and cannot be
 -- certified by copying the new version onto them. Park them for a fresh clear
 -- and independent verify pass under the current registry; already terminal

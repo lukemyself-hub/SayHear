@@ -87,7 +87,7 @@ import {
 
 import { createAuthOptions } from "./auth";
 import { loadRuntimeConfiguration } from "./runtime-config";
-import { createWorkflowStarter } from "./workflows/rolling-summary.workflow";
+import { createWorkflowStarter } from "./workflow-starter";
 
 const globalPool = globalThis as typeof globalThis & {
   sayHearPool?: ReturnType<typeof createPostgresPool>;

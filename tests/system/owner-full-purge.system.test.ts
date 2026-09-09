@@ -2105,7 +2105,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     await purgeRepository.markNeedsAttention({
       now: clock(),
       ownerPurgeOrderId: order.ownerPurgeOrderId,
-      reason: "verification_failed:drill",
+      reason: "verification_failed",
     });
     const scan = await purgeService.scanPendingOrders({ now: clock() });
     expect(scan.retried).toBe(1);
@@ -2119,6 +2119,23 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     // Terminal orders never regress and are not retried again.
     const idleScan = await purgeService.scanPendingOrders({ now: clock() });
     expect(idleScan.retried).toBe(0);
+  });
+
+  it("rejects non-allowlisted purge attention reasons at the repository boundary", async () => {
+    const { order } = await startPurgeOrder();
+    await expect(
+      purgeRepository.markNeedsAttention({
+        now: clock(),
+        ownerPurgeOrderId: order.ownerPurgeOrderId,
+        reason: "provider response contained private text" as never,
+      }),
+    ).rejects.toThrow("allowlisted error code");
+
+    const unchanged = await purgeRepository.findOrder({
+      ownerPurgeOrderId: order.ownerPurgeOrderId,
+    });
+    expect(unchanged?.status).toBe("requested");
+    expect(unchanged?.needsAttentionReason).toBeNull();
   });
 
   it("sensitive inspection of purged content fails closed even after re-authentication", async () => {

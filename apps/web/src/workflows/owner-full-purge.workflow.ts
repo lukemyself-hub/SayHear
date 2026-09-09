@@ -1,11 +1,7 @@
-import {
-  asUserId,
-  assertWorkflowSafe,
-  type WorkflowStarter,
-} from "@sayhear/application";
+import { asUserId } from "@sayhear/application/ids";
+import { assertWorkflowSafe } from "@sayhear/application/journal-eligibility";
+import type { WorkflowStarter } from "@sayhear/application";
 import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
 
 type OwnerFullPurgeManifestInput = {
   purgeSurfaceRegistryVersion?: unknown;
@@ -87,6 +83,7 @@ async function runPurgeStep(input: {
 }> {
   "use step";
   assertOwnerFullPurgeManifest(input);
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const result = await composition.ownerPurgeService.propagateForOwner({
     expectedDataEpoch: input.expectedDataEpoch,

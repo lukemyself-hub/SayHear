@@ -4,7 +4,8 @@ import type {
   OwnerPurgeOrderStatus,
   OwnerPurgeReceipt,
   OwnerPurgeRepository,
-} from "@sayhear/application";
+  PurgeAttentionReason,
+} from "@sayhear/application/owner-purge";
 import {
   PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
   PURGE_EXTERNAL_INTEGRATION_MANIFEST_LEGACY_VERSION,
@@ -16,9 +17,12 @@ import {
   PURGE_SURFACE_REGISTRY_VERSION,
   PURGE_WORKFLOW_SUBJECT_MANIFEST_LEGACY_VERSION,
   PurgeSurfaceRegistryError,
-  PurgeVerificationError,
   type PurgeSurfaceEntry,
-} from "@sayhear/application";
+} from "@sayhear/application/purge-surface-registry";
+import {
+  isPurgeAttentionReason,
+  PurgeVerificationError,
+} from "@sayhear/application/owner-purge";
 import { asUserId, type UserId } from "@sayhear/domain";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 
@@ -154,7 +158,12 @@ function mapOrder(row: OrderRow): OwnerPurgeOrder {
     activeSystemDeletedAt: row.active_system_deleted_at,
     retentionPendingAt: row.retention_pending_at,
     needsAttentionAt: row.needs_attention_at,
-    needsAttentionReason: row.needs_attention_reason,
+    needsAttentionReason:
+      row.needs_attention_reason === null
+        ? null
+        : isPurgeAttentionReason(row.needs_attention_reason)
+          ? row.needs_attention_reason
+          : "unknown_error",
     backupRetentionUntil: row.backup_retention_until,
   };
 }
@@ -1225,10 +1234,13 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
 
   public async markNeedsAttention(input: {
     ownerPurgeOrderId: string;
-    reason: string;
+    reason: PurgeAttentionReason;
     now: Date;
     expectedStatus?: OwnerPurgeOrder["status"];
   }): Promise<void> {
+    if (!isPurgeAttentionReason(input.reason)) {
+      throw new Error("Purge attention reason must be an allowlisted error code.");
+    }
     await this.pool.query<QueryResultRow>(
       `
         UPDATE owner_purge_orders

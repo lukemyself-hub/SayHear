@@ -8,8 +8,8 @@ import {
   type PurgeSurfaceExternalIntegration,
   type PurgeSurfaceOwnerResolution,
   type PurgeSurfaceRegistrySnapshot,
-} from "@sayhear/application";
-import { PurgeVerificationError } from "@sayhear/application";
+} from "@sayhear/application/purge-surface-registry";
+import { PurgeVerificationError } from "@sayhear/application/owner-purge";
 import type { PoolClient } from "pg";
 
 export type PostgresPurgeSurfaceContext = Readonly<{

@@ -24,6 +24,31 @@ export type OwnerPurgeOrderStatus =
   | "retention_pending"
   | "needs_attention";
 
+export const PURGE_ATTENTION_REASONS = [
+  "database_timeout",
+  "network_error",
+  "unknown_error",
+  "verification_failed",
+  "purge_marker_missing",
+  "purge_marker_epoch_mismatch",
+  "purge_marker_invalid",
+  "purge_marker_receipts_mismatch",
+  "verification_failed:purge_marker_missing",
+  "verification_failed:purge_marker_epoch_mismatch",
+  "verification_failed:purge_marker_invalid",
+  "verification_failed:purge_marker_receipts_mismatch",
+  "recovery_reapply_failed",
+  "purge_surface_registry_reconciliation_required",
+] as const;
+
+export type PurgeAttentionReason = (typeof PURGE_ATTENTION_REASONS)[number];
+
+export function isPurgeAttentionReason(
+  value: string,
+): value is PurgeAttentionReason {
+  return (PURGE_ATTENTION_REASONS as readonly string[]).includes(value);
+}
+
 export type OwnerPurgeOrder = Readonly<{
   ownerPurgeOrderId: string;
   userId: UserId;
@@ -41,7 +66,7 @@ export type OwnerPurgeOrder = Readonly<{
   activeSystemDeletedAt: Date | null;
   retentionPendingAt: Date | null;
   needsAttentionAt: Date | null;
-  needsAttentionReason: string | null;
+  needsAttentionReason: PurgeAttentionReason | null;
   backupRetentionUntil: Date | null;
 }>;
 
@@ -188,7 +213,7 @@ export type OwnerPurgeRepository = Readonly<{
   }): Promise<Readonly<{ outcome: "retention_pending" }> | Readonly<{ outcome: "not_applicable" }>>;
   markNeedsAttention(input: {
     ownerPurgeOrderId: string;
-    reason: string;
+    reason: PurgeAttentionReason;
     now: Date;
     expectedStatus?: OwnerPurgeOrderStatus;
   }): Promise<void>;
@@ -276,7 +301,7 @@ export class PurgeVerificationError extends Error {
 
 export class OwnerPurgePropagationError extends Error {
   public constructor(
-    public readonly reason: string,
+    public readonly reason: PurgeAttentionReason,
     public readonly status: OwnerPurgeOrderStatus,
   ) {
     super(`Full Purge propagation failed: ${reason}`);
@@ -284,9 +309,17 @@ export class OwnerPurgePropagationError extends Error {
   }
 }
 
-function sanitizePurgeReason(error: unknown): string {
+function sanitizePurgeReason(error: unknown): PurgeAttentionReason {
   if (error instanceof PurgeVerificationError) {
-    return `verification_failed:${error.violation}`;
+    switch (error.violation) {
+      case "purge_marker_missing":
+      case "purge_marker_epoch_mismatch":
+      case "purge_marker_invalid":
+      case "purge_marker_receipts_mismatch":
+        return `verification_failed:${error.violation}`;
+      default:
+        return "verification_failed";
+    }
   }
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
@@ -304,11 +337,16 @@ function isMarkerReconciliationRequired(order: OwnerPurgeOrder): boolean {
   const reason = order.needsAttentionReason ?? "";
   return (
     order.status === "needs_attention" &&
-    (reason === "purge_marker_missing" ||
-      reason === "purge_marker_epoch_mismatch" ||
-      reason === "purge_marker_invalid" ||
-      reason === "purge_marker_receipts_mismatch" ||
-      reason.startsWith("verification_failed:purge_marker_"))
+    [
+      "purge_marker_missing",
+      "purge_marker_epoch_mismatch",
+      "purge_marker_invalid",
+      "purge_marker_receipts_mismatch",
+      "verification_failed:purge_marker_missing",
+      "verification_failed:purge_marker_epoch_mismatch",
+      "verification_failed:purge_marker_invalid",
+      "verification_failed:purge_marker_receipts_mismatch",
+    ].includes(reason)
   );
 }
 
