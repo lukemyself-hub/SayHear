@@ -50,3 +50,8 @@ export {
 export { PostgresRollingSummaryRepository } from "./postgres-rolling-summary-repository";
 export { PostgresOwnerPurgeRepository } from "./postgres-owner-purge-repository";
 export { PostgresPurgeMarkerRepository } from "./postgres-purge-marker-repository";
+export {
+  ModelRoleAdmissionRejectedError,
+  PostgresModelRoleCommandRepository,
+} from "./postgres-model-role-command-repository";
+export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";

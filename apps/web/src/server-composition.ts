@@ -23,6 +23,9 @@ import {
   createRecoveryReapplyService,
   createRollingSummaryService,
   createOutboxDispatcherService,
+  createModelRoleCommandService,
+  createModelRoleRegistry,
+  createBioInspectionService,
   createUserTextConversationService,
   type JournalEligibilityRepository,
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
@@ -78,6 +81,8 @@ import {
   PostgresUserTextConversationRepository,
   PostgresDialogueStateRepository,
   PostgresRollingSummaryRepository,
+  PostgresModelRoleCommandRepository,
+  PostgresBioInspectionRepository,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
@@ -332,6 +337,15 @@ export function createServerComposition() {
   });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);
+  // F2 registers the composition seam without enabling a future role. An
+  // evaluated config and active rollout pin are required before admission.
+  const modelRoleCommandService = createModelRoleCommandService({
+    registry: createModelRoleRegistry([]),
+    repository: new PostgresModelRoleCommandRepository(pool),
+  });
+  const bioInspectionService = createBioInspectionService({
+    repository: new PostgresBioInspectionRepository(pool),
+  });
   const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
   const dialogueStateService = createDialogueStateService({
     clock: configuration.clock,
@@ -647,6 +661,8 @@ export function createServerComposition() {
       repository: new PostgresOwnerPurgeRepository(pool),
     }),
     outboxDispatcherService,
+    modelRoleCommandService,
+    bioInspectionService,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
       policyVersion: "sensitive-inspection:v1",

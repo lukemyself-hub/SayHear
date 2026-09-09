@@ -127,6 +127,14 @@ const CLEARED_SURFACES: ReadonlyArray<Readonly<{
   { label: "conversation_events", sql: "SELECT count(*) FROM conversation_events WHERE user_id = $1" },
   { label: "generation_commands", sql: "SELECT count(*) FROM generation_commands WHERE user_id = $1" },
   { label: "model_run_attempts", sql: "SELECT count(*) FROM model_run_attempts WHERE user_id = $1" },
+  { label: "bios", sql: "SELECT count(*) FROM bios WHERE user_id = $1" },
+  { label: "bio_versions", sql: "SELECT count(*) FROM bio_versions WHERE user_id = $1" },
+  { label: "bio_statements", sql: "SELECT count(*) FROM bio_statements WHERE user_id = $1" },
+  { label: "bio_atomic_propositions", sql: "SELECT count(*) FROM bio_atomic_propositions WHERE user_id = $1" },
+  { label: "bio_claim_links", sql: "SELECT count(*) FROM bio_claim_links WHERE user_id = $1" },
+  { label: "bio_coverage_units", sql: "SELECT count(*) FROM bio_coverage_units WHERE user_id = $1" },
+  { label: "bio_coverage_members", sql: "SELECT count(*) FROM bio_coverage_members WHERE user_id = $1" },
+  { label: "bio_validation_findings", sql: "SELECT count(*) FROM bio_validation_findings WHERE user_id = $1" },
   { label: "compiled_contexts", sql: "SELECT count(*) FROM compiled_contexts WHERE user_id = $1" },
   { label: "compiled_context_revision_refs", sql: "SELECT count(*) FROM compiled_context_revision_refs WHERE user_id = $1" },
   { label: "provider_egress_dispositions", sql: "SELECT count(*) FROM provider_egress_dispositions WHERE user_id = $1" },
@@ -868,6 +876,37 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
       );
       await client.query("DELETE FROM entity_mentions WHERE user_id = $1", [userId]);
       await client.query("DELETE FROM entity_labels WHERE user_id = $1", [userId]);
+
+      // F2 typed Bio rows are private read-model content. Clear their child
+      // links before the shared GenerationCommand / ModelRunAttempt ledger so
+      // the FK lineage is removed in the same owner purge transaction.
+      await client.query(
+        "DELETE FROM bio_validation_findings WHERE user_id = $1",
+        [userId],
+      );
+      await client.query("DELETE FROM bio_claim_links WHERE user_id = $1", [
+        userId,
+      ]);
+      await client.query(
+        "DELETE FROM bio_coverage_members WHERE user_id = $1",
+        [userId],
+      );
+      await client.query("DELETE FROM bio_coverage_units WHERE user_id = $1", [
+        userId,
+      ]);
+      await client.query("DELETE FROM bio_statements WHERE user_id = $1", [
+        userId,
+      ]);
+      await client.query(
+        "DELETE FROM bio_atomic_propositions WHERE user_id = $1",
+        [userId],
+      );
+      await client.query(
+        "UPDATE bios SET current_version_id = NULL WHERE user_id = $1",
+        [userId],
+      );
+      await client.query("DELETE FROM bio_versions WHERE user_id = $1", [userId]);
+      await client.query("DELETE FROM bios WHERE user_id = $1", [userId]);
 
       // These action rows carry typed Claim / Qualifier / Entity references.
       // Remove every owner workflow and outbox record first, then the
