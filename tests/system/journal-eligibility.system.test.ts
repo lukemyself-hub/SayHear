@@ -117,6 +117,15 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        episode_impact_reviews,
+        episode_build_runs,
+        episode_version_entity_links,
+        episode_evidence_links,
+        episode_candidate_entity_links,
+        episode_candidate_evidence_links,
+        episode_candidates,
+        episode_versions,
+        episodes,
         entity_identity_revalidation_runs,
         journal_identity_review_fences,
         journal_statement_entity_links,
@@ -150,6 +159,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
         user_self_entities,
         entity_versions,
         entities,
+        owner_purge_operational_metadata,
         owner_purge_receipts,
         owner_purge_orders,
         conversation_action_payloads,

@@ -45,6 +45,11 @@ import {
   loadPredicateRegistrySnapshot,
   PREDICATE_REGISTRY_RUNTIME_VERSION,
   createMemoryConsolidationScanService,
+  createEpisodeBuilderScanService,
+  EPISODE_BUILDER_POLICY_VERSION,
+  type EpisodeBuildEntrypointDependencies,
+  type EpisodeBuildModelProvider,
+  type EpisodeBuilderRepository,
   type FastPathExtractionEntrypointDependencies,
   type MemoryConsolidationEntrypointDependencies,
   relationshipHintInputsFor,
@@ -82,6 +87,7 @@ import {
   PostgresDialogueStateRepository,
   PostgresRollingSummaryRepository,
   PostgresModelRoleCommandRepository,
+  PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
 } from "@sayhear/data";
 
@@ -346,6 +352,31 @@ export function createServerComposition() {
   const modelRoleCommandService = createModelRoleCommandService({
     registry: createModelRoleRegistry([]),
     repository: new PostgresModelRoleCommandRepository(pool),
+  });
+  const episodeBuildProvider: EpisodeBuildModelProvider = {
+    role: "episode.build",
+    async buildProposals() {
+      throw new Error(
+        "episode.build has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
+      );
+    },
+  };
+  const episodeRepository = new PostgresEpisodeRepository(pool);
+  const episodeBuilderScanService = createEpisodeBuilderScanService({
+    clock: configuration.clock,
+    policyVersion: EPISODE_BUILDER_POLICY_VERSION,
+    repository: episodeRepository,
+    enabled: configuration.writeSwitches.episodeBuildEnabled,
+  });
+  const episodeEntrypointDependencies = (
+    workflowReceiptId: string,
+  ): EpisodeBuildEntrypointDependencies => ({
+    clock: configuration.clock,
+    repository: episodeRepository,
+    modelRoleCommandService,
+    episodeBuildProvider: episodeBuildProvider,
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
+    workflowReceiptId,
   });
   const bioInspectionService = createBioInspectionService({
     repository: new PostgresBioInspectionRepository(pool),
@@ -699,6 +730,12 @@ export function createServerComposition() {
     memoryConsolidationRepository,
     memoryConsolidationService,
     memoryConsolidationEntrypointDependencies,
+    episodeRepository,
+    episodeBuilderScanService,
+    episodeEntrypointDependencies,
+    episodeBuilderPolicyVersion: EPISODE_BUILDER_POLICY_VERSION,
+    episodeBuildProvider,
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

@@ -97,6 +97,18 @@ export type MemoryClaimVersionQualifierId = string & {
 export type RelationshipResolverHintId = string & {
   readonly [relationshipResolverHintIdBrand]: "RelationshipResolverHintId";
 };
+export type EpisodeId = string & {
+  readonly [episodeIdBrand]: "EpisodeId";
+};
+export type EpisodeVersionId = string & {
+  readonly [episodeVersionIdBrand]: "EpisodeVersionId";
+};
+export type EpisodeCandidateId = string & {
+  readonly [episodeCandidateIdBrand]: "EpisodeCandidateId";
+};
+declare const episodeIdBrand: unique symbol;
+declare const episodeVersionIdBrand: unique symbol;
+declare const episodeCandidateIdBrand: unique symbol;
 declare const memoryClaimIdBrand: unique symbol;
 declare const memoryClaimVersionIdBrand: unique symbol;
 declare const claimEvidenceLinkIdBrand: unique symbol;
@@ -259,6 +271,24 @@ export function asMemoryForgetReversalId(
     value,
     "MemoryForgetReversalId",
   ) as MemoryForgetReversalId;
+}
+
+export function asEpisodeId(value: string): EpisodeId {
+  return asOpaqueUuidV7(value, "EpisodeId") as EpisodeId;
+}
+
+export function asEpisodeVersionId(value: string): EpisodeVersionId {
+  return asOpaqueUuidV7(
+    value,
+    "EpisodeVersionId",
+  ) as EpisodeVersionId;
+}
+
+export function asEpisodeCandidateId(value: string): EpisodeCandidateId {
+  return asOpaqueUuidV7(
+    value,
+    "EpisodeCandidateId",
+  ) as EpisodeCandidateId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {

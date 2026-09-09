@@ -19,6 +19,9 @@ export function createRecoveryScannerHandler(dependencies: {
   rollingSummaryService?: RollingSummaryService;
   ownerPurgeService?: OwnerFullPurgeService;
   memoryConsolidationService?: MemoryConsolidationScanService;
+  episodeBuilderScanService?: {
+    scanPending(): Promise<Readonly<{ buildsQueued: number; maintenanceQueued: number }>>;
+  };
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -58,6 +61,11 @@ export function createRecoveryScannerHandler(dependencies: {
     const consolidation = dependencies.memoryConsolidationService
       ? await dependencies.memoryConsolidationService.scanPending()
       : { daily: 0, weekly: 0, sweeper: 0, reArmed: 0 };
+    // Episode Builder daily eligibility (issue #197): idempotent episode
+    // build commands plus the maintenance sweep, dispatched below.
+    const episode = dependencies.episodeBuilderScanService
+      ? await dependencies.episodeBuilderScanService.scanPending()
+      : { buildsQueued: 0, maintenanceQueued: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
@@ -68,6 +76,7 @@ export function createRecoveryScannerHandler(dependencies: {
       rollingSummary,
       purge,
       consolidation,
+      episode,
       outbox,
     });
   };

@@ -297,6 +297,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "purge_ordinary_entity_versions",
     "purge_bio_versions",
     "purge_bios",
+    "purge_episode_versions",
+    "purge_episodes",
     "redact_sensitive_access_audits",
     "capture_owner_purge_operational_metadata",
     "record_provider_retention",
@@ -309,6 +311,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "verify_owner_outbox_events_empty",
     "verify_conversation_revisions_purged",
     "verify_memory_claims_purged",
+    "verify_episode_versions_purged",
+    "verify_episodes_purged",
     "verify_memory_claim_versions_purged",
     "verify_memory_claim_version_qualifiers_purged",
     "verify_ordinary_entities_purged",
@@ -1108,6 +1112,30 @@ export async function clearPurgeSurface(
         [context.userId],
       );
       return;
+    case "purge_episode_versions":
+      // Episode version history keeps only a content-free lineage envelope:
+      // the typed content and label transition to NULL together with
+      // content_purged_at; identity, revisions and lineage stay frozen.
+      await client.query(
+        `UPDATE episode_versions
+         SET label = NULL, content = NULL, content_purged_at = $2
+         WHERE user_id = $1 AND content_purged_at IS NULL`,
+        [context.userId, new Date()],
+      );
+      return;
+    case "purge_episodes":
+      await client.query(
+        `UPDATE episode_versions
+         SET label = NULL, content = NULL, content_purged_at = $2
+         WHERE user_id = $1 AND content_purged_at IS NULL`,
+        [context.userId, new Date()],
+      );
+      await client.query(
+        `UPDATE episodes SET current_version_id = NULL, deleted_at = $2
+         WHERE user_id = $1`,
+        [context.userId, new Date()],
+      );
+      return;
     case "redact_sensitive_access_audits":
       await client.query(
         `UPDATE ${table}
@@ -1226,6 +1254,34 @@ export async function verifyPurgeSurface(
       );
       if (Number(result.rows[0]?.count ?? 0) > 0) {
         throw new PurgeVerificationError("conversation_revisions_not_purged");
+      }
+      return;
+    }
+    case "verify_episode_versions_purged": {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${table}
+         WHERE user_id = $1
+           AND (label IS NOT NULL
+             OR content IS NOT NULL
+             OR content_purged_at IS NULL)`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError("episode_versions_not_purged");
+      }
+      return;
+    }
+    case "verify_episodes_purged": {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${table}
+         WHERE user_id = $1
+           AND (episode_kind_id IS NOT NULL
+             OR current_version_id IS NOT NULL
+             OR deleted_at IS NULL)`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError("episodes_not_purged");
       }
       return;
     }
