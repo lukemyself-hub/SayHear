@@ -293,6 +293,12 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_EPISODE_BUILD_ENABLED",
     ),
+    // A3 (issue #199): the Reflection stage follows the same direct-switch
+    // discipline; it stays closed until its release manifest opens it.
+    reflectionEnabled: explicitSwitch(
+      environment,
+      "SAYHEAR_REFLECTION_ENABLED",
+    ),
   });
 
   return Object.freeze({

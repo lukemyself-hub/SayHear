@@ -175,6 +175,7 @@ export class PostgresNarrativeValidationRepository
     request: NarrativeValidationRequest;
     requestFingerprint: string;
     expectedDataEpoch: number;
+    now: Date;
   }): Promise<
     | Readonly<{ outcome: "created"; request: NarrativeValidationRecord }>
     | Readonly<{ outcome: "reused"; request: NarrativeValidationRecord }>
@@ -213,7 +214,7 @@ export class PostgresNarrativeValidationRepository
          ON CONFLICT (user_id, artifact_kind, draft_ref) DO NOTHING
          RETURNING (xmax = 0) AS inserted`,
         [
-          createUuidV7(new Date()),
+          createUuidV7(input.now),
           input.userId,
           input.request.artifactKind,
           input.request.draftRef,
@@ -226,7 +227,7 @@ export class PostgresNarrativeValidationRepository
           input.request.validationPolicyVersion,
           input.request.promptVersion,
           input.request.schemaVersion,
-          new Date(),
+          input.now,
         ],
       );
       const insertedNew = inserted.rows[0]?.inserted === true;

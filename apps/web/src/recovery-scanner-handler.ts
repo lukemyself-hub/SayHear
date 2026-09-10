@@ -22,6 +22,15 @@ export function createRecoveryScannerHandler(dependencies: {
   episodeBuilderScanService?: {
     scanPending(): Promise<Readonly<{ buildsQueued: number; maintenanceQueued: number }>>;
   };
+  reflectionSchedulerScanService?: {
+    scanPending(): Promise<
+      Readonly<{
+        dailyQueued: number;
+        weeklyQueued: number;
+        maintenanceQueued: number;
+      }>
+    >;
+  };
   /**
    * Candidate Review release/remap backstop (SPEC #193 §8.4, ADR-0122):
    * re-runs the idempotent published-Proposal scan, so a missed release
@@ -75,6 +84,11 @@ export function createRecoveryScannerHandler(dependencies: {
     const episode = dependencies.episodeBuilderScanService
       ? await dependencies.episodeBuilderScanService.scanPending()
       : { buildsQueued: 0, maintenanceQueued: 0 };
+    // Daily / Weekly Reflection scheduling (issue #199): idempotent
+    // reflection build + maintenance commands, dispatched below.
+    const reflection = dependencies.reflectionSchedulerScanService
+      ? await dependencies.reflectionSchedulerScanService.scanPending()
+      : { dailyQueued: 0, weeklyQueued: 0, maintenanceQueued: 0 };
     // Candidate Review governance backstop (SPEC #193 §8.4): idempotent
     // remap commands for published-but-unremapped awaiting Candidates,
     // dispatched below with the rest of the outbox.
@@ -92,6 +106,7 @@ export function createRecoveryScannerHandler(dependencies: {
       purge,
       consolidation,
       episode,
+      reflection,
       candidateRemaps,
       outbox,
     });

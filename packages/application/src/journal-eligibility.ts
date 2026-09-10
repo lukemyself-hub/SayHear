@@ -312,6 +312,9 @@ export type WorkflowStarter = (input: {
     | "model_role_requested"
     | "episode_build_requested"
     | "episode_maintenance_requested"
+    | "reflection_daily_requested"
+    | "reflection_weekly_requested"
+    | "reflection_maintenance_requested"
     | "predicate_registry_released"
     | "candidate_remap_requested";
   modelRole?: string;
@@ -333,6 +336,12 @@ export type WorkflowStarter = (input: {
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
+  /** Reflection command identity fields (Q3). */
+  claimBaselineDigest?: string;
+  weekIdentifier?: string;
+  windowStartDate?: string;
+  windowEndDate?: string;
+  sourceDigest?: string;
   purgeSurfaceRegistryVersion?: string;
   externalIntegrationManifestVersion?: string;
   workflowSubjectManifestVersion?: string;
@@ -429,6 +438,21 @@ export function createOutboxDispatcherService(dependencies: {
             sourceRevision: Number(event.aggregateRevision),
             policyVersion: String(event.payload.policyVersion ?? ""),
             expectedDataEpoch: Number(event.payload.expectedDataEpoch ?? 0),
+            ...(typeof event.payload.claimBaselineDigest === "string"
+              ? { claimBaselineDigest: event.payload.claimBaselineDigest }
+              : {}),
+            ...(typeof event.payload.weekIdentifier === "string"
+              ? { weekIdentifier: event.payload.weekIdentifier }
+              : {}),
+            ...(typeof event.payload.windowStartDate === "string"
+              ? { windowStartDate: event.payload.windowStartDate }
+              : {}),
+            ...(typeof event.payload.windowEndDate === "string"
+              ? { windowEndDate: event.payload.windowEndDate }
+              : {}),
+            ...(typeof event.payload.sourceDigest === "string"
+              ? { sourceDigest: event.payload.sourceDigest }
+              : {}),
             ...(typeof event.payload.purgeSurfaceRegistryVersion === "string"
               ? {
                   purgeSurfaceRegistryVersion:
@@ -510,6 +534,16 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "sourceRevision",
   "policyVersion",
   "expectedDataEpoch",
+  "scope",
+  "claimBaselineDigest",
+  "weekIdentifier",
+  "windowStartDate",
+  "windowEndDate",
+  "sourceDigest",
+  "rejectionCode",
+  "statementCount",
+  "candidateCount",
+  "degradedEpisodeReason",
   "purgeSurfaceRegistryVersion",
   "externalIntegrationManifestVersion",
   "workflowSubjectManifestVersion",
@@ -537,6 +571,7 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "attemptKind",
   "rolloutPin",
   "candidateCount",
+  "degradedEpisodeReason",
   "acceptedCount",
   "unresolvedCount",
   "rejectedCount",

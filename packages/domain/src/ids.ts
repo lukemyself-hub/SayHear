@@ -134,6 +134,23 @@ export type NarrativeValidatorResultId = string & {
 declare const episodeIdBrand: unique symbol;
 declare const episodeVersionIdBrand: unique symbol;
 declare const episodeCandidateIdBrand: unique symbol;
+declare const reflectionIdBrand: unique symbol;
+declare const reflectionVersionIdBrand: unique symbol;
+declare const reflectionStatementIdBrand: unique symbol;
+declare const reflectionAtomicPropositionIdBrand: unique symbol;
+
+export type ReflectionId = string & {
+  readonly [reflectionIdBrand]: "ReflectionId";
+};
+export type ReflectionVersionId = string & {
+  readonly [reflectionVersionIdBrand]: "ReflectionVersionId";
+};
+export type ReflectionStatementId = string & {
+  readonly [reflectionStatementIdBrand]: "ReflectionStatementId";
+};
+export type ReflectionAtomicPropositionId = string & {
+  readonly [reflectionAtomicPropositionIdBrand]: "ReflectionAtomicPropositionId";
+};
 declare const memoryClaimIdBrand: unique symbol;
 declare const memoryClaimVersionIdBrand: unique symbol;
 declare const claimEvidenceLinkIdBrand: unique symbol;
@@ -314,6 +331,33 @@ export function asEpisodeCandidateId(value: string): EpisodeCandidateId {
     value,
     "EpisodeCandidateId",
   ) as EpisodeCandidateId;
+}
+
+export function asReflectionId(value: string): ReflectionId {
+  return asOpaqueUuidV7(value, "ReflectionId") as ReflectionId;
+}
+
+export function asReflectionVersionId(value: string): ReflectionVersionId {
+  return asOpaqueUuidV7(
+    value,
+    "ReflectionVersionId",
+  ) as ReflectionVersionId;
+}
+
+export function asReflectionStatementId(value: string): ReflectionStatementId {
+  return asOpaqueUuidV7(
+    value,
+    "ReflectionStatementId",
+  ) as ReflectionStatementId;
+}
+
+export function asReflectionAtomicPropositionId(
+  value: string,
+): ReflectionAtomicPropositionId {
+  return asOpaqueUuidV7(
+    value,
+    "ReflectionAtomicPropositionId",
+  ) as ReflectionAtomicPropositionId;
 }
 
 export function asPredicateChangeProposalId(

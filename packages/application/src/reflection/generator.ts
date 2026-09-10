@@ -1,0 +1,765 @@
+import {
+  asDailySessionId,
+  asGenerationCommandId,
+  asModelRunAttemptId,
+  asUserId,
+  asWorkflowCommandId,
+  type UserId,
+} from "@sayhear/domain";
+
+import type { ModelRoleCommandService, ModelRoleFailureCode } from "../model-role-runtime";
+import type { RecoveryGate } from "../recovery-gate";
+import {
+  NARRATIVE_FINDINGS_SCHEMA_VERSION,
+  NARRATIVE_VALIDATION_POLICY_VERSION,
+  NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+  runNarrativeValidation,
+  readNarrativeValidationOutcome,
+  type NarrativeGeneratorProposition,
+  type NarrativeGeneratorStatement,
+  type NarrativeSourceEntry,
+} from "../narrative-validation";
+import type {
+  ReflectionBuildEntrypointInput,
+  ReflectionBuildEntrypointResult,
+  ReflectionEntrypointDependencies,
+  ReflectionFrozenInput,
+  ReflectionGenerationModelOutput,
+  ReflectionMaintenanceResult,
+  ReflectionModelStatement,
+  ReflectionRepository,
+} from "./types";
+import {
+  MAX_PROPOSITIONS_PER_STATEMENT,
+  MAX_STATEMENTS_PER_VERSION,
+  MAX_CANDIDATE_PROPOSALS_PER_VERSION,
+  REFLECTION_ADMISSION_POLICY_VERSION,
+  REFLECTION_OUTPUT_SCHEMA_VERSION,
+  REFLECTION_DAILY_PROMPT_VERSION,
+  REFLECTION_READINESS_POLICY_VERSION,
+  REFLECTION_WEEKLY_PROMPT_VERSION,
+} from "./types";
+import { assertWorkflowSafe } from "../journal-eligibility";
+import { planReflectionVersion } from "./engine";
+import { dateOrdinal } from "./readiness";
+
+/**
+ * Durable orchestration for Daily / Weekly Reflection (issue #199, SPEC 5.3).
+ * One frozen snapshot → one `reflection.daily` / `reflection.weekly`
+ * GenerationCommand (at most one same-model technical retry through the
+ * shared 1A.3b ledger) → deterministic Tier-1 gate → draft persist →
+ * `narrative.validate` (shared role, frozen reflection Prompt) → fenced
+ * current-pointer CAS commit + `propose_new` Candidate handoff. A validator
+ * that has not completed forbids the current commit and every Candidate
+ * (ADR-0132); Reflection v1 records semantic classes as advisory.
+ */
+
+function entrypointResult(
+  input: Readonly<{
+    subjectId: string;
+    scope: "daily" | "weekly";
+    outcome: ReflectionBuildEntrypointResult["outcome"];
+    rejectionCode?: string | null;
+    statementCount?: number;
+    candidateCount?: number;
+    degradedEpisodeReason?: string | null;
+    errorCode?: string | null;
+  }>,
+): ReflectionBuildEntrypointResult {
+  const result: ReflectionBuildEntrypointResult = {
+    subjectId: input.subjectId,
+    scope: input.scope,
+    outcome: input.outcome,
+    rejectionCode: input.rejectionCode ?? null,
+    statementCount: input.statementCount ?? 0,
+    candidateCount: input.candidateCount ?? 0,
+    degradedEpisodeReason: input.degradedEpisodeReason ?? null,
+    errorCode: input.errorCode ?? null,
+  };
+  assertWorkflowSafe(result, "reflection-result");
+  return result;
+}
+
+function classifyReflectionProviderError(error: unknown): ModelRoleFailureCode {
+  const category =
+    typeof error === "object" && error !== null && "category" in error
+      ? String((error as { category?: unknown }).category)
+      : "";
+  switch (category) {
+    case "timeout":
+      return "timeout";
+    case "rate_limited":
+      return "rate_limited";
+    case "unavailable":
+      return "server_error";
+    case "authentication":
+      return "authentication";
+    case "configuration":
+      return "configuration";
+    case "policy_blocked":
+      return "business_fence";
+    case "invalid_response":
+      return "schema_incompatible";
+    default:
+      return "result_unknown";
+  }
+}
+
+function roleForScope(scope: "daily" | "weekly") {
+  return scope === "daily"
+    ? {
+        role: "reflection.daily" as const,
+        promptVersion: REFLECTION_DAILY_PROMPT_VERSION,
+      }
+    : {
+        role: "reflection.weekly" as const,
+        promptVersion: REFLECTION_WEEKLY_PROMPT_VERSION,
+      };
+}
+
+/** Serialized draft text the validator independently re-decomposes. */
+function draftTextFor(statements: readonly ReflectionModelStatement[]): string {
+  return statements.map((statement) => statement.text).join("\n");
+}
+
+function generatorManifestFor(
+  statements: readonly ReflectionModelStatement[],
+): NarrativeGeneratorStatement[] {
+  return statements.map((statement) => ({
+    statementKey: statement.statementKey,
+    text: statement.text,
+    propositionStatements: statement.propositions.map(
+      (proposition): NarrativeGeneratorProposition => ({
+        propositionKey: proposition.propositionKey,
+        normalizedProposition: proposition.normalizedProposition,
+        propositionKind: proposition.propositionKind,
+        epistemicRendering: proposition.epistemicRendering,
+        supportKeys: [...proposition.supportEvidenceItemIds],
+      }),
+    ),
+  }));
+}
+
+function sourceEntriesFor(frozen: ReflectionFrozenInput): NarrativeSourceEntry[] {
+  return frozen.evidence.map((item) => ({
+    sourceKey: item.evidenceItemId,
+    sourceKind: "evidence_item" as const,
+    text: item.sourceText,
+    epistemicKind: null,
+  }));
+}
+
+function manifestForFrozen(frozen: ReflectionFrozenInput) {
+  return [
+    ...frozen.evidence.map((item) => ({
+      key: `evidence:${item.evidenceItemId}`,
+      revision: 0,
+      fingerprint: `evidence:${item.evidenceItemId}:${item.revisionId}`,
+    })),
+    ...frozen.episodes.map((item) => ({
+      key: `episode:${item.episodeVersionId}`,
+      revision: 0,
+      fingerprint: `episode:${item.episodeVersionId}`,
+    })),
+    ...frozen.summaries.map((item) => ({
+      key: `summary:${item.rollingSummaryVersionId}`,
+      revision: 0,
+      fingerprint: `summary:${item.rollingSummaryVersionId}`,
+    })),
+    {
+      key: "claim-baseline",
+      revision: 0,
+      fingerprint: `baseline:${frozen.claimBaselineDigest}`,
+    },
+  ];
+}
+
+// ---- Daily build entrypoint ---------------------------------------------------
+
+export async function runReflectionDailyBuild(input: Readonly<{
+  dependencies: ReflectionEntrypointDependencies;
+  command: ReflectionBuildEntrypointInput;
+  recoveryGate?: RecoveryGate;
+}>): Promise<ReflectionBuildEntrypointResult> {
+  asWorkflowCommandId(input.command.workflowCommandId);
+  assertWorkflowSafe(input.command, "reflection-command");
+  const dailySessionId = asDailySessionId(input.command.subjectId);
+  if (input.command.scope !== "daily") {
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: input.command.scope,
+      outcome: "rejected",
+      rejectionCode: "scope_mismatch",
+    });
+  }
+
+  const evaluated = await input.dependencies.repository.readDailySnapshot({
+    dailySessionId,
+    sourceRevision: input.command.sourceRevision,
+    claimBaselineDigest: input.command.claimBaselineDigest,
+    policyVersion: input.command.policyVersion,
+  });
+  if (evaluated.outcome !== "evaluated") {
+    // Benign: the head moved, the day is not ready anymore, or the baseline
+    // moved between queue time and run time. The scheduler re-freezes a
+    // fresh command at the new identity; no durable retry is burned.
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: "daily",
+      outcome: "stale_superseded",
+      errorCode: evaluated.outcome,
+    });
+  }
+  if (input.recoveryGate) {
+    await input.recoveryGate.requireOpen(evaluated.snapshot.userId);
+  }
+
+  let admitted: Awaited<
+    ReturnType<ModelRoleCommandService["admit"]>
+  >;
+  try {
+    admitted = await input.dependencies.modelRoleCommandService.admit({
+      userId: evaluated.snapshot.userId,
+      role: "reflection.daily",
+      intentKey: `reflection-daily:${dailySessionId}:${input.command.sourceRevision}:${input.command.claimBaselineDigest}`,
+      subjectType: "daily_session",
+      subjectId: dailySessionId,
+      sourceRevision: input.command.sourceRevision,
+      sourceSnapshot: `daily-session:${input.command.sourceRevision}`,
+      inputManifest: manifestForFrozen(evaluated.frozen),
+      expectedDataEpoch: input.command.expectedDataEpoch,
+      now: input.dependencies.clock(),
+    });
+  } catch (error) {
+    const reason =
+      error instanceof Error && error.message.includes("epoch")
+        ? "data_epoch"
+        : "admission";
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: "daily",
+      outcome: "fenced",
+      errorCode: reason,
+    });
+  }
+
+  return executeReflectionAttempt({
+    dependencies: input.dependencies,
+    userId: evaluated.snapshot.userId,
+    scope: "daily",
+    frozen: evaluated.frozen,
+    degradedEpisodeReason: evaluated.degradedEpisodeReason ?? null,
+    expectedDataEpoch: input.command.expectedDataEpoch,
+    generationCommandId: admitted.generationCommandId,
+    modelRunAttemptId: admitted.modelRunAttemptId,
+    attemptNo: admitted.attemptNo,
+    technicalRetriesUsed: 0,
+  });
+}
+
+// ---- Weekly build entrypoint --------------------------------------------------
+
+export async function runReflectionWeeklyBuild(input: Readonly<{
+  dependencies: ReflectionEntrypointDependencies;
+  command: ReflectionBuildEntrypointInput;
+  recoveryGate?: RecoveryGate;
+}>): Promise<ReflectionBuildEntrypointResult> {
+  asWorkflowCommandId(input.command.workflowCommandId);
+  assertWorkflowSafe(input.command, "reflection-command");
+  const userId = asUserId(input.command.subjectId);
+  if (input.command.scope !== "weekly") {
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: input.command.scope,
+      outcome: "rejected",
+      rejectionCode: "scope_mismatch",
+    });
+  }
+  const weekIdentifier = input.command.weekIdentifier ?? "";
+  if (!weekIdentifier) {
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: "weekly",
+      outcome: "rejected",
+      rejectionCode: "week_identifier_missing",
+    });
+  }
+
+  const evaluated = await input.dependencies.repository.readWeeklySnapshot({
+    userId,
+    weekIdentifier,
+    windowStartDate: input.command.windowStartDate ?? "",
+    windowEndDate: input.command.windowEndDate ?? "",
+    sourceDigest: input.command.sourceDigest ?? "",
+    policyVersion: input.command.policyVersion,
+  });
+  if (evaluated.outcome !== "evaluated") {
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: "weekly",
+      outcome: "stale_superseded",
+      errorCode: evaluated.outcome,
+    });
+  }
+  if (input.recoveryGate) {
+    await input.recoveryGate.requireOpen(evaluated.snapshot.userId);
+  }
+
+  let admitted: Awaited<
+    ReturnType<ModelRoleCommandService["admit"]>
+  >;
+  try {
+    admitted = await input.dependencies.modelRoleCommandService.admit({
+      userId: evaluated.snapshot.userId,
+      role: "reflection.weekly",
+      intentKey: `reflection-weekly:${userId}:${weekIdentifier}:${evaluated.frozen.sourceDigest ?? ""}`,
+      subjectType: "app_user",
+      subjectId: userId,
+      sourceRevision: dateOrdinal(evaluated.frozen.windowStartDate ?? ""),
+      sourceSnapshot: `week:${weekIdentifier}:${(evaluated.frozen.sourceDigest ?? "").slice(0, 16)}`,
+      inputManifest: manifestForFrozen(evaluated.frozen),
+      expectedDataEpoch: input.command.expectedDataEpoch,
+      now: input.dependencies.clock(),
+    });
+  } catch (error) {
+    const reason =
+      error instanceof Error && error.message.includes("epoch")
+        ? "data_epoch"
+        : "admission";
+    return entrypointResult({
+      subjectId: input.command.subjectId,
+      scope: "weekly",
+      outcome: "fenced",
+      errorCode: reason,
+    });
+  }
+
+  return executeReflectionAttempt({
+    dependencies: input.dependencies,
+    userId: evaluated.snapshot.userId,
+    scope: "weekly",
+    frozen: evaluated.frozen,
+    degradedEpisodeReason: null,
+    expectedDataEpoch: input.command.expectedDataEpoch,
+    generationCommandId: admitted.generationCommandId,
+    modelRunAttemptId: admitted.modelRunAttemptId,
+    attemptNo: admitted.attemptNo,
+    technicalRetriesUsed: 0,
+  });
+}
+
+// ---- Retry re-entry -------------------------------------------------------------
+
+export async function runReflectionAttempt(input: Readonly<{
+  dependencies: ReflectionEntrypointDependencies;
+  command: {
+    generationCommandId: string;
+    modelRunAttemptId: string;
+    attemptNo: number;
+  };
+}>): Promise<ReflectionBuildEntrypointResult> {
+  const context = await input.dependencies.repository.readAttemptContext({
+    generationCommandId: asGenerationCommandId(input.command.generationCommandId),
+    modelRunAttemptId: asModelRunAttemptId(input.command.modelRunAttemptId),
+  });
+  if (context.outcome !== "evaluated") {
+    return entrypointResult({
+      subjectId: "",
+      scope: "daily",
+      outcome: "stale_superseded",
+      errorCode: "attempt_settled_or_unknown",
+    });
+  }
+  const scope = context.dailySessionId !== null ? "daily" : "weekly";
+  if (scope === "daily") {
+    const evaluated = await input.dependencies.repository.readDailySnapshot({
+      dailySessionId: asDailySessionId(context.dailySessionId!),
+      sourceRevision: context.sourceRevision,
+      claimBaselineDigest: context.claimBaselineDigest,
+      policyVersion: context.policyVersion,
+    });
+    if (evaluated.outcome !== "evaluated") {
+      return entrypointResult({
+        subjectId: context.dailySessionId ?? "",
+        scope,
+        outcome: "stale_superseded",
+        errorCode: evaluated.outcome,
+      });
+    }
+    return executeReflectionAttempt({
+      dependencies: input.dependencies,
+      userId: evaluated.snapshot.userId,
+      scope,
+      frozen: evaluated.frozen,
+      degradedEpisodeReason: evaluated.degradedEpisodeReason ?? null,
+      expectedDataEpoch: context.expectedDataEpoch,
+      generationCommandId: input.command.generationCommandId,
+      modelRunAttemptId: input.command.modelRunAttemptId,
+      attemptNo: input.command.attemptNo,
+      technicalRetriesUsed: input.command.attemptNo - 1,
+    });
+  }
+  return executeReflectionAttempt({
+    dependencies: input.dependencies,
+    userId: context.userId,
+    scope,
+    frozen: context.frozen,
+    degradedEpisodeReason: null,
+    expectedDataEpoch: context.expectedDataEpoch,
+    generationCommandId: input.command.generationCommandId,
+    modelRunAttemptId: input.command.modelRunAttemptId,
+    attemptNo: input.command.attemptNo,
+    technicalRetriesUsed: input.command.attemptNo - 1,
+  });
+}
+
+// ---- Shared attempt execution ---------------------------------------------------
+
+async function executeReflectionAttempt(input: Readonly<{
+  dependencies: ReflectionEntrypointDependencies;
+  userId: UserId;
+  scope: "daily" | "weekly";
+  frozen: ReflectionFrozenInput;
+  degradedEpisodeReason: string | null;
+  expectedDataEpoch: number;
+  generationCommandId: string;
+  modelRunAttemptId: string;
+  attemptNo: number;
+  technicalRetriesUsed: number;
+}>): Promise<ReflectionBuildEntrypointResult> {
+  const { repository } = input.dependencies;
+  const { role, promptVersion } = roleForScope(input.scope);
+  const generationCommandId = asGenerationCommandId(input.generationCommandId);
+  const modelRunAttemptId = asModelRunAttemptId(input.modelRunAttemptId);
+  const sourceRevision =
+    input.frozen.scopeType === "daily_session"
+      ? (input.frozen.days[0]?.sourceRevision ?? 0)
+      : 0;
+  const subjectId = input.frozen.dailySessionId ?? input.userId;
+  const locale = input.frozen.dominantLocale ?? "en";
+
+  let output: ReflectionGenerationModelOutput;
+  try {
+    output = await input.dependencies.reflectionProvider.generate({
+      userId: input.userId,
+      role,
+      scopeType: input.frozen.scopeType,
+      weekIdentifier: input.frozen.weekIdentifier,
+      locale,
+      evidence: input.frozen.evidence,
+      episodes: input.frozen.episodes,
+      summaries: input.frozen.summaries,
+      baseline: input.frozen.baseline,
+      sessionCount: input.frozen.days.length,
+      maxStatements: MAX_STATEMENTS_PER_VERSION,
+      maxPropositionsPerStatement: MAX_PROPOSITIONS_PER_STATEMENT,
+      maxCandidateProposals: MAX_CANDIDATE_PROPOSALS_PER_VERSION,
+    });
+  } catch (error) {
+    const failureCode = classifyReflectionProviderError(error);
+    const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+      userId: input.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      role,
+      attemptNo: input.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome: "failed",
+      failureCode,
+      currentSourceRevision: sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.dependencies.clock(),
+    });
+    const outcome =
+      recorded.outcome === "discarded"
+        ? "fenced"
+        : recorded.outcome === "retry_scheduled"
+          ? "retryable_failed"
+          : "failed";
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome,
+      errorCode: outcome === "fenced" ? (recorded.reason ?? failureCode) : failureCode,
+    });
+  }
+
+  const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+    userId: input.userId,
+    generationCommandId,
+    modelRunAttemptId,
+    role,
+    attemptNo: input.attemptNo,
+    technicalRetriesUsed: input.technicalRetriesUsed,
+    semanticRepairsUsed: 0,
+    outcome: "succeeded",
+    currentSourceRevision: sourceRevision,
+    expectedDataEpoch: input.expectedDataEpoch,
+    now: input.dependencies.clock(),
+  });
+  if (recorded.outcome === "discarded") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "fenced",
+      errorCode: recorded.reason ?? "already_settled",
+    });
+  }
+
+  // Tier-1 deterministic gate (all-or-nothing, before any draft is kept).
+  const plan = planReflectionVersion({
+    frozen: input.frozen,
+    output: {
+      statements: output.statements,
+      candidateProposals: output.candidateProposals,
+    },
+  });
+  if (plan.action === "fail_version") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "rejected",
+      rejectionCode: plan.rejectionCode,
+      errorCode: `tier1:${plan.rejectionCode}`,
+    });
+  }
+
+  const persisted = await repository.persistDraftVersion({
+    userId: input.userId,
+    scopeType: input.frozen.scopeType,
+    dailySessionId: input.frozen.dailySessionId,
+    weekIdentifier: input.frozen.weekIdentifier,
+    windowStartDate: input.frozen.windowStartDate,
+    windowEndDate: input.frozen.windowEndDate,
+    sourceRevision,
+    sourceDigest: input.frozen.sourceDigest,
+    claimBaselineDigest: input.frozen.claimBaselineDigest,
+    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
+    schedulePolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
+    promptVersion,
+    schemaVersion: REFLECTION_OUTPUT_SCHEMA_VERSION,
+    locale,
+    expectedDataEpoch: input.expectedDataEpoch,
+    generationCommandId,
+    modelRunAttemptId,
+    degradedEpisodeReason: input.degradedEpisodeReason,
+    statements: plan.statements,
+    now: input.dependencies.clock(),
+  });
+  if (persisted.outcome === "fenced") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "fenced",
+      errorCode: persisted.reason,
+    });
+  }
+  const reflectionVersionId = persisted.reflectionVersionId;
+
+  // Shared validator (ADR-0132): the build may not commit current or derive
+  // a Candidate until a completed `narrative.validate` command exists.
+  const validated = await runNarrativeValidation({
+    dependencies: input.dependencies.narrativeValidation,
+    command: {
+      request: {
+        userId: input.userId,
+        artifactKind: "reflection",
+        draftRef: `reflection-version:${reflectionVersionId}`,
+        draftLocale: locale,
+        draftText: draftTextFor(plan.statements),
+        generatorManifest: generatorManifestFor(plan.statements),
+        sourceEntries: sourceEntriesFor(input.frozen),
+        plannedCoverageKeys: [],
+        validationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
+        promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+        schemaVersion: NARRATIVE_FINDINGS_SCHEMA_VERSION,
+      },
+      expectedDataEpoch: input.expectedDataEpoch,
+    },
+  });
+  if (validated.outcome !== "completed" || !validated.verdict) {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome:
+        validated.outcome === "retryable_failed" ? "retryable_failed" : "failed",
+      errorCode: `validator_${validated.outcome}`,
+    });
+  }
+
+  const outcome = await readNarrativeValidationOutcome({
+    repository: input.dependencies.narrativeValidation.repository,
+    userId: input.userId,
+    artifactKind: "reflection",
+    draftRef: `reflection-version:${reflectionVersionId}`,
+    now: input.dependencies.clock(),
+  });
+  if (outcome.outcome !== "ok" || outcome.result.result.outcome !== "accepted") {
+    // `incomplete` (validator not finished), `content_expired`, and a blocked
+    // verdict all forbid the current commit and every Candidate (ADR-0132;
+    // a raised-to-blocking policy must never publish a Reflection).
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "failed",
+      errorCode:
+        outcome.outcome === "ok"
+          ? "validator_blocked"
+          : `validator_${outcome.outcome}`,
+    });
+  }
+
+  const committed = await repository.commitReflection({
+    userId: input.userId,
+    reflectionVersionId,
+    frozen: input.frozen,
+    sourceRevision,
+    sourceDigest: input.frozen.sourceDigest,
+    claimBaselineDigest: input.frozen.claimBaselineDigest,
+    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
+    expectedDataEpoch: input.expectedDataEpoch,
+    generationCommandId,
+    modelRunAttemptId,
+    validatorRequestId: outcome.result.narrativeValidatorRequestId,
+    validatorResultId: outcome.result.narrativeValidatorResultId,
+    promptVersion,
+    locale,
+    statements: plan.statements,
+    candidateProposals: output.candidateProposals,
+    dedupeFingerprintSecret: input.dependencies.dedupeFingerprintSecret,
+  });
+  if (committed.outcome === "fenced") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "fenced",
+      errorCode: committed.reason,
+    });
+  }
+  if (committed.outcome === "already_committed") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "built",
+      errorCode: "already_committed",
+    });
+  }
+  return entrypointResult({
+    subjectId: String(subjectId),
+    scope: input.scope,
+    outcome: "built",
+    statementCount: committed.statementCount,
+    candidateCount: committed.candidateCount,
+    degradedEpisodeReason: input.degradedEpisodeReason,
+  });
+}
+
+// ---- Scheduler scan service ------------------------------------------------------
+
+export type ReflectionSchedulerScanOutcome = Readonly<{
+  dailyQueued: number;
+  weeklyQueued: number;
+  maintenanceQueued: number;
+}>;
+
+export type ReflectionSchedulerScanService = Readonly<{
+  scanPending(): Promise<ReflectionSchedulerScanOutcome>;
+}>;
+
+export function createReflectionSchedulerScanService(input: Readonly<{
+  clock: () => Date;
+  policyVersion: string;
+  repository: ReflectionRepository;
+  scanLimit?: number;
+  /** Production stays closed until a release manifest opens the stage. */
+  enabled: boolean;
+}>): ReflectionSchedulerScanService {
+  const scanLimit = input.scanLimit ?? 50;
+  return {
+    async scanPending() {
+      if (!input.enabled) {
+        return { dailyQueued: 0, weeklyQueued: 0, maintenanceQueued: 0 };
+      }
+      const dailySessions = await input.repository.listDueDailySessions({
+        now: input.clock(),
+        policyVersion: input.policyVersion,
+        limit: scanLimit,
+      });
+      let dailyQueued = 0;
+      for (const session of dailySessions) {
+        const digest = await input.repository.readDailyBaselineDigest({
+          dailySessionId: session.dailySessionId,
+          sourceRevision: session.sourceRevision,
+        });
+        if (!digest) {
+          continue;
+        }
+        const queued = await input.repository.queueDailyReflection({
+          dailySessionId: session.dailySessionId,
+          sourceRevision: session.sourceRevision,
+          claimBaselineDigest: digest,
+          policyVersion: input.policyVersion,
+        });
+        if (queued.outcome === "queued") {
+          dailyQueued += 1;
+        }
+      }
+      const weeks = await input.repository.listDueWeekWindows({
+        now: input.clock(),
+        policyVersion: input.policyVersion,
+        limit: scanLimit,
+      });
+      let weeklyQueued = 0;
+      for (const week of weeks) {
+        const queued = await input.repository.queueWeeklyReflection({
+          userId: week.userId,
+          weekIdentifier: week.weekIdentifier,
+          windowStartDate: week.windowStartDate,
+          windowEndDate: week.windowEndDate,
+          sourceDigest: week.sourceDigest,
+          policyVersion: input.policyVersion,
+        });
+        if (queued.outcome === "queued") {
+          weeklyQueued += 1;
+        }
+      }
+      const users = await input.repository.listUsersNeedingMaintenance({
+        now: input.clock(),
+        policyVersion: input.policyVersion,
+        limit: scanLimit,
+      });
+      let maintenanceQueued = 0;
+      for (const userId of users) {
+        const queued = await input.repository.queueReflectionMaintenance({
+          userId,
+          policyVersion: input.policyVersion,
+        });
+        if (queued.outcome === "queued") {
+          maintenanceQueued += 1;
+        }
+      }
+      return { dailyQueued, weeklyQueued, maintenanceQueued };
+    },
+  };
+}
+
+// ---- Maintenance ------------------------------------------------------------------
+
+export async function runReflectionMaintenance(input: Readonly<{
+  clock: () => Date;
+  repository: ReflectionRepository;
+  userId: UserId;
+  policyVersion: string;
+}>): Promise<ReflectionMaintenanceResult> {
+  const staledVersions = await input.repository.markStaleByInvalidatedEvidence({
+    userId: input.userId,
+    policyVersion: input.policyVersion,
+    limit: 500,
+  });
+  const expiredContent = await input.repository.purgeExpiredContent({
+    now: input.clock(),
+    limit: 500,
+  });
+  return { staledVersions, expiredContent };
+}

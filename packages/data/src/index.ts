@@ -74,3 +74,9 @@ export {
   type PendingRemapRow,
 } from "./postgres-candidate-review-repository";
 export { PostgresNarrativeValidationRepository } from "./postgres-narrative-validation-repository";
+export {
+  insertMemoryCandidateWithin,
+  insertCandidateEvidenceLinksWithin,
+  findTerminalCandidateByFingerprintWithin,
+} from "./postgres-memory-claim-repository";
+export { PostgresReflectionRepository } from "./postgres-reflection-repository";

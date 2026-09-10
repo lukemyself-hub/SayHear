@@ -123,6 +123,7 @@ export async function runNarrativeValidation(input: Readonly<{
     request,
     requestFingerprint,
     expectedDataEpoch: input.command.expectedDataEpoch,
+    now: input.dependencies.clock(),
   });
   if (submitted.outcome === "owner_missing") {
     return entrypointResult(request.draftRef, "fenced", "owner_missing", null, null);

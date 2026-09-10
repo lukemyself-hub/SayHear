@@ -18,6 +18,9 @@ import {
 } from "./workflows/rolling-summary.workflow";
 import { episodeBuildWorkflow } from "./workflows/episode-build.workflow";
 import { episodeMaintenanceWorkflow } from "./workflows/episode-maintenance.workflow";
+import { reflectionDailyWorkflow } from "./workflows/reflection-daily.workflow";
+import { reflectionWeeklyWorkflow } from "./workflows/reflection-weekly.workflow";
+import { reflectionMaintenanceWorkflow } from "./workflows/reflection-maintenance.workflow";
 import { candidateRemapWorkflow } from "./workflows/candidate-remap.workflow";
 import { predicateRegistryReleaseWorkflow } from "./workflows/predicate-registry-release.workflow";
 
@@ -76,6 +79,36 @@ export function createWorkflowStarter(): WorkflowStarter {
       run = await start(episodeBuildWorkflow, [workflowInput]);
     } else if (input.eventType === "episode_maintenance_requested") {
       run = await start(episodeMaintenanceWorkflow, [workflowInput]);
+    } else if (input.eventType === "reflection_daily_requested") {
+      if (!input.claimBaselineDigest) {
+        throw new Error("Reflection daily outbox event has no claim-baseline digest.");
+      }
+      run = await start(reflectionDailyWorkflow, [
+        {
+          ...workflowInput,
+          claimBaselineDigest: input.claimBaselineDigest,
+        },
+      ]);
+    } else if (input.eventType === "reflection_weekly_requested") {
+      if (
+        !input.weekIdentifier ||
+        !input.windowStartDate ||
+        !input.windowEndDate ||
+        !input.sourceDigest
+      ) {
+        throw new Error("Reflection weekly outbox event has no frozen window identity.");
+      }
+      run = await start(reflectionWeeklyWorkflow, [
+        {
+          ...workflowInput,
+          weekIdentifier: input.weekIdentifier,
+          windowStartDate: input.windowStartDate,
+          windowEndDate: input.windowEndDate,
+          sourceDigest: input.sourceDigest,
+        },
+      ]);
+    } else if (input.eventType === "reflection_maintenance_requested") {
+      run = await start(reflectionMaintenanceWorkflow, [workflowInput]);
     } else if (input.eventType === "predicate_registry_released") {
       run = await start(predicateRegistryReleaseWorkflow, [workflowInput]);
     } else if (input.eventType === "candidate_remap_requested") {

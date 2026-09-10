@@ -46,6 +46,7 @@ import {
   PREDICATE_REGISTRY_RUNTIME_VERSION,
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
+  createReflectionSchedulerScanService,
   asMemoryCandidateId,
   createMemoryClaimService,
   createCandidateReviewService,
@@ -53,10 +54,14 @@ import {
   CANDIDATE_REVIEW_POLICY_VERSION,
   type CandidateReviewWorkflowRepository,
   EPISODE_BUILDER_POLICY_VERSION,
+  REFLECTION_READINESS_POLICY_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
   type EpisodeBuildEntrypointDependencies,
   type EpisodeBuildModelProvider,
   type EpisodeBuilderRepository,
+  type ReflectionEntrypointDependencies,
+  type ReflectionGenerationModelProvider,
+  type ReflectionRepository,
   type FastPathExtractionEntrypointDependencies,
   type MemoryConsolidationEntrypointDependencies,
   type NarrativeValidationEntrypointDependencies,
@@ -103,6 +108,7 @@ import {
   insertCandidateRemapCommandWithin,
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
+  PostgresReflectionRepository,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
@@ -455,6 +461,38 @@ export function createServerComposition() {
     repository: new PostgresNarrativeValidationRepository(pool),
     modelRoleCommandService,
     narrativeValidationProvider,
+  });
+  // A3 (issue #199): Reflection roles stay closed until a release manifest
+  // publishes an evaluated config (ADR-0136 / ADR-0134). The scheduler only
+  // runs behind the explicit write switch.
+  const reflectionProvider: ReflectionGenerationModelProvider = {
+    role: "reflection.daily",
+    async generate() {
+      throw new Error(
+        "reflection.daily/weekly has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
+      );
+    },
+  };
+  const reflectionRepository = new PostgresReflectionRepository(pool, {
+    entryFor: predicateRegistryLookup.entryFor,
+    registryVersion: predicateRegistryLookup.registryVersion,
+  });
+  const reflectionSchedulerScanService = createReflectionSchedulerScanService({
+    clock: configuration.clock,
+    policyVersion: REFLECTION_READINESS_POLICY_VERSION,
+    repository: reflectionRepository,
+    enabled: configuration.writeSwitches.reflectionEnabled,
+  });
+  const reflectionEntrypointDependencies = (
+    workflowReceiptId: string,
+  ): ReflectionEntrypointDependencies => ({
+    clock: configuration.clock,
+    repository: reflectionRepository,
+    modelRoleCommandService,
+    reflectionProvider,
+    narrativeValidation: narrativeValidationEntrypointDependencies(),
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
+    workflowReceiptId,
   });
   const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
   const dialogueStateService = createDialogueStateService({
@@ -814,6 +852,10 @@ export function createServerComposition() {
     episodeEntrypointDependencies,
     episodeBuilderPolicyVersion: EPISODE_BUILDER_POLICY_VERSION,
     episodeBuildProvider,
+    reflectionRepository,
+    reflectionSchedulerScanService,
+    reflectionEntrypointDependencies,
+    reflectionReadinessPolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };

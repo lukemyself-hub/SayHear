@@ -17,6 +17,7 @@ export async function GET(request: Request): Promise<Response> {
     ownerPurgeService: composition.ownerPurgeService,
     memoryConsolidationService: composition.memoryConsolidationService,
     episodeBuilderScanService: composition.episodeBuilderScanService,
+    reflectionSchedulerScanService: composition.reflectionSchedulerScanService,
     // Candidate Review backstop (SPEC #193 §8.4, ADR-0122): the same
     // idempotent published-Proposal scan as the release workflow re-runs
     // here, so a missed release outbox event or an unfinished remap
