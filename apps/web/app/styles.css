@@ -248,6 +248,52 @@ h1 {
   color: #756f63;
 }
 
+.inspectorNotice {
+  background: #eef2f7;
+  border: 1px solid #b7c5d6;
+  border-radius: 0.75rem;
+  color: #40536a;
+  line-height: 1.5;
+  padding: 0.75rem 0.9rem;
+}
+
+.inspectorSmallButton {
+  background: #f4f2ed;
+  border: 1px solid #cfc7b9;
+  border-radius: 999px;
+  color: #22211f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.inspectorSmallButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.reflectionInspectorGrid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.reflectionTrace {
+  border-top: 1px solid #e5dfd5;
+  display: grid;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+
+.reflectionTraceItem {
+  border-left: 2px solid #d7d0c4;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.55rem 0;
+  padding-left: 0.7rem;
+}
+
 @media (max-width: 760px) {
   .inspectorSummary,
   .inspectorFacts,

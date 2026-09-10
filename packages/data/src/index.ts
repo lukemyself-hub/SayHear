@@ -80,3 +80,4 @@ export {
   findTerminalCandidateByFingerprintWithin,
 } from "./postgres-memory-claim-repository";
 export { PostgresReflectionRepository } from "./postgres-reflection-repository";
+export { PostgresReflectionInspectionRepository } from "./postgres-reflection-inspection-repository";

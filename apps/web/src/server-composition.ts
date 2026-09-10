@@ -26,6 +26,7 @@ import {
   createModelRoleCommandService,
   createModelRoleRegistry,
   createBioInspectionService,
+  createReflectionInspectionService,
   createUserTextConversationService,
   type JournalEligibilityRepository,
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
@@ -103,6 +104,7 @@ import {
   PostgresModelRoleCommandRepository,
   PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
+  PostgresReflectionInspectionRepository,
   PostgresMemoryClaimRepository,
   PostgresCandidateReviewRepository,
   insertCandidateRemapCommandWithin,
@@ -400,6 +402,15 @@ export function createServerComposition() {
   });
   const bioInspectionService = createBioInspectionService({
     repository: new PostgresBioInspectionRepository(pool),
+  });
+  const reflectionInspectionService = createReflectionInspectionService({
+    clock: configuration.clock,
+    recoveryGate,
+    repository: new PostgresReflectionInspectionRepository(
+      pool,
+      configuration.contextHmacSecret,
+      configuration.clock,
+    ),
   });
   const candidateReviewRepository = new PostgresCandidateReviewRepository(
     pool,
@@ -811,6 +822,7 @@ export function createServerComposition() {
     outboxDispatcherService,
     modelRoleCommandService,
     bioInspectionService,
+    reflectionInspectionService,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
       policyVersion: "sensitive-inspection:v1",

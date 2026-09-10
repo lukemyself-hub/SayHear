@@ -1679,7 +1679,7 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
     columnManifestHash: "fnv1a32:969af1b6:1337",
-    constraintManifestHash: "fnv1a32:7528c943:712",
+    constraintManifestHash: "fnv1a32:2d65a7a5:712",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
     foreignKeyManifestHash: "fnv1a32:03faf20b:389",
     indexManifestHash: "fnv1a32:0ecf04ff:114",
