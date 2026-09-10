@@ -137,7 +137,7 @@ describe("mapUtterance — anchors and enums with normalized typed values", () =
       expect(plan.predicateId).toBe(PREDICATE_IDS.lifeChange);
       expect(plan.scopeValue).toBe("moving_house");
     }
-    // 几天内待办归 Open Loop（1A.3b）——不落人生计划
+    // 几天内待办不是 Open Loop（任务语义按 SPEC 6.1 形成门禁拒绝）——不落人生计划
     const todo = mapUtterance({ text: "记得后天下午取护照然后去面签。", locale: "zh" });
     expect(todo.status).toBe("unmapped");
     if (todo.status === "unmapped") {

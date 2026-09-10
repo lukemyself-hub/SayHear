@@ -235,6 +235,11 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
         episode_candidates,
         episode_versions,
         episodes,
+        open_loop_closure_audits,
+        open_loop_expiry_runs,
+        open_loop_run_outcomes,
+        open_loop_versions,
+        open_loops,
         ${optionalNames ? `${optionalNames},` : ""}
         entity_identity_revalidation_runs,
         journal_identity_review_fences,

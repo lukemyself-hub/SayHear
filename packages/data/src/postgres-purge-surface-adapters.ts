@@ -299,6 +299,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "purge_bios",
     "purge_episode_versions",
     "purge_episodes",
+    "purge_open_loop_versions",
+    "purge_open_loops",
     "purge_narrative_validator_requests",
     "purge_narrative_validator_results",
     "redact_sensitive_access_audits",
@@ -315,6 +317,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "verify_memory_claims_purged",
     "verify_episode_versions_purged",
     "verify_episodes_purged",
+    "verify_open_loop_versions_purged",
+    "verify_open_loops_purged",
     "verify_narrative_validator_requests_purged",
     "verify_narrative_validator_results_purged",
     "verify_memory_claim_versions_purged",
@@ -1011,14 +1015,27 @@ export async function verifyPurgeSurfaceIntegration(
   }
 }
 
+async function purgeOpenLoopVersionContent(
+  client: PoolClient,
+  userId: string,
+): Promise<void> {
+  await client.query(
+    `UPDATE open_loop_versions
+     SET localized_summary = NULL, canonical_claim_key = NULL,
+         expected_start_at = NULL, expected_end_at = NULL,
+         timezone = NULL, content_purged_at = $2
+     WHERE user_id = $1 AND content_purged_at IS NULL`,
+    [userId, new Date()],
+  );
+}
+
 export async function clearPurgeSurface(
   client: PoolClient,
   surface: PurgeSurfaceEntry,
   context: PostgresPurgeSurfaceContext,
 ): Promise<void> {
   const table = tableName(surface);
-  switch (surface.clearHandler) {
-    case "retain_owner_envelope":
+  switch (surface.clearHandler) {    case "retain_owner_envelope":
     case "retain_governance":
       return;
     case "tombstone_conversation_revisions":
@@ -1137,6 +1154,21 @@ export async function clearPurgeSurface(
       );
       await client.query(
         `UPDATE episodes SET current_version_id = NULL, deleted_at = $2
+         WHERE user_id = $1`,
+        [context.userId, new Date()],
+      );
+      return;
+    case "purge_open_loop_versions":
+      // Open Loop version history keeps only a content-free lineage envelope:
+      // the rebuildable summary, claim binding, windows and timezone
+      // transition to NULL together with content_purged_at; identity,
+      // revisions and lifecycle stay frozen.
+      await purgeOpenLoopVersionContent(client, context.userId);
+      return;
+    case "purge_open_loops":
+      await purgeOpenLoopVersionContent(client, context.userId);
+      await client.query(
+        `UPDATE open_loops SET current_version_id = NULL, deleted_at = $2
          WHERE user_id = $1`,
         [context.userId, new Date()],
       );
@@ -1310,6 +1342,36 @@ export async function verifyPurgeSurface(
       );
       if (Number(result.rows[0]?.count ?? 0) > 0) {
         throw new PurgeVerificationError("episodes_not_purged");
+      }
+      return;
+    }
+    case "verify_open_loop_versions_purged": {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${table}
+         WHERE user_id = $1
+           AND (localized_summary IS NOT NULL
+             OR canonical_claim_key IS NOT NULL
+             OR expected_start_at IS NOT NULL
+             OR expected_end_at IS NOT NULL
+             OR timezone IS NOT NULL
+             OR content_purged_at IS NULL)`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError("open_loop_versions_not_purged");
+      }
+      return;
+    }
+    case "verify_open_loops_purged": {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${table}
+         WHERE user_id = $1
+           AND (current_version_id IS NOT NULL
+             OR deleted_at IS NULL)`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError("open_loops_not_purged");
       }
       return;
     }

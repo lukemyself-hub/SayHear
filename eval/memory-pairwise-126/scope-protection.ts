@@ -30,11 +30,12 @@ const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 type ScopeIssue = Readonly<{ check: string; detail: string }>;
 
 /** Forbidden persisted artifacts (vector and projection faces; ADR-0115). */
-// The 1A.3b Stage-1 Episode schema (issue #197) and the Reflection schema
-// (issue #199) are accepted SPEC deliverables; Open Loop and Proactive (C
-// lanes) and vector faces are not built yet and stay forbidden.
+// The 1A.3b Stage-1 Episode schema (issue #197), the Reflection schema
+// (issue #199) and the Open Loop schema (issue #204) are accepted SPEC
+// deliverables; Proactive (C2 lane) and vector faces are not built yet and
+// stay forbidden.
 const FORBIDDEN_TABLE_PATTERN =
-  /(embedding|vector|open_loop|proactive|profile_projection)/i;
+  /(embedding|vector|proactive|profile_projection)/i;
 
 const FORBIDDEN_EXTENSION_PATTERN = /create\s+extension[^;]*\bvector\b/i;
 
