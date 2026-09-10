@@ -47,11 +47,14 @@ import {
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
   EPISODE_BUILDER_POLICY_VERSION,
+  NARRATIVE_VALIDATION_POLICY_VERSION,
   type EpisodeBuildEntrypointDependencies,
   type EpisodeBuildModelProvider,
   type EpisodeBuilderRepository,
   type FastPathExtractionEntrypointDependencies,
   type MemoryConsolidationEntrypointDependencies,
+  type NarrativeValidationEntrypointDependencies,
+  type NarrativeValidationModelProvider,
   relationshipHintInputsFor,
   retrievalProjectionInputsFor,
 } from "@sayhear/application";
@@ -89,6 +92,7 @@ import {
   PostgresModelRoleCommandRepository,
   PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
+  PostgresNarrativeValidationRepository,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
@@ -380,6 +384,24 @@ export function createServerComposition() {
   });
   const bioInspectionService = createBioInspectionService({
     repository: new PostgresBioInspectionRepository(pool),
+  });
+  // A2 registers the shared narrative.validate seam without enabling a
+  // runtime provider. An evaluated config and active rollout pin are
+  // required before a producer workflow can validate a draft (ADR-0121).
+  const narrativeValidationProvider: NarrativeValidationModelProvider = {
+    role: "narrative.validate",
+    async validateNarrative() {
+      throw new Error(
+        "narrative.validate has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
+      );
+    },
+  };
+  const narrativeValidationEntrypointDependencies = (
+  ): NarrativeValidationEntrypointDependencies => ({
+    clock: configuration.clock,
+    repository: new PostgresNarrativeValidationRepository(pool),
+    modelRoleCommandService,
+    narrativeValidationProvider,
   });
   const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
   const dialogueStateService = createDialogueStateService({

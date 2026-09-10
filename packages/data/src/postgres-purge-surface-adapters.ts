@@ -299,6 +299,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "purge_bios",
     "purge_episode_versions",
     "purge_episodes",
+    "purge_narrative_validator_requests",
+    "purge_narrative_validator_results",
     "redact_sensitive_access_audits",
     "capture_owner_purge_operational_metadata",
     "record_provider_retention",
@@ -313,6 +315,8 @@ export function assertPurgeSurfaceAdapterCoverage(
     "verify_memory_claims_purged",
     "verify_episode_versions_purged",
     "verify_episodes_purged",
+    "verify_narrative_validator_requests_purged",
+    "verify_narrative_validator_results_purged",
     "verify_memory_claim_versions_purged",
     "verify_memory_claim_version_qualifiers_purged",
     "verify_ordinary_entities_purged",
@@ -1136,6 +1140,29 @@ export async function clearPurgeSurface(
         [context.userId, new Date()],
       );
       return;
+    case "purge_narrative_validator_requests":
+      // Validation content keeps only a content-free lineage envelope: the
+      // draft text and frozen manifests transition to NULL together with
+      // content_purged_at; identity, draft_ref and the request fingerprint
+      // stay frozen.
+      await client.query(
+        `UPDATE narrative_validator_requests
+         SET draft_text = NULL, generator_manifest = NULL,
+             source_manifest = NULL, planned_coverage = NULL,
+             content_purged_at = $2
+         WHERE user_id = $1 AND content_purged_at IS NULL`,
+        [context.userId, new Date()],
+      );
+      return;
+    case "purge_narrative_validator_results":
+      await client.query(
+        `UPDATE narrative_validator_results
+         SET blocking_findings = NULL, advisory_findings = NULL,
+             coverage = NULL, content_purged_at = $2
+         WHERE user_id = $1 AND content_purged_at IS NULL`,
+        [context.userId, new Date()],
+      );
+      return;
     case "redact_sensitive_access_audits":
       await client.query(
         `UPDATE ${table}
@@ -1282,6 +1309,41 @@ export async function verifyPurgeSurface(
       );
       if (Number(result.rows[0]?.count ?? 0) > 0) {
         throw new PurgeVerificationError("episodes_not_purged");
+      }
+      return;
+    }
+    case "verify_narrative_validator_requests_purged": {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${table}
+         WHERE user_id = $1
+           AND (draft_text IS NOT NULL
+             OR generator_manifest IS NOT NULL
+             OR source_manifest IS NOT NULL
+             OR planned_coverage IS NOT NULL
+             OR content_purged_at IS NULL)`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError(
+          "narrative_validator_requests_not_purged",
+        );
+      }
+      return;
+    }
+    case "verify_narrative_validator_results_purged": {
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM ${table}
+         WHERE user_id = $1
+           AND (blocking_findings IS NOT NULL
+             OR advisory_findings IS NOT NULL
+             OR coverage IS NOT NULL
+             OR content_purged_at IS NULL)`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError(
+          "narrative_validator_results_not_purged",
+        );
       }
       return;
     }
