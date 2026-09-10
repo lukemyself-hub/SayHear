@@ -211,6 +211,8 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
     retrievalFaults = null;
     await database.pool.query(`
       TRUNCATE TABLE
+        narrative_validator_results,
+        narrative_validator_requests,
         episode_impact_reviews,
         episode_build_runs,
         episode_version_entity_links,

@@ -122,6 +122,15 @@ export type EpisodeVersionId = string & {
 export type EpisodeCandidateId = string & {
   readonly [episodeCandidateIdBrand]: "EpisodeCandidateId";
 };
+declare const narrativeValidatorRequestIdBrand: unique symbol;
+declare const narrativeValidatorResultIdBrand: unique symbol;
+
+export type NarrativeValidatorRequestId = string & {
+  readonly [narrativeValidatorRequestIdBrand]: "NarrativeValidatorRequestId";
+};
+export type NarrativeValidatorResultId = string & {
+  readonly [narrativeValidatorResultIdBrand]: "NarrativeValidatorResultId";
+};
 declare const episodeIdBrand: unique symbol;
 declare const episodeVersionIdBrand: unique symbol;
 declare const episodeCandidateIdBrand: unique symbol;
@@ -341,6 +350,24 @@ export function asCandidateReviewAuditId(
     value,
     "CandidateReviewAuditId",
   ) as CandidateReviewAuditId;
+}
+
+export function asNarrativeValidatorRequestId(
+  value: string,
+): NarrativeValidatorRequestId {
+  return asOpaqueUuidV7(
+    value,
+    "NarrativeValidatorRequestId",
+  ) as NarrativeValidatorRequestId;
+}
+
+export function asNarrativeValidatorResultId(
+  value: string,
+): NarrativeValidatorResultId {
+  return asOpaqueUuidV7(
+    value,
+    "NarrativeValidatorResultId",
+  ) as NarrativeValidatorResultId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {

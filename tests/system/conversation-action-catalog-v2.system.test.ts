@@ -142,6 +142,8 @@ describe("Conversation Action Catalog v2 foundation system seam (issue #109)", (
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        narrative_validator_results,
+        narrative_validator_requests,
         episode_impact_reviews,
         episode_build_runs,
         episode_version_entity_links,

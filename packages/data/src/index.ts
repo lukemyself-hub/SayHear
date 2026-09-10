@@ -73,3 +73,4 @@ export {
   selectPendingRemapCandidates,
   type PendingRemapRow,
 } from "./postgres-candidate-review-repository";
+export { PostgresNarrativeValidationRepository } from "./postgres-narrative-validation-repository";
