@@ -270,6 +270,13 @@ export class CandidateReviewAuthError extends Error {
   }
 }
 
+export type CandidateEvidenceExcerpt = Readonly<{
+  revisionId: string;
+  actor: string;
+  locale: string;
+  text: string;
+}>;
+
 export type CandidateReviewRepository = Readonly<{
   authorizeCandidateReview(input: {
     userId: UserId;
@@ -312,6 +319,17 @@ export type CandidateReviewRepository = Readonly<{
     userId: UserId,
     candidateId: MemoryCandidateId,
   ): Promise<readonly string[]>;
+  /**
+   * B2 sensitive Evidence expansion (SPEC §8.5): owner-scoped verbatim
+   * excerpts for one Candidate. Callers must authorize the `candidate_review`
+   * capability with a fresh step-up and record a content-free audit BEFORE
+   * calling; this read performs no auth itself so the audit stays at the
+   * portal boundary. Queue payloads never include this verbatim.
+   */
+  readCandidateEvidenceExcerpts(
+    userId: UserId,
+    candidateId: MemoryCandidateId,
+  ): Promise<readonly CandidateEvidenceExcerpt[]>;
   findCurrentEntityLabels(
     userId: UserId,
     entityIds: readonly string[],
