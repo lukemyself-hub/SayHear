@@ -224,6 +224,8 @@ describe("Memory Claim admission system seam", () => {
         memory_forget_requests,
         memory_candidate_evidence_links,
         memory_candidates,
+        candidate_review_audits,
+        predicate_change_proposal_candidate_links,
         claim_evidence_links,
         memory_claim_versions,
         memory_claims,
@@ -441,13 +443,14 @@ describe("Memory Claim admission system seam", () => {
        WHERE user_id = $1 AND memory_claim_version_id = $2`,
       [OWNER, firstVersionId],
     );
+    // The 0044 purge-face shape: the only allowed immutable-version update
+    // NULLs every content field at once (ADR-0051 envelope + F1 registry).
     await database.pool.query(
       `UPDATE memory_claim_versions
        SET content_purged_at = $2, typed_value = NULL,
-           temporal_status = NULL, valid_from = NULL,
-           valid_from_precision = NULL, valid_to = NULL,
-           valid_to_precision = NULL, subject_entity_version_id = NULL,
-           object_entity_version_id = NULL
+           temporal_status = NULL, valid_from = NULL, valid_from_precision = NULL,
+           valid_to = NULL, valid_to_precision = NULL,
+           subject_entity_version_id = NULL, object_entity_version_id = NULL
        WHERE user_id = $1 AND memory_claim_version_id = $3`,
       [OWNER, clock(), firstVersionId],
     );

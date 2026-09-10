@@ -515,6 +515,8 @@ describe("Slow-path consolidation system seam", () => {
         memory_forget_requests,
         memory_candidate_evidence_links,
         memory_candidates,
+        candidate_review_audits,
+        predicate_change_proposal_candidate_links,
         claim_evidence_links,
         memory_claim_versions,
         memory_claims,

@@ -36,6 +36,10 @@ export {
   asEvidenceItemId,
   asUserId,
   asWorkflowCommandId,
+  asPredicateChangeProposalId,
+  asPredicateChangeProposalVersionId,
+  asPredicateChangeProposalCandidateLinkId,
+  asCandidateReviewAuditId,
   type ClaimEvidenceLinkId,
   type CompiledContextId,
   type ConversationEventId,
@@ -73,6 +77,10 @@ export {
   type EvidenceItemId,
   type UserId,
   type WorkflowCommandId,
+  type PredicateChangeProposalId,
+  type PredicateChangeProposalVersionId,
+  type PredicateChangeProposalCandidateLinkId,
+  type CandidateReviewAuditId,
 } from "./ids";
 export {
   evaluatePrivateWriteGate,

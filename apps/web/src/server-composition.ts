@@ -47,6 +47,12 @@ import {
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
   createReflectionSchedulerScanService,
+  asMemoryCandidateId,
+  createMemoryClaimService,
+  createCandidateReviewService,
+  createPredicateGovernanceService,
+  CANDIDATE_REVIEW_POLICY_VERSION,
+  type CandidateReviewWorkflowRepository,
   EPISODE_BUILDER_POLICY_VERSION,
   REFLECTION_READINESS_POLICY_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
@@ -97,6 +103,10 @@ import {
   PostgresModelRoleCommandRepository,
   PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
+  PostgresMemoryClaimRepository,
+  PostgresCandidateReviewRepository,
+  insertCandidateRemapCommandWithin,
+  selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
 } from "@sayhear/data";
@@ -391,6 +401,49 @@ export function createServerComposition() {
   const bioInspectionService = createBioInspectionService({
     repository: new PostgresBioInspectionRepository(pool),
   });
+  const candidateReviewRepository = new PostgresCandidateReviewRepository(
+    pool,
+    configuration.contextHmacSecret,
+  );
+  const candidateReviewMemoryClaimService = createMemoryClaimService({
+    repository: new PostgresMemoryClaimRepository(pool),
+    registry: predicateRegistryLookup,
+    clock: configuration.clock,
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
+  });
+  const candidateReviewService = createCandidateReviewService({
+    repository: candidateReviewRepository,
+    registry: predicateRegistryLookup,
+    memoryClaimService: candidateReviewMemoryClaimService,
+    clock: configuration.clock,
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
+  });
+  const predicateGovernanceService = createPredicateGovernanceService({
+    repository: candidateReviewRepository,
+    clock: configuration.clock,
+    registryVersion: () => predicateRegistryLookup.registryVersion(),
+  });
+  const candidateReviewWorkflowRepository: CandidateReviewWorkflowRepository = {
+    readRemapCommand: (input) =>
+      candidateReviewRepository.readRemapCommand(input),
+    completeRemapCommand: (input) =>
+      candidateReviewRepository.completeRemapCommand(input),
+    selectPendingRemapCandidates: (input) =>
+      selectPendingRemapCandidates(pool, {
+        policyVersion: CANDIDATE_REVIEW_POLICY_VERSION,
+        ...(input.registryVersion === undefined
+          ? {}
+          : { registryVersion: input.registryVersion }),
+      }),
+    insertRemapCommand: (input) =>
+      candidateReviewRepository.insertRemapCommand({
+        userId: input.userId,
+        candidateId: asMemoryCandidateId(input.memoryCandidateId),
+        registryVersion: input.registryVersion,
+        policyVersion: input.policyVersion ?? CANDIDATE_REVIEW_POLICY_VERSION,
+        now: configuration.clock(),
+      }),
+  };
   // A2 registers the shared narrative.validate seam without enabling a
   // runtime provider. An evaluated config and active rollout pin are
   // required before a producer workflow can validate a draft (ADR-0121).
@@ -790,6 +843,10 @@ export function createServerComposition() {
     memoryConsolidationRepository,
     memoryConsolidationService,
     memoryConsolidationEntrypointDependencies,
+    candidateReviewRepository,
+    candidateReviewService,
+    predicateGovernanceService,
+    candidateReviewWorkflowRepository,
     episodeRepository,
     episodeBuilderScanService,
     episodeEntrypointDependencies,

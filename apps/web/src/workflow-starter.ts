@@ -21,6 +21,8 @@ import { episodeMaintenanceWorkflow } from "./workflows/episode-maintenance.work
 import { reflectionDailyWorkflow } from "./workflows/reflection-daily.workflow";
 import { reflectionWeeklyWorkflow } from "./workflows/reflection-weekly.workflow";
 import { reflectionMaintenanceWorkflow } from "./workflows/reflection-maintenance.workflow";
+import { candidateRemapWorkflow } from "./workflows/candidate-remap.workflow";
+import { predicateRegistryReleaseWorkflow } from "./workflows/predicate-registry-release.workflow";
 
 export function createWorkflowStarter(): WorkflowStarter {
   return async (input) => {
@@ -107,6 +109,10 @@ export function createWorkflowStarter(): WorkflowStarter {
       ]);
     } else if (input.eventType === "reflection_maintenance_requested") {
       run = await start(reflectionMaintenanceWorkflow, [workflowInput]);
+    } else if (input.eventType === "predicate_registry_released") {
+      run = await start(predicateRegistryReleaseWorkflow, [workflowInput]);
+    } else if (input.eventType === "candidate_remap_requested") {
+      run = await start(candidateRemapWorkflow, [workflowInput]);
     } else {
       throw new Error(`Unsupported outbox event type: ${input.eventType}`);
     }

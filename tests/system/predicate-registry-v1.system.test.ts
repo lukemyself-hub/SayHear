@@ -54,6 +54,7 @@ describe("Predicate Registry v1 release over PostgreSQL", () => {
       localizations: 48,
       relationshipProjections: expect.any(Number),
       relations: expect.any(Number),
+      publishedProposals: 0,
     });
     // bilingual seeds complete per entry
     expect(result.localizations).toBe(24 * 2);

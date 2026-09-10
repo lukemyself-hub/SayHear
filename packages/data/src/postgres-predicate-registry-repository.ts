@@ -1,6 +1,7 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 import type { PredicateRegistrySnapshot } from "@sayhear/application";
+import { insertRegistryReleaseEventWithin } from "./postgres-candidate-review-repository";
 
 /**
  * Idempotent database sync for the code-owned Predicate Registry (§7.10.1
@@ -24,6 +25,8 @@ export type SyncResult = {
   localizations: number;
   relationshipProjections: number;
   relations: number;
+  /** Awaiting ProposalVersions this release transaction published. */
+  publishedProposals: number;
 };
 
 /** Rejected before any write: v1 must ship zero sensitive entries (#93 §6). */
@@ -54,6 +57,7 @@ export class PostgresPredicateRegistryRepository {
 
     const client = await this.pool.connect();
     const version = registry.registryVersion;
+    let publishedProposals = 0;
     try {
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
@@ -162,6 +166,17 @@ export class PostgresPredicateRegistryRepository {
         );
       }
 
+      // Registry release publishes the awaiting ProposalVersions in the SAME
+      // transaction (ADR-0122): published_at is the release commit moment,
+      // never a reconciliation or sweeper time. The release outbox event is
+      // written here; the idempotent per-candidate remap commands are created
+      // by the release workflow's scan.
+      publishedProposals = await publishAwaitingProposalsWithin(
+        client,
+        version,
+        now,
+      );
+
       await client.query("COMMIT");
       return {
         registryVersion: version,
@@ -169,6 +184,7 @@ export class PostgresPredicateRegistryRepository {
         localizations: registry.localizations.length,
         relationshipProjections: registry.relationshipProjections.length,
         relations: registry.relations.length,
+        publishedProposals: publishedProposals,
       };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -218,4 +234,43 @@ export class PostgresPredicateRegistryRepository {
     );
     return result.rows[0]?.digest ?? null;
   }
+}
+
+/**
+ * Registry release publishes awaiting ProposalVersions inside the release
+ * transaction (ADR-0122): `published_at` is taken from the release
+ * transaction's own commit moment (the `now` argument), so the 90-day
+ * boundary is anchored to the release transaction and can never be moved by
+ * reconciliation timing. Only `registry_change` drafts publish here; a
+ * `product_value_rejection` version is terminal by construction.
+ */
+async function publishAwaitingProposalsWithin(
+  client: PoolClient,
+  registryVersion: number,
+  publishedAt: Date,
+): Promise<number> {
+  const result = await client.query<{ count: string }>(
+    `WITH published AS (
+       UPDATE predicate_change_proposal_versions
+       SET status = 'published',
+           published_registry_version = $1,
+           published_at = $2
+       WHERE status = 'awaiting_release'
+         AND decision_scope = 'registry_change'
+       RETURNING 1
+     )
+     SELECT count(*)::text AS count FROM published`,
+    [registryVersion, publishedAt],
+  );
+  const published = Number(result.rows[0]?.count ?? "0");
+  if (published > 0) {
+    // The release transaction emits ONE outbox event; the release workflow's
+    // idempotent scan derives the per-candidate remap commands from the
+    // published ProposalVersions themselves (ADR-0122).
+    await insertRegistryReleaseEventWithin(client, {
+      registryVersion,
+      now: publishedAt,
+    });
+  }
+  return published;
 }

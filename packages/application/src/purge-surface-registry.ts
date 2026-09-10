@@ -1103,6 +1103,36 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     introducedBySchemaOrIntegration: "0033_memory_claim_domain.sql",
     clearOrder: 290,
   }),
+  // Candidate Review governance (SPEC #193 §8.3, 0046): the owner-scoped
+  // Proposal link is the only governance row that points at a private
+  // Candidate — Full Purge deletes it. The Proposal identity and its
+  // immutable version history are structurally user-content-free global
+  // governance records (no user_id column, no owner foreign key): they are
+  // retained across Full Purge and therefore sit OUTSIDE the owner-scoped
+  // registry inventory, like the reference Registry tables.
+  tableSurface({
+    table: "predicate_change_proposal_candidate_links",
+    privateContentFields: [],
+    indexes: ["predicate_change_proposal_candidate_links_proposal_idx"],
+    ownerResolution: directUser,
+    introducedBySchemaOrIntegration: "0046_predicate_candidate_governance.sql",
+    clearOrder: 292,
+  }),
+  // Content-free operator audit for review commands (SPEC §8.1): retained
+  // owner envelope with the target identity redacted by Full Purge and a
+  // 30-day read deadline (ADR-0130).
+  tableSurface({
+    table: "candidate_review_audits",
+    privateContentFields: ["target_type", "target_id"],
+    indexes: ["candidate_review_audits_user_time_idx"],
+    ownerResolution: directUser,
+    disposition: "retain_owner_envelope",
+    clearHandler: "redact_sensitive_access_audits",
+    verifyHandler: "verify_sensitive_access_audits_redacted",
+    readDeadlinePolicy: { kind: "active_system_deleted_plus_days", days: 30 },
+    introducedBySchemaOrIntegration: "0046_predicate_candidate_governance.sql",
+    clearOrder: 293,
+  }),
   tableSurface({
     table: "memory_candidate_evidence_links",
     privateContentFields: [],
@@ -1371,6 +1401,8 @@ bio_validation_findings|bio_validation_finding_id,bio_version_id,bio_id,user_id,
 bio_versions|bio_version_id,bio_id,user_id,revision,status,source_revision,expected_data_epoch,source_manifest,presentation_locale,self_entity_id,self_entity_version_id,generation_command_id,writer_model_run_attempt_id,validator_generation_command_id,validator_model_run_attempt_id,content_expires_at,content_purged_at,created_at
 bios|bio_id,user_id,current_version_id,current_source_revision,current_data_epoch,created_at,updated_at
 claim_evidence_links|claim_evidence_link_id,memory_claim_version_id,user_id,evidence_item_id,link_role,status,created_at
+candidate_review_audits|candidate_review_audit_id,user_id,command,target_type,target_id,disposition,reason,operator_principal_id,policy_version,recorded_at
+predicate_change_proposal_candidate_links|predicate_change_proposal_candidate_link_id,user_id,memory_candidate_id,predicate_change_proposal_id,created_at
 claim_retrieval_projections|claim_retrieval_projection_id,user_id,memory_claim_id,memory_claim_version_id,locale,view_direction,retrieval_text,lexical_terms,english_search,projection_policy_version,status,created_at,content_purged_at
 compiled_context_revision_refs|compiled_context_id,user_id,conversation_event_revision_id,ordinal,actor,estimated_tokens,sequence_no,section,selection_order
 compiled_contexts|compiled_context_id,user_id,generation_command_id,compiler_version,dialogue_revision,source_revision,locale,section_budgets,total_tokens,degraded_reason,content_hmac,created_at,policy_versions,sections,integrity_algorithm,integrity_key_version,rolling_summary,retrieval_manifest
@@ -1509,6 +1541,8 @@ continuous_exchange_inactivity_evaluations|inactivity_evaluation_id,user_id,dail
 conversation_action_executions|action_execution_id,user_id,decision_command_id,request_event_revision_id,action_kind,schema_version,catalog_version,target_kind,target_id,target_version_id,daily_session_id,source_revision,expected_data_epoch,idempotency_key,admission_status,execution_status,created_at,resolved_claim_id,resolved_claim_version_id,resolved_qualifier_id,resolved_entity_id,resolved_entity_version_id,resolved_related_entity_id,resolved_related_entity_version_id,entity_identity_operation
 conversation_action_handles|compiled_context_id,user_id,generation_command_id,action_kind,target_kind,target_id,target_version_id,source_revision,expected_data_epoch,created_at,expires_at,target_claim_id,target_claim_version_id,target_qualifier_id
 conversation_action_payloads|action_execution_id,payload_schema_version,expires_at,content_purged_at
+candidate_review_audits|candidate_review_audit_id,user_id,command,disposition,reason,operator_principal_id,policy_version,recorded_at
+predicate_change_proposal_candidate_links|predicate_change_proposal_candidate_link_id,user_id,memory_candidate_id,predicate_change_proposal_id,created_at
 conversation_action_receipts|action_receipt_id,action_execution_id,receipt_sequence,admission_status,execution_status,disposition,error_code,created_at,receipt_key,resolved_claim_id,resolved_claim_version_id,resolved_qualifier_id,resolved_entity_id,resolved_entity_version_id,resolved_related_entity_id,resolved_related_entity_version_id,entity_identity_operation
 conversation_event_revisions|conversation_event_revision_id,user_id,conversation_event_id,revision,locale,transcript_status,created_by,created_at,content_purged_at
 conversation_events|conversation_event_id,user_id,daily_session_id,interaction_turn_id,sequence_no,client_event_id,actor,channel,event_type,current_revision_id,lifecycle_status,created_at,deleted_at,generation_command_id
@@ -1644,11 +1678,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:f99ff140:1322",
-    constraintManifestHash: "fnv1a32:6293968c:702",
+    columnManifestHash: "fnv1a32:f5c4a64a:1245",
+    constraintManifestHash: "fnv1a32:8a5ed813:649",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:0a87bc74:382",
-    indexManifestHash: "fnv1a32:3a2c6a90:112",
+    foreignKeyManifestHash: "fnv1a32:5b2468e8:361",
+    indexManifestHash: "fnv1a32:db17f73a:95",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,

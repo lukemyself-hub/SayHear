@@ -343,6 +343,8 @@ export const TWIN_SCENARIO_RESET_TABLES = `
     memory_consolidation_runs,
     memory_candidate_evidence_links,
     memory_candidates,
+    candidate_review_audits,
+    predicate_change_proposal_candidate_links,
     memory_claim_versions,
     memory_claims,
     claim_evidence_links,

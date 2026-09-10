@@ -31,6 +31,15 @@ export function createRecoveryScannerHandler(dependencies: {
       }>
     >;
   };
+  /**
+   * Candidate Review release/remap backstop (SPEC #193 §8.4, ADR-0122):
+   * re-runs the idempotent published-Proposal scan, so a missed release
+   * outbox event or an unfinished remap converges without any second
+   * scheduler.
+   */
+  candidateReviewRecoveryService?: {
+    scanPendingRemaps(): Promise<Readonly<{ remapCommandsCreated: number }>>;
+  };
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -80,6 +89,12 @@ export function createRecoveryScannerHandler(dependencies: {
     const reflection = dependencies.reflectionSchedulerScanService
       ? await dependencies.reflectionSchedulerScanService.scanPending()
       : { dailyQueued: 0, weeklyQueued: 0, maintenanceQueued: 0 };
+    // Candidate Review governance backstop (SPEC #193 §8.4): idempotent
+    // remap commands for published-but-unremapped awaiting Candidates,
+    // dispatched below with the rest of the outbox.
+    const candidateRemaps = dependencies.candidateReviewRecoveryService
+      ? await dependencies.candidateReviewRecoveryService.scanPendingRemaps()
+      : { remapCommandsCreated: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
@@ -92,6 +107,7 @@ export function createRecoveryScannerHandler(dependencies: {
       consolidation,
       episode,
       reflection,
+      candidateRemaps,
       outbox,
     });
   };
