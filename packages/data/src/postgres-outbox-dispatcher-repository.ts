@@ -6,6 +6,7 @@ import {
   asConversationEventRevisionId,
   asDailySessionId,
   asEntityId,
+  asMemoryCandidateId,
   asMemoryClaimId,
   asOutboxEventId,
   asUserId,
@@ -22,6 +23,8 @@ type OutboxRow = Readonly<{
     | "app_user"
     | "entity"
     | "memory_claim"
+    | "memory_candidate"
+    | "predicate_registry"
     | "conversation_event_revision";
   aggregate_id: string;
   // aggregate_revision is BIGINT, which node-postgres always returns as a
@@ -49,9 +52,13 @@ function mapLeased(row: OutboxRow): LeasedOutboxEvent {
         ? asEntityId(row.aggregate_id)
         : row.aggregate_type === "memory_claim"
           ? asMemoryClaimId(row.aggregate_id)
-          : row.aggregate_type === "conversation_event_revision"
-            ? asConversationEventRevisionId(row.aggregate_id)
-            : asDailySessionId(row.aggregate_id);
+          : row.aggregate_type === "memory_candidate"
+            ? asMemoryCandidateId(row.aggregate_id)
+            : row.aggregate_type === "predicate_registry"
+              ? asWorkflowCommandId(row.aggregate_id)
+              : row.aggregate_type === "conversation_event_revision"
+                ? asConversationEventRevisionId(row.aggregate_id)
+                : asDailySessionId(row.aggregate_id);
   return {
     outboxEventId: asOutboxEventId(row.outbox_event_id),
     workflowCommandId: asWorkflowCommandId(row.workflow_command_id),

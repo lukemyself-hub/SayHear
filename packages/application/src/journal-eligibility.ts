@@ -140,7 +140,14 @@ export type JournalEligibilityRepository = Readonly<{
 export type LeasedOutboxEvent = Readonly<{
   outboxEventId: OutboxEventId;
   workflowCommandId: WorkflowCommandId;
-  aggregateId: DailySessionId | UserId | EntityId | MemoryClaimId | ConversationEventRevisionId;
+  aggregateId:
+    | DailySessionId
+    | UserId
+    | EntityId
+    | MemoryClaimId
+    | MemoryCandidateId
+    | WorkflowCommandId
+    | ConversationEventRevisionId;
   aggregateRevision: number;
   eventType: string;
   payload: Readonly<Record<string, unknown>>;
@@ -321,8 +328,8 @@ export type WorkflowStarter = (input: {
     | EntityId
     | MemoryClaimId
     | MemoryCandidateId
-    | ConversationEventRevisionId
-    | string;
+    | WorkflowCommandId
+    | ConversationEventRevisionId;
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;

@@ -1,6 +1,7 @@
 export {
   CANDIDATE_DISPOSITION_REASON_VERSION,
   CANDIDATE_REVIEW_POLICY_VERSION,
+  PROPOSAL_DRAFT_POLICY_VERSION,
   CANDIDATE_SPECIFIC_REJECTION_REASONS,
   PRODUCT_VALUE_REJECTION_REASON,
   REGISTRY_RELEASE_WAIT_DAYS,
@@ -30,6 +31,7 @@ export {
 } from "./types";
 export {
   createCandidateReviewService,
+  planCancelStaleDisposition,
   validateProposalEntryDraft,
   type CandidateReviewService,
   type RemapOutcome,
@@ -42,7 +44,7 @@ export {
 export {
   runCandidateRemapWorkflow,
   runPredicateRegistryReleaseWorkflow,
-  assertCandidateRemapWorkflowSafe,
+  assertCandidateGovernanceWorkflowSafe,
   type CandidateRemapCommandRecord,
   type CandidateRemapOutcome,
   type CandidateRemapResult,

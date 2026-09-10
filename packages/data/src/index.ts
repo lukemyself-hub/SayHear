@@ -67,7 +67,6 @@ export {
 export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";
 export { PostgresEpisodeRepository } from "./postgres-episode-repository";
 export {
-  planCancelStaleDisposition,
   PostgresCandidateReviewRepository,
   insertCandidateRemapCommandWithin,
   insertRegistryReleaseEventWithin,

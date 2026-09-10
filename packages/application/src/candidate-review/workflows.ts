@@ -1,6 +1,7 @@
 import type { MemoryCandidateId, UserId, WorkflowCommandId } from "@sayhear/domain";
 
 import { assertWorkflowSafe } from "../journal-eligibility";
+import type { RemapOutcome } from "./review";
 import { asMemoryCandidateId, asUserId } from "@sayhear/domain";
 import { CANDIDATE_REVIEW_POLICY_VERSION } from "./types";
 
@@ -15,11 +16,7 @@ import { CANDIDATE_REVIEW_POLICY_VERSION } from "./types";
  * remap commands are reconciliation work, not human dispositions.
  */
 
-export type CandidateRemapOutcome =
-  | "converged"
-  | "no_longer_eligible"
-  | "governance_blocked"
-  | "still_unmapped";
+export type CandidateRemapOutcome = RemapOutcome;
 
 export type CandidateRemapCommandRecord = Readonly<{
   userId: UserId;
@@ -35,7 +32,15 @@ export type CandidateReviewWorkflowRepository = Readonly<{
   completeRemapCommand(input: {
     workflowCommandId: WorkflowCommandId;
   }): Promise<void>;
-  selectPendingRemapCandidates(): Promise<
+  /**
+   * Registry version scope: the release workflow passes the RELEASED
+   * version, so a later release re-arms remaps for Candidates whose earlier
+   * remap completed without converging; the recovery backstop passes no
+   * version and falls back to each Proposal's pinned published version.
+   */
+  selectPendingRemapCandidates(input: {
+    registryVersion?: number;
+  }): Promise<
     readonly Readonly<{
       userId: string;
       memoryCandidateId: string;
@@ -64,6 +69,12 @@ export type PredicateRegistryReleaseResult = Readonly<{
  */
 export async function runPredicateRegistryReleaseWorkflow(input: {
   repository: CandidateReviewWorkflowRepository;
+  /**
+   * The released Registry version (the outbox event's aggregate revision).
+   * Command identities are keyed by it, so a later release re-arms remaps
+   * for Candidates the earlier release could not map.
+   */
+  registryVersion?: number;
   policyVersion?: string;
 }): Promise<PredicateRegistryReleaseResult> {
   const policyVersion =
@@ -73,7 +84,11 @@ export async function runPredicateRegistryReleaseWorkflow(input: {
       "Candidate remap policy does not match the runtime policy version.",
     );
   }
-  const pending = await input.repository.selectPendingRemapCandidates();
+  const pending = await input.repository.selectPendingRemapCandidates(
+    input.registryVersion === undefined
+      ? {}
+      : { registryVersion: input.registryVersion },
+  );
   let created = 0;
   for (const row of pending) {
     const inserted = await input.repository.insertRemapCommand({
@@ -126,6 +141,6 @@ export async function runCandidateRemapWorkflow(input: {
 }
 
 /** Workflow-history safety for the remap workflow inputs (architecture 13.3). */
-export function assertCandidateRemapWorkflowSafe(input: unknown): void {
+export function assertCandidateGovernanceWorkflowSafe(input: unknown): void {
   assertWorkflowSafe(input, "input");
 }

@@ -920,6 +920,7 @@ export type {
 export {
   CANDIDATE_DISPOSITION_REASON_VERSION,
   CANDIDATE_REVIEW_POLICY_VERSION,
+  PROPOSAL_DRAFT_POLICY_VERSION,
   CANDIDATE_SPECIFIC_REJECTION_REASONS,
   PRODUCT_VALUE_REJECTION_REASON,
   REVIEW_DEADLINE_DAYS,
@@ -927,7 +928,8 @@ export {
   CandidateReviewAuthError,
   createCandidateReviewService,
   createPredicateGovernanceService,
-  assertCandidateRemapWorkflowSafe,
+  planCancelStaleDisposition,
+  assertCandidateGovernanceWorkflowSafe,
   runCandidateRemapWorkflow,
   runPredicateRegistryReleaseWorkflow,
   validateProposalEntryDraft,

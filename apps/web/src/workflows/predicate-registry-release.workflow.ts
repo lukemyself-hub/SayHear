@@ -1,5 +1,5 @@
 import {
-  assertCandidateRemapWorkflowSafe,
+  assertCandidateGovernanceWorkflowSafe,
   runPredicateRegistryReleaseWorkflow,
   type PredicateRegistryReleaseResult,
 } from "@sayhear/application/candidate-review-workflow";
@@ -24,14 +24,17 @@ export async function predicateRegistryReleaseWorkflow(input: {
   expectedDataEpoch: number;
 }): Promise<PredicateRegistryReleaseResult> {
   "use workflow";
-  assertCandidateRemapWorkflowSafe(input);
-  return await runReleaseStep();
+  assertCandidateGovernanceWorkflowSafe(input);
+  return await runReleaseStep(input.sourceRevision);
 }
 
-async function runReleaseStep(): Promise<PredicateRegistryReleaseResult> {
+async function runReleaseStep(
+  releasedRegistryVersion: number,
+): Promise<PredicateRegistryReleaseResult> {
   "use step";
   const composition = createServerComposition();
   return runPredicateRegistryReleaseWorkflow({
     repository: composition.candidateReviewWorkflowRepository,
+    registryVersion: releasedRegistryVersion,
   });
 }

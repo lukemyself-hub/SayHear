@@ -128,6 +128,14 @@ export type ProposalEntryDraft = Readonly<{
  */
 export type ReviewerProposalDraft = Omit<ProposalEntryDraft, "baseRegistryVersion">;
 
+/**
+ * Versioned policy for the reviewer draft hygiene limits (SPEC §8.3:
+ * mechanical parameters not fixed by the SPEC are published as a named,
+ * versioned policy and frozen at the first release manifest). Values here
+ * are the frozen v1 values; widening any of them is a policy revision.
+ */
+export const PROPOSAL_DRAFT_POLICY_VERSION = "proposal-draft:v1";
+
 /** Fixed review deadline (ADR-0048) — 30 days from entering review state. */
 export const REVIEW_DEADLINE_DAYS = 30;
 /** Fixed release-wait deadline (ADR-0050) — 90 days from approve commit. */
@@ -367,6 +375,7 @@ export type CandidateReviewRepository = Readonly<{
     | { outcome: "rejected" }
     | { outcome: "not_eligible" }
     | { outcome: "review_deadline_passed" }
+    | { outcome: "proposal_not_rejected" }
   >;
   /**
    * Conditioned approve-for-release (one transaction): awaiting Proposal

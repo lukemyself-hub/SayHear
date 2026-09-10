@@ -4,8 +4,9 @@ import {
   CANDIDATE_REVIEW_POLICY_VERSION,
   REVIEW_STEP_UP_MAX_AGE_MS,
   CandidateReviewAuthError,
-  type CandidateReviewAuthDenialReason,
+  type CancelOutcome,
   type CandidateReviewErrorCode,
+  type CandidateReviewAuthDenialReason,
   type CandidateReviewRepository,
   type PredicateChangeProposalVersionRecord,
   type ReconsiderOutcome,
@@ -68,14 +69,8 @@ export type PredicateGovernanceService = Readonly<{
   >;
 }>;
 
-export type CancelOutcome = Readonly<{
-  outcome:
-    | "applied"
-    | "already_canceled"
-    | "proposal_not_found"
-    | "proposal_not_awaiting_release";
-  staledCandidateCount: number;
-}>;
+/** Re-exported for the module index (types.ts owns the definition). */
+export type { CancelOutcome } from "./types";
 
 export function createPredicateGovernanceService(dependencies: {
   repository: CandidateReviewRepository;

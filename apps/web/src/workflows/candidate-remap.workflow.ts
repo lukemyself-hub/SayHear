@@ -1,5 +1,5 @@
 import {
-  assertCandidateRemapWorkflowSafe,
+  assertCandidateGovernanceWorkflowSafe,
   runCandidateRemapWorkflow,
   type CandidateRemapResult,
 } from "@sayhear/application/candidate-review-workflow";
@@ -25,7 +25,7 @@ export async function candidateRemapWorkflow(input: {
   expectedDataEpoch: number;
 }): Promise<CandidateRemapResult> {
   "use workflow";
-  assertCandidateRemapWorkflowSafe(input);
+  assertCandidateGovernanceWorkflowSafe(input);
   return await runRemapStep(input.workflowCommandId);
 }
 

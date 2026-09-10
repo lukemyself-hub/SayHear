@@ -218,6 +218,11 @@ export function createCandidateReviewService(dependencies: {
     if (result.outcome === "rejected") {
       return { outcome: "applied", candidateAfter };
     }
+    if (result.outcome === "proposal_not_rejected") {
+      // §8.5: the reviewer-selected Proposal is not a live product-value
+      // rejection; the Candidate stays live and nothing was disposed.
+      return { outcome: "proposal_not_rejected", candidateAfter };
+    }
     if (result.outcome === "review_deadline_passed") {
       return { outcome: "review_deadline_passed", candidateAfter };
     }
@@ -287,10 +292,8 @@ export function createCandidateReviewService(dependencies: {
         if (!after) {
           return { outcome: "candidate_not_found", candidateAfter: null };
         }
-        if (
-          after.status !== "needs_predicate_review" &&
-          after.status !== "proposed"
-        ) {
+        if (after.status !== "needs_predicate_review") {
+          // Another disposition (including a winning map) already committed.
           return { outcome: "already_disposed", candidateAfter: after };
         }
         return { outcome: "review_deadline_passed", candidateAfter: after };
@@ -536,6 +539,16 @@ export function createCandidateReviewService(dependencies: {
       if (current.status !== "published") {
         return "still_unmapped";
       }
+      // The 90-day boundary holds at remap time too (ADR-0050): a Candidate
+      // whose release deadline passed before published_at never re-qualifies,
+      // regardless of sweeper or scan order.
+      if (
+        candidate.registryReleaseDueAt === null ||
+        current.publishedAt === null ||
+        current.publishedAt.getTime() > candidate.registryReleaseDueAt.getTime()
+      ) {
+        return "no_longer_eligible";
+      }
       const entry = registry.entryFor(current.proposedPredicateIdentity);
       if (!entry || entry.status !== "active") {
         return "still_unmapped";
@@ -561,8 +574,10 @@ export function createCandidateReviewService(dependencies: {
   };
 }
 
+/** Frozen by `proposal-draft:v1` (types.ts); see the policy note there. */
 const PROPOSAL_IDENTITY_PATTERN = /^sh\.[a-z_]+\.[a-z_]+$/;
 
+/** Draft length limits frozen under `proposal-draft:v1`. */
 const DRAFT_FIELD_LIMITS = Object.freeze({
   label: 120,
   definition: 2_000,
@@ -716,3 +731,36 @@ export function validateProposalEntryDraft(input: {
 }
 
 export { CANDIDATE_DISPOSITION_REASON_VERSION, CANDIDATE_REVIEW_POLICY_VERSION };
+
+/**
+ * Cancel-stale disposition (ADR-0122): terminal_effective_at is the CANCEL
+ * COMMIT TIME — not the original policy deadline, and never a sweeper time.
+ */
+/**
+ * Cancel-stale disposition (ADR-0122): terminal_effective_at is the CANCEL
+ * COMMIT TIME — not the original policy deadline, and never a sweeper time.
+ */
+export function planCancelStaleDisposition(input: {
+  userId: string;
+  semanticTarget: string;
+  evidenceRevisionIds: readonly string[];
+  secret: string;
+  now: Date;
+}): CandidateDispositionPlan {
+  return {
+    status: "stale",
+    dispositionReasonCode: "registry_release_canceled",
+    dispositionPolicyVersion: MEMORY_ADMISSION_POLICY_VERSION,
+    reproposalPolicy: "material_change_allowed",
+    terminalEffectiveAt: input.now,
+    terminalContentExpiresAt: addDays(input.now, TERMINAL_CONTENT_EXPIRY_DAYS),
+    dedupeFingerprint: dedupeFingerprint({
+      secret: input.secret,
+      userId: input.userId,
+      semanticTarget: input.semanticTarget,
+      evidenceRevisionIds: input.evidenceRevisionIds,
+      policyVersion: MEMORY_ADMISSION_POLICY_VERSION,
+    }),
+  };
+}
+

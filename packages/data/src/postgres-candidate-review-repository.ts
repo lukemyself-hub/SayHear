@@ -21,6 +21,7 @@ import {
   MEMORY_ADMISSION_POLICY_VERSION,
   REGISTRY_RELEASE_WAIT_DAYS,
   TERMINAL_CONTENT_EXPIRY_DAYS,
+  planCancelStaleDisposition,
   type CandidateDispositionPlan,
   type CandidateReviewQueueEntry,
   type ClaimTypedValue,
@@ -47,8 +48,10 @@ import type {
  * PostgreSQL executor for the Candidate Review and Predicate Registry
  * governance modules (SPEC #193 §8, ADR-0046–0053, ADR-0122). Every command
  * is a synchronous conditional database update in one short transaction —
- * no durable workflow is created for a human disposition — and appends a
- * content-free audit row in the SAME transaction as the state change.
+ * no durable workflow is created for a human disposition. The content-free
+ * audit row is appended at the module boundary once the capability and
+ * step-up are verified, so every authorized attempt (and every denial) is
+ * audited without the audit ever coupling into the conditional update.
  *
  * All deadline semantics live inside the WHERE clauses: a disposition is
  * valid only when `decided_at <= review_due_at`, the exact symmetry of
@@ -134,7 +137,7 @@ const VERSION_COLUMNS = `predicate_change_proposal_version_id, predicate_change_
   decision_scope, supersedes_version_id, created_at,
   published_registry_version, published_at`;
 
-type ReviewRejectionDiagnosis =
+type ReviewDispositionDiagnosis =
   | { outcome: "not_eligible" }
   | { outcome: "review_deadline_passed" };
 
@@ -438,7 +441,8 @@ export class PostgresCandidateReviewRepository
     decidedAt: Date;
   }): Promise<
     | { outcome: "rejected" }
-    | ReviewRejectionDiagnosis
+    | ReviewDispositionDiagnosis
+    | { outcome: "proposal_not_rejected" }
   > {
     const client = await this.pool.connect();
     try {
@@ -499,7 +503,12 @@ export class PostgresCandidateReviewRepository
         });
         if (!linked.ok) {
           await client.query("ROLLBACK");
-          return await this.diagnoseLateDisposition(input);
+          return {
+            outcome:
+              linked.reason === "proposal_not_rejected"
+                ? "proposal_not_rejected"
+                : "not_eligible",
+          };
         }
       }
       await client.query("COMMIT");
@@ -521,7 +530,7 @@ export class PostgresCandidateReviewRepository
     userId: UserId;
     candidateId: MemoryCandidateId;
     decidedAt: Date;
-  }): Promise<ReviewRejectionDiagnosis> {
+  }): Promise<ReviewDispositionDiagnosis> {
     const row = await this.pool.query<{
       status: MemoryCandidateRecord["status"];
       review_due_at: Date | null;
@@ -552,7 +561,7 @@ export class PostgresCandidateReviewRepository
     decidedAt: Date;
   }): Promise<
     | { outcome: "approved"; proposalVersionId: PredicateChangeProposalVersionId }
-    | ReviewRejectionDiagnosis
+    | ReviewDispositionDiagnosis
     | { outcome: "proposal_not_found" }
     | { outcome: "proposal_not_awaiting_release" }
   > {
@@ -933,7 +942,7 @@ export class PostgresCandidateReviewRepository
         candidateId: input.candidateId,
         registryVersion: input.registryVersion,
         policyVersion: input.policyVersion,
-        now: input.now ?? new Date(),
+        now: input.now,
       });
       await client.query("COMMIT");
       return inserted;
@@ -1023,34 +1032,6 @@ export class PostgresCandidateReviewRepository
     }
     return staled;
   }
-}
-
-/**
- * Cancel-stale disposition (ADR-0122): terminal_effective_at is the CANCEL
- * COMMIT TIME — not the original policy deadline, and never a sweeper time.
- */
-export function planCancelStaleDisposition(input: {
-  userId: string;
-  semanticTarget: string;
-  evidenceRevisionIds: readonly string[];
-  secret: string;
-  now: Date;
-}): CandidateDispositionPlan {
-  return {
-    status: "stale",
-    dispositionReasonCode: "registry_release_canceled",
-    dispositionPolicyVersion: MEMORY_ADMISSION_POLICY_VERSION,
-    reproposalPolicy: "material_change_allowed",
-    terminalEffectiveAt: input.now,
-    terminalContentExpiresAt: addDays(input.now, TERMINAL_CONTENT_EXPIRY_DAYS),
-    dedupeFingerprint: dedupeFingerprint({
-      secret: input.secret,
-      userId: input.userId,
-      semanticTarget: input.semanticTarget,
-      evidenceRevisionIds: input.evidenceRevisionIds,
-      policyVersion: MEMORY_ADMISSION_POLICY_VERSION,
-    }),
-  };
 }
 
 async function listCandidateEvidenceRevisionIdsWithin(
@@ -1258,7 +1239,16 @@ export type PendingRemapRow = Readonly<{
  */
 export async function selectPendingRemapCandidates(
   pool: Pool,
-  input: { policyVersion: string },
+  input: {
+    policyVersion: string;
+    /**
+     * Release scope: when the caller names the released version, the scan
+     * keys on it so a later release re-arms remaps for Candidates whose
+     * earlier remap completed without converging; without it (recovery
+     * backstop) the scan falls back to each Proposal's pinned version.
+     */
+    registryVersion?: number;
+  },
 ): Promise<readonly PendingRemapRow[]> {
   const result = await pool.query<{
     user_id: string;
@@ -1290,7 +1280,7 @@ export async function selectPendingRemapCandidates(
          WHERE command.command_type = $2
            AND command.subject_type = 'memory_candidate'
            AND command.subject_id = candidate.memory_candidate_id
-           AND command.source_revision = version.published_registry_version
+           AND command.source_revision = COALESCE($3::bigint, version.published_registry_version)
            AND command.policy_version = $1
            AND (
              command.status = 'completed'
@@ -1298,12 +1288,17 @@ export async function selectPendingRemapCandidates(
            )
        )
      LIMIT 500`,
-    [input.policyVersion, CANDIDATE_REMAP_COMMAND_TYPE],
+    [
+      input.policyVersion,
+      CANDIDATE_REMAP_COMMAND_TYPE,
+      input.registryVersion ?? null,
+    ],
   );
   return result.rows.map((row) => ({
     userId: row.user_id,
     memoryCandidateId: asMemoryCandidateId(row.memory_candidate_id),
-    registryVersion: row.published_registry_version,
+    registryVersion:
+      input.registryVersion ?? row.published_registry_version,
   }));
 }
 

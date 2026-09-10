@@ -418,9 +418,12 @@ export function createServerComposition() {
       candidateReviewRepository.readRemapCommand(input),
     completeRemapCommand: (input) =>
       candidateReviewRepository.completeRemapCommand(input),
-    selectPendingRemapCandidates: () =>
+    selectPendingRemapCandidates: (input) =>
       selectPendingRemapCandidates(pool, {
         policyVersion: CANDIDATE_REVIEW_POLICY_VERSION,
+        ...(input.registryVersion === undefined
+          ? {}
+          : { registryVersion: input.registryVersion }),
       }),
     insertRemapCommand: (input) =>
       candidateReviewRepository.insertRemapCommand({

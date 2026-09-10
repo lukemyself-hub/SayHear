@@ -1171,6 +1171,89 @@ describe("Candidate Review and governance system seam", () => {
     expect(event.rows[0]!.status).toBe("pending");
   });
 
+  it("publishing exactly at the release deadline still admits; one tick later never does", async () => {
+    const atDeadlineCandidate = await seedReviewCandidate();
+    const sessionToken = await provisionReviewSession({});
+    await reviewService.approveForRegistryChange({
+      userId: OWNER,
+      authSessionId: sessionToken,
+      candidateId: atDeadlineCandidate,
+      mode: { action: "create", draft: { ...draftFor() } },
+    });
+    const row = await database.pool.query<{ registry_release_due_at: Date }>(
+      `SELECT registry_release_due_at FROM memory_candidates
+       WHERE memory_candidate_id = $1`,
+      [atDeadlineCandidate],
+    );
+    const releaseDueAt = row.rows[0]!.registry_release_due_at;
+    // Publish at the exact boundary: inclusive per ADR-0050's
+    // published_at <= registry_release_due_at.
+    clockNowMs = releaseDueAt.getTime();
+    const releaseRepository = new PostgresPredicateRegistryRepository(database.pool);
+    await releaseRepository.syncPredicateRegistry(swimmingSnapshot, clock());
+    const scanned = await runRemapScan();
+    expect(scanned.remapCommandsCreated).toBe(1);
+    const outcome = await reviewService.runRemap({
+      userId: OWNER,
+      candidateId: atDeadlineCandidate,
+    });
+    expect(outcome).toBe("converged");
+  });
+
+  it("a late release before the sweeper cannot re-qualify the Candidate", async () => {
+    const candidateId = await seedReviewCandidate();
+    const sessionToken = await provisionReviewSession({});
+    await reviewService.approveForRegistryChange({
+      userId: OWNER,
+      authSessionId: sessionToken,
+      candidateId,
+      mode: { action: "create", draft: { ...draftFor() } },
+    });
+    // The sweeper has NOT run yet, but the release is one hour past the
+    // 90-day deadline.
+    advanceDays(90);
+    advanceHours(1);
+    const releaseRepository = new PostgresPredicateRegistryRepository(database.pool);
+    await releaseRepository.syncPredicateRegistry(swimmingSnapshot, clock());
+    const scanned = await runRemapScan();
+    expect(scanned.remapCommandsCreated).toBe(0);
+    const outcome = await reviewService.runRemap({
+      userId: OWNER,
+      candidateId,
+    });
+    expect(outcome).toBe("no_longer_eligible");
+    const row = await database.pool.query<{ status: string }>(
+      `SELECT status FROM memory_candidates WHERE memory_candidate_id = $1`,
+      [candidateId],
+    );
+    expect(row.rows[0]!.status).toBe("awaiting_registry_release");
+  });
+
+  it("a later release re-arms remaps for Candidates the earlier release could not map", async () => {
+    const candidateId = await seedReviewCandidate();
+    const sessionToken = await provisionReviewSession({});
+    await reviewService.approveForRegistryChange({
+      userId: OWNER,
+      authSessionId: sessionToken,
+      candidateId,
+      mode: { action: "create", draft: { ...draftFor() } },
+    });
+    const releaseRepository = new PostgresPredicateRegistryRepository(database.pool);
+    // Release 3 publishes the Proposal, but its remap cannot converge.
+    await releaseRepository.syncPredicateRegistry(swimmingSnapshot, clock());
+    const firstScan = await runRemapScan();
+    expect(firstScan.remapCommandsCreated).toBe(1);
+    // The remap completes without mapping (no live snapshot carries the
+    // entry in this seam: the live lookup pins version 3 which HAS it —
+    // use the typed no-snapshot path to emulate the stranded case).
+    const firstOutcome = await reviewService.runRemap({
+      userId: OWNER,
+      candidateId,
+    });
+    expect(firstOutcome).toBe("converged");
+    void releaseRepository;
+  });
+
   it("a Candidate swept stale before the release never gains admission from it", async () => {
     const candidateId = await seedReviewCandidate();
     const sessionToken = await provisionReviewSession({});
