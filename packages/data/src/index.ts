@@ -66,3 +66,11 @@ export {
 } from "./postgres-model-role-command-repository";
 export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";
 export { PostgresEpisodeRepository } from "./postgres-episode-repository";
+export {
+  planCancelStaleDisposition,
+  PostgresCandidateReviewRepository,
+  insertCandidateRemapCommandWithin,
+  insertRegistryReleaseEventWithin,
+  selectPendingRemapCandidates,
+  type PendingRemapRow,
+} from "./postgres-candidate-review-repository";

@@ -813,6 +813,11 @@ async function main(): Promise<void> {
   // well as at runtime. Unsupported clear/verify handlers must fail before a
   // migration can be promoted, not only when the first purge starts.
   assertDataAdapterCoverage(PURGE_SURFACE_REGISTRY_SNAPSHOT);
+  if (process.env.DUMP_INVENTORY === "1") {
+    process.stdout.write(
+      "CONSTRAINTS:" + JSON.stringify(inventory.constraints) + "\n",
+    );
+  }
   const result = validatePurgeSurfaceInventory(inventory);
   if (!result.ok) {
     console.error("Purge Surface Registry inventory check failed.");

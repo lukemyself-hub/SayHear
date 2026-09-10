@@ -16,6 +16,10 @@ declare const bioVersionIdBrand: unique symbol;
 declare const bioStatementIdBrand: unique symbol;
 declare const bioAtomicPropositionIdBrand: unique symbol;
 declare const bioCoverageUnitIdBrand: unique symbol;
+declare const predicateChangeProposalIdBrand: unique symbol;
+declare const predicateChangeProposalVersionIdBrand: unique symbol;
+declare const predicateChangeProposalCandidateLinkIdBrand: unique symbol;
+declare const candidateReviewAuditIdBrand: unique symbol;
 
 export type UserId = string & { readonly [userIdBrand]: "UserId" };
 export type DailySessionId = string & {
@@ -66,6 +70,18 @@ export type BioAtomicPropositionId = string & {
 };
 export type BioCoverageUnitId = string & {
   readonly [bioCoverageUnitIdBrand]: "BioCoverageUnitId";
+};
+export type PredicateChangeProposalId = string & {
+  readonly [predicateChangeProposalIdBrand]: "PredicateChangeProposalId";
+};
+export type PredicateChangeProposalVersionId = string & {
+  readonly [predicateChangeProposalVersionIdBrand]: "PredicateChangeProposalVersionId";
+};
+export type PredicateChangeProposalCandidateLinkId = string & {
+  readonly [predicateChangeProposalCandidateLinkIdBrand]: "PredicateChangeProposalCandidateLinkId";
+};
+export type CandidateReviewAuditId = string & {
+  readonly [candidateReviewAuditIdBrand]: "CandidateReviewAuditId";
 };
 export type MemoryClaimId = string & {
   readonly [memoryClaimIdBrand]: "MemoryClaimId";
@@ -289,6 +305,42 @@ export function asEpisodeCandidateId(value: string): EpisodeCandidateId {
     value,
     "EpisodeCandidateId",
   ) as EpisodeCandidateId;
+}
+
+export function asPredicateChangeProposalId(
+  value: string,
+): PredicateChangeProposalId {
+  return asOpaqueUuidV7(
+    value,
+    "PredicateChangeProposalId",
+  ) as PredicateChangeProposalId;
+}
+
+export function asPredicateChangeProposalVersionId(
+  value: string,
+): PredicateChangeProposalVersionId {
+  return asOpaqueUuidV7(
+    value,
+    "PredicateChangeProposalVersionId",
+  ) as PredicateChangeProposalVersionId;
+}
+
+export function asPredicateChangeProposalCandidateLinkId(
+  value: string,
+): PredicateChangeProposalCandidateLinkId {
+  return asOpaqueUuidV7(
+    value,
+    "PredicateChangeProposalCandidateLinkId",
+  ) as PredicateChangeProposalCandidateLinkId;
+}
+
+export function asCandidateReviewAuditId(
+  value: string,
+): CandidateReviewAuditId {
+  return asOpaqueUuidV7(
+    value,
+    "CandidateReviewAuditId",
+  ) as CandidateReviewAuditId;
 }
 
 function asOpaqueUuidV7(value: string, typeName: string): string {

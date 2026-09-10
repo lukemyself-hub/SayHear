@@ -2,12 +2,14 @@ import {
   asConversationEventRevisionId,
   asDailySessionId,
   asEntityId,
+  asMemoryCandidateId,
   asMemoryClaimId,
   asUserId,
   asWorkflowCommandId,
   type ConversationEventRevisionId,
   type DailySessionId,
   type EntityId,
+  type MemoryCandidateId,
   type MemoryClaimId,
   type OutboxEventId,
   type UserId,
@@ -302,7 +304,9 @@ export type WorkflowStarter = (input: {
     | "entity_identity_revalidation_requested"
     | "model_role_requested"
     | "episode_build_requested"
-    | "episode_maintenance_requested";
+    | "episode_maintenance_requested"
+    | "predicate_registry_released"
+    | "candidate_remap_requested";
   modelRole?: string;
   generationCommandId?: string;
   modelRunAttemptId?: string;
@@ -316,7 +320,9 @@ export type WorkflowStarter = (input: {
     | UserId
     | EntityId
     | MemoryClaimId
-    | ConversationEventRevisionId;
+    | MemoryCandidateId
+    | ConversationEventRevisionId
+    | string;
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;

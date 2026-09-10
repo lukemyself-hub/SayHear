@@ -46,6 +46,12 @@ import {
   PREDICATE_REGISTRY_RUNTIME_VERSION,
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
+  asMemoryCandidateId,
+  createMemoryClaimService,
+  createCandidateReviewService,
+  createPredicateGovernanceService,
+  CANDIDATE_REVIEW_POLICY_VERSION,
+  type CandidateReviewWorkflowRepository,
   EPISODE_BUILDER_POLICY_VERSION,
   type EpisodeBuildEntrypointDependencies,
   type EpisodeBuildModelProvider,
@@ -89,6 +95,10 @@ import {
   PostgresModelRoleCommandRepository,
   PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
+  PostgresMemoryClaimRepository,
+  PostgresCandidateReviewRepository,
+  insertCandidateRemapCommandWithin,
+  selectPendingRemapCandidates,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
@@ -381,6 +391,46 @@ export function createServerComposition() {
   const bioInspectionService = createBioInspectionService({
     repository: new PostgresBioInspectionRepository(pool),
   });
+  const candidateReviewRepository = new PostgresCandidateReviewRepository(
+    pool,
+    configuration.contextHmacSecret,
+  );
+  const candidateReviewMemoryClaimService = createMemoryClaimService({
+    repository: new PostgresMemoryClaimRepository(pool),
+    registry: predicateRegistryLookup,
+    clock: configuration.clock,
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
+  });
+  const candidateReviewService = createCandidateReviewService({
+    repository: candidateReviewRepository,
+    registry: predicateRegistryLookup,
+    memoryClaimService: candidateReviewMemoryClaimService,
+    clock: configuration.clock,
+    dedupeFingerprintSecret: configuration.contextHmacSecret,
+  });
+  const predicateGovernanceService = createPredicateGovernanceService({
+    repository: candidateReviewRepository,
+    clock: configuration.clock,
+    registryVersion: () => predicateRegistryLookup.registryVersion(),
+  });
+  const candidateReviewWorkflowRepository: CandidateReviewWorkflowRepository = {
+    readRemapCommand: (input) =>
+      candidateReviewRepository.readRemapCommand(input),
+    completeRemapCommand: (input) =>
+      candidateReviewRepository.completeRemapCommand(input),
+    selectPendingRemapCandidates: () =>
+      selectPendingRemapCandidates(pool, {
+        policyVersion: CANDIDATE_REVIEW_POLICY_VERSION,
+      }),
+    insertRemapCommand: (input) =>
+      candidateReviewRepository.insertRemapCommand({
+        userId: input.userId,
+        candidateId: asMemoryCandidateId(input.memoryCandidateId),
+        registryVersion: input.registryVersion,
+        policyVersion: input.policyVersion ?? CANDIDATE_REVIEW_POLICY_VERSION,
+        now: configuration.clock(),
+      }),
+  };
   const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
   const dialogueStateService = createDialogueStateService({
     clock: configuration.clock,
@@ -730,6 +780,10 @@ export function createServerComposition() {
     memoryConsolidationRepository,
     memoryConsolidationService,
     memoryConsolidationEntrypointDependencies,
+    candidateReviewRepository,
+    candidateReviewService,
+    predicateGovernanceService,
+    candidateReviewWorkflowRepository,
     episodeRepository,
     episodeBuilderScanService,
     episodeEntrypointDependencies,

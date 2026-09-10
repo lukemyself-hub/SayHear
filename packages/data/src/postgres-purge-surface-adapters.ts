@@ -323,6 +323,7 @@ export function assertPurgeSurfaceAdapterCoverage(
     "verify_owner_envelope",
     "verify_owner_purge_order",
     "verify_owner_purge_receipts",
+    "verify_predicate_change_governance",
   ]);
   for (const surface of registry.surfaces) {
     if (!clearHandlers.has(surface.clearHandler)) {
@@ -1381,6 +1382,24 @@ export async function verifyPurgeSurface(
       }
       return;
     }
+    case "verify_predicate_change_governance": {
+      // Governance records are retained without user content (ADR-0053 /
+      // SPEC §8.3). The independently-authored invariant: after Full Purge
+      // no owner-scoped proposal link may survive — verified from the
+      // governance side, never from the link table's own clear adapter.
+      const result = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count
+         FROM predicate_change_proposal_candidate_links
+         WHERE user_id = $1`,
+        [context.userId],
+      );
+      if (Number(result.rows[0]?.count ?? 0) > 0) {
+        throw new PurgeVerificationError(
+          "predicate_change_governance_owner_links_remain",
+        );
+      }
+      return;
+    }
     case "verify_owner_purge_operational_metadata": {
       const result = await client.query<{ count: string }>(
         `SELECT count(*)::text AS count
@@ -1538,6 +1557,22 @@ export async function sweepExpiredPurgeSurface(
     throw new PurgeSurfaceRegistryError(
       `missing_deadline_adapter:${surface.surfaceId}`,
     );
+  }
+  if (surface.surfaceId === "candidate_review_audits") {
+    // Same 30-day owner-envelope read deadline (ADR-0130); the audit table
+    // carries its own recorded_at time column and audit id.
+    const result = await client.query(
+      `DELETE FROM ${table} audit
+       USING owner_purge_orders purge
+       WHERE audit.user_id = purge.user_id
+         AND purge.active_system_deleted_at IS NOT NULL
+         AND audit.recorded_at <= purge.active_system_deleted_at
+         AND purge.active_system_deleted_at
+           + ($2 * interval '1 day') <= $1
+       RETURNING audit.candidate_review_audit_id`,
+      [now, surface.readDeadlinePolicy.days],
+    );
+    return result.rowCount ?? 0;
   }
   const result = await client.query(
     `DELETE FROM ${table} audit
