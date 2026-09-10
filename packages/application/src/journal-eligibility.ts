@@ -2,12 +2,14 @@ import {
   asConversationEventRevisionId,
   asDailySessionId,
   asEntityId,
+  asMemoryCandidateId,
   asMemoryClaimId,
   asUserId,
   asWorkflowCommandId,
   type ConversationEventRevisionId,
   type DailySessionId,
   type EntityId,
+  type MemoryCandidateId,
   type MemoryClaimId,
   type OutboxEventId,
   type UserId,
@@ -138,7 +140,14 @@ export type JournalEligibilityRepository = Readonly<{
 export type LeasedOutboxEvent = Readonly<{
   outboxEventId: OutboxEventId;
   workflowCommandId: WorkflowCommandId;
-  aggregateId: DailySessionId | UserId | EntityId | MemoryClaimId | ConversationEventRevisionId;
+  aggregateId:
+    | DailySessionId
+    | UserId
+    | EntityId
+    | MemoryClaimId
+    | MemoryCandidateId
+    | WorkflowCommandId
+    | ConversationEventRevisionId;
   aggregateRevision: number;
   eventType: string;
   payload: Readonly<Record<string, unknown>>;
@@ -302,7 +311,9 @@ export type WorkflowStarter = (input: {
     | "entity_identity_revalidation_requested"
     | "model_role_requested"
     | "episode_build_requested"
-    | "episode_maintenance_requested";
+    | "episode_maintenance_requested"
+    | "predicate_registry_released"
+    | "candidate_remap_requested";
   modelRole?: string;
   generationCommandId?: string;
   modelRunAttemptId?: string;
@@ -316,6 +327,8 @@ export type WorkflowStarter = (input: {
     | UserId
     | EntityId
     | MemoryClaimId
+    | MemoryCandidateId
+    | WorkflowCommandId
     | ConversationEventRevisionId;
   sourceRevision: number;
   policyVersion: string;
