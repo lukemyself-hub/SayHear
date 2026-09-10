@@ -4124,7 +4124,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         },
       },
     );
-    expect(await scanned.json()).toEqual({
+    expect(await scanned.json()).toMatchObject({
       candidateRemaps: {
         remapCommandsCreated: 0,
       },

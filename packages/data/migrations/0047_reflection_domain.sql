@@ -414,6 +414,7 @@ ALTER TABLE workflow_commands
       'daily_consolidation', 'weekly_consolidation', 'memory_sweeper',
       'memory_correction_followup', 'entity_identity_revalidation',
       'model_role', 'episode_build', 'episode_maintenance',
+      'candidate_remap', 'predicate_registry_release',
       'reflection_daily', 'reflection_weekly', 'reflection_maintenance'
     )
   );
@@ -431,6 +432,7 @@ ALTER TABLE outbox_events
       'memory_sweeper_requested', 'memory_correction_followup_requested',
       'entity_identity_revalidation_requested', 'model_role_requested',
       'episode_build_requested', 'episode_maintenance_requested',
+      'predicate_registry_released', 'candidate_remap_requested',
       'reflection_daily_requested', 'reflection_weekly_requested',
       'reflection_maintenance_requested'
     )
