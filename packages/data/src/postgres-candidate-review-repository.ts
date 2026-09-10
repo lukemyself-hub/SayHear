@@ -265,6 +265,46 @@ export class PostgresCandidateReviewRepository
     }
   }
 
+  public async readCandidateEvidenceExcerpts(
+    userId: UserId,
+    candidateId: MemoryCandidateId,
+  ): Promise<
+    readonly { revisionId: string; actor: string; locale: string; text: string }[]
+  > {
+    const result = await this.pool.query<{
+      revision_id: string;
+      actor: string;
+      locale: string;
+      text: string;
+    }>(
+      `SELECT revision.conversation_event_revision_id AS revision_id,
+              event.actor AS actor,
+              revision.locale AS locale,
+              revision.canonical_text AS text
+        FROM memory_candidate_evidence_links link
+        INNER JOIN evidence_items item
+          ON item.evidence_item_id = link.evidence_item_id
+         AND item.user_id = link.user_id
+        INNER JOIN conversation_event_revisions revision
+          ON revision.conversation_event_revision_id = item.source_revision_id
+         AND revision.user_id = item.user_id
+        INNER JOIN conversation_events event
+          ON event.conversation_event_id = revision.conversation_event_id
+         AND event.user_id = revision.user_id
+        WHERE link.user_id = $1
+          AND link.memory_candidate_id = $2
+          AND revision.content_purged_at IS NULL
+        ORDER BY event.sequence_no, revision.created_at`,
+      [userId, candidateId],
+    );
+    return result.rows.map((row) => ({
+      revisionId: row.revision_id,
+      actor: row.actor,
+      locale: row.locale,
+      text: row.text,
+    }));
+  }
+
   public async findCurrentEntityLabels(
     userId: UserId,
     entityIds: readonly string[],

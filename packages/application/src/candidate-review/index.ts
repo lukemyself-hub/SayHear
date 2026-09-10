@@ -9,6 +9,7 @@ export {
   REVIEW_STEP_UP_MAX_AGE_MS,
   CandidateReviewAuthError,
   type ApproveOutcome,
+  type CandidateEvidenceExcerpt,
   type CandidateReviewAuthDenialReason,
   type CandidateReviewCommandResult,
   type CandidateReviewErrorCode,
@@ -36,6 +37,15 @@ export {
   type CandidateReviewService,
   type RemapOutcome,
 } from "./review";
+export {
+  createCandidateReviewPortalService,
+  sortPortalEntriesByDeadlinePressure,
+  CANDIDATE_REVIEW_PORTAL_POLICY_VERSION,
+  type CandidateReviewPortalRepository,
+  type CandidateReviewPortalService,
+  type PortalQueueEntry,
+  type PortalQueueViews,
+} from "./portal";
 export {
   createPredicateGovernanceService,
   type CancelOutcome,

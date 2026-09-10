@@ -49,6 +49,7 @@ export default async function InternalPage() {
       <nav className="internalNav" aria-label="Internal tools">
         <a href="/internal/context-inspector">Open Context Inspector →</a>
         <a href="/internal/reflection-inspector">Open Reflection Inspector →</a>
+        <a href="/internal/candidate-review">Open Candidate Review →</a>
       </nav>
       <JournalCard currentJournal={currentJournal} latestNotice={latestJournalNotice} />
       <TextConversation

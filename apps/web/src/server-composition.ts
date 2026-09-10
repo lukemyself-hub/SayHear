@@ -50,6 +50,7 @@ import {
   createReflectionSchedulerScanService,
   asMemoryCandidateId,
   createMemoryClaimService,
+  createCandidateReviewPortalService,
   createCandidateReviewService,
   createPredicateGovernanceService,
   CANDIDATE_REVIEW_POLICY_VERSION,
@@ -433,6 +434,10 @@ export function createServerComposition() {
     repository: candidateReviewRepository,
     clock: configuration.clock,
     registryVersion: () => predicateRegistryLookup.registryVersion(),
+  });
+  const candidateReviewPortalService = createCandidateReviewPortalService({
+    repository: candidateReviewRepository,
+    clock: configuration.clock,
   });
   const candidateReviewWorkflowRepository: CandidateReviewWorkflowRepository = {
     readRemapCommand: (input) =>
@@ -857,6 +862,7 @@ export function createServerComposition() {
     memoryConsolidationEntrypointDependencies,
     candidateReviewRepository,
     candidateReviewService,
+    candidateReviewPortalService,
     predicateGovernanceService,
     candidateReviewWorkflowRepository,
     episodeRepository,
