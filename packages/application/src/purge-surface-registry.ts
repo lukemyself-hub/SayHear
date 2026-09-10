@@ -639,6 +639,65 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     clearOrder: 57,
   }),
   tableSurface({
+    table: "open_loop_versions",
+    indexes: [
+      "open_loop_versions_supersedes_once_idx",
+      "open_loop_versions_loop_idx",
+      "open_loop_versions_owner_status_idx",
+      "open_loop_versions_expiry_idx",
+    ],
+    ownerResolution: directUser,
+    disposition: "content_purge",
+    privateContentFields: [
+      "localized_summary",
+      "canonical_claim_key",
+      "expected_start_at",
+      "expected_end_at",
+      "timezone",
+    ],
+    clearHandler: "purge_open_loop_versions",
+    verifyHandler: "verify_open_loop_versions_purged",
+    introducedBySchemaOrIntegration: "0049_open_loop_domain.sql",
+    clearOrder: 58,
+  }),
+  tableSurface({
+    table: "open_loops",
+    ownerResolution: directUser,
+    disposition: "content_purge",
+    privateContentFields: ["open_loop_kind", "current_version_id"],
+    clearHandler: "purge_open_loops",
+    verifyHandler: "verify_open_loops_purged",
+    introducedBySchemaOrIntegration: "0049_open_loop_domain.sql",
+    clearOrder: 59,
+  }),
+  tableSurface({
+    table: "open_loop_closure_audits",
+    indexes: [
+      "open_loop_closure_audits_target_idx",
+      "open_loop_closure_audits_source_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0049_open_loop_domain.sql",
+    clearOrder: 60,
+  }),
+  tableSurface({
+    table: "open_loop_run_outcomes",
+    indexes: ["open_loop_run_outcomes_pending_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0049_open_loop_domain.sql",
+    clearOrder: 61,
+  }),
+  tableSurface({
+    table: "open_loop_expiry_runs",
+    indexes: ["open_loop_expiry_runs_user_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0049_open_loop_domain.sql",
+    clearOrder: 62,
+  }),
+  tableSurface({
     table: "compiled_contexts",
     privateContentFields: [
       "content_hmac",
@@ -1446,6 +1505,11 @@ reflection_atomic_propositions|reflection_atomic_proposition_id,reflection_state
 reflection_statement_evidence_links|reflection_statement_evidence_link_id,reflection_atomic_proposition_id,user_id,evidence_item_id,created_at
 reflection_candidate_proposals|reflection_candidate_proposal_id,reflection_version_id,user_id,memory_candidate_id,dedupe_fingerprint,dedupe_fingerprint_key_version,outcome,reason_code,created_at
 reflection_runs|reflection_run_id,user_id,scope_type,daily_session_id,week_window_id,window_start_date,window_end_date,source_revision,source_digest,claim_baseline_digest,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,statement_count,candidate_count,degraded_episode_reason,error_code,created_at,updated_at,content_purged_at
+open_loop_closure_audits|open_loop_closure_audit_id,user_id,source_event_revision_id,target_open_loop_id,proposed_status,resolver_policy_version,disposition,reason_code,created_at
+open_loop_expiry_runs|open_loop_expiry_run_id,user_id,open_loop_id,expiring_version_id,policy_version,terminal_effective_at,terminal_processed_at,created_at
+open_loop_run_outcomes|open_loop_run_outcome_id,user_id,source_event_revision_id,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,formed_count,closed_count,suppressed_count,skipped_count,error_code,created_at,updated_at
+open_loop_versions|open_loop_version_id,open_loop_id,user_id,revision,open_loop_kind,source_evidence_item_id,source_event_revision_id,source_claim_version_id,source_episode_version_id,canonical_claim_key,localized_summary,expected_start_at,expected_end_at,time_precision,timezone,followup_eligible_from_at,expires_at,expiry_source,status,closure_event_revision_id,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,terminal_effective_at,terminal_processed_at,content_expires_at,created_at,content_purged_at
+open_loops|open_loop_id,user_id,open_loop_kind,current_version_id,created_at,deleted_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,label,content,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,episode_kind_id,current_version_id,status,created_at,deleted_at
@@ -1579,6 +1643,11 @@ reflection_atomic_propositions|reflection_atomic_proposition_id,reflection_state
 reflection_statement_evidence_links|reflection_statement_evidence_link_id,reflection_atomic_proposition_id,user_id,evidence_item_id,created_at
 reflection_candidate_proposals|reflection_candidate_proposal_id,reflection_version_id,user_id,outcome,created_at
 reflection_runs|reflection_run_id,user_id,scope_type,daily_session_id,week_window_id,window_start_date,window_end_date,source_revision,source_digest,claim_baseline_digest,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,statement_count,candidate_count,degraded_episode_reason,error_code,created_at,updated_at,content_purged_at
+open_loop_closure_audits|open_loop_closure_audit_id,user_id,source_event_revision_id,target_open_loop_id,proposed_status,resolver_policy_version,disposition,reason_code,created_at
+open_loop_expiry_runs|open_loop_expiry_run_id,user_id,open_loop_id,expiring_version_id,policy_version,terminal_effective_at,terminal_processed_at,created_at
+open_loop_run_outcomes|open_loop_run_outcome_id,user_id,source_event_revision_id,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,formed_count,closed_count,suppressed_count,skipped_count,error_code,created_at,updated_at
+open_loop_versions|open_loop_version_id,open_loop_id,user_id,revision,open_loop_kind,source_evidence_item_id,source_event_revision_id,source_claim_version_id,source_episode_version_id,time_precision,followup_eligible_from_at,expires_at,expiry_source,status,closure_event_revision_id,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,terminal_effective_at,terminal_processed_at,content_expires_at,created_at,content_purged_at
+open_loops|open_loop_id,user_id,created_at,deleted_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,status,created_at,deleted_at
@@ -1678,11 +1747,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:969af1b6:1337",
-    constraintManifestHash: "fnv1a32:2d65a7a5:712",
+    columnManifestHash: "fnv1a32:aacb4547:1405",
+    constraintManifestHash: "fnv1a32:a5c2f33d:747",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:03faf20b:389",
-    indexManifestHash: "fnv1a32:0ecf04ff:114",
+    foreignKeyManifestHash: "fnv1a32:be7e9724:410",
+    indexManifestHash: "fnv1a32:e1d5e2cc:122",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,

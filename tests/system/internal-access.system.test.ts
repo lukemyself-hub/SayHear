@@ -184,6 +184,11 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         episode_candidates,
         episode_versions,
         episodes,
+        open_loop_closure_audits,
+        open_loop_expiry_runs,
+        open_loop_run_outcomes,
+        open_loop_versions,
+        open_loops,
         entity_identity_revalidation_runs,
         journal_identity_review_fences,
         journal_statement_entity_links,
@@ -620,7 +625,8 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     // tables. The 1A.2 foundations DO exist now, and the 1A.3a substrates
     // exist (#110 Entity identity, #112 Memory Claim admission), so the scope
     // guard subtracts those known substrate tables before matching future
-    // vertical prefixes.
+    // vertical prefixes. Episode (#197), Reflection (#199) and Open Loop
+    // (#204) are accepted 1A.3b deliverables and are not guarded here.
     const memoryClaimSubstrate = new Set([
       "memory_claims",
       "memory_claim_versions",
@@ -648,7 +654,6 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
             AND table_name ILIKE ANY(ARRAY[
               'memory%',
               'profile%',
-              'open_loop%',
               'replay%',
               'voice%',
               'audio%',

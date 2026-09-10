@@ -12,9 +12,9 @@ import { buildLegacyRegistryOverlay } from "./fixtures";
 const v1 = loadPredicateRegistrySnapshot(1);
 const v2 = loadPredicateRegistrySnapshot(2);
 const V1_FINGERPRINT =
-  "12cd39aab5a954b525c41c598ad2a18561e166a5cc0d50d2f4d7f38bf015d931";
+  "cbb311871c8bf3194f959644f96d548c54518867f7163e8ebd6c915c1097081b";
 const V2_FINGERPRINT =
-  "6186cc1b27c421c143f8a56903e4fd5a0b794d0c61daa730615f62e56bd0f930";
+  "9f4c402ced10e34f6a204e37ebda8edc268fcb93d7e51358479e14c5cd7bcc45";
 
 function localization(
   version: typeof v1 | typeof v2,

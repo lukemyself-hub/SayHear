@@ -387,7 +387,8 @@ export function buildRegistryV1Entries(): readonly PredicateRegistryEntry[] {
 
     // ── §3 计划与人生阶段（3 条）──────────────────────────────────────
     {
-      // 只承接周以上跨度主动计划；几天内的待办归 Open Loop、旅行归 Episode；
+      // 只承接周以上跨度主动计划；几天内待办不是 Open Loop（任务语义按
+      // Open Loop 形成门禁拒绝，SPEC 6.1/Issue #204）、旅行归 Episode；
       // 明确排除在 Person Portrait 之外（ADR-0111 口径，#93 §3/§17）。
       predicateId: PREDICATE_IDS.lifeChange,
       registryVersion: 1,

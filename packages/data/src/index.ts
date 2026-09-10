@@ -67,6 +67,11 @@ export {
 export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";
 export { PostgresEpisodeRepository } from "./postgres-episode-repository";
 export {
+  PostgresOpenLoopRepository,
+  type OpenLoopClosureEffect,
+  type OpenLoopFormationEffect,
+} from "./postgres-open-loop-repository";
+export {
   PostgresCandidateReviewRepository,
   insertCandidateRemapCommandWithin,
   insertRegistryReleaseEventWithin,

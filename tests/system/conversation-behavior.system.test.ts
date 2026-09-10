@@ -114,6 +114,11 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
         episode_candidates,
         episode_versions,
         episodes,
+        open_loop_closure_audits,
+        open_loop_expiry_runs,
+        open_loop_run_outcomes,
+        open_loop_versions,
+        open_loops,
         entity_identity_revalidation_runs,
         journal_identity_review_fences,
         journal_statement_entity_links,
@@ -741,7 +746,9 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
     // and the 1A.3a substrates exist (#110 Entity identity, #112 Memory Claim
     // admission) — but an in-flight active conversation must not create any
     // eligibility rows — eligibility fires only after a deterministic
-    // Continuous Exchange End.
+    // Continuous Exchange End. Episode (#197), Reflection (#199) and Open
+    // Loop (#204) are accepted 1A.3b deliverables with their own tables, so
+    // only the still-future verticals are guarded here.
     const memoryClaimSubstrate = new Set([
       "memory_claims",
       "memory_claim_versions",
@@ -769,7 +776,6 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
             AND table_name ILIKE ANY(ARRAY[
               'memory%',
               'profile%',
-              'open_loop%',
               'replay%',
               'voice%',
               'audio%',

@@ -826,13 +826,13 @@ export function buildLocalizationsV1(): readonly PredicateLocalization[] {
       locale: "zh",
       label: "人生阶段计划",
       definition:
-        "周以上跨度的主动人生计划。scope=封闭类别（搬家/换工作/深造备考/备婚/创业/跨国迁移）；value=用户原意的客观简述+可选目标时间并保留精度。同类别单值，变化开新版本；几天内待办归 Open Loop，旅行归 Episode，禁入 Portrait。",
+        "周以上跨度的主动人生计划。scope=封闭类别（搬家/换工作/深造备考/备婚/创业/跨国迁移）；value=用户原意的客观简述+可选目标时间并保留精度。同类别单值，变化开新版本；几天内待办不是 Open Loop（有日期的任务按 Open Loop 形成门禁拒绝），旅行归 Episode，禁入 Portrait。",
       positiveExamples: [
         "我们定好十一月初搬家，新房在城西已经签了。",
         "我决定辞职创业， 注册流程这周开始办。",
       ],
       negativeExamples: [
-        "记得后天下午取护照然后去面签。——几天内的待办归 Open Loop，不是人生计划",
+        "记得后天下午取护照然后去面签。——几天内的待办不是 Open Loop（任务语义按门禁拒绝），也不是人生计划",
         "五一去云南玩七天早订好了。——旅行归 Episode，不入本条目",
       ],
       lexicalSurfaces: [
@@ -850,13 +850,13 @@ export function buildLocalizationsV1(): readonly PredicateLocalization[] {
       locale: "en",
       label: "Life-stage plan",
       definition:
-        "Deliberate life plans spanning at least a week. Scope is a closed category (moving house, job change, exam prep, wedding prep, starting a business, relocating abroad); value is an objective restatement preserving any stated precision. Short-horizon to-dos are Open Loops; trips are Episodes; never enters Portrait.",
+        "Deliberate life plans spanning at least a week. Scope is a closed category (moving house, job change, exam prep, wedding prep, starting a business, relocating abroad); value is an objective restatement preserving any stated precision. Dated short-horizon to-dos are not Open Loops (rejected by the Open Loop formation gate); trips are Episodes; never enters Portrait.",
       positiveExamples: [
         "We're moving house in early November — lease signed in the west end.",
         "I've decided to quit and start my own company; paperwork begins this week.",
       ],
       negativeExamples: [
-        "Reminder: pick up my passport Tuesday for the visa interview. — a short-horizon to-do is an Open Loop",
+        "Reminder: pick up my passport Tuesday for the visa interview. — a dated to-do is not an Open Loop (task semantics rejected), not a life-stage plan",
         "Booked seven days in Yunnan for May. — trips are Episodes, not life-stage plans",
       ],
       lexicalSurfaces: [
