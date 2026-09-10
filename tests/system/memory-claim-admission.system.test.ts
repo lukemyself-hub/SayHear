@@ -193,6 +193,8 @@ describe("Memory Claim admission system seam", () => {
     clockNowMs = BASE_TIME;
     await database.pool.query(`
       TRUNCATE TABLE
+        narrative_validator_results,
+        narrative_validator_requests,
         episode_impact_reviews,
         episode_build_runs,
         episode_version_entity_links,
@@ -424,7 +426,9 @@ describe("Memory Claim admission system seam", () => {
 
     // Mirror the owner Full Purge result: links and proposal rows are gone,
     // the logical Claim remains as a tombstone, and the immutable version has
-    // its content cleared.
+    // its content cleared to the full content-free shape enforced by the
+    // 0044 purge face (same shape as the purge_memory_claim_versions
+    // adapter).
     await database.pool.query(
       `DELETE FROM claim_evidence_links
        WHERE user_id = $1 AND memory_claim_version_id = $2`,
@@ -432,7 +436,11 @@ describe("Memory Claim admission system seam", () => {
     );
     await database.pool.query(
       `UPDATE memory_claim_versions
-       SET content_purged_at = $2, typed_value = NULL
+       SET content_purged_at = $2, typed_value = NULL,
+           temporal_status = NULL, valid_from = NULL,
+           valid_from_precision = NULL, valid_to = NULL,
+           valid_to_precision = NULL, subject_entity_version_id = NULL,
+           object_entity_version_id = NULL
        WHERE user_id = $1 AND memory_claim_version_id = $3`,
       [OWNER, clock(), firstVersionId],
     );

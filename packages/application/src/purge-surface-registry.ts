@@ -516,6 +516,37 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     clearOrder: 48,
   }),
   tableSurface({
+    table: "narrative_validator_results",
+    indexes: ["narrative_validator_results_owner_idx"],
+    ownerResolution: directUser,
+    disposition: "content_purge",
+    privateContentFields: [
+      "blocking_findings",
+      "advisory_findings",
+      "coverage",
+    ],
+    clearHandler: "purge_narrative_validator_results",
+    verifyHandler: "verify_narrative_validator_results_purged",
+    introducedBySchemaOrIntegration: "0046_narrative_validation.sql",
+    clearOrder: 49,
+  }),
+  tableSurface({
+    table: "narrative_validator_requests",
+    indexes: ["narrative_validator_requests_owner_idx"],
+    ownerResolution: directUser,
+    disposition: "content_purge",
+    privateContentFields: [
+      "draft_text",
+      "generator_manifest",
+      "source_manifest",
+      "planned_coverage",
+    ],
+    clearHandler: "purge_narrative_validator_requests",
+    verifyHandler: "verify_narrative_validator_requests_purged",
+    introducedBySchemaOrIntegration: "0046_narrative_validation.sql",
+    clearOrder: 50,
+  }),
+  tableSurface({
     table: "compiled_contexts",
     privateContentFields: [
       "content_hmac",
@@ -1282,6 +1313,8 @@ episode_candidate_entity_links|episode_candidate_entity_link_id,episode_candidat
 episode_candidates|episode_candidate_id,user_id,daily_session_id,source_revision,proposed_episode_kind_id,proposed_existing_episode_id,proposed_label,proposed_temporal_anchor,proposed_phase,explicit_continuity_span,resolution_status,status,admission_reason_code,policy_version,generation_command_id,model_run_attempt_id,predecessor_candidate_id,successor_trigger,material_change_reason_codes,dedupe_fingerprint,dedupe_fingerprint_key_version,reproposal_policy,disposition_reason_code,disposition_policy_version,decided_at,terminal_effective_at,terminal_content_expires_at,created_at,content_purged_at
 episode_evidence_links|episode_evidence_link_id,episode_version_id,user_id,evidence_item_id,created_at
 episode_impact_reviews|episode_impact_review_id,user_id,episode_version_id,trigger_type,trigger_ref_id,outcome,policy_version,created_at,decided_at
+narrative_validator_requests|narrative_validator_request_id,user_id,artifact_kind,draft_ref,draft_locale,draft_text,generator_manifest,source_manifest,planned_coverage,request_fingerprint,validation_policy_version,prompt_version,schema_version,created_at,content_purged_at
+narrative_validator_results|narrative_validator_result_id,narrative_validator_request_id,user_id,generation_command_id,model_run_attempt_id,verdict,blocking_findings,advisory_findings,coverage,validation_policy_version,schema_version,prompt_version,created_at,content_purged_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,label,content,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,episode_kind_id,current_version_id,status,created_at,deleted_at
@@ -1404,6 +1437,8 @@ episode_candidate_entity_links|episode_candidate_entity_link_id,episode_candidat
 episode_candidates|episode_candidate_id,user_id,daily_session_id,source_revision,proposed_episode_kind_id,resolution_status,status,policy_version,generation_command_id,model_run_attempt_id,predecessor_candidate_id,successor_trigger,material_change_reason_codes,reproposal_policy,disposition_policy_version,decided_at,terminal_effective_at,terminal_content_expires_at,created_at,content_purged_at
 episode_evidence_links|episode_evidence_link_id,episode_version_id,user_id,evidence_item_id,created_at
 episode_impact_reviews|episode_impact_review_id,user_id,episode_version_id,trigger_type,outcome,policy_version,created_at,decided_at
+narrative_validator_requests|narrative_validator_request_id,user_id,artifact_kind,draft_ref,draft_locale,request_fingerprint,validation_policy_version,prompt_version,schema_version,created_at,content_purged_at
+narrative_validator_results|narrative_validator_result_id,narrative_validator_request_id,user_id,generation_command_id,model_run_attempt_id,verdict,validation_policy_version,schema_version,prompt_version,created_at,content_purged_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,status,created_at,deleted_at
@@ -1503,11 +1538,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:194fcdbf:1201",
-    constraintManifestHash: "fnv1a32:9286a1f0:625",
+    columnManifestHash: "fnv1a32:4e551e84:1230",
+    constraintManifestHash: "fnv1a32:63f1359c:639",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:b5aff687:349",
-    indexManifestHash: "fnv1a32:334c5775:91",
+    foreignKeyManifestHash: "fnv1a32:508148cd:354",
+    indexManifestHash: "fnv1a32:be26d059:93",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
