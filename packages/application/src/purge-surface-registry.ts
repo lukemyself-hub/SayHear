@@ -517,7 +517,10 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
   }),
   tableSurface({
     table: "narrative_validator_results",
-    indexes: ["narrative_validator_results_owner_idx"],
+    indexes: [
+      "narrative_validator_results_owner_idx",
+      "narrative_validator_results_owner_boundary_idx",
+    ],
     ownerResolution: directUser,
     disposition: "content_purge",
     privateContentFields: [
@@ -532,7 +535,10 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
   }),
   tableSurface({
     table: "narrative_validator_requests",
-    indexes: ["narrative_validator_requests_owner_idx"],
+    indexes: [
+      "narrative_validator_requests_owner_idx",
+      "narrative_validator_requests_owner_boundary_idx",
+    ],
     ownerResolution: directUser,
     disposition: "content_purge",
     privateContentFields: [
@@ -545,6 +551,92 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     verifyHandler: "verify_narrative_validator_requests_purged",
     introducedBySchemaOrIntegration: "0046_narrative_validation.sql",
     clearOrder: 50,
+  }),
+  tableSurface({
+    table: "reflection_versions",
+    indexes: [
+      "reflection_versions_daily_identity_idx",
+      "reflection_versions_weekly_identity_idx",
+      "reflection_versions_supersedes_once_idx",
+      "reflection_versions_reflection_idx",
+      "reflection_versions_owner_status_idx",
+      "reflection_versions_owner_boundary_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: ["statements", "candidate_proposals"],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 51,
+  }),
+  tableSurface({
+    table: "reflections",
+    indexes: [
+      "reflections_daily_session_idx",
+      "reflections_week_window_idx",
+      "reflections_current_version_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [
+      "daily_session_id",
+      "week_window_id",
+      "week_identifier",
+      "window_start_date",
+      "window_end_date",
+      "current_version_id",
+    ],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 52,
+  }),
+  tableSurface({
+    table: "reflection_statements",
+    indexes: ["reflection_statements_version_idx"],
+    ownerResolution: directUser,
+    privateContentFields: ["statement_text"],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 53,
+  }),
+  tableSurface({
+    table: "reflection_atomic_propositions",
+    indexes: ["reflection_atomic_propositions_statement_idx"],
+    ownerResolution: directUser,
+    privateContentFields: ["normalized_proposition", "baseline_claim_ids"],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 54,
+  }),
+  tableSurface({
+    table: "reflection_statement_evidence_links",
+    indexes: [
+      "reflection_statement_evidence_links_proposition_idx",
+      "reflection_statement_evidence_links_evidence_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 55,
+  }),
+  tableSurface({
+    table: "reflection_candidate_proposals",
+    indexes: ["reflection_candidate_proposals_version_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [
+      "memory_candidate_id",
+      "dedupe_fingerprint",
+      "dedupe_fingerprint_key_version",
+      "reason_code",
+    ],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 56,
+  }),
+  tableSurface({
+    table: "reflection_runs",
+    indexes: [
+      "reflection_runs_daily_identity_idx",
+      "reflection_runs_weekly_identity_idx",
+      "reflection_runs_pending_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0047_reflection_domain.sql",
+    clearOrder: 57,
   }),
   tableSurface({
     table: "compiled_contexts",
@@ -1315,6 +1407,13 @@ episode_evidence_links|episode_evidence_link_id,episode_version_id,user_id,evide
 episode_impact_reviews|episode_impact_review_id,user_id,episode_version_id,trigger_type,trigger_ref_id,outcome,policy_version,created_at,decided_at
 narrative_validator_requests|narrative_validator_request_id,user_id,artifact_kind,draft_ref,draft_locale,draft_text,generator_manifest,source_manifest,planned_coverage,request_fingerprint,validation_policy_version,prompt_version,schema_version,created_at,content_purged_at
 narrative_validator_results|narrative_validator_result_id,narrative_validator_request_id,user_id,generation_command_id,model_run_attempt_id,verdict,blocking_findings,advisory_findings,coverage,validation_policy_version,schema_version,prompt_version,created_at,content_purged_at
+reflections|reflection_id,user_id,scope_type,daily_session_id,week_window_id,week_identifier,window_start_date,window_end_date,current_version_id,created_at,deleted_at,content_purged_at
+reflection_versions|reflection_version_id,reflection_id,user_id,revision,scope_type,source_revision,source_digest,claim_baseline_digest,schedule_policy_version,policy_version,prompt_version,schema_version,locale,status,degraded_episode_reason,statements,candidate_proposals,generation_command_id,authoritative_model_attempt_id,validator_request_id,validator_result_id,committed_at,status_effective_at,content_expires_at,supersedes_version_id,created_at,content_purged_at
+reflection_statements|reflection_statement_id,reflection_version_id,user_id,statement_index,statement_kind,statement_text,content_purged_at
+reflection_atomic_propositions|reflection_atomic_proposition_id,reflection_statement_id,user_id,proposition_index,normalized_proposition,proposition_kind,epistemic_rendering,baseline_claim_ids,content_purged_at
+reflection_statement_evidence_links|reflection_statement_evidence_link_id,reflection_atomic_proposition_id,user_id,evidence_item_id,created_at
+reflection_candidate_proposals|reflection_candidate_proposal_id,reflection_version_id,user_id,memory_candidate_id,dedupe_fingerprint,dedupe_fingerprint_key_version,outcome,reason_code,created_at
+reflection_runs|reflection_run_id,user_id,scope_type,daily_session_id,week_window_id,window_start_date,window_end_date,source_revision,source_digest,claim_baseline_digest,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,statement_count,candidate_count,degraded_episode_reason,error_code,created_at,updated_at,content_purged_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,label,content,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,episode_kind_id,current_version_id,status,created_at,deleted_at
@@ -1439,6 +1538,13 @@ episode_evidence_links|episode_evidence_link_id,episode_version_id,user_id,evide
 episode_impact_reviews|episode_impact_review_id,user_id,episode_version_id,trigger_type,outcome,policy_version,created_at,decided_at
 narrative_validator_requests|narrative_validator_request_id,user_id,artifact_kind,draft_ref,draft_locale,request_fingerprint,validation_policy_version,prompt_version,schema_version,created_at,content_purged_at
 narrative_validator_results|narrative_validator_result_id,narrative_validator_request_id,user_id,generation_command_id,model_run_attempt_id,verdict,validation_policy_version,schema_version,prompt_version,created_at,content_purged_at
+reflections|reflection_id,user_id,scope_type,created_at,deleted_at,content_purged_at
+reflection_versions|reflection_version_id,reflection_id,user_id,revision,scope_type,source_revision,source_digest,claim_baseline_digest,schedule_policy_version,policy_version,prompt_version,schema_version,locale,status,degraded_episode_reason,generation_command_id,authoritative_model_attempt_id,validator_request_id,validator_result_id,committed_at,status_effective_at,content_expires_at,supersedes_version_id,created_at,content_purged_at
+reflection_statements|reflection_statement_id,reflection_version_id,user_id,statement_index,statement_kind,content_purged_at
+reflection_atomic_propositions|reflection_atomic_proposition_id,reflection_statement_id,user_id,proposition_index,proposition_kind,epistemic_rendering,content_purged_at
+reflection_statement_evidence_links|reflection_statement_evidence_link_id,reflection_atomic_proposition_id,user_id,evidence_item_id,created_at
+reflection_candidate_proposals|reflection_candidate_proposal_id,reflection_version_id,user_id,outcome,created_at
+reflection_runs|reflection_run_id,user_id,scope_type,daily_session_id,week_window_id,window_start_date,window_end_date,source_revision,source_digest,claim_baseline_digest,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,statement_count,candidate_count,degraded_episode_reason,error_code,created_at,updated_at,content_purged_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,status,created_at,deleted_at
@@ -1538,11 +1644,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:4e551e84:1230",
-    constraintManifestHash: "fnv1a32:63f1359c:639",
+    columnManifestHash: "fnv1a32:f99ff140:1322",
+    constraintManifestHash: "fnv1a32:6293968c:702",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:508148cd:354",
-    indexManifestHash: "fnv1a32:be26d059:93",
+    foreignKeyManifestHash: "fnv1a32:0a87bc74:382",
+    indexManifestHash: "fnv1a32:3a2c6a90:112",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,

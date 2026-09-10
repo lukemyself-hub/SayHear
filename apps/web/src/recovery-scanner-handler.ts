@@ -22,6 +22,15 @@ export function createRecoveryScannerHandler(dependencies: {
   episodeBuilderScanService?: {
     scanPending(): Promise<Readonly<{ buildsQueued: number; maintenanceQueued: number }>>;
   };
+  reflectionSchedulerScanService?: {
+    scanPending(): Promise<
+      Readonly<{
+        dailyQueued: number;
+        weeklyQueued: number;
+        maintenanceQueued: number;
+      }>
+    >;
+  };
 }): (request: Request) => Promise<Response> {
   return async (request) => {
     if (
@@ -66,6 +75,11 @@ export function createRecoveryScannerHandler(dependencies: {
     const episode = dependencies.episodeBuilderScanService
       ? await dependencies.episodeBuilderScanService.scanPending()
       : { buildsQueued: 0, maintenanceQueued: 0 };
+    // Daily / Weekly Reflection scheduling (issue #199): idempotent
+    // reflection build + maintenance commands, dispatched below.
+    const reflection = dependencies.reflectionSchedulerScanService
+      ? await dependencies.reflectionSchedulerScanService.scanPending()
+      : { dailyQueued: 0, weeklyQueued: 0, maintenanceQueued: 0 };
     const outbox = await dependencies.outboxDispatcherService.dispatchPending();
 
     return Response.json({
@@ -77,6 +91,7 @@ export function createRecoveryScannerHandler(dependencies: {
       purge,
       consolidation,
       episode,
+      reflection,
       outbox,
     });
   };

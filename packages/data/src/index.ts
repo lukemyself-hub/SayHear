@@ -67,3 +67,9 @@ export {
 export { PostgresBioInspectionRepository } from "./postgres-bio-inspection-repository";
 export { PostgresEpisodeRepository } from "./postgres-episode-repository";
 export { PostgresNarrativeValidationRepository } from "./postgres-narrative-validation-repository";
+export {
+  insertMemoryCandidateWithin,
+  insertCandidateEvidenceLinksWithin,
+  findTerminalCandidateByFingerprintWithin,
+} from "./postgres-memory-claim-repository";
+export { PostgresReflectionRepository } from "./postgres-reflection-repository";

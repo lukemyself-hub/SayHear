@@ -982,6 +982,13 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         model_run_attempts,
         generation_commands,
         continuous_exchange_inactivity_evaluations,
+        reflection_runs,
+        reflection_candidate_proposals,
+        reflection_statement_evidence_links,
+        reflection_atomic_propositions,
+        reflection_statements,
+        reflection_versions,
+        reflections,
         conversation_event_revisions,
         conversation_events,
         interaction_turns,
@@ -1965,8 +1972,11 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     if (first.outcome !== "started" || second.outcome !== "started") {
       throw new Error("both starts must converge");
     }
-    expect(second.created).toBe(false);
-    expect(second.order.ownerPurgeOrderId).toBe(first.order.ownerPurgeOrderId);
+    // The race winner is scheduling-dependent; the contract is that both
+    // calls converge on ONE order with exactly one created=true (issue #27).
+    const [winner, loser] = first.created ? [first, second] : [second, first];
+    expect(loser.created).toBe(false);
+    expect(loser.order.ownerPurgeOrderId).toBe(winner.order.ownerPurgeOrderId);
 
     expect(await countRows("SELECT 1 FROM owner_purge_orders")).toBe(1);
     expect(

@@ -258,6 +258,7 @@ export type NarrativeValidationRepository = Readonly<{
     request: NarrativeValidationRequest;
     requestFingerprint: string;
     expectedDataEpoch: number;
+    now: Date;
   }): Promise<
     | Readonly<{ outcome: "created"; request: NarrativeValidationRecord }>
     | Readonly<{ outcome: "reused"; request: NarrativeValidationRecord }>

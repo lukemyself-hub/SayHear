@@ -1,0 +1,65 @@
+import { randomUUID } from "node:crypto";
+
+import {
+  runReflectionDailyBuild,
+  type ReflectionBuildEntrypointResult,
+} from "@sayhear/application";
+import { createServerComposition } from "../server-composition";
+
+/**
+ * Daily Reflection workflow (issue #199, SPEC 5.3): one `reflection_daily`
+ * command freezes the session input, runs the `reflection.daily` role,
+ * validates through the shared `narrative.validate` role, and commits the
+ * fenced current version plus `propose_new` Candidates. Only allowlisted
+ * fields cross Workflow history.
+ */
+export async function reflectionDailyWorkflow(input: {
+  workflowCommandId: string;
+  subjectId: string;
+  sourceRevision: number;
+  claimBaselineDigest: string;
+  policyVersion: string;
+  expectedDataEpoch: number;
+}): Promise<ReflectionBuildEntrypointResult> {
+  "use workflow";
+  return await runReflectionDailyStep(input);
+}
+
+async function runReflectionDailyStep(input: {
+  workflowCommandId: string;
+  subjectId: string;
+  sourceRevision: number;
+  claimBaselineDigest: string;
+  policyVersion: string;
+  expectedDataEpoch: number;
+}): Promise<ReflectionBuildEntrypointResult> {
+  "use step";
+  const composition = await createServerComposition();
+  const policyVersion =
+    composition.reflectionReadinessPolicyVersion ?? input.policyVersion;
+  if (policyVersion !== input.policyVersion) {
+    throw new Error(
+      `Reflection daily command policy ${input.policyVersion} does not match runtime policy ${policyVersion}.`,
+    );
+  }
+  const dependencies = await composition.reflectionEntrypointDependencies(
+    `wf-${randomUUID()}`,
+  );
+  return runReflectionDailyBuild({
+    dependencies,
+    command: {
+      workflowCommandId: input.workflowCommandId,
+      subjectId: input.subjectId,
+      sourceRevision: input.sourceRevision,
+      claimBaselineDigest: input.claimBaselineDigest,
+      policyVersion: input.policyVersion,
+      expectedDataEpoch: input.expectedDataEpoch,
+      scope: "daily",
+      weekIdentifier: null,
+      windowStartDate: null,
+      windowEndDate: null,
+      sourceDigest: null,
+    },
+    recoveryGate: composition.recoveryGate,
+  });
+}

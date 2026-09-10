@@ -262,6 +262,13 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         model_run_attempts,
         generation_commands,
         continuous_exchange_inactivity_evaluations,
+        reflection_runs,
+        reflection_candidate_proposals,
+        reflection_statement_evidence_links,
+        reflection_atomic_propositions,
+        reflection_statements,
+        reflection_versions,
+        reflections,
         conversation_event_revisions,
         conversation_events,
         interaction_turns,
@@ -637,7 +644,6 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           FROM information_schema.tables
           WHERE table_schema = current_schema()
             AND table_name ILIKE ANY(ARRAY[
-                'reflection%',
               'memory%',
               'profile%',
               'open_loop%',
@@ -4143,6 +4149,11 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       purge: {
         remaining: 0,
         retried: 0,
+      },
+      reflection: {
+        dailyQueued: 0,
+        maintenanceQueued: 0,
+        weeklyQueued: 0,
       },
       outbox: {
         dispatched: 1,
