@@ -2,12 +2,16 @@ import { createHash } from "node:crypto";
 
 import { EPISODE_BUILDER_POLICY_VERSION } from "./episode/types";
 import {
+  ONE_A_3B_G1_DEFERRED_ROLES,
+  ONE_A_3B_G1_ENABLED_ROLES,
+  type OneA3bModelRole,
+} from "./model-role-contract";
+import {
   ModelRoleConfigurationError,
   ONE_A_3B_MODEL_ROLES,
   ONE_A_3B_ROLE_POLICY_VERSION,
   createModelRoleRegistry,
   type ModelRoleConfigurationSnapshot,
-  type OneA3bModelRole,
 } from "./model-role-runtime";
 import { NARRATIVE_VALIDATION_POLICY_VERSION } from "./narrative-validation/types";
 import { PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION } from "./purge-surface-registry";
@@ -27,18 +31,10 @@ export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
  * Bio producer roles stay outside this manifest, even when their shared
  * schema already exists.
  */
-export const ONE_A_3B_G1_ENABLED_ROLES = [
-  "episode.build",
-  "reflection.daily",
-  "reflection.weekly",
-  "narrative.validate",
-] as const satisfies readonly OneA3bModelRole[];
-
-export const ONE_A_3B_G1_DEFERRED_ROLES = [
-  "open_loop.extract",
-  "bio.write",
-  "proactive.followup",
-] as const satisfies readonly OneA3bModelRole[];
+export {
+  ONE_A_3B_G1_DEFERRED_ROLES,
+  ONE_A_3B_G1_ENABLED_ROLES,
+} from "./model-role-contract";
 
 export const ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA = [
   "AC-F01",

@@ -1,9 +1,6 @@
 import type { WorkflowStarter } from "@sayhear/application";
-import { assertWorkflowSafe } from "@sayhear/application/journal-eligibility";
-import { runMemoryCorrectionFollowupWorkflow } from "@sayhear/application/memory-trust-followup";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
 import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
 
 /**
  * The idempotent async follow-up of a committed `memory_correction` (issue
@@ -25,6 +22,10 @@ export async function memoryCorrectionFollowupWorkflow(input: {
 
 async function runMemoryCorrectionFollowupStep(workflowCommandId: string) {
   "use step";
+  const { runMemoryCorrectionFollowupWorkflow } = await import(
+    "@sayhear/application/memory-trust-followup"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   return runMemoryCorrectionFollowupWorkflow({
     repository: composition.memoryCorrectionFollowupRepository,

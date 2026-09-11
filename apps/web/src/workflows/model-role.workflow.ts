@@ -1,20 +1,12 @@
 import {
-  assertWorkflowSafe,
-  asGenerationCommandId,
-  asModelRunAttemptId,
-  asUserId,
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_MODEL_ROLES,
   ONE_A_3B_ROLE_POLICY_VERSION,
-  RecoveryGateClosedError,
-  runEpisodeBuildAttempt,
-  runNarrativeValidationAttempt,
-  runReflectionAttempt,
+  isModelRoleAttemptKind,
   type ModelRoleAttemptKind,
   type OneA3bModelRole,
-} from "@sayhear/application";
-
-import { createServerComposition } from "../server-composition";
+} from "@sayhear/application/model-role-contract";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
 
 export type ModelRoleWorkflowInput = Readonly<{
   workflowCommandId: string;
@@ -42,14 +34,6 @@ function isModelRole(value: string): value is OneA3bModelRole {
 
 function isG1ModelRole(value: OneA3bModelRole): boolean {
   return (ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(value);
-}
-
-function isAttemptKind(value: string): value is ModelRoleAttemptKind {
-  return (
-    value === "initial" ||
-    value === "technical_retry" ||
-    value === "schema_repair"
-  );
 }
 
 function assertNonEmptyString(value: unknown, field: string): asserts value is string {
@@ -105,7 +89,7 @@ export function assertModelRoleWorkflowInput(
   if (!Number.isSafeInteger(input.attemptNo) || input.attemptNo <= 0) {
     throw new Error("Model role attemptNo must be a positive safe integer.");
   }
-  if (!isAttemptKind(input.attemptKind)) {
+  if (!isModelRoleAttemptKind(input.attemptKind)) {
     throw new Error(`Unknown model role attempt kind: ${input.attemptKind}.`);
   }
 }
@@ -150,6 +134,16 @@ async function runModelRoleStep(
   input: ModelRoleWorkflowInput,
 ): Promise<ModelRoleWorkflowResult> {
   "use step";
+  const {
+    asGenerationCommandId,
+    asModelRunAttemptId,
+    asUserId,
+    RecoveryGateClosedError,
+    runEpisodeBuildAttempt,
+    runNarrativeValidationAttempt,
+    runReflectionAttempt,
+  } = await import("@sayhear/application");
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const userId = asUserId(input.subjectId);
   await composition.modelRoleCommandService.verifyActiveG1Release?.();

@@ -1,7 +1,4 @@
-import { assertWorkflowSafe } from "@sayhear/application/journal-eligibility";
-import { runJournalRegenerationWorkflow } from "@sayhear/application/journal-regeneration";
-
-import { createServerComposition } from "../server-composition";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
 
 export async function journalRegenerationWorkflow(input: {
   workflowCommandId: string;
@@ -25,6 +22,10 @@ async function runJournalRegenerationStep(input: {
   actionExecutionId: string;
 }) {
   "use step";
+  const { runJournalRegenerationWorkflow } = await import(
+    "@sayhear/application/journal-regeneration"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   if (input.policyVersion !== composition.journalGenerationPolicyVersion) {
     throw new Error("Journal regeneration command policy does not match runtime policy.");
@@ -45,5 +46,6 @@ export async function rollingSummaryWorkflow(input: {
 
 async function runRollingSummaryStep(commandId: string): Promise<{ outcome: "published" | "stale" | "failed" }> {
   "use step";
+  const { createServerComposition } = await import("../server-composition");
   return await createServerComposition().rollingSummaryService.run(commandId);
 }

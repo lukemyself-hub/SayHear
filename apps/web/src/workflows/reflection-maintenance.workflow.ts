@@ -1,8 +1,3 @@
-import { randomUUID } from "node:crypto";
-
-import { asUserId, runReflectionMaintenance } from "@sayhear/application";
-import { createServerComposition } from "../server-composition";
-
 /**
  * Reflection maintenance workflow (issue #199): one `reflection_maintenance`
  * command runs the owner's bounded passes — reverse-lineage staleness from
@@ -28,6 +23,10 @@ async function runReflectionMaintenanceStep(input: {
   expectedDataEpoch: number;
 }): Promise<{ staledVersions: number; expiredContent: number }> {
   "use step";
+  const { asUserId, runReflectionMaintenance } = await import(
+    "@sayhear/application"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = await createServerComposition();
   const policyVersion =
     composition.reflectionReadinessPolicyVersion ?? input.policyVersion;

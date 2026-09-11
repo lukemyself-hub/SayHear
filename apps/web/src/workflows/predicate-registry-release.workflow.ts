@@ -1,11 +1,5 @@
-import {
-  assertCandidateGovernanceWorkflowSafe,
-  runPredicateRegistryReleaseWorkflow,
-  type PredicateRegistryReleaseResult,
-} from "@sayhear/application/candidate-review-workflow";
-import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
+import type { PredicateRegistryReleaseResult } from "@sayhear/application/candidate-review-workflow";
 
 /**
  * Registry release handler (SPEC #193 §8.4, ADR-0122): the release migration
@@ -24,7 +18,7 @@ export async function predicateRegistryReleaseWorkflow(input: {
   expectedDataEpoch: number;
 }): Promise<PredicateRegistryReleaseResult> {
   "use workflow";
-  assertCandidateGovernanceWorkflowSafe(input);
+  assertWorkflowSafe(input, "input");
   return await runReleaseStep(input.sourceRevision);
 }
 
@@ -32,6 +26,10 @@ async function runReleaseStep(
   releasedRegistryVersion: number,
 ): Promise<PredicateRegistryReleaseResult> {
   "use step";
+  const { runPredicateRegistryReleaseWorkflow } = await import(
+    "@sayhear/application/candidate-review-workflow"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   return runPredicateRegistryReleaseWorkflow({
     repository: composition.candidateReviewWorkflowRepository,

@@ -1,13 +1,5 @@
-import { randomUUID } from "node:crypto";
-
-import {
-  runAutomaticJournal,
-  runJournalEligibility,
-  type WorkflowStarter,
-} from "@sayhear/application";
+import type { WorkflowStarter } from "@sayhear/application";
 import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
 
 /**
  * 1A.2 Journal Eligibility Workflow application entrypoint.
@@ -46,6 +38,11 @@ async function runEligibilityStep(input: {
   expectedDataEpoch: number;
 }) {
   "use step";
+  const { randomUUID } = await import("node:crypto");
+  const { runAutomaticJournal, runJournalEligibility } = await import(
+    "@sayhear/application"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const policy =
     await composition.journalEligibilityService.resolvePolicyForStep();

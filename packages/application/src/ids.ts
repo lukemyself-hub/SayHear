@@ -1,1 +1,1 @@
-export { asUserId } from "@sayhear/domain";
+export { asUserId, asWorkflowCommandId } from "@sayhear/domain";

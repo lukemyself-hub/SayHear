@@ -1,5 +1,4 @@
-import { asUserId } from "@sayhear/application/ids";
-import { assertWorkflowSafe } from "@sayhear/application/journal-eligibility";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
 import type { WorkflowStarter } from "@sayhear/application";
 import { start } from "workflow/api";
 
@@ -83,6 +82,7 @@ async function runPurgeStep(input: {
 }> {
   "use step";
   assertOwnerFullPurgeManifest(input);
+  const { asUserId } = await import("@sayhear/application/ids");
   const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const result = await composition.ownerPurgeService.propagateForOwner({

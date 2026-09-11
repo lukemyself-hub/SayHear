@@ -18,6 +18,9 @@ import {
 import type { EvidenceService } from "./evidence";
 import type { RecoveryGate } from "./recovery-gate";
 import { PURGE_WORKFLOW_SUBJECT_MANIFEST } from "./purge-surface-registry";
+import { assertWorkflowSafe } from "./workflow-contract";
+
+export { assertWorkflowSafe } from "./workflow-contract";
 
 // ---- Date outcome -----------------------------------------------------------
 
@@ -528,87 +531,6 @@ export function sanitizeErrorCode(error: unknown): string {
     }
   }
   return "unknown_error";
-}
-
-// ---- safeWorkflowStep wrapper (architecture 13.3) ---------------------------
-
-const ALLOWLISTED_PAYLOAD_KEYS = new Set([
-  "workflowCommandId",
-  "subjectType",
-  "subjectId",
-  "ownerId",
-  "sourceRevision",
-  "policyVersion",
-  "expectedDataEpoch",
-  "scope",
-  "claimBaselineDigest",
-  "weekIdentifier",
-  "windowStartDate",
-  "windowEndDate",
-  "sourceDigest",
-  "rejectionCode",
-  "statementCount",
-  "candidateCount",
-  "degradedEpisodeReason",
-  "purgeSurfaceRegistryVersion",
-  "externalIntegrationManifestVersion",
-  "workflowSubjectManifestVersion",
-  "eventType",
-  "status",
-  "errorCode",
-  "workflowReceiptId",
-  "dailySessionId",
-  "actionExecutionId",
-  "outcome",
-  "counters",
-  "diffCount",
-  "promotedCount",
-  "reinforcedCount",
-  "contestedCount",
-  "rejectedCount",
-  "skippedCount",
-  "dormantCount",
-  "staledCount",
-  "purgedCount",
-  "modelRole",
-  "generationCommandId",
-  "modelRunAttemptId",
-  "attemptNo",
-  "attemptKind",
-  "rolloutPin",
-  "candidateCount",
-  "degradedEpisodeReason",
-  "acceptedCount",
-  "unresolvedCount",
-  "rejectedCount",
-]);
-
-/**
- * Enforce that a value crossing into or out of Workflow history carries only
- * allowlisted fields (IDs, revisions, policy, event kind, status, error code).
- * This guard is mandatory (architecture 13.3) — correctness cannot rely on code
- * review alone — and is exercised by the canary system test.
- */
-export function assertWorkflowSafe(value: unknown, path = "payload"): void {
-  const pending: Array<{ value: unknown; path: string }> = [{ value, path }];
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (!current || current.value === null || typeof current.value !== "object") {
-      continue;
-    }
-    const record = current.value as Record<string, unknown>;
-    for (const key of Object.keys(record)) {
-      if (!ALLOWLISTED_PAYLOAD_KEYS.has(key)) {
-        throw new Error(
-          `Workflow ${current.path} contains a non-allowlisted field: ${key}`,
-        );
-      }
-      const child = record[key];
-      if (child !== null && typeof child === "object") {
-        pending.push({ value: child, path: `${current.path}.${key}` });
-      }
-    }
-  }
 }
 
 // ---- The Workflow application entrypoint (AC #10) ---------------------------

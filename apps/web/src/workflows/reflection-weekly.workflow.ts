@@ -1,11 +1,4 @@
-import { randomUUID } from "node:crypto";
-
-import {
-  asUserId,
-  runReflectionWeeklyBuild,
-  type ReflectionBuildEntrypointResult,
-} from "@sayhear/application";
-import { createServerComposition } from "../server-composition";
+import type { ReflectionBuildEntrypointResult } from "@sayhear/application";
 
 /**
  * Weekly Reflection workflow (issue #199, SPEC 5.3): one `reflection_weekly`
@@ -43,6 +36,11 @@ async function runReflectionWeeklyStep(input: {
   expectedDataEpoch: number;
 }): Promise<ReflectionBuildEntrypointResult> {
   "use step";
+  const { randomUUID } = await import("node:crypto");
+  const { asUserId, runReflectionWeeklyBuild } = await import(
+    "@sayhear/application"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = await createServerComposition();
   await composition.modelRoleCommandService.verifyActiveG1Release?.();
   await composition.recoveryGate.requireOpen(asUserId(input.ownerId));

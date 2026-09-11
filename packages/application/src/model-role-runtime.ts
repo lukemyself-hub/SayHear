@@ -15,30 +15,23 @@ import {
   RecoveryGateClosedError,
   type RecoveryGate,
 } from "./recovery-gate";
+import {
+  ONE_A_3B_MODEL_ROLES,
+  ONE_A_3B_ROLE_POLICY_VERSION,
+  isModelRoleAttemptKind,
+  type ModelRoleAttemptKind,
+  type ModelRoleFreshnessPolicy,
+  type OneA3bModelRole,
+} from "./model-role-contract";
 
-export const ONE_A_3B_MODEL_ROLES = [
-  "episode.build",
-  "open_loop.extract",
-  "reflection.daily",
-  "reflection.weekly",
-  "bio.write",
-  "narrative.validate",
-  "proactive.followup",
-] as const;
-
-export type OneA3bModelRole = (typeof ONE_A_3B_MODEL_ROLES)[number];
-export type ModelRoleFreshnessPolicy = "source_valid:v1" | "exact_head:v1";
-export const ONE_A_3B_ROLE_POLICY_VERSION = "1a3b-model-role-policy:v1";
-export type ModelRoleAttemptKind =
-  | "initial"
-  | "technical_retry"
-  | "schema_repair";
-
-export function isModelRoleAttemptKind(
-  value: string,
-): value is ModelRoleAttemptKind {
-  return value === "initial" || value === "technical_retry" || value === "schema_repair";
-}
+export {
+  ONE_A_3B_MODEL_ROLES,
+  ONE_A_3B_ROLE_POLICY_VERSION,
+  isModelRoleAttemptKind,
+  type ModelRoleAttemptKind,
+  type ModelRoleFreshnessPolicy,
+  type OneA3bModelRole,
+} from "./model-role-contract";
 
 export type ModelRoleParameterSnapshot = Readonly<Record<string, unknown>>;
 
