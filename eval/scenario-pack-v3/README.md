@@ -10,7 +10,7 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 
 ## TL;DR
 
-- `scenarios.json` 是 `scenario-pack:v3.4`：54 个合成多回合场景 =
+- `scenarios.json` 是 `scenario-pack:v3.5`：54 个合成多回合场景 =
   v2.1 的 45 个 + 9 个新的多日召回场景（三类 × en / zh / code-switch）。
   v3.1（#126，Luke 2026-08-30 fixture 裁定）：5 个场景内容改写以匹配生产逻辑
   （continuity ×3 换 registry 可承载题材、temporal en/zh 补 day-1 第二次提名），
@@ -20,6 +20,9 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
   （完成体「入职了」+ 机构名）。v3.4（#148，2026-09-01 AC35 FP 裁定）：
   objective t4 不再把背景公司名作为逐字硬门禁，语义层仍要求清楚指向该工作或
   offer；continuity / temporal 的 required token 保持硬门禁。
+  v3.5（#228，Luke 2026-09-11 门禁裁定）：全部 recall token 转咨询层——语义
+  接住即算召回，不再逐字卡点名；场景内容与 token 列表不变，只翻 fixture
+  `checks`（tokenTier advisory / gating false）。
 - `tiered-checks.ts`（`tiered-checks:v3`）按 ADR-0110 的三档执行机械检查，
   共享的确定性机制（posture 重放、stop-signal 窗口、v2 回合门禁、安全资源
   白名单）直接复用 v2 模块——两代检查器的共同门禁只有一份实现。
@@ -29,10 +32,9 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
   （`packages/application/src/prompt-artifacts.ts`，由 Context Compiler 在
   存在记忆 section 的回合编译为 `recall_experience` section）；评测侧是本包的
   v3 fixture 与门禁。
-- v2 中 deferred 到 1A.3a 的 expected-recall 检查在本包**翻活**为 #99 的
-  两级制：token 级期望词（`requiredTokens`）= 确定性硬门禁，全 locale 100%
-  通过；语义级期望 = advisory，只由 judge 结构预筛与 Internal Owner 在记忆
-  盲评样本内终审，永不由本检查器裁定（ADR-0110：judge 不评味觉）。
+- v2 中 deferred 到 1A.3a 的 expected-recall 检查在本包翻活；#228 起 token 级
+  与语义级全部咨询化：`requiredTokens` 只给 judge 结构预筛与 Internal Owner
+  终审作参考，永不由本检查器逐字裁定（ADR-0110：judge 不评味觉）。
 - `verify-pack` 机械校验全部期望 fixture 能被生产策略与场景自身复现，任何
   mismatch 退出非零；#126 证据运行必须先过这道门。
 
@@ -41,7 +43,7 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 | 字段 | 语义 | 检查层级 |
 | --- | --- | --- |
 | `injectedMemories` | 场景级「真实注入」投影（kind：`objective_memory` / `ai_impression` / `person_portrait`）；正确零场景可为空 | 验证：required token 必须可从中派生 |
-| `expectedRecalls[]` | #99 两级 expectedRecall：`atTurn` + `semantic`（advisory 层）+ 可选 `requiredTokens`（token 硬门禁层，即「本次召回是必需的」标注：已注入 + 开场许可已给 + 无回避信号） | token 级 = `required_recall_missing` 硬门禁；语义级 = advisory 预筛 |
+| `expectedRecalls[]` | #99 expectedRecall：`atTurn` + `semantic`（advisory 层）+ 可选 `requiredTokens`（咨询层：给 judge 预筛与人评作参考，#228 起永不由检查器逐字阻断） | 语义级 = advisory 预筛；token 列表由 `verify-pack` 校验可满足性 |
 | `forbiddenMentionTokens` | 从未注入的具体细节（编造证明 token） | `forbidden_memory_mention` 硬门禁，自 `forbiddenMentionFromTurn`（默认 1）起作用 |
 | `forbiddenMentionFromTurn` | 跨日场景的上下文边界轮：边界前的轮次上下文可能合法包含该内容，不参与门禁 | 验证：token 不得出现在边界后的用户轮或注入记忆中 |
 | `fencedMentions[]` | 曾经已知、自 `fromTurn` 起被围栏的内容（post-Correction / post-Forget non-reuse） | `fenced_memory_mention` 硬门禁；验证：至少一个 token 在围栏前可知（转述探针词随之有效），且任何 token 不得出现在围栏后的用户轮里（围栏只判回应，不判用户原话） |
@@ -60,14 +62,14 @@ Runnable eval artifact — 行为契约与评测规则的载体（权威规则�
 | `memory_temporal` | en / zh（correction）、mix（forget） | 关系时间变化 + 更正后旧状态不复用（`fencedMentions`，fromTurn = 更正后的下一轮）；code-switch 场景覆盖 post-Forget non-reuse（问句与陈述式回带都被围栏） |
 
 同时升级的 `memory_continuity` 三场景：`open_loop`/`memory` 投影 kind 更正为
-1A.3a 真实存在的 `objective_memory`（1A.3a 没有 Open Loop）；第 3 轮（跨日
-开场）标为正确零；第 4 轮带 token 级 required 词（"two weeks" / "两周"）。
+  1A.3a 真实存在的 `objective_memory`（1A.3a 没有 Open Loop）；第 3 轮（跨日
+  开场）标为正确零；第 4 轮带咨询层 recall token（名称供 judge 预筛与人评参考）。
 
 ## 文件
 
 | 路径 | 用途 |
 | --- | --- |
-| `scenarios.json` | scenario-pack:v3.4，由 build 脚本生成 |
+| `scenarios.json` | scenario-pack:v3.5，由 build 脚本生成 |
 | `build-v3.ts` | 生成脚本：读取 v2.1 pack，升级（v3.1 含改写）3 个 memory_continuity fixture，追加 9 个多日场景（provenance 见脚本头注） |
 | `tiered-checks.ts` | 三档检查模块 v3（复用 v2 模块共享机制 + `@sayhear/application` 版本化校验函数） |
 | `check-transcripts.ts` | CLI：对一个 #61 格式的 transcripts.json 出 TieredReport；可选第三参联接 v3 pack fixture |
@@ -96,8 +98,8 @@ pnpm exec tsx eval/scenario-pack-v3/check-transcripts.ts \
   ADR-0117 已记录）。因此 v3 的 fixture 用 `fencedMentions`（post-Correction /
   post-Forget 的确定性围栏）承担跨日非复用的硬门禁，而 stop-signal 与召回的
   交互仍由人评与 judge 预筛覆盖。
-- 记忆追问以问句出现时占用每轮单问题名额（`too_many_questions` 硬门禁不变，
-  v2 门禁照常计数）；陈述式回带不占用。此边界不改变任何计数器实现。
+- 记忆追问以问句出现时计入轨迹问题率（#228 起单轮双问不再是硬门禁）；
+  陈述式回带不占用。此边界不改变任何计数器实现。
 
 ## 边界
 

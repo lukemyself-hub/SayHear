@@ -8,7 +8,8 @@
  *
  * The optional third argument joins the pack's fixtures by scenario id:
  * memory fixtures contribute the scoped forbidden-mention tokens, the
- * #99 two-tier expectedRecall required words, the fenced-mention tokens, and
+ * advisory expectedRecall tokens (documented only; no longer gated since #228),
+ * the fenced-mention tokens, and
  * the stop-signal release turns that close the suppression windows.
  *
  * Output is a TieredReport. Every hard-gate hit and advisory candidate is a

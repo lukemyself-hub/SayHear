@@ -2,9 +2,10 @@
  * Mechanically verify the scenario-pack:v3 expectation fixtures against the
  * deterministic production policies (issue #118): posture K-turn
  * expectations, stop-signal session-persistent expectations with release, and
- * the activated v3 memory-fixture tiering — forbidden-mention with the
- * day-boundary scope, the #99 two-tier expectedRecall (token-level required
- * words = hard gate; semantic expectations = advisory judge pre-screen), and
+ * the v3 memory-fixture tiering — forbidden-mention with the
+ * day-boundary scope, advisory expectedRecall tokens (satisfiability-checked
+ * for the judge pre-screen; never gated since #228), semantic expectations =
+ * advisory judge pre-screen, and
  * the post-Correction / post-Forget fenced-mention gates. Exits non-zero on
  * any mismatch, so evidence runs (#126) can gate on it before generating
  * transcripts.

@@ -152,8 +152,11 @@ export function verifySyntheticRunHardGates(
         sequenceInScenario: turn.sequenceInScenario,
         userText: turn.userInput.text,
       }).hardGates;
+      // #228: the shared v3 checker no longer gates on per-turn question
+      // counts or recall tokens (both advisory-only there). This F3 catalog
+      // keeps its own per-fixture maxQuestions enforcement above; recall
+      // tokens ride along as advisory expectations for human review.
       for (const finding of findings) {
-        if (finding.gate === "too_many_questions") continue;
         failures.push(`${prefix}: ${finding.gate} — ${finding.detail}`);
       }
     }

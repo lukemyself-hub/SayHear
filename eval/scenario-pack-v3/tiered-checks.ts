@@ -14,6 +14,13 @@
  * - A `fenced_mention` hard gate covers post-Correction / post-Forget
  *   non-reuse: details the user once shared but that are fenced out of recall
  *   from a declared turn onward may not reappear in any response.
+ * - Required-recall tokens are advisory expectations for the judge
+ *   pre-screen and the Internal Owner's ruling (#228): a reply that clearly
+ *   addresses the injected content in its own words passes even without the
+ *   verbatim token. The checker no longer gates on token presence; the
+ *   `requiredRecallTokens` input is retained for caller compatibility and
+ *   fixture documentation, and `verifyScenarioPackExpectations` still
+ *   validates that advisory tokens are satisfiable.
  * - `forbiddenMentionFromTurn` scopes the never-injected forbidden-mention
  *   gate to the turns whose compiled context cannot contain the token — the
  *   multi-day scenarios open with a zero-signal greeting whose correct-zero
@@ -52,7 +59,7 @@ export type { ScenarioTurn, AdvisoryFinding };
 
 export const TIERED_CHECKS_VERSION = "tiered-checks:v3";
 
-export type HardGate = V2HardGate | "required_recall_missing" | "fenced_memory_mention";
+export type HardGate = V2HardGate | "fenced_memory_mention";
 
 export type HardGateFinding = {
   scenarioId: string;
@@ -71,9 +78,11 @@ export type TurnCheckInput = {
   postureActive?: boolean;
   forbiddenMentionTokens?: readonly string[];
   /**
-   * Token-level expected words of the "this recall is required" expectation
-   * declared for this turn; the response must contain all of them (hard
-   * gate, #99 two-tier expectedRecall, token tier).
+   * Advisory token-level expected words for the "this recall is required"
+   * expectation declared for this turn (#228: no longer a hard gate — the
+   * judge pre-screen plus the Internal Owner's ruling decides whether the
+   * response clearly addresses the injected content; retained here so callers
+   * and fixtures keep documenting the expectation without gating on it).
    */
   requiredRecallTokens?: readonly string[];
   /**
@@ -107,15 +116,11 @@ export function checkTurn(
     scenarioId: input.scenarioId,
     sequenceInScenario: input.sequenceInScenario,
   };
-  for (const token of input.requiredRecallTokens ?? []) {
-    if (!contains(input.assistantText, token)) {
-      hardGates.push({
-        ...where,
-        gate: "required_recall_missing",
-        detail: `required-recall token "${token}" absent from the response`,
-      });
-    }
-  }
+  // #228: required-recall tokens are advisory only. A missing token is
+  // judged by the judge pre-screen plus the Internal Owner's ruling, never
+  // by this checker — intentionally no hard-gate emission here. The
+  // `requiredRecallTokens` input is accepted and ignored.
+  void input.requiredRecallTokens;
   for (const token of input.fencedMentionTokens ?? []) {
     if (contains(input.assistantText, token)) {
       hardGates.push({
@@ -140,7 +145,6 @@ export type MemoryCheckTiering = Readonly<{
   /** The emitted hard-gate IDs the activated memory checks resolve to. */
   activeChecks: readonly [
     "forbidden_memory_mention",
-    "required_recall_missing",
     "fenced_memory_mention",
   ];
   /** Advisory tier: judge pre-screen plus human ruling, never a gate here. */
@@ -148,16 +152,16 @@ export type MemoryCheckTiering = Readonly<{
 }>;
 
 /**
- * The activated memory-fixture judgment (issue #118 / #99): fabrication of
- * never-injected details, token-level misses on required recalls, and
- * fenced-content resurrection are deterministic hard gates; semantic-level
- * expected recall stays advisory (judge structural pre-screen plus the
- * Internal Owner's blind-sample ruling; ADR-0110) and never gates here.
+ * The activated memory-fixture judgment (issue #118 / #99, tiering revised
+ * by #228): fabrication of never-injected details and fenced-content
+ * resurrection are deterministic hard gates; all expected recall —
+ * token-level and semantic — stays advisory (judge structural pre-screen
+ * plus the Internal Owner's blind-sample ruling; ADR-0110) and never gates
+ * here.
  */
 export const MEMORY_CHECK_TIERING: MemoryCheckTiering = Object.freeze({
   activeChecks: Object.freeze([
     "forbidden_memory_mention",
-    "required_recall_missing",
     "fenced_memory_mention",
   ] as const),
   advisoryChecks: Object.freeze(["semantic_expected_recall"] as const),
@@ -177,9 +181,11 @@ export type ExpectedRecall = Readonly<{
    */
   semantic: string;
   /**
-   * Token-level expected words; their presence annotates "this recall is
-   * required" and activates the deterministic hard gate for this turn.
-   * Omit for expectations that stay on the advisory tier.
+   * Advisory token-level expected words naming what the recall is about;
+   * they document the expectation for the judge pre-screen and the Internal
+   * Owner's ruling and are validated as satisfiable by
+   * `verifyScenarioPackExpectations`, but their presence never gates here
+   * (#228). Omit for expectations that stay purely semantic.
    */
   requiredTokens?: readonly string[];
 }>;
@@ -217,9 +223,9 @@ export type MemoryFixture = Readonly<{
     forbiddenMention: Readonly<{ status: "active"; tier: "hard_gate" }>;
     expectedRecall: Readonly<{
       status: "active";
-      tokenTier: "hard_gate_required_only";
+      tokenTier: "advisory";
       semanticTier: "advisory_prescreen";
-      gating: true;
+      gating: false;
     }>;
   }>;
 }>;
@@ -233,9 +239,9 @@ export function scenarioMemoryChecks(): MemoryFixture["checks"] {
     forbiddenMention: { status: "active", tier: "hard_gate" },
     expectedRecall: {
       status: "active",
-      tokenTier: "hard_gate_required_only",
+      tokenTier: "advisory",
       semanticTier: "advisory_prescreen",
-      gating: true,
+      gating: false,
     },
   };
 }
@@ -319,11 +325,13 @@ export type PackVerification = Readonly<{
  * - Forbidden-mention tokens stay provably never-injected: absent from every
  *   injected memory and from every user turn at or after the declared
  *   boundary turn, so a match can only be fabrication.
- * - Required-recall tokens must be derivable from the injected memories and
- *   must not appear in the expectation turn's own user text (otherwise the
- *   gate could pass by echo alone), and the expectation turn must not carry a
- *   stop signal (a required recall under avoidance is not "permission
- *   granted").
+ * - Advisory recall tokens must still be derivable from the injected
+ *   memories and must not appear in the expectation turn's own user text
+ *   (otherwise a match would prove echo, not recall), and the expectation
+ *   turn must not carry a stop signal (a recall under avoidance is not
+ *   "permission granted"). These stay validated so the advisory expectations
+ *   remain meaningful to the judge pre-screen and human ruling, even though
+ *   nothing gates on them here (#228).
  * - Fenced-mention tokens must protect content that was genuinely knowable
  *   before the fence turn: at least one of the fence's tokens must appear in
  *   a pre-fence user turn or injected memory (paraphrase probe-words that the
@@ -700,6 +708,8 @@ export function assembleReport(input: {
           : {}),
         ...(fixture
           ? {
+              // #228: passed for documentation/caller compatibility; checkTurn
+              // treats recall tokens as advisory-only and does not gate on them.
               requiredRecallTokens: (fixture.expectedRecalls ?? [])
                 .filter((expectation) => expectation.atTurn === turnNo)
                 .flatMap((expectation) => expectation.requiredTokens ?? []),
