@@ -1,12 +1,5 @@
-import {
-  assertCandidateGovernanceWorkflowSafe,
-  runCandidateRemapWorkflow,
-  type CandidateRemapResult,
-} from "@sayhear/application/candidate-review-workflow";
-import { asWorkflowCommandId } from "@sayhear/application";
-import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
+import type { CandidateRemapResult } from "@sayhear/application/candidate-review-workflow";
 
 /**
  * Release-driven Candidate remap (SPEC #193 §8.4, ADR-0122): re-enter normal
@@ -25,7 +18,7 @@ export async function candidateRemapWorkflow(input: {
   expectedDataEpoch: number;
 }): Promise<CandidateRemapResult> {
   "use workflow";
-  assertCandidateGovernanceWorkflowSafe(input);
+  assertWorkflowSafe(input, "input");
   return await runRemapStep(input.workflowCommandId);
 }
 
@@ -33,6 +26,11 @@ async function runRemapStep(
   workflowCommandId: string,
 ): Promise<CandidateRemapResult> {
   "use step";
+  const { asWorkflowCommandId } = await import("@sayhear/application/ids");
+  const { runCandidateRemapWorkflow } = await import(
+    "@sayhear/application/candidate-review-workflow"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   return runCandidateRemapWorkflow({
     repository: composition.candidateReviewWorkflowRepository,

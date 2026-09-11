@@ -137,6 +137,89 @@ for (const [moduleName, sourceRoot] of Object.entries(sourceRoots)) {
   }
 }
 
+// The Workflow transform builds a deterministic sandbox for each registered
+// entrypoint. Runtime-only code must therefore be reachable only from a step,
+// never through a top-level import in a workflow module. This source guard
+// keeps the boundary explicit and complements the build-backed transform check
+// that follows in Next.js.
+const workflowStarterPath = join(
+  sourceRoots.web.pathname,
+  "src",
+  "workflow-starter.ts",
+);
+const isBoundaryFixture = Boolean(process.env.SAYHEAR_BOUNDARY_ROOT);
+let workflowEntrypoints = [];
+let workflowStarterSource = null;
+try {
+  workflowStarterSource = await readFile(workflowStarterPath, "utf8");
+} catch (error) {
+  if (!isBoundaryFixture || error?.code !== "ENOENT") {
+    throw error;
+  }
+}
+if (workflowStarterSource !== null) {
+  workflowEntrypoints = [
+    ...workflowStarterSource.matchAll(
+      /from\s+["']\.\/workflows\/([^"']+\.workflow)["']/g,
+    ),
+  ].map((match) => match[1]);
+}
+if (!isBoundaryFixture && workflowEntrypoints.length === 0) {
+  failures.push(
+    "apps/web/src/workflow-starter.ts registers no Workflow entrypoints",
+  );
+}
+const allowedWorkflowStaticImports = new Set([
+  "@sayhear/application/entity-identity-revalidation",
+  "@sayhear/application/model-role-contract",
+  "@sayhear/application/workflow-contract",
+  "workflow/api",
+]);
+
+for (const entrypoint of workflowEntrypoints) {
+  const filename = join(sourceRoots.web.pathname, "src", "workflows", `${entrypoint}.ts`);
+  const source = await readFile(filename, "utf8");
+  if (!source.includes('"use workflow"')) {
+    failures.push(`${relative(repositoryRoot.pathname, filename)} has no workflow directive`);
+  }
+  if (!source.includes('"use step"')) {
+    failures.push(`${relative(repositoryRoot.pathname, filename)} has no step directive`);
+  }
+
+  const declarations = [
+    ...source.matchAll(/^\s*import\s+(?!type\b)[\s\S]*?;/gm),
+  ];
+  for (const declaration of declarations) {
+    const dependency = declaration[0].match(
+      /(?:from\s+)?["']([^"']+)["']/,
+    )?.[1];
+    if (!dependency) {
+      failures.push(
+        `${relative(repositoryRoot.pathname, filename)} has an unparsable static import`,
+      );
+      continue;
+    }
+    if (dependency.startsWith("node:")) {
+      failures.push(
+        `${relative(repositoryRoot.pathname, filename)} imports Node builtin ${dependency} outside a step`,
+      );
+    }
+    if (dependency === "../server-composition") {
+      failures.push(
+        `${relative(repositoryRoot.pathname, filename)} imports server composition outside a step`,
+      );
+    }
+    if (
+      dependency.startsWith("@sayhear/application") &&
+      !allowedWorkflowStaticImports.has(dependency)
+    ) {
+      failures.push(
+        `${relative(repositoryRoot.pathname, filename)} imports runtime application code ${dependency} outside a step`,
+      );
+    }
+  }
+}
+
 for (const parent of ["apps", "packages"]) {
   const directory = new URL(`${parent}/`, repositoryRoot);
   for (const entry of await readdir(directory)) {
@@ -154,5 +237,7 @@ if (failures.length > 0) {
   console.error(failures.join("\n"));
   process.exitCode = 1;
 } else {
-  console.log("Module boundaries match the 1A.2 ticket graph.");
+  console.log(
+    `Module boundaries match the 1A.2 ticket graph; ${workflowEntrypoints.length} Workflow entrypoints keep Node runtime code behind steps.`,
+  );
 }

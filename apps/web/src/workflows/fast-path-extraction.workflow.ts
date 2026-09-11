@@ -1,12 +1,5 @@
-import { randomUUID } from "node:crypto";
-
-import {
-  runFastPathExtraction,
-  type FastPathExtractionEntrypointResult,
-} from "@sayhear/application";
+import type { FastPathExtractionEntrypointResult } from "@sayhear/application";
 import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
 
 /**
  * 1A.3a Fast-path extraction Workflow application entrypoint (issue #113).
@@ -42,6 +35,9 @@ async function runFastPathStep(input: {
   expectedDataEpoch: number;
 }): Promise<FastPathExtractionEntrypointResult> {
   "use step";
+  const { randomUUID } = await import("node:crypto");
+  const { runFastPathExtraction } = await import("@sayhear/application");
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const policy = await composition.fastPathExtractionService.resolvePolicyForStep();
   if (input.policyVersion !== policy.policyVersion) {

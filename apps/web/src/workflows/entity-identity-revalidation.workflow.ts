@@ -1,10 +1,5 @@
-import { assertWorkflowSafe } from "@sayhear/application/journal-eligibility";
-import {
-  ENTITY_IDENTITY_REVALIDATION_POLICY_VERSION,
-  runEntityIdentityRevalidationWorkflow,
-} from "@sayhear/application/entity-identity-revalidation";
-
-import { createServerComposition } from "../server-composition";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
+import { ENTITY_IDENTITY_REVALIDATION_POLICY_VERSION } from "@sayhear/application/entity-identity-revalidation";
 
 /**
  * Durable wrapper for the targeted reverse-lineage pass created by #121.
@@ -30,6 +25,10 @@ export async function entityIdentityRevalidationWorkflow(input: {
 
 async function runEntityIdentityRevalidationStep(workflowCommandId: string) {
   "use step";
+  const { runEntityIdentityRevalidationWorkflow } = await import(
+    "@sayhear/application/entity-identity-revalidation"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   return runEntityIdentityRevalidationWorkflow({
     repository: composition.entityIdentityRevalidationRepository,

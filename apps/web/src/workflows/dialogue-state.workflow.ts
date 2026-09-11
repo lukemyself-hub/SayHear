@@ -1,9 +1,7 @@
-import { randomUUID } from "node:crypto";
-
-import { assertWorkflowSafe, type WorkflowStarter } from "@sayhear/application";
+import { assertWorkflowSafe } from "@sayhear/application/workflow-contract";
+import type { WorkflowStarter } from "@sayhear/application";
 import { start } from "workflow/api";
 
-import { createServerComposition } from "../server-composition";
 import { journalEligibilityWorkflow } from "./journal-eligibility.workflow";
 
 type DialogueStateWorkflowInput = {
@@ -25,6 +23,8 @@ export async function dialogueStateWorkflow(input: DialogueStateWorkflowInput): 
 
 async function runDialogueStateStep(input: DialogueStateWorkflowInput) {
   "use step";
+  const { randomUUID } = await import("node:crypto");
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const result = await composition.dialogueStateService.run(input.workflowCommandId);
   const output = {

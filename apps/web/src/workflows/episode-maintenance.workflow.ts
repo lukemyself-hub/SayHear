@@ -1,8 +1,3 @@
-import { randomUUID } from "node:crypto";
-
-import { asUserId, runEpisodeMaintenance } from "@sayhear/application";
-import { createServerComposition } from "../server-composition";
-
 /**
  * Episode maintenance workflow (issue #197): one `episode_maintenance`
  * command runs the owner's bounded sweep passes — 30-day unresolved
@@ -43,6 +38,10 @@ async function runEpisodeMaintenanceStep(input: {
   supersededVersions: number;
 }> {
   "use step";
+  const { asUserId, runEpisodeMaintenance } = await import(
+    "@sayhear/application"
+  );
+  const { createServerComposition } = await import("../server-composition");
   const composition = await createServerComposition();
   const policyVersion =
     composition.episodeBuilderPolicyVersion ?? input.policyVersion;

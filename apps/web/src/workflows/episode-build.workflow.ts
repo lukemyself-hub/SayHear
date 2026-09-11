@@ -1,8 +1,3 @@
-import { randomUUID } from "node:crypto";
-
-import { asUserId, runEpisodeBuild } from "@sayhear/application";
-import { createServerComposition } from "../server-composition";
-
 /**
  * Daily Episode Builder workflow (issue #197): one `episode_build` command
  * runs the full deterministic build for one quiescent Daily Session. Only
@@ -55,6 +50,9 @@ async function runEpisodeBuildStep(input: {
   errorCode: string | null;
 }> {
   "use step";
+  const { randomUUID } = await import("node:crypto");
+  const { asUserId, runEpisodeBuild } = await import("@sayhear/application");
+  const { createServerComposition } = await import("../server-composition");
   const composition = await createServerComposition();
   await composition.modelRoleCommandService.verifyActiveG1Release?.();
   await composition.recoveryGate.requireOpen(asUserId(input.ownerId));

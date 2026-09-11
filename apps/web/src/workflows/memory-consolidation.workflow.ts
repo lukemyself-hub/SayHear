@@ -1,12 +1,5 @@
-import { randomUUID } from "node:crypto";
-
-import {
-  runMemoryConsolidation,
-  type MemoryConsolidationEntrypointResult,
-} from "@sayhear/application";
+import type { MemoryConsolidationEntrypointResult } from "@sayhear/application";
 import { start } from "workflow/api";
-
-import { createServerComposition } from "../server-composition";
 
 /**
  * 1A.3a Slow-path consolidation Workflow application entrypoint (issue #114):
@@ -40,6 +33,9 @@ async function runConsolidationStep(input: {
   expectedDataEpoch: number;
 }): Promise<MemoryConsolidationEntrypointResult> {
   "use step";
+  const { randomUUID } = await import("node:crypto");
+  const { runMemoryConsolidation } = await import("@sayhear/application");
+  const { createServerComposition } = await import("../server-composition");
   const composition = createServerComposition();
   const policy = await composition.memoryConsolidationService.resolvePolicyForStep();
   if (input.policyVersion !== policy.policyVersion) {

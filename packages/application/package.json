@@ -7,6 +7,8 @@
     "./ids": "./src/ids.ts",
     "./owner-purge": "./src/owner-purge.ts",
     "./purge-surface-registry": "./src/purge-surface-registry.ts",
+    "./workflow-contract": "./src/workflow-contract.ts",
+    "./model-role-contract": "./src/model-role-contract.ts",
     "./journal-eligibility": "./src/journal-eligibility.ts",
     "./journal-regeneration": "./src/journal-regeneration.ts",
     "./memory-trust-followup": "./src/memory-trust-followup.ts",
