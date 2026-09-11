@@ -22,6 +22,8 @@ function candidate(
     source: "open_loop",
     sourceRank: null,
     evidenceAt: "2026-09-10T12:00:00.000Z",
+    expectedStartAt: null,
+    expiresAt: "2026-10-01T12:00:00.000Z",
     sensitive: false,
     lastUsedAt: null,
     current: true,
@@ -167,7 +169,7 @@ describe("C2 deterministic target selection", () => {
                 targetId: "ordinary-new",
                 targetVersionId: "v1",
                 source: "query_retrieval",
-                sourceRank: 2,
+                sourceRank: 1,
               }),
             ],
           },
@@ -178,6 +180,74 @@ describe("C2 deterministic target selection", () => {
     if (result.outcome === "selected") {
       expect(result.target.targetId).toBe("ordinary-new");
     }
+  });
+
+  it("replays the frozen within-lane profiles before usage fairness", () => {
+    const openLoopResult = selectProactiveFollowupTarget(
+      selectionInput({
+        opportunity: "open_start",
+        lanes: [
+          {
+            name: "open_loop",
+            enabled: true,
+            status: "complete",
+            watermark: { sourceRevision: 8, coveredThroughSequence: 2 },
+            manifestVersion: "open-loop-read:v1",
+            integrity: "valid",
+            candidates: [
+              candidate({
+                targetId: "later",
+                expectedStartAt: "2026-09-20T12:00:00.000Z",
+                lastUsedAt: "2026-09-10T12:00:00.000Z",
+              }),
+              candidate({
+                targetId: "earlier",
+                expectedStartAt: "2026-09-15T12:00:00.000Z",
+              }),
+            ],
+          },
+        ],
+      }),
+    );
+    expect(openLoopResult).toMatchObject({
+      outcome: "selected",
+      target: { targetId: "earlier" },
+    });
+
+    const memoryResult = selectProactiveFollowupTarget(
+      selectionInput({
+        lanes: [
+          {
+            name: "memory",
+            enabled: true,
+            status: "complete",
+            watermark: { sourceRevision: 8, coveredThroughSequence: 2 },
+            manifestVersion: "memory-retrieval:v1",
+            integrity: "valid",
+            candidates: [
+              candidate({
+                targetKind: "memory_claim",
+                targetId: "rank-2",
+                targetVersionId: "v1",
+                source: "query_retrieval",
+                sourceRank: 2,
+              }),
+              candidate({
+                targetKind: "memory_claim",
+                targetId: "rank-1",
+                targetVersionId: "v1",
+                source: "person_portrait",
+                sourceRank: 1,
+              }),
+            ],
+          },
+        ],
+      }),
+    );
+    expect(memoryResult).toMatchObject({
+      outcome: "selected",
+      target: { targetId: "rank-1" },
+    });
   });
 
   it("fails closed for focus, ordinary questions, stale dialogue, or a bad lane", () => {
@@ -209,11 +279,66 @@ describe("C2 deterministic target selection", () => {
       selectProactiveFollowupTarget(
         selectionInput({
           lanes: selectionInput().lanes.map((lane) =>
-            lane.name === "memory" ? { ...lane, integrity: "invalid" } : lane,
+            lane.name === "memory"
+              ? { ...lane, manifestVersion: "unknown:v1" }
+              : lane,
           ),
         }),
       ),
     ).toMatchObject({ outcome: "none", reason: "lane_not_readable" });
+  });
+
+  it("ignores disabled lanes and rejects candidates assigned to the wrong lane", () => {
+    const disabledLane = {
+      name: "memory" as const,
+      enabled: false,
+      status: "unavailable" as const,
+      watermark: null,
+      manifestVersion: "unknown:v1",
+      integrity: "invalid" as const,
+      candidates: [
+        candidate({
+          targetKind: "memory_claim",
+          targetId: "disabled-memory",
+          targetVersionId: "v1",
+          source: "person_portrait",
+          sourceRank: 0,
+        }),
+      ],
+    };
+    const ignored = selectProactiveFollowupTarget(
+      selectionInput({
+        lanes: [
+          selectionInput().lanes[0]!,
+          disabledLane,
+        ],
+      }),
+    );
+    expect(ignored).toMatchObject({
+      outcome: "selected",
+      target: { targetId: "loop-1" },
+    });
+
+    const wrongLane = selectProactiveFollowupTarget(
+      selectionInput({
+        lanes: [
+          {
+            ...selectionInput().lanes[0]!,
+            candidates: [
+              candidate({
+                targetKind: "memory_claim",
+                source: "person_portrait",
+                sourceRank: 0,
+              }),
+            ],
+          },
+        ],
+      }),
+    );
+    expect(wrongLane).toMatchObject({
+      outcome: "none",
+      reason: "lane_not_readable",
+    });
   });
 
   it("excludes same-exchange mentions, same-turn loops, and suppressed versions", () => {
@@ -350,6 +475,22 @@ describe("C2 suppression and release policy", () => {
         state: { ...suppressed, suppressedUntilAt: null },
       }),
     ).toMatchObject({ outcome: "rejected", reason: "permission_not_target_specific" });
+
+    const released = planProactiveFollowupRelease({
+      now: NOW,
+      reason: "user_reopened",
+      targetKind: "open_loop",
+      targetId: "loop-1",
+      targetVersionId: "loop-version-1",
+      currentUserEventRevisionId: "user-revision-2",
+      currentUserEventSequence: 2,
+      permissionTargetId: null,
+      state: { ...suppressed, consecutiveSoftStopCount: 3 },
+    });
+    expect(released).toMatchObject({
+      outcome: "released",
+      state: { consecutiveSoftStopCount: 0 },
+    });
   });
 
   it("does not invent a state row for a no-stop signal", () => {

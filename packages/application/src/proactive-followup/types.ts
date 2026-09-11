@@ -15,6 +15,12 @@ export const PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION =
   "proactive-followup-commit:v1" as const;
 export const PROACTIVE_FOLLOWUP_MANIFEST_VERSION =
   "proactive-followup-selection-manifest:v1" as const;
+export const PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION =
+  "open-loop-read:v1" as const;
+export const PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS = [
+  "memory-retrieval:v1",
+  "person-portrait:v1",
+] as const;
 
 /** Mechanical confidence floor; changing it requires a new policy version. */
 export const PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR = 0.7;
@@ -85,6 +91,10 @@ export type ProactiveFollowupCandidate = Readonly<{
   sourceRank: number | null;
   /** Open Loop schedule/evidence time, or Memory evidence time. */
   evidenceAt: string;
+  /** Open Loop's frozen expected time anchor, when present. */
+  expectedStartAt?: string | null;
+  /** Open Loop's frozen finite expiry. */
+  expiresAt?: string | null;
   sensitive: boolean;
   lastUsedAt: string | null;
   current: boolean;
@@ -156,6 +166,8 @@ export type ProactiveFollowupRankTuple = readonly [
   sensitivity: 0 | 1,
   /** opportunity-specific lane precedence */
   lane: 0 | 1,
+  /** Existing lane order or the Open Loop time-first profile. */
+  withinLane: string,
   /** never-used first */
   usage: 0 | 1,
   /** least recently used; ISO epoch sentinel means never used */
@@ -171,6 +183,10 @@ export type ProactiveFollowupManifestCandidate = Readonly<{
   targetId: string;
   targetVersionId: string;
   rankTuple: ProactiveFollowupRankTuple | null;
+  stateVersionId: string | null;
+  suppressionReason: ProactiveFollowupSuppressionReason | null;
+  consecutiveSoftStopCount: number;
+  suppressedUntilAt: string | null;
   eligible: boolean;
   exclusionReason: string | null;
 }>;

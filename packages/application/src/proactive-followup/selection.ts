@@ -1,7 +1,9 @@
 import {
   PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR,
+  PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS,
   PROACTIVE_FOLLOWUP_MANIFEST_VERSION,
   PROACTIVE_FOLLOWUP_MAX_CANDIDATES,
+  PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION,
   PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
   type ProactiveFollowupCandidate,
   type ProactiveFollowupLaneSnapshot,
@@ -14,6 +16,8 @@ import {
 } from "./types";
 
 const NEVER_USED = "1970-01-01T00:00:00.000Z";
+const OPEN_LOOP_UNANCHORED_START = "9999-12-31T23:59:59.999Z";
+const MAX_SOURCE_RANK = 999_999_999_999;
 
 type CandidateDecision = Readonly<{
   candidate: ProactiveFollowupCandidate;
@@ -30,8 +34,9 @@ function targetKey(target: Readonly<{
   return `${target.targetKind}:${target.targetId}`;
 }
 
-function isValidIso(value: string): boolean {
-  return !Number.isNaN(Date.parse(value));
+function normalizedIso(value: string): string | null {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? null : new Date(timestamp).toISOString();
 }
 
 function compareDescending(left: string, right: string): number {
@@ -42,16 +47,18 @@ function compareRankTuple(
   left: ProactiveFollowupRankTuple,
   right: ProactiveFollowupRankTuple,
 ): number {
-  for (const index of [0, 1, 2] as const) {
+  for (const index of [0, 1] as const) {
     if (left[index] !== right[index]) {
       return left[index] - right[index];
     }
   }
-  const lastUsed = left[3] === right[3] ? 0 : left[3] < right[3] ? -1 : 1;
+  const withinLane = left[2] === right[2] ? 0 : left[2] < right[2] ? -1 : 1;
+  if (withinLane !== 0) return withinLane;
+  const lastUsed = left[4] === right[4] ? 0 : left[4] < right[4] ? -1 : 1;
   if (lastUsed !== 0) return lastUsed;
-  const evidence = compareDescending(left[4], right[4]);
+  const evidence = compareDescending(left[5], right[5]);
   if (evidence !== 0) return evidence;
-  return left[5].localeCompare(right[5]);
+  return left[6].localeCompare(right[6]);
 }
 
 function laneRank(
@@ -69,29 +76,89 @@ function makeRankTuple(
   candidate: ProactiveFollowupCandidate,
   state: ProactiveFollowupStateSnapshot | null,
 ): ProactiveFollowupRankTuple | null {
-  if (!isValidIso(candidate.evidenceAt)) return null;
-  const lastUsedAt = state?.lastUsedAt ?? candidate.lastUsedAt;
-  if (lastUsedAt !== null && !isValidIso(lastUsedAt)) return null;
+  const evidenceAt = normalizedIso(candidate.evidenceAt);
+  const lastUsedAt = state ? state.lastUsedAt : candidate.lastUsedAt;
+  const normalizedLastUsedAt =
+    lastUsedAt === null ? NEVER_USED : normalizedIso(lastUsedAt);
+  if (evidenceAt === null || normalizedLastUsedAt === null) return null;
+
+  let withinLane: string | null = null;
+  if (candidate.targetKind === "open_loop") {
+    if (
+      candidate.source !== "open_loop" ||
+      candidate.expiresAt === undefined ||
+      candidate.expiresAt === null
+    ) {
+      return null;
+    }
+    const expiresAt = normalizedIso(candidate.expiresAt);
+    const expectedStartAt =
+      candidate.expectedStartAt === undefined || candidate.expectedStartAt === null
+        ? OPEN_LOOP_UNANCHORED_START
+        : normalizedIso(candidate.expectedStartAt);
+    if (expiresAt === null || expectedStartAt === null) return null;
+    if (
+      expectedStartAt !== OPEN_LOOP_UNANCHORED_START &&
+      Date.parse(expectedStartAt) >= Date.parse(expiresAt)
+    ) {
+      return null;
+    }
+    withinLane = `open-loop:${expectedStartAt}:${expiresAt}`;
+  } else {
+    if (
+      candidate.source === "open_loop" ||
+      candidate.sourceRank === null ||
+      !Number.isSafeInteger(candidate.sourceRank) ||
+      candidate.sourceRank < 0 ||
+      candidate.sourceRank > MAX_SOURCE_RANK
+    ) {
+      return null;
+    }
+    withinLane = `memory:${candidate.sourceRank.toString().padStart(12, "0")}`;
+  }
+
   return [
     candidate.sensitive ? 1 : 0,
     laneRank(input.opportunity, candidate),
+    withinLane,
     lastUsedAt === null ? 0 : 1,
-    lastUsedAt ?? NEVER_USED,
-    candidate.evidenceAt,
+    normalizedLastUsedAt,
+    evidenceAt,
     `${candidate.targetKind}:${candidate.targetId}:${candidate.targetVersionId}`,
   ];
+}
+
+function laneManifestIsKnown(lane: ProactiveFollowupLaneSnapshot): boolean {
+  if (lane.name === "open_loop") {
+    return lane.manifestVersion === PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION;
+  }
+  return (PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS as readonly string[]).includes(
+    lane.manifestVersion,
+  );
 }
 
 function laneIsReadable(
   input: ProactiveFollowupSelectionInput,
   lane: ProactiveFollowupLaneSnapshot,
 ): boolean {
+  const candidateShapesMatchLane = lane.candidates.every((candidate) =>
+    lane.name === "open_loop"
+      ? candidate.targetKind === "open_loop" && candidate.source === "open_loop"
+      : candidate.targetKind === "memory_claim" &&
+        (candidate.source === "person_portrait" ||
+          candidate.source === "query_retrieval"),
+  );
   return (
     !lane.enabled ||
     (lane.status === "complete" &&
       lane.integrity === "valid" &&
-      lane.manifestVersion !== "" &&
+      laneManifestIsKnown(lane) &&
+      candidateShapesMatchLane &&
       lane.watermark !== null &&
+      Number.isInteger(lane.watermark.sourceRevision) &&
+      lane.watermark.sourceRevision >= 0 &&
+      Number.isInteger(lane.watermark.coveredThroughSequence) &&
+      lane.watermark.coveredThroughSequence >= 0 &&
       lane.watermark.sourceRevision === input.currentSourceRevision &&
       lane.watermark.coveredThroughSequence >= input.currentUserEventSequence)
   );
@@ -126,11 +193,15 @@ function selectionManifest(
       candidateCount: lane.candidates.length,
     })),
     candidates: candidateDecisions.map<ProactiveFollowupManifestCandidate>(
-      ({ candidate, rankTuple, eligible, exclusionReason }) => ({
+      ({ candidate, state, rankTuple, eligible, exclusionReason }) => ({
         targetKind: candidate.targetKind,
         targetId: candidate.targetId,
         targetVersionId: candidate.targetVersionId,
         rankTuple,
+        stateVersionId: state?.stateVersionId ?? null,
+        suppressionReason: state?.suppressionReason ?? null,
+        consecutiveSoftStopCount: state?.consecutiveSoftStopCount ?? 0,
+        suppressedUntilAt: state?.suppressedUntilAt ?? null,
         eligible,
         exclusionReason,
       }),
@@ -154,13 +225,17 @@ function none(
 function uniqueCandidates(
   lanes: readonly ProactiveFollowupLaneSnapshot[],
 ): readonly ProactiveFollowupCandidate[] | null {
-  const seen = new Set<string>();
+  const seen = new Map<string, string>();
   const candidates: ProactiveFollowupCandidate[] = [];
   for (const lane of lanes) {
     for (const candidate of lane.candidates) {
       const key = targetKey(candidate);
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const existingVersion = seen.get(key);
+      if (existingVersion !== undefined) {
+        if (existingVersion !== candidate.targetVersionId) return null;
+        continue;
+      }
+      seen.set(key, candidate.targetVersionId);
       candidates.push(candidate);
     }
   }
@@ -197,7 +272,10 @@ function candidateDecision(
   if (
     candidate.targetId === "" ||
     candidate.targetVersionId === "" ||
-    candidate.targetKind === undefined
+    !["open_loop", "memory_claim"].includes(candidate.targetKind) ||
+    !["open_loop", "person_portrait", "query_retrieval"].includes(
+      candidate.source,
+    )
   ) {
     return fail("invalid_target_identity");
   }
@@ -243,7 +321,13 @@ export function selectProactiveFollowupTarget(
   if (
     input.continuousExchangeNo < 1 ||
     input.currentUserEventSequence < 1 ||
-    input.currentSourceRevision < 0
+    input.currentSourceRevision < 0 ||
+    !Number.isInteger(input.continuousExchangeNo) ||
+    !Number.isInteger(input.currentUserEventSequence) ||
+    !Number.isInteger(input.currentSourceRevision) ||
+    input.userId === "" ||
+    input.dailySessionId === "" ||
+    input.currentUserEventRevisionId === ""
   ) {
     return none(input, "invalid_exchange_identity");
   }
@@ -275,10 +359,15 @@ export function selectProactiveFollowupTarget(
   }
   const enabledLanes = input.lanes.filter((lane) => lane.enabled);
   if (enabledLanes.length === 0) return none(input, "no_enabled_lane");
+  if (
+    new Set(input.lanes.map((lane) => lane.name)).size !== input.lanes.length
+  ) {
+    return none(input, "lane_integrity");
+  }
   if (input.lanes.some((lane) => !laneIsReadable(input, lane))) {
     return none(input, "lane_not_readable");
   }
-  const candidates = uniqueCandidates(input.lanes);
+  const candidates = uniqueCandidates(enabledLanes);
   if (candidates === null) return none(input, "candidate_capacity_exceeded");
   const states = stateMap(input.states);
   if (states === null) return none(input, "state_integrity");
@@ -316,4 +405,3 @@ export function selectProactiveFollowupTarget(
   );
   return { outcome: "selected", target, manifest };
 }
-

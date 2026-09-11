@@ -152,6 +152,7 @@ function releaseState(
     targetVersionId,
     eligibilityStatus: "eligible",
     suppressionReason: null,
+    consecutiveSoftStopCount: 0,
     suppressedUntilAt: null,
     releaseReason: reason as ProactiveFollowupStateSnapshot["releaseReason"],
   };
@@ -223,4 +224,3 @@ export function planProactiveFollowupCooldownRelease(input: Readonly<{
 }
 
 export { PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION };
-

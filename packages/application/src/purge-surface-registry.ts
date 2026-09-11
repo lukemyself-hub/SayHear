@@ -698,6 +698,49 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     clearOrder: 62,
   }),
   tableSurface({
+    table: "proactive_followup_dispositions",
+    indexes: ["proactive_followup_dispositions_trigger_idx"],
+    ownerResolution: directUser,
+    privateContentFields: ["final_text_locator"],
+    introducedBySchemaOrIntegration: "0050_proactive_followup.sql",
+    clearOrder: 63,
+  }),
+  tableSurface({
+    table: "proactive_followup_uses",
+    indexes: ["proactive_followup_uses_target_idx"],
+    ownerResolution: directUser,
+    privateContentFields: ["final_text_locator", "policy_bundle"],
+    introducedBySchemaOrIntegration: "0050_proactive_followup.sql",
+    clearOrder: 64,
+  }),
+  tableSurface({
+    table: "proactive_followup_reservations",
+    indexes: ["proactive_followup_reservations_active_idx"],
+    ownerResolution: directUser,
+    privateContentFields: ["selection_manifest"],
+    introducedBySchemaOrIntegration: "0050_proactive_followup.sql",
+    clearOrder: 65,
+  }),
+  tableSurface({
+    table: "proactive_followup_state_versions",
+    indexes: [
+      "proactive_followup_state_versions_due_idx",
+      "proactive_followup_state_versions_owner_idx",
+    ],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0050_proactive_followup.sql",
+    clearOrder: 66,
+  }),
+  tableSurface({
+    table: "proactive_followup_states",
+    indexes: ["proactive_followup_states_current_version_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0050_proactive_followup.sql",
+    clearOrder: 67,
+  }),
+  tableSurface({
     table: "compiled_contexts",
     privateContentFields: [
       "content_hmac",
@@ -1510,6 +1553,11 @@ open_loop_expiry_runs|open_loop_expiry_run_id,user_id,open_loop_id,expiring_vers
 open_loop_run_outcomes|open_loop_run_outcome_id,user_id,source_event_revision_id,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,formed_count,closed_count,suppressed_count,skipped_count,error_code,created_at,updated_at
 open_loop_versions|open_loop_version_id,open_loop_id,user_id,revision,open_loop_kind,source_evidence_item_id,source_event_revision_id,source_claim_version_id,source_episode_version_id,canonical_claim_key,localized_summary,expected_start_at,expected_end_at,time_precision,timezone,followup_eligible_from_at,expires_at,expiry_source,status,closure_event_revision_id,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,terminal_effective_at,terminal_processed_at,content_expires_at,created_at,content_purged_at
 open_loops|open_loop_id,user_id,open_loop_kind,current_version_id,created_at,deleted_at
+proactive_followup_dispositions|proactive_followup_disposition_id,user_id,proactive_followup_use_id,target_kind,target_id,target_version_id,trigger_user_event_revision_id,trigger_user_event_sequence,signal,final_text_locator,outcome,state_version_id,created_at
+proactive_followup_uses|proactive_followup_use_id,user_id,proactive_followup_reservation_id,daily_session_id,continuous_exchange_no,main_generation_command_id,segment_generation_command_id,compiled_context_id,prompt_user_event_revision_id,prompt_user_event_sequence,assistant_event_id,assistant_event_revision_id,target_kind,target_id,target_version_id,expression_kind,final_text_locator,selection_policy_version,prompt_policy_version,policy_bundle,created_at
+proactive_followup_reservations|proactive_followup_reservation_id,user_id,daily_session_id,continuous_exchange_no,main_generation_command_id,segment_generation_command_id,target_kind,target_id,target_version_id,selection_manifest,selection_policy_version,status,expected_data_epoch,committed_use_id,created_at,terminal_at
+proactive_followup_state_versions|proactive_followup_state_version_id,proactive_followup_state_id,user_id,revision,target_kind,target_id,target_version_id,eligibility_status,suppression_reason,consecutive_soft_stop_count,suppressed_until_at,release_reason,trigger_user_event_revision_id,last_prompt_event_revision_id,last_response_event_revision_id,last_used_at,trigger_exchange_no,policy_version,created_at
+proactive_followup_states|proactive_followup_state_id,user_id,target_kind,target_id,current_version_id,created_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,label,content,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
 episodes|episode_id,user_id,episode_kind_id,current_version_id,status,created_at,deleted_at
@@ -1647,6 +1695,11 @@ open_loop_closure_audits|open_loop_closure_audit_id,user_id,source_event_revisio
 open_loop_expiry_runs|open_loop_expiry_run_id,user_id,open_loop_id,expiring_version_id,policy_version,terminal_effective_at,terminal_processed_at,created_at
 open_loop_run_outcomes|open_loop_run_outcome_id,user_id,source_event_revision_id,policy_version,expected_data_epoch,generation_command_id,model_run_attempt_id,status,outcome_detail,formed_count,closed_count,suppressed_count,skipped_count,error_code,created_at,updated_at
 open_loop_versions|open_loop_version_id,open_loop_id,user_id,revision,open_loop_kind,source_evidence_item_id,source_event_revision_id,source_claim_version_id,source_episode_version_id,time_precision,followup_eligible_from_at,expires_at,expiry_source,status,closure_event_revision_id,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,terminal_effective_at,terminal_processed_at,content_expires_at,created_at,content_purged_at
+proactive_followup_dispositions|proactive_followup_disposition_id,user_id,proactive_followup_use_id,target_kind,target_id,target_version_id,trigger_user_event_revision_id,trigger_user_event_sequence,signal,outcome,state_version_id,created_at
+proactive_followup_uses|proactive_followup_use_id,user_id,proactive_followup_reservation_id,daily_session_id,continuous_exchange_no,main_generation_command_id,segment_generation_command_id,compiled_context_id,prompt_user_event_revision_id,prompt_user_event_sequence,assistant_event_id,assistant_event_revision_id,target_kind,target_id,target_version_id,expression_kind,selection_policy_version,prompt_policy_version,created_at
+proactive_followup_reservations|proactive_followup_reservation_id,user_id,daily_session_id,continuous_exchange_no,main_generation_command_id,segment_generation_command_id,target_kind,target_id,target_version_id,selection_policy_version,status,expected_data_epoch,committed_use_id,created_at,terminal_at
+proactive_followup_state_versions|proactive_followup_state_version_id,proactive_followup_state_id,user_id,revision,target_kind,target_id,target_version_id,eligibility_status,suppression_reason,consecutive_soft_stop_count,suppressed_until_at,release_reason,trigger_user_event_revision_id,last_prompt_event_revision_id,last_response_event_revision_id,last_used_at,trigger_exchange_no,policy_version,created_at
+proactive_followup_states|proactive_followup_state_id,user_id,target_kind,target_id,current_version_id,created_at
 open_loops|open_loop_id,user_id,created_at,deleted_at
 episode_version_entity_links|episode_version_entity_link_id,episode_version_id,user_id,entity_id,created_at
 episode_versions|episode_version_id,episode_id,user_id,revision,source_revision,episode_kind_id,status,policy_version,generation_command_id,model_run_attempt_id,supersedes_version_id,enrichment_paused_at,enrichment_pause_reason,created_at,content_purged_at
@@ -1747,11 +1800,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:aacb4547:1405",
-    constraintManifestHash: "fnv1a32:a5c2f33d:747",
+    columnManifestHash: "fnv1a32:08b1aceb:1480",
+    constraintManifestHash: "fnv1a32:368e958d:796",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:be7e9724:410",
-    indexManifestHash: "fnv1a32:e1d5e2cc:122",
+    foreignKeyManifestHash: "fnv1a32:abfe49b3:435",
+    indexManifestHash: "fnv1a32:2ac04226:128",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
