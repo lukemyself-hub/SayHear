@@ -1982,6 +1982,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     // The race winner is scheduling-dependent; the contract is that both
     // calls converge on ONE order with exactly one created=true (issue #27).
     const [winner, loser] = first.created ? [first, second] : [second, first];
+    expect(winner.created).toBe(true);
     expect(loser.created).toBe(false);
     expect(loser.order.ownerPurgeOrderId).toBe(winner.order.ownerPurgeOrderId);
 
