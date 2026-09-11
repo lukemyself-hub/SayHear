@@ -50,6 +50,8 @@ export type ConversationTextModelRequest = Readonly<{
   locale: string;
   messages: readonly ConversationTextMessage[];
   model: string;
+  /** Provider request parameters frozen by the owning release configuration. */
+  parameters?: Readonly<Record<string, unknown>>;
   signal?: AbortSignal;
   toolsDisabled?: boolean;
 }>;

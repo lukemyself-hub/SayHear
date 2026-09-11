@@ -323,6 +323,8 @@ export type WorkflowStarter = (input: {
   attemptNo?: number;
   attemptKind?: string;
   rolloutPin?: string;
+  /** Owner identity for daily-session workflows; content-free recovery fence. */
+  ownerId?: UserId;
   actionExecutionId?: string;
   workflowCommandId: WorkflowCommandId;
   subjectId:
@@ -433,6 +435,9 @@ export function createOutboxDispatcherService(dependencies: {
             ...(typeof event.payload.rolloutPin === "string"
               ? { rolloutPin: event.payload.rolloutPin }
               : {}),
+            ...(typeof event.payload.ownerId === "string"
+              ? { ownerId: asUserId(event.payload.ownerId) }
+              : {}),
             workflowCommandId: event.workflowCommandId,
             subjectId: event.aggregateId,
             sourceRevision: Number(event.aggregateRevision),
@@ -531,6 +536,7 @@ const ALLOWLISTED_PAYLOAD_KEYS = new Set([
   "workflowCommandId",
   "subjectType",
   "subjectId",
+  "ownerId",
   "sourceRevision",
   "policyVersion",
   "expectedDataEpoch",

@@ -1,3 +1,13 @@
+import { resolve } from "node:path";
+
+import {
+  verifyOneA3bG1ReleaseManifest,
+  type OneA3bG1ReleaseManifest,
+} from "@sayhear/application";
+import {
+  verifyActiveG1Evidence as verifyActiveG1EvidenceFiles,
+} from "./g1-release-evidence";
+
 type Environment = Readonly<Record<string, string | undefined>>;
 
 export type SayHearDeployment =
@@ -38,6 +48,100 @@ function resolveDeployment(environment: Environment): SayHearDeployment {
   }
 
   return authoritativeDeployment ?? explicitDeployment ?? "development";
+}
+
+function g1StageRequested(environment: Environment): boolean {
+  return (
+    environment.SAYHEAR_EPISODE_BUILD_ENABLED === "true" ||
+    environment.SAYHEAR_REFLECTION_ENABLED === "true"
+  );
+}
+
+function g1StageFullyRequested(environment: Environment): boolean {
+  return (
+    environment.SAYHEAR_EPISODE_BUILD_ENABLED === "true" &&
+    environment.SAYHEAR_REFLECTION_ENABLED === "true"
+  );
+}
+
+function verifyActiveG1Evidence(manifest: OneA3bG1ReleaseManifest): void {
+  const roots = [
+    process.cwd(),
+    resolve(process.cwd(), ".."),
+    resolve(process.cwd(), "../.."),
+    resolve(process.cwd(), "../../.."),
+  ].filter((root, index, all) => all.indexOf(root) === index);
+  verifyActiveG1EvidenceFiles(manifest, roots);
+}
+
+/**
+ * Resolve and verify the exact G1 release artifact. An absent artifact keeps
+ * the stage closed; an explicitly requested stage requires an active,
+ * content-addressed artifact and an explicit deployment commit pin.
+ */
+export function resolveOneA3bG1ReleaseManifest(
+  environment: Environment,
+): OneA3bG1ReleaseManifest | null {
+  const raw = environment.SAYHEAR_1A_3B_G1_RELEASE_MANIFEST;
+  if (g1StageRequested(environment) && !g1StageFullyRequested(environment)) {
+    throw new Error(
+      "SAYHEAR_EPISODE_BUILD_ENABLED and SAYHEAR_REFLECTION_ENABLED must be enabled together for the evaluated 1A.3b G1 release.",
+    );
+  }
+  if (!raw || raw.trim() === "") {
+    if (g1StageRequested(environment)) {
+      throw new Error(
+        "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST is required when an 1A.3b G1 write switch is enabled.",
+      );
+    }
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST must be valid JSON.",
+    );
+  }
+
+  let verification: ReturnType<typeof verifyOneA3bG1ReleaseManifest>;
+  try {
+    verification = verifyOneA3bG1ReleaseManifest(parsed);
+  } catch {
+    throw new Error(
+      "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST failed structural verification.",
+    );
+  }
+  if (!verification.passed) {
+    throw new Error(
+      `SAYHEAR_1A_3B_G1_RELEASE_MANIFEST is invalid: ${verification.mismatches.join("; ")}`,
+    );
+  }
+  const manifest = parsed as OneA3bG1ReleaseManifest;
+  const deployedCommit =
+    environment.VERCEL_GIT_COMMIT_SHA ??
+    environment.SAYHEAR_DEPLOYED_GIT_COMMIT_SHA;
+  if (g1StageFullyRequested(environment) && !deployedCommit) {
+    throw new Error(
+      "SAYHEAR_DEPLOYED_GIT_COMMIT_SHA or VERCEL_GIT_COMMIT_SHA is required when the G1 write switches are enabled.",
+    );
+  }
+  if (deployedCommit && manifest.gitCommit !== deployedCommit) {
+    throw new Error(
+      "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST gitCommit does not match the deployed commit.",
+    );
+  }
+  if (g1StageRequested(environment) && manifest.status !== "active") {
+    throw new Error(
+      "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST must be active before a G1 write switch can open.",
+    );
+  }
+  if (g1StageFullyRequested(environment) && manifest.status === "active") {
+    verifyActiveG1Evidence(manifest);
+  }
+  return manifest;
 }
 
 export function assertSafeRuntimeConfiguration(
@@ -85,6 +189,8 @@ export function assertSafeRuntimeConfiguration(
     );
   }
 
+  resolveOneA3bG1ReleaseManifest(environment);
+
   return deployment;
 }
 
@@ -113,6 +219,7 @@ function explicitSwitch(environment: Environment, name: string): boolean {
 
 export function loadRuntimeConfiguration(environment: Environment) {
   const deployment = assertSafeRuntimeConfiguration(environment);
+  const oneA3bG1ReleaseManifest = resolveOneA3bG1ReleaseManifest(environment);
   const testNow = environment.SAYHEAR_TEST_NOW
     ? new Date(environment.SAYHEAR_TEST_NOW)
     : null;
@@ -190,6 +297,26 @@ export function loadRuntimeConfiguration(environment: Environment) {
       : adapter === "deepseek"
         ? { apiKey: required(environment, "DEEPSEEK_API_KEY"), baseUrl: deepseekBaseUrl }
         : null;
+  const roleProviderAdapters = Object.freeze({
+    deepseek:
+      !environment.DEEPSEEK_API_KEY
+        ? null
+        : Object.freeze({
+            apiKey: environment.DEEPSEEK_API_KEY,
+            baseUrl: deepseekBaseUrl,
+            provider: "deepseek" as const,
+            timeoutMs,
+          }),
+    openai:
+      !environment.OPENAI_API_KEY
+        ? null
+        : Object.freeze({
+            apiKey: environment.OPENAI_API_KEY,
+            baseUrl: "https://api.openai.com/v1",
+            provider: "openai" as const,
+            timeoutMs,
+          }),
+  });
   const inactivityTimeoutMs = Number(
     environment.SAYHEAR_INACTIVITY_TIMEOUT_MS ?? "1800000",
   );
@@ -338,6 +465,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
       adapter,
       apiKey: liveProviderCredentials?.apiKey ?? null,
       timeoutMs,
+      roleAdapters: roleProviderAdapters,
       ...(liveProviderCredentials
         ? { baseUrl: liveProviderCredentials.baseUrl }
         : {}),
@@ -363,6 +491,9 @@ export function loadRuntimeConfiguration(environment: Environment) {
       deterministicChunks: Object.freeze(deterministicChunks),
       ...(failAfterCompletion ? { failAfterCompletion: true } : {}),
       ...(failAfterChunks === undefined ? {} : { failAfterChunks }),
+    }),
+    oneA3bG1: Object.freeze({
+      releaseManifest: oneA3bG1ReleaseManifest,
     }),
     writeSwitches,
   });

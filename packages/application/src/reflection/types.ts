@@ -400,6 +400,23 @@ export type ReflectionAttemptContext =
   | Readonly<{ outcome: "settled" }>
   | Readonly<{ outcome: "not_found" }>;
 
+export type ReflectionAttemptPreparation = Readonly<{
+  userId: UserId;
+  scopeType: ReflectionScopeType;
+  dailySessionId: DailySessionId | null;
+  weekIdentifier: string | null;
+  windowStartDate: string | null;
+  windowEndDate: string | null;
+  sourceRevision: number;
+  sourceDigest: string | null;
+  claimBaselineDigest: string;
+  policyVersion: string;
+  expectedDataEpoch: number;
+  generationCommandId: GenerationCommandId;
+  modelRunAttemptId: ModelRunAttemptId;
+  now: Date;
+}>;
+
 export type ReflectionDailySnapshotOutcome =
   | Readonly<{
       outcome: "evaluated";
@@ -503,6 +520,11 @@ export type ReflectionRepository = Readonly<{
     generationCommandId: GenerationCommandId;
     modelRunAttemptId: ModelRunAttemptId;
   }): Promise<ReflectionAttemptContext>;
+  /** Create the content-free run ledger before a Provider call. */
+  prepareAttempt?(input: ReflectionAttemptPreparation): Promise<
+    | Readonly<{ outcome: "prepared" | "already_prepared" | "already_built" }>
+    | Readonly<{ outcome: "fenced"; reason: string }>
+  >;
   /**
    * Persists the draft ReflectionVersion (status draft) and the ready run row
    * in one transaction, re-verifying epoch + exact head + baseline digest.
@@ -610,6 +632,8 @@ export type ReflectionEntrypointDependencies = Readonly<{
   clock: () => Date;
   repository: ReflectionRepository;
   modelRoleCommandService: import("../model-role-runtime").ModelRoleCommandService;
+  /** Final recovery/rollout/epoch claim immediately before provider dispatch. */
+  providerEgress?: import("../model-role-runtime").ModelRoleProviderEgress;
   reflectionProvider: ReflectionGenerationModelProvider;
   narrativeValidation: import("../narrative-validation/types").NarrativeValidationEntrypointDependencies;
   dedupeFingerprintSecret: string;

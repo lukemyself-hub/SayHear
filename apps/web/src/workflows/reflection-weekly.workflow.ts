@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  asUserId,
   runReflectionWeeklyBuild,
   type ReflectionBuildEntrypointResult,
 } from "@sayhear/application";
@@ -16,6 +17,7 @@ import { createServerComposition } from "../server-composition";
 export async function reflectionWeeklyWorkflow(input: {
   workflowCommandId: string;
   subjectId: string;
+  ownerId: string;
   sourceRevision: number;
   weekIdentifier: string;
   windowStartDate: string;
@@ -31,6 +33,7 @@ export async function reflectionWeeklyWorkflow(input: {
 async function runReflectionWeeklyStep(input: {
   workflowCommandId: string;
   subjectId: string;
+  ownerId: string;
   sourceRevision: number;
   weekIdentifier: string;
   windowStartDate: string;
@@ -41,6 +44,8 @@ async function runReflectionWeeklyStep(input: {
 }): Promise<ReflectionBuildEntrypointResult> {
   "use step";
   const composition = await createServerComposition();
+  await composition.modelRoleCommandService.verifyActiveG1Release?.();
+  await composition.recoveryGate.requireOpen(asUserId(input.ownerId));
   const policyVersion =
     composition.reflectionReadinessPolicyVersion ?? input.policyVersion;
   if (policyVersion !== input.policyVersion) {
@@ -67,5 +72,6 @@ async function runReflectionWeeklyStep(input: {
       sourceDigest: input.sourceDigest,
     },
     recoveryGate: composition.recoveryGate,
+    recoveryOwnerId: asUserId(input.ownerId),
   });
 }

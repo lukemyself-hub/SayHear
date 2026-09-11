@@ -26,6 +26,7 @@ import type {
   ReflectionEpisodeInput,
   ReflectionEvidenceInput,
   ReflectionFrozenInput,
+  ReflectionAttemptPreparation,
   ReflectionModelStatement,
   ReflectionRepository,
   ReflectionRunOutcomeRow,
@@ -50,6 +51,7 @@ import {
   insertCandidateEvidenceLinksWithin,
   insertMemoryCandidateWithin,
 } from "./postgres-memory-claim-repository";
+import { modelRoleAttemptIsRunning } from "./postgres-model-role-attempt-fence";
 
 /**
  * PostgreSQL adapter for Daily / Weekly Reflection (issue #199). Every
@@ -1049,6 +1051,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         payload: {
           scope: "daily",
           claimBaselineDigest: input.claimBaselineDigest,
+          ownerId: row.user_id,
         },
       });
       await client.query("COMMIT");
@@ -1135,6 +1138,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           sourceDigest: input.sourceDigest,
           windowStartDate: input.windowStartDate,
           windowEndDate: input.windowEndDate,
+          ownerId: input.userId,
         },
       });
       await client.query("COMMIT");
@@ -1669,12 +1673,198 @@ export class PostgresReflectionRepository implements ReflectionRepository {
 
   // ---- Draft persist ------------------------------------------------------------------
 
+  /** Create the content-free run ledger before the first Provider dispatch. */
+  public async prepareAttempt(
+    input: ReflectionAttemptPreparation,
+  ): Promise<
+    | Readonly<{ outcome: "prepared" | "already_prepared" | "already_built" }>
+    | Readonly<{ outcome: "fenced"; reason: string }>
+  > {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      if (!(await modelRoleAttemptIsRunning(client, input))) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "attempt_settled" };
+      }
+      const owner = await client.query<{ status: string; data_epoch: string }>(
+        "SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE",
+        [input.userId],
+      );
+      const ownerRow = owner.rows[0];
+      if (!ownerRow || ownerRow.status !== "active") {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "owner" };
+      }
+      if (Number(ownerRow.data_epoch) !== input.expectedDataEpoch) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "data_epoch" };
+      }
+      if (input.scopeType === "daily_session") {
+        const session = await client.query<{
+          user_id: string;
+          source_revision: string;
+          activity_state: string;
+        }>(
+          `SELECT user_id, source_revision::text, activity_state
+           FROM daily_sessions
+           WHERE daily_session_id = $1 AND user_id = $2
+           FOR UPDATE`,
+          [input.dailySessionId, input.userId],
+        );
+        const sessionRow = session.rows[0];
+        if (!sessionRow || Number(sessionRow.source_revision) !== input.sourceRevision) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "stale_source" };
+        }
+        if (sessionRow.activity_state !== "quiescent") {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "not_quiescent" };
+        }
+        if (await this.digestBaselineWithin(client, input.userId) !== input.claimBaselineDigest) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "baseline_changed" };
+        }
+      } else {
+        const digest = await this.weeklyWindowDigestWithin(client, input.userId, {
+          weekIdentifier: input.weekIdentifier ?? "",
+          windowStartDate: input.windowStartDate ?? "",
+          windowEndDate: input.windowEndDate ?? "",
+        });
+        if (!digest || digest !== input.sourceDigest) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "digest_changed" };
+        }
+      }
+
+      const runId = createUuidV7(input.now);
+      const inserted = await client.query<{ status: string }>(
+        `INSERT INTO reflection_runs (
+           reflection_run_id, user_id, scope_type, daily_session_id,
+           week_window_id, window_start_date, window_end_date,
+           source_revision, source_digest, claim_baseline_digest,
+           policy_version, expected_data_epoch, generation_command_id,
+           model_run_attempt_id, status, created_at, updated_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                   $11, $12, $13, $14, 'ready', $15, $15)
+         ON CONFLICT DO NOTHING
+         RETURNING reflection_run_id, status`,
+        [
+          runId,
+          input.userId,
+          input.scopeType,
+          input.dailySessionId,
+          input.weekIdentifier
+            ? computeWeekWindowId(input.userId, input.weekIdentifier)
+            : null,
+          input.windowStartDate,
+          input.windowEndDate,
+          input.sourceRevision,
+          input.sourceDigest,
+          input.claimBaselineDigest,
+          input.policyVersion,
+          input.expectedDataEpoch,
+          input.generationCommandId,
+          input.modelRunAttemptId,
+          input.now,
+        ],
+      );
+      if (inserted.rows[0]) {
+        await client.query("COMMIT");
+        return {
+          outcome: inserted.rows[0].status === "built" ? "already_built" : "prepared",
+        };
+      }
+
+      const existing = await client.query<{ status: string }>(
+        input.scopeType === "daily_session"
+          ? `SELECT status FROM reflection_runs
+             WHERE user_id = $1 AND daily_session_id = $2
+               AND source_revision = $3 AND claim_baseline_digest = $4
+               AND policy_version = $5 AND scope_type = 'daily_session'
+             FOR UPDATE`
+          : `SELECT status FROM reflection_runs
+             WHERE user_id = $1 AND week_window_id = $2
+               AND source_digest = $3 AND policy_version = $4
+               AND scope_type = 'date_range'
+             FOR UPDATE`,
+        input.scopeType === "daily_session"
+          ? [
+              input.userId,
+              input.dailySessionId,
+              input.sourceRevision,
+              input.claimBaselineDigest,
+              input.policyVersion,
+            ]
+          : [
+              input.userId,
+              computeWeekWindowId(input.userId, input.weekIdentifier ?? ""),
+              input.sourceDigest,
+              input.policyVersion,
+            ],
+      );
+      if (existing.rows[0] && existing.rows[0].status !== "built") {
+        await client.query(
+          input.scopeType === "daily_session"
+            ? `UPDATE reflection_runs
+               SET generation_command_id = $6, model_run_attempt_id = $7,
+                   expected_data_epoch = $8, updated_at = $9
+               WHERE user_id = $1 AND daily_session_id = $2
+                 AND source_revision = $3 AND claim_baseline_digest = $4
+                 AND policy_version = $5 AND scope_type = 'daily_session'
+                 AND status <> 'built'`
+            : `UPDATE reflection_runs
+               SET generation_command_id = $5, model_run_attempt_id = $6,
+                   expected_data_epoch = $7, updated_at = $8
+               WHERE user_id = $1 AND week_window_id = $2
+                 AND source_digest = $3 AND policy_version = $4
+                 AND scope_type = 'date_range' AND status <> 'built'`,
+          input.scopeType === "daily_session"
+            ? [
+                input.userId,
+                input.dailySessionId,
+                input.sourceRevision,
+                input.claimBaselineDigest,
+                input.policyVersion,
+                input.generationCommandId,
+                input.modelRunAttemptId,
+                input.expectedDataEpoch,
+                input.now,
+              ]
+            : [
+                input.userId,
+                computeWeekWindowId(input.userId, input.weekIdentifier ?? ""),
+                input.sourceDigest,
+                input.policyVersion,
+                input.generationCommandId,
+                input.modelRunAttemptId,
+                input.expectedDataEpoch,
+                input.now,
+              ],
+        );
+      }
+      await client.query("COMMIT");
+      return {
+        outcome: existing.rows[0]?.status === "built" ? "already_built" : "already_prepared",
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   public async persistDraftVersion(
     input: ReflectionDraftInput,
   ): Promise<ReflectionDraftResult> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (!(await modelRoleAttemptIsRunning(client, input))) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "attempt_settled" };
+      }
       const owner = await client.query<{ status: string; data_epoch: string }>(
         "SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE",
         [input.userId],
@@ -1891,6 +2081,10 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (!(await modelRoleAttemptIsRunning(client, input))) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "attempt_settled" };
+      }
       const owner = await client.query<{ status: string; data_epoch: string }>(
         "SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE",
         [input.userId],
@@ -2285,6 +2479,18 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (
+        input.generationCommandId &&
+        input.modelRunAttemptId &&
+        !(await modelRoleAttemptIsRunning(client, {
+          userId: input.userId,
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: input.modelRunAttemptId,
+        }))
+      ) {
+        await client.query("ROLLBACK");
+        return { applied: false };
+      }
       const insert = await client.query(
         `INSERT INTO reflection_runs (
            reflection_run_id, user_id, scope_type, daily_session_id,

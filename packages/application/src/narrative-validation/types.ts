@@ -331,6 +331,8 @@ export type NarrativeValidationEntrypointDependencies = Readonly<{
   clock: () => Date;
   repository: NarrativeValidationRepository;
   modelRoleCommandService: import("../model-role-runtime").ModelRoleCommandService;
+  /** Final recovery/rollout/epoch claim immediately before provider dispatch. */
+  providerEgress?: import("../model-role-runtime").ModelRoleProviderEgress;
   narrativeValidationProvider: NarrativeValidationModelProvider;
 }>;
 
@@ -343,6 +345,9 @@ export type NarrativeValidationAttemptInput = Readonly<{
   generationCommandId: string;
   modelRunAttemptId: string;
   attemptNo: number;
+  /** Optional for legacy direct retry callers; runtime derives retry metadata. */
+  attemptKind?: import("../model-role-runtime").ModelRoleAttemptKind;
+  rolloutPin?: string;
 }>;
 
 export type NarrativeValidationEntrypointResult = Readonly<{

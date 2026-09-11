@@ -23,8 +23,17 @@ import {
   MAX_PROPOSALS_PER_BUILD,
 } from "./types";
 import { assertWorkflowSafe } from "../journal-eligibility";
-import type { RecoveryGate } from "../recovery-gate";
-import type { ModelRoleCommandService } from "../model-role-runtime";
+import { ProviderDispatchError } from "../conversation-model";
+import {
+  RecoveryGateClosedError,
+  type RecoveryGate,
+} from "../recovery-gate";
+import {
+  isModelRoleAttemptKind,
+  type ModelRoleAttemptKind,
+  type ModelRoleCommandService,
+  type ModelRoleProviderEgress,
+} from "../model-role-runtime";
 import {
   episodeDedupeFingerprint,
   episodeSemanticTarget,
@@ -147,7 +156,9 @@ export async function runEpisodeBuild(input: Readonly<{
   dedupeFingerprintSecret: string;
   workflowReceiptId: string;
   command: EpisodeBuildEntrypointInput;
+  providerEgress?: ModelRoleProviderEgress | undefined;
   recoveryGate?: RecoveryGate;
+  recoveryOwnerId?: UserId;
 }>): Promise<EpisodeBuildEntrypointResult> {
   asWorkflowCommandId(input.command.workflowCommandId);
   const dailySessionId = asDailySessionId(input.command.subjectId);
@@ -162,6 +173,13 @@ export async function runEpisodeBuild(input: Readonly<{
     },
     "command",
   );
+
+  if (input.recoveryGate) {
+    if (!input.recoveryOwnerId) {
+      throw new Error("Episode build recovery requires a content-free owner identity.");
+    }
+    await input.recoveryGate.requireOpen(input.recoveryOwnerId);
+  }
 
   const evaluated = await input.repository.readSessionSnapshot({
     dailySessionId,
@@ -205,9 +223,11 @@ export async function runEpisodeBuild(input: Readonly<{
   });
 
   return executeEpisodeAttempt({
+    clock: input.clock,
     repository: input.repository,
     episodeBuildProvider: input.episodeBuildProvider,
     modelRoleCommandService: input.modelRoleCommandService,
+    providerEgress: input.providerEgress,
     dedupeFingerprintSecret: input.dedupeFingerprintSecret,
     userId: evaluated.snapshot.userId,
     dailySessionId,
@@ -220,7 +240,11 @@ export async function runEpisodeBuild(input: Readonly<{
       modelRunAttemptId: admitted.modelRunAttemptId,
       attemptNo: admitted.attemptNo,
     },
-    technicalRetriesUsed: 0,
+    attemptKind: admitted.attemptKind,
+    rolloutPin:
+      input.modelRoleCommandService.configuration("episode.build")?.rolloutPin ??
+      "",
+    technicalRetriesUsed: admitted.attemptNo - 1,
   });
 }
 
@@ -231,7 +255,16 @@ export async function runEpisodeBuildAttempt(input: Readonly<{
   episodeBuildProvider: EpisodeBuildModelProvider;
   dedupeFingerprintSecret: string;
   command: EpisodeBuildAttemptInput;
+  providerEgress?: ModelRoleProviderEgress | undefined;
+  recoveryGate?: RecoveryGate;
+  recoveryOwnerId?: UserId;
 }>): Promise<EpisodeBuildEntrypointResult> {
+  if (input.recoveryGate) {
+    if (!input.recoveryOwnerId) {
+      throw new Error("Episode retry recovery requires a content-free owner identity.");
+    }
+    await input.recoveryGate.requireOpen(input.recoveryOwnerId);
+  }
   const context = await input.repository.readAttemptContext({
     generationCommandId: asGenerationCommandId(input.command.generationCommandId),
     modelRunAttemptId: asModelRunAttemptId(input.command.modelRunAttemptId),
@@ -247,10 +280,16 @@ export async function runEpisodeBuildAttempt(input: Readonly<{
       errorCode: null,
     };
   }
+  await input.recoveryGate?.requireOpen(context.userId);
+  if (!isModelRoleAttemptKind(input.command.attemptKind)) {
+    throw new Error(`Unknown model role attempt kind: ${input.command.attemptKind}.`);
+  }
   return executeEpisodeAttempt({
+    clock: input.clock,
     repository: input.repository,
     episodeBuildProvider: input.episodeBuildProvider,
     modelRoleCommandService: input.modelRoleCommandService,
+    providerEgress: input.providerEgress,
     dedupeFingerprintSecret: input.dedupeFingerprintSecret,
     userId: context.userId,
     dailySessionId: context.dailySessionId,
@@ -263,6 +302,8 @@ export async function runEpisodeBuildAttempt(input: Readonly<{
       modelRunAttemptId: input.command.modelRunAttemptId,
       attemptNo: input.command.attemptNo,
     },
+    attemptKind: input.command.attemptKind,
+    rolloutPin: input.command.rolloutPin,
     technicalRetriesUsed: input.command.attemptNo - 1,
   });
 }
@@ -275,9 +316,11 @@ export async function runEpisodeBuildAttempt(input: Readonly<{
  * model configuration, never a cross-model fallback).
  */
 async function executeEpisodeAttempt(input: Readonly<{
+  clock: () => Date;
   repository: EpisodeBuilderRepository;
   episodeBuildProvider: EpisodeBuildModelProvider;
   modelRoleCommandService: ModelRoleCommandService;
+  providerEgress: ModelRoleProviderEgress | undefined;
   dedupeFingerprintSecret: string;
   userId: UserId;
   dailySessionId: DailySessionId;
@@ -290,21 +333,67 @@ async function executeEpisodeAttempt(input: Readonly<{
     modelRunAttemptId: string;
     attemptNo: number;
   }>;
+  attemptKind: ModelRoleAttemptKind;
+  rolloutPin: string;
   technicalRetriesUsed: number;
 }>): Promise<EpisodeBuildEntrypointResult> {
   let proposals: Awaited<
     ReturnType<EpisodeBuildModelProvider["buildProposals"]>
   >;
   try {
-    proposals = await input.episodeBuildProvider.buildProposals({
+    const request = {
       userId: input.userId,
       dailySessionId: input.dailySessionId,
       sourceRevision: input.sourceRevision,
       kindCatalog: EPISODE_KIND_CATALOG_V1,
       evidence: input.frozen.evidence,
       activeEpisodes: input.frozen.activeEpisodes,
-    });
+    };
+    proposals = input.providerEgress
+      ? await input.providerEgress.dispatch({
+          userId: input.userId,
+          generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+          modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+          role: "episode.build",
+          attemptNo: input.admitted.attemptNo,
+          attemptKind: input.attemptKind,
+          rolloutPin: input.rolloutPin,
+          currentSourceRevision: input.sourceRevision,
+          expectedDataEpoch: input.expectedDataEpoch,
+          now: input.clock(),
+          sourceIsCurrent: async () => {
+            const current = await input.repository.readSessionSnapshot({
+              dailySessionId: input.dailySessionId,
+              sourceRevision: input.sourceRevision,
+              policyVersion: input.policyVersion,
+            });
+            return (
+              current.outcome === "evaluated" &&
+              current.snapshot.userId === input.userId &&
+              current.snapshot.ownerEpoch === input.expectedDataEpoch
+            );
+          },
+          execute: () => input.episodeBuildProvider.buildProposals(request),
+        })
+      : await input.episodeBuildProvider.buildProposals(request);
   } catch (error) {
+    if (
+      error instanceof RecoveryGateClosedError &&
+      error.result.status === "unavailable"
+    ) {
+      throw error;
+    }
+    if (error instanceof ProviderDispatchError && !error.settlesAttempt) {
+      return {
+        dailySessionId: input.dailySessionId,
+        outcome: "fenced",
+        candidateCount: 0,
+        acceptedCount: 0,
+        unresolvedCount: 0,
+        rejectedCount: 0,
+        errorCode: "provider_egress_blocked",
+      };
+    }
     const failureCode = classifyEpisodeProviderError(error);
     const recorded = await input.modelRoleCommandService.recordAttemptResult({
       userId: input.userId,
@@ -318,7 +407,7 @@ async function executeEpisodeAttempt(input: Readonly<{
       failureCode,
       currentSourceRevision: input.sourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
-      now: new Date(),
+      now: input.clock(),
     });
     const outcome: EpisodeBuildEntrypointResult["outcome"] =
       recorded.outcome === "discarded"
@@ -355,33 +444,9 @@ async function executeEpisodeAttempt(input: Readonly<{
     };
   }
 
-  const recorded = await input.modelRoleCommandService.recordAttemptResult({
-    userId: input.userId,
-    generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
-    modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
-    role: "episode.build",
-    attemptNo: input.admitted.attemptNo,
-    technicalRetriesUsed: input.technicalRetriesUsed,
-    semanticRepairsUsed: 0,
-    outcome: "succeeded",
-    currentSourceRevision: input.sourceRevision,
-    expectedDataEpoch: input.expectedDataEpoch,
-    now: new Date(),
-  });
-  if (recorded.outcome === "discarded") {
-    // The attempt lost its fence after the provider call (source head moved,
-    // epoch advanced, or the pin was revoked). Fail closed: no commit.
-    return {
-      dailySessionId: input.dailySessionId,
-      outcome: "fenced",
-      candidateCount: 0,
-      acceptedCount: 0,
-      unresolvedCount: 0,
-      rejectedCount: 0,
-      errorCode: recorded.reason ?? "already_settled",
-    };
-  }
-
+  // Commit the authoritative domain result before settling the attempt. If a
+  // worker dies in the gap, recovery replays this idempotent commit and then
+  // settles the attempt without losing the Episode result.
   const committed = await input.repository.commitEpisodeAdmission({
     userId: input.userId,
     dailySessionId: input.dailySessionId,
@@ -394,6 +459,20 @@ async function executeEpisodeAttempt(input: Readonly<{
     dedupeFingerprintSecret: input.dedupeFingerprintSecret,
   });
   if (committed.outcome === "fenced") {
+    await input.modelRoleCommandService.recordAttemptResult({
+      userId: input.userId,
+      generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+      role: "episode.build",
+      attemptNo: input.admitted.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome: "failed",
+      failureCode: "business_fence",
+      currentSourceRevision: input.sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.clock(),
+    });
     return {
       dailySessionId: input.dailySessionId,
       outcome: "fenced",
@@ -402,6 +481,30 @@ async function executeEpisodeAttempt(input: Readonly<{
       unresolvedCount: 0,
       rejectedCount: 0,
       errorCode: committed.reason,
+    };
+  }
+  const recorded = await input.modelRoleCommandService.recordAttemptResult({
+    userId: input.userId,
+    generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+    modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+    role: "episode.build",
+    attemptNo: input.admitted.attemptNo,
+    technicalRetriesUsed: input.technicalRetriesUsed,
+    semanticRepairsUsed: 0,
+    outcome: "succeeded",
+    currentSourceRevision: input.sourceRevision,
+    expectedDataEpoch: input.expectedDataEpoch,
+    now: input.clock(),
+  });
+  if (recorded.outcome === "discarded") {
+    return {
+      dailySessionId: input.dailySessionId,
+      outcome: "fenced",
+      candidateCount: 0,
+      acceptedCount: 0,
+      unresolvedCount: 0,
+      rejectedCount: 0,
+      errorCode: recorded.reason ?? "already_settled",
     };
   }
   return {

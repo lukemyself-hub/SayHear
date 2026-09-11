@@ -588,6 +588,8 @@ export type EpisodeBuildEntrypointDependencies = Readonly<{
   clock: () => Date;
   repository: EpisodeBuilderRepository;
   modelRoleCommandService: import("../model-role-runtime").ModelRoleCommandService;
+  /** Final recovery/rollout/epoch claim immediately before provider dispatch. */
+  providerEgress?: import("../model-role-runtime").ModelRoleProviderEgress;
   episodeBuildProvider: EpisodeBuildModelProvider;
   dedupeFingerprintSecret: string;
   workflowReceiptId: string;

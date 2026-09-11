@@ -2,9 +2,22 @@ import type {
   AdmittedModelRoleCommand,
   ModelRoleCommandRepository,
   ModelRoleConfigurationSnapshot,
+  ModelRoleAttemptReadiness,
+  ModelRoleAttemptRecovery,
   PersistModelRoleAdmission,
+  PersistModelRoleAttemptDiscard,
+  PersistModelRoleAttemptValidation,
   PersistModelRoleAttemptResult,
   RecordedModelRoleAttempt,
+} from "@sayhear/application";
+import type {
+  ModelRoleAttemptKind,
+  OneA3bModelRole,
+  OneA3bG1ReleaseManifest,
+} from "@sayhear/application";
+import {
+  isModelRoleAttemptKind,
+  ONE_A_3B_G1_ENABLED_ROLES,
 } from "@sayhear/application";
 import {
   asGenerationCommandId,
@@ -39,6 +52,7 @@ type CommandRow = Readonly<{
   status: string;
   attempt_id: string | null;
   attempt_no: number | null;
+  attempt_kind: ModelRoleAttemptKind | null;
   attempt_status: string | null;
   provider: string;
   model: string;
@@ -75,10 +89,34 @@ type ActiveRolloutRow = Readonly<{
   policy_role: string;
   policy_provider: string;
   policy_status: string;
+  policy_consent_policy_version: string | null;
+  release_fingerprint: string | null;
+}>;
+
+const MODEL_ROLE_RECOVERY_WINDOW_MS = 300_000;
+
+type RecoveryAttemptRow = Readonly<{
+  model_run_attempt_id: string;
+  attempt_no: number | string;
+  attempt_kind: string;
+  operation_type: string;
+  provider: string;
+  model: string;
+  model_snapshot: string;
+  prompt_version: string;
+  status: string;
+  started_at: Date | null;
 }>;
 
 function asNumber(value: string | number): number {
   return typeof value === "number" ? value : Number(value);
+}
+
+function hasExactG1RoleSet(roles: readonly OneA3bModelRole[]): boolean {
+  return (
+    roles.length === ONE_A_3B_G1_ENABLED_ROLES.length &&
+    ONE_A_3B_G1_ENABLED_ROLES.every((role) => roles.includes(role))
+  );
 }
 
 function canonicalJson(value: unknown): string {
@@ -132,7 +170,9 @@ async function lockActiveRollout(
             config.max_semantic_repairs AS config_max_semantic_repairs,
             policy.role AS policy_role,
             policy.provider AS policy_provider,
-            policy.status AS policy_status
+            policy.status AS policy_status,
+            policy.consent_policy_version AS policy_consent_policy_version,
+            pin.release_fingerprint
      FROM model_role_rollout_pins pin
      INNER JOIN model_role_definitions definition
        ON definition.role = pin.role
@@ -153,16 +193,47 @@ async function lockActiveRollout(
   return result.rows[0] ?? null;
 }
 
+async function providerConsentIsActive(
+  client: PoolClient,
+  input: Readonly<{
+    userId: UserId;
+    role: string;
+    provider: string;
+    consentPolicyVersion: string | null;
+  }>,
+): Promise<boolean> {
+  if (input.consentPolicyVersion === null) return true;
+  const consent = await client.query<{ status: string }>(
+    `SELECT status
+     FROM provider_egress_consents
+     WHERE user_id = $1
+       AND provider = $2
+       AND role = $3
+       AND consent_policy_version = $4
+     FOR UPDATE`,
+    [
+      input.userId,
+      input.provider,
+      input.role,
+      input.consentPolicyVersion,
+    ],
+  );
+  return consent.rows[0]?.status === "active";
+}
+
 function rolloutMatchesConfiguration(
   row: ActiveRolloutRow,
   role: string,
   configuration: ModelRoleConfigurationSnapshot,
+  releaseFingerprint?: string,
 ): boolean {
   return (
     row.role === role &&
     row.enabled &&
     row.policy_status === "active" &&
     row.policy_role === role &&
+    (releaseFingerprint === undefined ||
+      row.release_fingerprint === releaseFingerprint) &&
     row.policy_provider === configuration.provider &&
     row.config_version === configuration.configVersion &&
     row.provider_policy_version === configuration.providerPolicyVersion &&
@@ -190,11 +261,63 @@ function rolloutMatchesConfiguration(
   );
 }
 
+function commandMatchesConfiguration(
+  row: CommandRow,
+  configuration: ModelRoleConfigurationSnapshot,
+): boolean {
+  return (
+    row.provider === configuration.provider &&
+    row.model === configuration.model &&
+    row.model_snapshot === configuration.modelSnapshot &&
+    row.prompt_version === configuration.promptVersion &&
+    row.schema_version === configuration.schemaVersion &&
+    row.role_policy_version === configuration.rolePolicyVersion &&
+    row.freshness_policy === configuration.freshnessPolicy &&
+    canonicalJson(row.parameter_snapshot) ===
+      canonicalJson(configuration.parameterSnapshot) &&
+    row.fallback_mode === configuration.fallbackMode &&
+    row.model_config_version === configuration.configVersion &&
+    row.provider_policy_version === configuration.providerPolicyVersion &&
+    row.rollout_pin === configuration.rolloutPin
+  );
+}
+
+type G1SchemaContract = Pick<OneA3bG1ReleaseManifest["schema"], "migrations" | "fingerprint">;
+
+async function assertG1SchemaContract(
+  client: PoolClient,
+  schemaContract: G1SchemaContract | undefined,
+): Promise<void> {
+  if (!schemaContract) return;
+  const applied = await client.query<{
+    migration_name: string;
+    migration_sha256: string;
+  }>(
+    `SELECT migration_name, migration_sha256
+     FROM schema_migrations
+     ORDER BY migration_name`,
+  );
+  const expected = schemaContract.migrations;
+  const matches =
+    applied.rows.length === expected.length &&
+    applied.rows.every(
+      (row, index) =>
+        row.migration_name === expected[index]?.name &&
+        row.migration_sha256 === expected[index]?.sha256,
+    );
+  if (!matches) {
+    throw new Error(
+      `Database schema does not match the frozen G1 migration contract ${schemaContract.fingerprint}.`,
+    );
+  }
+}
+
 function mapAdmissionResult(
   row: Readonly<{
     generation_command_id: string;
     model_run_attempt_id: string;
     attempt_no: number;
+    attempt_kind: ModelRoleAttemptKind;
     workflow_command_id: string | null;
     inserted: boolean;
     intent_key: string;
@@ -208,6 +331,7 @@ function mapAdmissionResult(
       ? asWorkflowCommandId(row.workflow_command_id)
       : null,
     attemptNo: row.attempt_no,
+    attemptKind: row.attempt_kind,
     intentKey: row.intent_key,
   };
 }
@@ -332,10 +456,435 @@ async function insertWorkflowAndOutbox(
   return resolvedWorkflowCommandId;
 }
 
+async function discardAttemptRows(
+  client: PoolClient,
+  input: Readonly<{
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    userId: UserId;
+    reason: PersistModelRoleAttemptDiscard["reason"];
+    now: Date;
+  }>,
+): Promise<void> {
+  await client.query(
+    `UPDATE model_run_attempts
+     SET status = 'discarded', error_code = $1,
+         completed_at = $2, provider_completed_at = $2,
+         recovery_status = 'terminal'
+     WHERE model_run_attempt_id = $3
+       AND generation_command_id = $4
+       AND user_id = $5
+       AND status NOT IN ('succeeded', 'failed', 'discarded', 'result_unknown')`,
+    [
+      input.reason,
+      input.now,
+      input.modelRunAttemptId,
+      input.generationCommandId,
+      input.userId,
+    ],
+  );
+  await client.query(
+    `UPDATE generation_commands
+     SET status = 'failed', recovery_status = 'terminal',
+         recovery_checked_at = $1, settled_at = $1
+     WHERE generation_command_id = $2
+       AND user_id = $3
+       AND status NOT IN ('succeeded', 'failed')`,
+    [input.now, input.generationCommandId, input.userId],
+  );
+  await client.query(
+    `UPDATE provider_egress_dispositions
+     SET status = 'failed', error_category = 'policy_blocked', completed_at = $1
+     WHERE model_run_attempt_id = $2
+       AND user_id = $3
+       AND status = 'dispatched'`,
+    [input.now, input.modelRunAttemptId, input.userId],
+  );
+}
+
 export class PostgresModelRoleCommandRepository
   implements ModelRoleCommandRepository
 {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(
+    private readonly pool: Pool,
+    private readonly schemaContract?: G1SchemaContract,
+    private readonly releaseFingerprint?: string,
+  ) {}
+
+  private async assertActiveG1Release(
+    client: PoolClient,
+    configurations: readonly ModelRoleConfigurationSnapshot[],
+  ): Promise<void> {
+    if (!hasExactG1RoleSet(configurations.map((configuration) => configuration.role))) {
+      throw new Error(
+        `G1 release must contain the complete active role set: ${ONE_A_3B_G1_ENABLED_ROLES.join(", ")}.`,
+      );
+    }
+    if (!this.releaseFingerprint || !/^sha256:[a-f0-9]{64}$/.test(this.releaseFingerprint)) {
+      throw new Error("G1 active rollout pins are missing their release fingerprint binding.");
+    }
+    await assertG1SchemaContract(client, this.schemaContract);
+    const active = await client.query<{ role: string; rollout_pin: string }>(
+      `SELECT role, rollout_pin
+       FROM model_role_rollout_pins
+       WHERE status = 'active'
+       FOR UPDATE`,
+      [],
+    );
+    if (
+      active.rows.length !== ONE_A_3B_G1_ENABLED_ROLES.length ||
+      new Set(active.rows.map((row) => row.role)).size !==
+        ONE_A_3B_G1_ENABLED_ROLES.length ||
+      active.rows.some(
+        (row) =>
+          !(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(row.role),
+      )
+    ) {
+      throw new Error("G1 active rollout pins are not the complete four-role set.");
+    }
+    for (const configuration of configurations) {
+      const rollout = await lockActiveRollout(
+        client,
+        configuration.role,
+        configuration.rolloutPin,
+      );
+      if (
+        !rollout ||
+        !rolloutMatchesConfiguration(
+          rollout,
+          configuration.role,
+          configuration,
+          this.releaseFingerprint,
+        )
+      ) {
+        throw new Error(
+          `Active G1 rollout pin for ${configuration.role} does not match the release manifest.`,
+        );
+      }
+    }
+  }
+
+  public async verifyActiveG1Release(input: Readonly<{
+    configurations: readonly ModelRoleConfigurationSnapshot[];
+  }>): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await this.assertActiveG1Release(client, input.configurations);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Reconcile a replayed model-role event before it can reach a Provider.
+   * A stale running attempt is made result-unknown and gets one new,
+   * content-free technical retry in the same transaction. A late callback for
+   * the old attempt therefore finds a terminal row and cannot settle it again.
+   */
+  public async recoverAttempt(input: Readonly<{
+    userId: UserId;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+  }>): Promise<ModelRoleAttemptRecovery> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await assertG1SchemaContract(client, this.schemaContract);
+      const command = await client.query<{
+        status: string;
+        model_role: string;
+        max_technical_retries: string | number;
+      }>(
+        `SELECT gc.status, gc.model_role,
+                definition.max_technical_retries
+         FROM generation_commands gc
+         INNER JOIN model_role_definitions definition
+           ON definition.role = gc.model_role
+         WHERE gc.generation_command_id = $1 AND gc.user_id = $2
+         FOR UPDATE`,
+        [input.generationCommandId, input.userId],
+      );
+      if (!command.rows[0]) {
+        await client.query("COMMIT");
+        return { outcome: "settled", terminalOutcome: "discarded" };
+      }
+      const latest = await client.query<RecoveryAttemptRow>(
+        `SELECT model_run_attempt_id, attempt_no, attempt_kind,
+                operation_type, provider, model, model_snapshot,
+                prompt_version, status, started_at
+         FROM model_run_attempts
+         WHERE generation_command_id = $1 AND user_id = $2
+         ORDER BY attempt_no DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [input.generationCommandId, input.userId],
+      );
+      const attempt = latest.rows[0];
+      if (!attempt) {
+        await client.query("COMMIT");
+        return { outcome: "settled", terminalOutcome: "discarded" };
+      }
+      const attemptId = asModelRunAttemptId(attempt.model_run_attempt_id);
+      const attemptNo = asNumber(attempt.attempt_no);
+      const attemptKind = isModelRoleAttemptKind(attempt.attempt_kind)
+        ? attempt.attempt_kind
+        : null;
+      if (!attemptKind) {
+        throw new Error("Model role recovery found an invalid attempt kind.");
+      }
+      if (command.rows[0].status === "succeeded") {
+        await client.query("COMMIT");
+        return { outcome: "settled", terminalOutcome: "succeeded" };
+      }
+      if (
+        command.rows[0].status === "failed" ||
+        command.rows[0].status === "interrupted" ||
+        attempt.status === "failed" ||
+        attempt.status === "discarded" ||
+        attempt.status === "result_unknown"
+      ) {
+        await client.query("COMMIT");
+        return { outcome: "settled", terminalOutcome: "failed" };
+      }
+      if (attempt.status === "succeeded") {
+        await client.query("COMMIT");
+        return { outcome: "settled", terminalOutcome: "succeeded" };
+      }
+      if (attempt.status === "prepared") {
+        await client.query("COMMIT");
+        return {
+          outcome: "ready",
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: attemptId,
+          attemptNo,
+          attemptKind,
+        };
+      }
+      const interrupted = attempt.status === "interrupted";
+      if (attempt.status !== "running" && !interrupted) {
+        await client.query("COMMIT");
+        return { outcome: "not_due" };
+      }
+      if (
+        !interrupted &&
+        (!attempt.started_at ||
+        attempt.started_at.getTime() + MODEL_ROLE_RECOVERY_WINDOW_MS >
+          input.now.getTime())
+      ) {
+        await client.query("COMMIT");
+        return { outcome: "not_due" };
+      }
+
+      await client.query(
+        `UPDATE model_run_attempts
+         SET status = 'result_unknown', error_category = 'unavailable',
+             error_code = 'recovery_timeout', completed_at = $1,
+             provider_completed_at = $1, recovery_status = 'retried'
+         WHERE model_run_attempt_id = $2 AND user_id = $3
+           AND status IN ('running', 'interrupted')`,
+        [input.now, attemptId, input.userId],
+      );
+      await client.query(
+        `UPDATE provider_egress_dispositions
+         SET status = 'failed', error_category = 'unavailable', completed_at = $1
+         WHERE model_run_attempt_id = $2 AND user_id = $3
+           AND status = 'dispatched'`,
+        [input.now, attemptId, input.userId],
+      );
+      if (attemptNo >= 1 + asNumber(command.rows[0].max_technical_retries)) {
+        await client.query(
+          `UPDATE generation_commands
+           SET status = 'failed', recovery_status = 'terminal',
+               recovery_checked_at = $1, settled_at = $1
+           WHERE generation_command_id = $2 AND user_id = $3
+             AND status NOT IN ('succeeded', 'failed')`,
+          [input.now, input.generationCommandId, input.userId],
+        );
+        await client.query("COMMIT");
+        return { outcome: "settled", terminalOutcome: "failed" };
+      }
+
+      const nextAttemptId = asModelRunAttemptId(createUuidV7(input.now));
+      await client.query(
+        `INSERT INTO model_run_attempts (
+           model_run_attempt_id, user_id, generation_command_id, attempt_no,
+           operation_type, provider, model, model_snapshot, prompt_version,
+           status, retry_of_model_run_attempt_id, recovery_status,
+           attempt_kind, source_attempt_id, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'prepared',
+                   $10, 'pending', 'technical_retry', $10, $11)`,
+        [
+          nextAttemptId,
+          input.userId,
+          input.generationCommandId,
+          attemptNo + 1,
+          attempt.operation_type,
+          attempt.provider,
+          attempt.model,
+          attempt.model_snapshot,
+          attempt.prompt_version,
+          attemptId,
+          input.now,
+        ],
+      );
+      await client.query(
+        `UPDATE generation_commands
+         SET status = 'retry_pending', recovery_status = 'recovering',
+             recovery_checked_at = $1, next_recovery_at = NULL,
+             settled_at = NULL
+         WHERE generation_command_id = $2 AND user_id = $3
+           AND status NOT IN ('succeeded', 'failed')`,
+        [input.now, input.generationCommandId, input.userId],
+      );
+      await client.query("COMMIT");
+      return {
+        outcome: "ready",
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: nextAttemptId,
+        attemptNo: attemptNo + 1,
+        attemptKind: "technical_retry",
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /** Bind already-provisioned active pins to the exact manifest before cutover. */
+  public async bindActiveG1Release(input: Readonly<{
+    configurations: readonly ModelRoleConfigurationSnapshot[];
+    manifestFingerprint: string;
+    now: Date;
+  }>): Promise<number> {
+    if (
+      !hasExactG1RoleSet(
+        input.configurations.map((configuration) => configuration.role),
+      ) ||
+      !/^sha256:[a-f0-9]{64}$/.test(input.manifestFingerprint)
+    ) {
+      throw new Error(
+        "G1 activation requires the complete role set and a valid manifest fingerprint.",
+      );
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await assertG1SchemaContract(client, this.schemaContract);
+      const active = await client.query<{ role: string }>(
+        `SELECT role
+         FROM model_role_rollout_pins
+         WHERE status = 'active'
+         FOR UPDATE`,
+        [],
+      );
+      if (
+        active.rows.length !== ONE_A_3B_G1_ENABLED_ROLES.length ||
+        new Set(active.rows.map((row) => row.role)).size !==
+          ONE_A_3B_G1_ENABLED_ROLES.length ||
+        active.rows.some(
+          (row) =>
+            !(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(row.role),
+        )
+      ) {
+        throw new Error("G1 activation requires the complete four-role active pin set.");
+      }
+      for (const configuration of input.configurations) {
+        const rollout = await lockActiveRollout(
+          client,
+          configuration.role,
+          configuration.rolloutPin,
+        );
+        if (!rollout || !rolloutMatchesConfiguration(rollout, configuration.role, configuration)) {
+          throw new Error(
+            `Active G1 rollout pin for ${configuration.role} does not match the manifest configuration.`,
+          );
+        }
+        if (
+          rollout.release_fingerprint !== null &&
+          rollout.release_fingerprint !== input.manifestFingerprint
+        ) {
+          throw new Error(
+            `Active G1 rollout pin for ${configuration.role} is already bound to another release.`,
+          );
+        }
+      }
+      const result = await client.query(
+        `UPDATE model_role_rollout_pins
+         SET release_fingerprint = $1
+         WHERE status = 'active'`,
+        [input.manifestFingerprint],
+      );
+      if (result.rowCount !== ONE_A_3B_G1_ENABLED_ROLES.length) {
+        throw new Error("G1 activation did not bind every active role pin.");
+      }
+      await client.query("COMMIT");
+      return result.rowCount;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Revoke the active pins before or during a G1 rollback. Admission and late
+   * result recording lock the same rows, so a result that arrives after this
+   * transaction commits is discarded by lockActiveRollout rather than becoming
+   * current under an old release.
+   */
+  public async revokeActiveRolloutPins(input: Readonly<{
+    now: Date;
+    roles: readonly OneA3bModelRole[];
+    configurations: readonly ModelRoleConfigurationSnapshot[];
+    manifestFingerprint: string;
+  }>): Promise<number> {
+    if (!hasExactG1RoleSet(input.roles)) {
+      throw new Error(
+        `G1 rollback must revoke the complete active role set atomically: ${ONE_A_3B_G1_ENABLED_ROLES.join(", ")}.`,
+      );
+    }
+    if (input.configurations.length !== input.roles.length ||
+        new Set(input.configurations.map((configuration) => configuration.role)).size !== input.roles.length ||
+        input.configurations.some((configuration) => !input.roles.includes(configuration.role)) ||
+        !/^sha256:[a-f0-9]{64}$/.test(input.manifestFingerprint)) {
+      throw new Error("G1 rollback requires the exact active role configurations and manifest fingerprint.");
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await this.assertActiveG1Release(client, input.configurations);
+      const result = await client.query<{ role: string }>(
+        `UPDATE model_role_rollout_pins
+         SET status = 'revoked', revoked_at = $1
+         WHERE status = 'active'
+           AND role = ANY($2::text[])
+           AND release_fingerprint = $3
+         RETURNING role`,
+        [input.now, [...input.roles], input.manifestFingerprint],
+      );
+      if (result.rows.length !== input.roles.length) {
+        throw new Error(
+          `G1 rollback expected ${input.roles.length} active rollout pins but found ${result.rows.length}; no pins were revoked.`,
+        );
+      }
+      await client.query("COMMIT");
+      return result.rows.length;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   public async admit(
     input: PersistModelRoleAdmission,
@@ -344,6 +893,7 @@ export class PostgresModelRoleCommandRepository
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await assertG1SchemaContract(client, this.schemaContract);
       const owner = await lockOwner(client, admission.userId);
       if (!owner || owner.status !== "active") {
         throw new ModelRoleAdmissionRejectedError("owner");
@@ -356,7 +906,24 @@ export class PostgresModelRoleCommandRepository
         admission.role,
         configuration.rolloutPin,
       );
-      if (!rollout || !rolloutMatchesConfiguration(rollout, admission.role, configuration)) {
+      const consentActive = rollout
+        ? await providerConsentIsActive(client, {
+            userId: admission.userId,
+            role: admission.role,
+            provider: configuration.provider,
+            consentPolicyVersion: rollout.policy_consent_policy_version,
+          })
+        : false;
+      if (
+        !rollout ||
+        !consentActive ||
+        !rolloutMatchesConfiguration(
+          rollout,
+          admission.role,
+          configuration,
+          this.releaseFingerprint,
+        )
+      ) {
         throw new ModelRoleAdmissionRejectedError("rollout");
       }
 
@@ -424,8 +991,9 @@ export class PostgresModelRoleCommandRepository
         const existing = await client.query<{
           model_run_attempt_id: string;
           attempt_no: number;
+          attempt_kind: string;
         }>(
-          `SELECT model_run_attempt_id, attempt_no
+          `SELECT model_run_attempt_id, attempt_no, attempt_kind
            FROM model_run_attempts
            WHERE generation_command_id = $1
            ORDER BY attempt_no DESC
@@ -435,11 +1003,15 @@ export class PostgresModelRoleCommandRepository
         if (!existing.rows[0]) {
           throw new Error("Existing model role command has no attempt ledger row.");
         }
+        if (!isModelRoleAttemptKind(existing.rows[0].attempt_kind)) {
+          throw new Error("Existing model role command has an invalid attempt kind.");
+        }
         await client.query("COMMIT");
         return mapAdmissionResult({
           generation_command_id: commandRow.generation_command_id,
           model_run_attempt_id: existing.rows[0].model_run_attempt_id,
           attempt_no: existing.rows[0].attempt_no,
+          attempt_kind: existing.rows[0].attempt_kind,
           workflow_command_id: null,
           inserted: false,
           intent_key: commandRow.intent_key,
@@ -485,10 +1057,266 @@ export class PostgresModelRoleCommandRepository
         generation_command_id: commandRow.generation_command_id,
         model_run_attempt_id: modelRunAttemptId,
         attempt_no: 1,
+        attempt_kind: "initial",
         workflow_command_id: workflowCommandId,
         inserted: true,
         intent_key: commandRow.intent_key,
       });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async validateAttemptInTransaction(
+    client: PoolClient,
+    input: PersistModelRoleAttemptValidation,
+  ): Promise<ModelRoleAttemptReadiness> {
+    await assertG1SchemaContract(client, this.schemaContract);
+    const command = await client.query<CommandRow>(
+      `SELECT command.generation_command_id, command.user_id,
+              command.model_role, command.model_config_version,
+              command.provider_policy_version, command.rollout_pin,
+              command.intent_key, command.source_revision,
+              command.expected_data_epoch, command.status,
+              attempt.model_run_attempt_id AS attempt_id,
+              attempt.attempt_no, attempt.attempt_kind, attempt.status AS attempt_status,
+              command.provider, command.model, command.model_snapshot,
+              command.prompt_version, command.schema_version,
+              command.role_policy_version, command.freshness_policy,
+              command.parameter_snapshot,
+              command.fallback_mode
+       FROM generation_commands command
+       INNER JOIN model_run_attempts attempt
+         ON attempt.generation_command_id = command.generation_command_id
+        AND attempt.user_id = command.user_id
+       WHERE command.generation_command_id = $1
+         AND command.user_id = $2
+         AND attempt.model_run_attempt_id = $3
+       FOR UPDATE OF command, attempt`,
+      [input.generationCommandId, input.userId, input.modelRunAttemptId],
+    );
+    const row = command.rows[0];
+    if (!row) return { outcome: "discarded", reason: "already_settled" };
+    if (
+      row.attempt_status === "succeeded" ||
+      row.attempt_status === "failed" ||
+      row.attempt_status === "discarded" ||
+      row.attempt_status === "result_unknown" ||
+      row.attempt_status !== "prepared" ||
+      !["prepared", "retry_pending"].includes(row.status)
+    ) {
+      return { outcome: "discarded", reason: "already_settled" };
+    }
+    if (
+      row.attempt_no !== input.attemptNo ||
+      row.attempt_kind !== input.attemptKind
+    ) {
+      await discardAttemptRows(client, {
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+        userId: input.userId,
+        reason: "attempt_metadata_mismatch",
+        now: input.now,
+      });
+      return { outcome: "discarded", reason: "attempt_metadata_mismatch" };
+    }
+    if (
+      row.model_role !== input.role ||
+      asNumber(row.source_revision) !== input.currentSourceRevision
+    ) {
+      await discardAttemptRows(client, {
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+        userId: input.userId,
+        reason: "source_changed",
+        now: input.now,
+      });
+      return { outcome: "discarded", reason: "source_changed" };
+    }
+    const owner = await lockOwner(client, input.userId);
+    if (
+      !owner ||
+      owner.status !== "active" ||
+      owner.dataEpoch !== input.expectedDataEpoch ||
+      owner.dataEpoch !== asNumber(row.expected_data_epoch)
+    ) {
+      await discardAttemptRows(client, {
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+        userId: input.userId,
+        reason: "data_epoch",
+        now: input.now,
+      });
+      return { outcome: "discarded", reason: "data_epoch" };
+    }
+    if (row.rollout_pin !== input.rolloutPin) {
+      await discardAttemptRows(client, {
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+        userId: input.userId,
+        reason: "rollout_pin_changed",
+        now: input.now,
+      });
+      return { outcome: "discarded", reason: "rollout_pin_changed" };
+    }
+    const rollout = await lockActiveRollout(
+      client,
+      input.role,
+      input.rolloutPin,
+    );
+    const consentActive = rollout
+      ? await providerConsentIsActive(client, {
+          userId: input.userId,
+          role: input.role,
+          provider: input.configuration.provider,
+          consentPolicyVersion: rollout.policy_consent_policy_version,
+        })
+      : false;
+    if (
+      !rollout ||
+      !consentActive ||
+      !rolloutMatchesConfiguration(
+        rollout,
+        input.role,
+        input.configuration,
+        this.releaseFingerprint,
+      ) ||
+      !commandMatchesConfiguration(row, input.configuration)
+    ) {
+      await discardAttemptRows(client, {
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+        userId: input.userId,
+        reason: "rollout_pin_changed",
+        now: input.now,
+      });
+      return { outcome: "discarded", reason: "rollout_pin_changed" };
+    }
+    return { outcome: "ready" };
+  }
+
+  public async validateAttempt(
+    input: PersistModelRoleAttemptValidation,
+  ): Promise<ModelRoleAttemptReadiness> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const readiness = await this.validateAttemptInTransaction(client, input);
+      await client.query("COMMIT");
+      return readiness;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async claimProviderDispatch(
+    input: PersistModelRoleAttemptValidation,
+  ): Promise<ModelRoleAttemptReadiness> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const readiness = await this.validateAttemptInTransaction(client, input);
+      if (readiness.outcome !== "ready") {
+        await client.query("COMMIT");
+        return readiness;
+      }
+      const claimed = await client.query(
+        `UPDATE model_run_attempts
+         SET status = 'running', started_at = $1
+         WHERE model_run_attempt_id = $2
+           AND user_id = $3
+           AND status = 'prepared'`,
+        [input.now, input.modelRunAttemptId, input.userId],
+      );
+      if (claimed.rowCount !== 1) {
+        await client.query("COMMIT");
+        return { outcome: "discarded", reason: "already_settled" };
+      }
+      await client.query(
+        `UPDATE generation_commands
+         SET status = 'running'
+         WHERE generation_command_id = $1
+           AND user_id = $2
+           AND status IN ('prepared', 'retry_pending')`,
+        [input.generationCommandId, input.userId],
+      );
+      await client.query(
+        `INSERT INTO provider_egress_dispositions (
+           provider_egress_disposition_id, user_id, model_run_attempt_id,
+           provider, model, role, provider_policy_version,
+           expected_data_epoch, status, checked_at, dispatched_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dispatched', $9, $9)
+         ON CONFLICT (model_run_attempt_id) DO NOTHING`,
+        [
+          createUuidV7(input.now),
+          input.userId,
+          input.modelRunAttemptId,
+          input.configuration.provider,
+          input.configuration.model,
+          input.role,
+          input.configuration.providerPolicyVersion,
+          input.expectedDataEpoch,
+          input.now,
+        ],
+      );
+      await client.query("COMMIT");
+      return { outcome: "ready" };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async discardAttempt(
+    input: PersistModelRoleAttemptDiscard,
+  ): Promise<RecordedModelRoleAttempt> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const attempt = await client.query<{
+        status: string;
+        generation_command_id: string;
+      }>(
+        `SELECT status, generation_command_id
+         FROM model_run_attempts
+         WHERE model_run_attempt_id = $1
+           AND generation_command_id = $2
+           AND user_id = $3
+         FOR UPDATE`,
+        [input.modelRunAttemptId, input.generationCommandId, input.userId],
+      );
+      const row = attempt.rows[0];
+      if (
+        !row ||
+        row.status === "succeeded" ||
+        row.status === "failed" ||
+        row.status === "discarded" ||
+        row.status === "result_unknown"
+      ) {
+        await client.query("COMMIT");
+        return {
+          outcome: "discarded",
+          reason: "already_settled",
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: input.modelRunAttemptId,
+        };
+      }
+      await discardAttemptRows(client, input);
+      await client.query("COMMIT");
+      return {
+        outcome: "discarded",
+        reason: input.reason,
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+      };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -503,6 +1331,7 @@ export class PostgresModelRoleCommandRepository
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      await assertG1SchemaContract(client, this.schemaContract);
       const command = await client.query<CommandRow>(
         `SELECT command.generation_command_id, command.user_id,
                 command.model_role, command.model_config_version,
@@ -551,7 +1380,7 @@ export class PostgresModelRoleCommandRepository
         row.model_role !== input.role ||
         asNumber(row.source_revision) !== input.currentSourceRevision
       ) {
-        await this.discardAttempt(client, input, "source_changed");
+        await this.discardAttemptForResult(client, input, "source_changed");
         await client.query("COMMIT");
         return {
           outcome: "discarded",
@@ -567,7 +1396,7 @@ export class PostgresModelRoleCommandRepository
         owner.dataEpoch !== input.expectedDataEpoch ||
         owner.dataEpoch !== asNumber(row.expected_data_epoch)
       ) {
-        await this.discardAttempt(client, input, "data_epoch");
+        await this.discardAttemptForResult(client, input, "data_epoch");
         await client.query("COMMIT");
         return {
           outcome: "discarded",
@@ -577,9 +1406,23 @@ export class PostgresModelRoleCommandRepository
         };
       }
       const rollout = await lockActiveRollout(client, input.role, row.rollout_pin);
+      const consentActive = rollout
+        ? await providerConsentIsActive(client, {
+            userId: input.userId,
+            role: input.role,
+            provider: input.configuration.provider,
+            consentPolicyVersion: rollout.policy_consent_policy_version,
+          })
+        : false;
       if (
         !rollout ||
-        !rolloutMatchesConfiguration(rollout, input.role, input.configuration) ||
+        !consentActive ||
+        !rolloutMatchesConfiguration(
+          rollout,
+          input.role,
+          input.configuration,
+          this.releaseFingerprint,
+        ) ||
         row.provider !== input.configuration.provider ||
         row.model !== input.configuration.model ||
         row.model_snapshot !== input.configuration.modelSnapshot ||
@@ -594,7 +1437,7 @@ export class PostgresModelRoleCommandRepository
         row.provider_policy_version !== input.configuration.providerPolicyVersion ||
         row.rollout_pin !== input.configuration.rolloutPin
       ) {
-        await this.discardAttempt(client, input, "rollout_pin_changed");
+        await this.discardAttemptForResult(client, input, "rollout_pin_changed");
         await client.query("COMMIT");
         return {
           outcome: "discarded",
@@ -660,6 +1503,24 @@ export class PostgresModelRoleCommandRepository
             : input.outcome === "succeeded"
               ? "not_needed"
               : "terminal",
+          input.modelRunAttemptId,
+          input.userId,
+        ],
+      );
+      await client.query(
+        `UPDATE provider_egress_dispositions
+         SET status = $1, error_category = $2, completed_at = $3
+         WHERE model_run_attempt_id = $4
+           AND user_id = $5
+           AND status = 'dispatched'`,
+        [
+          input.outcome === "succeeded" ? "completed" : "failed",
+          input.outcome === "succeeded"
+            ? null
+            : input.failureCode
+              ? errorCategory(input.failureCode)
+              : "unknown",
+          input.now,
           input.modelRunAttemptId,
           input.userId,
         ],
@@ -757,25 +1618,17 @@ export class PostgresModelRoleCommandRepository
     }
   }
 
-  private async discardAttempt(
+  private async discardAttemptForResult(
     client: PoolClient,
     input: PersistModelRoleAttemptResult,
     reason: "data_epoch" | "source_changed" | "rollout_pin_changed",
   ): Promise<void> {
-    await client.query(
-      `UPDATE model_run_attempts
-       SET status = 'discarded', error_code = $1,
-           completed_at = $2, provider_completed_at = $2,
-           recovery_status = 'terminal'
-       WHERE model_run_attempt_id = $3 AND user_id = $4`,
-      [reason, input.now, input.modelRunAttemptId, input.userId],
-    );
-    await client.query(
-      `UPDATE generation_commands
-       SET status = 'failed', recovery_status = 'terminal',
-           recovery_checked_at = $1, settled_at = $1
-       WHERE generation_command_id = $2 AND user_id = $3`,
-      [input.now, input.generationCommandId, input.userId],
-    );
+    await discardAttemptRows(client, {
+      generationCommandId: input.generationCommandId,
+      modelRunAttemptId: input.modelRunAttemptId,
+      userId: input.userId,
+      reason,
+      now: input.now,
+    });
   }
 }

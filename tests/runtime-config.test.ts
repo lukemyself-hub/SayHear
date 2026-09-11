@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { assertSafeRuntimeConfiguration, loadRuntimeConfiguration } from "../apps/web/src/runtime-config";
+import {
+  assertSafeRuntimeConfiguration,
+  loadRuntimeConfiguration,
+  resolveOneA3bG1ReleaseManifest,
+} from "../apps/web/src/runtime-config";
 
 describe("runtime safety configuration", () => {
   it("allows a fixed principal only in the test environment", () => {
@@ -78,6 +82,38 @@ describe("runtime safety configuration", () => {
         SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION: "true",
       }),
     ).toBe("test");
+  });
+
+  it("requires an exact G1 release artifact before opening a G1 write switch", () => {
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "test",
+        SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+        SAYHEAR_REFLECTION_ENABLED: "true",
+      }),
+    ).toThrow("SAYHEAR_1A_3B_G1_RELEASE_MANIFEST is required");
+
+    expect(() =>
+      resolveOneA3bG1ReleaseManifest({
+        SAYHEAR_DEPLOYMENT: "test",
+        SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: "not-json",
+      }),
+    ).toThrow("valid JSON");
+  });
+
+  it("requires the Episode and Reflection G1 switches to cut over atomically", () => {
+    expect(() =>
+      resolveOneA3bG1ReleaseManifest({
+        SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+        SAYHEAR_REFLECTION_ENABLED: "false",
+      }),
+    ).toThrow("must be enabled together");
+    expect(() =>
+      resolveOneA3bG1ReleaseManifest({
+        SAYHEAR_EPISODE_BUILD_ENABLED: "false",
+        SAYHEAR_REFLECTION_ENABLED: "true",
+      }),
+    ).toThrow("must be enabled together");
   });
 
   it("defaults Journal and Evidence write switches to enabled and parses each independently", () => {

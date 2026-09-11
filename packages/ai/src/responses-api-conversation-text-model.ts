@@ -8,6 +8,42 @@ type ResponsesApiStreamEvent = Readonly<
   { type: string } & Record<string, unknown>
 >;
 
+const PROTECTED_REQUEST_KEYS = new Set([
+  "input",
+  "instructions",
+  "model",
+  "store",
+  "stream",
+  "tools",
+  "tool_choice",
+]);
+
+// Release manifests use the provider-neutral camelCase parameter names that
+// are persisted in the model-role ledger. Responses APIs use wire-level
+// snake_case names for the same fields. Keep this translation at the transport
+// boundary so the frozen application configuration remains unchanged.
+const RESPONSES_PARAMETER_ALIASES: Readonly<Record<string, string>> = {
+  maxOutputTokens: "max_output_tokens",
+};
+
+function providerParameters(
+  parameters: Readonly<Record<string, unknown>> | undefined,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parameters ?? {})) {
+    if (PROTECTED_REQUEST_KEYS.has(key)) continue;
+    const wireKey = RESPONSES_PARAMETER_ALIASES[key] ?? key;
+    if (wireKey in result && wireKey !== key) {
+      throw new ProviderDispatchError(
+        "configuration",
+        `Responses API parameter ${wireKey} was supplied more than once.`,
+      );
+    }
+    result[wireKey] = value;
+  }
+  return result;
+}
+
 /**
  * A provider-agnostic Conversation Text adapter for any Provider that exposes an
  * OpenAI-compatible Responses API (`POST {baseUrl}/responses`, SSE streaming with
@@ -34,6 +70,7 @@ export function createResponsesApiConversationTextModel(input: {
       try {
         const response = await fetchImplementation(`${baseUrl}/responses`, {
           body: JSON.stringify({
+            ...providerParameters(request.parameters),
             input: request.messages.map((message) => ({
               content: message.text,
               role: message.role,
@@ -204,6 +241,9 @@ export function createResponsesApiConversationTextModel(input: {
             const usage = isRecord(completedResponse.usage)
               ? completedResponse.usage
               : null;
+            if (typeof completedResponse.model !== "string") {
+              throw new ProviderDispatchError("invalid_response");
+            }
             completed = true;
 
             // Call-only answer for a visibleReplyRequired function: finish
@@ -230,6 +270,9 @@ export function createResponsesApiConversationTextModel(input: {
                 instructions: request.instructions,
                 messages: request.messages,
                 model: request.model,
+                ...(request.parameters
+                  ? { parameters: request.parameters }
+                  : {}),
               });
               for await (const delta of continuation.deltas) {
                 textEmitted = true;
@@ -254,10 +297,7 @@ export function createResponsesApiConversationTextModel(input: {
               costMicros: null,
               finishReason: "completed",
               inputTokens: asOptionalNumber(finalUsage?.input_tokens),
-              modelSnapshot:
-                typeof completedResponse.model === "string"
-                  ? completedResponse.model
-                  : request.model,
+              modelSnapshot: completedResponse.model,
               outputTokens: asOptionalNumber(finalUsage?.output_tokens),
               providerRequestId,
               type: "completed",
@@ -310,6 +350,7 @@ async function dispatchContinuation(input: {
     text: string;
   }>[];
   model: string;
+  parameters?: Readonly<Record<string, unknown>>;
 }): Promise<{
   deltas: string[];
   providerRequestId: string | null;
@@ -333,6 +374,7 @@ async function dispatchContinuation(input: {
       ],
       instructions: input.instructions,
       model: input.model,
+      ...providerParameters(input.parameters),
       store: false,
       stream: true,
     }),

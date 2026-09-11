@@ -22,6 +22,10 @@ import { reflectionDailyWorkflow } from "./workflows/reflection-daily.workflow";
 import { reflectionWeeklyWorkflow } from "./workflows/reflection-weekly.workflow";
 import { reflectionMaintenanceWorkflow } from "./workflows/reflection-maintenance.workflow";
 import { candidateRemapWorkflow } from "./workflows/candidate-remap.workflow";
+import {
+  modelRoleWorkflow,
+  type ModelRoleWorkflowInput,
+} from "./workflows/model-role.workflow";
 import { predicateRegistryReleaseWorkflow } from "./workflows/predicate-registry-release.workflow";
 
 export function createWorkflowStarter(): WorkflowStarter {
@@ -75,17 +79,53 @@ export function createWorkflowStarter(): WorkflowStarter {
       run = await start(memoryCorrectionFollowupWorkflow, [workflowInput]);
     } else if (input.eventType === "entity_identity_revalidation_requested") {
       run = await start(entityIdentityRevalidationWorkflow, [workflowInput]);
+    } else if (input.eventType === "model_role_requested") {
+      if (
+        !input.modelRole ||
+        !input.generationCommandId ||
+        !input.modelRunAttemptId ||
+        input.attemptNo === undefined ||
+        !input.attemptKind ||
+        !input.rolloutPin
+      ) {
+        throw new Error(
+          "Model role outbox event has incomplete attempt metadata.",
+        );
+      }
+      const modelRoleInput = {
+        ...workflowInput,
+        modelRole: input.modelRole,
+        generationCommandId: input.generationCommandId,
+        modelRunAttemptId: input.modelRunAttemptId,
+        attemptNo: input.attemptNo,
+        attemptKind: input.attemptKind,
+        rolloutPin: input.rolloutPin,
+      } as ModelRoleWorkflowInput;
+      run = await start(modelRoleWorkflow, [modelRoleInput]);
     } else if (input.eventType === "episode_build_requested") {
-      run = await start(episodeBuildWorkflow, [workflowInput]);
+      if (!input.ownerId) {
+        throw new Error(
+          "Episode build outbox event has no content-free owner identity.",
+        );
+      }
+      run = await start(episodeBuildWorkflow, [
+        { ...workflowInput, ownerId: input.ownerId },
+      ]);
     } else if (input.eventType === "episode_maintenance_requested") {
       run = await start(episodeMaintenanceWorkflow, [workflowInput]);
     } else if (input.eventType === "reflection_daily_requested") {
       if (!input.claimBaselineDigest) {
         throw new Error("Reflection daily outbox event has no claim-baseline digest.");
       }
+      if (!input.ownerId) {
+        throw new Error(
+          "Reflection daily outbox event has no content-free owner identity.",
+        );
+      }
       run = await start(reflectionDailyWorkflow, [
         {
           ...workflowInput,
+          ownerId: input.ownerId,
           claimBaselineDigest: input.claimBaselineDigest,
         },
       ]);
@@ -98,9 +138,15 @@ export function createWorkflowStarter(): WorkflowStarter {
       ) {
         throw new Error("Reflection weekly outbox event has no frozen window identity.");
       }
+      if (!input.ownerId) {
+        throw new Error(
+          "Reflection weekly outbox event has no content-free owner identity.",
+        );
+      }
       run = await start(reflectionWeeklyWorkflow, [
         {
           ...workflowInput,
+          ownerId: input.ownerId,
           weekIdentifier: input.weekIdentifier,
           windowStartDate: input.windowStartDate,
           windowEndDate: input.windowEndDate,

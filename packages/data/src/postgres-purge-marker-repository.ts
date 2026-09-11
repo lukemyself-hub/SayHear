@@ -1,6 +1,7 @@
 import type {
   PurgeMarkerRepository,
   PurgeMarkerSnapshot,
+  OneA3bG1ReleaseManifest,
 } from "@sayhear/application";
 import type { UserId } from "@sayhear/domain";
 import type { Pool } from "pg";
@@ -21,7 +22,38 @@ type MarkerRow = Readonly<{
  * (issue #28, architecture 20.6).
  */
 export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
-  public constructor(private readonly pool: Pool) {}
+  public constructor(
+    private readonly pool: Pool,
+    private readonly schemaContract?: Pick<
+      OneA3bG1ReleaseManifest["schema"],
+      "purgeMarkerMigrations" | "purgeMarkerFingerprint"
+    >,
+  ) {}
+
+  private async assertSchemaContract(): Promise<void> {
+    if (!this.schemaContract) return;
+    const applied = await this.pool.query<{
+      migration_name: string;
+      migration_sha256: string;
+    }>(
+      `SELECT migration_name, migration_sha256
+       FROM schema_migrations
+       ORDER BY migration_name`,
+    );
+    const expected = this.schemaContract.purgeMarkerMigrations;
+    const matches =
+      applied.rows.length === expected.length &&
+      applied.rows.every(
+        (row, index) =>
+          row.migration_name === expected[index]?.name &&
+          row.migration_sha256 === expected[index]?.sha256,
+      );
+    if (!matches) {
+      throw new Error(
+        `Purge-marker schema does not match the frozen G1 migration contract ${this.schemaContract.purgeMarkerFingerprint}.`,
+      );
+    }
+  }
 
   public async writeMarker(input: {
     userId: UserId;
@@ -34,6 +66,7 @@ export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
       providerRetentionUntil: Date | null;
     }>[];
   }): Promise<void> {
+    await this.assertSchemaContract();
     await this.pool.query(
       `
         INSERT INTO purge_markers (
@@ -75,6 +108,7 @@ export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
   public async findLatestMarker(input: {
     userId: UserId;
   }): Promise<PurgeMarkerSnapshot | null> {
+    await this.assertSchemaContract();
     const result = await this.pool.query<MarkerRow>(
       `
         SELECT data_epoch::text, status, purged_at,

@@ -7,8 +7,16 @@ import {
   type UserId,
 } from "@sayhear/domain";
 
-import type { ModelRoleCommandService, ModelRoleFailureCode } from "../model-role-runtime";
-import type { RecoveryGate } from "../recovery-gate";
+import type {
+  ModelRoleAttemptKind,
+  ModelRoleCommandService,
+  ModelRoleFailureCode,
+} from "../model-role-runtime";
+import { isModelRoleAttemptKind } from "../model-role-runtime";
+import {
+  RecoveryGateClosedError,
+  type RecoveryGate,
+} from "../recovery-gate";
 import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
@@ -28,6 +36,7 @@ import type {
   ReflectionMaintenanceResult,
   ReflectionModelStatement,
   ReflectionRepository,
+  ReflectionRunStatus,
 } from "./types";
 import {
   MAX_PROPOSITIONS_PER_STATEMENT,
@@ -40,6 +49,7 @@ import {
   REFLECTION_WEEKLY_PROMPT_VERSION,
 } from "./types";
 import { assertWorkflowSafe } from "../journal-eligibility";
+import { ProviderDispatchError } from "../conversation-model";
 import { planReflectionVersion } from "./engine";
 import { dateOrdinal } from "./readiness";
 
@@ -149,6 +159,44 @@ function sourceEntriesFor(frozen: ReflectionFrozenInput): NarrativeSourceEntry[]
   }));
 }
 
+async function recordReflectionRunOutcome(input: Readonly<{
+  repository: ReflectionRepository;
+  userId: UserId;
+  frozen: ReflectionFrozenInput;
+  sourceRevision: number;
+  expectedDataEpoch: number;
+  generationCommandId: import("@sayhear/domain").GenerationCommandId | null;
+  modelRunAttemptId: import("@sayhear/domain").ModelRunAttemptId | null;
+  status: ReflectionRunStatus;
+  outcomeDetail: string | null;
+  statementCount: number | null;
+  candidateCount: number | null;
+  degradedEpisodeReason: string | null;
+  errorCode: string | null;
+}>): Promise<void> {
+  await input.repository.recordRunOutcome({
+    userId: input.userId,
+    scopeType: input.frozen.scopeType,
+    dailySessionId: input.frozen.dailySessionId,
+    weekIdentifier: input.frozen.weekIdentifier,
+    windowStartDate: input.frozen.windowStartDate,
+    windowEndDate: input.frozen.windowEndDate,
+    sourceRevision: input.sourceRevision,
+    sourceDigest: input.frozen.sourceDigest,
+    claimBaselineDigest: input.frozen.claimBaselineDigest,
+    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
+    expectedDataEpoch: input.expectedDataEpoch,
+    generationCommandId: input.generationCommandId,
+    modelRunAttemptId: input.modelRunAttemptId,
+    status: input.status,
+    outcomeDetail: input.outcomeDetail,
+    statementCount: input.statementCount,
+    candidateCount: input.candidateCount,
+    degradedEpisodeReason: input.degradedEpisodeReason,
+    errorCode: input.errorCode,
+  });
+}
+
 function manifestForFrozen(frozen: ReflectionFrozenInput) {
   return [
     ...frozen.evidence.map((item) => ({
@@ -180,6 +228,7 @@ export async function runReflectionDailyBuild(input: Readonly<{
   dependencies: ReflectionEntrypointDependencies;
   command: ReflectionBuildEntrypointInput;
   recoveryGate?: RecoveryGate;
+  recoveryOwnerId?: UserId;
 }>): Promise<ReflectionBuildEntrypointResult> {
   asWorkflowCommandId(input.command.workflowCommandId);
   assertWorkflowSafe(input.command, "reflection-command");
@@ -191,6 +240,13 @@ export async function runReflectionDailyBuild(input: Readonly<{
       outcome: "rejected",
       rejectionCode: "scope_mismatch",
     });
+  }
+
+  if (input.recoveryGate) {
+    if (!input.recoveryOwnerId) {
+      throw new Error("Daily reflection recovery requires a content-free owner identity.");
+    }
+    await input.recoveryGate.requireOpen(input.recoveryOwnerId);
   }
 
   const evaluated = await input.dependencies.repository.readDailySnapshot({
@@ -253,7 +309,13 @@ export async function runReflectionDailyBuild(input: Readonly<{
     generationCommandId: admitted.generationCommandId,
     modelRunAttemptId: admitted.modelRunAttemptId,
     attemptNo: admitted.attemptNo,
-    technicalRetriesUsed: 0,
+    attemptKind: admitted.attemptKind,
+    rolloutPin:
+      input.dependencies.modelRoleCommandService.configuration("reflection.daily")
+        ?.rolloutPin ?? "",
+    technicalRetriesUsed: admitted.attemptNo - 1,
+    sourcePolicyVersion: input.command.policyVersion,
+    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
   });
 }
 
@@ -263,6 +325,7 @@ export async function runReflectionWeeklyBuild(input: Readonly<{
   dependencies: ReflectionEntrypointDependencies;
   command: ReflectionBuildEntrypointInput;
   recoveryGate?: RecoveryGate;
+  recoveryOwnerId?: UserId;
 }>): Promise<ReflectionBuildEntrypointResult> {
   asWorkflowCommandId(input.command.workflowCommandId);
   assertWorkflowSafe(input.command, "reflection-command");
@@ -283,6 +346,13 @@ export async function runReflectionWeeklyBuild(input: Readonly<{
       outcome: "rejected",
       rejectionCode: "week_identifier_missing",
     });
+  }
+
+  if (input.recoveryGate) {
+    if (!input.recoveryOwnerId) {
+      throw new Error("Weekly reflection recovery requires a content-free owner identity.");
+    }
+    await input.recoveryGate.requireOpen(input.recoveryOwnerId);
   }
 
   const evaluated = await input.dependencies.repository.readWeeklySnapshot({
@@ -344,7 +414,13 @@ export async function runReflectionWeeklyBuild(input: Readonly<{
     generationCommandId: admitted.generationCommandId,
     modelRunAttemptId: admitted.modelRunAttemptId,
     attemptNo: admitted.attemptNo,
-    technicalRetriesUsed: 0,
+    attemptKind: admitted.attemptKind,
+    rolloutPin:
+      input.dependencies.modelRoleCommandService.configuration("reflection.weekly")
+        ?.rolloutPin ?? "",
+    technicalRetriesUsed: admitted.attemptNo - 1,
+    sourcePolicyVersion: input.command.policyVersion,
+    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
   });
 }
 
@@ -356,8 +432,18 @@ export async function runReflectionAttempt(input: Readonly<{
     generationCommandId: string;
     modelRunAttemptId: string;
     attemptNo: number;
+    attemptKind: ModelRoleAttemptKind;
+    rolloutPin: string;
   };
+  recoveryGate?: RecoveryGate;
+  recoveryOwnerId?: UserId;
 }>): Promise<ReflectionBuildEntrypointResult> {
+  if (input.recoveryGate) {
+    if (!input.recoveryOwnerId) {
+      throw new Error("Reflection retry recovery requires a content-free owner identity.");
+    }
+    await input.recoveryGate.requireOpen(input.recoveryOwnerId);
+  }
   const context = await input.dependencies.repository.readAttemptContext({
     generationCommandId: asGenerationCommandId(input.command.generationCommandId),
     modelRunAttemptId: asModelRunAttemptId(input.command.modelRunAttemptId),
@@ -369,6 +455,9 @@ export async function runReflectionAttempt(input: Readonly<{
       outcome: "stale_superseded",
       errorCode: "attempt_settled_or_unknown",
     });
+  }
+  if (!isModelRoleAttemptKind(input.command.attemptKind)) {
+    throw new Error(`Unknown model role attempt kind: ${input.command.attemptKind}.`);
   }
   const scope = context.dailySessionId !== null ? "daily" : "weekly";
   if (scope === "daily") {
@@ -386,6 +475,7 @@ export async function runReflectionAttempt(input: Readonly<{
         errorCode: evaluated.outcome,
       });
     }
+    await input.recoveryGate?.requireOpen(evaluated.snapshot.userId);
     return executeReflectionAttempt({
       dependencies: input.dependencies,
       userId: evaluated.snapshot.userId,
@@ -396,9 +486,14 @@ export async function runReflectionAttempt(input: Readonly<{
       generationCommandId: input.command.generationCommandId,
       modelRunAttemptId: input.command.modelRunAttemptId,
       attemptNo: input.command.attemptNo,
+      attemptKind: input.command.attemptKind,
+      rolloutPin: input.command.rolloutPin,
       technicalRetriesUsed: input.command.attemptNo - 1,
+      sourcePolicyVersion: context.policyVersion,
+      policyVersion: context.policyVersion,
     });
   }
+  await input.recoveryGate?.requireOpen(context.userId);
   return executeReflectionAttempt({
     dependencies: input.dependencies,
     userId: context.userId,
@@ -409,7 +504,11 @@ export async function runReflectionAttempt(input: Readonly<{
     generationCommandId: input.command.generationCommandId,
     modelRunAttemptId: input.command.modelRunAttemptId,
     attemptNo: input.command.attemptNo,
+    attemptKind: input.command.attemptKind,
+    rolloutPin: input.command.rolloutPin,
     technicalRetriesUsed: input.command.attemptNo - 1,
+    sourcePolicyVersion: context.policyVersion,
+    policyVersion: context.policyVersion,
   });
 }
 
@@ -425,7 +524,11 @@ async function executeReflectionAttempt(input: Readonly<{
   generationCommandId: string;
   modelRunAttemptId: string;
   attemptNo: number;
+  attemptKind: ModelRoleAttemptKind;
+  rolloutPin: string;
   technicalRetriesUsed: number;
+  sourcePolicyVersion: string;
+  policyVersion: string;
 }>): Promise<ReflectionBuildEntrypointResult> {
   const { repository } = input.dependencies;
   const { role, promptVersion } = roleForScope(input.scope);
@@ -434,13 +537,88 @@ async function executeReflectionAttempt(input: Readonly<{
   const sourceRevision =
     input.frozen.scopeType === "daily_session"
       ? (input.frozen.days[0]?.sourceRevision ?? 0)
-      : 0;
+      : dateOrdinal(input.frozen.windowStartDate ?? "");
   const subjectId = input.frozen.dailySessionId ?? input.userId;
   const locale = input.frozen.dominantLocale ?? "en";
+  const settleAttempt = (
+    outcome: "succeeded" | "failed",
+    failureCode?: ModelRoleFailureCode,
+  ) =>
+    input.dependencies.modelRoleCommandService.recordAttemptResult({
+      userId: input.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      role,
+      attemptNo: input.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome,
+      ...(failureCode ? { failureCode } : {}),
+      currentSourceRevision: sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.dependencies.clock(),
+    });
+
+  const prepared = await repository.prepareAttempt?.({
+    userId: input.userId,
+    scopeType: input.frozen.scopeType,
+    dailySessionId: input.frozen.dailySessionId,
+    weekIdentifier: input.frozen.weekIdentifier,
+    windowStartDate: input.frozen.windowStartDate,
+    windowEndDate: input.frozen.windowEndDate,
+    sourceRevision,
+    sourceDigest: input.frozen.sourceDigest,
+    claimBaselineDigest: input.frozen.claimBaselineDigest,
+    policyVersion: input.policyVersion,
+    expectedDataEpoch: input.expectedDataEpoch,
+    generationCommandId,
+    modelRunAttemptId,
+    now: input.dependencies.clock(),
+  });
+  if (prepared?.outcome === "fenced") {
+    await input.dependencies.modelRoleCommandService.discardAttempt({
+      userId: input.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      reason:
+        prepared.reason === "data_epoch" ? "data_epoch" : "source_changed",
+      now: input.dependencies.clock(),
+    });
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "fenced",
+      errorCode: prepared.reason ?? null,
+    });
+  }
+  if (prepared?.outcome === "already_built") {
+    const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+      userId: input.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      role,
+      attemptNo: input.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome: "succeeded",
+      currentSourceRevision: sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.dependencies.clock(),
+    });
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: recorded.outcome === "discarded" ? "fenced" : "built",
+      errorCode:
+        recorded.outcome === "discarded"
+          ? recorded.reason ?? null
+          : "already_built",
+    });
+  }
 
   let output: ReflectionGenerationModelOutput;
   try {
-    output = await input.dependencies.reflectionProvider.generate({
+    const request = {
       userId: input.userId,
       role,
       scopeType: input.frozen.scopeType,
@@ -454,8 +632,64 @@ async function executeReflectionAttempt(input: Readonly<{
       maxStatements: MAX_STATEMENTS_PER_VERSION,
       maxPropositionsPerStatement: MAX_PROPOSITIONS_PER_STATEMENT,
       maxCandidateProposals: MAX_CANDIDATE_PROPOSALS_PER_VERSION,
-    });
+    };
+    output = input.dependencies.providerEgress
+      ? await input.dependencies.providerEgress.dispatch({
+          userId: input.userId,
+          generationCommandId,
+          modelRunAttemptId,
+          role,
+          attemptNo: input.attemptNo,
+          attemptKind: input.attemptKind,
+          rolloutPin: input.rolloutPin,
+          currentSourceRevision: sourceRevision,
+          expectedDataEpoch: input.expectedDataEpoch,
+          now: input.dependencies.clock(),
+          sourceIsCurrent: async () => {
+            if (input.scope === "daily") {
+              const current = await repository.readDailySnapshot({
+                dailySessionId: input.frozen.dailySessionId!,
+                sourceRevision,
+                claimBaselineDigest: input.frozen.claimBaselineDigest,
+                policyVersion: input.sourcePolicyVersion,
+              });
+              return (
+                current.outcome === "evaluated" &&
+                current.snapshot.userId === input.userId &&
+                current.snapshot.ownerEpoch === input.expectedDataEpoch
+              );
+            }
+            const current = await repository.readWeeklySnapshot({
+              userId: input.userId,
+              weekIdentifier: input.frozen.weekIdentifier ?? "",
+              windowStartDate: input.frozen.windowStartDate ?? "",
+              windowEndDate: input.frozen.windowEndDate ?? "",
+              sourceDigest: input.frozen.sourceDigest ?? "",
+              policyVersion: input.sourcePolicyVersion,
+            });
+            return (
+              current.outcome === "evaluated" &&
+              current.snapshot.ownerEpoch === input.expectedDataEpoch
+            );
+          },
+          execute: () => input.dependencies.reflectionProvider.generate(request),
+        })
+      : await input.dependencies.reflectionProvider.generate(request);
   } catch (error) {
+    if (
+      error instanceof RecoveryGateClosedError &&
+      error.result.status === "unavailable"
+    ) {
+      throw error;
+    }
+    if (error instanceof ProviderDispatchError && !error.settlesAttempt) {
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: "fenced",
+        errorCode: "provider_egress_blocked",
+      });
+    }
     const failureCode = classifyReflectionProviderError(error);
     const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
       userId: input.userId,
@@ -485,28 +719,6 @@ async function executeReflectionAttempt(input: Readonly<{
     });
   }
 
-  const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
-    userId: input.userId,
-    generationCommandId,
-    modelRunAttemptId,
-    role,
-    attemptNo: input.attemptNo,
-    technicalRetriesUsed: input.technicalRetriesUsed,
-    semanticRepairsUsed: 0,
-    outcome: "succeeded",
-    currentSourceRevision: sourceRevision,
-    expectedDataEpoch: input.expectedDataEpoch,
-    now: input.dependencies.clock(),
-  });
-  if (recorded.outcome === "discarded") {
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "fenced",
-      errorCode: recorded.reason ?? "already_settled",
-    });
-  }
-
   // Tier-1 deterministic gate (all-or-nothing, before any draft is kept).
   const plan = planReflectionVersion({
     frozen: input.frozen,
@@ -516,6 +728,30 @@ async function executeReflectionAttempt(input: Readonly<{
     },
   });
   if (plan.action === "fail_version") {
+    await recordReflectionRunOutcome({
+      repository,
+      userId: input.userId,
+      frozen: input.frozen,
+      sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      status: "failed",
+      outcomeDetail: plan.rejectionCode,
+      statementCount: 0,
+      candidateCount: 0,
+      degradedEpisodeReason: input.degradedEpisodeReason,
+      errorCode: `tier1:${plan.rejectionCode}`,
+    });
+    const recorded = await settleAttempt("succeeded");
+    if (recorded.outcome === "discarded") {
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: "fenced",
+        errorCode: recorded.reason ?? "already_settled",
+      });
+    }
     return entrypointResult({
       subjectId: String(subjectId),
       scope: input.scope,
@@ -548,6 +784,22 @@ async function executeReflectionAttempt(input: Readonly<{
     now: input.dependencies.clock(),
   });
   if (persisted.outcome === "fenced") {
+    await recordReflectionRunOutcome({
+      repository,
+      userId: input.userId,
+      frozen: input.frozen,
+      sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      status: "fenced",
+      outcomeDetail: persisted.reason,
+      statementCount: null,
+      candidateCount: null,
+      degradedEpisodeReason: input.degradedEpisodeReason,
+      errorCode: persisted.reason,
+    });
+    await settleAttempt("failed", "business_fence");
     return entrypointResult({
       subjectId: String(subjectId),
       scope: input.scope,
@@ -579,12 +831,29 @@ async function executeReflectionAttempt(input: Readonly<{
     },
   });
   if (validated.outcome !== "completed" || !validated.verdict) {
+    const validatorError = `validator_${validated.outcome}`;
+    await recordReflectionRunOutcome({
+      repository,
+      userId: input.userId,
+      frozen: input.frozen,
+      sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      status: "failed",
+      outcomeDetail: validatorError,
+      statementCount: null,
+      candidateCount: null,
+      degradedEpisodeReason: input.degradedEpisodeReason,
+      errorCode: validatorError,
+    });
+    await settleAttempt("failed", "semantic_rejection");
     return entrypointResult({
       subjectId: String(subjectId),
       scope: input.scope,
       outcome:
         validated.outcome === "retryable_failed" ? "retryable_failed" : "failed",
-      errorCode: `validator_${validated.outcome}`,
+      errorCode: validatorError,
     });
   }
 
@@ -599,14 +868,31 @@ async function executeReflectionAttempt(input: Readonly<{
     // `incomplete` (validator not finished), `content_expired`, and a blocked
     // verdict all forbid the current commit and every Candidate (ADR-0132;
     // a raised-to-blocking policy must never publish a Reflection).
+    const validatorError =
+      outcome.outcome === "ok"
+        ? "validator_blocked"
+        : `validator_${outcome.outcome}`;
+    await recordReflectionRunOutcome({
+      repository,
+      userId: input.userId,
+      frozen: input.frozen,
+      sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      status: "failed",
+      outcomeDetail: validatorError,
+      statementCount: null,
+      candidateCount: null,
+      degradedEpisodeReason: input.degradedEpisodeReason,
+      errorCode: validatorError,
+    });
+    await settleAttempt("failed", "semantic_rejection");
     return entrypointResult({
       subjectId: String(subjectId),
       scope: input.scope,
       outcome: "failed",
-      errorCode:
-        outcome.outcome === "ok"
-          ? "validator_blocked"
-          : `validator_${outcome.outcome}`,
+      errorCode: validatorError,
     });
   }
 
@@ -630,6 +916,22 @@ async function executeReflectionAttempt(input: Readonly<{
     dedupeFingerprintSecret: input.dependencies.dedupeFingerprintSecret,
   });
   if (committed.outcome === "fenced") {
+    await recordReflectionRunOutcome({
+      repository,
+      userId: input.userId,
+      frozen: input.frozen,
+      sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      status: "fenced",
+      outcomeDetail: committed.reason,
+      statementCount: null,
+      candidateCount: null,
+      degradedEpisodeReason: input.degradedEpisodeReason,
+      errorCode: committed.reason,
+    });
+    await settleAttempt("failed", "business_fence");
     return entrypointResult({
       subjectId: String(subjectId),
       scope: input.scope,
@@ -638,11 +940,39 @@ async function executeReflectionAttempt(input: Readonly<{
     });
   }
   if (committed.outcome === "already_committed") {
+    const recorded = await settleAttempt("succeeded");
     return entrypointResult({
       subjectId: String(subjectId),
       scope: input.scope,
-      outcome: "built",
-      errorCode: "already_committed",
+      outcome: recorded.outcome === "discarded" ? "fenced" : "built",
+      errorCode:
+        recorded.outcome === "discarded"
+          ? recorded.reason ?? null
+          : "already_committed",
+    });
+  }
+  await recordReflectionRunOutcome({
+    repository,
+    userId: input.userId,
+    frozen: input.frozen,
+    sourceRevision,
+    expectedDataEpoch: input.expectedDataEpoch,
+    generationCommandId,
+    modelRunAttemptId,
+    status: "built",
+    outcomeDetail: null,
+    statementCount: committed.statementCount,
+    candidateCount: committed.candidateCount,
+    degradedEpisodeReason: input.degradedEpisodeReason,
+    errorCode: null,
+  });
+  const recorded = await settleAttempt("succeeded");
+  if (recorded.outcome === "discarded") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "fenced",
+      errorCode: recorded.reason ?? "already_settled",
     });
   }
   return entrypointResult({
