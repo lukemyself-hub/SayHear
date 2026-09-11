@@ -4,10 +4,19 @@ import {
   asGenerationCommandId,
   asModelRunAttemptId,
   type NarrativeValidatorRequestId,
+  type UserId,
 } from "@sayhear/domain";
 
-import type { RecoveryGate } from "../recovery-gate";
-import type { ModelRoleCommandService, ModelRoleFailureCode } from "../model-role-runtime";
+import {
+  RecoveryGateClosedError,
+  type RecoveryGate,
+} from "../recovery-gate";
+import { ProviderDispatchError } from "../conversation-model";
+import type {
+  ModelRoleAttemptKind,
+  ModelRoleCommandService,
+  ModelRoleFailureCode,
+} from "../model-role-runtime";
 import type {
   NarrativeValidationAttemptInput,
   NarrativeValidationEntrypointDependencies,
@@ -116,6 +125,10 @@ export async function runNarrativeValidation(input: Readonly<{
     return entrypointResult(request.draftRef, "rejected", null, rejection.code, null);
   }
 
+  if (input.recoveryGate) {
+    await input.recoveryGate.requireOpen(request.userId);
+  }
+
   const requestFingerprint = narrativeValidationRequestFingerprint(request);
 
   const submitted = await input.dependencies.repository.submitRequest({
@@ -138,10 +151,6 @@ export async function runNarrativeValidation(input: Readonly<{
     return entrypointResult(request.draftRef, "rejected", null, "draft_intent_conflict", null);
   }
   const requestRecord = submitted.request;
-
-  if (input.recoveryGate) {
-    await input.recoveryGate.requireOpen(request.userId);
-  }
 
   const admitted = await input.dependencies.modelRoleCommandService.admit({
     userId: request.userId,
@@ -178,7 +187,11 @@ export async function runNarrativeValidation(input: Readonly<{
     generationCommandId: admitted.generationCommandId,
     modelRunAttemptId: admitted.modelRunAttemptId,
     attemptNo: admitted.attemptNo,
-    technicalRetriesUsed: 0,
+    attemptKind: admitted.attemptKind,
+    rolloutPin:
+      input.dependencies.modelRoleCommandService.configuration("narrative.validate")
+        ?.rolloutPin ?? "",
+    technicalRetriesUsed: admitted.attemptNo - 1,
   });
 }
 
@@ -190,7 +203,15 @@ export async function runNarrativeValidation(input: Readonly<{
 export async function runNarrativeValidationAttempt(input: Readonly<{
   dependencies: NarrativeValidationEntrypointDependencies;
   command: NarrativeValidationAttemptInput;
+  recoveryGate?: RecoveryGate;
+  recoveryOwnerId?: UserId;
 }>): Promise<NarrativeValidationEntrypointResult> {
+  if (input.recoveryGate) {
+    if (!input.recoveryOwnerId) {
+      throw new Error("Narrative retry recovery requires a content-free owner identity.");
+    }
+    await input.recoveryGate.requireOpen(input.recoveryOwnerId);
+  }
   const context = await input.dependencies.repository.readAttemptContext({
     generationCommandId: asGenerationCommandId(input.command.generationCommandId),
     modelRunAttemptId: asModelRunAttemptId(input.command.modelRunAttemptId),
@@ -198,6 +219,13 @@ export async function runNarrativeValidationAttempt(input: Readonly<{
   if (context.outcome !== "evaluated") {
     return entrypointResult("", "incomplete", "attempt_settled_or_unknown", null, null);
   }
+  await input.recoveryGate?.requireOpen(context.request.userId);
+  const attemptKind = input.command.attemptKind ?? "technical_retry";
+  const rolloutPin =
+    input.command.rolloutPin ??
+    input.dependencies.modelRoleCommandService.configuration("narrative.validate")
+      ?.rolloutPin ??
+    "";
   return executeNarrativeAttempt({
     dependencies: input.dependencies,
     frozenRequest: context.request,
@@ -207,6 +235,8 @@ export async function runNarrativeValidationAttempt(input: Readonly<{
     generationCommandId: input.command.generationCommandId,
     modelRunAttemptId: input.command.modelRunAttemptId,
     attemptNo: input.command.attemptNo,
+    attemptKind,
+    rolloutPin,
     technicalRetriesUsed: input.command.attemptNo - 1,
   });
 }
@@ -226,6 +256,8 @@ async function executeNarrativeAttempt(input: Readonly<{
   generationCommandId: string;
   modelRunAttemptId: string;
   attemptNo: number;
+  attemptKind: ModelRoleAttemptKind;
+  rolloutPin: string;
   technicalRetriesUsed: number;
 }>): Promise<NarrativeValidationEntrypointResult> {
   const request = input.frozenRequest;
@@ -238,15 +270,59 @@ async function executeNarrativeAttempt(input: Readonly<{
 
   let modelOutput: NarrativeValidatorModelOutput;
   try {
-    modelOutput = await input.dependencies.narrativeValidationProvider.validateNarrative({
+    const providerRequest = {
       userId: request.userId,
       artifactKind: request.artifactKind,
       draftRef: request.draftRef,
       draftLocale: request.draftLocale,
       draftText: request.draftText,
       sourceEntries: request.sourceEntries,
-    });
+    };
+    modelOutput = input.dependencies.providerEgress
+      ? await input.dependencies.providerEgress.dispatch({
+          userId: request.userId,
+          generationCommandId,
+          modelRunAttemptId,
+          role: "narrative.validate",
+          attemptNo: input.attemptNo,
+          attemptKind: input.attemptKind,
+          rolloutPin: input.rolloutPin,
+          currentSourceRevision: 0,
+          expectedDataEpoch: input.expectedDataEpoch,
+          now: input.dependencies.clock(),
+          sourceIsCurrent: async () => {
+            const current = await input.dependencies.repository.readRequest({
+              userId: request.userId,
+              artifactKind: request.artifactKind,
+              draftRef: request.draftRef,
+            });
+            return current.outcome === "ok";
+          },
+          execute: () =>
+            input.dependencies.narrativeValidationProvider.validateNarrative(
+              providerRequest,
+            ),
+        })
+      : await input.dependencies.narrativeValidationProvider.validateNarrative(
+          providerRequest,
+        );
   } catch (error) {
+    if (
+      error instanceof RecoveryGateClosedError &&
+      error.result.status === "unavailable"
+    ) {
+      throw error;
+    }
+    if (error instanceof ProviderDispatchError && !error.settlesAttempt) {
+      return entrypointResult(
+        request.draftRef,
+        "fenced",
+        "provider_egress_blocked",
+        null,
+        null,
+        ledger,
+      );
+    }
     const failureCode = classifyNarrativeProviderError(error);
     const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
       userId: request.userId,
@@ -278,32 +354,6 @@ async function executeNarrativeAttempt(input: Readonly<{
     );
   }
 
-  const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
-    userId: request.userId,
-    generationCommandId,
-    modelRunAttemptId,
-    role: "narrative.validate",
-    attemptNo: input.attemptNo,
-    technicalRetriesUsed: input.technicalRetriesUsed,
-    semanticRepairsUsed: 0,
-    outcome: "succeeded",
-    currentSourceRevision: 0,
-    expectedDataEpoch: input.expectedDataEpoch,
-    now: input.dependencies.clock(),
-  });
-  if (recorded.outcome === "discarded") {
-    // The attempt lost its fence after the provider call (epoch advanced or
-    // the pin was revoked). Fail closed: no typed result is committed.
-    return entrypointResult(
-      request.draftRef,
-      "fenced",
-      recorded.reason ?? "already_settled",
-      null,
-      null,
-      ledger,
-    );
-  }
-
   const comparison = compareNarrativeManifests({
     generatorManifest: request.generatorManifest,
     sourceEntries: request.sourceEntries,
@@ -329,7 +379,44 @@ async function executeNarrativeAttempt(input: Readonly<{
     result,
   });
   if (committed.outcome === "fenced") {
+    await input.dependencies.modelRoleCommandService.recordAttemptResult({
+      userId: request.userId,
+      generationCommandId,
+      modelRunAttemptId,
+      role: "narrative.validate",
+      attemptNo: input.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome: "failed",
+      failureCode: "business_fence",
+      currentSourceRevision: 0,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.dependencies.clock(),
+    });
     return entrypointResult(request.draftRef, "fenced", committed.reason, null, null, ledger);
+  }
+  const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+    userId: request.userId,
+    generationCommandId,
+    modelRunAttemptId,
+    role: "narrative.validate",
+    attemptNo: input.attemptNo,
+    technicalRetriesUsed: input.technicalRetriesUsed,
+    semanticRepairsUsed: 0,
+    outcome: "succeeded",
+    currentSourceRevision: 0,
+    expectedDataEpoch: input.expectedDataEpoch,
+    now: input.dependencies.clock(),
+  });
+  if (recorded.outcome === "discarded") {
+    return entrypointResult(
+      request.draftRef,
+      "fenced",
+      recorded.reason ?? "already_settled",
+      null,
+      null,
+      ledger,
+    );
   }
   return entrypointResult(request.draftRef, "completed", null, null, result.outcome, ledger);
 }

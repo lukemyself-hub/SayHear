@@ -49,6 +49,7 @@ export {
   REFLECTION_WEEKLY_PROMPT_VERSION,
   type QueuedReflection,
   type ReflectionAttemptContext,
+  type ReflectionAttemptPreparation,
   type ReflectionBaselineEntry,
   type ReflectionBuildEntrypointInput,
   type ReflectionBuildEntrypointResult,

@@ -7,6 +7,15 @@ import type {
   WorkflowCommandId,
 } from "@sayhear/domain";
 
+import {
+  ProviderDispatchError,
+  type ProviderDispatchErrorCategory,
+} from "./conversation-model";
+import {
+  RecoveryGateClosedError,
+  type RecoveryGate,
+} from "./recovery-gate";
+
 export const ONE_A_3B_MODEL_ROLES = [
   "episode.build",
   "open_loop.extract",
@@ -24,6 +33,12 @@ export type ModelRoleAttemptKind =
   | "initial"
   | "technical_retry"
   | "schema_repair";
+
+export function isModelRoleAttemptKind(
+  value: string,
+): value is ModelRoleAttemptKind {
+  return value === "initial" || value === "technical_retry" || value === "schema_repair";
+}
 
 export type ModelRoleParameterSnapshot = Readonly<Record<string, unknown>>;
 
@@ -364,6 +379,7 @@ export type AdmittedModelRoleCommand = Readonly<{
   modelRunAttemptId: ModelRunAttemptId;
   workflowCommandId: WorkflowCommandId | null;
   attemptNo: number;
+  attemptKind: ModelRoleAttemptKind;
   intentKey: string;
 }>;
 
@@ -390,9 +406,70 @@ export type PersistModelRoleAttemptResult = Readonly<{
   recovery: ModelRoleRecoveryPlan;
 }>;
 
+export type ModelRoleAttemptReadiness = Readonly<{
+  outcome: "ready" | "discarded";
+  reason?:
+    | "data_epoch"
+    | "source_changed"
+    | "rollout_pin_changed"
+    | "already_settled"
+    | "attempt_metadata_mismatch";
+}>;
+
+/** Recovery result for a replayed outbox event whose prior process may have died. */
+export type ModelRoleAttemptRecovery =
+  | Readonly<{
+      outcome: "ready";
+      generationCommandId: GenerationCommandId;
+      modelRunAttemptId: ModelRunAttemptId;
+      attemptNo: number;
+      attemptKind: ModelRoleAttemptKind;
+    }>
+  | Readonly<{
+      outcome: "settled";
+      terminalOutcome: "succeeded" | "failed" | "discarded";
+    }>
+  | Readonly<{ outcome: "not_due" }>;
+
+export type PersistModelRoleAttemptValidation = Readonly<{
+  userId: UserId;
+  generationCommandId: GenerationCommandId;
+  modelRunAttemptId: ModelRunAttemptId;
+  role: OneA3bModelRole;
+  attemptNo: number;
+  attemptKind: ModelRoleAttemptKind;
+  rolloutPin: string;
+  currentSourceRevision: number;
+  expectedDataEpoch: number;
+  now: Date;
+  configuration: ModelRoleConfigurationSnapshot;
+}>;
+
+export type PersistModelRoleAttemptDiscard = Readonly<{
+  userId: UserId;
+  generationCommandId: GenerationCommandId;
+  modelRunAttemptId: ModelRunAttemptId;
+  reason:
+    | "data_epoch"
+    | "source_changed"
+    | "rollout_pin_changed"
+    | "already_settled"
+    | "attempt_metadata_mismatch"
+    | "recovery_closed"
+    | "runtime_disabled";
+  now: Date;
+}>;
+
 export type RecordedModelRoleAttempt = Readonly<{
   outcome: "succeeded" | "retry_scheduled" | "failed" | "discarded";
-  reason?: "data_epoch" | "source_changed" | "rollout_pin_changed" | "already_settled";
+  reason?:
+    | "data_epoch"
+    | "source_changed"
+    | "rollout_pin_changed"
+    | "already_settled"
+    | "attempt_metadata_mismatch"
+    | "recovery_closed"
+    | "runtime_disabled";
   generationCommandId: GenerationCommandId;
   modelRunAttemptId: ModelRunAttemptId;
   nextModelRunAttemptId?: ModelRunAttemptId;
@@ -401,6 +478,24 @@ export type RecordedModelRoleAttempt = Readonly<{
 
 export type ModelRoleCommandRepository = Readonly<{
   admit(input: PersistModelRoleAdmission): Promise<AdmittedModelRoleCommand>;
+  recoverAttempt?(input: Readonly<{
+    userId: UserId;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+  }>): Promise<ModelRoleAttemptRecovery>;
+  verifyActiveG1Release?(input: Readonly<{
+    configurations: readonly ModelRoleConfigurationSnapshot[];
+  }>): Promise<void>;
+  validateAttempt(
+    input: PersistModelRoleAttemptValidation,
+  ): Promise<ModelRoleAttemptReadiness>;
+  claimProviderDispatch(
+    input: PersistModelRoleAttemptValidation,
+  ): Promise<ModelRoleAttemptReadiness>;
+  discardAttempt(
+    input: PersistModelRoleAttemptDiscard,
+  ): Promise<RecordedModelRoleAttempt>;
   recordAttemptResult(
     input: PersistModelRoleAttemptResult,
   ): Promise<RecordedModelRoleAttempt>;
@@ -408,6 +503,31 @@ export type ModelRoleCommandRepository = Readonly<{
 
 export type ModelRoleCommandService = Readonly<{
   admit(input: ModelRoleAdmissionInput): Promise<AdmittedModelRoleCommand>;
+  recoverAttempt?(input: Readonly<{
+    userId: UserId;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+  }>): Promise<ModelRoleAttemptRecovery>;
+  verifyActiveG1Release?(): Promise<void>;
+  configuration(
+    role: OneA3bModelRole,
+  ): ModelRoleConfigurationSnapshot | null;
+  validateAttempt(
+    input: Omit<
+      PersistModelRoleAttemptValidation,
+      "configuration"
+    >,
+  ): Promise<ModelRoleAttemptReadiness>;
+  claimProviderDispatch(
+    input: Omit<
+      PersistModelRoleAttemptValidation,
+      "configuration"
+    >,
+  ): Promise<ModelRoleAttemptReadiness>;
+  discardAttempt(
+    input: PersistModelRoleAttemptDiscard,
+  ): Promise<RecordedModelRoleAttempt>;
   recordAttemptResult(
     input: Omit<
       PersistModelRoleAttemptResult,
@@ -415,6 +535,120 @@ export type ModelRoleCommandService = Readonly<{
     >,
   ): Promise<RecordedModelRoleAttempt>;
 }>;
+
+/**
+ * The final in-process boundary for a 1A.3b Provider call. Role producers
+ * construct their frozen request first, then invoke this port immediately
+ * before the Provider adapter. The port owns the recovery check and the
+ * database claim, so a purge or rollout revocation can close the attempt
+ * before private input crosses the Provider boundary.
+ */
+export type ModelRoleProviderDispatchInput<T> = Readonly<{
+  userId: UserId;
+  generationCommandId: GenerationCommandId;
+  modelRunAttemptId: ModelRunAttemptId;
+  role: OneA3bModelRole;
+  attemptNo: number;
+  attemptKind: ModelRoleAttemptKind;
+  rolloutPin: string;
+  currentSourceRevision: number;
+  expectedDataEpoch: number;
+  now: Date;
+  /** Re-read the content-free source head immediately before the Provider call. */
+  sourceIsCurrent?: () => Promise<boolean>;
+  execute: () => Promise<T>;
+}>;
+
+export type ModelRoleProviderEgress = Readonly<{
+  dispatch<T>(input: ModelRoleProviderDispatchInput<T>): Promise<T>;
+}>;
+
+/** Build the role-aware egress port used by the four G1 producer roles. */
+export function createModelRoleProviderEgress(input: Readonly<{
+  commandService: Pick<
+    ModelRoleCommandService,
+    | "claimProviderDispatch"
+    | "discardAttempt"
+    | "verifyActiveG1Release"
+  >;
+  recoveryGate: RecoveryGate;
+}>): ModelRoleProviderEgress {
+  return {
+    async dispatch<T>(
+      dispatchInput: ModelRoleProviderDispatchInput<T>,
+    ) {
+      try {
+        await input.recoveryGate.requireOpen(dispatchInput.userId);
+      } catch (error) {
+        if (!(error instanceof RecoveryGateClosedError)) {
+          throw error;
+        }
+        if (error.result.status === "unavailable") {
+          throw error;
+        }
+        await input.commandService.discardAttempt({
+          userId: dispatchInput.userId,
+          generationCommandId: dispatchInput.generationCommandId,
+          modelRunAttemptId: dispatchInput.modelRunAttemptId,
+          reason: "recovery_closed",
+          now: dispatchInput.now,
+        });
+        throw new ProviderDispatchError(
+          "policy_blocked",
+          "The recovery gate closed before Provider dispatch.",
+          false,
+        );
+      }
+
+      if (input.commandService.verifyActiveG1Release) {
+        await input.commandService.verifyActiveG1Release();
+      }
+
+      const readiness = await input.commandService.claimProviderDispatch({
+        userId: dispatchInput.userId,
+        generationCommandId: dispatchInput.generationCommandId,
+        modelRunAttemptId: dispatchInput.modelRunAttemptId,
+        role: dispatchInput.role,
+        attemptNo: dispatchInput.attemptNo,
+        attemptKind: dispatchInput.attemptKind,
+        rolloutPin: dispatchInput.rolloutPin,
+        currentSourceRevision: dispatchInput.currentSourceRevision,
+        expectedDataEpoch: dispatchInput.expectedDataEpoch,
+        now: dispatchInput.now,
+      });
+      if (readiness.outcome !== "ready") {
+        const category: ProviderDispatchErrorCategory =
+          readiness.reason === "already_settled"
+            ? "unavailable"
+            : "policy_blocked";
+        throw new ProviderDispatchError(
+          category,
+          "The model role attempt lost its Provider dispatch fence.",
+          false,
+        );
+      }
+      if (
+        dispatchInput.sourceIsCurrent &&
+        !(await dispatchInput.sourceIsCurrent())
+      ) {
+        await input.commandService.discardAttempt({
+          userId: dispatchInput.userId,
+          generationCommandId: dispatchInput.generationCommandId,
+          modelRunAttemptId: dispatchInput.modelRunAttemptId,
+          reason: "source_changed",
+          now: dispatchInput.now,
+        });
+        throw new ProviderDispatchError(
+          "policy_blocked",
+          "The source changed before Provider dispatch.",
+          false,
+        );
+      }
+      return dispatchInput.execute();
+    },
+  };
+
+}
 
 export type ModelRoleAdapterRequest = Readonly<{
   generationCommandId: GenerationCommandId;
@@ -494,6 +728,48 @@ export function createModelRoleCommandService(dependencies: Readonly<{
         configuration,
         identity,
       });
+    },
+    async recoverAttempt(input) {
+      if (!dependencies.repository.recoverAttempt) {
+        return { outcome: "not_due" as const };
+      }
+      return dependencies.repository.recoverAttempt(input);
+    },
+    configuration(role) {
+      return dependencies.registry.configuration(role);
+    },
+    async verifyActiveG1Release() {
+      if (dependencies.registry.enabledRoles.length === 0) return;
+      if (!dependencies.repository.verifyActiveG1Release) {
+        throw new Error("The active G1 release has no database readiness verifier.");
+      }
+      const configurations = dependencies.registry.enabledRoles.map((role) =>
+        dependencies.registry.requireConfiguration(role),
+      );
+      await dependencies.repository.verifyActiveG1Release({ configurations });
+    },
+    async validateAttempt(input) {
+      const configuration = dependencies.registry.configuration(input.role);
+      if (!configuration) {
+        return { outcome: "discarded", reason: "already_settled" };
+      }
+      return dependencies.repository.validateAttempt({
+        ...input,
+        configuration,
+      });
+    },
+    async claimProviderDispatch(input) {
+      const configuration = dependencies.registry.configuration(input.role);
+      if (!configuration) {
+        return { outcome: "discarded", reason: "already_settled" };
+      }
+      return dependencies.repository.claimProviderDispatch({
+        ...input,
+        configuration,
+      });
+    },
+    async discardAttempt(input) {
+      return dependencies.repository.discardAttempt(input);
     },
     async recordAttemptResult(input) {
       const configuration = dependencies.registry.requireConfiguration(input.role);

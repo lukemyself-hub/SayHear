@@ -25,6 +25,7 @@ import type {
 } from "@sayhear/application";
 import { NARRATIVE_VALIDATION_CONTENT_EXPIRY_DAYS } from "@sayhear/application";
 import { createUuidV7 } from "./uuid-v7";
+import { modelRoleAttemptIsRunning } from "./postgres-model-role-attempt-fence";
 import type { Pool } from "pg";
 
 type RequestRow = Readonly<{
@@ -358,6 +359,10 @@ export class PostgresNarrativeValidationRepository
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (!(await modelRoleAttemptIsRunning(client, input))) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "attempt_settled" };
+      }
       const request = await client.query<{ user_id: string; content_purged_at: Date | null }>(
         `SELECT user_id, content_purged_at
          FROM narrative_validator_requests

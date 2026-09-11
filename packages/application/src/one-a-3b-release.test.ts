@@ -1,0 +1,247 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildOneA3bG1ReleaseManifest,
+  ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+  ONE_A_3B_G1_ENABLED_ROLES,
+  ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
+  verifyOneA3bG1ReleaseManifest,
+  type OneA3bG1Evidence,
+} from "./one-a-3b-release";
+import type { ModelRoleConfigurationSnapshot } from "./model-role-runtime";
+
+const gitCommit = "a".repeat(40);
+const migrations = [
+  { name: "0044_1a3b_model_roles_and_bio_read_schema.sql", sha256: "b".repeat(64) },
+  { name: "0048_reflection_inspection_access.sql", sha256: "c".repeat(64) },
+] as const;
+const purgeMarkerMigrations = [
+  { name: "0001_purge_marker.sql", sha256: "d".repeat(64) },
+  { name: "0002_latest_marker_high_water.sql", sha256: "e".repeat(64) },
+] as const;
+
+const roleConfigurations: readonly ModelRoleConfigurationSnapshot[] =
+  ONE_A_3B_G1_ENABLED_ROLES.map((role, index) => ({
+    role,
+    configVersion: `synthetic-${role}:v1`,
+    provider: "synthetic-provider",
+    model: "synthetic-model",
+    modelSnapshot: `synthetic-model@${index + 1}`,
+    promptVersion: `synthetic-prompt:${role}:v1`,
+    schemaVersion: `synthetic-schema:${role}:v1`,
+    rolePolicyVersion: "1a3b-model-role-policy:v1",
+    providerPolicyVersion: `synthetic-egress:${role}:v1`,
+    rolloutPin: `synthetic-rollout:${role}:v1`,
+    freshnessPolicy:
+      role === "episode.build" ? "source_valid:v1" : "exact_head:v1",
+    fallbackMode: "disabled",
+    maxTechnicalRetries: 1,
+    maxSemanticRepairs: 0,
+    parameterSnapshot: { fixture: "synthetic" },
+  }));
+
+function evidence(
+  overrides: Partial<OneA3bG1Evidence> = {},
+): readonly OneA3bG1Evidence[] {
+  return ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA.map((criterion, index) => ({
+    criterion,
+    fixtureIds: [`synthetic-${criterion.toLowerCase()}`],
+    command: `pnpm verify:g1 ${criterion}`,
+    artifactSha256: (index + 1).toString(16).repeat(64),
+    artifactPath: `eval/continuation-acceptance-1a3b/run/${criterion.toLowerCase()}.json`,
+    owner: "Luke",
+    source:
+      criterion === "AC-M01"
+        ? "provider"
+        : criterion === "AC-W01"
+          ? "hosted"
+          : "ci",
+    status: "verified",
+    ...(overrides.criterion === criterion ? overrides : {}),
+  }));
+}
+
+const validatorCalibration = {
+  ledgerPath:
+    "eval/continuation-acceptance-1a3b/run/validator-ledger.json",
+  ledgerSha256: "e".repeat(64),
+  ledgerVersion: ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+  f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
+  totalCases: 18 as const,
+  acceptedCases: 18,
+  humanOwner: "Luke" as const,
+  status: "verified" as const,
+};
+
+function build(overrides: Partial<Parameters<typeof buildOneA3bG1ReleaseManifest>[0]> = {}) {
+  return buildOneA3bG1ReleaseManifest({
+    gitCommit,
+    migrations,
+    purgeMarkerMigrations,
+    roleConfigurations,
+    fixture: {
+      f3ManifestPath: "eval/continuation-acceptance-1a3b/run/manifest.json",
+      f3ManifestSha256: "d".repeat(64),
+      f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
+      fixtureSeed: 196,
+      sampleSeed: 1960,
+    },
+    validatorCalibration,
+    commands: ["CI=true pnpm validate"],
+    evidence: evidence(),
+    cutoverState: "disabled",
+    createdAt: "2026-09-10T20:00:00.000Z",
+    ...overrides,
+  });
+}
+
+describe("1A.3b G1 release manifest", () => {
+  it("stays blocked when hosted evidence is not verified", () => {
+    const manifest = build({
+      roleConfigurations: [],
+      evidence: evidence({
+        criterion: "AC-W01",
+        status: "pending",
+        artifactSha256: null,
+        owner: "unassigned",
+        note: "Hosted synthetic canary has not run.",
+      }),
+    });
+
+    expect(manifest.status).toBe("blocked");
+    expect(verifyOneA3bG1ReleaseManifest(manifest)).toEqual({
+      mismatches: [],
+      passed: true,
+    });
+  });
+
+  it("freezes the four G1 role configurations and can become ready for cutover", () => {
+    const manifest = build();
+
+    expect(manifest.status).toBe("ready_for_cutover");
+    expect(manifest.roles.enabledRoles).toEqual(ONE_A_3B_G1_ENABLED_ROLES);
+    expect(verifyOneA3bG1ReleaseManifest(manifest).passed).toBe(true);
+
+    const rebuilt = build({ createdAt: "2026-09-11T20:00:00.000Z" });
+    expect(rebuilt.fingerprint).toBe(manifest.fingerprint);
+  });
+
+  it("rejects a deferred role, and requires hosted and Provider evidence provenance", () => {
+    expect(() =>
+      build({
+        roleConfigurations: [
+          ...roleConfigurations,
+          {
+            ...roleConfigurations[0]!,
+            role: "bio.write",
+          },
+        ],
+      }),
+    ).toThrow("deferred");
+
+    expect(() =>
+      build({
+        evidence: evidence({
+          criterion: "AC-W01",
+          source: "local",
+        }),
+      }),
+    ).toThrow("hosted");
+
+    expect(() =>
+      build({
+        evidence: evidence({
+          criterion: "AC-M01",
+          source: "local",
+        }),
+      }),
+    ).toThrow("provider");
+
+    expect(() =>
+      build({
+        evidence: evidence({
+          criterion: "AC-X04",
+          source: "human",
+        }),
+      }),
+    ).toThrow("automated");
+  });
+
+  it("cannot mark an incomplete manifest active", () => {
+    expect(() =>
+      build({
+        roleConfigurations: [],
+        cutoverState: "active",
+      }),
+    ).toThrow("active");
+  });
+
+  it("keeps G1 blocked until all 18 validator cases are human-accepted", () => {
+    const manifest = build({
+      validatorCalibration: {
+        ...validatorCalibration,
+        acceptedCases: 17,
+        status: "pending",
+        note: "One case still requires Luke's adjudication.",
+      },
+    });
+
+    expect(manifest.status).toBe("blocked");
+    expect(verifyOneA3bG1ReleaseManifest(manifest).passed).toBe(true);
+    expect(() =>
+      build({
+        validatorCalibration: {
+          ...validatorCalibration,
+          acceptedCases: 17,
+        },
+      }),
+    ).toThrow("all 18 cases");
+  });
+
+  it("detects drift after a frozen schema hash changes", () => {
+    const manifest = build();
+    const drifted = {
+      ...manifest,
+      schema: {
+        ...manifest.schema,
+        migrations: [
+          { ...manifest.schema.migrations[0]!, sha256: "e".repeat(64) },
+          ...manifest.schema.migrations.slice(1),
+        ],
+      },
+    };
+
+    expect(verifyOneA3bG1ReleaseManifest(drifted).mismatches).toContain(
+      "schema fingerprint does not match its migration hashes",
+    );
+  });
+
+  it("returns mismatches for malformed untrusted JSON", () => {
+    expect(verifyOneA3bG1ReleaseManifest({ roles: {} }).passed).toBe(false);
+  });
+
+  it("does not silently accept malformed migration or evidence entries", () => {
+    const manifest = build();
+    const malformed = {
+      ...manifest,
+      schema: {
+        ...manifest.schema,
+        migrations: [...manifest.schema.migrations, null],
+      },
+      evidence: manifest.evidence.map((entry) =>
+        entry.criterion === "AC-F01"
+          ? { ...entry, source: "untrusted" }
+          : entry,
+      ),
+    };
+
+    const verification = verifyOneA3bG1ReleaseManifest(malformed);
+    expect(verification.passed).toBe(false);
+    expect(verification.mismatches).toContain(
+      "schema migrations contain a non-object entry",
+    );
+    expect(verification.mismatches).toContain(
+      "AC-F01 has an invalid evidence source",
+    );
+  });
+});

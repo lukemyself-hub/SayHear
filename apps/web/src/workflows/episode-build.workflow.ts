@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { runEpisodeBuild } from "@sayhear/application";
+import { asUserId, runEpisodeBuild } from "@sayhear/application";
 import { createServerComposition } from "../server-composition";
 
 /**
@@ -11,6 +11,7 @@ import { createServerComposition } from "../server-composition";
 export async function episodeBuildWorkflow(input: {
   workflowCommandId: string;
   subjectId: string;
+  ownerId: string;
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
@@ -35,6 +36,7 @@ export async function episodeBuildWorkflow(input: {
 async function runEpisodeBuildStep(input: {
   workflowCommandId: string;
   subjectId: string;
+  ownerId: string;
   sourceRevision: number;
   policyVersion: string;
   expectedDataEpoch: number;
@@ -54,6 +56,8 @@ async function runEpisodeBuildStep(input: {
 }> {
   "use step";
   const composition = await createServerComposition();
+  await composition.modelRoleCommandService.verifyActiveG1Release?.();
+  await composition.recoveryGate.requireOpen(asUserId(input.ownerId));
   const policyVersion =
     composition.episodeBuilderPolicyVersion ?? input.policyVersion;
   if (policyVersion !== input.policyVersion) {
@@ -68,6 +72,7 @@ async function runEpisodeBuildStep(input: {
     clock: dependencies.clock,
     repository: dependencies.repository,
     modelRoleCommandService: dependencies.modelRoleCommandService,
+    providerEgress: dependencies.providerEgress,
     episodeBuildProvider: dependencies.episodeBuildProvider,
     dedupeFingerprintSecret: dependencies.dedupeFingerprintSecret,
     workflowReceiptId: `wf-${randomUUID()}`,
@@ -79,5 +84,6 @@ async function runEpisodeBuildStep(input: {
       expectedDataEpoch: input.expectedDataEpoch,
     },
     recoveryGate: composition.recoveryGate,
+    recoveryOwnerId: asUserId(input.ownerId),
   });
 }

@@ -49,6 +49,14 @@ describe("Responses API Conversation Text adapter", () => {
         },
       ],
       model: "gpt-5.4",
+      parameters: {
+        input: "must be replaced",
+        maxOutputTokens: 900,
+        model: "must be replaced",
+        store: true,
+        temperature: 0.2,
+        tools: "must be replaced",
+      },
     })) {
       events.push(event);
     }
@@ -69,7 +77,14 @@ describe("Responses API Conversation Text adapter", () => {
       model: "gpt-5.4",
       store: false,
       stream: true,
+      temperature: 0.2,
+      max_output_tokens: 900,
     });
+    expect(requestBody).not.toHaveProperty("maxOutputTokens");
+    expect(requestBody?.input).toEqual([
+      { content: "Synthetic input", role: "user" },
+    ]);
+    expect(requestBody).not.toHaveProperty("tools", "must be replaced");
     expect(requestBody).not.toHaveProperty("previous_response_id");
   });
 

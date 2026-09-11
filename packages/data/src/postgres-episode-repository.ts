@@ -44,6 +44,7 @@ import {
 import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
+import { modelRoleAttemptIsRunning } from "./postgres-model-role-attempt-fence";
 
 type EpisodeContentLike = {
   kind: string;
@@ -408,6 +409,7 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
               sourceRevision: input.sourceRevision,
               policyVersion: input.policyVersion,
               expectedDataEpoch,
+              ownerId: row.user_id,
               eventType: "episode_build_requested",
             }),
           ],
@@ -695,6 +697,10 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (!(await modelRoleAttemptIsRunning(client, input))) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "attempt_settled" };
+      }
       const owner = await client.query<{ status: string; data_epoch: string }>(
         "SELECT status, data_epoch::text FROM app_users WHERE user_id = $1 FOR UPDATE",
         [input.userId],

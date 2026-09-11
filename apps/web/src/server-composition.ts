@@ -25,6 +25,7 @@ import {
   createOutboxDispatcherService,
   createModelRoleCommandService,
   createModelRoleRegistry,
+  createModelRoleProviderEgress,
   createBioInspectionService,
   createReflectionInspectionService,
   createUserTextConversationService,
@@ -74,6 +75,7 @@ import {
 import {
   createRuntimeProviderEgressPort,
   createRuntimeJournalRoleProviderRegistry,
+  createRuntimeOneA3bRoleProviders,
   type JournalRoleConfiguration,
 } from "@sayhear/ai";
 import {
@@ -125,6 +127,14 @@ const globalPool = globalThis as typeof globalThis & {
 
 export function createServerComposition() {
   const configuration = loadRuntimeConfiguration(process.env);
+  const g1SwitchesEnabled =
+    configuration.writeSwitches.episodeBuildEnabled &&
+    configuration.writeSwitches.reflectionEnabled;
+  const activeG1ReleaseManifest =
+    configuration.oneA3bG1.releaseManifest?.status === "active" &&
+    g1SwitchesEnabled
+      ? configuration.oneA3bG1.releaseManifest
+      : null;
   const pool =
     globalPool.sayHearPool ??
     createPostgresPool({
@@ -146,7 +156,17 @@ export function createServerComposition() {
   globalPool.sayHearPurgeMarkerPool = purgeMarkerPool;
 
   const accessRepository = new PostgresInternalOwnerAccessRepository(pool);
-  const purgeMarkerRepository = new PostgresPurgeMarkerRepository(purgeMarkerPool);
+  const purgeMarkerRepository = new PostgresPurgeMarkerRepository(
+    purgeMarkerPool,
+    activeG1ReleaseManifest
+      ? {
+          purgeMarkerMigrations:
+            activeG1ReleaseManifest.schema.purgeMarkerMigrations,
+          purgeMarkerFingerprint:
+            activeG1ReleaseManifest.schema.purgeMarkerFingerprint,
+        }
+      : undefined,
+  );
   const purgeRepository = new PostgresOwnerPurgeRepository(pool);
   const recoveryGate = createRecoveryGate({
     businessStateRepository: accessRepository,
@@ -370,20 +390,57 @@ export function createServerComposition() {
   });
   const outboxDispatcherRepository =
     new PostgresOutboxDispatcherRepository(pool);
-  // F2 registers the composition seam without enabling a future role. An
-  // evaluated config and active rollout pin are required before admission.
+  // F2 registers the composition seam. G1 only opens the four role
+  // configurations frozen by an active release manifest; later roles remain
+  // absent from the registry until their own release stage.
+  const activeG1Configurations =
+    activeG1ReleaseManifest
+      ? activeG1ReleaseManifest.roles.configurations
+      : [];
+  const g1RuntimeProviders =
+    activeG1ReleaseManifest
+      ? configuration.provider.adapter === "deterministic"
+        ? (() => {
+            throw new Error(
+              "An active 1A.3b G1 manifest cannot open with the deterministic test adapter.",
+            );
+          })()
+        : createRuntimeOneA3bRoleProviders({
+            adapters: [
+              ...(configuration.provider.roleAdapters.openai
+                ? [configuration.provider.roleAdapters.openai]
+                : []),
+              ...(configuration.provider.roleAdapters.deepseek
+                ? [configuration.provider.roleAdapters.deepseek]
+                : []),
+            ],
+            configurations:
+              activeG1ReleaseManifest.roles.configurations,
+          })
+      : null;
   const modelRoleCommandService = createModelRoleCommandService({
-    registry: createModelRoleRegistry([]),
-    repository: new PostgresModelRoleCommandRepository(pool),
+    registry: createModelRoleRegistry(activeG1Configurations),
+    repository: new PostgresModelRoleCommandRepository(
+      pool,
+      activeG1ReleaseManifest
+        ? activeG1ReleaseManifest.schema
+        : undefined,
+      activeG1ReleaseManifest?.fingerprint,
+    ),
   });
-  const episodeBuildProvider: EpisodeBuildModelProvider = {
-    role: "episode.build",
-    async buildProposals() {
-      throw new Error(
-        "episode.build has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
-      );
-    },
-  };
+  const modelRoleProviderEgress = createModelRoleProviderEgress({
+    commandService: modelRoleCommandService,
+    recoveryGate,
+  });
+  const episodeBuildProvider: EpisodeBuildModelProvider =
+    g1RuntimeProviders?.episodeBuildProvider ?? {
+      role: "episode.build",
+      async buildProposals() {
+        throw new Error(
+          "episode.build has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
+        );
+      },
+    };
   const episodeRepository = new PostgresEpisodeRepository(pool);
   const episodeBuilderScanService = createEpisodeBuilderScanService({
     clock: configuration.clock,
@@ -397,6 +454,7 @@ export function createServerComposition() {
     clock: configuration.clock,
     repository: episodeRepository,
     modelRoleCommandService,
+    providerEgress: modelRoleProviderEgress,
     episodeBuildProvider: episodeBuildProvider,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     workflowReceiptId,
@@ -463,32 +521,35 @@ export function createServerComposition() {
   // A2 registers the shared narrative.validate seam without enabling a
   // runtime provider. An evaluated config and active rollout pin are
   // required before a producer workflow can validate a draft (ADR-0121).
-  const narrativeValidationProvider: NarrativeValidationModelProvider = {
-    role: "narrative.validate",
-    async validateNarrative() {
-      throw new Error(
-        "narrative.validate has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
-      );
-    },
-  };
+  const narrativeValidationProvider: NarrativeValidationModelProvider =
+    g1RuntimeProviders?.narrativeValidationProvider ?? {
+      role: "narrative.validate",
+      async validateNarrative() {
+        throw new Error(
+          "narrative.validate has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
+        );
+      },
+    };
   const narrativeValidationEntrypointDependencies = (
   ): NarrativeValidationEntrypointDependencies => ({
     clock: configuration.clock,
     repository: new PostgresNarrativeValidationRepository(pool),
     modelRoleCommandService,
+    providerEgress: modelRoleProviderEgress,
     narrativeValidationProvider,
   });
   // A3 (issue #199): Reflection roles stay closed until a release manifest
   // publishes an evaluated config (ADR-0136 / ADR-0134). The scheduler only
   // runs behind the explicit write switch.
-  const reflectionProvider: ReflectionGenerationModelProvider = {
-    role: "reflection.daily",
-    async generate() {
-      throw new Error(
-        "reflection.daily/weekly has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
-      );
-    },
-  };
+  const reflectionProvider: ReflectionGenerationModelProvider =
+    g1RuntimeProviders?.reflectionProvider ?? {
+      role: "reflection.daily",
+      async generate() {
+        throw new Error(
+          "reflection.daily/weekly has no runtime provider; admission stays closed until a release manifest publishes an evaluated config.",
+        );
+      },
+    };
   const reflectionRepository = new PostgresReflectionRepository(pool, {
     entryFor: predicateRegistryLookup.entryFor,
     registryVersion: predicateRegistryLookup.registryVersion,
@@ -505,6 +566,7 @@ export function createServerComposition() {
     clock: configuration.clock,
     repository: reflectionRepository,
     modelRoleCommandService,
+    providerEgress: modelRoleProviderEgress,
     reflectionProvider,
     narrativeValidation: narrativeValidationEntrypointDependencies(),
     dedupeFingerprintSecret: configuration.contextHmacSecret,
@@ -874,6 +936,8 @@ export function createServerComposition() {
     reflectionSchedulerScanService,
     reflectionEntrypointDependencies,
     reflectionReadinessPolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
+    narrativeValidationEntrypointDependencies,
+    oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
