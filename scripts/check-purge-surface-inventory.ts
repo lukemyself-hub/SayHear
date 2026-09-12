@@ -134,7 +134,14 @@ function postgresGeneratedConstraintName(
   columns: string[],
   suffix: "pkey" | "key",
 ): string {
-  return `${table}_${columns.join("_")}_${suffix}`.slice(0, 63);
+  // PostgreSQL's makeObjectName keeps the suffix and splits the available
+  // identifier length between the table and column portions. A plain
+  // concatenation slice produces a different name for long composite keys.
+  const label = columns.join("_");
+  const available = 63 - suffix.length - 2;
+  const tableLength = Math.min(table.length, Math.floor(available / 2));
+  const labelLength = Math.min(label.length, available - tableLength);
+  return `${table.slice(0, tableLength)}_${label.slice(0, labelLength)}_${suffix}`;
 }
 
 function constraintDefinitions(
@@ -424,6 +431,7 @@ async function main(): Promise<void> {
     string,
     { name: string; table: string; definition: string }
   >();
+  const alteredForeignKeyOptions = new Map<string, string>();
   const columns = new Map<string, Set<string>>();
   const foreignKeys: ParsedForeignKey[] = [];
   const droppedConstraints: DroppedConstraint[] = [];
@@ -539,6 +547,18 @@ async function main(): Promise<void> {
       const body = match[2];
       if (name && body) {
         alters.push({ body, name });
+        for (const altered of body.matchAll(
+          /ALTER\s+CONSTRAINT\s+([a-z][a-z0-9_]*)\s+((?:(?:NOT\s+)?DEFERRABLE)(?:\s+INITIALLY\s+(?:DEFERRED|IMMEDIATE))?)/gi,
+        )) {
+          const constraintName = altered[1];
+          const options = altered[2]?.trim();
+          if (constraintName && options) {
+            alteredForeignKeyOptions.set(
+              `${name}|${constraintName}`,
+              normalizeSql(options),
+            );
+          }
+        }
         constraints.push(
           ...alterConstraintDefinitions(
             name,
@@ -651,9 +671,16 @@ async function main(): Promise<void> {
   const intentionallyRemovedForeignKeys = new Map([
     ["conversation_event_revisions->conversation_events", 1],
   ]);
-  const remainingForeignKeys = activeForeignKeys.map(
-    (foreignKey) => foreignKey,
-  );
+  const remainingForeignKeys = activeForeignKeys.map((foreignKey) => {
+    const options = foreignKey.constraintName
+      ? alteredForeignKeyOptions.get(
+          `${foreignKey.childTable}|${foreignKey.constraintName}`,
+        )
+      : undefined;
+    return options
+      ? { ...foreignKey, canonical: `${foreignKey.canonical} ${options}` }
+      : foreignKey;
+  });
   for (const [foreignKey, removalCount] of intentionallyRemovedForeignKeys) {
     for (let index = 0; index < removalCount; index += 1) {
       const position = remainingForeignKeys.findIndex(

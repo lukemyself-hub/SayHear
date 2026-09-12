@@ -245,6 +245,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     narrativeScript = undefined;
     await database!.pool.query(`
       TRUNCATE TABLE
+        proactive_followup_dispositions,
+        proactive_followup_uses,
+        proactive_followup_reservations,
+        proactive_followup_state_versions,
+        proactive_followup_states,
         reflection_runs,
         reflection_candidate_proposals,
         reflection_statement_evidence_links,

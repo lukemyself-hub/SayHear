@@ -72,6 +72,14 @@ export {
   type OpenLoopFormationEffect,
 } from "./postgres-open-loop-repository";
 export {
+  PostgresProactiveFollowupRepository,
+  type ProactiveFollowupDispositionResult,
+  type ProactiveFollowupReservationResult,
+  type ProactiveFollowupTargetInput,
+  type ProactiveFollowupUseCommitInput,
+  type ProactiveFollowupUseCommitResult,
+} from "./postgres-proactive-followup-repository";
+export {
   PostgresCandidateReviewRepository,
   insertCandidateRemapCommandWithin,
   insertRegistryReleaseEventWithin,

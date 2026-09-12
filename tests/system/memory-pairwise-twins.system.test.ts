@@ -458,7 +458,7 @@ describe("Memory-on / Memory-off twin capture (issue #126)", () => {
     120_000,
   );
 
-  it("scope protection: no 1A.3b artifact, champion cluster unchanged", async () => {
+  it("scope protection: no unplanned vector artifact, champion cluster unchanged", async () => {
     const incumbent = JSON.parse(
       await readFile(
         path.join(repositoryRoot, "eval/incumbent-baseline/run/manifest.json"),
