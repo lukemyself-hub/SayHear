@@ -819,57 +819,192 @@ export class PostgresProactiveFollowupRepository {
     segmentGenerationCommandId: string;
     now: Date;
   }>): Promise<Readonly<{ outcome: "bound" | "already_bound" | "fenced"; reason?: string }>> {
-    return inTransaction(this.pool, async (client) => {
-      const fence = await ownerFence(client, input);
-      if (fence) return { outcome: "fenced", reason: fence };
-      const command = await client.query<{ expected_data_epoch: string }>(
-        `SELECT expected_data_epoch::text
+    return inTransaction(this.pool, (client) =>
+      this.bindSegmentCommandWithin(client, input),
+    );
+  }
+
+  public async bindSegmentCommandWithin(
+    client: PoolClient,
+    input: Readonly<{
+      userId: string;
+      expectedDataEpoch: number;
+      reservationId: string;
+      mainGenerationCommandId: string;
+      segmentGenerationCommandId: string;
+      now: Date;
+    }>,
+  ): Promise<Readonly<{ outcome: "bound" | "already_bound" | "fenced"; reason?: string }>> {
+    const fence = await ownerFence(client, input);
+    if (fence) return { outcome: "fenced", reason: fence };
+    if (input.segmentGenerationCommandId === input.mainGenerationCommandId) {
+      return { outcome: "fenced", reason: "segment_command_identity" };
+    }
+    const command = await client.query<{
+      expected_data_epoch: string;
+      generation_stage: string;
+      model_role: string | null;
+      operation_type: string;
+    }>(
+      `SELECT expected_data_epoch::text, generation_stage, model_role,
+              operation_type
          FROM generation_commands
          WHERE generation_command_id = $1 AND user_id = $2`,
-        [input.segmentGenerationCommandId, input.userId],
-      );
-      if (
-        command.rows.length !== 1 ||
-        command.rows[0]?.expected_data_epoch !== String(input.expectedDataEpoch)
-      ) {
-        return { outcome: "fenced", reason: "segment_command_missing" };
-      }
-      const reservation = await client.query<{
-        status: string;
-        expected_data_epoch: string;
-        main_generation_command_id: string;
-        segment_generation_command_id: string | null;
-      }>(
-        `SELECT status, expected_data_epoch::text,
-                main_generation_command_id, segment_generation_command_id
+      [input.segmentGenerationCommandId, input.userId],
+    );
+    if (
+      command.rows.length !== 1 ||
+      command.rows[0]?.expected_data_epoch !== String(input.expectedDataEpoch) ||
+      command.rows[0].generation_stage !== "proactive_followup" ||
+      command.rows[0].model_role !== "proactive.followup" ||
+      command.rows[0].operation_type !== "proactive.followup"
+    ) {
+      return { outcome: "fenced", reason: "segment_command_missing" };
+    }
+    const reservation = await client.query<{
+      status: string;
+      expected_data_epoch: string;
+      main_generation_command_id: string;
+      segment_generation_command_id: string | null;
+    }>(
+      `SELECT status, expected_data_epoch::text,
+              main_generation_command_id, segment_generation_command_id
          FROM proactive_followup_reservations
          WHERE proactive_followup_reservation_id = $1 AND user_id = $2
          FOR UPDATE`,
-        [input.reservationId, input.userId],
-      );
-      const row = reservation.rows[0];
-      if (
-        !row ||
-        row.expected_data_epoch !== String(input.expectedDataEpoch) ||
-        row.main_generation_command_id !== input.mainGenerationCommandId
-      ) {
-        return { outcome: "fenced", reason: "reservation_missing" };
-      }
-      if (row.segment_generation_command_id !== null) {
-        return row.segment_generation_command_id === input.segmentGenerationCommandId
-          ? { outcome: "already_bound" }
-          : { outcome: "fenced", reason: "segment_command_already_bound" };
-      }
-      if (row.status !== "active") return { outcome: "fenced", reason: "reservation_terminal" };
-      await client.query(
-        `UPDATE proactive_followup_reservations
+      [input.reservationId, input.userId],
+    );
+    const row = reservation.rows[0];
+    if (
+      !row ||
+      row.expected_data_epoch !== String(input.expectedDataEpoch) ||
+      row.main_generation_command_id !== input.mainGenerationCommandId
+    ) {
+      return { outcome: "fenced", reason: "reservation_missing" };
+    }
+    if (row.status !== "active") {
+      return { outcome: "fenced", reason: "reservation_terminal" };
+    }
+    if (row.segment_generation_command_id !== null) {
+      return row.segment_generation_command_id === input.segmentGenerationCommandId
+        ? { outcome: "already_bound" }
+        : { outcome: "fenced", reason: "segment_command_already_bound" };
+    }
+    await client.query(
+      `UPDATE proactive_followup_reservations
          SET segment_generation_command_id = $2
          WHERE proactive_followup_reservation_id = $1 AND user_id = $3
            AND status = 'active' AND segment_generation_command_id IS NULL`,
-        [input.reservationId, input.segmentGenerationCommandId, input.userId],
-      );
-      return { outcome: "bound" };
-    });
+      [input.reservationId, input.segmentGenerationCommandId, input.userId],
+    );
+    return { outcome: "bound" };
+  }
+
+  /**
+   * Terminalize a Segment Command that was prepared but could not pass the
+   * final display/use fence. The caller owns the transaction so the main
+   * Assistant Event can be committed without the optional segment.
+   */
+  public async abandonSegmentWithin(
+    client: PoolClient,
+    input: Readonly<{
+      userId: string;
+      expectedDataEpoch: number;
+      reservationId: string;
+      mainGenerationCommandId: string;
+      segmentGenerationCommandId: string;
+      now: Date;
+    }>,
+  ): Promise<void> {
+    const fence = await ownerFence(client, input);
+    if (fence) return;
+    const reservation = await client.query<{
+      expected_data_epoch: string;
+      main_generation_command_id: string;
+      segment_generation_command_id: string | null;
+      status: string;
+    }>(
+      `SELECT expected_data_epoch::text, main_generation_command_id,
+              segment_generation_command_id, status
+       FROM proactive_followup_reservations
+       WHERE proactive_followup_reservation_id = $1 AND user_id = $2
+       FOR UPDATE`,
+      [input.reservationId, input.userId],
+    );
+    const reservationRow = reservation.rows[0];
+    if (
+      !reservationRow ||
+      reservationRow.expected_data_epoch !== String(input.expectedDataEpoch) ||
+      reservationRow.main_generation_command_id !== input.mainGenerationCommandId ||
+      reservationRow.segment_generation_command_id !==
+        input.segmentGenerationCommandId ||
+      reservationRow.status !== "active"
+    ) {
+      return;
+    }
+    await client.query(
+      `UPDATE model_run_attempts
+       SET status = 'failed', error_category = 'policy_blocked',
+           completed_at = $1, recovery_status = 'terminal',
+           recovery_claimed_at = NULL
+       WHERE model_run_attempt_id IN (
+         SELECT model_run_attempt_id
+         FROM model_run_attempts
+         WHERE generation_command_id = $2 AND user_id = $3
+         ORDER BY attempt_no DESC
+         LIMIT 1
+       )
+         AND status IN ('prepared', 'running')`,
+      [input.now, input.segmentGenerationCommandId, input.userId],
+    );
+    await client.query(
+      `UPDATE provider_egress_dispositions
+       SET status = 'failed', error_category = 'policy_blocked', completed_at = $1
+       WHERE model_run_attempt_id = (
+         SELECT model_run_attempt_id
+         FROM model_run_attempts
+         WHERE generation_command_id = $2 AND user_id = $3
+         ORDER BY attempt_no DESC
+         LIMIT 1
+       )
+         AND user_id = $3 AND status IN ('dispatched', 'completed')`,
+      [input.now, input.segmentGenerationCommandId, input.userId],
+    );
+    await client.query(
+      `UPDATE generation_commands
+       SET status = 'failed', recovery_status = 'terminal',
+           recovery_checked_at = $1, next_recovery_at = NULL, settled_at = $1
+       WHERE generation_command_id = $2 AND user_id = $3
+         AND expected_data_epoch = $4
+         AND status IN ('prepared', 'running')`,
+      [
+        input.now,
+        input.segmentGenerationCommandId,
+        input.userId,
+        input.expectedDataEpoch,
+      ],
+    );
+    await client.query(
+      `UPDATE proactive_followup_reservations
+       SET status = 'abandoned', terminal_at = $1,
+           selection_manifest = jsonb_set(
+             selection_manifest, '{reservationStatus}', '"abandoned"'::jsonb
+           )
+       WHERE proactive_followup_reservation_id = $2
+         AND user_id = $3
+         AND expected_data_epoch = $4
+         AND main_generation_command_id = $5
+         AND segment_generation_command_id = $6
+         AND status = 'active'`,
+      [
+        input.now,
+        input.reservationId,
+        input.userId,
+        input.expectedDataEpoch,
+        input.mainGenerationCommandId,
+        input.segmentGenerationCommandId,
+      ],
+    );
   }
 
   /**

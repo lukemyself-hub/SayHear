@@ -6,3 +6,15 @@ export {
   planProactiveFollowupDisposition,
   planProactiveFollowupRelease,
 } from "./suppression";
+export {
+  composeProactiveFollowupResponse,
+  validateProactiveFollowupSegmentOutput,
+  type ProactiveFollowupSegmentAbandonReason,
+  type ProactiveFollowupSegmentCommit,
+  type ProactiveFollowupSegmentGeneration,
+  type ProactiveFollowupSegmentOutput,
+  type ProactiveFollowupSegmentPlan,
+  type ProactiveFollowupSegmentPreparationInput,
+  type ProactiveFollowupSegmentStage,
+  type ProactiveFollowupSegmentValidation,
+} from "./segment";

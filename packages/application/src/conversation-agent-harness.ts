@@ -16,6 +16,14 @@ import type {
   CompleteResponseMetadata,
   ConversationResponseRepository,
 } from "./conversation-response";
+import {
+  composeProactiveFollowupResponse,
+  validateProactiveFollowupSegmentOutput,
+  type ProactiveFollowupSegmentAbandonReason,
+  type ProactiveFollowupSegmentCommit,
+  type ProactiveFollowupSegmentStage,
+} from "./proactive-followup";
+import { countFollowUpQuestions } from "./conversation-behavior";
 import type { ContextCompiler } from "./context-compiler";
 import type {
   ActionReferenceHandle,
@@ -127,6 +135,7 @@ export type ConversationDecisionCommand = Readonly<{
  */
 export type ConversationHarnessEvent =
   | Readonly<{ delta: string; type: "decision_delta" }>
+  | Readonly<{ delta: string; type: "decision_segment_delta" }>
   | Readonly<{
       assistantEventId: ConversationEventId;
       assistantEventRevisionId: ConversationEventRevisionId;
@@ -176,6 +185,7 @@ export function createConversationAgentHarness(dependencies: {
   egressPort: ProviderEgressPort;
   jitter?: () => number;
   contextCompiler?: Pick<ContextCompiler, "compile">;
+  proactiveFollowupStage?: ProactiveFollowupSegmentStage;
   repository: ConversationAgentHarnessRepository;
 }): ConversationAgentHarness {
   const delay =
@@ -187,6 +197,7 @@ export function createConversationAgentHarness(dependencies: {
   async function* runDecisionAttempt(
     command: ConversationDecisionCommand,
     signal?: AbortSignal,
+    allowProactiveSegment = true,
   ): AsyncIterable<ConversationHarnessEvent> {
     let possiblyVisible = false;
     let completeText = "";
@@ -310,11 +321,70 @@ export function createConversationAgentHarness(dependencies: {
         throw new ProviderDispatchError("invalid_response");
       }
 
+      let proactiveSegment: ProactiveFollowupSegmentCommit | undefined;
+      const proactiveStage = dependencies.proactiveFollowupStage;
+      if (
+        allowProactiveSegment &&
+        proactiveStage &&
+        command.requestEventRevisionId &&
+        countFollowUpQuestions(completeText) === 0
+      ) {
+        let plan: ProactiveFollowupSegmentCommit["plan"] | null = null;
+        try {
+          plan = await proactiveStage.prepare({
+            interactionTurnId: command.interactionTurnId,
+            mainGenerationCommandId: command.generationCommandId,
+            mainText: completeText,
+            now: dependencies.clock(),
+            ordinaryQuestionAlreadyAsked: false,
+            requestEventRevisionId: command.requestEventRevisionId,
+            userId: command.userId,
+          });
+        } catch {
+          // The optional branch is fail-closed. A selection/read failure never
+          // changes the ordinary main response path.
+          plan = null;
+        }
+        if (plan) {
+          try {
+            const generation = await proactiveStage.generate(plan, signal);
+            const validation = validateProactiveFollowupSegmentOutput({
+              mainText: completeText,
+              output: generation.output,
+              plan,
+            });
+            if (validation.outcome === "invalid") {
+              throw new InvalidProactiveFollowupSegmentError(
+                validation.reason,
+              );
+            }
+            // Validate the exact composition boundary before handing the
+            // frozen segment to the repository's atomic commit.
+            composeProactiveFollowupResponse({
+              mainText: completeText,
+              segmentText: generation.output.content,
+            });
+            proactiveSegment = { generation, plan };
+          } catch (error) {
+            await abandonProactiveFollowupSegment(
+              proactiveStage,
+              plan,
+              signal?.aborted
+                ? "interrupted"
+                : error instanceof InvalidProactiveFollowupSegmentError
+                  ? "invalid_output"
+                  : "generation_failed",
+            );
+          }
+        }
+      }
+
       const committed = await dependencies.repository.commitCompleteResponse({
         completedAt: dependencies.clock(),
         generationCommandId: command.generationCommandId,
         metadata: completion,
         modelRunAttemptId: command.modelRunAttemptId,
+        ...(proactiveSegment ? { proactiveSegment } : {}),
         ...(stopSignalProposals.length > 0
           ? { stopSignalProposals }
           : {}),
@@ -323,6 +393,15 @@ export function createConversationAgentHarness(dependencies: {
       });
       if (committed.outcome === "fence_rejected") {
         throw new ProviderDispatchError("policy_blocked");
+      }
+      if (
+        proactiveSegment &&
+        committed.segment === "committed"
+      ) {
+        yield {
+          delta: proactiveSegment.generation.output.content.trim(),
+          type: "decision_segment_delta",
+        };
       }
       yield {
         assistantEventId: committed.eventId,
@@ -395,6 +474,7 @@ export function createConversationAgentHarness(dependencies: {
               modelRunAttemptId: recovery.modelRunAttemptId,
             },
             signal,
+            false,
           );
           return;
         }
@@ -419,7 +499,7 @@ export function createConversationAgentHarness(dependencies: {
       if (command.harnessPolicy.toolsDisabled !== true) {
         throw new Error("Action Finalization must disable tools.");
       }
-      return runDecisionAttempt(command, signal);
+      return runDecisionAttempt(command, signal, false);
     },
     async *runFinalizationCommand(command, input, signal) {
       if (input.harnessPolicy.toolsDisabled !== true) {
@@ -500,9 +580,31 @@ export function createConversationAgentHarness(dependencies: {
           userId: command.userId,
         },
         signal,
+        false,
       );
     },
   };
+}
+
+class InvalidProactiveFollowupSegmentError extends Error {
+  constructor(reason: string) {
+    super(`Invalid proactive followup segment: ${reason}`);
+    this.name = "InvalidProactiveFollowupSegmentError";
+  }
+}
+
+async function abandonProactiveFollowupSegment(
+  stage: ProactiveFollowupSegmentStage,
+  plan: ProactiveFollowupSegmentCommit["plan"],
+  reason: ProactiveFollowupSegmentAbandonReason,
+): Promise<void> {
+  try {
+    await stage.abandon(plan, reason);
+  } catch {
+    // Abandonment is best-effort here. The repository's recovery/reconciler
+    // remains responsible for terminalizing an uncertain segment command;
+    // the main response must never be lost because that cleanup failed.
+  }
 }
 
 function normalizedJitter(value: number): number {

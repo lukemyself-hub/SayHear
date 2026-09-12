@@ -62,6 +62,9 @@ export const PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION =
 export const ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION =
   "task-instruction-action-finalization:v1";
 
+export const PROACTIVE_FOLLOWUP_TASK_INSTRUCTION_VERSION =
+  "proactive-followup-prompt:v1";
+
 /**
  * The reduced persona variant the Context Compiler renders while the Safety
  * Posture is active (issue #76, ADR-0112): the compiler swaps the ordinary
@@ -114,7 +117,10 @@ export const TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
 export const PREVIOUS_TRUST_ACTION_EXPRESSION_CONTRACT_VERSION =
   "trust-action-expression-contract:v1";
 
-export type GenerationCommandStage = "decision" | "action_finalization";
+export type GenerationCommandStage =
+  | "decision"
+  | "action_finalization"
+  | "proactive_followup";
 
 export class PromptArtifactResolutionError extends Error {
   public constructor(layer: string, version: string) {
@@ -253,6 +259,10 @@ const TASK_INSTRUCTION_CONTENT: Readonly<
   action_finalization: {
     [ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION]:
       "Finalize this turn's response after the admitted Conversation Action. Let the frozen Action Finalization Receipt alone determine what may be claimed about the Action outcome; answer the user's current expression without opening new directions or further questions.",
+  },
+  proactive_followup: {
+    [PROACTIVE_FOLLOWUP_TASK_INSTRUCTION_VERSION]:
+      "Write one short, optional companion segment about the frozen target. Use only the target references and context provided to you; do not use tools, introduce a new topic, or ask more than one question. Return exactly one expression: either one question or one acknowledgment, with the target reference and expression kind kept separate from the text.",
   },
 };
 
