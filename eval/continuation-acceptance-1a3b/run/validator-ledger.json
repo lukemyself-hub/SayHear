@@ -1,0 +1,100 @@
+{
+  "adjudicator": "Luke",
+  "decidedAt": "2026-09-12T00:06:00-08:00",
+  "entries": [
+    {
+      "fixtureId": "validator-bio-unsupported-en",
+      "note": "R1通过 unsupported 在列；R2通过 verdict=blocked；附加 manifest_mismatch 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-contradiction-en",
+      "note": "R1通过 contradiction 在列；R2通过 verdict=blocked；附加 manifest_mismatch 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-upgrade-en",
+      "note": "R1通过 kind_upgrade 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-absence-en",
+      "note": "R1通过 material_absence 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-reflection-manifest-en",
+      "note": "R1通过 manifest_mismatch 在列；R2通过 verdict=accepted；附加 unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-reflection-ambiguity-en",
+      "note": "R1通过 ambiguous 在列；R2通过 verdict=accepted；附加 manifest_mismatch、unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-unsupported-zh",
+      "note": "R1通过 unsupported 在列；R2通过 verdict=blocked；附加 manifest_mismatch 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-contradiction-zh",
+      "note": "R1通过 contradiction 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-upgrade-zh",
+      "note": "R1通过 kind_upgrade 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-absence-zh",
+      "note": "R1通过 material_absence 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-reflection-manifest-zh",
+      "note": "R1通过 manifest_mismatch 在列；R2通过 verdict=accepted；附加 unsupported、ambiguous、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-reflection-ambiguity-zh",
+      "note": "rejected：期望 ambiguous 缺席。R2 verdict 正确，无 R3。计入 10% 漏检预算（1/18）。",
+      "verdict": "rejected"
+    },
+    {
+      "fixtureId": "validator-bio-unsupported-mix",
+      "note": "R1通过 unsupported 在列；R2通过 verdict=blocked；附加 manifest_mismatch 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-contradiction-mix",
+      "note": "R1通过 contradiction 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-upgrade-mix",
+      "note": "R1通过 kind_upgrade 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-bio-absence-mix",
+      "note": "R1通过 material_absence 在列；R2通过 verdict=blocked；附加 manifest_mismatch、unsupported 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-reflection-manifest-mix",
+      "note": "R1通过 manifest_mismatch 在列；R2通过 verdict=accepted；附加 unsupported、unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "validator-reflection-ambiguity-mix",
+      "note": "R1通过 ambiguous 在列；R2通过 verdict=accepted；附加 manifest_mismatch、unsupported、material_absence 属 R4 容忍，无 R3 荒谬。",
+      "verdict": "accepted"
+    }
+  ],
+  "group": "validator",
+  "manifestFingerprint": "sha256:e267ba7835c25209709f89d1cb0bbad2bc8c61a55d98df2c71d9d3f2078f345c",
+  "maxRejects": 1,
+  "version": "1a3b-f3-adjudication:v1"
+}

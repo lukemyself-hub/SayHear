@@ -22,6 +22,7 @@ import {
   toPublicReviewPackage,
   unblindReviewPackage,
   validateValidatorLedger,
+  verifySyntheticRunHardGates,
   type SyntheticRun,
 } from "../eval/continuation-acceptance-1a3b/review-package";
 import {
@@ -176,8 +177,17 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
   });
 
   it("blocks comparison when the historical incumbent has no clean rebaseline", () => {
+    const blockedBaseline = {
+      ...baseline,
+      currentIncumbent: {
+        status: "requires-clean-rebaseline" as const,
+        commit: null,
+        confirmedHardGateFailures: null,
+        manifestPath: null,
+      },
+    };
     const blocked = buildManifest({
-      baseline,
+      baseline: blockedBaseline,
       catalog,
       commands: ["pnpm exec tsx eval/continuation-acceptance-1a3b/build-manifest.ts"],
       fixtureSeed: 196,
@@ -457,6 +467,43 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
         manifest: manifest(),
       }),
     ).toThrow(/more than one question/i);
+  });
+
+  it("keeps advisory token findings out of the hard-gate pass only when explicitly requested", () => {
+    const fixture = catalog.scenarios.find(
+      (entry) =>
+        entry.group === "continuation" &&
+        entry.category === "direct_task" &&
+        entry.hardGate.requiredTokens.length > 0,
+    );
+    expect(fixture).toBeDefined();
+
+    const candidate = syntheticRun("candidate", "continuation");
+    const responseWithoutRequiredToken = {
+      ...candidate,
+      scenarios: candidate.scenarios.map((entry) =>
+        entry.fixtureId === fixture!.id
+          ? {
+              ...entry,
+              turns: entry.turns.map((turn) =>
+                turn.sequenceInScenario === 1
+                  ? { ...turn, assistantText: "I hear the specific thing you shared." }
+                  : turn,
+              ),
+            }
+          : entry,
+      ),
+    };
+
+    const advisory = verifySyntheticRunHardGates(catalog, responseWithoutRequiredToken, {
+      tokenGates: "advisory",
+    });
+    expect(advisory.passed).toBe(true);
+    expect(advisory.advisories.some((entry) => entry.includes("required_recall_missing"))).toBe(true);
+
+    const hard = verifySyntheticRunHardGates(catalog, responseWithoutRequiredToken);
+    expect(hard.passed).toBe(false);
+    expect(hard.failures.some((entry) => entry.includes("required_recall_missing"))).toBe(true);
   });
 
   it("does not reveal identities until every blinded score is present", () => {

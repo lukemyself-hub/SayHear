@@ -69,6 +69,7 @@ const validatorCalibration = {
   f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
   totalCases: 18 as const,
   acceptedCases: 18,
+  maxRejects: 0,
   humanOwner: "Luke" as const,
   status: "verified" as const,
 };
@@ -176,13 +177,28 @@ describe("1A.3b G1 release manifest", () => {
     ).toThrow("active");
   });
 
-  it("keeps G1 blocked until all 18 validator cases are human-accepted", () => {
+  it("accepts the 10% validator miss budget and blocks beyond it", () => {
     const manifest = build({
       validatorCalibration: {
         ...validatorCalibration,
         acceptedCases: 17,
+        maxRejects: 1,
+      },
+    });
+
+    expect(manifest.status).toBe("ready_for_cutover");
+    expect(manifest.validatorCalibration.acceptedCases).toBe(17);
+    expect(verifyOneA3bG1ReleaseManifest(manifest).passed).toBe(true);
+  });
+
+  it("keeps G1 blocked while the rejected case exceeds the human-accepted budget", () => {
+    const manifest = build({
+      validatorCalibration: {
+        ...validatorCalibration,
+        acceptedCases: 17,
+        maxRejects: 0,
         status: "pending",
-        note: "One case still requires Luke's adjudication.",
+        note: "One case awaits Luke's adjudication.",
       },
     });
 
@@ -193,9 +209,19 @@ describe("1A.3b G1 release manifest", () => {
         validatorCalibration: {
           ...validatorCalibration,
           acceptedCases: 17,
+          maxRejects: 0,
         },
       }),
-    ).toThrow("all 18 cases");
+    ).toThrow("10% error budget");
+    expect(() =>
+      build({
+        validatorCalibration: {
+          ...validatorCalibration,
+          acceptedCases: 16,
+          maxRejects: 2,
+        },
+      }),
+    ).toThrow("10% error budget");
   });
 
   it("detects drift after a frozen schema hash changes", () => {

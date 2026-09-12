@@ -180,10 +180,11 @@ function verifyEvidenceValues(
   const summary = validateValidatorLedger({ catalog, ledger });
   if (
     summary.total !== input.validatorCalibration.totalCases ||
-    summary.accepted !== input.validatorCalibration.acceptedCases
+    summary.accepted !== input.validatorCalibration.acceptedCases ||
+    summary.maxRejects !== input.validatorCalibration.maxRejects
   ) {
     throw new Error(
-      `Validator calibration counts do not match the ledger (${summary.accepted}/${summary.total}).`,
+      `Validator calibration counts do not match the ledger (${summary.accepted}/${summary.total}, maxRejects ${summary.maxRejects}).`,
     );
   }
   for (const entry of input.evidence) {
@@ -204,7 +205,7 @@ function verifyEvidenceValues(
       evidence: entry,
       gitCommit: input.gitCommit,
       f3ManifestFingerprint: f3Manifest.fingerprint,
-      fixtureCatalogSha256: f3Manifest.catalog.sha256,
+      fixtureCatalogSha256: f3Manifest.catalog.sha256.slice("sha256:".length),
       knownFixtureIds: new Set(catalog.scenarios.map((fixture) => fixture.id)),
     });
     if (artifactMismatches.length > 0) {

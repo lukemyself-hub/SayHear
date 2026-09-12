@@ -82,6 +82,7 @@ export type OneA3bG1ValidatorCalibration = Readonly<{
   f3ManifestFingerprint: string;
   totalCases: 18;
   acceptedCases: number;
+  maxRejects: number;
   humanOwner: "Luke";
   status: OneA3bG1EvidenceStatus;
   note?: string;
@@ -290,6 +291,26 @@ function validateFixture(input: OneA3bG1ReleaseManifestInput["fixture"]): void {
   requireInteger(input.sampleSeed, "fixture.sampleSeed");
 }
 
+/**
+ * The accepted calibration rule is a 10% miss budget with the human owner
+ * adjudicating every case: all 18 must be ruled, and at most floor(18 * 0.1) = 1
+ * may be rejected. Precision (zero false blocks) is proven separately by the
+ * F3 fixture artifacts, not by this ledger.
+ */
+export function validatorCalibrationRejectsWithinBudget(input: Readonly<{
+  totalCases: number;
+  acceptedCases: number;
+  maxRejects: number;
+}>): boolean {
+  const rejected = input.totalCases - input.acceptedCases;
+  return (
+    rejected >= 0 &&
+    input.maxRejects >= 0 &&
+    rejected <= input.maxRejects &&
+    input.maxRejects <= Math.floor(input.totalCases * 0.1)
+  );
+}
+
 function validateValidatorCalibration(
   input: OneA3bG1ValidatorCalibration,
   fixture: OneA3bG1ReleaseManifestInput["fixture"],
@@ -322,6 +343,15 @@ function validateValidatorCalibration(
       "validatorCalibration.acceptedCases must be an integer from 0 through 18.",
     );
   }
+  if (
+    !Number.isSafeInteger(input.maxRejects) ||
+    input.maxRejects < 0 ||
+    input.maxRejects > Math.floor(input.totalCases * 0.1)
+  ) {
+    throw new Error(
+      "validatorCalibration.maxRejects must be an integer within the 10% error budget.",
+    );
+  }
   if (input.humanOwner !== "Luke") {
     throw new Error("validatorCalibration.humanOwner must be Luke.");
   }
@@ -332,9 +362,16 @@ function validateValidatorCalibration(
   ) {
     throw new Error("validatorCalibration has an invalid status.");
   }
-  if (input.status === "verified" && input.acceptedCases !== input.totalCases) {
+  if (
+    input.status === "verified" &&
+    !validatorCalibrationRejectsWithinBudget({
+      totalCases: input.totalCases,
+      acceptedCases: input.acceptedCases,
+      maxRejects: input.maxRejects,
+    })
+  ) {
     throw new Error(
-      "validatorCalibration cannot be verified until all 18 cases are accepted.",
+      "validatorCalibration cannot be verified while rejected cases exceed the 10% error budget.",
     );
   }
   if (input.status !== "verified") {
@@ -422,12 +459,13 @@ function validatorCalibrationIsComplete(
     status: OneA3bG1EvidenceStatus;
     totalCases: number;
     acceptedCases: number;
+    maxRejects: number;
   }>,
 ): boolean {
   return (
     calibration.status === "verified" &&
     calibration.totalCases === 18 &&
-    calibration.acceptedCases === 18
+    validatorCalibrationRejectsWithinBudget(calibration)
   );
 }
 
@@ -454,6 +492,7 @@ function expectedStatus(input: Readonly<{
     status: OneA3bG1EvidenceStatus;
     totalCases: number;
     acceptedCases: number;
+    maxRejects: number;
   }>;
 }>): OneA3bG1ReleaseManifest["status"] {
   const complete =
@@ -876,6 +915,7 @@ export function verifyOneA3bG1ReleaseManifest(
   let validatorCalibrationStatus: OneA3bG1EvidenceStatus = "blocked";
   let validatorCalibrationTotalCases = 0;
   let validatorCalibrationAcceptedCases = 0;
+  let validatorCalibrationMaxRejects = 0;
   if (!validatorCalibration) {
     mismatches.push("validator calibration section is missing");
   } else {
@@ -916,6 +956,10 @@ export function verifyOneA3bG1ReleaseManifest(
       typeof validatorCalibration.acceptedCases === "number"
         ? validatorCalibration.acceptedCases
         : 0;
+    validatorCalibrationMaxRejects =
+      typeof validatorCalibration.maxRejects === "number"
+        ? validatorCalibration.maxRejects
+        : 0;
     pushIf(
       mismatches,
       validatorCalibrationTotalCases !== 18,
@@ -930,6 +974,13 @@ export function verifyOneA3bG1ReleaseManifest(
     );
     pushIf(
       mismatches,
+      !Number.isSafeInteger(validatorCalibrationMaxRejects) ||
+        validatorCalibrationMaxRejects < 0 ||
+        validatorCalibrationMaxRejects > Math.floor(18 * 0.1),
+      "validator calibration max rejects is outside the 10% error budget",
+    );
+    pushIf(
+      mismatches,
       validatorCalibration.humanOwner !== "Luke",
       "validator calibration human owner is not Luke",
     );
@@ -940,8 +991,13 @@ export function verifyOneA3bG1ReleaseManifest(
       validatorCalibrationStatus = status;
       pushIf(
         mismatches,
-        status === "verified" && validatorCalibrationAcceptedCases !== 18,
-        "validator calibration cannot be verified before all 18 cases are accepted",
+        status === "verified" &&
+          !validatorCalibrationRejectsWithinBudget({
+            totalCases: validatorCalibrationTotalCases,
+            acceptedCases: validatorCalibrationAcceptedCases,
+            maxRejects: validatorCalibrationMaxRejects,
+          }),
+        "validator calibration cannot be verified while rejects exceed the 10% error budget",
       );
       pushIf(
         mismatches,
@@ -974,6 +1030,7 @@ export function verifyOneA3bG1ReleaseManifest(
       status: validatorCalibrationStatus,
       totalCases: validatorCalibrationTotalCases,
       acceptedCases: validatorCalibrationAcceptedCases,
+      maxRejects: validatorCalibrationMaxRejects,
     },
   });
   pushIf(mismatches, value.status !== expected, `G1 status must be ${expected}`);

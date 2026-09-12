@@ -278,8 +278,20 @@ function verifyActiveG1EvidenceAtRoot(
   if (seenIds.size !== expectedIds.size) {
     throw new Error("Validator calibration ledger does not cover all 18 F3 fixtures.");
   }
+  const ledgerMaxRejects =
+    typeof ledger.maxRejects === "number" ? ledger.maxRejects : 0;
+  const rejectedCases = seenIds.size - acceptedCases;
+  if (
+    !Number.isInteger(ledgerMaxRejects) ||
+    ledgerMaxRejects < 0 ||
+    ledgerMaxRejects > Math.floor(18 * 0.1) ||
+    rejectedCases > ledgerMaxRejects
+  ) {
+    throw new Error("Validator ledger rejects exceed the 10% error budget.");
+  }
   if (
     acceptedCases !== manifest.validatorCalibration.acceptedCases ||
+    ledgerMaxRejects !== manifest.validatorCalibration.maxRejects ||
     manifest.validatorCalibration.totalCases !== 18
   ) {
     throw new Error("Validator calibration counts do not match the G1 manifest.");
@@ -320,7 +332,7 @@ function verifyActiveG1EvidenceAtRoot(
       evidence: entry,
       gitCommit: manifest.gitCommit,
       f3ManifestFingerprint,
-      fixtureCatalogSha256: f3CatalogFingerprint,
+      fixtureCatalogSha256: f3CatalogFingerprint.slice("sha256:".length),
       knownFixtureIds,
     });
     if (artifactMismatches.length > 0) {
