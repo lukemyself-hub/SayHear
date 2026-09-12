@@ -22,15 +22,22 @@ function parseJson<T>(value: string, name: string): T {
   }
 }
 
-const artifactFile = requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE");
-const values = parseJson<WorkflowCanaryValues>(
-  requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_VALUES"),
-  "SAYHEAR_WORKFLOW_CANARY_VALUES",
-);
-const artifacts = parseJson<WorkflowCanaryArtifacts>(
-  await readFile(artifactFile, "utf8"),
-  "SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE",
-);
+async function main(): Promise<void> {
+  const artifactFile = requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE");
+  const values = parseJson<WorkflowCanaryValues>(
+    requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_VALUES"),
+    "SAYHEAR_WORKFLOW_CANARY_VALUES",
+  );
+  const artifacts = parseJson<WorkflowCanaryArtifacts>(
+    await readFile(artifactFile, "utf8"),
+    "SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE",
+  );
 
-assertWorkflowHistoryCanaryClean(artifacts, values);
-console.log("Hosted Workflow canary passed: exported artifacts contain no configured private canary values.");
+  assertWorkflowHistoryCanaryClean(artifacts, values);
+  console.log("Hosted Workflow canary passed: exported artifacts contain no configured private canary values.");
+}
+
+main().catch((error: unknown) => {
+  console.error("Hosted Workflow canary failed:", error);
+  process.exitCode = 1;
+});
