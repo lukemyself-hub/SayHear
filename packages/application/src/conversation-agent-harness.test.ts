@@ -306,6 +306,80 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
     );
   });
 
+  it("does not expose a segment unless the response transaction confirms it", async () => {
+    const egressPort: ProviderEgressPort = {
+      async *stream() {
+        yield { delta: "I hear you.", type: "delta" } as const;
+        yield { ...completedMetadata, type: "completed" } as const;
+      },
+    };
+    const plan = proactivePlan();
+    const proactiveFollowupStage: ProactiveFollowupSegmentStage = {
+      async prepare() {
+        return plan;
+      },
+      async generate() {
+        return {
+          metadata: completedMetadata,
+          output: {
+            content: "I’m glad you shared that.",
+            expressionKind: "acknowledgment" as const,
+            targetRef: {
+              targetId: plan.targetId,
+              targetKind: plan.targetKind,
+              targetVersionId: plan.targetVersionId,
+            },
+          },
+        };
+      },
+      async abandon() {
+        throw new Error("unexpected abandon");
+      },
+    };
+    const repository: ConversationAgentHarnessRepository = {
+      async claimResponseExecution() {
+        return "owner";
+      },
+      async loadResponse() {
+        throw new Error("unexpected loadResponse");
+      },
+      async commitCompleteResponse() {
+        return {
+          eventId: assistantEventId,
+          outcome: "committed",
+          revisionId: assistantRevisionId,
+          // An omitted segment is a successful main-response commit, not a
+          // permission to reveal the segment generated above.
+          segment: "omitted" as const,
+        };
+      },
+      async settleResponseFailure() {
+        throw new Error("unexpected settleResponseFailure");
+      },
+      async claimStaleResponseExecution() {
+        throw new Error("unexpected claimStaleResponseExecution");
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      egressPort,
+      proactiveFollowupStage,
+      repository,
+    });
+
+    const events: ConversationHarnessEvent[] = [];
+    for await (const event of harness.runDecision(baseCommand())) {
+      events.push(event);
+    }
+
+    expect(events.some((event) => event.type === "decision_segment_delta")).toBe(
+      false,
+    );
+    expect(events.some((event) => event.type === "decision_committed")).toBe(
+      true,
+    );
+  });
+
   it("preserves the main response when segment validation fails and abandons once", async () => {
     const egressPort: ProviderEgressPort = {
       async *stream() {

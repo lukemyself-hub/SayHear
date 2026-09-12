@@ -819,57 +819,85 @@ export class PostgresProactiveFollowupRepository {
     segmentGenerationCommandId: string;
     now: Date;
   }>): Promise<Readonly<{ outcome: "bound" | "already_bound" | "fenced"; reason?: string }>> {
-    return inTransaction(this.pool, async (client) => {
-      const fence = await ownerFence(client, input);
-      if (fence) return { outcome: "fenced", reason: fence };
-      const command = await client.query<{ expected_data_epoch: string }>(
-        `SELECT expected_data_epoch::text
+    return inTransaction(this.pool, (client) =>
+      this.bindSegmentCommandWithin(client, input),
+    );
+  }
+
+  public async bindSegmentCommandWithin(
+    client: PoolClient,
+    input: Readonly<{
+      userId: string;
+      expectedDataEpoch: number;
+      reservationId: string;
+      mainGenerationCommandId: string;
+      segmentGenerationCommandId: string;
+      now: Date;
+    }>,
+  ): Promise<Readonly<{ outcome: "bound" | "already_bound" | "fenced"; reason?: string }>> {
+    const fence = await ownerFence(client, input);
+    if (fence) return { outcome: "fenced", reason: fence };
+    if (input.segmentGenerationCommandId === input.mainGenerationCommandId) {
+      return { outcome: "fenced", reason: "segment_command_identity" };
+    }
+    const command = await client.query<{
+      expected_data_epoch: string;
+      generation_stage: string;
+      model_role: string | null;
+      operation_type: string;
+    }>(
+      `SELECT expected_data_epoch::text, generation_stage, model_role,
+              operation_type
          FROM generation_commands
          WHERE generation_command_id = $1 AND user_id = $2`,
-        [input.segmentGenerationCommandId, input.userId],
-      );
-      if (
-        command.rows.length !== 1 ||
-        command.rows[0]?.expected_data_epoch !== String(input.expectedDataEpoch)
-      ) {
-        return { outcome: "fenced", reason: "segment_command_missing" };
-      }
-      const reservation = await client.query<{
-        status: string;
-        expected_data_epoch: string;
-        main_generation_command_id: string;
-        segment_generation_command_id: string | null;
-      }>(
-        `SELECT status, expected_data_epoch::text,
-                main_generation_command_id, segment_generation_command_id
+      [input.segmentGenerationCommandId, input.userId],
+    );
+    if (
+      command.rows.length !== 1 ||
+      command.rows[0]?.expected_data_epoch !== String(input.expectedDataEpoch) ||
+      command.rows[0].generation_stage !== "proactive_followup" ||
+      command.rows[0].model_role !== "proactive.followup" ||
+      command.rows[0].operation_type !== "proactive.followup"
+    ) {
+      return { outcome: "fenced", reason: "segment_command_missing" };
+    }
+    const reservation = await client.query<{
+      status: string;
+      expected_data_epoch: string;
+      main_generation_command_id: string;
+      segment_generation_command_id: string | null;
+    }>(
+      `SELECT status, expected_data_epoch::text,
+              main_generation_command_id, segment_generation_command_id
          FROM proactive_followup_reservations
          WHERE proactive_followup_reservation_id = $1 AND user_id = $2
          FOR UPDATE`,
-        [input.reservationId, input.userId],
-      );
-      const row = reservation.rows[0];
-      if (
-        !row ||
-        row.expected_data_epoch !== String(input.expectedDataEpoch) ||
-        row.main_generation_command_id !== input.mainGenerationCommandId
-      ) {
-        return { outcome: "fenced", reason: "reservation_missing" };
-      }
-      if (row.segment_generation_command_id !== null) {
-        return row.segment_generation_command_id === input.segmentGenerationCommandId
-          ? { outcome: "already_bound" }
-          : { outcome: "fenced", reason: "segment_command_already_bound" };
-      }
-      if (row.status !== "active") return { outcome: "fenced", reason: "reservation_terminal" };
-      await client.query(
-        `UPDATE proactive_followup_reservations
+      [input.reservationId, input.userId],
+    );
+    const row = reservation.rows[0];
+    if (
+      !row ||
+      row.expected_data_epoch !== String(input.expectedDataEpoch) ||
+      row.main_generation_command_id !== input.mainGenerationCommandId
+    ) {
+      return { outcome: "fenced", reason: "reservation_missing" };
+    }
+    if (row.status !== "active") {
+      return { outcome: "fenced", reason: "reservation_terminal" };
+    }
+    if (row.segment_generation_command_id !== null) {
+      return row.segment_generation_command_id === input.segmentGenerationCommandId
+        ? { outcome: "already_bound" }
+        : { outcome: "fenced", reason: "segment_command_already_bound" };
+    }
+    await client.query(
+      `UPDATE proactive_followup_reservations
          SET segment_generation_command_id = $2
          WHERE proactive_followup_reservation_id = $1 AND user_id = $3
            AND status = 'active' AND segment_generation_command_id IS NULL`,
-        [input.reservationId, input.segmentGenerationCommandId, input.userId],
-      );
-      return { outcome: "bound" };
-    });
+      [input.reservationId, input.segmentGenerationCommandId, input.userId],
+    );
+    return { outcome: "bound" };
   }
 
   /**
@@ -890,6 +918,30 @@ export class PostgresProactiveFollowupRepository {
   ): Promise<void> {
     const fence = await ownerFence(client, input);
     if (fence) return;
+    const reservation = await client.query<{
+      expected_data_epoch: string;
+      main_generation_command_id: string;
+      segment_generation_command_id: string | null;
+      status: string;
+    }>(
+      `SELECT expected_data_epoch::text, main_generation_command_id,
+              segment_generation_command_id, status
+       FROM proactive_followup_reservations
+       WHERE proactive_followup_reservation_id = $1 AND user_id = $2
+       FOR UPDATE`,
+      [input.reservationId, input.userId],
+    );
+    const reservationRow = reservation.rows[0];
+    if (
+      !reservationRow ||
+      reservationRow.expected_data_epoch !== String(input.expectedDataEpoch) ||
+      reservationRow.main_generation_command_id !== input.mainGenerationCommandId ||
+      reservationRow.segment_generation_command_id !==
+        input.segmentGenerationCommandId ||
+      reservationRow.status !== "active"
+    ) {
+      return;
+    }
     await client.query(
       `UPDATE model_run_attempts
        SET status = 'failed', error_category = 'policy_blocked',
@@ -942,6 +994,7 @@ export class PostgresProactiveFollowupRepository {
          AND user_id = $3
          AND expected_data_epoch = $4
          AND main_generation_command_id = $5
+         AND segment_generation_command_id = $6
          AND status = 'active'`,
       [
         input.now,
@@ -949,6 +1002,7 @@ export class PostgresProactiveFollowupRepository {
         input.userId,
         input.expectedDataEpoch,
         input.mainGenerationCommandId,
+        input.segmentGenerationCommandId,
       ],
     );
   }

@@ -1898,13 +1898,29 @@ export class PostgresConversationResponseRepository
         });
       };
       if (segmentInput) {
-        segmentReady = await lockProactiveSegmentCommand(client, {
-          mainGenerationCommandId: input.generationCommandId,
-          mainInputRevisionId: row.input_revision_id,
-          mainInteractionTurnId: row.interaction_turn_id,
-          segment: segmentInput,
-          userId: input.userId,
-        });
+        const binding = await this.proactiveFollowupRepository.bindSegmentCommandWithin(
+          client,
+          {
+            expectedDataEpoch: segmentInput.plan.expectedDataEpoch,
+            mainGenerationCommandId: segmentInput.plan.mainGenerationCommandId,
+            now: input.completedAt,
+            reservationId: segmentInput.plan.reservationId,
+            segmentGenerationCommandId:
+              segmentInput.plan.segmentGenerationCommandId,
+            userId: input.userId,
+          },
+        );
+        segmentReady =
+          binding.outcome === "bound" || binding.outcome === "already_bound";
+        if (segmentReady) {
+          segmentReady = await lockProactiveSegmentCommand(client, {
+            mainGenerationCommandId: input.generationCommandId,
+            mainInputRevisionId: row.input_revision_id,
+            mainInteractionTurnId: row.interaction_turn_id,
+            segment: segmentInput,
+            userId: input.userId,
+          });
+        }
         if (!segmentReady) await abandonSegment();
       }
 
@@ -2053,49 +2069,59 @@ export class PostgresConversationResponseRepository
           segmentText: segmentInput.generation.output.content,
         });
         await writeMainResponse(composedText);
-        const segmentSettled = await settleProactiveSegmentWithin(client, {
-          completedAt: input.completedAt,
-          segment: segmentInput,
-          userId: input.userId,
-        });
-        const use = segmentSettled
-          ? await this.proactiveFollowupRepository.commitUseWithin(client, {
-              assistantEventId: eventId,
-              assistantEventRevisionId: revisionId,
-              compiledContextId: segmentInput.plan.segmentCompiledContextId,
-              expectedDataEpoch: segmentInput.plan.expectedDataEpoch,
-              expressionKind: segmentInput.generation.output.expressionKind,
-              finalTextLocator: {
+        try {
+          const segmentSettled = await settleProactiveSegmentWithin(client, {
+            completedAt: input.completedAt,
+            segment: segmentInput,
+            userId: input.userId,
+          });
+          const use = segmentSettled
+            ? await this.proactiveFollowupRepository.commitUseWithin(client, {
+                assistantEventId: eventId,
                 assistantEventRevisionId: revisionId,
-                kind: "assistant_event_revision",
-                ordinal: 0,
-                segment: "proactive_followup",
-              },
-              mainGenerationCommandId: input.generationCommandId,
-              now: input.completedAt,
-              policyBundle: segmentInput.plan.policyBundle,
-              policyBundleVersion: segmentInput.plan.policyBundleVersion,
-              promptPolicyVersion: segmentInput.plan.promptPolicyVersion,
-              promptUserEventRevisionId:
-                segmentInput.plan.promptUserEventRevisionId,
-              promptUserEventSequence:
-                segmentInput.plan.promptUserEventSequence,
-              reservationId: segmentInput.plan.reservationId,
-              selectionPolicyVersion:
-                segmentInput.plan.selectionPolicyVersion,
-              segmentGenerationCommandId:
-                segmentInput.plan.segmentGenerationCommandId,
-              targetId: segmentInput.plan.targetId,
-              targetKind: segmentInput.plan.targetKind,
-              targetVersionId: segmentInput.plan.targetVersionId,
-              userId: input.userId,
-            })
-          : { outcome: "fenced" as const, reason: "segment_settlement" };
-        if (use.outcome === "committed") {
-          segmentIncluded = true;
-        } else {
+                compiledContextId: segmentInput.plan.segmentCompiledContextId,
+                expectedDataEpoch: segmentInput.plan.expectedDataEpoch,
+                expressionKind: segmentInput.generation.output.expressionKind,
+                finalTextLocator: {
+                  assistantEventRevisionId: revisionId,
+                  kind: "assistant_event_revision",
+                  ordinal: 0,
+                  segment: "proactive_followup",
+                },
+                mainGenerationCommandId: input.generationCommandId,
+                now: input.completedAt,
+                policyBundle: segmentInput.plan.policyBundle,
+                policyBundleVersion: segmentInput.plan.policyBundleVersion,
+                promptPolicyVersion: segmentInput.plan.promptPolicyVersion,
+                promptUserEventRevisionId:
+                  segmentInput.plan.promptUserEventRevisionId,
+                promptUserEventSequence:
+                  segmentInput.plan.promptUserEventSequence,
+                reservationId: segmentInput.plan.reservationId,
+                selectionPolicyVersion:
+                  segmentInput.plan.selectionPolicyVersion,
+                segmentGenerationCommandId:
+                  segmentInput.plan.segmentGenerationCommandId,
+                targetId: segmentInput.plan.targetId,
+                targetKind: segmentInput.plan.targetKind,
+                targetVersionId: segmentInput.plan.targetVersionId,
+                userId: input.userId,
+              })
+            : { outcome: "fenced" as const, reason: "segment_settlement" };
+          if (use.outcome === "committed") {
+            segmentIncluded = true;
+          } else {
+            throw new Error("proactive_followup_segment_fenced");
+          }
+        } catch {
           await client.query("ROLLBACK TO SAVEPOINT proactive_followup_segment");
-          await abandonSegment();
+          await client.query("SAVEPOINT proactive_followup_segment_abandon");
+          try {
+            await abandonSegment();
+          } catch {
+            await client.query("ROLLBACK TO SAVEPOINT proactive_followup_segment_abandon");
+          }
+          await client.query("RELEASE SAVEPOINT proactive_followup_segment_abandon");
           await writeMainResponse(input.text);
         }
         await client.query("RELEASE SAVEPOINT proactive_followup_segment");

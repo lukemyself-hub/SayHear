@@ -396,7 +396,7 @@ export function createConversationAgentHarness(dependencies: {
       }
       if (
         proactiveSegment &&
-        committed.segment !== "omitted"
+        committed.segment === "committed"
       ) {
         yield {
           delta: proactiveSegment.generation.output.content.trim(),
