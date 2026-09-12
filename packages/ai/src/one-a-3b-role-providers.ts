@@ -415,7 +415,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
       const parsed = await askJson(
         episodeConfiguration,
         request,
-        "Given the frozen Evidence and active Episode records, return a JSON array of typed proposals. Each proposal must contain proposedKind, label, temporalAnchor, phase, kindFields, citedEvidenceItemIds, realWorldOccurrence, and may contain entityAnchorIds, explicitContinuity, or explicitNewOccurrence. Cite only supplied Evidence IDs and never invent IDs or facts.",
+        "Given the frozen Evidence and active Episode records, return a JSON array of typed proposals. Each proposal must contain proposedKind, label, temporalAnchor, phase, kindFields, citedEvidenceItemIds, realWorldOccurrence, and may contain entityAnchorIds, explicitContinuity, or explicitNewOccurrence. proposedKind must come from the supplied kind catalog. phase must be one of planned, ongoing, completed, unknown. temporalAnchor start/end precision must be one of exact, month, year, approximate, unknown. Cite only supplied Evidence IDs and never invent IDs or facts.",
         request.evidence[0]?.locale ?? "en-US",
       );
       return asEpisodeProposals(parsed);
@@ -433,7 +433,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
         await askJson(
           configuration,
           request,
-          "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. Candidate proposals must be propose_new-only and cite supplied Evidence IDs.",
+          "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.",
           request.locale || "en-US",
         ),
         request.role,
@@ -448,7 +448,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
         await askJson(
           narrativeConfiguration,
           request,
-          "Independently decompose the draft into propositions and report source coverage. Return an object with propositions and coverageKeys arrays. Each proposition must contain propositionKey, text, propositionKind, epistemicRendering, supportKeys, unsupported, contradicted, and ambiguous. Use only supplied source keys.",
+          "Independently decompose the draft into propositions and report source coverage. Return an object with propositions and coverageKeys arrays. Each proposition must contain propositionKey, text, propositionKind, epistemicRendering, supportKeys, unsupported, contradicted, and ambiguous. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Use only supplied source keys. Each proposition text must be an exact verbatim quote (a contiguous substring) of the draft text; never paraphrase, normalize, reorder, or translate its wording. Flag semantics. Mark unsupported true only when no supplied source states or directly entails the proposition; paraphrase that preserves meaning counts as supported. Mark contradicted true only when a supplied source states the opposite of the proposition; absence of support is unsupported, never contradicted. Mark ambiguous true only when something needed for source linkage cannot be determined from the draft itself: an entity, quantity, degree, or comparison with no identifiable value or antecedent. Inelegant wording, paraphrase, or anything whose value is determinable from context is not ambiguous. When uncertain about any flag, leave it false.",
           request.draftLocale ?? "en-US",
         ),
       );
