@@ -13,6 +13,18 @@ export const PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION =
   "proactive-followup-suppression:v1" as const;
 export const PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION =
   "proactive-followup-commit:v1" as const;
+export const PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION =
+  "proactive-followup-policy-bundle:v1" as const;
+export const PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION =
+  "proactive-followup-opportunity:v1" as const;
+export const PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION =
+  "proactive-followup-use:v1" as const;
+export const PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION =
+  "proactive-followup-prompt:v1" as const;
+export const PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION =
+  "proactive-followup-expression:v1" as const;
+export const PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION =
+  "proactive-followup-reason-codes:v1" as const;
 export const PROACTIVE_FOLLOWUP_MANIFEST_VERSION =
   "proactive-followup-selection-manifest:v1" as const;
 export const PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION =
@@ -95,6 +107,8 @@ export type ProactiveFollowupCandidate = Readonly<{
   expectedStartAt?: string | null;
   /** Open Loop's frozen finite expiry. */
   expiresAt?: string | null;
+  /** Existing retrieval fence codes, when the upstream lane can provide them. */
+  trustFenceResults?: readonly string[];
   sensitive: boolean;
   lastUsedAt: string | null;
   current: boolean;
@@ -182,18 +196,35 @@ export type ProactiveFollowupManifestCandidate = Readonly<{
   targetKind: ProactiveFollowupTargetKind;
   targetId: string;
   targetVersionId: string;
+  sensitivity: 0 | 1;
+  sourceLane: ProactiveFollowupCandidate["source"];
+  sourceRank: number | null;
+  trustFenceResults: readonly string[];
+  mentionedInExchange: boolean;
+  formedFromCurrentEvent: boolean;
+  eligibilityReason: "never_suppressed" | "eligible" | "suppressed" | "excluded";
   rankTuple: ProactiveFollowupRankTuple | null;
   stateVersionId: string | null;
   suppressionReason: ProactiveFollowupSuppressionReason | null;
   consecutiveSoftStopCount: number;
   suppressedUntilAt: string | null;
+  lastUseAt: string | null;
   eligible: boolean;
+  selectionReasonCodes: readonly string[];
+  rejectionReasonCodes: readonly string[];
   exclusionReason: string | null;
 }>;
 
 export type ProactiveFollowupSelectionManifest = Readonly<{
   manifestVersion: typeof PROACTIVE_FOLLOWUP_MANIFEST_VERSION;
+  policyBundleVersion: typeof PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION;
+  opportunityPolicyVersion: typeof PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION;
   selectionPolicyVersion: typeof PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION;
+  suppressionPolicyVersion: typeof PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION;
+  useSchemaVersion: typeof PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION;
+  expressionPromptVersion: typeof PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION;
+  expressionPolicyVersion: typeof PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION;
+  reasonCodeSchemaVersion: typeof PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION;
   userId: string;
   dailySessionId: string;
   continuousExchangeNo: number;
@@ -201,6 +232,18 @@ export type ProactiveFollowupSelectionManifest = Readonly<{
   currentUserEventSequence: number;
   currentSourceRevision: number;
   opportunity: ProactiveFollowupOpportunityKind;
+  opportunityMode: ProactiveFollowupOpportunityKind;
+  currentRequestRequiresFocus: Readonly<{
+    value: boolean | null;
+    confidence: number;
+    sourceRevisionIds: readonly string[];
+    freshness: "current" | "stale";
+  }>;
+  opportunityGateResults: readonly Readonly<{
+    gate: string;
+    passed: boolean;
+    reason: string | null;
+  }>[];
   decision: "selected" | "none";
   reason: string;
   lanes: readonly Readonly<{
@@ -208,9 +251,20 @@ export type ProactiveFollowupSelectionManifest = Readonly<{
     enabled: boolean;
     status: ProactiveFollowupLaneSnapshot["status"];
     watermark: ProactiveFollowupLaneSnapshot["watermark"];
+    completeness: ProactiveFollowupLaneSnapshot["status"];
+    timingMs: number | null;
+    degradedReason: string | null;
     manifestVersion: string;
     integrity: ProactiveFollowupLaneSnapshot["integrity"];
     candidateCount: number;
+  }>[];
+  laneWatermarks: readonly Readonly<{
+    lane: ProactiveFollowupLaneSnapshot["name"];
+    sourceRevision: number | null;
+    coveredThroughSequence: number | null;
+    completeness: ProactiveFollowupLaneSnapshot["status"];
+    timingMs: number | null;
+    degradedReason: string | null;
   }>[];
   candidates: readonly ProactiveFollowupManifestCandidate[];
   selectedTarget: Readonly<{
@@ -218,6 +272,9 @@ export type ProactiveFollowupSelectionManifest = Readonly<{
     targetId: string;
     targetVersionId: string;
   }> | null;
+  stableTieBreak: string | null;
+  reservationId: string | null;
+  reservationStatus: "not_reserved" | "active" | "committed" | "released" | "abandoned";
 }>;
 
 export type ProactiveFollowupTarget = Readonly<{
@@ -251,6 +308,7 @@ export type ProactiveFollowupDispositionInput = Readonly<{
   targetVersionId: string;
   currentUserEventRevisionId: string;
   currentUserEventSequence: number;
+  currentUserEventExchangeNo: number;
   use: Readonly<{
     useId: string;
     userId: string;

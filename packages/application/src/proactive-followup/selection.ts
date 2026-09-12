@@ -1,10 +1,17 @@
 import {
   PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR,
+  PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
   PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS,
   PROACTIVE_FOLLOWUP_MANIFEST_VERSION,
   PROACTIVE_FOLLOWUP_MAX_CANDIDATES,
+  PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION,
   PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION,
+  PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
+  PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION,
   PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION,
   type ProactiveFollowupCandidate,
   type ProactiveFollowupLaneSnapshot,
   type ProactiveFollowupManifestCandidate,
@@ -171,9 +178,33 @@ function selectionManifest(
   candidateDecisions: readonly CandidateDecision[],
   selectedTarget: ProactiveFollowupSelectionManifest["selectedTarget"],
 ): ProactiveFollowupSelectionManifest {
+  const focus = input.dialogue.currentRequestRequiresFocus;
+  const dialogueCoreIsCurrent =
+    input.dialogue.status === "current" &&
+    input.dialogue.coveredThroughSequence === input.currentUserEventSequence &&
+    input.dialogue.currentEventSequence === input.currentUserEventSequence &&
+    input.dialogue.currentEventRevisionId === input.currentUserEventRevisionId;
+  const focusSignalIsCurrent =
+    focus.value === false &&
+    Number.isFinite(focus.confidence) &&
+    focus.confidence >= PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR &&
+    focus.sourceRevisionIds.includes(input.currentUserEventRevisionId);
+  const dialogueIsCurrent = dialogueCoreIsCurrent && focusSignalIsCurrent;
+  const focusFreeOpportunity = ![
+    "current_topic",
+    "direct_task",
+    "urgent_or_high_risk",
+  ].includes(input.opportunity);
   return {
     manifestVersion: PROACTIVE_FOLLOWUP_MANIFEST_VERSION,
+    policyBundleVersion: PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
+    opportunityPolicyVersion: PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION,
     selectionPolicyVersion: PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
+    suppressionPolicyVersion: PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION,
+    useSchemaVersion: PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION,
+    expressionPromptVersion: PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
+    expressionPolicyVersion: PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION,
+    reasonCodeSchemaVersion: PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION,
     userId: input.userId,
     dailySessionId: input.dailySessionId,
     continuousExchangeNo: input.continuousExchangeNo,
@@ -181,6 +212,33 @@ function selectionManifest(
     currentUserEventSequence: input.currentUserEventSequence,
     currentSourceRevision: input.currentSourceRevision,
     opportunity: input.opportunity,
+    opportunityMode: input.opportunity,
+    currentRequestRequiresFocus: {
+      ...focus,
+      freshness: dialogueIsCurrent ? "current" : "stale",
+    },
+    opportunityGateResults: [
+      {
+        gate: "ordinary_question_absent",
+        passed: !input.ordinaryQuestionAlreadyAsked,
+        reason: input.ordinaryQuestionAlreadyAsked ? "ordinary_question_present" : null,
+      },
+      {
+        gate: "focus_free_opportunity",
+        passed: focusFreeOpportunity,
+        reason: focusFreeOpportunity ? null : "focus_required_by_opportunity",
+      },
+      {
+        gate: "focus_signal_current",
+        passed: focusSignalIsCurrent,
+        reason: focusSignalIsCurrent ? null : "focus_signal_not_current",
+      },
+      {
+        gate: "dialogue_current",
+        passed: dialogueIsCurrent,
+        reason: dialogueIsCurrent ? null : "dialogue_state_not_ready",
+      },
+    ],
     decision,
     reason,
     lanes: input.lanes.map((lane) => ({
@@ -188,25 +246,62 @@ function selectionManifest(
       enabled: lane.enabled,
       status: lane.status,
       watermark: lane.watermark,
+      completeness: lane.status,
+      timingMs: null,
+      degradedReason: lane.status === "complete" ? null : "lane_not_complete",
       manifestVersion: lane.manifestVersion,
       integrity: lane.integrity,
       candidateCount: lane.candidates.length,
+    })),
+    laneWatermarks: input.lanes.map((lane) => ({
+      lane: lane.name,
+      sourceRevision: lane.watermark?.sourceRevision ?? null,
+      coveredThroughSequence: lane.watermark?.coveredThroughSequence ?? null,
+      completeness: lane.status,
+      timingMs: null,
+      degradedReason: lane.status === "complete" ? null : "lane_not_complete",
     })),
     candidates: candidateDecisions.map<ProactiveFollowupManifestCandidate>(
       ({ candidate, state, rankTuple, eligible, exclusionReason }) => ({
         targetKind: candidate.targetKind,
         targetId: candidate.targetId,
         targetVersionId: candidate.targetVersionId,
+        sensitivity: candidate.sensitive ? 1 : 0,
+        sourceLane: candidate.source,
+        sourceRank: candidate.sourceRank,
+        trustFenceResults: candidate.trustFenceResults ?? [candidate.trustFence],
+        mentionedInExchange: candidate.mentionedInExchange,
+        formedFromCurrentEvent: candidate.formedInCurrentTurn,
+        eligibilityReason: state?.eligibilityStatus === "suppressed"
+          ? "suppressed"
+          : eligible
+            ? state === null
+              ? "never_suppressed"
+              : "eligible"
+            : "excluded",
         rankTuple,
         stateVersionId: state?.stateVersionId ?? null,
         suppressionReason: state?.suppressionReason ?? null,
         consecutiveSoftStopCount: state?.consecutiveSoftStopCount ?? 0,
         suppressedUntilAt: state?.suppressedUntilAt ?? null,
+        lastUseAt: state?.lastUsedAt ?? candidate.lastUsedAt,
         eligible,
+        selectionReasonCodes: eligible && selectedTarget !== null &&
+          candidate.targetKind === selectedTarget.targetKind &&
+          candidate.targetId === selectedTarget.targetId &&
+          candidate.targetVersionId === selectedTarget.targetVersionId
+          ? ["selected"]
+          : [],
+        rejectionReasonCodes: exclusionReason === null ? [] : [exclusionReason],
         exclusionReason,
       }),
     ),
     selectedTarget,
+    stableTieBreak: selectedTarget
+      ? `${selectedTarget.targetKind}:${selectedTarget.targetId}:${selectedTarget.targetVersionId}`
+      : null,
+    reservationId: null,
+    reservationStatus: "not_reserved",
   };
 }
 

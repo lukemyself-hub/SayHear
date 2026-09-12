@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
   PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
   selectProactiveFollowupTarget,
 } from "@sayhear/application";
@@ -45,6 +46,9 @@ const COOLDOWN_TARGET_ID = fixtureId(19);
 const COOLDOWN_TARGET_VERSION_ID = fixtureId(20);
 const COOLDOWN_STATE_ID = fixtureId(21);
 const COOLDOWN_STATE_VERSION_ID = fixtureId(22);
+const LATER_TRIGGER_TURN_ID = fixtureId(23);
+const LATER_TRIGGER_EVENT_ID = fixtureId(24);
+const LATER_TRIGGER_REVISION_ID = fixtureId(25);
 
 systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
   let database: IsolatedPostgresSchema | undefined;
@@ -391,13 +395,27 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
       "reservationId" in result ? [result.reservationId] : [],
     );
     expect(new Set(reservationIds).size).toBe(1);
+    const firstReservationId = reservationIds[0]!;
+    await database!.pool.query(
+      `UPDATE proactive_followup_reservations
+       SET status = 'abandoned', terminal_at = $2
+       WHERE proactive_followup_reservation_id = $1 AND user_id = $3`,
+      [firstReservationId, BASE_TIME, OWNER],
+    );
+    const retry = await repository.reserveSelection(input);
+    expect(retry.outcome).toBe("reserved");
+    if (retry.outcome !== "reserved") {
+      throw new Error("reason" in retry ? retry.reason : "retry_not_reserved");
+    }
+    expect(retry.reservationId).not.toBe(firstReservationId);
   });
 
   it("commits a typed use idempotently and records the next-event cooldown", async () => {
     const reservation = await database!.pool.query<{ proactive_followup_reservation_id: string }>(
       `SELECT proactive_followup_reservation_id
        FROM proactive_followup_reservations
-       WHERE user_id = $1 AND daily_session_id = $2 AND continuous_exchange_no = 1`,
+       WHERE user_id = $1 AND daily_session_id = $2 AND continuous_exchange_no = 1
+         AND status = 'active'`,
       [OWNER, SESSION_ID],
     );
     const reservationId = reservation.rows[0]!.proactive_followup_reservation_id;
@@ -424,9 +442,30 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
       },
       selectionPolicyVersion: PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
       promptPolicyVersion: "proactive-followup-prompt:v1",
+      policyBundleVersion: PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
       policyBundle: { fixture: true },
       now: BASE_TIME,
     };
+    await database!.pool.query(
+      `UPDATE proactive_followup_reservations
+       SET selection_manifest = jsonb_set(
+         selection_manifest, '{policyBundleVersion}', '"tampered"'::jsonb
+       )
+       WHERE proactive_followup_reservation_id = $1 AND user_id = $2`,
+      [reservationId, OWNER],
+    );
+    expect(await repository.commitUse(useInput)).toEqual({
+      outcome: "fenced",
+      reason: "manifest_lineage",
+    });
+    await database!.pool.query(
+      `UPDATE proactive_followup_reservations
+       SET selection_manifest = jsonb_set(
+         selection_manifest, '{policyBundleVersion}', to_jsonb($2::text)
+       )
+       WHERE proactive_followup_reservation_id = $1 AND user_id = $3`,
+      [reservationId, PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION, OWNER],
+    );
     const committed = await repository.commitUse(useInput);
     expect(committed.outcome).toBe("committed");
     if (!("useId" in committed)) throw new Error(committed.reason);
@@ -456,6 +495,44 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
       outcome: "already_recorded",
       stateVersionId: disposition.stateVersionId,
     });
+
+    await database!.pool.query(
+      `INSERT INTO interaction_turns (
+         interaction_turn_id, user_id, daily_session_id, client_turn_id,
+         turn_sequence_no, continuous_exchange_no, status, started_at,
+         settled_at, created_at, updated_at
+       ) VALUES ($1, $2, $3, 'later-trigger', 4, 1, 'settled', $4, $4, $4, $4)`,
+      [LATER_TRIGGER_TURN_ID, OWNER, SESSION_ID, BASE_TIME],
+    );
+    await database!.pool.query(
+      `INSERT INTO conversation_events (
+         conversation_event_id, user_id, daily_session_id,
+         interaction_turn_id, sequence_no, client_event_id, actor, channel,
+         event_type, lifecycle_status, created_at
+       ) VALUES ($1, $2, $3, $4, 4, 'later-trigger', 'user', 'text',
+                 'user_message', 'active', $5)`,
+      [LATER_TRIGGER_EVENT_ID, OWNER, SESSION_ID, LATER_TRIGGER_TURN_ID, BASE_TIME],
+    );
+    await database!.pool.query(
+      `INSERT INTO conversation_event_revisions (
+         conversation_event_revision_id, user_id, conversation_event_id,
+         revision, locale, canonical_text, transcript_status, created_by,
+         created_at
+       ) VALUES ($1, $2, $3, 1, 'en', 'Synthetic later response.', 'final', 'client', $4)`,
+      [LATER_TRIGGER_REVISION_ID, OWNER, LATER_TRIGGER_EVENT_ID, BASE_TIME],
+    );
+    await database!.pool.query(
+      `UPDATE conversation_events SET current_revision_id = $2
+       WHERE conversation_event_id = $1`,
+      [LATER_TRIGGER_EVENT_ID, LATER_TRIGGER_REVISION_ID],
+    );
+    expect(
+      await repository.recordDisposition({
+        ...dispositionInput,
+        triggerUserEventRevisionId: LATER_TRIGGER_REVISION_ID,
+        triggerUserEventSequence: 4,
+      }),
+    ).toEqual({ outcome: "fenced", reason: "trigger_event_not_next" });
 
     const state = await repository.readState({
       userId: OWNER,
@@ -502,5 +579,42 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
       [OWNER],
     );
     expect(after.rows[0]?.count).toBe(before.rows[0]?.count);
+  });
+
+  it("allows registry child-first clearing of the two deferred pointer cycles", async () => {
+    await database!.pool.query("BEGIN");
+    try {
+      await database!.pool.query(
+        "DELETE FROM proactive_followup_dispositions WHERE user_id = $1",
+        [OWNER],
+      );
+      await database!.pool.query(
+        "DELETE FROM proactive_followup_uses WHERE user_id = $1",
+        [OWNER],
+      );
+      await database!.pool.query(
+        "DELETE FROM proactive_followup_reservations WHERE user_id = $1",
+        [OWNER],
+      );
+      await database!.pool.query(
+        "DELETE FROM proactive_followup_state_versions WHERE user_id = $1",
+        [OWNER],
+      );
+      await database!.pool.query(
+        "DELETE FROM proactive_followup_states WHERE user_id = $1",
+        [OWNER],
+      );
+      await database!.pool.query("COMMIT");
+    } catch (error) {
+      await database!.pool.query("ROLLBACK");
+      throw error;
+    }
+    const remaining = await database!.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM proactive_followup_states WHERE user_id = $1
+       UNION ALL
+       SELECT COUNT(*)::text FROM proactive_followup_uses WHERE user_id = $1`,
+      [OWNER],
+    );
+    expect(remaining.rows.map((row) => row.count)).toEqual(["0", "0"]);
   });
 });

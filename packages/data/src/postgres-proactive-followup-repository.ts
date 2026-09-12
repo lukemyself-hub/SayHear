@@ -3,10 +3,17 @@ import {
   planProactiveFollowupDisposition,
   planProactiveFollowupRelease,
   PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR,
+  PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
   PROACTIVE_FOLLOWUP_MANIFEST_VERSION,
+  PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
+  PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION,
   PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
   PROACTIVE_FOLLOWUP_STOP_SIGNALS,
   PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION,
   type ProactiveFollowupDispositionInput,
   type ProactiveFollowupReleaseInput,
   type ProactiveFollowupSelectionManifest,
@@ -54,6 +61,7 @@ export type ProactiveFollowupUseCommitInput = Readonly<{
   finalTextLocator: ProactiveFollowupTextLocator;
   selectionPolicyVersion: string;
   promptPolicyVersion: string;
+  policyBundleVersion: string;
   policyBundle: Readonly<Record<string, unknown>>;
   useId?: string;
   now: Date;
@@ -97,6 +105,8 @@ type UseRow = Readonly<{
   target_version_id: string;
   prompt_user_event_revision_id: string;
   prompt_user_event_sequence: string;
+  prompt_user_event_id: string;
+  prompt_user_event_created_at: Date;
   final_text_locator: unknown;
 }>;
 
@@ -179,6 +189,22 @@ function sameTextLocator(
     locator.segment === expected.segment &&
     locator.ordinal === expected.ordinal
   );
+}
+
+function stringField(value: unknown, key: string): string | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "string" ? field : null;
+}
+
+function numberField(value: unknown, key: string): number | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "number" && Number.isSafeInteger(field) ? field : null;
 }
 
 function mapState(row: StateRow): ProactiveFollowupStateSnapshot {
@@ -343,11 +369,56 @@ async function targetIsCurrent(
        ON version.memory_claim_version_id = claim.current_version_id
        AND version.memory_claim_version_id = $3
        AND version.user_id = claim.user_id
+     INNER JOIN entities subject_entity
+       ON subject_entity.entity_id = claim.subject_entity_id
+       AND subject_entity.user_id = claim.user_id
+     INNER JOIN entity_versions subject_version
+       ON subject_version.entity_version_id = subject_entity.current_version_id
+       AND subject_version.user_id = claim.user_id
+     INNER JOIN entity_versions subject_claim_version
+       ON subject_claim_version.entity_version_id = version.subject_entity_version_id
+       AND subject_claim_version.user_id = claim.user_id
+     LEFT JOIN entities object_entity
+       ON object_entity.entity_id = claim.object_entity_id
+       AND object_entity.user_id = claim.user_id
+     LEFT JOIN entity_versions object_version
+       ON object_version.entity_version_id = object_entity.current_version_id
+       AND object_version.user_id = claim.user_id
+     LEFT JOIN entity_versions object_claim_version
+       ON object_claim_version.entity_version_id = version.object_entity_version_id
+       AND object_claim_version.user_id = claim.user_id
      WHERE claim.user_id = $1 AND claim.memory_claim_id = $2
        AND claim.deleted_at IS NULL AND claim.content_purged_at IS NULL
-       AND version.status IN ('active', 'review_due')
+       AND version.status = 'active'
        AND version.epistemic_status <> 'contested'
        AND version.content_purged_at IS NULL
+       AND subject_entity.deleted_at IS NULL
+       AND subject_version.status = 'active'
+       AND subject_version.content_purged_at IS NULL
+       AND subject_claim_version.status = 'active'
+       AND subject_claim_version.content_purged_at IS NULL
+       AND (object_entity.entity_id IS NULL OR (
+         object_entity.deleted_at IS NULL
+         AND object_version.status IN ('active', 'unresolved')
+         AND object_version.content_purged_at IS NULL
+         AND object_claim_version.status IN ('active', 'unresolved')
+         AND object_claim_version.content_purged_at IS NULL
+       ))
+       AND NOT EXISTS (
+         SELECT 1
+         FROM memory_forget_requests forget_request
+         WHERE forget_request.user_id = claim.user_id
+           AND forget_request.target_claim_id = claim.memory_claim_id
+           AND forget_request.target_scope = 'whole_claim'
+           AND forget_request.status = 'applied'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM memory_forget_reversals reversal
+             WHERE reversal.memory_forget_request_id = forget_request.memory_forget_request_id
+               AND reversal.user_id = forget_request.user_id
+               AND reversal.status = 'active'
+           )
+       )
        AND EXISTS (
          SELECT 1
          FROM claim_evidence_links link
@@ -356,7 +427,17 @@ async function targetIsCurrent(
            AND evidence.user_id = claim.user_id
            AND evidence.status = 'active'
          WHERE link.memory_claim_version_id = version.memory_claim_version_id
-           AND link.user_id = claim.user_id AND link.status = 'active'
+           AND link.user_id = claim.user_id
+           AND link.status = 'active'
+           AND link.link_role IN ('support', 'subjective_report')
+           AND NOT EXISTS (
+             SELECT 1
+             FROM memory_forget_evidence_exclusions exclusion
+             WHERE exclusion.user_id = link.user_id
+               AND exclusion.evidence_item_id = link.evidence_item_id
+               AND exclusion.status = 'active'
+               AND exclusion.exclusion_scope = 'whole_claim'
+           )
        )`,
     [input.userId, input.targetId, input.targetVersionId],
   );
@@ -377,12 +458,21 @@ async function loadUse(
             proactive_use.target_version_id,
             proactive_use.prompt_user_event_revision_id,
             proactive_use.prompt_user_event_sequence,
+            prompt_event.conversation_event_id AS prompt_user_event_id,
+            prompt_event.created_at AS prompt_user_event_created_at,
             proactive_use.final_text_locator
      FROM proactive_followup_uses proactive_use
      INNER JOIN proactive_followup_reservations reservation
        ON reservation.proactive_followup_reservation_id =
           proactive_use.proactive_followup_reservation_id
        AND reservation.user_id = proactive_use.user_id
+     INNER JOIN conversation_event_revisions prompt_revision
+       ON prompt_revision.conversation_event_revision_id =
+          proactive_use.prompt_user_event_revision_id
+       AND prompt_revision.user_id = proactive_use.user_id
+     INNER JOIN conversation_events prompt_event
+       ON prompt_event.conversation_event_id = prompt_revision.conversation_event_id
+       AND prompt_event.user_id = proactive_use.user_id
      WHERE proactive_use.proactive_followup_use_id = $1
        AND proactive_use.user_id = $2
      ${input.forUpdate ? "FOR UPDATE OF proactive_use, reservation" : ""}`,
@@ -401,6 +491,7 @@ function useInput(
     targetVersionId: string;
     currentUserEventRevisionId: string;
     currentUserEventSequence: number;
+    currentUserEventExchangeNo: number;
     timeZone: string;
     use: UseRow;
     finalTextLocator: ProactiveFollowupTextLocator;
@@ -417,6 +508,7 @@ function useInput(
     targetVersionId: input.targetVersionId,
     currentUserEventRevisionId: input.currentUserEventRevisionId,
     currentUserEventSequence: input.currentUserEventSequence,
+    currentUserEventExchangeNo: input.currentUserEventExchangeNo,
     use: {
       useId: input.use.proactive_followup_use_id,
       userId: input.use.user_id,
@@ -515,6 +607,25 @@ export class PostgresProactiveFollowupRepository {
         input.manifest.dailySessionId !== input.dailySessionId ||
         input.manifest.continuousExchangeNo !== input.continuousExchangeNo ||
         input.manifest.decision !== "selected" ||
+        input.manifest.reservationId !== null ||
+        input.manifest.reservationStatus !== "not_reserved" ||
+        input.manifest.opportunityMode !== input.manifest.opportunity ||
+        input.manifest.opportunityPolicyVersion !==
+          PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION ||
+        input.manifest.suppressionPolicyVersion !==
+          PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION ||
+        input.manifest.useSchemaVersion !== PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION ||
+        input.manifest.expressionPromptVersion !== PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION ||
+        input.manifest.expressionPolicyVersion !== PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION ||
+        input.manifest.reasonCodeSchemaVersion !== PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION ||
+        input.manifest.currentRequestRequiresFocus.value !== false ||
+        !Number.isFinite(input.manifest.currentRequestRequiresFocus.confidence) ||
+        input.manifest.currentRequestRequiresFocus.confidence <
+          PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR ||
+        input.manifest.currentRequestRequiresFocus.freshness !== "current" ||
+        !input.manifest.currentRequestRequiresFocus.sourceRevisionIds.includes(
+          input.manifest.currentUserEventRevisionId,
+        ) ||
         !selected ||
         targetKey(selected).some(
           (value, index) => value !== targetKey(input.target)[index],
@@ -523,7 +634,8 @@ export class PostgresProactiveFollowupRepository {
         !manifestCandidate.eligible ||
         manifestCandidate.rankTuple === null ||
         input.manifest.selectionPolicyVersion !==
-          PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION
+          PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION ||
+        input.manifest.policyBundleVersion !== PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION
       ) {
         return { outcome: "fenced", reason: "selection_manifest" };
       }
@@ -541,6 +653,7 @@ export class PostgresProactiveFollowupRepository {
          FROM proactive_followup_reservations
          WHERE daily_session_id = $1 AND user_id = $2
            AND continuous_exchange_no = $3
+           AND status IN ('active', 'committed')
          FOR UPDATE`,
         [input.dailySessionId, input.userId, input.continuousExchangeNo],
       );
@@ -680,7 +793,11 @@ export class PostgresProactiveFollowupRepository {
           input.target.targetKind,
           input.target.targetId,
           input.target.targetVersionId,
-          json(input.manifest),
+          json({
+            ...input.manifest,
+            reservationId,
+            reservationStatus: "active",
+          }),
           input.manifest.selectionPolicyVersion,
           input.expectedDataEpoch,
           input.now,
@@ -772,7 +889,8 @@ export class PostgresProactiveFollowupRepository {
     }
     if (
       !["question", "acknowledgment"].includes(input.expressionKind) ||
-      input.promptPolicyVersion === "" ||
+      input.promptPolicyVersion !== PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION ||
+      input.policyBundleVersion !== PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION ||
       input.finalTextLocator.kind !== "assistant_event_revision" ||
       input.finalTextLocator.segment !== "proactive_followup" ||
       input.finalTextLocator.ordinal !== 0 ||
@@ -791,11 +909,13 @@ export class PostgresProactiveFollowupRepository {
       target_id: string;
       target_version_id: string;
       committed_use_id: string | null;
+      selection_manifest: unknown;
     }>(
       `SELECT status, expected_data_epoch::text, daily_session_id,
               continuous_exchange_no,
               main_generation_command_id, segment_generation_command_id,
-              target_kind, target_id, target_version_id, committed_use_id
+              target_kind, target_id, target_version_id, committed_use_id,
+              selection_manifest
        FROM proactive_followup_reservations
        WHERE proactive_followup_reservation_id = $1 AND user_id = $2
        FOR UPDATE`,
@@ -813,6 +933,31 @@ export class PostgresProactiveFollowupRepository {
         reservationRow.segment_generation_command_id !== input.segmentGenerationCommandId)
     ) {
       return { outcome: "fenced", reason: "reservation_identity" };
+    }
+    const manifest = reservationRow.selection_manifest;
+    const manifestStatus = stringField(manifest, "reservationStatus");
+    const manifestMatchesCommit =
+      stringField(manifest, "manifestVersion") === PROACTIVE_FOLLOWUP_MANIFEST_VERSION &&
+      stringField(manifest, "reservationId") === input.reservationId &&
+      stringField(manifest, "policyBundleVersion") === input.policyBundleVersion &&
+      stringField(manifest, "opportunityPolicyVersion") ===
+        PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION &&
+      stringField(manifest, "selectionPolicyVersion") === input.selectionPolicyVersion &&
+      stringField(manifest, "suppressionPolicyVersion") ===
+        PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION &&
+      stringField(manifest, "useSchemaVersion") === PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION &&
+      stringField(manifest, "expressionPromptVersion") === input.promptPolicyVersion &&
+      stringField(manifest, "expressionPolicyVersion") ===
+        PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION &&
+      stringField(manifest, "reasonCodeSchemaVersion") ===
+        PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION &&
+      stringField(manifest, "currentUserEventRevisionId") ===
+        input.promptUserEventRevisionId &&
+      numberField(manifest, "currentUserEventSequence") === input.promptUserEventSequence &&
+      ((reservationRow.status === "active" && manifestStatus === "active") ||
+        (reservationRow.status === "committed" && manifestStatus === "committed"));
+    if (!manifestMatchesCommit) {
+      return { outcome: "fenced", reason: "manifest_lineage" };
     }
     if (reservationRow.status === "committed" && reservationRow.committed_use_id) {
       return { outcome: "already_committed", useId: reservationRow.committed_use_id };
@@ -959,6 +1104,7 @@ export class PostgresProactiveFollowupRepository {
         input.promptPolicyVersion,
         json({
           ...input.policyBundle,
+          policyBundleVersion: input.policyBundleVersion,
           commitPolicyVersion: PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION,
         }),
         input.now,
@@ -966,7 +1112,10 @@ export class PostgresProactiveFollowupRepository {
     );
     await client.query(
       `UPDATE proactive_followup_reservations
-       SET status = 'committed', committed_use_id = $2, terminal_at = $3
+       SET status = 'committed', committed_use_id = $2, terminal_at = $3,
+           selection_manifest = jsonb_set(
+             selection_manifest, '{reservationStatus}', '"committed"'::jsonb
+           )
        WHERE proactive_followup_reservation_id = $1 AND user_id = $4
          AND status = 'active'`,
       [input.reservationId, useId, input.now, input.userId],
@@ -1037,15 +1186,25 @@ export class PostgresProactiveFollowupRepository {
         return { outcome: "fenced", reason: "use_identity" };
       }
       const trigger = await client.query<{
+        daily_session_id: string;
+        continuous_exchange_no: number;
+        conversation_event_id: string;
+        created_at: Date;
         sequence_no: string;
         actor: string;
         lifecycle_status: string;
       }>(
-        `SELECT event.sequence_no::text, event.actor, event.lifecycle_status
+        `SELECT event.daily_session_id, turn.continuous_exchange_no,
+                event.conversation_event_id, event.created_at,
+                event.sequence_no::text, event.actor, event.lifecycle_status
          FROM conversation_event_revisions revision
          INNER JOIN conversation_events event
            ON event.conversation_event_id = revision.conversation_event_id
            AND event.user_id = revision.user_id
+         INNER JOIN interaction_turns turn
+           ON turn.interaction_turn_id = event.interaction_turn_id
+           AND turn.daily_session_id = event.daily_session_id
+           AND turn.user_id = event.user_id
          WHERE revision.conversation_event_revision_id = $1
            AND revision.user_id = $2
            AND revision.content_purged_at IS NULL
@@ -1058,9 +1217,76 @@ export class PostgresProactiveFollowupRepository {
         triggerRow.actor !== "user" ||
         triggerRow.lifecycle_status !== "active" ||
         triggerRow.sequence_no !== String(input.triggerUserEventSequence) ||
-        Number(triggerRow.sequence_no) <= Number(use.prompt_user_event_sequence)
+        (triggerRow.daily_session_id === use.daily_session_id
+          ? Number(triggerRow.sequence_no) <= Number(use.prompt_user_event_sequence)
+          : triggerRow.created_at.getTime() < use.prompt_user_event_created_at.getTime() ||
+            (triggerRow.created_at.getTime() === use.prompt_user_event_created_at.getTime() &&
+              triggerRow.conversation_event_id <= use.prompt_user_event_id))
       ) {
         return { outcome: "fenced", reason: "trigger_event" };
+      }
+      const earlierUserEvent = await client.query(
+        `SELECT 1
+         FROM conversation_events earlier_event
+         INNER JOIN interaction_turns earlier_turn
+           ON earlier_turn.interaction_turn_id = earlier_event.interaction_turn_id
+           AND earlier_turn.daily_session_id = earlier_event.daily_session_id
+           AND earlier_turn.user_id = earlier_event.user_id
+         INNER JOIN conversation_event_revisions earlier_revision
+           ON earlier_revision.conversation_event_revision_id = earlier_event.current_revision_id
+           AND earlier_revision.conversation_event_id = earlier_event.conversation_event_id
+           AND earlier_revision.user_id = earlier_event.user_id
+         WHERE earlier_event.user_id = $1
+           AND earlier_event.actor = 'user'
+           AND earlier_event.lifecycle_status = 'active'
+           AND earlier_revision.content_purged_at IS NULL
+           AND (
+             (
+               earlier_event.daily_session_id = $2::uuid
+               AND earlier_event.sequence_no > $3::bigint
+             )
+             OR (
+               earlier_event.daily_session_id <> $2::uuid
+               AND (
+                 earlier_event.created_at > $4::timestamptz
+                 OR (
+                   earlier_event.created_at = $4::timestamptz
+                   AND earlier_event.conversation_event_id > $5::uuid
+                 )
+               )
+             )
+           )
+           AND (
+             (
+               earlier_event.daily_session_id = $6::uuid
+               AND earlier_event.sequence_no < $7::bigint
+             )
+             OR (
+               earlier_event.daily_session_id <> $6::uuid
+               AND (
+                 earlier_event.created_at < $8::timestamptz
+                 OR (
+                   earlier_event.created_at = $8::timestamptz
+                   AND earlier_event.conversation_event_id < $9::uuid
+                 )
+               )
+             )
+           )
+         LIMIT 1`,
+        [
+          input.userId,
+          use.daily_session_id,
+          use.prompt_user_event_sequence,
+          use.prompt_user_event_created_at,
+          use.prompt_user_event_id,
+          triggerRow.daily_session_id,
+          input.triggerUserEventSequence,
+          triggerRow.created_at,
+          triggerRow.conversation_event_id,
+        ],
+      );
+      if (earlierUserEvent.rows.length !== 0) {
+        return { outcome: "fenced", reason: "trigger_event_not_next" };
       }
       if (!(await targetIsCurrent(client, {
         userId: input.userId,
@@ -1089,6 +1315,7 @@ export class PostgresProactiveFollowupRepository {
             targetVersionId: input.targetVersionId,
             currentUserEventRevisionId: input.triggerUserEventRevisionId,
             currentUserEventSequence: input.triggerUserEventSequence,
+            currentUserEventExchangeNo: triggerRow.continuous_exchange_no,
             timeZone: input.timeZone,
             use,
             finalTextLocator: input.finalTextLocator,
@@ -1127,7 +1354,7 @@ export class PostgresProactiveFollowupRepository {
           lastPromptEventRevisionId: use.prompt_user_event_revision_id,
           lastResponseEventRevisionId: input.triggerUserEventRevisionId,
           lastUsedAt: input.now.toISOString(),
-          triggerExchangeNo: use.continuous_exchange_no,
+          triggerExchangeNo: triggerRow.continuous_exchange_no,
           now: input.now,
         });
       }
@@ -1252,7 +1479,10 @@ export class PostgresProactiveFollowupRepository {
       for (const row of result.rows) {
         await client.query(
           `UPDATE proactive_followup_reservations
-           SET status = 'abandoned', terminal_at = $2
+           SET status = 'abandoned', terminal_at = $2,
+               selection_manifest = jsonb_set(
+                 selection_manifest, '{reservationStatus}', '"abandoned"'::jsonb
+               )
            WHERE proactive_followup_reservation_id = $1 AND user_id = $3
              AND status = 'active'`,
           [row.proactive_followup_reservation_id, input.now, input.userId],

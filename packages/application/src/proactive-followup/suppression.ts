@@ -32,10 +32,13 @@ function isoNow(input: Date): string {
 function assertUseMatches(input: ProactiveFollowupDispositionInput): void {
   if (
     input.userId !== input.use.userId ||
+    !Number.isSafeInteger(input.currentUserEventExchangeNo) ||
+    input.currentUserEventExchangeNo < 1 ||
     input.use.targetKind !== input.targetKind ||
     input.use.targetId !== input.targetId ||
     input.use.targetVersionId !== input.targetVersionId ||
-    input.use.promptUserEventSequence >= input.currentUserEventSequence ||
+    (input.use.exchangeNo === input.currentUserEventExchangeNo &&
+      input.use.promptUserEventSequence >= input.currentUserEventSequence) ||
     input.use.promptUserEventRevisionId === input.currentUserEventRevisionId
   ) {
     throw new Error("Proactive follow-up disposition failed its use/event fence.");

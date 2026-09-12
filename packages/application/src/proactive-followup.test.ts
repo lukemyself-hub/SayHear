@@ -404,6 +404,7 @@ describe("C2 suppression and release policy", () => {
         targetVersionId: "loop-version-1",
         currentUserEventRevisionId: "user-revision-2",
         currentUserEventSequence: 2,
+        currentUserEventExchangeNo: 3,
         use,
         state: state({ consecutiveSoftStopCount: count }),
       });
@@ -438,6 +439,7 @@ describe("C2 suppression and release policy", () => {
         targetVersionId: "loop-version-1",
         currentUserEventRevisionId: "user-revision-2",
         currentUserEventSequence: 2,
+        currentUserEventExchangeNo: 3,
         use,
         state: null,
       });
@@ -448,6 +450,27 @@ describe("C2 suppression and release policy", () => {
         state: null,
       });
     }
+  });
+
+  it("does not compare per-session sequence numbers across exchanges", () => {
+    const result = planProactiveFollowupDisposition({
+      userId: "user-1",
+      now: NOW,
+      timeZone: "UTC",
+      signal: "short_response",
+      targetKind: "open_loop",
+      targetId: "loop-1",
+      targetVersionId: "loop-version-1",
+      currentUserEventRevisionId: "user-revision-2",
+      currentUserEventSequence: 1,
+      currentUserEventExchangeNo: 4,
+      use,
+      state: null,
+    });
+    expect(result).toMatchObject({
+      outcome: "suppressed",
+      suppressionReason: "short_response",
+    });
   });
 
   it("releases exactly at the cooldown boundary and rejects generic permission", () => {
@@ -504,6 +527,7 @@ describe("C2 suppression and release policy", () => {
       targetVersionId: "loop-version-1",
       currentUserEventRevisionId: "user-revision-2",
       currentUserEventSequence: 2,
+      currentUserEventExchangeNo: 3,
       use,
       state: null,
     });
