@@ -25,6 +25,10 @@ import {
   type ProviderEgressPort,
 } from "./conversation-model";
 import type { CompleteResponseMetadata } from "./conversation-response";
+import type {
+  ProactiveFollowupSegmentPlan,
+  ProactiveFollowupSegmentStage,
+} from "./proactive-followup";
 
 const userId = asUserId("01984477-1f9a-7d25-9d97-e588769566c0");
 const interactionTurnId = asInteractionTurnId(
@@ -44,6 +48,18 @@ const assistantEventId = asConversationEventId(
 );
 const assistantRevisionId = asConversationEventRevisionId(
   "01984477-1f9a-7d25-9d97-e588769566c6",
+);
+const requestEventRevisionId = asConversationEventRevisionId(
+  "01984477-1f9a-7d25-9d97-e588769566c7",
+);
+const segmentGenerationCommandId = asGenerationCommandId(
+  "01984477-1f9a-7d25-9d97-e588769566c8",
+);
+const segmentCompiledContextId = asCompiledContextId(
+  "01984477-1f9a-7d25-9d97-e588769566c9",
+);
+const segmentModelRunAttemptId = asModelRunAttemptId(
+  "01984477-1f9a-7d25-9d97-e588769566ca",
 );
 
 const fixedClock = () => new Date("2026-08-11T12:00:00.000Z");
@@ -65,6 +81,29 @@ function baseCommand() {
     harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
     interactionTurnId,
     modelRunAttemptId,
+    requestEventRevisionId,
+    userId,
+  };
+}
+
+function proactivePlan(): ProactiveFollowupSegmentPlan {
+  return {
+    expectedDataEpoch: 7,
+    interactionTurnId,
+    mainGenerationCommandId: generationCommandId,
+    promptUserEventRevisionId: requestEventRevisionId,
+    promptUserEventSequence: 12,
+    policyBundle: { source: "test" },
+    policyBundleVersion: "proactive-followup-policy-bundle:v1",
+    promptPolicyVersion: "proactive-followup-prompt:v1",
+    reservationId: "01984477-1f9a-7d25-9d97-e588769566cb",
+    segmentCompiledContextId,
+    segmentGenerationCommandId,
+    segmentModelRunAttemptId,
+    selectionPolicyVersion: "proactive-followup-selection:v1",
+    targetId: "01984477-1f9a-7d25-9d97-e588769566cc",
+    targetKind: "open_loop",
+    targetVersionId: "01984477-1f9a-7d25-9d97-e588769566cd",
     userId,
   };
 }
@@ -120,6 +159,290 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       },
     ]);
     expect(commitCalls).toBe(1);
+  });
+
+  it("generates one hidden proactive segment after a statement and commits it with the main response", async () => {
+    const egressPort: ProviderEgressPort = {
+      async *stream() {
+        yield { delta: "I hear you.", type: "delta" } as const;
+        yield { ...completedMetadata, type: "completed" } as const;
+      },
+    };
+    const plan = proactivePlan();
+    const preparedInputs: string[] = [];
+    let generated = 0;
+    let committedSegment: unknown;
+    const proactiveFollowupStage: ProactiveFollowupSegmentStage = {
+      async prepare(input) {
+        preparedInputs.push(input.mainText);
+        return plan;
+      },
+      async generate() {
+        generated += 1;
+        return {
+          metadata: completedMetadata,
+          output: {
+            content: "I’m glad you shared that.",
+            expressionKind: "acknowledgment" as const,
+            targetRef: {
+              targetId: plan.targetId,
+              targetKind: plan.targetKind,
+              targetVersionId: plan.targetVersionId,
+            },
+          },
+        };
+      },
+      async abandon() {
+        throw new Error("unexpected abandon");
+      },
+    };
+    const repository: ConversationAgentHarnessRepository = {
+      async claimResponseExecution() {
+        return "owner";
+      },
+      async loadResponse() {
+        throw new Error("unexpected loadResponse");
+      },
+      async commitCompleteResponse(input) {
+        committedSegment = input.proactiveSegment;
+        return {
+          eventId: assistantEventId,
+          outcome: "committed",
+          revisionId: assistantRevisionId,
+          segment: "committed" as const,
+        };
+      },
+      async settleResponseFailure() {
+        throw new Error("unexpected settleResponseFailure");
+      },
+      async claimStaleResponseExecution() {
+        throw new Error("unexpected claimStaleResponseExecution");
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      egressPort,
+      proactiveFollowupStage,
+      repository,
+    });
+
+    const events: ConversationHarnessEvent[] = [];
+    for await (const event of harness.runDecision(baseCommand())) {
+      events.push(event);
+    }
+
+    expect(preparedInputs).toEqual(["I hear you."]);
+    expect(generated).toBe(1);
+    expect(committedSegment).toEqual(
+      expect.objectContaining({ plan, generation: expect.any(Object) }),
+    );
+    expect(events).toEqual([
+      { delta: "I hear you.", type: "decision_delta" },
+      { delta: "I’m glad you shared that.", type: "decision_segment_delta" },
+      {
+        assistantEventId,
+        assistantEventRevisionId: assistantRevisionId,
+        type: "decision_committed",
+      },
+    ]);
+  });
+
+  it("does not prepare a proactive segment when the main response already asks a question", async () => {
+    const egressPort: ProviderEgressPort = {
+      async *stream() {
+        yield { delta: "What would help most?", type: "delta" } as const;
+        yield { ...completedMetadata, type: "completed" } as const;
+      },
+    };
+    let prepareCalls = 0;
+    const proactiveFollowupStage: ProactiveFollowupSegmentStage = {
+      async prepare() {
+        prepareCalls += 1;
+        throw new Error("must not prepare");
+      },
+      async generate() {
+        throw new Error("must not generate");
+      },
+      async abandon() {
+        throw new Error("must not abandon");
+      },
+    };
+    const repository: ConversationAgentHarnessRepository = {
+      async claimResponseExecution() {
+        return "owner";
+      },
+      async loadResponse() {
+        throw new Error("unexpected loadResponse");
+      },
+      async commitCompleteResponse() {
+        return {
+          eventId: assistantEventId,
+          outcome: "committed",
+          revisionId: assistantRevisionId,
+        };
+      },
+      async settleResponseFailure() {
+        throw new Error("unexpected settleResponseFailure");
+      },
+      async claimStaleResponseExecution() {
+        throw new Error("unexpected claimStaleResponseExecution");
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      egressPort,
+      proactiveFollowupStage,
+      repository,
+    });
+
+    const events = [] as ConversationHarnessEvent[];
+    for await (const event of harness.runDecision(baseCommand())) {
+      events.push(event);
+    }
+
+    expect(prepareCalls).toBe(0);
+    expect(events.some((event) => event.type === "decision_segment_delta")).toBe(
+      false,
+    );
+  });
+
+  it("preserves the main response when segment validation fails and abandons once", async () => {
+    const egressPort: ProviderEgressPort = {
+      async *stream() {
+        yield { delta: "I hear you.", type: "delta" } as const;
+        yield { ...completedMetadata, type: "completed" } as const;
+      },
+    };
+    const plan = proactivePlan();
+    const abandoned: string[] = [];
+    let committedSegment: unknown = "not-set";
+    const proactiveFollowupStage: ProactiveFollowupSegmentStage = {
+      async prepare() {
+        return plan;
+      },
+      async generate() {
+        return {
+          metadata: completedMetadata,
+          output: {
+            content: "This has the wrong target.",
+            expressionKind: "acknowledgment" as const,
+            targetRef: {
+              targetId: "wrong-target",
+              targetKind: plan.targetKind,
+              targetVersionId: plan.targetVersionId,
+            },
+          },
+        };
+      },
+      async abandon(_plan, reason) {
+        abandoned.push(reason);
+      },
+    };
+    const repository: ConversationAgentHarnessRepository = {
+      async claimResponseExecution() {
+        return "owner";
+      },
+      async loadResponse() {
+        throw new Error("unexpected loadResponse");
+      },
+      async commitCompleteResponse(input) {
+        committedSegment = input.proactiveSegment;
+        return {
+          eventId: assistantEventId,
+          outcome: "committed",
+          revisionId: assistantRevisionId,
+        };
+      },
+      async settleResponseFailure() {
+        throw new Error("unexpected settleResponseFailure");
+      },
+      async claimStaleResponseExecution() {
+        throw new Error("unexpected claimStaleResponseExecution");
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      egressPort,
+      proactiveFollowupStage,
+      repository,
+    });
+
+    const events: ConversationHarnessEvent[] = [];
+    for await (const event of harness.runDecision(baseCommand())) {
+      events.push(event);
+    }
+
+    expect(abandoned).toEqual(["invalid_output"]);
+    expect(committedSegment).toBeUndefined();
+    expect(events.some((event) => event.type === "decision_segment_delta")).toBe(
+      false,
+    );
+    expect(events.some((event) => event.type === "decision_committed")).toBe(
+      true,
+    );
+  });
+
+  it("does not retry a failed segment and preserves the main response", async () => {
+    const egressPort: ProviderEgressPort = {
+      async *stream() {
+        yield { delta: "I hear you.", type: "delta" } as const;
+        yield { ...completedMetadata, type: "completed" } as const;
+      },
+    };
+    const plan = proactivePlan();
+    const abandoned: string[] = [];
+    let generateCalls = 0;
+    const proactiveFollowupStage: ProactiveFollowupSegmentStage = {
+      async prepare() {
+        return plan;
+      },
+      async generate() {
+        generateCalls += 1;
+        throw new Error("provider unavailable");
+      },
+      async abandon(_plan, reason) {
+        abandoned.push(reason);
+      },
+    };
+    const repository: ConversationAgentHarnessRepository = {
+      async claimResponseExecution() {
+        return "owner";
+      },
+      async loadResponse() {
+        throw new Error("unexpected loadResponse");
+      },
+      async commitCompleteResponse(input) {
+        expect(input.proactiveSegment).toBeUndefined();
+        return {
+          eventId: assistantEventId,
+          outcome: "committed",
+          revisionId: assistantRevisionId,
+        };
+      },
+      async settleResponseFailure() {
+        throw new Error("unexpected settleResponseFailure");
+      },
+      async claimStaleResponseExecution() {
+        throw new Error("unexpected claimStaleResponseExecution");
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      egressPort,
+      proactiveFollowupStage,
+      repository,
+    });
+
+    const events: ConversationHarnessEvent[] = [];
+    for await (const event of harness.runDecision(baseCommand())) {
+      events.push(event);
+    }
+
+    expect(generateCalls).toBe(1);
+    expect(abandoned).toEqual(["generation_failed"]);
+    expect(events.some((event) => event.type === "decision_committed")).toBe(
+      true,
+    );
   });
 
   it("fails closed with no Assistant Event when output is interrupted mid-stream", async () => {
