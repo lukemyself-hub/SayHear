@@ -1897,6 +1897,19 @@ export class PostgresConversationResponseRepository
           now: input.completedAt,
         });
       };
+      const abandonUnboundSegment = async (): Promise<void> => {
+        if (!segmentInput) return;
+        await this.proactiveFollowupRepository.abandonUnboundSegmentWithin(
+          client,
+          {
+            expectedDataEpoch: segmentInput.plan.expectedDataEpoch,
+            mainGenerationCommandId: segmentInput.plan.mainGenerationCommandId,
+            now: input.completedAt,
+            reservationId: segmentInput.plan.reservationId,
+            userId: input.userId,
+          },
+        );
+      };
       if (segmentInput) {
         const binding = await this.proactiveFollowupRepository.bindSegmentCommandWithin(
           client,
@@ -1910,8 +1923,9 @@ export class PostgresConversationResponseRepository
             userId: input.userId,
           },
         );
-        segmentReady =
+        const segmentBound =
           binding.outcome === "bound" || binding.outcome === "already_bound";
+        segmentReady = segmentBound;
         if (segmentReady) {
           segmentReady = await lockProactiveSegmentCommand(client, {
             mainGenerationCommandId: input.generationCommandId,
@@ -1921,7 +1935,13 @@ export class PostgresConversationResponseRepository
             userId: input.userId,
           });
         }
-        if (!segmentReady) await abandonSegment();
+        if (!segmentReady) {
+          if (segmentBound) {
+            await abandonSegment();
+          } else {
+            await abandonUnboundSegment();
+          }
+        }
       }
 
       let eventId = "";
@@ -2118,8 +2138,9 @@ export class PostgresConversationResponseRepository
           await client.query("SAVEPOINT proactive_followup_segment_abandon");
           try {
             await abandonSegment();
-          } catch {
+          } catch (error) {
             await client.query("ROLLBACK TO SAVEPOINT proactive_followup_segment_abandon");
+            throw error;
           }
           await client.query("RELEASE SAVEPOINT proactive_followup_segment_abandon");
           await writeMainResponse(input.text);

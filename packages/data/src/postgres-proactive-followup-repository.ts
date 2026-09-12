@@ -1008,6 +1008,46 @@ export class PostgresProactiveFollowupRepository {
   }
 
   /**
+   * Release a reservation whose Segment Command never became bound. This is
+   * deliberately narrower than abandonSegmentWithin: a bound reservation is
+   * owned by the exact Segment Command and must use that command's terminal
+   * transition instead.
+   */
+  public async abandonUnboundSegmentWithin(
+    client: PoolClient,
+    input: Readonly<{
+      userId: string;
+      expectedDataEpoch: number;
+      reservationId: string;
+      mainGenerationCommandId: string;
+      now: Date;
+    }>,
+  ): Promise<void> {
+    const fence = await ownerFence(client, input);
+    if (fence) return;
+    await client.query(
+      `UPDATE proactive_followup_reservations
+       SET status = 'abandoned', terminal_at = $1,
+           selection_manifest = jsonb_set(
+             selection_manifest, '{reservationStatus}', '"abandoned"'::jsonb
+           )
+       WHERE proactive_followup_reservation_id = $2
+         AND user_id = $3
+         AND expected_data_epoch = $4
+         AND main_generation_command_id = $5
+         AND segment_generation_command_id IS NULL
+         AND status = 'active'`,
+      [
+        input.now,
+        input.reservationId,
+        input.userId,
+        input.expectedDataEpoch,
+        input.mainGenerationCommandId,
+      ],
+    );
+  }
+
+  /**
    * Called by the response transaction after the Assistant Event revision is
    * inserted. It intentionally does not BEGIN/COMMIT: the caller owns the
    * transaction, so Event + use + usage marker + reservation transition can
