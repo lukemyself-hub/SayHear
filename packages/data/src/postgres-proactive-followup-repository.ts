@@ -873,6 +873,87 @@ export class PostgresProactiveFollowupRepository {
   }
 
   /**
+   * Terminalize a Segment Command that was prepared but could not pass the
+   * final display/use fence. The caller owns the transaction so the main
+   * Assistant Event can be committed without the optional segment.
+   */
+  public async abandonSegmentWithin(
+    client: PoolClient,
+    input: Readonly<{
+      userId: string;
+      expectedDataEpoch: number;
+      reservationId: string;
+      mainGenerationCommandId: string;
+      segmentGenerationCommandId: string;
+      now: Date;
+    }>,
+  ): Promise<void> {
+    const fence = await ownerFence(client, input);
+    if (fence) return;
+    await client.query(
+      `UPDATE model_run_attempts
+       SET status = 'failed', error_category = 'policy_blocked',
+           completed_at = $1, recovery_status = 'terminal',
+           recovery_claimed_at = NULL
+       WHERE model_run_attempt_id IN (
+         SELECT model_run_attempt_id
+         FROM model_run_attempts
+         WHERE generation_command_id = $2 AND user_id = $3
+         ORDER BY attempt_no DESC
+         LIMIT 1
+       )
+         AND status IN ('prepared', 'running')`,
+      [input.now, input.segmentGenerationCommandId, input.userId],
+    );
+    await client.query(
+      `UPDATE provider_egress_dispositions
+       SET status = 'failed', error_category = 'policy_blocked', completed_at = $1
+       WHERE model_run_attempt_id = (
+         SELECT model_run_attempt_id
+         FROM model_run_attempts
+         WHERE generation_command_id = $2 AND user_id = $3
+         ORDER BY attempt_no DESC
+         LIMIT 1
+       )
+         AND user_id = $3 AND status IN ('dispatched', 'completed')`,
+      [input.now, input.segmentGenerationCommandId, input.userId],
+    );
+    await client.query(
+      `UPDATE generation_commands
+       SET status = 'failed', recovery_status = 'terminal',
+           recovery_checked_at = $1, next_recovery_at = NULL, settled_at = $1
+       WHERE generation_command_id = $2 AND user_id = $3
+         AND expected_data_epoch = $4
+         AND status IN ('prepared', 'running')`,
+      [
+        input.now,
+        input.segmentGenerationCommandId,
+        input.userId,
+        input.expectedDataEpoch,
+      ],
+    );
+    await client.query(
+      `UPDATE proactive_followup_reservations
+       SET status = 'abandoned', terminal_at = $1,
+           selection_manifest = jsonb_set(
+             selection_manifest, '{reservationStatus}', '"abandoned"'::jsonb
+           )
+       WHERE proactive_followup_reservation_id = $2
+         AND user_id = $3
+         AND expected_data_epoch = $4
+         AND main_generation_command_id = $5
+         AND status = 'active'`,
+      [
+        input.now,
+        input.reservationId,
+        input.userId,
+        input.expectedDataEpoch,
+        input.mainGenerationCommandId,
+      ],
+    );
+  }
+
+  /**
    * Called by the response transaction after the Assistant Event revision is
    * inserted. It intentionally does not BEGIN/COMMIT: the caller owns the
    * transaction, so Event + use + usage marker + reservation transition can

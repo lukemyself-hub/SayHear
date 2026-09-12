@@ -15,10 +15,12 @@ import type {
   ProviderDispatchErrorCategory,
   ProviderEgressClaim,
   ProviderEgressRepository,
+  ProactiveFollowupSegmentCommit,
 } from "@sayhear/application";
 import {
   applyCuriosityStopSignalProposals,
   countFollowUpQuestions,
+  composeProactiveFollowupResponse,
   CURIOSITY_STOP_SIGNAL_POLICY_VERSION,
   EMPTY_CURIOSITY_STOP_SIGNAL_CONTENT,
   minimumHighRiskSafetyPostureDetector,
@@ -54,6 +56,7 @@ import { createUuidV7 } from "./uuid-v7";
 import { loadActionFinalizationReceiptSnapshot } from "./postgres-memory-trust-action-repository";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 import { FAST_PATH_PENDING_REVISIONS_SQL } from "./postgres-fast-path-extraction-repository";
+import { PostgresProactiveFollowupRepository } from "./postgres-proactive-followup-repository";
 
 type ContextHeadRow = Readonly<{
   action_execution_id: string | null;
@@ -71,7 +74,10 @@ type ContextHeadRow = Readonly<{
   current_journal_source_revision: string | null;
   current_journal_version_status: "published" | "stale" | "validation_failed" | "needs_review" | null;
   dialogue_revision: string;
-  generation_stage: "decision" | "action_finalization";
+  generation_stage:
+    | "decision"
+    | "action_finalization"
+    | "proactive_followup";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -126,7 +132,10 @@ type DispatchRow = Readonly<{
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
-  generation_stage: "decision" | "action_finalization";
+  generation_stage:
+    | "decision"
+    | "action_finalization"
+    | "proactive_followup";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -152,6 +161,156 @@ type DispatchRow = Readonly<{
   user_status: string;
 }>;
 
+type ProactiveSegmentCommandRow = Readonly<{
+  attempt_status: string;
+  command_authoritative_result_id: string | null;
+  command_compiled_context_id: string | null;
+  command_expected_data_epoch: string;
+  command_generation_stage: string;
+  command_model_role: string;
+  command_operation_type: string;
+  command_status: string;
+  egress_role: string;
+  egress_status: string;
+  interaction_turn_id: string | null;
+}>;
+
+async function lockProactiveSegmentCommand(
+  client: PoolClient,
+  input: Readonly<{
+    mainGenerationCommandId: GenerationCommandId;
+    mainInteractionTurnId: string;
+    mainInputRevisionId: string;
+    segment: ProactiveFollowupSegmentCommit;
+    userId: UserId;
+  }>,
+): Promise<boolean> {
+  const plan = input.segment.plan;
+  if (
+    plan.userId !== input.userId ||
+    plan.interactionTurnId !== input.mainInteractionTurnId ||
+    plan.promptUserEventRevisionId !== input.mainInputRevisionId ||
+    plan.mainGenerationCommandId !== input.mainGenerationCommandId ||
+    plan.segmentGenerationCommandId === plan.mainGenerationCommandId
+  ) {
+    return false;
+  }
+  const result = await client.query<ProactiveSegmentCommandRow>(
+    `SELECT command.status AS command_status,
+            command.authoritative_result_id AS command_authoritative_result_id,
+            command.compiled_context_id AS command_compiled_context_id,
+            command.expected_data_epoch::text AS command_expected_data_epoch,
+            command.generation_stage AS command_generation_stage,
+            command.model_role AS command_model_role,
+            command.operation_type AS command_operation_type,
+            command.interaction_turn_id,
+            attempt.status AS attempt_status,
+            egress.status AS egress_status,
+            egress.role AS egress_role
+     FROM generation_commands command
+     INNER JOIN model_run_attempts attempt
+       ON attempt.generation_command_id = command.generation_command_id
+       AND attempt.user_id = command.user_id
+     INNER JOIN provider_egress_dispositions egress
+       ON egress.model_run_attempt_id = attempt.model_run_attempt_id
+       AND egress.user_id = attempt.user_id
+     INNER JOIN compiled_contexts context
+       ON context.compiled_context_id = command.compiled_context_id
+       AND context.user_id = command.user_id
+     WHERE command.generation_command_id = $1
+       AND command.user_id = $2
+       AND attempt.model_run_attempt_id = $3
+       AND context.compiled_context_id = $4
+     FOR UPDATE OF command, attempt, egress, context`,
+    [
+      plan.segmentGenerationCommandId,
+      input.userId,
+      plan.segmentModelRunAttemptId,
+      plan.segmentCompiledContextId,
+    ],
+  );
+  const row = result.rows[0];
+  return (
+    row !== undefined &&
+    row.command_status === "running" &&
+    row.command_authoritative_result_id === null &&
+    row.command_compiled_context_id === plan.segmentCompiledContextId &&
+    row.command_expected_data_epoch === String(plan.expectedDataEpoch) &&
+    row.command_generation_stage === "proactive_followup" &&
+    row.command_model_role === "proactive.followup" &&
+    row.command_operation_type === "proactive.followup" &&
+    (row.interaction_turn_id === null ||
+      row.interaction_turn_id === plan.interactionTurnId) &&
+    row.attempt_status === "running" &&
+    (row.egress_status === "dispatched" || row.egress_status === "completed") &&
+    row.egress_role === "proactive.followup"
+  );
+}
+
+async function settleProactiveSegmentWithin(
+  client: PoolClient,
+  input: Readonly<{
+    segment: ProactiveFollowupSegmentCommit;
+    userId: UserId;
+    completedAt: Date;
+  }>,
+): Promise<boolean> {
+  const plan = input.segment.plan;
+  const generation = input.segment.generation;
+  const command = await client.query(
+    `UPDATE generation_commands
+     SET status = 'succeeded', settled_at = $1,
+         recovery_status = CASE
+           WHEN recovery_status = 'recovering' THEN 'recovered'
+           ELSE 'not_needed'
+         END,
+         recovery_checked_at = CASE
+           WHEN recovery_status = 'recovering' THEN $1
+           ELSE recovery_checked_at
+         END,
+         next_recovery_at = NULL
+     WHERE generation_command_id = $2 AND user_id = $3
+       AND status = 'running' AND authoritative_result_id IS NULL`,
+    [input.completedAt, plan.segmentGenerationCommandId, input.userId],
+  );
+  const attempt = await client.query(
+    `UPDATE model_run_attempts
+     SET status = 'succeeded', provider_request_id = $1,
+         model_snapshot = $2, completed_at = $3,
+         input_tokens = $4, output_tokens = $5, cost_micros = $6,
+         finish_reason = $7, error_category = NULL,
+         recovery_status = CASE
+           WHEN retry_of_model_run_attempt_id IS NOT NULL
+             OR recovery_status = 'recovering'
+           THEN 'recovered'
+           ELSE 'not_needed'
+         END,
+         recovery_claimed_at = NULL
+     WHERE model_run_attempt_id = $8 AND user_id = $9
+       AND generation_command_id = $10 AND status = 'running'`,
+    [
+      generation.metadata.providerRequestId,
+      generation.metadata.modelSnapshot,
+      input.completedAt,
+      generation.metadata.inputTokens,
+      generation.metadata.outputTokens,
+      generation.metadata.costMicros,
+      generation.metadata.finishReason,
+      plan.segmentModelRunAttemptId,
+      input.userId,
+      plan.segmentGenerationCommandId,
+    ],
+  );
+  const egress = await client.query(
+    `UPDATE provider_egress_dispositions
+     SET status = 'completed', completed_at = $1, error_category = NULL
+     WHERE model_run_attempt_id = $2 AND user_id = $3
+       AND role = 'proactive.followup'`,
+    [input.completedAt, plan.segmentModelRunAttemptId, input.userId],
+  );
+  return command.rowCount === 1 && attempt.rowCount === 1 && egress.rowCount === 1;
+}
+
 export class PostgresConversationResponseRepository
   implements
     ContextCompilerRepository,
@@ -164,9 +323,13 @@ export class PostgresConversationResponseRepository
   ) {
     this.safetyPostureDetector =
       options.safetyPostureDetector ?? minimumHighRiskSafetyPostureDetector;
+    this.proactiveFollowupRepository = new PostgresProactiveFollowupRepository(
+      pool,
+    );
   }
 
   private readonly safetyPostureDetector: SafetyPostureDetector;
+  private readonly proactiveFollowupRepository: PostgresProactiveFollowupRepository;
 
   public async commitActionDecision(input: {
     completedAt: Date;
@@ -1583,6 +1746,7 @@ export class PostgresConversationResponseRepository
     generationCommandId: GenerationCommandId;
     metadata: CompleteResponseMetadata;
     modelRunAttemptId: ModelRunAttemptId;
+    proactiveSegment?: ProactiveFollowupSegmentCommit;
     stopSignalProposals?: readonly CuriosityStopSignalProposal[];
     text: string;
     userId: UserId;
@@ -1601,6 +1765,7 @@ export class PostgresConversationResponseRepository
         input_sequence_no: string;
         interaction_turn_id: string;
         interaction_turn_exchange_no: string;
+        generation_stage: "decision" | "action_finalization" | "proactive_followup";
         locale: string;
         next_event_sequence_no: string;
         provider_policy_status: string;
@@ -1627,6 +1792,7 @@ export class PostgresConversationResponseRepository
             ) AS consent_active,
             turn.interaction_turn_id,
             turn.daily_session_id,
+            command.generation_stage,
             session.next_event_sequence_no,
             session.source_revision,
             turn.continuous_exchange_no AS interaction_turn_exchange_no,
@@ -1716,135 +1882,250 @@ export class PostgresConversationResponseRepository
         return { outcome: "fence_rejected" };
       }
 
-      const eventId = createUuidV7(input.completedAt);
-      const revisionId = createUuidV7(input.completedAt);
+      const segmentInput = input.proactiveSegment;
+      let segmentReady = false;
+      let segmentIncluded = false;
+      const abandonSegment = async (): Promise<void> => {
+        if (!segmentInput) return;
+        await this.proactiveFollowupRepository.abandonSegmentWithin(client, {
+          expectedDataEpoch: segmentInput.plan.expectedDataEpoch,
+          mainGenerationCommandId: segmentInput.plan.mainGenerationCommandId,
+          reservationId: segmentInput.plan.reservationId,
+          segmentGenerationCommandId:
+            segmentInput.plan.segmentGenerationCommandId,
+          userId: input.userId,
+          now: input.completedAt,
+        });
+      };
+      if (segmentInput) {
+        segmentReady = await lockProactiveSegmentCommand(client, {
+          mainGenerationCommandId: input.generationCommandId,
+          mainInputRevisionId: row.input_revision_id,
+          mainInteractionTurnId: row.interaction_turn_id,
+          segment: segmentInput,
+          userId: input.userId,
+        });
+        if (!segmentReady) await abandonSegment();
+      }
+
+      let eventId = "";
+      let revisionId = "";
+      const writeMainResponse = async (text: string): Promise<void> => {
+        eventId = createUuidV7(input.completedAt);
+        revisionId = createUuidV7(input.completedAt);
+        await client.query(
+          `
+            INSERT INTO conversation_events (
+              conversation_event_id,
+              user_id,
+              daily_session_id,
+              interaction_turn_id,
+              sequence_no,
+              client_event_id,
+              actor,
+              channel,
+              event_type,
+              lifecycle_status,
+              generation_command_id,
+              created_at
+            )
+            VALUES (
+              $1, $2, $3, $4, $5, $6, 'assistant', 'text', 'message',
+              'active', $7, $8
+            )
+          `,
+          [
+            eventId,
+            input.userId,
+            row.daily_session_id,
+            row.interaction_turn_id,
+            Number(row.next_event_sequence_no),
+            `assistant/${input.generationCommandId}`,
+            input.generationCommandId,
+            input.completedAt,
+          ],
+        );
+        await client.query(
+          `
+            INSERT INTO conversation_event_revisions (
+              conversation_event_revision_id,
+              user_id,
+              conversation_event_id,
+              revision,
+              locale,
+              canonical_text,
+              transcript_status,
+              created_by,
+              created_at
+            )
+            VALUES ($1, $2, $3, 1, $4, $5, 'final', 'provider', $6)
+          `,
+          [
+            revisionId,
+            input.userId,
+            eventId,
+            row.locale,
+            text,
+            input.completedAt,
+          ],
+        );
+        await client.query(
+          `
+            UPDATE conversation_events
+            SET current_revision_id = $1
+            WHERE conversation_event_id = $2
+              AND user_id = $3
+              AND current_revision_id IS NULL
+          `,
+          [revisionId, eventId, input.userId],
+        );
+        await client.query(
+          `
+            UPDATE generation_commands
+            SET
+              status = 'succeeded',
+              authoritative_result_id = $1,
+              recovery_status = CASE
+                WHEN recovery_status = 'recovering' THEN 'recovered'
+                ELSE 'not_needed'
+              END,
+              recovery_checked_at = CASE
+                WHEN recovery_status = 'recovering' THEN $2
+                ELSE recovery_checked_at
+              END,
+              next_recovery_at = NULL,
+              settled_at = $2
+            WHERE generation_command_id = $3
+              AND user_id = $4
+          `,
+          [revisionId, input.completedAt, input.generationCommandId, input.userId],
+        );
+        await client.query(
+          `
+            UPDATE model_run_attempts
+            SET
+              status = 'succeeded',
+              provider_request_id = $1,
+              model_snapshot = $2,
+              completed_at = $3,
+              input_tokens = $4,
+              output_tokens = $5,
+              cost_micros = $6,
+              finish_reason = $7,
+              error_category = NULL,
+              recovery_status = CASE
+                WHEN retry_of_model_run_attempt_id IS NOT NULL
+                  OR recovery_status = 'recovering'
+                THEN 'recovered'
+                ELSE 'not_needed'
+              END,
+              recovery_claimed_at = NULL
+            WHERE model_run_attempt_id = $8
+              AND user_id = $9
+          `,
+          [
+            input.metadata.providerRequestId,
+            input.metadata.modelSnapshot,
+            input.completedAt,
+            input.metadata.inputTokens,
+            input.metadata.outputTokens,
+            input.metadata.costMicros,
+            input.metadata.finishReason,
+            input.modelRunAttemptId,
+            input.userId,
+          ],
+        );
+        await client.query(
+          `
+            UPDATE provider_egress_dispositions
+            SET status = 'completed', completed_at = $1, error_category = NULL
+            WHERE model_run_attempt_id = $2
+              AND user_id = $3
+          `,
+          [input.completedAt, input.modelRunAttemptId, input.userId],
+        );
+      };
+
+      if (segmentInput && segmentReady) {
+        await client.query("SAVEPOINT proactive_followup_segment");
+        const composedText = composeProactiveFollowupResponse({
+          mainText: input.text,
+          segmentText: segmentInput.generation.output.content,
+        });
+        await writeMainResponse(composedText);
+        const segmentSettled = await settleProactiveSegmentWithin(client, {
+          completedAt: input.completedAt,
+          segment: segmentInput,
+          userId: input.userId,
+        });
+        const use = segmentSettled
+          ? await this.proactiveFollowupRepository.commitUseWithin(client, {
+              assistantEventId: eventId,
+              assistantEventRevisionId: revisionId,
+              compiledContextId: segmentInput.plan.segmentCompiledContextId,
+              expectedDataEpoch: segmentInput.plan.expectedDataEpoch,
+              expressionKind: segmentInput.generation.output.expressionKind,
+              finalTextLocator: {
+                assistantEventRevisionId: revisionId,
+                kind: "assistant_event_revision",
+                ordinal: 0,
+                segment: "proactive_followup",
+              },
+              mainGenerationCommandId: input.generationCommandId,
+              now: input.completedAt,
+              policyBundle: segmentInput.plan.policyBundle,
+              policyBundleVersion: segmentInput.plan.policyBundleVersion,
+              promptPolicyVersion: segmentInput.plan.promptPolicyVersion,
+              promptUserEventRevisionId:
+                segmentInput.plan.promptUserEventRevisionId,
+              promptUserEventSequence:
+                segmentInput.plan.promptUserEventSequence,
+              reservationId: segmentInput.plan.reservationId,
+              selectionPolicyVersion:
+                segmentInput.plan.selectionPolicyVersion,
+              segmentGenerationCommandId:
+                segmentInput.plan.segmentGenerationCommandId,
+              targetId: segmentInput.plan.targetId,
+              targetKind: segmentInput.plan.targetKind,
+              targetVersionId: segmentInput.plan.targetVersionId,
+              userId: input.userId,
+            })
+          : { outcome: "fenced" as const, reason: "segment_settlement" };
+        if (use.outcome === "committed") {
+          segmentIncluded = true;
+        } else {
+          await client.query("ROLLBACK TO SAVEPOINT proactive_followup_segment");
+          await abandonSegment();
+          await writeMainResponse(input.text);
+        }
+        await client.query("RELEASE SAVEPOINT proactive_followup_segment");
+      } else {
+        await writeMainResponse(input.text);
+      }
+
+      const mainLinkRole =
+        row.generation_stage === "action_finalization"
+          ? "action_finalization"
+          : "main_response";
       await client.query(
-        `
-          INSERT INTO conversation_events (
-            conversation_event_id,
-            user_id,
-            daily_session_id,
-            interaction_turn_id,
-            sequence_no,
-            client_event_id,
-            actor,
-            channel,
-            event_type,
-            lifecycle_status,
-            generation_command_id,
-            created_at
-          )
-          VALUES (
-            $1, $2, $3, $4, $5, $6, 'assistant', 'text', 'message',
-            'active', $7, $8
-          )
-        `,
-        [
-          eventId,
-          input.userId,
-          row.daily_session_id,
-          row.interaction_turn_id,
-          Number(row.next_event_sequence_no),
-          `assistant/${input.generationCommandId}`,
-          input.generationCommandId,
-          input.completedAt,
-        ],
+        `INSERT INTO conversation_event_generation_command_links (
+           conversation_event_id, generation_command_id, user_id, role, created_at
+         ) VALUES ($1,$2,$3,$4,$5)`,
+        [eventId, input.generationCommandId, input.userId, mainLinkRole, input.completedAt],
       );
-      await client.query(
-        `
-          INSERT INTO conversation_event_revisions (
-            conversation_event_revision_id,
-            user_id,
-            conversation_event_id,
-            revision,
-            locale,
-            canonical_text,
-            transcript_status,
-            created_by,
-            created_at
-          )
-          VALUES ($1, $2, $3, 1, $4, $5, 'final', 'provider', $6)
-        `,
-        [
-          revisionId,
-          input.userId,
-          eventId,
-          row.locale,
-          input.text,
-          input.completedAt,
-        ],
-      );
-      await client.query(
-        `
-          UPDATE conversation_events
-          SET current_revision_id = $1
-          WHERE conversation_event_id = $2
-            AND user_id = $3
-            AND current_revision_id IS NULL
-        `,
-        [revisionId, eventId, input.userId],
-      );
-      await client.query(
-        `
-          UPDATE generation_commands
-          SET
-            status = 'succeeded',
-            authoritative_result_id = $1,
-            recovery_status = CASE
-              WHEN recovery_status = 'recovering' THEN 'recovered'
-              ELSE 'not_needed'
-            END,
-            recovery_checked_at = CASE
-              WHEN recovery_status = 'recovering' THEN $2
-              ELSE recovery_checked_at
-            END,
-            next_recovery_at = NULL,
-            settled_at = $2
-          WHERE generation_command_id = $3
-        `,
-        [revisionId, input.completedAt, input.generationCommandId],
-      );
-      await client.query(
-        `
-          UPDATE model_run_attempts
-          SET
-            status = 'succeeded',
-            provider_request_id = $1,
-            model_snapshot = $2,
-            completed_at = $3,
-            input_tokens = $4,
-            output_tokens = $5,
-            cost_micros = $6,
-            finish_reason = $7,
-            error_category = NULL,
-            recovery_status = CASE
-              WHEN retry_of_model_run_attempt_id IS NOT NULL
-                OR recovery_status = 'recovering'
-              THEN 'recovered'
-              ELSE 'not_needed'
-            END,
-            recovery_claimed_at = NULL
-          WHERE model_run_attempt_id = $8
-        `,
-        [
-          input.metadata.providerRequestId,
-          input.metadata.modelSnapshot,
-          input.completedAt,
-          input.metadata.inputTokens,
-          input.metadata.outputTokens,
-          input.metadata.costMicros,
-          input.metadata.finishReason,
-          input.modelRunAttemptId,
-        ],
-      );
-      await client.query(
-        `
-          UPDATE provider_egress_dispositions
-          SET status = 'completed', completed_at = $1, error_category = NULL
-          WHERE model_run_attempt_id = $2
-        `,
-        [input.completedAt, input.modelRunAttemptId],
-      );
+      if (segmentIncluded && segmentInput) {
+        await client.query(
+          `INSERT INTO conversation_event_generation_command_links (
+             conversation_event_id, generation_command_id, user_id, role, created_at
+           ) VALUES ($1,$2,$3,'proactive_segment',$4)`,
+          [
+            eventId,
+            segmentInput.plan.segmentGenerationCommandId,
+            input.userId,
+            input.completedAt,
+          ],
+        );
+      }
       await client.query(
         `
           UPDATE interaction_turns
@@ -1951,6 +2232,9 @@ export class PostgresConversationResponseRepository
         eventId: asConversationEventId(eventId),
         outcome: "committed",
         revisionId: asConversationEventRevisionId(revisionId),
+        ...(segmentInput
+          ? { segment: segmentIncluded ? ("committed" as const) : ("omitted" as const) }
+          : {}),
       };
     } catch (error) {
       await client.query("ROLLBACK");

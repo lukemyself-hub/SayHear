@@ -303,6 +303,14 @@ export const PURGE_SURFACE_REGISTRY: readonly PurgeSurfaceEntry[] = [
     clearOrder: 900,
   }),
   tableSurface({
+    table: "conversation_event_generation_command_links",
+    indexes: ["conversation_event_generation_command_links_owner_event_idx"],
+    ownerResolution: directUser,
+    privateContentFields: [],
+    introducedBySchemaOrIntegration: "0052_proactive_followup_segment.sql",
+    clearOrder: 895,
+  }),
+  tableSurface({
     table: "conversation_event_revisions",
     ownerResolution: directUser,
     disposition: "content_purge",
@@ -1518,6 +1526,7 @@ conversation_action_payloads|action_execution_id,payload_schema_version,cipherte
 conversation_action_receipts|action_receipt_id,action_execution_id,receipt_sequence,admission_status,execution_status,disposition,error_code,created_at,receipt_key,resolved_claim_id,resolved_claim_version_id,disposition_detail,resolved_qualifier_id,resolved_entity_id,resolved_entity_version_id,resolved_related_entity_id,resolved_related_entity_version_id,entity_identity_operation
 conversation_event_revisions|conversation_event_revision_id,user_id,conversation_event_id,revision,locale,canonical_text,transcript_status,created_by,created_at,content_purged_at
 conversation_events|conversation_event_id,user_id,daily_session_id,interaction_turn_id,sequence_no,client_event_id,actor,channel,event_type,current_revision_id,lifecycle_status,created_at,deleted_at,generation_command_id
+conversation_event_generation_command_links|conversation_event_id,generation_command_id,user_id,role,created_at
 curiosity_stop_signals|curiosity_stop_signal_id,user_id,daily_session_id,version_no,source_revision,policy_version,content,committed_generation_command_id,created_at
 current_curiosity_stop_signals|daily_session_id,curiosity_stop_signal_id,user_id,source_revision,version_no,updated_at
 current_dialogue_states|daily_session_id,dialogue_state_version_id,user_id,source_revision,dialogue_revision,covered_through_sequence_no,updated_at
@@ -1661,6 +1670,7 @@ predicate_change_proposal_candidate_links|predicate_change_proposal_candidate_li
 conversation_action_receipts|action_receipt_id,action_execution_id,receipt_sequence,admission_status,execution_status,disposition,error_code,created_at,receipt_key,resolved_claim_id,resolved_claim_version_id,resolved_qualifier_id,resolved_entity_id,resolved_entity_version_id,resolved_related_entity_id,resolved_related_entity_version_id,entity_identity_operation
 conversation_event_revisions|conversation_event_revision_id,user_id,conversation_event_id,revision,locale,transcript_status,created_by,created_at,content_purged_at
 conversation_events|conversation_event_id,user_id,daily_session_id,interaction_turn_id,sequence_no,client_event_id,actor,channel,event_type,current_revision_id,lifecycle_status,created_at,deleted_at,generation_command_id
+conversation_event_generation_command_links|conversation_event_id,generation_command_id,user_id,role,created_at
 curiosity_stop_signals|curiosity_stop_signal_id,user_id,daily_session_id,version_no,source_revision,policy_version,committed_generation_command_id,created_at
 current_curiosity_stop_signals|daily_session_id,curiosity_stop_signal_id,user_id,source_revision,version_no,updated_at
 current_dialogue_states|daily_session_id,dialogue_state_version_id,user_id,source_revision,dialogue_revision,covered_through_sequence_no,updated_at
@@ -1803,11 +1813,11 @@ export const PURGE_SURFACE_REGISTRY_SNAPSHOT: PurgeSurfaceRegistrySnapshot =
       PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
     registeredColumns: PURGE_SURFACE_REGISTERED_COLUMNS,
     nonPrivateColumns: PURGE_SURFACE_REGISTERED_NON_PRIVATE_COLUMNS,
-    columnManifestHash: "fnv1a32:08b1aceb:1480",
-    constraintManifestHash: "fnv1a32:5f620945:795",
+    columnManifestHash: "fnv1a32:a0c1285d:1485",
+    constraintManifestHash: "fnv1a32:2906e25d:798",
     externalIntegrations: PURGE_SURFACE_EXTERNAL_INTEGRATIONS,
-    foreignKeyManifestHash: "fnv1a32:a538ea6b:435",
-    indexManifestHash: "fnv1a32:928551e3:129",
+    foreignKeyManifestHash: "fnv1a32:de2afd4f:438",
+    indexManifestHash: "fnv1a32:672808c8:130",
     registryVersion: PURGE_SURFACE_REGISTRY_VERSION,
     surfaces: PURGE_SURFACE_REGISTRY,
     workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
