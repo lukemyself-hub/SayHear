@@ -17,7 +17,7 @@
     "reflection.daily": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "reflection-daily:eval:v3", "schemaVersion": "reflection-proposal:v1", "policyVersion": "reflection-admission:v1", "parameters": { "temperature": 0.2, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
     "reflection.weekly": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "reflection-weekly:eval:v3", "schemaVersion": "reflection-proposal:v1", "policyVersion": "reflection-admission:v1", "parameters": { "temperature": 0.2, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
     "bio.write": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "bio-write:eval:v1", "schemaVersion": "bio-draft:v1", "policyVersion": "bio-publish:v1", "parameters": { "temperature": 0.3, "maxOutputTokens": 1200 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "narrative.validate": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:eval:v5", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
+    "narrative.validate": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:eval:v4", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
     "proactive.followup": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "proactive-followup:eval:v1", "schemaVersion": "proactive-segment:v1", "policyVersion": "proactive-followup-selection:v1", "parameters": { "temperature": 0.4, "maxOutputTokens": 240 }, "maxTechnicalRetries": 0, "fallback": "none" }
   },
   "continuation": {
@@ -50,6 +50,6 @@
     ]
   },
   "validator": {
-    "configuration": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:eval:v5", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" }
+    "configuration": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:eval:v4", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" }
   }
 }

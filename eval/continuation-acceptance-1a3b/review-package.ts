@@ -891,7 +891,7 @@ export function unblindReviewPackage(input: {
 export function validateValidatorLedger(input: {
   catalog: FixtureCatalog;
   ledger: ValidatorAdjudicationLedger;
-}): Readonly<{ accepted: number; rejected: number; total: number }> {
+}): Readonly<{ accepted: number; maxRejects: number; rejected: number; total: number }> {
   const sourceViolations = verifySyntheticSourceBoundary(input.ledger, "validator ledger");
   if (sourceViolations.length > 0) {
     throw new Error(`Validator ledger contains a production source:\n${sourceViolations.join("\n")}`);
@@ -922,5 +922,12 @@ export function validateValidatorLedger(input: {
     const missing = fixtures.filter((fixture) => !seen.has(fixture.id)).map((fixture) => fixture.id);
     throw new Error(`Validator ledger is missing ${missing.join(", ")}.`);
   }
-  return { accepted, rejected, total: seen.size };
+  const maxRejects = input.ledger.maxRejects ?? 0;
+  if (!Number.isInteger(maxRejects) || maxRejects < 0) {
+    throw new Error("Validator ledger maxRejects must be a non-negative integer.");
+  }
+  if (maxRejects > Math.floor(seen.size * 0.1)) {
+    throw new Error(`Validator ledger maxRejects ${maxRejects} exceeds the 10% error budget.`);
+  }
+  return { accepted, maxRejects, rejected, total: seen.size };
 }

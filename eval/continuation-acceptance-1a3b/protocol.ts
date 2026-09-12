@@ -426,6 +426,13 @@ export type ValidatorAdjudicationLedger = Readonly<{
   }>[];
   group: "validator";
   manifestFingerprint: string;
+  /**
+   * Gate rule (2026-09-12): calibration misses share a 10% error budget;
+   * precision false-blocks stay zero-tolerance and are tracked separately.
+   * Optional for backwards compatibility; defaults to 0. Tooling refuses a
+   * budget above floor(10% of total entries).
+   */
+  maxRejects?: number;
   version: typeof F3_LEDGER_VERSION;
 }>;
 

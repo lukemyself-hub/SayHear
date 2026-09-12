@@ -516,11 +516,33 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
 
     expect(validateValidatorLedger({ catalog, ledger })).toEqual({
       accepted: 18,
+      maxRejects: 0,
       rejected: 0,
       total: 18,
     });
     expect(() =>
       validateValidatorLedger({ catalog, ledger: { ...ledger, entries: ledger.entries.slice(1) } }),
     ).toThrow(/missing/i);
+  });
+
+  it("caps the validator ledger error budget at ten percent", () => {
+    const fixtures = catalog.scenarios.filter((fixture) => fixture.group === "validator");
+    const base = {
+      adjudicator: "Luke",
+      decidedAt: "2026-09-08T00:00:00.000Z",
+      group: "validator" as const,
+      manifestFingerprint: manifest().fingerprint,
+      version: "1a3b-f3-adjudication:v1" as const,
+    };
+    const oneReject = fixtures.map((fixture, index) => ({
+      fixtureId: fixture.id,
+      verdict: (index === 0 ? "rejected" : "accepted") as "accepted" | "rejected",
+    }));
+    expect(
+      validateValidatorLedger({ catalog, ledger: { ...base, entries: oneReject, maxRejects: 1 } }),
+    ).toEqual({ accepted: 17, maxRejects: 1, rejected: 1, total: 18 });
+    expect(() =>
+      validateValidatorLedger({ catalog, ledger: { ...base, entries: oneReject, maxRejects: 2 } }),
+    ).toThrow(/10%/);
   });
 });

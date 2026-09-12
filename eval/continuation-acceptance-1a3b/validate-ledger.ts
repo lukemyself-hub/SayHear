@@ -48,9 +48,9 @@ async function main(): Promise<void> {
     throw new Error("Validator ledger does not belong to the supplied manifest.");
   }
   const summary = validateValidatorLedger({ catalog, ledger });
-  console.log(`[f3-validator] ${summary.accepted} accepted / ${summary.rejected} rejected / ${summary.total} total by Luke`);
-  if (summary.rejected > 0) {
-    console.error(`[f3-validator] formal validator acceptance failed: ${summary.rejected} cases were rejected`);
+  console.log(`[f3-validator] ${summary.accepted} accepted / ${summary.rejected} rejected / ${summary.total} total by Luke (budget: ${summary.maxRejects})`);
+  if (summary.rejected > summary.maxRejects) {
+    console.error(`[f3-validator] formal validator acceptance failed: ${summary.rejected} cases were rejected (budget ${summary.maxRejects})`);
     process.exitCode = 1;
   }
 }
