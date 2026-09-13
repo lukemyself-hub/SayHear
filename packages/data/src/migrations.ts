@@ -30,6 +30,12 @@ export async function runMigrations(
 
   try {
     await client.query("BEGIN");
+    // Serialize deploy-time migrators for this database. Vercel can build
+    // adjacent production deployments while the previous build is still
+    // finishing, and migration discovery plus DDL must remain one writer.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtextextended('sayhear.schema-migrations', 0))",
+    );
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         migration_name TEXT PRIMARY KEY,

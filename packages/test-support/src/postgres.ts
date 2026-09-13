@@ -13,6 +13,20 @@ export const fixedInternalOwnerPrincipal = Object.freeze({
   userId: asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc68"),
 });
 
+function isolatedSchemaConnectionString(
+  connectionString: string,
+  schema: string,
+): string {
+  const isolatedConnection = new URL(connectionString);
+  // Neon pooled endpoints reject `options`; schema-scoped sessions need direct connections.
+  isolatedConnection.hostname = isolatedConnection.hostname.replace(
+    "-pooler.",
+    ".",
+  );
+  isolatedConnection.searchParams.set("options", `-c search_path=${schema}`);
+  return isolatedConnection.toString();
+}
+
 export async function createIsolatedPostgresSchema(
   connectionString: string,
 ): Promise<IsolatedPostgresSchema> {
@@ -22,9 +36,10 @@ export async function createIsolatedPostgresSchema(
     connectionString,
   });
   await adminPool.query(`CREATE SCHEMA ${schema}`);
-  const isolatedConnection = new URL(connectionString);
-  isolatedConnection.searchParams.set("options", `-c search_path=${schema}`);
-  const isolatedConnectionString = isolatedConnection.toString();
+  const isolatedConnectionString = isolatedSchemaConnectionString(
+    connectionString,
+    schema,
+  );
 
   const pool = new Pool({
     application_name: "sayhear-system-test",

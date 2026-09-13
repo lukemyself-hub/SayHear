@@ -6,6 +6,16 @@ import { describe, expect, it } from "vitest";
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 
 describe("Workflow deployment boundaries", () => {
+  it("runs production migrations before the web build", async () => {
+    const configuration = JSON.parse(
+      await readFile(`${repositoryRoot}apps/web/vercel.json`, "utf8"),
+    ) as { buildCommand?: string };
+
+    expect(configuration.buildCommand).toBe(
+      'if [ "$VERCEL_ENV" = "production" ]; then pnpm -w run db:migrate; fi && pnpm run build',
+    );
+  });
+
   it("does not activate a Vercel Cron before the production reliability gate", async () => {
     const configuration = JSON.parse(
       await readFile(`${repositoryRoot}apps/web/vercel.json`, "utf8"),
