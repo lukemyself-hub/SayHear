@@ -120,6 +120,7 @@ describe("1A.3b G1 release manifest", () => {
     const manifest = build();
 
     expect(manifest.status).toBe("ready_for_cutover");
+    expect(manifest.fingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(manifest.roles.enabledRoles).toEqual(ONE_A_3B_G1_ENABLED_ROLES);
     expect(verifyOneA3bG1ReleaseManifest(manifest).passed).toBe(true);
 

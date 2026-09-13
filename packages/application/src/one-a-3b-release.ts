@@ -478,10 +478,10 @@ function manifestWithoutFingerprint(
 function manifestFingerprint(
   manifest: Omit<OneA3bG1ReleaseManifest, "fingerprint">,
 ): string {
-  return sha256Hex({
+  return `sha256:${sha256Hex({
     ...manifestWithoutFingerprint(manifest),
     createdAt: "volatile",
-  });
+  })}`;
 }
 
 function expectedStatus(input: Readonly<{
