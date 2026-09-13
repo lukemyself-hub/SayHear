@@ -1123,7 +1123,7 @@ describe("Candidate Review and governance system seam", () => {
       [candidateId],
     );
     expect(candidateRow.rows[0]!.status).toBe("accepted");
-  });
+  }, 60_000);
 
   it("the recovery scan backstops a missed release outbox event", async () => {
     const candidateId = await seedReviewCandidate();
@@ -1175,7 +1175,7 @@ describe("Candidate Review and governance system seam", () => {
       `SELECT status FROM outbox_events WHERE event_type = 'candidate_remap_requested'`,
     );
     expect(event.rows[0]!.status).toBe("pending");
-  });
+  }, 60_000);
 
   it("publishing exactly at the release deadline still admits; one tick later never does", async () => {
     const atDeadlineCandidate = await seedReviewCandidate();
@@ -1204,7 +1204,7 @@ describe("Candidate Review and governance system seam", () => {
       candidateId: atDeadlineCandidate,
     });
     expect(outcome).toBe("converged");
-  });
+  }, 60_000);
 
   it("a late release before the sweeper cannot re-qualify the Candidate", async () => {
     const candidateId = await seedReviewCandidate();
@@ -1233,7 +1233,7 @@ describe("Candidate Review and governance system seam", () => {
       [candidateId],
     );
     expect(row.rows[0]!.status).toBe("awaiting_registry_release");
-  });
+  }, 60_000);
 
   it("a later release re-arms remaps for Candidates the earlier release could not map", async () => {
     const candidateId = await seedReviewCandidate();

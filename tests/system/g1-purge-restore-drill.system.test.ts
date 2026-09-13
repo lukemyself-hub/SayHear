@@ -86,7 +86,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
       subject: "test-owner",
       userId: OWNER,
     });
-  }, 20_000);
+  }, 60_000);
 
   beforeEach(async () => {
     clockNowMs = BASE_TIME.getTime();

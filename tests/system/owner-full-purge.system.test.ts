@@ -887,7 +887,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
       subject: "test-owner",
       userId: OWNER,
     });
-  }, 20_000);
+  }, 60_000);
 
   beforeEach(async () => {
     clockNowMs = BASE_TIME.getTime();

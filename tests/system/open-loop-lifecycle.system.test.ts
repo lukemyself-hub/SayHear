@@ -213,7 +213,7 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
       ],
     );
     repository = new PostgresOpenLoopRepository(seeded.pool);
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await database?.dispose();

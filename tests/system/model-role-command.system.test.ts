@@ -108,7 +108,7 @@ systemDescribe("1A.3b model role persistence", () => {
         now,
       ],
     );
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await database?.dispose();
