@@ -206,7 +206,9 @@ Bio 自然度使用另一套 15 场景盲评，比较至少两个完整冻结配
 Luke 逐份检查胜出配置的固定样本；任意一份明显不能作为产品正文的 Bio 都阻止
 开放。`narrative.validate` 使用独立的 18 例危险错误验收集：每种语言 4 个
 Bio 与 2 个 Reflection，总计 12 / 6，覆盖所有已知 blocking class。这组结果不
-代替 Bio 自然度判断。
+代替 Bio 自然度判断。18 例必须全部由 Luke 裁定；校准 recall 采用向下取整的 10%
+漏检预算，即最多 1 例，独立 precision probes 对误伤保持零容忍。超过漏检预算或
+出现 precision 误伤均阻止发布。
 
 冻结 incumbent 仍用于相对归因，但其已裁定硬门失败不构成发布豁免。正式
 candidate 必须为零已确认确定性硬失败；若既有失败仍复现，先独立修复并冻结
@@ -233,6 +235,7 @@ candidate 必须为零已确认确定性硬失败；若既有失败仍复现，�
   [0135](../adr/0135-1a3b-acceptance-does-not-grandfather-hard-failures.md) ·
   [0137](../adr/0137-narrative-validator-acceptance-weights-bio.md) ·
   [0138](../adr/0138-1a3b-formal-acceptance-uses-synthetic-data.md) ·
+  [0139](../adr/0139-narrative-validator-calibration-allows-a-bounded-miss.md) ·
   [0111](../adr/0111-persona-and-conversation-state-inputs-are-compiled-versioned-contracts.md) ·
   [0112](../adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)
 - 证据：[#61 基线](../../eval/conversation-text-baseline/analysis.md) · #62 盲评（issue 评论）
