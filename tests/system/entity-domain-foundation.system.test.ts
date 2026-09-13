@@ -140,6 +140,7 @@ describe("Entity domain foundation system seam", () => {
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
         proactive_followup_reservations,

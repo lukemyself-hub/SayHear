@@ -103,6 +103,7 @@ describe("Authenticated Internal Text Conversation System Seam — bilingual beh
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
         proactive_followup_reservations,

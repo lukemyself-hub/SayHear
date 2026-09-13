@@ -5,7 +5,7 @@
  * vector / embedding artifact, Profile Projection, predicate-governance
  * tooling, model routing, Provider, or Conversation Text Champion change;
  * and no backfill of pre-1A.3a conversations. The explicitly allowlisted
- * C1/C2 schema faces are now part of the repository and remain outside this
+ * C1/C2/C3 schema faces are now part of the repository and remain outside this
  * historical memory-pairwise scope check.
  *
  * This is the mechanical proof: (1) no forbidden schema artifact exists in
@@ -38,7 +38,7 @@ const FORBIDDEN_TABLE_PATTERN =
   /(embedding|vector|proactive|profile_projection)/i;
 
 const ALLOWED_CURRENT_1A3B_ARTIFACT_PATTERN =
-  /^proactive_followup_(?:states|state_versions|reservations|uses|dispositions|states_current_version_idx|state_versions_due_idx|state_versions_owner_idx|reservations_active_idx|uses_target_idx|dispositions_trigger_idx)$/i;
+  /^proactive_followup_(?:states|state_versions|reservations|uses|dispositions|states_current_version_idx|state_versions_due_idx|state_versions_owner_idx|reservations_active_idx|reservations_live_exchange_idx|uses_target_idx|dispositions_trigger_idx)$/i;
 
 const FORBIDDEN_EXTENSION_PATTERN = /create\s+extension[^;]*\bvector\b/i;
 
