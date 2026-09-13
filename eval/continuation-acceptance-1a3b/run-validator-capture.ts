@@ -97,7 +97,7 @@ const PRECISION_DRAFTS = [
   { id: "precision-clean-en-2", locale: "en-US", inputRef: "validator-en", claimId: "syn-claim-validator-en", draftText: "Repairing radios is what the user does." },
   { id: "precision-clean-zh-1", locale: "zh-CN", inputRef: "validator-zh", claimId: "syn-claim-validator-zh", draftText: "该用户会修理收音机。" },
   { id: "precision-clean-zh-2", locale: "zh-CN", inputRef: "validator-zh", claimId: "syn-claim-validator-zh", draftText: "修理收音机是该用户会做的事情。" },
-  { id: "precision-clean-mix-1", locale: "zh-CN", inputRef: "validator-mix", claimId: "syn-claim-validator-mix", draftText: "该用户会 repair radios。" },
+  { id: "precision-clean-mix-1", locale: "zh-CN", inputRef: "validator-mix", claimId: "syn-claim-validator-mix", draftText: "Repair radios 是虚构用户会做的事情。" },
   { id: "precision-clean-mix-2", locale: "zh-CN", inputRef: "validator-mix", claimId: "syn-claim-validator-mix", draftText: "虚构用户会 repair radios。" },
 ] as const;
 
