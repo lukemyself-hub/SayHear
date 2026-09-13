@@ -899,6 +899,12 @@ Schema、policy、model config、provider / model snapshot、bundle、fixture、
 数据；真实 Internal Owner 数据只作上线后观察，不是 release gate。历史
 Conversation 不 backfill；真实数据不自动进入 Replay 或验收 artifact。
 
+Release evidence 在准确 main commit 确定后生成，不作为该 commit 的 tracked
+application files。Manifest build、独立 verify 与数据库 activation 都必须从 operator
+checkout 校验实际 artifact bytes 和 hash；production runtime 校验自哈希 active manifest
+与 deployment commit，并在每次 G1 写入时由数据库 active rollout pins 复核同一 manifest
+fingerprint。部署不为满足 runtime 文件读取而混入 commit 之外的 evidence 文件。
+
 每个准确 release manifest 至少完成一次覆盖 Purge Surface Registry 全部
 `delete` / `content_purge` surface 的 seeded-canary purge，以及一次“备份快照早于
 purge”的 restore drill。Episode、Open Loop、Reflection、Bio、Proactive、Candidate、

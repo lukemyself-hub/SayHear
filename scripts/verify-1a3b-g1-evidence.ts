@@ -96,6 +96,16 @@ function parseJson<T>(bytes: Uint8Array, label: string): T {
   }
 }
 
+function evidenceDeploymentId(value: unknown): string | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const result = (value as Record<string, unknown>).result;
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return null;
+  const deploymentId = (result as Record<string, unknown>).deploymentId;
+  return typeof deploymentId === "string" && deploymentId.trim() !== ""
+    ? deploymentId
+    : null;
+}
+
 async function readJson<T>(path: string, label: string): Promise<T> {
   return parseJson(await readFile(path), label);
 }
@@ -187,6 +197,8 @@ function verifyEvidenceValues(
       `Validator calibration counts do not match the ledger (${summary.accepted}/${summary.total}, maxRejects ${summary.maxRejects}).`,
     );
   }
+  let hostedCanaryDeploymentId: string | null = null;
+  let releaseDeploymentId: string | null = null;
   for (const entry of input.evidence) {
     if (entry.status !== "verified") continue;
     const artifactPath = repositoryFile(
@@ -200,8 +212,9 @@ function verifyEvidenceValues(
         `${entry.criterion} artifact bytes do not match its artifactSha256.`,
       );
     }
+    const artifactValue = parseJson<unknown>(artifactBytes, `${entry.criterion} evidence artifact`);
     const artifactMismatches = verifyOneA3bG1EvidenceArtifact({
-      value: parseJson<unknown>(artifactBytes, `${entry.criterion} evidence artifact`),
+      value: artifactValue,
       evidence: entry,
       gitCommit: input.gitCommit,
       f3ManifestFingerprint: f3Manifest.fingerprint,
@@ -213,6 +226,20 @@ function verifyEvidenceValues(
         `${entry.criterion} evidence artifact is invalid: ${artifactMismatches.join("; ")}`,
       );
     }
+    if (entry.criterion === "AC-W01") {
+      hostedCanaryDeploymentId = evidenceDeploymentId(artifactValue);
+    } else if (entry.criterion === "AC-D01") {
+      releaseDeploymentId = evidenceDeploymentId(artifactValue);
+    }
+  }
+  if (
+    !hostedCanaryDeploymentId ||
+    !releaseDeploymentId ||
+    hostedCanaryDeploymentId !== releaseDeploymentId
+  ) {
+    throw new Error(
+      "AC-W01 hosted Workflow evidence and AC-D01 release evidence must bind the same deployment ID.",
+    );
   }
   return { acceptedCases: summary.accepted, totalCases: summary.total };
 }

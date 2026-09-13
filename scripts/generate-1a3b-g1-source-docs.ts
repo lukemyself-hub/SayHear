@@ -300,6 +300,15 @@ async function main(): Promise<void> {
   const deployment = await createDeploymentArtifact(f3Manifest);
   const workflowHistory = hostedArtifacts.workflowHistory.filter(isRecord);
   const outboxPayloads = hostedArtifacts.outboxPayloads.filter(isRecord);
+  const deploymentId = String(deployment.deployment.deploymentId);
+  const hostedDeploymentIds = new Set(
+    workflowHistory.map((run) => run.deploymentId).filter((value): value is string => typeof value === "string"),
+  );
+  if (hostedDeploymentIds.size !== 1 || !hostedDeploymentIds.has(deploymentId)) {
+    throw new Error(
+      `Hosted Workflow evidence must come from release deployment ${deploymentId}; found ${[...hostedDeploymentIds].join(", ") || "no deployment ID"}.`,
+    );
+  }
   const workflowReceiptIds = workflowHistory.flatMap((run) => {
     const output = isRecord(run.output) ? run.output : null;
     return output && typeof output.workflowReceiptId === "string"
@@ -530,6 +539,7 @@ async function main(): Promise<void> {
     fixtureIds: ["cont-open-loop-en"],
     command: `pnpm exec vercel api /v13/deployments/${String(deployment.deployment.deploymentId)}`,
     result: {
+      deploymentId,
       deploymentCommit: deployment.deployment.deploymentCommit,
       schemaFingerprint: deployment.deployment.schemaFingerprint,
       manifestFingerprint: deployment.deployment.manifestFingerprint,

@@ -188,18 +188,20 @@ export const ONE_A_3B_G1_EVIDENCE_CONTRACTS: Readonly<
   "AC-W01": {
     evidenceKind: "hosted-canary-ledger",
     requiredAssertionIds: ["hosted_canary", "workflow_history", "outbox_receipt"],
-    requiredResultKeys: ["hosted", "canaryRunId", "exportArtifact"],
+    requiredResultKeys: ["hosted", "canaryRunId", "deploymentId", "exportArtifact"],
     resultFieldKinds: {
       hosted: "true",
       canaryRunId: "non-empty-string",
+      deploymentId: "non-empty-string",
       exportArtifact: "content-addressed-artifact",
     },
   },
   "AC-D01": {
     evidenceKind: "deployment-release-ledger",
     requiredAssertionIds: ["deployment_commit", "migration_fingerprint", "runtime_switch"],
-    requiredResultKeys: ["deploymentCommit", "schemaFingerprint", "manifestFingerprint"],
+    requiredResultKeys: ["deploymentId", "deploymentCommit", "schemaFingerprint", "manifestFingerprint"],
     resultFieldKinds: {
+      deploymentId: "non-empty-string",
       deploymentCommit: "git-commit",
       schemaFingerprint: "sha256-hex",
       manifestFingerprint: "manifest-fingerprint",
