@@ -94,7 +94,7 @@
     }
   ],
   "group": "validator",
-  "manifestFingerprint": "sha256:e267ba7835c25209709f89d1cb0bbad2bc8c61a55d98df2c71d9d3f2078f345c",
+  "manifestFingerprint": "sha256:fdcfaa0f1a0b43670aa27b79e3051893dc587aebe98cffb841134ebca1a15551",
   "maxRejects": 1,
   "version": "1a3b-f3-adjudication:v1"
 }
