@@ -265,6 +265,11 @@ const SYNTHETIC_CONTEXT_HMAC_SECRET = "baseline-context-integrity-secret";
  */
 export const TWIN_SCENARIO_RESET_TABLES = `
   TRUNCATE TABLE
+    proactive_followup_dispositions,
+    proactive_followup_uses,
+    proactive_followup_reservations,
+    proactive_followup_state_versions,
+    proactive_followup_states,
     reflection_runs,
     reflection_candidate_proposals,
     reflection_statement_evidence_links,

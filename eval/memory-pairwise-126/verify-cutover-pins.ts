@@ -66,10 +66,10 @@ export function expectedPinList(): Record<string, unknown> {
       tAuto: ENTITY_RESOLVE_T_AUTO,
     },
     evalChannel: {
-      // v3.4 (#148): objective background company-name expectations moved to
-      // the advisory semantic tier; continuity and temporal token gates stay
-      // hard gates. Checker semantics stay tiered-checks:v3.
-      scenarioPack: "scenario-pack:v3.4",
+      // v3.5 (#228): all recall tokens are advisory (judge pre-screen plus
+      // human ruling, never the checker); fabrication and fenced-content
+      // gates stay hard. Checker semantics stay tiered-checks:v3.
+      scenarioPack: "scenario-pack:v3.5",
       tieredChecks: TIERED_CHECKS_VERSION,
     },
     fastPathExtractionPolicyVersion: FAST_PATH_EXTRACTION_POLICY_VERSION,

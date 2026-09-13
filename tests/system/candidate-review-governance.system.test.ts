@@ -283,6 +283,11 @@ describe("Candidate Review and governance system seam", () => {
     clockNowMs = BASE_TIME;
     await database.pool.query(`
       TRUNCATE TABLE
+        proactive_followup_dispositions,
+        proactive_followup_uses,
+        proactive_followup_reservations,
+        proactive_followup_state_versions,
+        proactive_followup_states,
         candidate_review_audits,
         predicate_change_proposal_candidate_links,
         predicate_change_proposal_versions,

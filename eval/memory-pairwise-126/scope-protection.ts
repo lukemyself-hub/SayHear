@@ -1,11 +1,12 @@
 /**
  * Merge-time scope protection check (issue #126; SPEC #107 AC 40).
  *
- * At merge the 1A.3a slice must not carry any 1A.3b artifact: no Episode,
- * Open Loop, Proactive Follow-up state, Reflection, Profile Projection,
- * predicate-governance tooling, or vector / embedding artifact; no model
- * routing, Provider, or Conversation Text Champion change; and no backfill of
- * pre-1A.3a conversations.
+ * At merge the 1A.3a slice must not carry an unplanned 1A.3b artifact: no
+ * vector / embedding artifact, Profile Projection, predicate-governance
+ * tooling, model routing, Provider, or Conversation Text Champion change;
+ * and no backfill of pre-1A.3a conversations. The explicitly allowlisted
+ * C1/C2 schema faces are now part of the repository and remain outside this
+ * historical memory-pairwise scope check.
  *
  * This is the mechanical proof: (1) no forbidden schema artifact exists in
  * the migration history; (2) no embedding / vector / backfill code path
@@ -30,12 +31,14 @@ const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 type ScopeIssue = Readonly<{ check: string; detail: string }>;
 
 /** Forbidden persisted artifacts (vector and projection faces; ADR-0115). */
-// The 1A.3b Stage-1 Episode schema (issue #197), the Reflection schema
-// (issue #199) and the Open Loop schema (issue #204) are accepted SPEC
-// deliverables; Proactive (C2 lane) and vector faces are not built yet and
-// stay forbidden.
+// The 1A.3b Stage-1 Episode, Reflection, Open Loop, and Proactive Follow-up
+// schemas are accepted SPEC deliverables. Vector and profile-projection faces
+// remain forbidden here.
 const FORBIDDEN_TABLE_PATTERN =
   /(embedding|vector|proactive|profile_projection)/i;
+
+const ALLOWED_CURRENT_1A3B_ARTIFACT_PATTERN =
+  /^proactive_followup_(?:states|state_versions|reservations|uses|dispositions|states_current_version_idx|state_versions_due_idx|state_versions_owner_idx|reservations_active_idx|uses_target_idx|dispositions_trigger_idx)$/i;
 
 const FORBIDDEN_EXTENSION_PATTERN = /create\s+extension[^;]*\bvector\b/i;
 
@@ -89,7 +92,10 @@ export async function runScopeProtectionChecks(input: {
       /create\s+(?:table|index|unique\s+index)\s+(?:if\s+not\s+exists\s+)?([a-z_.]+)/gi,
     )) {
       const name = match[1] ?? "";
-      if (FORBIDDEN_TABLE_PATTERN.test(name)) {
+      if (
+        FORBIDDEN_TABLE_PATTERN.test(name) &&
+        !ALLOWED_CURRENT_1A3B_ARTIFACT_PATTERN.test(name)
+      ) {
         issues.push({
           check: "schema-artifact",
           detail: `${relative} creates "${name}", a 1A.3b / vector face that must not exist at merge`,

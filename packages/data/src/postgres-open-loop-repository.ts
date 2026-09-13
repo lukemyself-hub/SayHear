@@ -514,8 +514,12 @@ export class PostgresOpenLoopRepository {
   }>): Promise<
     readonly Readonly<{
       openLoopId: string;
+      openLoopVersionId: string;
       kind: string;
       localizedSummary: string | null;
+      expectedStartAt: string | null;
+      expiresAt: string;
+      evidenceAt: string;
       followupEligible: boolean;
       suppressed: boolean;
     }>[]
@@ -525,23 +529,29 @@ export class PostgresOpenLoopRepository {
     }
     const result = await this.pool.query<{
       open_loop_id: string;
+      open_loop_version_id: string;
       open_loop_kind: string;
       localized_summary: string | null;
+      expected_start_at: string | null;
       followup_eligible_from_at: string;
       expires_at: string;
       content_expires_at: string | null;
+      evidence_at: string;
       suppressed: boolean;
     }>(
       `SELECT l.open_loop_id,
+              v.open_loop_version_id,
               v.open_loop_kind,
               CASE
                 WHEN v.content_expires_at IS NOT NULL
                   AND $2::timestamptz >= v.content_expires_at THEN NULL
                 ELSE v.localized_summary
               END AS localized_summary,
+              v.expected_start_at::text,
               v.followup_eligible_from_at::text,
               v.expires_at::text,
               v.content_expires_at::text,
+              evidence.created_at::text AS evidence_at,
               EXISTS (
                 SELECT 1 FROM open_loop_closure_audits audit
                 WHERE audit.target_open_loop_id = l.open_loop_id
@@ -554,6 +564,7 @@ export class PostgresOpenLoopRepository {
          ON evidence.evidence_item_id = v.source_evidence_item_id
          AND evidence.status = 'active'
        WHERE l.user_id = $1
+         AND l.deleted_at IS NULL
          AND v.status = 'open'
          AND v.content_purged_at IS NULL
          AND v.followup_eligible_from_at <= $2::timestamptz
@@ -562,8 +573,12 @@ export class PostgresOpenLoopRepository {
     );
     return result.rows.map((row) => ({
       openLoopId: asOpenLoopId(row.open_loop_id),
+      openLoopVersionId: row.open_loop_version_id,
       kind: row.open_loop_kind,
       localizedSummary: row.localized_summary,
+      expectedStartAt: row.expected_start_at,
+      expiresAt: row.expires_at,
+      evidenceAt: row.evidence_at,
       followupEligible: true,
       suppressed: row.suppressed,
     }));

@@ -117,6 +117,11 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
   beforeEach(async () => {
     await database.pool.query(`
       TRUNCATE TABLE
+        proactive_followup_dispositions,
+        proactive_followup_uses,
+        proactive_followup_reservations,
+        proactive_followup_state_versions,
+        proactive_followup_states,
         narrative_validator_results,
         narrative_validator_requests,
         episode_impact_reviews,

@@ -159,7 +159,7 @@ _Avoid_: Simulated execution, Invented capability explanation, Persona-first tas
 _Avoid_: Advice, Coaching
 
 **Follow-up Question**:
-为了继续理解而紧扣用户当前表达提出的问题；每轮最多一个，用户愿意继续时可跨轮追问，用户简短回应、回避、拒绝或转换话题后必须停止原方向。
+为了继续理解而紧扣用户当前表达提出的问题；默认每轮最多一个，偶尔出现第二个符合日常对话习惯、不算失败，只有频繁堆叠才需要优化。用户愿意继续时可跨轮追问，用户简短回应、回避、拒绝或转换话题后必须停止原方向。
 _Avoid_: Intake question, Question stack
 
 **DialogueState**:

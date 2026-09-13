@@ -945,7 +945,7 @@ export class PostgresModelRoleCommandRepository
            conversation_action_catalog_version, expected_data_epoch, status,
            model_role, schema_version, role_policy_version, rollout_pin,
            source_revision, source_snapshot, input_manifest, parameter_snapshot,
-           fallback_mode,
+           fallback_mode, generation_stage,
            created_at
          )
          VALUES (
@@ -953,7 +953,10 @@ export class PostgresModelRoleCommandRepository
            $8, 'model-role:none:v1', $9, $9, $9, $9, 'und', $10, $11, $12,
            $13, $14, NULL, $15, 'model-role-harness:none:v1',
            'model-role-actions:none:v1', $16, 'prepared', $3, $17, $18,
-           $19, $20, $21, $22::jsonb, $23::jsonb, 'disabled', $24
+           $19, $20, $21, $22::jsonb, $23::jsonb, 'disabled',
+           CASE WHEN $3 = 'proactive.followup'
+             THEN 'proactive_followup' ELSE 'decision' END,
+           $24
          )
          ON CONFLICT (user_id, intent_key) DO UPDATE
            SET generation_command_id = generation_commands.generation_command_id

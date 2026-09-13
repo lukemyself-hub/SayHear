@@ -22,11 +22,12 @@ import {
 
 /**
  * Issue #118 — the recall experience contract evaluation: scenario-pack:v3
- * with the #99 two-tier expectedRecall activated (token-level required words
- * are a deterministic hard gate; semantic expectations stay advisory per
- * ADR-0110), the post-Correction / post-Forget fenced-mention gate, the
- * day-boundary forbidden-mention scope that makes the ADR-0117 correct-zero
- * openers provable, and the verify-pack gate over all of it.
+ * with the #99 expectedRecall on the advisory tier (token-level expected
+ * words document the recall for the judge pre-screen plus the Internal
+ * Owner's ruling and never gate through this checker per ADR-0110 and #228),
+ * the post-Correction / post-Forget fenced-mention gate, the day-boundary
+ * forbidden-mention scope that makes the ADR-0117 correct-zero openers
+ * provable, and the verify-pack gate over all of it.
  */
 
 const packPath = join(
@@ -43,7 +44,7 @@ function scenarioById(id: string) {
 
 describe("scenario-pack:v3 (#118)", () => {
   it("carries 54 unique scenarios: the 45 carried from v2.1 plus 9 new multi-day recall scenarios", () => {
-    expect(pack.version).toBe("scenario-pack:v3.4");
+    expect(pack.version).toBe("scenario-pack:v3.5");
     expect(pack.scenarios).toHaveLength(54);
     expect(new Set(pack.scenarios.map((s) => s.id)).size).toBe(54);
     for (const id of [
@@ -177,7 +178,7 @@ describe("scenario-pack:v3 (#118)", () => {
     expect(verification.fixtureCounts.memory).toBe(12);
   });
 
-  it("activates the previously deferred expected-recall tier on the carried memory_continuity fixtures", () => {
+  it("keeps recall expectations on the advisory tier (#228)", () => {
     for (const id of [
       "memory-continuity-en",
       "memory-continuity-zh",
@@ -186,9 +187,10 @@ describe("scenario-pack:v3 (#118)", () => {
       const fixture = scenarioById(id).memoryFixture!;
       expect(fixture.checks, id).toEqual(scenarioMemoryChecks());
       expect(fixture.checks.expectedRecall.status, id).toBe("active");
-      expect(fixture.checks.expectedRecall.gating, id).toBe(true);
+      expect(fixture.checks.expectedRecall.gating, id).toBe(false);
+      expect(fixture.checks.expectedRecall.tokenTier, id).toBe("advisory");
       // Day-2 boundary: the zero-signal opener at turn 3 is correct zero, and
-      // turn 4 carries the token-level required words.
+      // turn 4 carries advisory recall tokens naming the project.
       expect(fixture.forbiddenMentionFromTurn, id).toBe(3);
       expect(fixture.expectedRecalls[0]?.atTurn, id).toBe(3);
       expect(fixture.expectedRecalls[0]?.requiredTokens, id).toBeUndefined();
@@ -205,8 +207,9 @@ describe("scenario-pack:v3 (#118)", () => {
     expect(scenarioById("memory-continuity-en").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["cairn"]);
     expect(scenarioById("memory-continuity-mix").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["拾光"]);
 
-    // Temporal relationship tokens remain hard gates: they protect the
-    // corrected state rather than requiring a background proper name.
+    // Temporal relationship tokens stay as advisory recall markers: they name
+    // the corrected state for the judge pre-screen and human ruling rather
+    // than gating word-for-word.
     expect(scenarioById("memory-temporal-en").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["friend"]);
     expect(scenarioById("memory-temporal-zh").memoryFixture!.expectedRecalls[1]?.requiredTokens).toEqual(["朋友"]);
     expect(scenarioById("memory-temporal-mix").memoryFixture!.expectedRecalls[1]?.requiredTokens).toBeUndefined();
@@ -214,10 +217,10 @@ describe("scenario-pack:v3 (#118)", () => {
 
   it("pins the v3 checker and tiering identities", () => {
     expect(TIERED_CHECKS_VERSION).toBe("tiered-checks:v3");
-    // The active tier names the emitted gate IDs one-to-one.
+    // The active tier names the emitted gate IDs one-to-one (#228: recall
+    // tokens are advisory-only and no longer emitted as gates).
     expect(MEMORY_CHECK_TIERING.activeChecks).toEqual([
       "forbidden_memory_mention",
-      "required_recall_missing",
       "fenced_memory_mention",
     ]);
     expect(MEMORY_CHECK_TIERING.advisoryChecks).toEqual([
@@ -226,7 +229,7 @@ describe("scenario-pack:v3 (#118)", () => {
   });
 });
 
-describe("v3 memory hard gates", () => {
+describe("v3 memory gates (#228: recall is advisory)", () => {
   const base: TurnCheckInput = {
     scenarioId: "memory-objective-en",
     sequenceInScenario: 4,
@@ -237,7 +240,7 @@ describe("v3 memory hard gates", () => {
       "You mentioned Brightline — honestly, the longer you sit on it the heavier it gets.",
   };
 
-  it("passes a response that recalls the required token", () => {
+  it("passes a response that recalls the advisory token", () => {
     const { hardGates } = checkTurn({
       ...base,
       requiredRecallTokens: ["Brightline"],
@@ -245,19 +248,17 @@ describe("v3 memory hard gates", () => {
     expect(hardGates).toEqual([]);
   });
 
-  it("fails the required-recall hard gate at token level when the expected words are missing", () => {
+  it("does not hard-fail when advisory recall tokens are missing (#228)", () => {
+    // A reply that clearly addresses the content in its own words passes
+    // without the verbatim token; recall quality is judged by the judge
+    // pre-screen plus the Internal Owner's ruling, never by this checker.
     const { hardGates } = checkTurn({
       ...base,
       assistantText:
         "You mentioned something the other night — whenever you're ready is fine.",
       requiredRecallTokens: ["Brightline"],
     });
-    expect(hardGates).toHaveLength(1);
-    expect(hardGates[0]).toMatchObject({
-      scenarioId: "memory-objective-en",
-      sequenceInScenario: 4,
-      gate: "required_recall_missing",
-    });
+    expect(hardGates).toEqual([]);
   });
 
   it("fails the fenced-mention gate when a post-correction response resurrects the old state", () => {
@@ -315,8 +316,9 @@ describe("v3 memory hard gates", () => {
       assistantText: "Two questions? Right? And a forbidden detail: recruiter",
       forbiddenMentionTokens: ["recruiter"],
     });
+    // #228: per-turn question counts no longer gate (observed via
+    // trajectory instead); the never-injected detail still hard-fails.
     expect(hardGates.map((gate) => gate.gate)).toEqual([
-      "too_many_questions",
       "forbidden_memory_mention",
     ]);
   });
@@ -551,15 +553,16 @@ describe("verify-pack catches v3 fixture drift", () => {
     const mismatches = verifyScenarioPackExpectations(
       tamperMemory("memory-objective-zh", (fixture) => ({
         ...fixture!,
-        // Deliberately drifts from the tiering (gating must be true); the
-        // cast is the point — the verifier, not the type system, catches it.
+        // Deliberately drifts from the tiering (gating must be false since
+        // #228); the cast is the point — the verifier, not the type system,
+        // catches it.
         checks: {
           forbiddenMention: { status: "active", tier: "hard_gate" },
           expectedRecall: {
             status: "active",
-            tokenTier: "hard_gate_required_only",
+            tokenTier: "advisory",
             semanticTier: "advisory_prescreen",
-            gating: false,
+            gating: true,
           },
         } as unknown as MemoryFixture["checks"],
       })),
