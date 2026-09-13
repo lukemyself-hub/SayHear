@@ -49,7 +49,7 @@ function option(arguments_: readonly string[], name: string): string | null {
 
 async function gitOutput(...arguments_: string[]): Promise<string> {
   const result = await execFileAsync("git", arguments_, { cwd: repositoryRoot });
-  return result.stdout.trim();
+  return result.stdout.trimEnd();
 }
 
 function sha256Bytes(value: Uint8Array): string {
