@@ -96,33 +96,42 @@ function parseRoles(value: string): readonly OneA3bModelRole[] {
   return unique;
 }
 
-const arguments_ = process.argv.slice(2);
-const manifest = readManifest(requiredOption(arguments_, "--manifest"));
-assertRepositoryCommit(manifest.gitCommit, repositoryRoot);
-const roles = parseRoles(requiredOption(arguments_, "--roles"));
-if (
-  roles.length !== manifest.roles.enabledRoles.length ||
-  roles.some((role) => !manifest.roles.enabledRoles.includes(role))
-) {
-  throw new Error("Rollback roles must match the active manifest's complete G1 role set.");
-}
-const pool = createPostgresPool({
-  applicationName: "sayhear-rollback-g1",
-  connectionString: requiredEnvironment("DATABASE_URL"),
-});
-
-try {
-  const revoked = await new PostgresModelRoleCommandRepository(
-    pool,
-    manifest.schema,
-    manifest.fingerprint,
-  ).revokeActiveRolloutPins({
-    now: new Date(),
-    roles,
-    configurations: manifest.roles.configurations,
-    manifestFingerprint: manifest.fingerprint,
+async function main(): Promise<void> {
+  const arguments_ = process.argv.slice(2);
+  const manifest = readManifest(requiredOption(arguments_, "--manifest"));
+  assertRepositoryCommit(manifest.gitCommit, repositoryRoot);
+  const roles = parseRoles(requiredOption(arguments_, "--roles"));
+  if (
+    roles.length !== manifest.roles.enabledRoles.length ||
+    roles.some((role) => !manifest.roles.enabledRoles.includes(role))
+  ) {
+    throw new Error("Rollback roles must match the active manifest's complete G1 role set.");
+  }
+  const pool = createPostgresPool({
+    applicationName: "sayhear-rollback-g1",
+    connectionString: requiredEnvironment("DATABASE_URL"),
   });
-  console.log(`[g1-rollback] revoked ${revoked} active rollout pin(s) for ${roles.join(", ")}.`);
-} finally {
-  await pool.end();
+
+  try {
+    const revoked = await new PostgresModelRoleCommandRepository(
+      pool,
+      manifest.schema,
+      manifest.fingerprint,
+    ).revokeActiveRolloutPins({
+      now: new Date(),
+      roles,
+      configurations: manifest.roles.configurations,
+      manifestFingerprint: manifest.fingerprint,
+    });
+    console.log(`[g1-rollback] revoked ${revoked} active rollout pin(s) for ${roles.join(", ")}.`);
+  } finally {
+    await pool.end();
+  }
 }
+
+main().catch((error: unknown) => {
+  console.error(
+    `[g1-rollback] ${error instanceof Error ? error.message : "rollback failed"}`,
+  );
+  process.exitCode = 1;
+});
