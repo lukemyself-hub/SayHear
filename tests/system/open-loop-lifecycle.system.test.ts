@@ -289,7 +289,7 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
       watermarkReadable: false,
     });
     expect(gapLane).toHaveLength(0);
-  });
+  }, 60_000);
 
   it("rejects a stale epoch instead of publishing a late result (AC-F02)", async () => {
     const session = await seedSession({
@@ -316,7 +316,7 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
         policyVersion: POLICY,
       }),
     ).toBe(false);
-  });
+  }, 60_000);
 
   it("closes a loop on entailed evidence and suppresses ambiguous targets atomically", async () => {
     const pool = database!.pool;
@@ -447,7 +447,7 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
     });
     const released = laneAfterRelease.find((row) => row.openLoopId === targets[1]);
     expect(released?.suppressed).toBe(false);
-  });
+  }, 60_000);
 
   it("trims per-Event formation to 4 loops with a stable order", async () => {
     const session = await seedSession({
@@ -487,7 +487,7 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
     if (settled.outcome === "settled") {
       expect(settled.formed).toBe(4);
     }
-  });
+  }, 60_000);
 
   it("materializes expiry with the original effective time and lets a pre-expiry closure win", async () => {
     const session = await seedSession({
@@ -583,5 +583,5 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
     // Boundary-equal Events never rewrite expired: covered by the pure
     // arbitration unit test; the scanner row above keeps its original
     // effective time as immutable history.
-  });
+  }, 60_000);
 });

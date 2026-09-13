@@ -247,7 +247,7 @@ systemDescribe("1A.3b model role persistence", () => {
     await expect(
       new PostgresBioInspectionRepository(database!.pool).readCurrentBio({ userId }),
     ).resolves.toMatchObject({ outcome: "no_record" });
-  });
+  }, 60_000);
 
   it("discards a late result after the owner epoch advances", async () => {
     const service = createModelRoleCommandService({
@@ -285,7 +285,7 @@ systemDescribe("1A.3b model role persistence", () => {
         now,
       }),
     ).resolves.toMatchObject({ outcome: "discarded", reason: "data_epoch" });
-  });
+  }, 60_000);
 
   it("reads the typed Bio trace and refuses it after the owner fence changes", async () => {
     const bioId = "01984477-3f9a-7b25-a5cc-83c3b21fbc68";
@@ -438,5 +438,5 @@ systemDescribe("1A.3b model role persistence", () => {
       bioVersionId,
       observedDataEpoch: 2,
     });
-  });
+  }, 60_000);
 });

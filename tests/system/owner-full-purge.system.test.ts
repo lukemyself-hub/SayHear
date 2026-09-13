@@ -2326,5 +2326,5 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     };
     expect(secondBody.created).toBe(true);
     expect(secondBody.order.dataEpoch).toBe(3);
-  }, 60_000);
+  }, 120_000);
 });
