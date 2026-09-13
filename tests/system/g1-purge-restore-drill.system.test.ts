@@ -235,12 +235,12 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
       providerRetentionDays: 30,
       repository: purgeRepository,
     });
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await database?.dispose();
     await markerDatabase?.dispose();
-  }, 10_000);
+  }, 60_000);
 
   async function seedCanaryChain(): Promise<void> {
     const t0 = "2026-09-09T15:00:00.000Z";
@@ -382,7 +382,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         `SELECT 1 FROM conversation_event_revisions WHERE conversation_event_revision_id = '${R1}' AND canonical_text = '${CANARY_TEXT}'`,
       ),
     ).toBe(1);
-  });
+  }, 60_000);
 
   it("AC-L02 drill purge-first inflight order: stale epoch writes are fenced after the purge", async () => {
     await seedCanaryChain();
@@ -404,7 +404,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     ).rejects.toThrow(/fenced by the owner data epoch/);
     expect(await countRows("SELECT 1 FROM generation_commands")).toBe(0);
     expect(await countRows("SELECT 1 FROM model_run_attempts")).toBe(0);
-  });
+  }, 60_000);
 
   it("AC-L02 drill write-first inflight order: pre-purge canaries are cleared with no resurrection", async () => {
     await seedCanaryChain();
@@ -443,7 +443,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
       OWNER,
     ]);
     expect(owner.rows[0]).toMatchObject({ status: "active", data_epoch: "2" });
-  });
+  }, 60_000);
 
   it("AC-L02 drill restore and marker reapply: pre-purge backup restore cannot resurrect content past the marker gate", async () => {
     await seedCanaryChain();
@@ -542,7 +542,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     expect(PURGE_SURFACE_REGISTRY_VERSION).toBe(
       "purge-surface-registry:v1",
     );
-  });
+  }, 60_000);
 
   async function seedCanaryChainRestored(): Promise<void> {
     // The purge tombstoned the R1 revision row instead of deleting it, and

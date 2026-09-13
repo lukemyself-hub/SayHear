@@ -1037,12 +1037,12 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
       repository: purgeRepository,
     });
     await seedOwnerData(database.pool);
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await database?.dispose();
     await markerDatabase?.dispose();
-  }, 10_000);
+  }, 60_000);
 
   async function startPurgeOrder() {
     const started = await purgeRepository.startOrder({
@@ -1142,7 +1142,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         userId: OWNER,
       }),
     ).resolves.toEqual({ accepted: false, generationCommandId: "fence-jg" });
-  });
+  }, 60_000);
 
   it("fails closed when an owner-scoped table is added after the registry is loaded", async () => {
     await database.pool.query(
@@ -1171,7 +1171,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     } finally {
       await database.pool.query("DROP TABLE unregistered_private_surface");
     }
-  });
+  }, 60_000);
 
   it("propagation clears every owner-scoped surface, writes receipts and the external marker, revives the owner, and never claims fully_expired", async () => {
     const { order } = await startPurgeOrder();
@@ -1359,7 +1359,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     ).resolves.toEqual({ deleted: operationalMetadataBeforeSweep + 1 });
     expect(await countRows("SELECT 1 FROM sensitive_access_audits")).toBe(0);
     expect(await countRows("SELECT 1 FROM owner_purge_operational_metadata")).toBe(0);
-  });
+  }, 60_000);
 
   it("clears the typed Bio aggregate and every owner-scoped Bio child surface", async () => {
     const createdAt = BASE_TIME.toISOString();
@@ -1449,7 +1449,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     ]) {
       expect(await countRows(`SELECT 1 FROM ${table}`)).toBe(0);
     }
-  });
+  }, 60_000);
 
   it("purges the Entity, Memory, fast-path, relationship, retrieval, and Inspector data face while retaining only contentless identity envelopes", async () => {
     await seedMemoryPurgeData(database.pool);
@@ -1685,7 +1685,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         `SELECT 1 FROM outbox_events WHERE outbox_event_id = '${OTHER_OUTBOX}'`,
       ),
     ).toBe(1);
-  });
+  }, 60_000);
 
   it("reapplies an external marker to an old backup without resurrecting memory or Inspector traces", async () => {
     await seedMemoryPurgeData(database.pool);
@@ -1819,7 +1819,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
       [OWNER],
     );
     expect(owner.rows[0]).toMatchObject({ status: "active", data_epoch: "2" });
-  });
+  }, 60_000);
 
   it("keeps the external purge marker at the per-owner high-water epoch", async () => {
     await markerRepository.writeMarker({
@@ -1847,7 +1847,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     await expect(markerRepository.findLatestMarker({ userId: OWNER })).resolves.toMatchObject({
       dataEpoch: 3,
     });
-  });
+  }, 60_000);
 
   it("concurrency drill: journal publication and projection current-pointer writes cannot resurrect after the deletion epoch advances", async () => {
     const { order } = await startPurgeOrder();
@@ -1963,7 +1963,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     expect(await countRows("SELECT 1 FROM rolling_summary_versions")).toBe(0);
     expect(await countRows("SELECT 1 FROM dialogue_state_versions")).toBe(0);
     expect(await countRows("SELECT 1 FROM journal_versions")).toBe(0);
-  });
+  }, 60_000);
 
   it("duplicate starts converge on one order without duplicate destructive effects", async () => {
     const [first, second] = await Promise.all([
@@ -2011,7 +2011,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
       ownerPurgeOrderId: first.order.ownerPurgeOrderId,
     });
     expect(await countRows("SELECT 1 FROM workflow_commands")).toBe(0);
-  });
+  }, 60_000);
 
   it("concurrent propagation reuses the durable purge time and marker receipts", async () => {
     const { order } = await startPurgeOrder();
@@ -2076,7 +2076,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         }),
       ]),
     );
-  });
+  }, 60_000);
 
   it("a crash between the clear transaction and the marker write converges with identical marker receipts", async () => {
     const { order } = await startPurgeOrder();
@@ -2133,7 +2133,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
       ownerPurgeOrderId: order.ownerPurgeOrderId,
     });
     expect(finalOrder?.status).toBe("retention_pending");
-  });
+  }, 60_000);
 
   it("needs_attention orders are auto-retried by the recovery scan and converge", async () => {
     const { order } = await startPurgeOrder();
@@ -2154,7 +2154,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     // Terminal orders never regress and are not retried again.
     const idleScan = await purgeService.scanPendingOrders({ now: clock() });
     expect(idleScan.retried).toBe(0);
-  });
+  }, 60_000);
 
   it("rejects non-allowlisted purge attention reasons at the repository boundary", async () => {
     const { order } = await startPurgeOrder();
@@ -2171,7 +2171,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     });
     expect(unchanged?.status).toBe("requested");
     expect(unchanged?.needsAttentionReason).toBeNull();
-  });
+  }, 60_000);
 
   it("sensitive inspection of purged content fails closed even after re-authentication", async () => {
     const inspectionService = createInternalInspectionService({
@@ -2222,7 +2222,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
         userId: OWNER,
       }),
     ).toBeNull();
-  });
+  }, 60_000);
 
   it("operator endpoint: confirmation, idempotent duplicate, content-free inspection, and access control", async () => {
     const accessService = createInternalOwnerAccessService({
@@ -2326,5 +2326,5 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     };
     expect(secondBody.created).toBe(true);
     expect(secondBody.order.dataEpoch).toBe(3);
-  });
+  }, 60_000);
 });

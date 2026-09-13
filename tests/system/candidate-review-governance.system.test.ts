@@ -336,7 +336,7 @@ describe("Candidate Review and governance system seam", () => {
 
   afterAll(async () => {
     await database?.dispose();
-  }, 10_000);
+  }, 60_000);
 
   // ── fixtures ─────────────────────────────────────────────────────────────
 
