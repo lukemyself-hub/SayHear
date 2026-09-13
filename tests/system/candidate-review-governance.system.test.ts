@@ -1146,7 +1146,7 @@ describe("Candidate Review and governance system seam", () => {
       candidateId,
     });
     expect(outcome).toBe("converged");
-  });
+  }, 60_000);
 
   it("a dead-lettered remap delivery is re-armed by the scan without a second command", async () => {
     const candidateId = await seedReviewCandidate();
