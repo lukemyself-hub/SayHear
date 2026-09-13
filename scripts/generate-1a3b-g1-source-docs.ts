@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
+  PURGE_SURFACE_REGISTRY_VERSION,
   sha256Hex,
 } from "@sayhear/application";
 
@@ -142,13 +144,108 @@ async function readReport(path: string): Promise<Readonly<{ reference: ArtifactR
   };
 }
 
-function ids(
+export function ids(
   summary: ReportSummary,
-  predicate: (assertionId: string) => boolean = () => true,
+  predicate?: (assertionId: string) => boolean,
 ): readonly string[] {
+  if (!predicate) {
+    return summary.assertionIds.length > 0
+      ? summary.assertionIds
+      : [summary.runId];
+  }
   const selected = summary.assertionIds.filter(predicate);
   if (selected.length > 0) return selected;
-  return [summary.runId];
+  throw new Error(
+    `No passing assertion in ${summary.runId} matched the required criterion predicate.`,
+  );
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function successfulProviderCall(call: JsonObject): boolean {
+  return (
+    call.status === "succeeded" ||
+    call.status === "success" ||
+    call.outcome === "completed" ||
+    call.outcome === "succeeded" ||
+    call.outcome === "success"
+  );
+}
+
+function callHasIdentity(call: JsonObject): boolean {
+  return [
+    call.providerRequestId,
+    call.modelRunAttemptId,
+    call.attemptId,
+    call.requestId,
+    call.callId,
+  ].some(nonEmptyString);
+}
+
+export function validatedAcM01Result(
+  capture: JsonObject,
+  pins: JsonObject,
+  enabledRoles: readonly string[] = ONE_A_3B_G1_ENABLED_ROLES,
+): Readonly<{
+  modelSnapshots: readonly JsonObject[];
+  parameterSnapshots: readonly JsonObject[];
+  providerCalls: readonly JsonObject[];
+}> {
+  if (!Array.isArray(capture.providerCalls)) {
+    throw new Error("AC-M01 capture has no providerCalls array.");
+  }
+  const rolePins = isRecord(pins.roles) ? pins.roles : null;
+  if (!rolePins) throw new Error("AC-M01 pins have no roles object.");
+
+  const successfulCalls = capture.providerCalls.filter(
+    (call): call is JsonObject => isRecord(call) && successfulProviderCall(call),
+  );
+  const validatedCalls: JsonObject[] = [];
+  for (const role of enabledRoles) {
+    const pin = isRecord(rolePins[role]) ? rolePins[role] : null;
+    if (!pin || !isRecord(pin.parameters)) {
+      throw new Error(`AC-M01 pin for ${role} is missing or incomplete.`);
+    }
+    const roleCalls = successfulCalls.filter((call) => call.role === role);
+    if (roleCalls.length === 0) {
+      throw new Error(`AC-M01 has no successful provider call for ${role}.`);
+    }
+    for (const call of roleCalls) {
+      if (!callHasIdentity(call)) {
+        throw new Error(`AC-M01 provider call for ${role} has no call identity.`);
+      }
+      if (
+        call.provider !== pin.provider ||
+        call.model !== pin.model ||
+        call.modelSnapshot !== pin.snapshot ||
+        !isRecord(call.parameters) ||
+        sha256Hex(call.parameters) !== sha256Hex(pin.parameters)
+      ) {
+        throw new Error(
+          `AC-M01 successful provider call for ${role} does not match its evaluated pin.`,
+        );
+      }
+      validatedCalls.push(call);
+    }
+  }
+
+  return {
+    providerCalls: validatedCalls,
+    modelSnapshots: validatedCalls.map(
+      ({ model, modelSnapshot, provider, role }) => ({
+        model,
+        modelSnapshot,
+        provider,
+        role,
+      }),
+    ),
+    parameterSnapshots: validatedCalls.map(({ parameters, role }) => ({
+      parameters,
+      role,
+    })),
+  };
 }
 
 function reportMetadata(summary: ReportSummary): JsonObject {
@@ -159,6 +256,73 @@ function reportMetadata(summary: ReportSummary): JsonObject {
     passedTests: summary.passedTests,
     totalTestSuites: summary.totalTestSuites,
     totalTests: summary.totalTests,
+  };
+}
+
+/**
+ * AC-L02 requires a dedicated purge-before-backup restore drill (ADR-0138):
+ * a seeded-canary purge, a backup snapshot that strictly predates the purge,
+ * a restore of that snapshot followed by a marker reapply with no
+ * resurrection, and both controlled in-flight orders. Each predicate below
+ * throws unless the drill report contains a passing assertion for that
+ * phase, so a missing or partial drill fails the source build instead of
+ * producing a weak artifact.
+ */
+export function buildAcL02DrillResult(input: Readonly<{
+  drill: ReportSummary;
+  purge: ReportSummary;
+}>): JsonObject {
+  const drillMetadata = reportMetadata(input.drill);
+  const seededCanaryAssertions = ids(
+    input.drill,
+    (assertionId) => assertionId.includes("seeded canary"),
+  );
+  const snapshotAssertions = ids(
+    input.drill,
+    (assertionId) => assertionId.includes("predates the purge"),
+  );
+  const purgeFirstAssertions = ids(
+    input.drill,
+    (assertionId) => assertionId.includes("purge-first"),
+  );
+  const writeFirstAssertions = ids(
+    input.drill,
+    (assertionId) => assertionId.includes("write-first"),
+  );
+  const restoreAssertions = ids(
+    input.drill,
+    (assertionId) => assertionId.includes("restore"),
+  );
+  const markerAssertions = ids(
+    input.drill,
+    (assertionId) => assertionId.includes("marker"),
+  );
+  return {
+    purgeSurfaceRegistryVersion: PURGE_SURFACE_REGISTRY_VERSION,
+    seededCanaryEvidence: {
+      canaryAssertions: seededCanaryAssertions,
+      snapshotAssertions,
+      testReport: drillMetadata,
+    },
+    snapshotPredatesPurge: true,
+    restoreDrill: {
+      restoreAssertions,
+      markerAssertions,
+      testReport: drillMetadata,
+    },
+    inflightOrders: [
+      { order: "purge-first", assertionIds: purgeFirstAssertions },
+      { order: "write-first", assertionIds: writeFirstAssertions },
+    ],
+    recoveryGateEvidence: {
+      assertionIds: ids(
+        input.purge,
+        (assertionId) =>
+          assertionId.includes("recovery") || assertionId.includes("crash"),
+      ),
+      passed: true,
+    },
+    testReport: drillMetadata,
   };
 }
 
@@ -200,7 +364,7 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
     deploymentCommit,
     deploymentRef: metadata.gitCommitRef,
     gitDirty: metadata.gitDirty,
-    manifestFingerprint: f3Manifest.fingerprint,
+    f3ManifestFingerprint: f3Manifest.fingerprint,
     projectId: raw.projectId,
     readyState: raw.readyState,
     schemaFingerprint: sha256Hex(migrationPinsValue),
@@ -292,8 +456,11 @@ async function main(): Promise<void> {
 
   const system = await readReport(resolve(runRoot, "test-reports/ac-system-seams.json"));
   const purge = await readReport(resolve(runRoot, "test-reports/ac-purge-seam.json"));
+  const drill = await readReport(resolve(runRoot, "test-reports/ac-purge-restore-drill.json"));
   const episode = await readReport(resolve(runRoot, "test-reports/ac-episode-admission.json"));
-  const capture = await reference(resolve(runRoot, "continuation-incumbent.json"));
+  const capturePath = resolve(runRoot, "continuation-incumbent.json");
+  const captureEvidence = await readJson(capturePath);
+  const capture = await reference(capturePath);
   const hosted = await reference(hostedArtifactPath);
   const pinsReference = await reference(pinsPath);
   const f3Reference = await reference(f3ManifestPath);
@@ -462,22 +629,13 @@ async function main(): Promise<void> {
     verificationCommand: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-inspection.system.test.ts",
   });
 
-  const rolePins = isRecord(pins.roles) ? pins.roles : {};
-  const providerCalls = ONE_A_3B_G1_ENABLED_ROLES.map((role) => {
-    const pin = isRecord(rolePins[role]) ? rolePins[role] : {};
-    return { model: pin.model, modelSnapshot: pin.snapshot, provider: pin.provider, role };
-  });
+  const providerEvidence = validatedAcM01Result(captureEvidence, pins);
   await add({
     criterion: "AC-M01",
     fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && pnpm exec tsx eval/continuation-acceptance-1a3b/run-synthetic-capture.ts --continue-on-error",
     result: {
-      providerCalls,
-      modelSnapshots: providerCalls.map(({ model, modelSnapshot, role }) => ({ model, modelSnapshot, role })),
-      parameterSnapshots: ONE_A_3B_G1_ENABLED_ROLES.map((role) => {
-        const pin = isRecord(rolePins[role]) ? rolePins[role] : {};
-        return { parameters: pin.parameters, role };
-      }),
+      ...providerEvidence,
       captureArtifact: capture,
     },
     runId: "provider-capture-continuation-incumbent-2026-09-12",
@@ -505,17 +663,12 @@ async function main(): Promise<void> {
   await add({
     criterion: "AC-L02",
     fixtureIds: ["cont-open-loop-en"],
-    command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
-    result: {
-      beforePurgeEvidence: { assertionIds: ids(purge.summary, (assertionId) => assertionId.includes("before") || assertionId.includes("opening")), passed: true },
-      afterPurgeEvidence: { assertionIds: ids(purge.summary, (assertionId) => assertionId.includes("purge") || assertionId.includes("clears")), passed: true },
-      recoveryGateEvidence: { assertionIds: ids(purge.summary, (assertionId) => assertionId.includes("recovery") || assertionId.includes("crash")), passed: true },
-      testReport: purgeMetadata,
-    },
-    runId: purge.summary.runId,
+    command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts --reporter=json --outputFile=eval/continuation-acceptance-1a3b/run/test-reports/ac-purge-restore-drill.json",
+    result: buildAcL02DrillResult({ drill: drill.summary, purge: purge.summary }),
+    runId: drill.summary.runId,
     source: "ci",
-    references: [purge.reference],
-    verificationCommand: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+    references: [drill.reference, purge.reference],
+    verificationCommand: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts",
   });
 
   await add({
@@ -542,7 +695,6 @@ async function main(): Promise<void> {
       deploymentId,
       deploymentCommit: deployment.deployment.deploymentCommit,
       schemaFingerprint: deployment.deployment.schemaFingerprint,
-      manifestFingerprint: deployment.deployment.manifestFingerprint,
       deploymentArtifact: deployment.reference,
     },
     runId: String(deployment.deployment.deploymentId),
@@ -561,7 +713,12 @@ async function main(): Promise<void> {
   console.log(`Source artifacts: ${Object.keys(sourceArtifacts).join(", ")}`);
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

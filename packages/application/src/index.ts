@@ -112,6 +112,7 @@ export {
   type RecordedModelRoleAttempt,
 } from "./model-role-runtime";
 export {
+  buildG1ReleaseIdentityFingerprint,
   buildOneA3bG1ReleaseManifest,
   sha256Hex,
   verifyOneA3bG1ReleaseManifest,
@@ -120,6 +121,8 @@ export {
   ONE_A_3B_G1_RELEASE_MANIFEST_VERSION,
   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+  ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
+  ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
   type OneA3bG1AcceptanceCriterion,
   type OneA3bG1Evidence,
   type OneA3bG1EvidenceSource,

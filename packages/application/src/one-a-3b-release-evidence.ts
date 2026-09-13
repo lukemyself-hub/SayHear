@@ -178,10 +178,20 @@ export const ONE_A_3B_G1_EVIDENCE_CONTRACTS: Readonly<
   "AC-L02": {
     evidenceKind: "inflight-purge-order-ledger",
     requiredAssertionIds: ["inflight_before_purge", "inflight_after_purge", "recovery_gate"],
-    requiredResultKeys: ["beforePurgeEvidence", "afterPurgeEvidence", "recoveryGateEvidence"],
+    requiredResultKeys: [
+      "purgeSurfaceRegistryVersion",
+      "seededCanaryEvidence",
+      "snapshotPredatesPurge",
+      "restoreDrill",
+      "inflightOrders",
+      "recoveryGateEvidence",
+    ],
     resultFieldKinds: {
-      beforePurgeEvidence: "object",
-      afterPurgeEvidence: "object",
+      purgeSurfaceRegistryVersion: "non-empty-string",
+      seededCanaryEvidence: "object",
+      snapshotPredatesPurge: "true",
+      restoreDrill: "object",
+      inflightOrders: "non-empty-array",
       recoveryGateEvidence: "object",
     },
   },
@@ -199,12 +209,12 @@ export const ONE_A_3B_G1_EVIDENCE_CONTRACTS: Readonly<
   "AC-D01": {
     evidenceKind: "deployment-release-ledger",
     requiredAssertionIds: ["deployment_commit", "migration_fingerprint", "runtime_switch"],
-    requiredResultKeys: ["deploymentId", "deploymentCommit", "schemaFingerprint", "manifestFingerprint"],
+    requiredResultKeys: ["deploymentId", "deploymentCommit", "schemaFingerprint", "releaseIdentityFingerprint"],
     resultFieldKinds: {
       deploymentId: "non-empty-string",
       deploymentCommit: "git-commit",
       schemaFingerprint: "sha256-hex",
-      manifestFingerprint: "manifest-fingerprint",
+      releaseIdentityFingerprint: "manifest-fingerprint",
     },
   },
   "AC-X04": {

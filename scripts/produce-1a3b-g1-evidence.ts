@@ -25,8 +25,10 @@ import {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
+  ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
+  buildG1ReleaseIdentityFingerprint,
   verifyOneA3bF3ReleaseArtifacts,
   verifyOneA3bG1EvidenceArtifact,
   verifyOneA3bG1RoleConfigurationsAgainstF3,
@@ -48,6 +50,7 @@ import {
   type FixtureCatalog,
   type ValidatorAdjudicationLedger,
 } from "../eval/continuation-acceptance-1a3b/protocol";
+import { verifyValidatorPrecisionReport } from "./verify-1a3b-g1-evidence";
 
 const execFileAsync = promisify(execFile);
 
@@ -58,6 +61,8 @@ const defaultF3ManifestPath =
   "eval/continuation-acceptance-1a3b/run/manifest.json";
 const defaultLedgerPath =
   "eval/continuation-acceptance-1a3b/run/validator-ledger.json";
+const defaultPrecisionReportPath =
+  "eval/continuation-acceptance-1a3b/run/validator-precision-report.json";
 const defaultSourceBundlePath =
   "eval/continuation-acceptance-1a3b/run/g1-evidence-sources.json";
 const defaultSourceDirectory =
@@ -92,6 +97,7 @@ type Options = Readonly<{
   catalogPath: string;
   f3ManifestPath: string;
   ledgerPath: string;
+  precisionReportPath: string;
   sourceBundlePath: string;
   sourceDirectory: string;
   evidenceDirectory: string;
@@ -115,6 +121,9 @@ type ValidatorCheck = Readonly<{
   maxRejects: number | null;
   note: string | null;
   rejectedCases: number | null;
+  precisionFalseBlockingCases: number | null;
+  precisionReportSha256: string | null;
+  precisionTotalCases: number | null;
   status: "verified" | "blocked";
   totalCases: number | null;
 }>;
@@ -244,6 +253,7 @@ function parseOptions(arguments_: readonly string[]): Options {
     "--catalog",
     "--manifest",
     "--ledger",
+    "--precision-report",
     "--sources",
     "--source-dir",
     "--evidence-dir",
@@ -266,6 +276,11 @@ function parseOptions(arguments_: readonly string[]): Options {
       defaultF3ManifestPath,
     ),
     ledgerPath: option(arguments_, "--ledger", defaultLedgerPath),
+    precisionReportPath: option(
+      arguments_,
+      "--precision-report",
+      defaultPrecisionReportPath,
+    ),
     sourceBundlePath: option(
       arguments_,
       "--sources",
@@ -452,15 +467,15 @@ function roleConfigurationsFromF3(value: JsonObject): RoleCheck {
     }
     configurations.push({
       role,
-      configVersion: `${role}:eval-capture:v1`,
+      configVersion: `${role}:g1-release:v1`,
       provider,
       model,
       modelSnapshot,
       promptVersion,
       schemaVersion,
       rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-      providerPolicyVersion: `${provider}-${role}-egress:capture:v1`,
-      rolloutPin: `${role}-capture-pin:v1`,
+      providerPolicyVersion: `${provider}-${role}-egress:g1-release:v1`,
+      rolloutPin: `${role}-g1-release-pin:v1`,
       freshnessPolicy: policy.freshnessPolicy,
       fallbackMode: "disabled",
       maxTechnicalRetries: policy.maxTechnicalRetries,
@@ -474,6 +489,8 @@ function roleConfigurationsFromF3(value: JsonObject): RoleCheck {
 async function validatorCheck(
   catalogDocument: ReadDocument,
   ledgerDocument: ReadDocument,
+  precisionReportDocument: ReadDocument,
+  manifestFingerprint: string | null,
 ): Promise<ValidatorCheck> {
   const ledgerSha256 = ledgerDocument.bytes
     ? sha256Bytes(ledgerDocument.bytes)
@@ -483,12 +500,25 @@ async function validatorCheck(
     ledgerSha256,
     maxRejects: null,
     note: null,
+    precisionFalseBlockingCases: null,
+    precisionReportSha256: precisionReportDocument.bytes
+      ? sha256Bytes(precisionReportDocument.bytes)
+      : null,
+    precisionTotalCases: null,
     rejectedCases: null,
     status: "blocked",
     totalCases: null,
   };
-  if (!isRecord(catalogDocument.value) || !isRecord(ledgerDocument.value)) {
-    return { ...base, note: "Validator catalog or ledger is unavailable." };
+  if (
+    !isRecord(catalogDocument.value) ||
+    !isRecord(ledgerDocument.value) ||
+    !isRecord(precisionReportDocument.value) ||
+    !manifestFingerprint
+  ) {
+    return {
+      ...base,
+      note: "Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.",
+    };
   }
   const catalog = catalogDocument.value as FixtureCatalog;
   const ledger = ledgerDocument.value as ValidatorAdjudicationLedger;
@@ -517,11 +547,18 @@ async function validatorCheck(
         totalCases: summary.total,
       };
     }
+    const precisionSummary = verifyValidatorPrecisionReport({
+      report: precisionReportDocument.value,
+      manifestFingerprint,
+    });
     return {
       acceptedCases: summary.accepted,
       ledgerSha256,
       maxRejects: summary.maxRejects,
       note: null,
+      precisionFalseBlockingCases: precisionSummary.falseBlockingCases,
+      precisionReportSha256: base.precisionReportSha256,
+      precisionTotalCases: precisionSummary.totalCases,
       rejectedCases: summary.rejected,
       status: "verified",
       totalCases: summary.total,
@@ -767,16 +804,29 @@ async function hostedCanaryCheck(
 }
 
 async function buildPreflight(options: Options): Promise<Preflight> {
-  const [catalogDocument, f3ManifestDocument, ledgerDocument] =
+  const [
+    catalogDocument,
+    f3ManifestDocument,
+    ledgerDocument,
+    precisionReportDocument,
+  ] =
     await Promise.all([
       readJsonDocument(options.catalogPath, "F3 fixture catalog", true),
       readJsonDocument(options.f3ManifestPath, "F3 manifest", true),
       readJsonDocument(options.ledgerPath, "validator ledger", true),
+      readJsonDocument(
+        options.precisionReportPath,
+        "validator precision report",
+        true,
+      ),
     ]);
   const f3Mismatches: string[] = [];
   if (catalogDocument.error) f3Mismatches.push(catalogDocument.error);
   if (f3ManifestDocument.error) f3Mismatches.push(f3ManifestDocument.error);
   if (ledgerDocument.error) f3Mismatches.push(ledgerDocument.error);
+  if (precisionReportDocument.error) {
+    f3Mismatches.push(precisionReportDocument.error);
+  }
 
   const catalog = isRecord(catalogDocument.value)
     ? (catalogDocument.value as FixtureCatalog)
@@ -838,7 +888,12 @@ async function buildPreflight(options: Options): Promise<Preflight> {
     }
   }
 
-  const validator = await validatorCheck(catalogDocument, ledgerDocument);
+  const validator = await validatorCheck(
+    catalogDocument,
+    ledgerDocument,
+    precisionReportDocument,
+    f3Manifest ? f3ManifestFingerprint(f3Manifest) : null,
+  );
   const hardGate = await hardGateCheck(options.hardGatePath);
   const hostedCanary = await hostedCanaryCheck(
     options.hostedArtifactPath,
@@ -1136,18 +1191,88 @@ async function collectSources(
   };
 }
 
+async function currentMigrationPins(
+  directory: string,
+): Promise<readonly { name: string; sha256: string }[]> {
+  const names = (await readdir(directory))
+    .filter((name) => name.endsWith(".sql"))
+    .sort((left, right) => left.localeCompare(right));
+  return Promise.all(
+    names.map(async (name) => ({
+      name,
+      sha256: sha256Bytes(await readFile(resolve(directory, name))),
+    })),
+  );
+}
+
+/**
+ * Release identity for AC-D01 binding. It covers only immutable deployable
+ * inputs so deployment evidence can reference it before the full manifest
+ * (which contains that evidence) is frozen. Returns null while preflight or
+ * migration pins are incomplete so callers stay blocked instead of guessing.
+ */
+async function buildReleaseIdentity(
+  preflight: Preflight,
+): Promise<string | null> {
+  try {
+    if (
+      !preflight.currentCommit ||
+      !preflight.f3ManifestFingerprint ||
+      !preflight.f3ManifestSha256 ||
+      preflight.fixtureSeed === null ||
+      preflight.sampleSeed === null ||
+      preflight.roleCheck.configurations.length === 0 ||
+      preflight.roleCheck.mismatches.length > 0
+    ) {
+      return null;
+    }
+    const [migrations, purgeMarkerMigrations] = await Promise.all([
+      currentMigrationPins(resolve(repositoryRoot, "packages/data/migrations")),
+      currentMigrationPins(
+        resolve(repositoryRoot, "packages/data/migrations-purge-marker"),
+      ),
+    ]);
+    return buildG1ReleaseIdentityFingerprint({
+      gitCommit: preflight.currentCommit,
+      migrations,
+      purgeMarkerMigrations,
+      roleConfigurations: preflight.roleCheck.configurations,
+      fixture: {
+        f3ManifestSha256: preflight.f3ManifestSha256,
+        f3ManifestFingerprint: preflight.f3ManifestFingerprint,
+        fixtureSeed: preflight.fixtureSeed,
+        sampleSeed: preflight.sampleSeed,
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
 function sourceSpecificErrors(
   source: SourceEvidence | undefined,
   criterion: OneA3bG1AcceptanceCriterion,
   preflight: Preflight,
+  releaseIdentity: string | null,
 ): readonly string[] {
   if (!source) return [];
   const errors: string[] = [];
   const contract = ONE_A_3B_G1_EVIDENCE_CONTRACTS[criterion];
   for (const key of contract.requiredResultKeys) {
+    // AC-D01 identity is producer-injected from immutable inputs (see
+    // buildReleaseIdentity); the deployment source only observes the Vercel
+    // deployment and must not fabricate it.
+    if (criterion === "AC-D01" && key === "releaseIdentityFingerprint") continue;
     if (!(key in source.result)) {
       errors.push(`${criterion} source result is missing ${key}`);
     }
+  }
+  if (
+    criterion === "AC-D01" &&
+    "releaseIdentityFingerprint" in source.result &&
+    source.result.releaseIdentityFingerprint !== releaseIdentity
+  ) {
+    errors.push("AC-D01 source release identity does not match the computed release identity");
   }
   if (criterion === "AC-M01") {
     const providerCalls = source.result.providerCalls;
@@ -1214,6 +1339,9 @@ function sourceSpecificErrors(
       source: source.source,
       status: "verified",
     };
+    if (criterion === "AC-D01" && !releaseIdentity) {
+      errors.push("AC-D01 release identity is unavailable from immutable inputs");
+    }
     errors.push(
       ...verifyOneA3bG1EvidenceArtifact({
         value: evidenceArtifactValue({
@@ -1222,6 +1350,7 @@ function sourceSpecificErrors(
           fixtureCatalogSha256: preflight.catalogSha256,
           source,
           gitCommit: preflight.currentCommit,
+          releaseIdentityFingerprint: releaseIdentity,
         }),
         evidence: provisionalEvidence,
         gitCommit: preflight.currentCommit,
@@ -1274,10 +1403,11 @@ function criterionNote(
 function criterionReports(
   sources: SourceCollection,
   preflight: Preflight,
+  releaseIdentity: string | null,
 ): readonly CriterionReport[] {
   return ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA.map((criterion) => {
     const source = sources.sources.get(criterion);
-    const errors = sourceSpecificErrors(source, criterion, preflight);
+    const errors = sourceSpecificErrors(source, criterion, preflight, releaseIdentity);
     const sourceReady = source !== undefined && errors.length === 0;
     const verified =
       preflight.f3Ready &&
@@ -1299,10 +1429,17 @@ function evidenceArtifactValue(input: Readonly<{
   fixtureCatalogSha256: string;
   source: SourceEvidence;
   gitCommit: string;
+  releaseIdentityFingerprint: string | null;
 }>): JsonObject {
   const contract = ONE_A_3B_G1_EVIDENCE_CONTRACTS[input.evidence.criterion];
   const resultFields: JsonObject = {};
   for (const key of contract.requiredResultKeys) {
+    // AC-D01 identity is always the producer-computed value so a source
+    // document cannot fabricate the binding.
+    if (input.evidence.criterion === "AC-D01" && key === "releaseIdentityFingerprint") {
+      resultFields[key] = input.releaseIdentityFingerprint;
+      continue;
+    }
     resultFields[key] = input.source.result[key];
   }
   const result: JsonObject = {
@@ -1342,6 +1479,7 @@ async function writeEvidenceArtifacts(input: Readonly<{
   gitCommit: string;
   preflight: Preflight;
   sources: SourceCollection;
+  releaseIdentityFingerprint: string | null;
 }>): Promise<readonly OneA3bG1Evidence[]> {
   const evidenceDirectory = repositoryPath(
     input.evidenceDirectory,
@@ -1376,12 +1514,16 @@ async function writeEvidenceArtifacts(input: Readonly<{
         source: source.source,
         status: "verified",
       };
+      if (criterion === "AC-D01" && !input.releaseIdentityFingerprint) {
+        throw new Error("AC-D01 release identity is unavailable from immutable inputs.");
+      }
       const artifact = evidenceArtifactValue({
         evidence: evidenceWithoutHash,
         f3ManifestFingerprint: input.f3ManifestFingerprint,
         fixtureCatalogSha256: input.fixtureCatalogSha256,
         source,
         gitCommit: input.gitCommit,
+        releaseIdentityFingerprint: input.releaseIdentityFingerprint,
       });
       const bytes = Buffer.from(`${JSON.stringify(artifact, null, 2)}\n`, "utf8");
       const stagingPath = resolve(stagingDirectory, basename(artifactPath));
@@ -1433,9 +1575,12 @@ function validatorCalibration(
   if (
     !preflight.f3ManifestFingerprint ||
     !preflight.validator.ledgerSha256 ||
+    !preflight.validator.precisionReportSha256 ||
     preflight.validator.totalCases === null ||
     preflight.validator.acceptedCases === null ||
-    preflight.validator.maxRejects === null
+    preflight.validator.maxRejects === null ||
+    preflight.validator.precisionTotalCases === null ||
+    preflight.validator.precisionFalseBlockingCases === null
   ) {
     throw new Error("Validator calibration cannot be assembled from incomplete preflight data.");
   }
@@ -1445,6 +1590,14 @@ function validatorCalibration(
     ),
     ledgerSha256: preflight.validator.ledgerSha256,
     ledgerVersion: "1a3b-f3-adjudication:v1",
+    precisionReportPath: relativeRepositoryPath(
+      repositoryPath(options.precisionReportPath, "validator precision report"),
+    ),
+    precisionReportSha256: preflight.validator.precisionReportSha256,
+    precisionReportVersion: ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
+    precisionTotalCases: preflight.validator.precisionTotalCases as 6,
+    precisionFalseBlockingCases:
+      preflight.validator.precisionFalseBlockingCases,
     f3ManifestFingerprint: preflight.f3ManifestFingerprint,
     totalCases: 18,
     acceptedCases: preflight.validator.acceptedCases,
@@ -1578,7 +1731,8 @@ async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   const preflight = await buildPreflight(options);
   const sources = await collectSources(options, preflight.fixtureIds);
-  const criteria = criterionReports(sources, preflight);
+  const releaseIdentity = await buildReleaseIdentity(preflight);
+  const criteria = criterionReports(sources, preflight, releaseIdentity);
   let evidence: readonly OneA3bG1Evidence[] = [];
   let manifestInputWritten = false;
   let evidenceWritten: readonly string[] = [];
@@ -1603,6 +1757,7 @@ async function main(): Promise<void> {
         gitCommit: preflight.currentCommit,
         preflight,
         sources,
+        releaseIdentityFingerprint: releaseIdentity,
       });
       evidenceWritten = evidence.map((entry) => entry.artifactPath!);
       await writeManifestInput({ evidence, options, preflight, sources });

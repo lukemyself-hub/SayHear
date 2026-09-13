@@ -37,6 +37,7 @@ Accepted
 - [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision 与 Action Finalization 使用独立 GenerationCommand
 - [`0133`](adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)：Bio 写作与验证使用独立 GenerationCommand 和可计算的 attempt 预算，repair 后必须重新验证
 - [`0136`](adr/0136-1a3b-model-pins-are-evidence-outputs.md)：1A.3b SPEC 固定角色评测合同，生产模型 pin 由冻结验收证据产生而不是提前指定
+- [`0140`](adr/0140-g1-deepseek-model-alias-is-pinned-evidence.md)：G1 接受 DeepSeek 可变 alias 作为有界例外，以完整 pin、运行时快照比对与 AC-M01 调用证据为前提
 - [`0138`](adr/0138-1a3b-formal-acceptance-uses-synthetic-data.md)：1A.3b 正式验收只使用固定合成数据，准确 release manifest 必须通过完整 purge 与旧备份恢复 drill
 - [`0098`](adr/0098-conversation-actions-use-descriptors-gateway-and-typed-handlers.md)：Conversation Action 通过 descriptor、统一 Gateway 与 typed deep handler 扩展
 - [`0099`](adr/0099-conversation-actions-separate-admission-from-execution-state.md)：Conversation Action 分离受理状态与执行状态，并以不可变 Receipt 驱动当前投影

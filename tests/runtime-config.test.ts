@@ -144,6 +144,12 @@ describe("runtime safety configuration", () => {
         ledgerPath: "release-evidence/not-deployed/validator-ledger.json",
         ledgerSha256: "f".repeat(64),
         ledgerVersion: "1a3b-f3-adjudication:v1",
+        precisionReportPath:
+          "release-evidence/not-deployed/validator-precision-report.json",
+        precisionReportSha256: "1".repeat(64),
+        precisionReportVersion: "1a3b-f3-validator-precision-report:v1",
+        precisionTotalCases: 6,
+        precisionFalseBlockingCases: 0,
         f3ManifestFingerprint: `sha256:${"e".repeat(64)}`,
         totalCases: 18,
         acceptedCases: 17,

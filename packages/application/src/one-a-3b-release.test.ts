@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildG1ReleaseIdentityFingerprint,
   buildOneA3bG1ReleaseManifest,
   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
   ONE_A_3B_G1_ENABLED_ROLES,
@@ -66,6 +67,12 @@ const validatorCalibration = {
     "eval/continuation-acceptance-1a3b/run/validator-ledger.json",
   ledgerSha256: "e".repeat(64),
   ledgerVersion: ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+  precisionReportPath:
+    "eval/continuation-acceptance-1a3b/run/validator-precision-report.json",
+  precisionReportSha256: "a".repeat(64),
+  precisionReportVersion: "1a3b-f3-validator-precision-report:v1" as const,
+  precisionTotalCases: 6 as const,
+  precisionFalseBlockingCases: 0,
   f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
   totalCases: 18 as const,
   acceptedCases: 18,
@@ -223,6 +230,72 @@ describe("1A.3b G1 release manifest", () => {
         },
       }),
     ).toThrow("10% error budget");
+  });
+
+  it("requires a complete precision corpus with zero false blocks", () => {
+    expect(() =>
+      build({
+        validatorCalibration: {
+          ...validatorCalibration,
+          precisionFalseBlockingCases: 1,
+        },
+      }),
+    ).toThrow("cannot be verified");
+
+    const falseBlocked = build({
+      validatorCalibration: {
+        ...validatorCalibration,
+        precisionFalseBlockingCases: 1,
+        status: "blocked",
+        note: "One clean precision case was falsely blocked.",
+      },
+    });
+    expect(falseBlocked.status).toBe("blocked");
+    expect(verifyOneA3bG1ReleaseManifest(falseBlocked).passed).toBe(true);
+
+    const manifest = build();
+    const incomplete = {
+      ...manifest,
+      validatorCalibration: {
+        ...manifest.validatorCalibration,
+        precisionTotalCases: 5,
+      },
+    };
+    expect(verifyOneA3bG1ReleaseManifest(incomplete).mismatches).toContain(
+      "validator precision corpus must contain exactly 6 cases",
+    );
+  });
+
+  it("freezes a release identity that excludes evidence and timestamps", () => {
+    const manifest = build();
+    expect(manifest.releaseIdentityFingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    const rebuilt = build({ createdAt: "2026-09-11T20:00:00.000Z" });
+    expect(rebuilt.releaseIdentityFingerprint).toBe(
+      manifest.releaseIdentityFingerprint,
+    );
+
+    const expected = buildG1ReleaseIdentityFingerprint({
+      gitCommit,
+      migrations: [...migrations],
+      purgeMarkerMigrations: [...purgeMarkerMigrations],
+      roleConfigurations,
+      fixture: {
+        f3ManifestSha256: "d".repeat(64),
+        f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
+        fixtureSeed: 196,
+        sampleSeed: 1960,
+      },
+    });
+    expect(manifest.releaseIdentityFingerprint).toBe(expected);
+
+    const tampered = {
+      ...manifest,
+      releaseIdentityFingerprint: `sha256:${"0".repeat(64)}`,
+    };
+    expect(verifyOneA3bG1ReleaseManifest(tampered).mismatches).toContain(
+      "release identity fingerprint does not match its immutable inputs",
+    );
   });
 
   it("detects drift after a frozen schema hash changes", () => {

@@ -89,7 +89,7 @@ async function main(): Promise<void> {
   });
 
   try {
-    const bound = await new PostgresModelRoleCommandRepository(
+    const activated = await new PostgresModelRoleCommandRepository(
       pool,
       manifest.schema,
     ).bindActiveG1Release({
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
       now: new Date(),
     });
     console.log(
-      `[g1-activate] bound ${bound} active rollout pin(s) to ${manifest.fingerprint}.`,
+      `[g1-activate] activated ${activated} rollout pin(s) for ${manifest.fingerprint}.`,
     );
   } finally {
     await pool.end();
