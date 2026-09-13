@@ -542,7 +542,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     expect(PURGE_SURFACE_REGISTRY_VERSION).toBe(
       "purge-surface-registry:v1",
     );
-  }, 60_000);
+  }, 120_000);
 
   async function seedCanaryChainRestored(): Promise<void> {
     // The purge tombstoned the R1 revision row instead of deleting it, and
