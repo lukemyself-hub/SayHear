@@ -2501,8 +2501,8 @@ export class PostgresReflectionRepository implements ReflectionRepository {
            outcome_detail, statement_count, candidate_count,
            degraded_episode_reason, error_code, created_at, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-           $14, $15, $16, $17, $18, $19, $19, $19)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+            $14, $15, $16, $17, $18, $19, $20, $21, $21)
          ${
            input.scopeType === "daily_session"
              ? "ON CONFLICT (user_id, daily_session_id, source_revision, claim_baseline_digest, policy_version) WHERE scope_type = 'daily_session' DO UPDATE SET"

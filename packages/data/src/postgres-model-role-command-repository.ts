@@ -88,6 +88,7 @@ type ActiveRolloutRow = Readonly<{
   config_max_semantic_repairs: string | number;
   policy_role: string;
   policy_provider: string;
+  policy_model_config_version: string;
   policy_status: string;
   policy_consent_policy_version: string | null;
   release_fingerprint: string | null;
@@ -170,6 +171,7 @@ async function lockActiveRollout(
             config.max_semantic_repairs AS config_max_semantic_repairs,
             policy.role AS policy_role,
             policy.provider AS policy_provider,
+            policy.model_config_version AS policy_model_config_version,
             policy.status AS policy_status,
             policy.consent_policy_version AS policy_consent_policy_version,
             pin.release_fingerprint
@@ -235,6 +237,7 @@ function rolloutMatchesConfiguration(
     (releaseFingerprint === undefined ||
       row.release_fingerprint === releaseFingerprint) &&
     row.policy_provider === configuration.provider &&
+    row.policy_model_config_version === configuration.configVersion &&
     row.config_version === configuration.configVersion &&
     row.provider_policy_version === configuration.providerPolicyVersion &&
     row.config_provider === configuration.provider &&
@@ -258,6 +261,46 @@ function rolloutMatchesConfiguration(
       configuration.maxTechnicalRetries &&
     asNumber(row.definition_max_semantic_repairs) ===
       configuration.maxSemanticRepairs
+  );
+}
+
+type ConfigurationRow = Readonly<{
+  role: string;
+  config_version: string;
+  provider: string;
+  model: string;
+  model_snapshot: string;
+  prompt_version: string;
+  schema_version: string;
+  role_policy_version: string;
+  provider_policy_version: string;
+  freshness_policy: string;
+  fallback_mode: string;
+  max_technical_retries: string | number;
+  max_semantic_repairs: string | number;
+  parameter_snapshot: unknown;
+}>;
+
+function storedConfigurationMatches(
+  row: ConfigurationRow,
+  configuration: ModelRoleConfigurationSnapshot,
+): boolean {
+  return (
+    row.role === configuration.role &&
+    row.config_version === configuration.configVersion &&
+    row.provider === configuration.provider &&
+    row.model === configuration.model &&
+    row.model_snapshot === configuration.modelSnapshot &&
+    row.prompt_version === configuration.promptVersion &&
+    row.schema_version === configuration.schemaVersion &&
+    row.role_policy_version === configuration.rolePolicyVersion &&
+    row.provider_policy_version === configuration.providerPolicyVersion &&
+    row.freshness_policy === configuration.freshnessPolicy &&
+    row.fallback_mode === configuration.fallbackMode &&
+    asNumber(row.max_technical_retries) === configuration.maxTechnicalRetries &&
+    asNumber(row.max_semantic_repairs) === configuration.maxSemanticRepairs &&
+    canonicalJson(row.parameter_snapshot) ===
+      canonicalJson(configuration.parameterSnapshot)
   );
 }
 
@@ -758,7 +801,7 @@ export class PostgresModelRoleCommandRepository
     }
   }
 
-  /** Bind already-provisioned active pins to the exact manifest before cutover. */
+  /** Provision and activate the exact manifest role set before cutover. */
   public async bindActiveG1Release(input: Readonly<{
     configurations: readonly ModelRoleConfigurationSnapshot[];
     manifestFingerprint: string;
@@ -778,23 +821,144 @@ export class PostgresModelRoleCommandRepository
     try {
       await client.query("BEGIN");
       await assertG1SchemaContract(client, this.schemaContract);
-      const active = await client.query<{ role: string }>(
-        `SELECT role
+      const active = await client.query<{ role: string; rollout_pin: string }>(
+        `SELECT role, rollout_pin
          FROM model_role_rollout_pins
          WHERE status = 'active'
          FOR UPDATE`,
         [],
       );
-      if (
-        active.rows.length !== ONE_A_3B_G1_ENABLED_ROLES.length ||
-        new Set(active.rows.map((row) => row.role)).size !==
-          ONE_A_3B_G1_ENABLED_ROLES.length ||
-        active.rows.some(
-          (row) =>
-            !(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(row.role),
-        )
-      ) {
-        throw new Error("G1 activation requires the complete four-role active pin set.");
+      if (active.rows.length > 0) {
+        const requestedPins = new Map(
+          input.configurations.map((configuration) => [
+            configuration.role,
+            configuration.rolloutPin,
+          ]),
+        );
+        if (
+          active.rows.length !== ONE_A_3B_G1_ENABLED_ROLES.length ||
+          active.rows.some(
+            (row) => requestedPins.get(row.role as OneA3bModelRole) !== row.rollout_pin,
+          )
+        ) {
+          throw new Error(
+            "G1 activation refuses a partial or conflicting active rollout pin set.",
+          );
+        }
+      }
+
+      for (const configuration of input.configurations) {
+        await client.query(
+          `INSERT INTO model_role_configurations (
+             role, config_version, provider, model, model_snapshot,
+             prompt_version, schema_version, role_policy_version,
+             provider_policy_version, freshness_policy, fallback_mode,
+             max_technical_retries, max_semantic_repairs,
+             parameter_snapshot, created_at
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+             $14::jsonb, $15
+           )
+           ON CONFLICT (role, config_version) DO NOTHING`,
+          [
+            configuration.role,
+            configuration.configVersion,
+            configuration.provider,
+            configuration.model,
+            configuration.modelSnapshot,
+            configuration.promptVersion,
+            configuration.schemaVersion,
+            configuration.rolePolicyVersion,
+            configuration.providerPolicyVersion,
+            configuration.freshnessPolicy,
+            configuration.fallbackMode,
+            configuration.maxTechnicalRetries,
+            configuration.maxSemanticRepairs,
+            JSON.stringify(configuration.parameterSnapshot),
+            input.now,
+          ],
+        );
+        const stored = await client.query<ConfigurationRow>(
+          `SELECT role, config_version, provider, model, model_snapshot,
+                  prompt_version, schema_version, role_policy_version,
+                  provider_policy_version, freshness_policy, fallback_mode,
+                  max_technical_retries, max_semantic_repairs,
+                  parameter_snapshot
+           FROM model_role_configurations
+           WHERE role = $1 AND config_version = $2
+           FOR UPDATE`,
+          [configuration.role, configuration.configVersion],
+        );
+        if (
+          !stored.rows[0] ||
+          !storedConfigurationMatches(stored.rows[0], configuration)
+        ) {
+          throw new Error(
+            `Immutable G1 configuration for ${configuration.role} conflicts with the release manifest.`,
+          );
+        }
+
+        const pin = await client.query<{
+          config_version: string;
+          provider_policy_version: string;
+          release_fingerprint: string | null;
+        }>(
+          `SELECT config_version, provider_policy_version, release_fingerprint
+           FROM model_role_rollout_pins
+           WHERE role = $1 AND rollout_pin = $2
+           FOR UPDATE`,
+          [configuration.role, configuration.rolloutPin],
+        );
+        if (
+          pin.rows[0] &&
+          (pin.rows[0].config_version !== configuration.configVersion ||
+            pin.rows[0].provider_policy_version !==
+              configuration.providerPolicyVersion ||
+            (pin.rows[0].release_fingerprint !== null &&
+              pin.rows[0].release_fingerprint !== input.manifestFingerprint))
+        ) {
+          throw new Error(
+            `Immutable G1 rollout pin for ${configuration.role} conflicts with the release manifest.`,
+          );
+        }
+        if (pin.rows[0]) {
+          await client.query(
+            `UPDATE model_role_rollout_pins
+             SET status = 'active', activated_at = $1, revoked_at = NULL,
+                 release_fingerprint = $2
+             WHERE role = $3 AND rollout_pin = $4`,
+            [
+              input.now,
+              input.manifestFingerprint,
+              configuration.role,
+              configuration.rolloutPin,
+            ],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO model_role_rollout_pins (
+               role, rollout_pin, config_version, provider_policy_version,
+               status, activated_at, release_fingerprint
+             ) VALUES ($1, $2, $3, $4, 'active', $5, $6)`,
+            [
+              configuration.role,
+              configuration.rolloutPin,
+              configuration.configVersion,
+              configuration.providerPolicyVersion,
+              input.now,
+              input.manifestFingerprint,
+            ],
+          );
+        }
+      }
+      const definitions = await client.query(
+        `UPDATE model_role_definitions
+         SET enabled = TRUE
+         WHERE role = ANY($1::text[])`,
+        [input.configurations.map((configuration) => configuration.role)],
+      );
+      if (definitions.rowCount !== ONE_A_3B_G1_ENABLED_ROLES.length) {
+        throw new Error("G1 activation did not enable every manifest role.");
       }
       for (const configuration of input.configurations) {
         const rollout = await lockActiveRollout(
@@ -802,31 +966,22 @@ export class PostgresModelRoleCommandRepository
           configuration.role,
           configuration.rolloutPin,
         );
-        if (!rollout || !rolloutMatchesConfiguration(rollout, configuration.role, configuration)) {
-          throw new Error(
-            `Active G1 rollout pin for ${configuration.role} does not match the manifest configuration.`,
-          );
-        }
         if (
-          rollout.release_fingerprint !== null &&
-          rollout.release_fingerprint !== input.manifestFingerprint
+          !rollout ||
+          !rolloutMatchesConfiguration(
+            rollout,
+            configuration.role,
+            configuration,
+            input.manifestFingerprint,
+          )
         ) {
           throw new Error(
-            `Active G1 rollout pin for ${configuration.role} is already bound to another release.`,
+            `Active G1 rollout pin for ${configuration.role} does not match the release manifest.`,
           );
         }
       }
-      const result = await client.query(
-        `UPDATE model_role_rollout_pins
-         SET release_fingerprint = $1
-         WHERE status = 'active'`,
-        [input.manifestFingerprint],
-      );
-      if (result.rowCount !== ONE_A_3B_G1_ENABLED_ROLES.length) {
-        throw new Error("G1 activation did not bind every active role pin.");
-      }
       await client.query("COMMIT");
-      return result.rowCount;
+      return ONE_A_3B_G1_ENABLED_ROLES.length;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;

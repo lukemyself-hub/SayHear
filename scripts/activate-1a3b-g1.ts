@@ -67,38 +67,47 @@ function readManifest(path: string): OneA3bG1ReleaseManifest {
   return manifest;
 }
 
-const manifest = readManifest(
-  requiredManifestPath(process.argv.slice(2)),
-);
-assertRepositoryCommit(manifest.gitCommit, repositoryRoot);
-await verifyG1EvidenceFiles(
-  {
-    gitCommit: manifest.gitCommit,
-    fixture: manifest.fixture,
-    validatorCalibration: manifest.validatorCalibration,
-    evidence: manifest.evidence,
-    roleConfigurations: manifest.roles.configurations,
-  },
-  repositoryRoot,
-  { requireComparisonReady: true },
-);
-const pool = createPostgresPool({
-  applicationName: "sayhear-activate-g1",
-  connectionString: requiredEnvironment("DATABASE_URL"),
-});
-
-try {
-  const bound = await new PostgresModelRoleCommandRepository(
-    pool,
-    manifest.schema,
-  ).bindActiveG1Release({
-    configurations: manifest.roles.configurations,
-    manifestFingerprint: manifest.fingerprint,
-    now: new Date(),
-  });
-  console.log(
-    `[g1-activate] bound ${bound} active rollout pin(s) to ${manifest.fingerprint}.`,
+async function main(): Promise<void> {
+  const manifest = readManifest(
+    requiredManifestPath(process.argv.slice(2)),
   );
-} finally {
-  await pool.end();
+  assertRepositoryCommit(manifest.gitCommit, repositoryRoot);
+  await verifyG1EvidenceFiles(
+    {
+      gitCommit: manifest.gitCommit,
+      fixture: manifest.fixture,
+      validatorCalibration: manifest.validatorCalibration,
+      evidence: manifest.evidence,
+      roleConfigurations: manifest.roles.configurations,
+    },
+    repositoryRoot,
+    { requireComparisonReady: true },
+  );
+  const pool = createPostgresPool({
+    applicationName: "sayhear-activate-g1",
+    connectionString: requiredEnvironment("DATABASE_URL"),
+  });
+
+  try {
+    const activated = await new PostgresModelRoleCommandRepository(
+      pool,
+      manifest.schema,
+    ).bindActiveG1Release({
+      configurations: manifest.roles.configurations,
+      manifestFingerprint: manifest.fingerprint,
+      now: new Date(),
+    });
+    console.log(
+      `[g1-activate] activated ${activated} rollout pin(s) for ${manifest.fingerprint}.`,
+    );
+  } finally {
+    await pool.end();
+  }
 }
+
+main().catch((error: unknown) => {
+  console.error(
+    `[g1-activate] ${error instanceof Error ? error.message : "activation failed"}`,
+  );
+  process.exitCode = 1;
+});

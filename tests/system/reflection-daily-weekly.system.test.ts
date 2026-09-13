@@ -4,11 +4,13 @@ import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
   createModelRoleCommandService,
+  createModelRoleProviderEgress,
   createModelRoleRegistry,
   runReflectionDailyBuild,
   type ModelRoleCommandService,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
+  type RecoveryGate,
   type ReflectionEntrypointDependencies,
   type ReflectionGenerationModelOutput,
 } from "@sayhear/application";
@@ -174,6 +176,37 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     return new Date(clockNowMs);
   }
 
+  // Production wires the shared egress port into every role entrypoint
+  // (server-composition); the port owns the prepared → running claim, so the
+  // system seam must exercise the same boundary. The G1 release verifier is
+  // intentionally unwired: there is no active release manifest in tests.
+  function testEgress() {
+    const gate: RecoveryGate = {
+      evaluate: async () => ({
+        status: "open" as const,
+        markerDataEpoch: null,
+        markerPurgedAt: null,
+        markerWrittenAt: null,
+        receiptDestinations: [],
+      }),
+      requireOpen: async () => ({
+        status: "open" as const,
+        markerDataEpoch: null,
+        markerPurgedAt: null,
+        markerWrittenAt: null,
+        receiptDestinations: [],
+      }),
+    };
+    return createModelRoleProviderEgress({
+      commandService: {
+        claimProviderDispatch: (input) =>
+          commandService!.claimProviderDispatch(input),
+        discardAttempt: (input) => commandService!.discardAttempt(input),
+      },
+      recoveryGate: gate,
+    });
+  }
+
   function reflectionDependencies(
     generate: (
       request: Parameters<ReflectionEntrypointDependencies["reflectionProvider"]["generate"]>[0],
@@ -187,6 +220,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         role: "reflection.daily",
         generate,
       },
+      providerEgress: testEgress(),
       narrativeValidation: narrativeValidationDependencies(),
       dedupeFingerprintSecret: "system-test-dedupe-secret",
       workflowReceiptId: "wf-reflection-system-test",
@@ -198,6 +232,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       clock,
       repository: new PostgresNarrativeValidationRepository(database!.pool),
       modelRoleCommandService: commandService!,
+      providerEgress: testEgress(),
       narrativeValidationProvider: {
         role: "narrative.validate",
         async validateNarrative(request: unknown) {
@@ -245,6 +280,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     narrativeScript = undefined;
     await database!.pool.query(`
       TRUNCATE TABLE
+        conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
         proactive_followup_reservations,
@@ -1006,9 +1042,9 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          'synthetic-model@fixture', 'system-reflection-daily:v1',
          'exact_head:v1', 'reflection-output:v1',
          'conversation-harness:v1', 'memory-trust-actions-catalog:v1',
-         '1a3b-model-role-policy:v1', 'system-reflection-daily-pin:v1',
-         'system-reflection-egress:v1', 1, '{}'::jsonb, 'disabled', 1,
-         'succeeded', $4)`,
+          '1a3b-model-role-policy:v1', 'system-reflection-daily-pin:v1',
+          'system-reflection-egress:v1', 1, '{}'::jsonb, 'disabled', 1,
+          'running', $4)`,
       [rotatedCommandId, OWNER, session.dailySessionId, new Date(BASE_TIME)],
     );
     await database!.pool.query(
@@ -1018,7 +1054,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          attempt_kind, status, created_at
        ) VALUES ($1, $2, $3, 1, 'reflection.daily', 'system-test',
          'synthetic-model', 'synthetic-model@fixture',
-         'reflection-daily:system-test:v1', 'initial', 'succeeded', $4)`,
+         'reflection-daily:system-test:v1', 'initial', 'running', $4)`,
       [rotatedAttemptId, OWNER, rotatedCommandId, new Date(BASE_TIME)],
     );
     const rotated = await reflectionRepository!.persistDraftVersion({

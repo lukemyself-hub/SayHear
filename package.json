@@ -11,6 +11,7 @@
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:purge-surfaces": "tsx scripts/check-purge-surface-inventory.ts",
     "canary:workflow": "tsx scripts/verify-hosted-workflow-canary.ts",
+    "release:g1:produce": "tsx scripts/produce-1a3b-g1-evidence.ts",
     "release:g1:build": "tsx scripts/build-1a3b-g1-release-manifest.ts",
     "release:g1:activate": "tsx scripts/activate-1a3b-g1.ts",
     "release:g1:rollback": "tsx scripts/rollback-1a3b-g1.ts",

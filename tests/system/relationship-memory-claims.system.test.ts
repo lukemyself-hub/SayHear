@@ -458,6 +458,7 @@ describe("Relationship Memory Claims system seam (#115)", () => {
     selfEntityIdCache = null;
     await database.pool.query(`
       TRUNCATE TABLE
+        conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
         proactive_followup_reservations,

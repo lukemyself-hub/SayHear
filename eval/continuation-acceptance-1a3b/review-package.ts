@@ -93,24 +93,37 @@ function sameInput(left: unknown, right: unknown): boolean {
 }
 
 export type HardGateReport = Readonly<{
+  advisories: readonly string[];
   checkedFixtureCount: number;
   failures: readonly string[];
   passed: boolean;
 }>;
 
-/** Run the F3 deterministic response checks over the complete candidate pool. */
+/**
+ * Run the F3 deterministic response checks over the complete candidate pool.
+ *
+ * Option 2 (Luke, 2026-09-12): keyword-matching gates must not decide the
+ * incumbent. A frozen incumbent is judged only on the deterministic
+ * invariants (question budget, safety support, and resource validation); its
+ * token-only recall/fabrication findings (`required_recall_missing` and
+ * `forbidden_memory_mention`) are recorded as advisories. The candidate arm
+ * still treats them as hard.
+ */
 export function verifySyntheticRunHardGates(
   catalog: FixtureCatalog,
   run: SyntheticRun,
+  options: Readonly<{ tokenGates?: "hard" | "advisory" }> = {},
 ): HardGateReport {
+  const tokenGates = options.tokenGates ?? "hard";
   if (run.group !== "continuation") {
-    return { checkedFixtureCount: 0, failures: [], passed: true };
+    return { advisories: [], checkedFixtureCount: 0, failures: [], passed: true };
   }
   const fixtures = catalog.scenarios.filter(
     (fixture): fixture is ContinuationFixture => fixture.group === "continuation",
   );
   const scenarios = runScenariosById(run);
   const failures: string[] = [];
+  const advisories: string[] = [];
   for (const fixture of fixtures) {
     const scenario = scenarios.get(fixture.id);
     if (!scenario) {
@@ -157,11 +170,26 @@ export function verifySyntheticRunHardGates(
       // keeps its own per-fixture maxQuestions enforcement above; recall
       // tokens ride along as advisory expectations for human review.
       for (const finding of findings) {
-        failures.push(`${prefix}: ${finding.gate} — ${finding.detail}`);
+        const message = `${prefix}: ${finding.gate} — ${finding.detail}`;
+        if (
+          tokenGates === "advisory" &&
+          finding.gate === "forbidden_memory_mention"
+        ) {
+          advisories.push(message);
+          continue;
+        }
+        failures.push(message);
+      }
+      for (const token of fixture.hardGate.requiredTokens) {
+        if (turn.assistantText.toLowerCase().includes(token.toLowerCase())) continue;
+        const message = `${prefix}: required_recall_missing — required-recall token "${token}" absent from the response`;
+        if (tokenGates === "advisory") advisories.push(message);
+        else failures.push(message);
       }
     }
   }
   return {
+    advisories,
     checkedFixtureCount: fixtures.length,
     failures,
     passed: failures.length === 0,
@@ -418,9 +446,15 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
     throw new Error("The two review arms must use different complete configurations.");
   }
 
-  const firstHardGates = verifySyntheticRunHardGates(input.catalog, input.baselineRun);
+  const firstHardGates = verifySyntheticRunHardGates(input.catalog, input.baselineRun, {
+    tokenGates: "advisory",
+  });
   const secondHardGates = verifySyntheticRunHardGates(input.catalog, input.candidateRun);
   const hardGateReport: HardGateReport = {
+    advisories: [
+      ...firstHardGates.advisories,
+      ...secondHardGates.advisories,
+    ],
     checkedFixtureCount: firstHardGates.checkedFixtureCount,
     failures: [...firstHardGates.failures, ...secondHardGates.failures],
     passed: firstHardGates.passed && secondHardGates.passed,
@@ -894,7 +928,7 @@ export function unblindReviewPackage(input: {
 export function validateValidatorLedger(input: {
   catalog: FixtureCatalog;
   ledger: ValidatorAdjudicationLedger;
-}): Readonly<{ accepted: number; rejected: number; total: number }> {
+}): Readonly<{ accepted: number; maxRejects: number; rejected: number; total: number }> {
   const sourceViolations = verifySyntheticSourceBoundary(input.ledger, "validator ledger");
   if (sourceViolations.length > 0) {
     throw new Error(`Validator ledger contains a production source:\n${sourceViolations.join("\n")}`);
@@ -925,5 +959,12 @@ export function validateValidatorLedger(input: {
     const missing = fixtures.filter((fixture) => !seen.has(fixture.id)).map((fixture) => fixture.id);
     throw new Error(`Validator ledger is missing ${missing.join(", ")}.`);
   }
-  return { accepted, rejected, total: seen.size };
+  const maxRejects = input.ledger.maxRejects ?? 0;
+  if (!Number.isInteger(maxRejects) || maxRejects < 0) {
+    throw new Error("Validator ledger maxRejects must be a non-negative integer.");
+  }
+  if (maxRejects > Math.floor(seen.size * 0.1)) {
+    throw new Error(`Validator ledger maxRejects ${maxRejects} exceeds the 10% error budget.`);
+  }
+  return { accepted, maxRejects, rejected, total: seen.size };
 }

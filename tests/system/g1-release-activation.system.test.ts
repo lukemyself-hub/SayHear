@@ -1,0 +1,346 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import {
+  ONE_A_3B_G1_ENABLED_ROLES,
+  ONE_A_3B_ROLE_POLICIES,
+  ONE_A_3B_ROLE_POLICY_VERSION,
+  type ModelRoleConfigurationSnapshot,
+} from "@sayhear/application";
+import {
+  PostgresModelRoleCommandRepository,
+  runMigrations,
+} from "@sayhear/data";
+import {
+  createIsolatedPostgresSchema,
+  type IsolatedPostgresSchema,
+} from "@sayhear/test-support";
+
+const testDatabaseUrl = process.env.TEST_DATABASE_URL;
+const systemDescribe = testDatabaseUrl ? describe : describe.skip;
+const manifestFingerprint = `sha256:${"a".repeat(64)}`;
+const activatedAt = new Date("2026-09-12T10:00:00.000Z");
+
+const configurations: readonly ModelRoleConfigurationSnapshot[] =
+  ONE_A_3B_G1_ENABLED_ROLES.map((role) => {
+    const policy = ONE_A_3B_ROLE_POLICIES[role];
+    return {
+      role,
+      configVersion: `${role}:g1-release:v1`,
+      provider: "deepseek",
+      model: "deepseek-chat",
+      modelSnapshot: "deepseek-chat@2026-09-12",
+      promptVersion: `${role}-prompt:v1`,
+      schemaVersion: `${role}-schema:v1`,
+      rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
+      providerPolicyVersion: `deepseek-${role}-egress:g1-release:v1`,
+      rolloutPin: `${role}-g1-release-pin:v1`,
+      freshnessPolicy: policy.freshnessPolicy,
+      fallbackMode: "disabled",
+      maxTechnicalRetries: policy.maxTechnicalRetries,
+      maxSemanticRepairs: policy.maxSemanticRepairs,
+      parameterSnapshot: { temperature: 0 },
+    };
+  });
+
+systemDescribe("G1 release activation persistence", () => {
+  let database: IsolatedPostgresSchema | undefined;
+
+  beforeEach(async () => {
+    database = await createIsolatedPostgresSchema(testDatabaseUrl!);
+    await runMigrations(database.pool);
+  });
+
+  afterEach(async () => {
+    await database?.dispose();
+    database = undefined;
+  });
+
+  it("provisions all four roles, revokes them, and reactivates the same immutable rows", async () => {
+    const repository = new PostgresModelRoleCommandRepository(database!.pool);
+
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+
+    const fresh = await database!.pool.query<{
+      configurations: number;
+      enabled_definitions: number;
+      active_pins: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM model_role_configurations
+          WHERE role = ANY($1::text[])) AS configurations,
+         (SELECT count(*)::int FROM model_role_definitions
+          WHERE role = ANY($1::text[]) AND enabled) AS enabled_definitions,
+         (SELECT count(*)::int FROM model_role_rollout_pins
+          WHERE role = ANY($1::text[]) AND status = 'active'
+            AND release_fingerprint = $2) AS active_pins`,
+      [[...ONE_A_3B_G1_ENABLED_ROLES], manifestFingerprint],
+    );
+    expect(fresh.rows[0]).toEqual({
+      configurations: 4,
+      enabled_definitions: 4,
+      active_pins: 4,
+    });
+
+    const rollbackRepository = new PostgresModelRoleCommandRepository(
+      database!.pool,
+      undefined,
+      manifestFingerprint,
+    );
+    await expect(
+      rollbackRepository.revokeActiveRolloutPins({
+        now: new Date("2026-09-12T10:05:00.000Z"),
+        roles: ONE_A_3B_G1_ENABLED_ROLES,
+        configurations,
+        manifestFingerprint,
+      }),
+    ).resolves.toBe(4);
+
+    const rolledBack = await database!.pool.query<{
+      configurations: number;
+      revoked_pins: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM model_role_configurations
+          WHERE role = ANY($1::text[])) AS configurations,
+         (SELECT count(*)::int FROM model_role_rollout_pins
+          WHERE role = ANY($1::text[]) AND status = 'revoked'
+            AND release_fingerprint = $2) AS revoked_pins`,
+      [[...ONE_A_3B_G1_ENABLED_ROLES], manifestFingerprint],
+    );
+    expect(rolledBack.rows[0]).toEqual({ configurations: 4, revoked_pins: 4 });
+
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: new Date("2026-09-12T10:10:00.000Z"),
+      }),
+    ).resolves.toBe(4);
+
+    const reactivated = await database!.pool.query<{
+      configurations: number;
+      pins: number;
+      active_pins: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM model_role_configurations
+          WHERE role = ANY($1::text[])) AS configurations,
+         (SELECT count(*)::int FROM model_role_rollout_pins
+          WHERE role = ANY($1::text[])) AS pins,
+         (SELECT count(*)::int FROM model_role_rollout_pins
+          WHERE role = ANY($1::text[]) AND status = 'active'
+            AND release_fingerprint = $2) AS active_pins`,
+      [[...ONE_A_3B_G1_ENABLED_ROLES], manifestFingerprint],
+    );
+    expect(reactivated.rows[0]).toEqual({
+      configurations: 4,
+      pins: 4,
+      active_pins: 4,
+    });
+  });
+
+  it("rejects a conflicting immutable configuration without partially activating", async () => {
+    const conflict = configurations[0]!;
+    await database!.pool.query(
+      `INSERT INTO model_role_configurations (
+         role, config_version, provider, model, model_snapshot, prompt_version,
+         schema_version, role_policy_version, provider_policy_version,
+         freshness_policy, fallback_mode, max_technical_retries,
+         max_semantic_repairs, parameter_snapshot, created_at
+       ) VALUES ($1, $2, $3, 'conflicting-model', $4, $5, $6, $7, $8, $9,
+                 $10, $11, $12, $13::jsonb, $14)`,
+      [
+        conflict.role,
+        conflict.configVersion,
+        conflict.provider,
+        conflict.modelSnapshot,
+        conflict.promptVersion,
+        conflict.schemaVersion,
+        conflict.rolePolicyVersion,
+        conflict.providerPolicyVersion,
+        conflict.freshnessPolicy,
+        conflict.fallbackMode,
+        conflict.maxTechnicalRetries,
+        conflict.maxSemanticRepairs,
+        JSON.stringify(conflict.parameterSnapshot),
+        activatedAt,
+      ],
+    );
+
+    await expect(
+      new PostgresModelRoleCommandRepository(database!.pool).bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).rejects.toThrow("Immutable G1 configuration");
+
+    const counts = await database!.pool.query<{
+      configurations: number;
+      pins: number;
+      enabled_definitions: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM model_role_configurations) AS configurations,
+         (SELECT count(*)::int FROM model_role_rollout_pins) AS pins,
+         (SELECT count(*)::int FROM model_role_definitions WHERE enabled)
+           AS enabled_definitions`,
+    );
+    expect(counts.rows[0]).toEqual({
+      configurations: 1,
+      pins: 0,
+      enabled_definitions: 0,
+    });
+  });
+
+  it("requires exactly four manifest roles before starting the transaction", async () => {
+    await expect(
+      new PostgresModelRoleCommandRepository(database!.pool).bindActiveG1Release({
+        configurations: configurations.slice(0, 3),
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).rejects.toThrow("complete role set");
+
+    const counts = await database!.pool.query<{
+      configurations: number;
+      pins: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM model_role_configurations) AS configurations,
+         (SELECT count(*)::int FROM model_role_rollout_pins) AS pins`,
+    );
+    expect(counts.rows[0]).toEqual({ configurations: 0, pins: 0 });
+  });
+
+  it("rejects a conflicting immutable pin without replacing it or provisioning other roles", async () => {
+    const conflict = configurations[0]!;
+    const conflictingConfigVersion = `${conflict.role}:conflict:v1`;
+    const conflictingPolicyVersion = `deepseek-${conflict.role}-egress:conflict:v1`;
+    await database!.pool.query(
+      `INSERT INTO provider_egress_policy_versions (
+         policy_version, provider, role, model_config_version, status
+       ) VALUES ($1, 'deepseek', $2, $3, 'active')`,
+      [conflictingPolicyVersion, conflict.role, conflictingConfigVersion],
+    );
+    await database!.pool.query(
+      `INSERT INTO model_role_configurations (
+         role, config_version, provider, model, model_snapshot, prompt_version,
+         schema_version, role_policy_version, provider_policy_version,
+         freshness_policy, fallback_mode, max_technical_retries,
+         max_semantic_repairs, parameter_snapshot, created_at
+       ) VALUES ($1, $2, 'deepseek', 'conflict', 'conflict@v1', 'conflict:v1',
+                 'conflict:v1', $3, $4, $5, 'disabled', $6, $7, '{}'::jsonb, $8)`,
+      [
+        conflict.role,
+        conflictingConfigVersion,
+        conflict.rolePolicyVersion,
+        conflictingPolicyVersion,
+        conflict.freshnessPolicy,
+        conflict.maxTechnicalRetries,
+        conflict.maxSemanticRepairs,
+        activatedAt,
+      ],
+    );
+    await database!.pool.query(
+      `INSERT INTO model_role_rollout_pins (
+         role, rollout_pin, config_version, provider_policy_version,
+         status, activated_at, revoked_at
+       ) VALUES ($1, $2, $3, $4, 'revoked', $5, $5)`,
+      [
+        conflict.role,
+        conflict.rolloutPin,
+        conflictingConfigVersion,
+        conflictingPolicyVersion,
+        activatedAt,
+      ],
+    );
+
+    await expect(
+      new PostgresModelRoleCommandRepository(database!.pool).bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).rejects.toThrow("Immutable G1 rollout pin");
+
+    const pins = await database!.pool.query<{
+      config_version: string;
+      status: string;
+      release_fingerprint: string | null;
+    }>(
+      `SELECT config_version, status, release_fingerprint
+       FROM model_role_rollout_pins`,
+    );
+    expect(pins.rows).toEqual([
+      {
+        config_version: conflictingConfigVersion,
+        status: "revoked",
+        release_fingerprint: null,
+      },
+    ]);
+    await expect(
+      database!.pool.query(
+        `SELECT count(*)::int AS count FROM model_role_configurations
+         WHERE config_version LIKE '%:g1-release:v1'`,
+      ),
+    ).resolves.toMatchObject({ rows: [{ count: 0 }] });
+  });
+
+  it("rejects any pre-existing partial or foreign active pin set", async () => {
+    await database!.pool.query(
+      `INSERT INTO provider_egress_policy_versions (
+         policy_version, provider, role, model_config_version, status
+       ) VALUES ('deepseek-open-loop-egress:foreign:v1', 'deepseek',
+                 'open_loop.extract', 'open-loop:foreign:v1', 'active')`,
+    );
+    await database!.pool.query(
+      `INSERT INTO model_role_configurations (
+         role, config_version, provider, model, model_snapshot, prompt_version,
+         schema_version, role_policy_version, provider_policy_version,
+         freshness_policy, fallback_mode, max_technical_retries,
+         max_semantic_repairs, parameter_snapshot, created_at
+       ) VALUES ('open_loop.extract', 'open-loop:foreign:v1', 'deepseek',
+                 'foreign', 'foreign@v1', 'foreign:v1', 'foreign:v1',
+                 $1, 'deepseek-open-loop-egress:foreign:v1',
+                 'source_valid:v1', 'disabled', 1, 0, '{}'::jsonb, $2)`,
+      [ONE_A_3B_ROLE_POLICY_VERSION, activatedAt],
+    );
+    await database!.pool.query(
+      `INSERT INTO model_role_rollout_pins (
+         role, rollout_pin, config_version, provider_policy_version,
+         status, activated_at
+       ) VALUES ('open_loop.extract', 'foreign-pin:v1',
+                 'open-loop:foreign:v1',
+                 'deepseek-open-loop-egress:foreign:v1', 'active', $1)`,
+      [activatedAt],
+    );
+
+    await expect(
+      new PostgresModelRoleCommandRepository(database!.pool).bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).rejects.toThrow("partial or conflicting active rollout pin set");
+
+    const state = await database!.pool.query<{
+      active_pins: number;
+      g1_configurations: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM model_role_rollout_pins
+          WHERE status = 'active') AS active_pins,
+         (SELECT count(*)::int FROM model_role_configurations
+          WHERE role = ANY($1::text[])) AS g1_configurations`,
+      [[...ONE_A_3B_G1_ENABLED_ROLES]],
+    );
+    expect(state.rows[0]).toEqual({ active_pins: 1, g1_configurations: 0 });
+  });
+});

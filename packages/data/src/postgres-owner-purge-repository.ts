@@ -26,6 +26,8 @@ import {
 import { asUserId, type UserId } from "@sayhear/domain";
 import type { Pool, PoolClient, QueryResultRow } from "pg";
 
+import { randomUUIDv7 } from "node:crypto";
+
 import {
   assertPurgeSurfaceAdapterCoverage,
   assertPurgeSurfaceDatabaseInventory,
@@ -430,9 +432,9 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
 
       const fromDataEpoch = Number(ownerRow.data_epoch);
       const dataEpoch = fromDataEpoch + 1;
-      const orderId = crypto.randomUUID();
-      const workflowCommandId = crypto.randomUUID();
-      const outboxEventId = crypto.randomUUID();
+      const orderId = randomUUIDv7();
+      const workflowCommandId = randomUUIDv7();
+      const outboxEventId = randomUUIDv7();
 
       const inserted = await client.query<OrderRow>(
         `
@@ -1346,7 +1348,7 @@ export class PostgresOwnerPurgeRepository implements OwnerPurgeRepository {
          ORDER BY requested_at DESC LIMIT 1`,
         [input.userId, input.dataEpoch],
       );
-      orderId = existing.rows[0]?.owner_purge_order_id ?? crypto.randomUUID();
+      orderId = existing.rows[0]?.owner_purge_order_id ?? randomUUIDv7();
       if (existing.rows[0]) {
         if (
           !isCurrentPurgeVersions(existing.rows[0]) &&

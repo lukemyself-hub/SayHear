@@ -9,6 +9,7 @@ import {
   NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
   createModelRoleCommandService,
+  createModelRoleProviderEgress,
   createModelRoleRegistry,
   runNarrativeValidation,
   runNarrativeValidationAttempt,
@@ -21,6 +22,7 @@ import {
   type NarrativeValidationRequest,
   type NarrativeValidatorModelOutput,
   type NarrativeValidatorModelRequest,
+  type RecoveryGate,
 } from "@sayhear/application";
 import {
   PostgresModelRoleCommandRepository,
@@ -258,11 +260,40 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
   function dependencies(
     provider: NarrativeValidationModelProvider,
   ): NarrativeValidationEntrypointDependencies {
+    // Production wires the shared egress port into the validator entrypoint
+    // (server-composition); the port owns the prepared → running claim, so
+    // the system seam must exercise the same boundary. The G1 release
+    // verifier is intentionally unwired: there is no active release
+    // manifest in tests.
+    const gate: RecoveryGate = {
+      evaluate: async () => ({
+        status: "open" as const,
+        markerDataEpoch: null,
+        markerPurgedAt: null,
+        markerWrittenAt: null,
+        receiptDestinations: [],
+      }),
+      requireOpen: async () => ({
+        status: "open" as const,
+        markerDataEpoch: null,
+        markerPurgedAt: null,
+        markerWrittenAt: null,
+        receiptDestinations: [],
+      }),
+    };
     return {
       clock: () => baseTime,
       repository: new PostgresNarrativeValidationRepository(database!.pool),
       modelRoleCommandService: commandService!,
       narrativeValidationProvider: provider,
+      providerEgress: createModelRoleProviderEgress({
+        commandService: {
+          claimProviderDispatch: (input) =>
+            commandService!.claimProviderDispatch(input),
+          discardAttempt: (input) => commandService!.discardAttempt(input),
+        },
+        recoveryGate: gate,
+      }),
     };
   }
 

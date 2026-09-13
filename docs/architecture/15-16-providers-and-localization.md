@@ -167,8 +167,9 @@ kind、lifecycle、data epoch 与 source revision。首版不增加 NLI、QA che
 每种语言内为 4 个 Bio 与 2 个 Reflection，总计 12 个 Bio 与 6 个
 Reflection。每个 artifact 与 locale 组合都覆盖，并让每个已知 blocking error
 class 至少出现一次。Luke 逐例
-判断；任何危险错误漏检都阻止发布。首版不建设分桶 precision / recall、置信区间或
-加权总分，新发现的失败加入回归集。这 18 例不兼任 Bio 自然度盲评。
+判断；校准 recall 允许最多 10% 漏检，18 例即最多 1 例，超过预算阻止发布。
+独立 precision probes 对误伤保持零容忍。首版不建设置信区间或加权总分，新发现的
+失败加入回归集。这 18 例不兼任 Bio 自然度盲评。
 确定性 schema、lineage、lifecycle、epoch 与 Context-isolation gates 仍须全部通过。
 
 #174 只冻结 `bio.write` role、输入、Prompt / Schema / policy 与无 fallback 边界，

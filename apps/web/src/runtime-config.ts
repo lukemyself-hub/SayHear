@@ -1,12 +1,7 @@
-import { resolve } from "node:path";
-
 import {
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1ReleaseManifest,
 } from "@sayhear/application";
-import {
-  verifyActiveG1Evidence as verifyActiveG1EvidenceFiles,
-} from "./g1-release-evidence";
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -64,20 +59,12 @@ function g1StageFullyRequested(environment: Environment): boolean {
   );
 }
 
-function verifyActiveG1Evidence(manifest: OneA3bG1ReleaseManifest): void {
-  const roots = [
-    process.cwd(),
-    resolve(process.cwd(), ".."),
-    resolve(process.cwd(), "../.."),
-    resolve(process.cwd(), "../../.."),
-  ].filter((root, index, all) => all.indexOf(root) === index);
-  verifyActiveG1EvidenceFiles(manifest, roots);
-}
-
 /**
  * Resolve and verify the exact G1 release artifact. An absent artifact keeps
- * the stage closed; an explicitly requested stage requires an active,
- * content-addressed artifact and an explicit deployment commit pin.
+ * the stage closed. The build, verification, and activation commands verify
+ * evidence files before binding database pins; deployed runtime verifies the
+ * content-addressed manifest and exact deployment commit without requiring
+ * post-commit release artifacts in the application checkout.
  */
 export function resolveOneA3bG1ReleaseManifest(
   environment: Environment,
@@ -137,9 +124,6 @@ export function resolveOneA3bG1ReleaseManifest(
     throw new Error(
       "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST must be active before a G1 write switch can open.",
     );
-  }
-  if (g1StageFullyRequested(environment) && manifest.status === "active") {
-    verifyActiveG1Evidence(manifest);
   }
   return manifest;
 }

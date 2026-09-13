@@ -318,6 +318,7 @@ describe("Fast-path extraction workflow system seam", () => {
     resolveScript = () => ({ verdict: "unclear", entityId: null, confidence: 0 });
     await database.pool.query(`
       TRUNCATE TABLE
+        conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
         proactive_followup_reservations,

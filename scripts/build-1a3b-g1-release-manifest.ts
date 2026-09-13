@@ -23,6 +23,12 @@ const defaultOutput = resolve(
   repositoryRoot,
   "eval/continuation-acceptance-1a3b/run/g1-release-manifest.json",
 );
+const generatedEvidenceRoot =
+  "eval/continuation-acceptance-1a3b/run/";
+const agentMetadataFiles = new Set([
+  ".agent-context",
+  ".agent-parent-branch",
+]);
 
 type InputDocument = Omit<
   OneA3bG1ReleaseManifestInput,
@@ -43,7 +49,7 @@ function option(arguments_: readonly string[], name: string): string | null {
 
 async function gitOutput(...arguments_: string[]): Promise<string> {
   const result = await execFileAsync("git", arguments_, { cwd: repositoryRoot });
-  return result.stdout.trim();
+  return result.stdout.trimEnd();
 }
 
 function sha256Bytes(value: Uint8Array): string {
@@ -101,9 +107,16 @@ async function main(): Promise<void> {
   const input = await readInput(inputPath);
   const explicitCommit = option(arguments_, "--git-commit") ?? input.gitCommit;
   const workingTreeStatus = await gitOutput("status", "--short");
-  if (workingTreeStatus !== "") {
+  const unexpectedWorkingTreeEntries = workingTreeStatus
+    .split("\n")
+    .filter((entry) => entry !== "")
+    .filter((entry) => {
+      const path = entry.slice(3);
+      return !path.startsWith(generatedEvidenceRoot) && !agentMetadataFiles.has(path);
+    });
+  if (unexpectedWorkingTreeEntries.length > 0) {
     throw new Error(
-      "The working tree must be clean before freezing a G1 release manifest.",
+      `The application tree must be clean before freezing a G1 release manifest; only generated evidence may remain. Unexpected entries: ${unexpectedWorkingTreeEntries.join(", ")}`,
     );
   }
   const currentCommit = await gitOutput("rev-parse", "HEAD");

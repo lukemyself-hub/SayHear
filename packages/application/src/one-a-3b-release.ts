@@ -25,6 +25,16 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
   "1a3b-g1-release:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
+export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =
+  "1a3b-f3-validator-precision-report:v1" as const;
+export const ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS = [
+  "precision-clean-en-1",
+  "precision-clean-en-2",
+  "precision-clean-zh-1",
+  "precision-clean-zh-2",
+  "precision-clean-mix-1",
+  "precision-clean-mix-2",
+] as const;
 
 /**
  * G1 is the first direct-release stage. The later Open Loop, Proactive and
@@ -79,9 +89,15 @@ export type OneA3bG1ValidatorCalibration = Readonly<{
   ledgerPath: string;
   ledgerSha256: string;
   ledgerVersion: typeof ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION;
+  precisionReportPath: string;
+  precisionReportSha256: string;
+  precisionReportVersion: typeof ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION;
+  precisionTotalCases: 6;
+  precisionFalseBlockingCases: number;
   f3ManifestFingerprint: string;
   totalCases: 18;
   acceptedCases: number;
+  maxRejects: number;
   humanOwner: "Luke";
   status: OneA3bG1EvidenceStatus;
   note?: string;
@@ -134,6 +150,7 @@ export type OneA3bG1ReleaseManifest = Readonly<{
   commands: readonly string[];
   evidence: readonly OneA3bG1Evidence[];
   cutoverState: "disabled" | "active" | "rolled_back";
+  releaseIdentityFingerprint: string;
   fingerprint: string;
 }>;
 
@@ -290,12 +307,40 @@ function validateFixture(input: OneA3bG1ReleaseManifestInput["fixture"]): void {
   requireInteger(input.sampleSeed, "fixture.sampleSeed");
 }
 
+/**
+ * The accepted calibration rule is a 10% miss budget with the human owner
+ * adjudicating every case: all 18 must be ruled, and at most floor(18 * 0.1) = 1
+ * may be rejected. The separate precision corpus must also be complete with
+ * zero false blocks.
+ */
+export function validatorCalibrationRejectsWithinBudget(input: Readonly<{
+  totalCases: number;
+  acceptedCases: number;
+  maxRejects: number;
+}>): boolean {
+  const rejected = input.totalCases - input.acceptedCases;
+  return (
+    rejected >= 0 &&
+    input.maxRejects >= 0 &&
+    rejected <= input.maxRejects &&
+    input.maxRejects <= Math.floor(input.totalCases * 0.1)
+  );
+}
+
 function validateValidatorCalibration(
   input: OneA3bG1ValidatorCalibration,
   fixture: OneA3bG1ReleaseManifestInput["fixture"],
 ): void {
   requireNonEmpty(input.ledgerPath, "validatorCalibration.ledgerPath");
   requireSha256(input.ledgerSha256, "validatorCalibration.ledgerSha256");
+  requireNonEmpty(
+    input.precisionReportPath,
+    "validatorCalibration.precisionReportPath",
+  );
+  requireSha256(
+    input.precisionReportSha256,
+    "validatorCalibration.precisionReportSha256",
+  );
   requireFingerprint(
     input.f3ManifestFingerprint,
     "validatorCalibration.f3ManifestFingerprint",
@@ -303,6 +348,14 @@ function validateValidatorCalibration(
   if (input.ledgerVersion !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION) {
     throw new Error(
       `validatorCalibration.ledgerVersion must be ${ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION}.`,
+    );
+  }
+  if (
+    input.precisionReportVersion !==
+    ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION
+  ) {
+    throw new Error(
+      `validatorCalibration.precisionReportVersion must be ${ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION}.`,
     );
   }
   if (input.f3ManifestFingerprint !== fixture.f3ManifestFingerprint) {
@@ -314,12 +367,36 @@ function validateValidatorCalibration(
     throw new Error("validatorCalibration.totalCases must be exactly 18.");
   }
   if (
+    input.precisionTotalCases !==
+    ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.length
+  ) {
+    throw new Error("validatorCalibration.precisionTotalCases must be exactly 6.");
+  }
+  if (
+    !Number.isSafeInteger(input.precisionFalseBlockingCases) ||
+    input.precisionFalseBlockingCases < 0 ||
+    input.precisionFalseBlockingCases > input.precisionTotalCases
+  ) {
+    throw new Error(
+      "validatorCalibration.precisionFalseBlockingCases must be an integer from 0 through 6.",
+    );
+  }
+  if (
     !Number.isSafeInteger(input.acceptedCases) ||
     input.acceptedCases < 0 ||
     input.acceptedCases > input.totalCases
   ) {
     throw new Error(
       "validatorCalibration.acceptedCases must be an integer from 0 through 18.",
+    );
+  }
+  if (
+    !Number.isSafeInteger(input.maxRejects) ||
+    input.maxRejects < 0 ||
+    input.maxRejects > Math.floor(input.totalCases * 0.1)
+  ) {
+    throw new Error(
+      "validatorCalibration.maxRejects must be an integer within the 10% error budget.",
     );
   }
   if (input.humanOwner !== "Luke") {
@@ -332,9 +409,24 @@ function validateValidatorCalibration(
   ) {
     throw new Error("validatorCalibration has an invalid status.");
   }
-  if (input.status === "verified" && input.acceptedCases !== input.totalCases) {
+  if (
+    input.status === "verified" &&
+    !validatorCalibrationRejectsWithinBudget({
+      totalCases: input.totalCases,
+      acceptedCases: input.acceptedCases,
+      maxRejects: input.maxRejects,
+    })
+  ) {
     throw new Error(
-      "validatorCalibration cannot be verified until all 18 cases are accepted.",
+      "validatorCalibration cannot be verified while rejected cases exceed the 10% error budget.",
+    );
+  }
+  if (
+    input.status === "verified" &&
+    input.precisionFalseBlockingCases !== 0
+  ) {
+    throw new Error(
+      "validatorCalibration cannot be verified with a false-blocking precision verdict.",
     );
   }
   if (input.status !== "verified") {
@@ -422,13 +514,80 @@ function validatorCalibrationIsComplete(
     status: OneA3bG1EvidenceStatus;
     totalCases: number;
     acceptedCases: number;
+    maxRejects: number;
+    precisionTotalCases: number;
+    precisionFalseBlockingCases: number;
   }>,
 ): boolean {
   return (
     calibration.status === "verified" &&
     calibration.totalCases === 18 &&
-    calibration.acceptedCases === 18
+    calibration.precisionTotalCases ===
+      ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.length &&
+    calibration.precisionFalseBlockingCases === 0 &&
+    validatorCalibrationRejectsWithinBudget(calibration)
   );
+}
+
+/**
+ * Stable deployable identity for a G1 release. It covers only immutable
+ * inputs — exact commit, sorted migration pins, registry versions, frozen
+ * policy bundle, exact role configurations, and frozen F3 fixture pins — and
+ * deliberately excludes evidence, validator outcomes, commands, timestamps,
+ * status, cutover state, and the full content-addressed fingerprint. AC-D01
+ * binds this identity so deployment evidence can be produced before the full
+ * manifest (which contains that evidence) is frozen.
+ */
+export function buildG1ReleaseIdentityFingerprint(input: Readonly<{
+  gitCommit: string;
+  migrations: readonly OneA3bG1MigrationPin[];
+  purgeMarkerMigrations: readonly OneA3bG1MigrationPin[];
+  roleConfigurations: readonly ModelRoleConfigurationSnapshot[];
+  fixture: Readonly<{
+    f3ManifestSha256: string;
+    f3ManifestFingerprint: string;
+    fixtureSeed: number;
+    sampleSeed: number;
+  }>;
+}>): string {
+  if (!GIT_COMMIT_PATTERN.test(input.gitCommit)) {
+    throw new Error("release identity gitCommit must be a full 40-character commit.");
+  }
+  const orderedMigrations = sortedMigrations(input.migrations);
+  const orderedPurgeMarkerMigrations = sortedMigrations(input.purgeMarkerMigrations);
+  const orderedConfigurations = sortedConfigurations(input.roleConfigurations);
+  return `sha256:${sha256Hex({
+    version: ONE_A_3B_G1_RELEASE_MANIFEST_VERSION,
+    stage: "g1",
+    gitCommit: input.gitCommit,
+    schema: {
+      migrations: orderedMigrations,
+      purgeMarkerMigrations: orderedPurgeMarkerMigrations,
+      purgeSurfaceRegistryVersion: PURGE_SURFACE_REGISTRY_VERSION,
+      externalIntegrationManifestVersion:
+        PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
+      workflowSubjectManifestVersion: PURGE_WORKFLOW_SUBJECT_MANIFEST_VERSION,
+    },
+    policyBundle: {
+      modelRolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
+      episodeBuilderPolicyVersion: EPISODE_BUILDER_POLICY_VERSION,
+      reflectionReadinessPolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
+      narrativeValidationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
+      fallbackMode: "disabled",
+      futureStages: "closed",
+    },
+    roles: {
+      configurations: orderedConfigurations,
+      enabledRoles: [...ONE_A_3B_G1_ENABLED_ROLES],
+      deferredRoles: [...ONE_A_3B_G1_DEFERRED_ROLES],
+    },
+    fixture: {
+      f3ManifestSha256: input.fixture.f3ManifestSha256,
+      f3ManifestFingerprint: input.fixture.f3ManifestFingerprint,
+      fixtureSeed: input.fixture.fixtureSeed,
+      sampleSeed: input.fixture.sampleSeed,
+    },
+  })}`;
 }
 
 function manifestWithoutFingerprint(
@@ -440,10 +599,10 @@ function manifestWithoutFingerprint(
 function manifestFingerprint(
   manifest: Omit<OneA3bG1ReleaseManifest, "fingerprint">,
 ): string {
-  return sha256Hex({
+  return `sha256:${sha256Hex({
     ...manifestWithoutFingerprint(manifest),
     createdAt: "volatile",
-  });
+  })}`;
 }
 
 function expectedStatus(input: Readonly<{
@@ -454,6 +613,9 @@ function expectedStatus(input: Readonly<{
     status: OneA3bG1EvidenceStatus;
     totalCases: number;
     acceptedCases: number;
+    maxRejects: number;
+    precisionTotalCases: number;
+    precisionFalseBlockingCases: number;
   }>;
 }>): OneA3bG1ReleaseManifest["status"] {
   const complete =
@@ -548,6 +710,13 @@ export function buildOneA3bG1ReleaseManifest(
       fixtureIds: [...entry.fixtureIds],
     })),
     cutoverState,
+    releaseIdentityFingerprint: buildG1ReleaseIdentityFingerprint({
+      gitCommit: input.gitCommit,
+      migrations: migrationPins,
+      purgeMarkerMigrations: purgeMarkerMigrationPins,
+      roleConfigurations: configurations,
+      fixture: input.fixture,
+    }),
   } satisfies Omit<OneA3bG1ReleaseManifest, "fingerprint">;
   if (
     cutoverState === "active" &&
@@ -876,6 +1045,9 @@ export function verifyOneA3bG1ReleaseManifest(
   let validatorCalibrationStatus: OneA3bG1EvidenceStatus = "blocked";
   let validatorCalibrationTotalCases = 0;
   let validatorCalibrationAcceptedCases = 0;
+  let validatorCalibrationMaxRejects = 0;
+  let validatorCalibrationPrecisionTotalCases = 0;
+  let validatorCalibrationPrecisionFalseBlockingCases = -1;
   if (!validatorCalibration) {
     mismatches.push("validator calibration section is missing");
   } else {
@@ -893,9 +1065,27 @@ export function verifyOneA3bG1ReleaseManifest(
     );
     pushIf(
       mismatches,
+      typeof validatorCalibration.precisionReportPath !== "string" ||
+        validatorCalibration.precisionReportPath.trim() === "",
+      "validator precision report path is missing",
+    );
+    pushIf(
+      mismatches,
+      typeof validatorCalibration.precisionReportSha256 !== "string" ||
+        !SHA256_PATTERN.test(validatorCalibration.precisionReportSha256),
+      "validator precision report hash is invalid",
+    );
+    pushIf(
+      mismatches,
       validatorCalibration.ledgerVersion !==
         ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
       "validator calibration ledger version is not the released version",
+    );
+    pushIf(
+      mismatches,
+      validatorCalibration.precisionReportVersion !==
+        ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
+      "validator precision report version is not the released version",
     );
     const frozenF3Fingerprint =
       fixture && typeof fixture.f3ManifestFingerprint === "string"
@@ -916,6 +1106,18 @@ export function verifyOneA3bG1ReleaseManifest(
       typeof validatorCalibration.acceptedCases === "number"
         ? validatorCalibration.acceptedCases
         : 0;
+    validatorCalibrationMaxRejects =
+      typeof validatorCalibration.maxRejects === "number"
+        ? validatorCalibration.maxRejects
+        : 0;
+    validatorCalibrationPrecisionTotalCases =
+      typeof validatorCalibration.precisionTotalCases === "number"
+        ? validatorCalibration.precisionTotalCases
+        : 0;
+    validatorCalibrationPrecisionFalseBlockingCases =
+      typeof validatorCalibration.precisionFalseBlockingCases === "number"
+        ? validatorCalibration.precisionFalseBlockingCases
+        : -1;
     pushIf(
       mismatches,
       validatorCalibrationTotalCases !== 18,
@@ -923,10 +1125,33 @@ export function verifyOneA3bG1ReleaseManifest(
     );
     pushIf(
       mismatches,
+      validatorCalibrationPrecisionTotalCases !==
+        ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.length,
+      "validator precision corpus must contain exactly 6 cases",
+    );
+    pushIf(
+      mismatches,
+      !Number.isSafeInteger(
+        validatorCalibrationPrecisionFalseBlockingCases,
+      ) ||
+        validatorCalibrationPrecisionFalseBlockingCases < 0 ||
+        validatorCalibrationPrecisionFalseBlockingCases >
+          validatorCalibrationPrecisionTotalCases,
+      "validator precision false-block count is invalid",
+    );
+    pushIf(
+      mismatches,
       !Number.isSafeInteger(validatorCalibrationAcceptedCases) ||
         validatorCalibrationAcceptedCases < 0 ||
         validatorCalibrationAcceptedCases > 18,
       "validator calibration accepted case count is invalid",
+    );
+    pushIf(
+      mismatches,
+      !Number.isSafeInteger(validatorCalibrationMaxRejects) ||
+        validatorCalibrationMaxRejects < 0 ||
+        validatorCalibrationMaxRejects > Math.floor(18 * 0.1),
+      "validator calibration max rejects is outside the 10% error budget",
     );
     pushIf(
       mismatches,
@@ -940,8 +1165,19 @@ export function verifyOneA3bG1ReleaseManifest(
       validatorCalibrationStatus = status;
       pushIf(
         mismatches,
-        status === "verified" && validatorCalibrationAcceptedCases !== 18,
-        "validator calibration cannot be verified before all 18 cases are accepted",
+        status === "verified" &&
+          !validatorCalibrationRejectsWithinBudget({
+            totalCases: validatorCalibrationTotalCases,
+            acceptedCases: validatorCalibrationAcceptedCases,
+            maxRejects: validatorCalibrationMaxRejects,
+          }),
+        "validator calibration cannot be verified while rejects exceed the 10% error budget",
+      );
+      pushIf(
+        mismatches,
+        status === "verified" &&
+          validatorCalibrationPrecisionFalseBlockingCases !== 0,
+        "validator calibration cannot be verified with a false-blocking precision verdict",
       );
       pushIf(
         mismatches,
@@ -974,9 +1210,49 @@ export function verifyOneA3bG1ReleaseManifest(
       status: validatorCalibrationStatus,
       totalCases: validatorCalibrationTotalCases,
       acceptedCases: validatorCalibrationAcceptedCases,
+      maxRejects: validatorCalibrationMaxRejects,
+      precisionTotalCases: validatorCalibrationPrecisionTotalCases,
+      precisionFalseBlockingCases:
+        validatorCalibrationPrecisionFalseBlockingCases,
     },
   });
   pushIf(mismatches, value.status !== expected, `G1 status must be ${expected}`);
+
+  let expectedIdentity: string | null = null;
+  try {
+    expectedIdentity = buildG1ReleaseIdentityFingerprint({
+      gitCommit: typeof value.gitCommit === "string" ? value.gitCommit : "",
+      migrations: migrations as readonly OneA3bG1MigrationPin[],
+      purgeMarkerMigrations: purgeMarkerMigrations as readonly OneA3bG1MigrationPin[],
+      roleConfigurations: configurations as readonly ModelRoleConfigurationSnapshot[],
+      fixture: {
+        f3ManifestSha256:
+          isRecord(value.fixture) && typeof value.fixture.f3ManifestSha256 === "string"
+            ? (value.fixture.f3ManifestSha256 as string)
+            : "",
+        f3ManifestFingerprint:
+          isRecord(value.fixture) && typeof value.fixture.f3ManifestFingerprint === "string"
+            ? (value.fixture.f3ManifestFingerprint as string)
+            : "",
+        fixtureSeed:
+          isRecord(value.fixture) && typeof value.fixture.fixtureSeed === "number"
+            ? (value.fixture.fixtureSeed as number)
+            : -1,
+        sampleSeed:
+          isRecord(value.fixture) && typeof value.fixture.sampleSeed === "number"
+            ? (value.fixture.sampleSeed as number)
+            : -1,
+      },
+    });
+  } catch {
+    // Malformed identity inputs stay as a verification mismatch below.
+  }
+  pushIf(
+    mismatches,
+    typeof (value as Record<string, unknown>).releaseIdentityFingerprint !== "string" ||
+      (value as Record<string, unknown>).releaseIdentityFingerprint !== expectedIdentity,
+    "release identity fingerprint does not match its immutable inputs",
+  );
 
   const { fingerprint: actualFingerprint, ...withoutFingerprint } = value as Record<string, unknown> & { fingerprint?: unknown };
   let expectedFingerprint: string | null = null;

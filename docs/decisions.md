@@ -37,6 +37,7 @@ Accepted
 - [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision 与 Action Finalization 使用独立 GenerationCommand
 - [`0133`](adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)：Bio 写作与验证使用独立 GenerationCommand 和可计算的 attempt 预算，repair 后必须重新验证
 - [`0136`](adr/0136-1a3b-model-pins-are-evidence-outputs.md)：1A.3b SPEC 固定角色评测合同，生产模型 pin 由冻结验收证据产生而不是提前指定
+- [`0140`](adr/0140-g1-deepseek-model-alias-is-pinned-evidence.md)：G1 接受 DeepSeek 可变 alias 作为有界例外，以完整 pin、运行时快照比对与 AC-M01 调用证据为前提
 - [`0138`](adr/0138-1a3b-formal-acceptance-uses-synthetic-data.md)：1A.3b 正式验收只使用固定合成数据，准确 release manifest 必须通过完整 purge 与旧备份恢复 drill
 - [`0098`](adr/0098-conversation-actions-use-descriptors-gateway-and-typed-handlers.md)：Conversation Action 通过 descriptor、统一 Gateway 与 typed deep handler 扩展
 - [`0099`](adr/0099-conversation-actions-separate-admission-from-execution-state.md)：Conversation Action 分离受理状态与执行状态，并以不可变 Receipt 驱动当前投影
@@ -102,6 +103,7 @@ Accepted
 - [`0114`](adr/0114-low-fatigue-pairwise-evaluation-sampling.md)：后续盲评使用分层随机抽样与 A / 持平 / B 三选一，降低单评审疲劳
 - [`0135`](adr/0135-1a3b-acceptance-does-not-grandfather-hard-failures.md)：1A.3b 不继承 incumbent 的硬门禁豁免，Continuation、Bio 和确定性正确性证据互不抵消
 - [`0137`](adr/0137-narrative-validator-acceptance-weights-bio.md)：`narrative.validate` 首版 18 例按每语言 4 个 Bio 与 2 个 Reflection 分配，不替代 Bio 自然度盲评
+- [`0139`](adr/0139-narrative-validator-calibration-allows-a-bounded-miss.md)：`narrative.validate` 18 例全部人工裁定，允许最多 10% 校准漏检，precision 误伤与确定性硬失败保持零容忍
 
 ### Memory 准入与认识状态
 
@@ -124,7 +126,7 @@ Accepted
 - [`0122`](adr/0122-candidate-review-commands-are-synchronous-and-fail-closed.md)：Candidate review 处置是同步 CAS 命令，人工处置以 `decided_at <= review_due_at` fail closed；取消 Proposal 立即终局等待中的候选人；Proposal 无用户内容由 schema 结构排除保证
 - [`0123`](adr/0123-bio-narrative-identity-is-explicit-and-locale-frozen.md)：Bio 与 User Profile 使用不同领域身份；Bio 使用 Self Entity 姓名与用户明确声明的代词，每个版本冻结一个经过生成和校验的展示 locale
 - [`0124`](adr/0124-bio-materiality-is-policy-owned-and-validation-is-dual-decomposed.md)：Bio materiality 由版本化 policy 和 Predicate metadata 决定，生成器声明原子命题后由 validator 独立重拆并比较
-- [`0125`](adr/0125-bio-publishing-requires-human-validator-acceptance-and-has-no-force-publish.md)：Bio 在约 18 个固定中英与 code-switch 案例经 Luke 逐例接受前不开放；失败只允许一次有界修复且不能强制发布
+- [`0125`](adr/0125-bio-publishing-requires-human-validator-acceptance-and-has-no-force-publish.md)：Bio 在固定中英与 code-switch 案例经 Luke 逐例裁定并通过 ADR-0139 预算前不开放；失败只允许一次有界修复且不能强制发布
 - [`0126`](adr/0126-bio-structure-is-typed-and-failed-content-expires-after-seven-days.md)：Bio 使用 typed rows；发布版本保留到 Full Purge，失败草稿语义内容七天后清除
 - [`0127`](adr/0127-bio-trust-rebuilds-preempt-ordinary-refreshes.md)：Bio trust rebuild 抢占普通刷新，读取路径独立复核 support fence 并保持 fail closed
 - [`0128`](adr/0128-bio-budget-overflow-is-disclosed-not-fatal.md)：Bio 篇幅不足时由 coverage policy 记录 deferred unit 并提示选择性覆盖，不让产品失败或把取舍交给模型

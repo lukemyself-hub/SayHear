@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import pg from "pg";
+import { createPostgresPool } from "../packages/data/src/pool.ts";
 import { parseArgs } from "node:util";
 
 const { values: { since } } = parseArgs({
@@ -24,11 +24,9 @@ if (!connectionString) {
   process.exit(1);
 }
 
-const pool = new pg.Pool({
+const pool = createPostgresPool({
   connectionString,
-  application_name: "canary-hosted-scan",
-  max: 2,
-  statement_timeout: 30_000,
+  applicationName: "canary-hosted-scan",
 });
 
 const canaryMarker = "%CANARY-REAL-EGRESS-%";
@@ -60,13 +58,13 @@ async function runCanaryChecks() {
         name: "journal_eligibility_commands"
       },
       {
-        table: "workflow_outbox_committs",
+        table: "outbox_events",
         query: `
           SELECT COUNT(*) as count
-          FROM workflow_outbox_commits
+          FROM outbox_events
           WHERE created_at > $1
         `,
-        name: "outbox_commits"
+        name: "outbox_events_since_window"
       },
       {
         table: "outbox_events",
@@ -102,11 +100,11 @@ async function runCanaryChecks() {
       },
       {
         table: "workflow_commands",
-        column: "payload",
+        column: "*",
         query: `
           SELECT COUNT(*) as count
           FROM workflow_commands
-          WHERE payload::text ILIKE $1
+          WHERE workflow_commands::text ILIKE $1
         `
       },
       {

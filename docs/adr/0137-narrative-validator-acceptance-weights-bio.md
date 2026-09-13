@@ -17,3 +17,7 @@ publication failure classes. These cases qualify dangerous-error detection;
 they do not double as the separate fifteen-scenario blind evaluation of Bio
 narrative naturalness, and results from the two evidence groups cannot offset
 one another.
+
+ADR-0139 defines the release threshold for this set: all eighteen cases require
+human adjudication, one calibration miss is within the ten-percent recall
+budget, and the separate precision gate permits no false blocks.

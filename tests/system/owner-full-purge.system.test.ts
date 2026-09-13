@@ -893,6 +893,7 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     clockNowMs = BASE_TIME.getTime();
     await database.pool.query(`
       TRUNCATE TABLE
+        conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
         proactive_followup_reservations,

@@ -11,6 +11,7 @@ import type {
   ModelRoleAttemptKind,
   ModelRoleCommandService,
   ModelRoleFailureCode,
+  RecordedModelRoleAttempt,
 } from "../model-role-runtime";
 import { isModelRoleAttemptKind } from "../model-role-runtime";
 import {
@@ -559,81 +560,85 @@ async function executeReflectionAttempt(input: Readonly<{
       now: input.dependencies.clock(),
     });
 
-  const prepared = await repository.prepareAttempt?.({
-    userId: input.userId,
-    scopeType: input.frozen.scopeType,
-    dailySessionId: input.frozen.dailySessionId,
-    weekIdentifier: input.frozen.weekIdentifier,
-    windowStartDate: input.frozen.windowStartDate,
-    windowEndDate: input.frozen.windowEndDate,
-    sourceRevision,
-    sourceDigest: input.frozen.sourceDigest,
-    claimBaselineDigest: input.frozen.claimBaselineDigest,
-    policyVersion: input.policyVersion,
-    expectedDataEpoch: input.expectedDataEpoch,
-    generationCommandId,
-    modelRunAttemptId,
-    now: input.dependencies.clock(),
-  });
-  if (prepared?.outcome === "fenced") {
-    await input.dependencies.modelRoleCommandService.discardAttempt({
-      userId: input.userId,
-      generationCommandId,
-      modelRunAttemptId,
-      reason:
-        prepared.reason === "data_epoch" ? "data_epoch" : "source_changed",
-      now: input.dependencies.clock(),
-    });
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "fenced",
-      errorCode: prepared.reason ?? null,
-    });
-  }
-  if (prepared?.outcome === "already_built") {
-    const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
-      userId: input.userId,
-      generationCommandId,
-      modelRunAttemptId,
-      role,
-      attemptNo: input.attemptNo,
-      technicalRetriesUsed: input.technicalRetriesUsed,
-      semanticRepairsUsed: 0,
-      outcome: "succeeded",
-      currentSourceRevision: sourceRevision,
-      expectedDataEpoch: input.expectedDataEpoch,
-      now: input.dependencies.clock(),
-    });
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: recorded.outcome === "discarded" ? "fenced" : "built",
-      errorCode:
-        recorded.outcome === "discarded"
-          ? recorded.reason ?? null
-          : "already_built",
-    });
-  }
+  type PreparedGeneration =
+    | { outcome: "generated"; output: ReflectionGenerationModelOutput }
+    | { outcome: "fenced"; errorCode: string | null }
+    | { outcome: "already_built"; recorded: RecordedModelRoleAttempt };
 
-  let output: ReflectionGenerationModelOutput;
-  try {
-    const request = {
+  const request = {
+    userId: input.userId,
+    role,
+    scopeType: input.frozen.scopeType,
+    weekIdentifier: input.frozen.weekIdentifier,
+    locale,
+    evidence: input.frozen.evidence,
+    episodes: input.frozen.episodes,
+    summaries: input.frozen.summaries,
+    baseline: input.frozen.baseline,
+    sessionCount: input.frozen.days.length,
+    maxStatements: MAX_STATEMENTS_PER_VERSION,
+    maxPropositionsPerStatement: MAX_PROPOSITIONS_PER_STATEMENT,
+    maxCandidateProposals: MAX_CANDIDATE_PROPOSALS_PER_VERSION,
+  };
+
+  // The run ledger is prepared inside the Provider-dispatch boundary so the
+  // prepared → running claim (owned by the egress port) happens before the
+  // first fenced domain write. Admit alone leaves the attempt prepared,
+  // which the domain fence must keep rejecting.
+  const runGeneration = async (): Promise<PreparedGeneration> => {
+    const prepared = await repository.prepareAttempt?.({
       userId: input.userId,
-      role,
       scopeType: input.frozen.scopeType,
+      dailySessionId: input.frozen.dailySessionId,
       weekIdentifier: input.frozen.weekIdentifier,
-      locale,
-      evidence: input.frozen.evidence,
-      episodes: input.frozen.episodes,
-      summaries: input.frozen.summaries,
-      baseline: input.frozen.baseline,
-      sessionCount: input.frozen.days.length,
-      maxStatements: MAX_STATEMENTS_PER_VERSION,
-      maxPropositionsPerStatement: MAX_PROPOSITIONS_PER_STATEMENT,
-      maxCandidateProposals: MAX_CANDIDATE_PROPOSALS_PER_VERSION,
+      windowStartDate: input.frozen.windowStartDate,
+      windowEndDate: input.frozen.windowEndDate,
+      sourceRevision,
+      sourceDigest: input.frozen.sourceDigest,
+      claimBaselineDigest: input.frozen.claimBaselineDigest,
+      policyVersion: input.policyVersion,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      now: input.dependencies.clock(),
+    });
+    if (prepared?.outcome === "fenced") {
+      await input.dependencies.modelRoleCommandService.discardAttempt({
+        userId: input.userId,
+        generationCommandId,
+        modelRunAttemptId,
+        reason:
+          prepared.reason === "data_epoch" ? "data_epoch" : "source_changed",
+        now: input.dependencies.clock(),
+      });
+      return { outcome: "fenced", errorCode: prepared.reason ?? null };
+    }
+    if (prepared?.outcome === "already_built") {
+      const recorded =
+        await input.dependencies.modelRoleCommandService.recordAttemptResult({
+          userId: input.userId,
+          generationCommandId,
+          modelRunAttemptId,
+          role,
+          attemptNo: input.attemptNo,
+          technicalRetriesUsed: input.technicalRetriesUsed,
+          semanticRepairsUsed: 0,
+          outcome: "succeeded",
+          currentSourceRevision: sourceRevision,
+          expectedDataEpoch: input.expectedDataEpoch,
+          now: input.dependencies.clock(),
+        });
+      return { outcome: "already_built", recorded };
+    }
+    return {
+      outcome: "generated",
+      output: await input.dependencies.reflectionProvider.generate(request),
     };
-    output = input.dependencies.providerEgress
+  };
+
+  let generated: PreparedGeneration;
+  try {
+    generated = input.dependencies.providerEgress
       ? await input.dependencies.providerEgress.dispatch({
           userId: input.userId,
           generationCommandId,
@@ -672,9 +677,9 @@ async function executeReflectionAttempt(input: Readonly<{
               current.snapshot.ownerEpoch === input.expectedDataEpoch
             );
           },
-          execute: () => input.dependencies.reflectionProvider.generate(request),
+          execute: runGeneration,
         })
-      : await input.dependencies.reflectionProvider.generate(request);
+      : await runGeneration();
   } catch (error) {
     if (
       error instanceof RecoveryGateClosedError &&
@@ -718,6 +723,27 @@ async function executeReflectionAttempt(input: Readonly<{
       errorCode: outcome === "fenced" ? (recorded.reason ?? failureCode) : failureCode,
     });
   }
+  if (generated.outcome === "fenced") {
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: "fenced",
+      errorCode: generated.errorCode,
+    });
+  }
+  if (generated.outcome === "already_built") {
+    const recorded = generated.recorded;
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome: recorded.outcome === "discarded" ? "fenced" : "built",
+      errorCode:
+        recorded.outcome === "discarded"
+          ? (recorded.reason ?? null)
+          : "already_built",
+    });
+  }
+  const output = generated.output;
 
   // Tier-1 deterministic gate (all-or-nothing, before any draft is kept).
   const plan = planReflectionVersion({

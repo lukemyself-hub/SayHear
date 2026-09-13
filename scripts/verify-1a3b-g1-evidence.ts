@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import {
   isAbsolute,
@@ -13,6 +13,9 @@ import { fileURLToPath } from "node:url";
 
 import {
   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+  ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
+  ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
+  buildG1ReleaseIdentityFingerprint,
   verifyOneA3bF3ReleaseArtifacts,
   verifyOneA3bG1EvidenceArtifact,
   verifyOneA3bG1RoleConfigurationsAgainstF3,
@@ -96,6 +99,116 @@ function parseJson<T>(bytes: Uint8Array, label: string): T {
   }
 }
 
+export function verifyValidatorPrecisionReport(input: Readonly<{
+  report: unknown;
+  manifestFingerprint: string;
+}>): Readonly<{ falseBlockingCases: number; totalCases: number }> {
+  if (input.report === null || typeof input.report !== "object" || Array.isArray(input.report)) {
+    throw new Error("Validator precision report must be an object.");
+  }
+  const report = input.report as Record<string, unknown>;
+  if (report.version !== ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION) {
+    throw new Error("Validator precision report version is not the released version.");
+  }
+  if (report.manifestFingerprint !== input.manifestFingerprint) {
+    throw new Error("Validator precision report does not belong to the F3 manifest.");
+  }
+  if (!Array.isArray(report.cases)) {
+    throw new Error("Validator precision report cases must be an array.");
+  }
+
+  const expectedIds = new Set<string>(
+    ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
+  );
+  const seenIds = new Set<string>();
+  let falseBlockingCases = 0;
+  for (const value of report.cases) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("Validator precision report contains a non-object case.");
+    }
+    const entry = value as Record<string, unknown>;
+    const fixtureId = typeof entry.fixtureId === "string" ? entry.fixtureId : "";
+    if (!expectedIds.has(fixtureId) || seenIds.has(fixtureId)) {
+      throw new Error(
+        `Validator precision report has an unknown or duplicate fixture ${fixtureId}.`,
+      );
+    }
+    seenIds.add(fixtureId);
+    if (entry.outcome !== "completed") {
+      throw new Error(`Validator precision fixture ${fixtureId} is not completed.`);
+    }
+    if (entry.verdict !== "accepted" && entry.verdict !== "blocked") {
+      throw new Error(`Validator precision fixture ${fixtureId} has an invalid verdict.`);
+    }
+    if (
+      !Array.isArray(entry.blockingFindingCodes) ||
+      entry.blockingFindingCodes.some((code) => typeof code !== "string")
+    ) {
+      throw new Error(
+        `Validator precision fixture ${fixtureId} has invalid blocking finding codes.`,
+      );
+    }
+    if (entry.verdict === "blocked" || entry.blockingFindingCodes.length > 0) {
+      falseBlockingCases += 1;
+    }
+  }
+  if (seenIds.size !== expectedIds.size) {
+    throw new Error("Validator precision report does not cover every frozen fixture exactly once.");
+  }
+  if (falseBlockingCases !== 0) {
+    throw new Error(
+      `Validator precision report contains ${falseBlockingCases} false-blocking verdict(s).`,
+    );
+  }
+  return { falseBlockingCases, totalCases: seenIds.size };
+}
+
+export function verifyValidatorPrecisionReportArtifact(input: Readonly<{
+  bytes: Uint8Array;
+  expectedSha256: string;
+  manifestFingerprint: string;
+}>): Readonly<{ falseBlockingCases: number; totalCases: number }> {
+  if (sha256Bytes(input.bytes) !== input.expectedSha256) {
+    throw new Error(
+      "Validator precision report bytes do not match validatorCalibration.precisionReportSha256.",
+    );
+  }
+  return verifyValidatorPrecisionReport({
+    report: parseJson<unknown>(input.bytes, "validator precision report"),
+    manifestFingerprint: input.manifestFingerprint,
+  });
+}
+
+function evidenceDeploymentId(value: unknown): string | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const result = (value as Record<string, unknown>).result;
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return null;
+  const deploymentId = (result as Record<string, unknown>).deploymentId;
+  return typeof deploymentId === "string" && deploymentId.trim() !== ""
+    ? deploymentId
+    : null;
+}
+
+function evidenceReleaseIdentity(value: unknown): string | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const result = (value as Record<string, unknown>).result;
+  if (result === null || typeof result !== "object" || Array.isArray(result)) return null;
+  const identity = (result as Record<string, unknown>).releaseIdentityFingerprint;
+  return typeof identity === "string" && identity.trim() !== "" ? identity : null;
+}
+
+function currentMigrationPinsSync(directory: string): readonly { name: string; sha256: string }[] {
+  return readdirSync(directory)
+    .filter((name) => name.endsWith(".sql"))
+    .sort((left, right) => left.localeCompare(right))
+    .map((name) => ({
+      name,
+      sha256: createHash("sha256")
+        .update(readFileSync(resolve(directory, name)))
+        .digest("hex"),
+    }));
+}
+
 async function readJson<T>(path: string, label: string): Promise<T> {
   return parseJson(await readFile(path), label);
 }
@@ -114,6 +227,7 @@ function verifyEvidenceValues(
   root: string,
   f3ManifestBytes: Uint8Array,
   ledgerBytes: Uint8Array,
+  precisionReportBytes: Uint8Array,
   f3Manifest: AcceptanceManifest,
   ledger: ValidatorAdjudicationLedger,
   catalog: FixtureCatalog,
@@ -176,16 +290,43 @@ function verifyEvidenceValues(
       "Validator calibration ledger bytes do not match validatorCalibration.ledgerSha256.",
     );
   }
+  const precisionSummary = verifyValidatorPrecisionReportArtifact({
+    bytes: precisionReportBytes,
+    expectedSha256: input.validatorCalibration.precisionReportSha256,
+    manifestFingerprint: f3Manifest.fingerprint,
+  });
+  if (
+    input.validatorCalibration.precisionReportVersion !==
+      ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION ||
+    precisionSummary.totalCases !== input.validatorCalibration.precisionTotalCases ||
+    precisionSummary.falseBlockingCases !==
+      input.validatorCalibration.precisionFalseBlockingCases
+  ) {
+    throw new Error("Validator precision report summary does not match the G1 calibration pin.");
+  }
 
   const summary = validateValidatorLedger({ catalog, ledger });
   if (
     summary.total !== input.validatorCalibration.totalCases ||
-    summary.accepted !== input.validatorCalibration.acceptedCases
+    summary.accepted !== input.validatorCalibration.acceptedCases ||
+    summary.maxRejects !== input.validatorCalibration.maxRejects
   ) {
     throw new Error(
-      `Validator calibration counts do not match the ledger (${summary.accepted}/${summary.total}).`,
+      `Validator calibration counts do not match the ledger (${summary.accepted}/${summary.total}, maxRejects ${summary.maxRejects}).`,
     );
   }
+  const expectedReleaseIdentity = buildG1ReleaseIdentityFingerprint({
+    gitCommit: input.gitCommit,
+    migrations: currentMigrationPinsSync(resolve(root, "packages/data/migrations")),
+    purgeMarkerMigrations: currentMigrationPinsSync(
+      resolve(root, "packages/data/migrations-purge-marker"),
+    ),
+    roleConfigurations: input.roleConfigurations,
+    fixture: input.fixture,
+  });
+  let hostedCanaryDeploymentId: string | null = null;
+  let releaseDeploymentId: string | null = null;
+  let releaseIdentity: string | null = null;
   for (const entry of input.evidence) {
     if (entry.status !== "verified") continue;
     const artifactPath = repositoryFile(
@@ -199,12 +340,13 @@ function verifyEvidenceValues(
         `${entry.criterion} artifact bytes do not match its artifactSha256.`,
       );
     }
+    const artifactValue = parseJson<unknown>(artifactBytes, `${entry.criterion} evidence artifact`);
     const artifactMismatches = verifyOneA3bG1EvidenceArtifact({
-      value: parseJson<unknown>(artifactBytes, `${entry.criterion} evidence artifact`),
+      value: artifactValue,
       evidence: entry,
       gitCommit: input.gitCommit,
       f3ManifestFingerprint: f3Manifest.fingerprint,
-      fixtureCatalogSha256: f3Manifest.catalog.sha256,
+      fixtureCatalogSha256: f3Manifest.catalog.sha256.slice("sha256:".length),
       knownFixtureIds: new Set(catalog.scenarios.map((fixture) => fixture.id)),
     });
     if (artifactMismatches.length > 0) {
@@ -212,6 +354,26 @@ function verifyEvidenceValues(
         `${entry.criterion} evidence artifact is invalid: ${artifactMismatches.join("; ")}`,
       );
     }
+    if (entry.criterion === "AC-W01") {
+      hostedCanaryDeploymentId = evidenceDeploymentId(artifactValue);
+    } else if (entry.criterion === "AC-D01") {
+      releaseDeploymentId = evidenceDeploymentId(artifactValue);
+      releaseIdentity = evidenceReleaseIdentity(artifactValue);
+    }
+  }
+  if (!releaseIdentity || releaseIdentity !== expectedReleaseIdentity) {
+    throw new Error(
+      "AC-D01 release evidence must bind the computed release identity fingerprint.",
+    );
+  }
+  if (
+    !hostedCanaryDeploymentId ||
+    !releaseDeploymentId ||
+    hostedCanaryDeploymentId !== releaseDeploymentId
+  ) {
+    throw new Error(
+      "AC-W01 hosted Workflow evidence and AC-D01 release evidence must bind the same deployment ID.",
+    );
   }
   return { acceptedCases: summary.accepted, totalCases: summary.total };
 }
@@ -237,14 +399,20 @@ export async function verifyG1EvidenceFiles(
     input.validatorCalibration.ledgerPath,
     "validatorCalibration.ledgerPath",
   );
+  const precisionReportPath = repositoryFile(
+    root,
+    input.validatorCalibration.precisionReportPath,
+    "validatorCalibration.precisionReportPath",
+  );
   const catalogPath = repositoryFile(
     root,
     "eval/continuation-acceptance-1a3b/fixtures.json",
     "F3 fixture catalog path",
   );
-  const [f3ManifestBytes, ledgerBytes] = await Promise.all([
+  const [f3ManifestBytes, ledgerBytes, precisionReportBytes] = await Promise.all([
     readFile(f3ManifestPath),
     readFile(ledgerPath),
+    readFile(precisionReportPath),
   ]);
   const f3Manifest = await readJson<AcceptanceManifest>(
     f3ManifestPath,
@@ -271,6 +439,7 @@ export async function verifyG1EvidenceFiles(
     root,
     f3ManifestBytes,
     ledgerBytes,
+    precisionReportBytes,
     f3Manifest,
     ledger,
     catalog,
@@ -296,6 +465,11 @@ export function verifyG1EvidenceFilesSync(
     input.validatorCalibration.ledgerPath,
     "validatorCalibration.ledgerPath",
   );
+  const precisionReportPath = repositoryFile(
+    root,
+    input.validatorCalibration.precisionReportPath,
+    "validatorCalibration.precisionReportPath",
+  );
   const catalogPath = repositoryFile(
     root,
     "eval/continuation-acceptance-1a3b/fixtures.json",
@@ -303,12 +477,14 @@ export function verifyG1EvidenceFilesSync(
   );
   const f3ManifestBytes = readFileSync(f3ManifestPath);
   const ledgerBytes = readFileSync(ledgerPath);
+  const precisionReportBytes = readFileSync(precisionReportPath);
   const catalogBytes = readFileSync(catalogPath);
   return verifyEvidenceValues(
     input,
     root,
     f3ManifestBytes,
     ledgerBytes,
+    precisionReportBytes,
     parseJson<AcceptanceManifest>(f3ManifestBytes, "F3 manifest"),
     parseJson<ValidatorAdjudicationLedger>(ledgerBytes, "validator calibration ledger"),
     parseJson<FixtureCatalog>(catalogBytes, "F3 fixture catalog"),
