@@ -134,6 +134,27 @@ export {
   type OneA3bG1ValidatorCalibration,
 } from "./one-a-3b-release";
 export {
+  buildG2ReleaseIdentityFingerprint,
+  buildOneA3bG2ReleaseManifest,
+  continuationPreferencePasses,
+  verifyOneA3bG2ReleaseManifest,
+  ONE_A_3B_G2_BUNDLE_ROLES,
+  ONE_A_3B_G2_CONTINUATION_LEDGER_VERSION,
+  ONE_A_3B_G2_DEFERRED_ROLES,
+  ONE_A_3B_G2_ENABLED_ROLES,
+  ONE_A_3B_G2_RELEASE_MANIFEST_VERSION,
+  ONE_A_3B_G2_REQUIRED_ACCEPTANCE_CRITERIA,
+  type OneA3bG2AcceptanceCriterion,
+  type OneA3bG2ContinuationCalibration,
+  type OneA3bG2Evidence,
+  type OneA3bG2EvidenceSource,
+  type OneA3bG2EvidenceStatus,
+  type OneA3bG2MigrationPin,
+  type OneA3bG2ReleaseManifest,
+  type OneA3bG2ReleaseManifestInput,
+  type OneA3bG2ReleaseManifestVerification,
+} from "./one-a-3b-g2-release";
+export {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   verifyOneA3bF3ReleaseArtifacts,
   verifyOneA3bG1EvidenceArtifact,
