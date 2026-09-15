@@ -3,24 +3,31 @@
 ## Goal
 
 Freeze the Open Loop / Proactive follow-up bundle behind a single G2
-release manifest with deterministic evidence, leaving actual Provider,
-hosted, and human steps explicitly pending instead of claimed.
+release manifest with deterministic evidence. Layers 1–2c plus the v2
+echo fix are implemented and committed (`1f6cb1c` on `agent/issue-207`);
+remaining are the layer-3 human/hosted steps (15-case review, hosted
+export scan, purge/rollback drills).
 
 ## Expected production change
 
-- Production files: 3 (`model-role-contract.ts`, `one-a-3b-g2-release.ts`,
-  `index.ts` in `packages/application`).
-- Production TypeScript: about 1340 lines (45 edited + ~1295 new);
-  tests and this contract are not counted in the bound.
-- Architecture boundaries: 1 — application release/rollout domain.
-- Migration: no. G2 reuses the C1–C3 tables and the existing Purge Surface
-  Registry; no new data surface.
-- Runtime/release wiring: no. Stage gates stay closed; gate opening,
-  persistence activation, and operator scripts are deferred layers.
-- Risk: MEDIUM, because rollout-gate code must not weaken the G1 contract
-  or let unexecuted Provider/hosted/human evidence read as a pass.
+- Cumulative committed state: layers 1 (release domain, `7ab27f5`),
+  2a (activation), 2b (extract lane), 2c (proactive lane), v2 echo
+  fix — one commit `1f6cb1c`, ~2750 insertions across 29 tracked
+  files plus 16 new files (providers, stage, lane adapter, scripts,
+  unit + system tests).
+- Architecture boundaries: ai, application, data, web — all within
+  the existing package direction; `pnpm check:boundaries` green.
+- Migration: no. G2 reuses the C1–C3 tables and the existing Purge
+  Surface Registry; no new data surface.
+- Runtime wiring: present but gated — G2 write switches default
+  closed; the G2 regime additionally requires the active G2 manifest
+  plus the switched G1 base. No switch is open.
+- Risk: MEDIUM-HIGH, carried by composition/egress branching on the
+  release stage; the G1 regime stays behavior-identical and is
+  covered by the G1 activation system test plus the G2-off
+  composition fallback test.
 
-## Bound exception
+## Bound exception (layer 1, historical)
 
 The 600-LOC production-diff bound is exceeded (~1340 lines). The excess
 is the G2 structural verifier (~470 lines) plus the stage-specific
@@ -52,7 +59,7 @@ G1 evidence machinery. File count (3), boundary count (1), migration
    write switch, no registry/workflow/provider/egress change: every
    execution gate stays closed. Evidence-file re-hashing inside the
    scripts is deferred to layer 3 (no evidence files exist yet).
-3. **G2 extract lane with shared runtime plumbing (2b, done 2026-09-15, uncommitted).**
+3. **G2 extract lane with shared runtime plumbing (2b, done 2026-09-15, in `1f6cb1c`).**
    Explicit G2 write switches (`SAYHEAR_OPEN_LOOP_EXTRACTION_ENABLED`,
    `SAYHEAR_PROACTIVE_FOLLOWUP_ENABLED`, same explicit-switch
    discipline as G1), composition derives the active G2 regime only
@@ -70,21 +77,33 @@ G1 evidence machinery. File count (3), boundary count (1), migration
    into `model_role_requested`, mirroring episode admission), and the
    workflow-gate branch for `open_loop.extract`. `proactive.followup`
    stays gate-closed until 2c.
-4. **G2 proactive lane (2c, deferred).** `proactive.followup` provider
-   (segment generation, plus next-event disposition classification
-   inside the same role so no other role's frozen contract is
-   touched), the `ProactiveFollowupSegmentStage` implementation
-   (prepare/generate/abandon over the existing reservation/segment/
-   use repositories), harness wiring, and the workflow-gate branch
-   for `proactive.followup`. Deferred as a separately reviewable
-   layer, not as scope loss: the release bundle still merges at
-   activation (layer 2a already enforces bundle atomicity).
-5. **G2 evidence and drills (deferred).** Two complete expression configs
-   through actual adapters/egress, Continuation 15-case Luke review,
-   exact-manifest purge/restore and rollback drills with suppression/use
-   preservation, hosted export scan. Deferred because these need real
-   Provider credentials, a hosted deployment, and Luke adjudication, none
-   of which are available to the agent.
+4. **G2 proactive lane (2c, done 2026-09-15, in `1f6cb1c`).**
+   `proactive.followup` provider (segment generation, plus next-event
+   disposition classification inside the same role),
+   `ProactiveFollowupSegmentStage` prepare/generate/abandon over the
+   existing reservation/segment/use repositories, harness wiring via
+   `apps/web/src/proactive-followup-lane.ts`, the workflow-gate crash-path
+   branch (`abandonSegmentByCommand` + discard, no model call, no retry),
+   and the recovery-scanner maintenance trigger
+   (`reconcileTerminalReservationsGlobal`). Postgres readers for turn
+   context, dialogue snapshot, lane watermark (`hasUnsettledExtraction`),
+   formation lineage, and gated summaries; no migration.
+5. **v2 echo fix (done 2026-09-15, in `1f6cb1c`, Luke-approved fix (a)).**
+   deepseek-flash egress evidence showed v1 insufficient: the
+   disposition prompt demanded echoing a locator the payload never
+   supplied, and the segment prompt demanded echoing an identity never
+   supplied as an object. The disposition request now carries
+   `finalTextLocator`, the segment request carries `targetRef`, both
+   prompts name the field, and the application validators check exact
+   echo. `proactive-followup-prompt` and `proactive-followup-policy-bundle`
+   v1 → v2 per SPEC §7.4; expression policy stays v1. Re-smoke on
+   deepseek-flash: 4/4 full passes (segment + disposition, exact echo).
+6. **G2 evidence and drills (open).** Continuation 15-case Luke review
+   (ON-vs-OFF comparison on identical Memory input, NOT expression
+   iteration — Luke decision 2026-09-15), exact-manifest purge/restore
+   and rollback drills with suppression/use preservation, hosted
+   export scan, evidence-file re-hashing inside the `release:g2`
+   scripts (deferred from 2a: no evidence files exist yet).
 
 ## Layer 2a bound
 
@@ -137,45 +156,77 @@ G1 evidence machinery. File count (3), boundary count (1), migration
   snapshot → admit → subject resolve → fake-provider extract →
   settled → scan converges, plus superseded-stale).
 
+## Layer 2c bound
+
+- Production files: 6 (AI role providers; application
+  proactive-followup provider/stage/types; data open-loop +
+  proactive-followup repositories; web lane adapter,
+  server-composition, model-role workflow, recovery-scanner
+  handler + route).
+- Architecture boundaries: 3 (ai, application+data via existing
+  package direction, web); workflow files touch application only
+  inside steps.
+- Migration: no. New repository reads/writes stay on the C2 tables
+  (reservations, uses, dispositions, segment commands); the two new
+  crash-path methods are idempotent by construction.
+- Release behavior: the segment generates in-request inside the turn
+  harness; the durable workflow owns only the crash path
+  (reclaim-then-discard, never retries per ADR-0132). Disposition
+  failure leaves the use unsettled and the target closed
+  (fail-closed, main response preserved).
+- Risk: MEDIUM-HIGH, same shape as 2b (composition/egress branching);
+  covered by fake-provider unit tests, two Neon system suites
+  (crash path + readers, proactive seam), and real-egress smoke.
+- Test-seam consequences: disposition/segment provider requests now
+  carry `finalTextLocator` / `targetRef` (v2); fixtures constructing
+  them were updated; `commitUse` fixtures pin prompt/bundle v2.
+
 ## Validation
 
-- `pnpm exec vitest run packages/application/src/one-a-3b-g2-release.test.ts`
-- `pnpm exec vitest run packages/application/src/one-a-3b-release.test.ts`
-  (G1 regression)
-- `pnpm typecheck`
-- `pnpm check:boundaries`
-- `pnpm check:purge-surfaces`
+- `CI=true pnpm exec vitest run --exclude 'tests/system/**'`
+  (1084 unit tests, DB-free).
+- Neon system suites (gitignored `.env.neon`, see handoff for
+  invocation notes): proactive crash path + readers, proactive seam,
+  open-loop extraction lane, open-loop lifecycle.
+- `pnpm typecheck`, `pnpm check:boundaries`,
+  `pnpm check:purge-surfaces`.
+- Real-egress smoke (authorized): `createRuntimeOneA3bRoleProviders`
+  with the DeepSeek adapter on `deepseek-flash`, synthetic frozen
+  input, outputs asserted through the repo validators (temp script,
+  deleted after the run; no writes, no switches touched).
 
-## Handoff (2026-09-15, branch `agent/issue-207`)
+## Handoff (2026-09-15, branch `agent/issue-207`, committed `1f6cb1c`)
 
 ### Where things stand
 
-- Layers 1, 2a, 2b are implemented; **nothing is committed** (working
-  tree on top of `7ab27f5`, parent `main`). Do not commit/push without
-  an explicit request.
-- 2b verification, all green at handoff time:
-  - Unit (DB-free): 1054 passed (`CI=true pnpm exec vitest run
-    --exclude 'tests/system/**'`).
-  - System (real Neon via gitignored `.env.neon`): 42 passed across 7
-    files — g1/g2 release activation, open-loop lifecycle,
-    model-role-command, narrative-validation, reflection-daily-weekly,
-    and the new `tests/system/open-loop-extraction-lane.system.test.ts`.
-  - `pnpm typecheck`, `pnpm check:boundaries`,
-    `pnpm check:purge-surfaces` green.
+- Layers 1, 2a, 2b, 2c, and the v2 echo fix are implemented and
+  committed. Working tree is clean (only gitignored worktree
+  scaffolding untracked). Do not push or rewrite history without an
+  explicit request.
+- Verification at commit time, all green (see Validation above):
+  1084 unit tests; Neon system suites for the lanes; typecheck,
+  boundaries, purge-surfaces.
+- Real-egress evidence (deepseek-flash, authorized run 2026-09-15):
+  v1 segment sufficient, v1 disposition insufficient (locator never
+  supplied); v2 supplies both echo objects and passes 4/4 full runs.
+  Raw outputs were reported to Luke; the temp script was deleted.
 - System-test invocation notes (Neon is remote and slow):
-  - `.env.neon` cannot be `source`d (special characters); load it with a
-    small Node dotenv-style loader and spawn vitest with the env.
-  - Pass `--hookTimeout=300000 --testTimeout=300000` and
-    `--maxWorkers=2`; 7 parallel files trip Neon contention and fail
-    hooks (looks like code failure, is not).
-- Two boundary violations were introduced and fixed mid-2b; the
-  checker is a reliable gate, keep running it:
-  - workflow files may only import `@sayhear/application` inside a
-    step (dynamic `await import`), plus the `-contract` subpaths at
-    top level — the lane policy constant rides the existing dynamic
-    import in `runModelRoleStep`.
-  - `packages/ai` (incl. tests) may not import `@sayhear/domain`;
-    brand constructors come re-exported from `@sayhear/application`.
+  - `.env.neon` cannot be `source`d (special characters); export
+    single vars instead, e.g.
+    `export TEST_DATABASE_URL="$(grep '^TEST_DATABASE_URL=' .env.neon | cut -d= -f2-)"`.
+  - Prefer `--maxWorkers=2`; 7 parallel files trip Neon contention
+    and fail hooks (looks like code failure, is not).
+  - Slow suites need raised hook budgets (`beforeAll(..., 120_000)`
+    pattern in `tests/system/proactive-followup-crash-path.system.test.ts`).
+  - node-pg deduces each placeholder independently: never reuse one
+    `$n` in conflicting type positions (e.g. uuid column + text
+    concat); use a separate placeholder per context.
+  - DeepSeek snapshot guard: `modelSnapshot` must equal the served
+    model id (`deepseek-flash`), or the provider rejects its own call.
+- Known pre-existing environment flake (not caused by this stack,
+  file untouched): `tests/system/g2-release-activation.system.test.ts`
+  runs full migrations in `beforeEach` and exceeds the 10s hook
+  budget on cold Neon; passes intermittently on retry.
 
 ### Key design points the next agent must preserve
 
@@ -199,30 +250,26 @@ G1 evidence machinery. File count (3), boundary count (1), migration
 
 ### Next work
 
-1. **Layer 2c (proactive lane, no Luke input needed).** Mirror the 2b
-   shape: `proactive.followup` provider in
-   `packages/ai/src/one-a-3b-role-providers.ts` (segment generation +
-   next-event disposition inside the same role),
-   `ProactiveFollowupSegmentStage` prepare/generate/abandon over the
-   existing reservation/segment/use repositories
-   (`packages/data/src/postgres-proactive-followup-repository.ts`
-   already exists), harness wiring, workflow-gate branch for
-   `proactive.followup` next to the extract branch in
-   `apps/web/src/workflows/model-role.workflow.ts`, scan/scheduler
-   trigger, fake-provider unit + system tests. Suggested bound: same
-   shape as 2b, no migration (C2 tables exist), MEDIUM-HIGH.
-2. **Layer 3 (evidence and drills).** Blocked on Luke (see below).
-3. Commit discipline: layers landed as one uncommitted tree; when Luke
-   asks for commits, keep 2b (and later 2c) as separate reviewable
-   commits on `agent/issue-207`, never rewrite `main` history.
+1. **Layer 3 remainder (evidence and drills).** Blocked on Luke (see
+   below): 15-case ON-vs-OFF review on v2, exact-manifest
+   purge/restore and rollback drills, hosted export scan,
+   evidence-file re-hashing in the `release:g2` scripts.
+2. Commit discipline: the stack landed as one commit `1f6cb1c` per
+   Luke's request; keep layer-3 work as separate reviewable commits
+   on `agent/issue-207`, never rewrite `main` history.
 
-### Needs Luke (blocking layer 3 only; 2c is unblocked)
+### Needs Luke (blocking layer 3 only; implementation is done)
 
-- [ ] Real Provider credentials/egress approval for the two evaluated
-      expression configs (actual adapters/egress run).
+- [x] Real Provider credentials/egress approval — DeepSeek key
+  available; authorized smoke completed (v1 verdict + v2 4/4).
+- [x] v1-sufficiency decision — v1 insufficient (disposition);
+  fix approved (option a); prompt + bundle now v2.
+- [x] Evaluation framing — same model `deepseek-flash` both sides;
+  goal is ON-vs-OFF conversation comparison, not expression
+  iteration.
 - [ ] Continuation 15-case review (8/5/2, strict-positive net
       preference, per-locale + protected categories non-negative) —
-      Luke-owned adjudication per the G2 manifest calibration.
+      Luke-owned cases + adjudication per the G2 manifest calibration.
 - [ ] Hosted deployment + `SAYHEAR_DEPLOYED_GIT_COMMIT_SHA` (or Vercel
       SHA) so the G2 manifest `gitCommit` check and the hosted export
       scan can run.
@@ -231,16 +278,18 @@ G1 evidence machinery. File count (3), boundary count (1), migration
 
 ### Suggested skills for the next agent
 
-- `implement-by-layers` for layer 2c (dependency-ordered, reviewable
-  layers with the fixed review budget).
-- `tdd` for the provider/runner seams (validators and deterministic
-  cores first, fakes in tests, no live calls).
+- `research` for layer-3 legwork that needs primary sources (hosted
+  export-scan behavior, DeepSeek model-identity changes) — capture
+  findings as a repo file, not chat text.
 - `diagnosing-bugs` if a system-test failure appears under Neon —
   first suspect hook/worker contention (rerun with `--maxWorkers=2`),
-  then the fail-closed fingerprint binding, then real logic.
-- `code-review-with-budget` before reporting 2c done (Standards =
+  then cold-start hook budgets, then the fail-closed fingerprint
+  binding, then real logic.
+- `code-review-with-budget` before reporting layer 3 done (Standards =
   boundaries/workflow-transform rules, Spec = #207 AC + SPEC #193
   ch.6/7), two passes max.
-- `create-github-issue` if any follow-up (e.g. G2-on composition pin
-  without DB, currently covered only indirectly) should be tracked
-  rather than fixed inline.
+- `create-github-issue` for follow-ups that should be tracked, not
+  fixed inline (e.g. the `g2-release-activation` hook-budget flake;
+  exchange-mention detection, currently a documented `false` default
+  in `apps/web/src/proactive-followup-lane.ts`, needs a dedicated
+  mention pipeline).
