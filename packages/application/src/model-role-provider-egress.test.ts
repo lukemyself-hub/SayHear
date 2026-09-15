@@ -129,6 +129,50 @@ describe("model-role Provider Egress", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it("verifies the G2 bundle release for a bundle role instead of the G1 release", async () => {
+    const claimProviderDispatch = vi.fn(async () => ({ outcome: "ready" as const }));
+    const verifyActiveG1Release = vi.fn(async () => {});
+    const verifyActiveG2Release = vi.fn(async () => {});
+    const execute = vi.fn(async () => "provider-result");
+    const egress = createModelRoleProviderEgress({
+      commandService: {
+        ...commandService(claimProviderDispatch),
+        verifyActiveG1Release,
+        verifyActiveG2Release,
+      },
+      recoveryGate: openGate(),
+    });
+
+    await expect(
+      egress.dispatch({ ...dispatchInput, role: "open_loop.extract", execute }),
+    ).resolves.toBe("provider-result");
+    expect(verifyActiveG2Release).toHaveBeenCalledOnce();
+    expect(verifyActiveG1Release).not.toHaveBeenCalled();
+    expect(claimProviderDispatch).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("keeps verifying the G1 release for a G1 role when the G2 verifier exists", async () => {
+    const claimProviderDispatch = vi.fn(async () => ({ outcome: "ready" as const }));
+    const verifyActiveG1Release = vi.fn(async () => {});
+    const verifyActiveG2Release = vi.fn(async () => {});
+    const execute = vi.fn(async () => "provider-result");
+    const egress = createModelRoleProviderEgress({
+      commandService: {
+        ...commandService(claimProviderDispatch),
+        verifyActiveG1Release,
+        verifyActiveG2Release,
+      },
+      recoveryGate: openGate(),
+    });
+
+    await expect(egress.dispatch({ ...dispatchInput, execute })).resolves.toBe(
+      "provider-result",
+    );
+    expect(verifyActiveG1Release).toHaveBeenCalledOnce();
+    expect(verifyActiveG2Release).not.toHaveBeenCalled();
+  });
+
   it("rechecks the source head after claiming and before the provider callback", async () => {
     const claimProviderDispatch = vi.fn(async () => ({ outcome: "ready" as const }));
     const discardAttempt = vi.fn(async () => ({

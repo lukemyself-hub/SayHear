@@ -32,6 +32,23 @@ export function createRecoveryScannerHandler(dependencies: {
     >;
   };
   /**
+   * G2 extract-lane trigger (issue #207 layer 2b): idempotent per-Event
+   * extraction admissions, dispatched below with the rest of the outbox.
+   * The service itself stays closed until the G2 bundle switches open.
+   */
+  openLoopExtractionScanService?: {
+    scanPending(): Promise<Readonly<{ extractionsQueued: number }>>;
+  };
+  /**
+   * G2 proactive-lane maintenance (issue #207 layer 2c): converges active
+   * reservations whose segment commands already terminalized (crashed turns
+   * the workflow never redelivered). No second scheduler; runs with the
+   * existing cron surface.
+   */
+  proactiveFollowupMaintenanceService?: {
+    scan(): Promise<Readonly<{ reconciled: number }>>;
+  };
+  /**
    * Candidate Review release/remap backstop (SPEC #193 §8.4, ADR-0122):
    * re-runs the idempotent published-Proposal scan, so a missed release
    * outbox event or an unfinished remap converges without any second
@@ -90,6 +107,17 @@ export function createRecoveryScannerHandler(dependencies: {
       const reflection = dependencies.reflectionSchedulerScanService
         ? await dependencies.reflectionSchedulerScanService.scanPending()
         : { dailyQueued: 0, weeklyQueued: 0, maintenanceQueued: 0 };
+      // G2 Open Loop extraction scheduling (issue #207): idempotent
+      // per-Event extract commands, dispatched below.
+      const openLoopExtraction = dependencies.openLoopExtractionScanService
+        ? await dependencies.openLoopExtractionScanService.scanPending()
+        : { extractionsQueued: 0 };
+      // G2 proactive reservation maintenance (issue #207): idempotent
+      // terminal-reservation convergence, dispatched below.
+      const proactiveFollowupMaintenance =
+        dependencies.proactiveFollowupMaintenanceService
+          ? await dependencies.proactiveFollowupMaintenanceService.scan()
+          : { reconciled: 0 };
       // Candidate Review governance backstop (SPEC #193 §8.4): idempotent
       // remap commands for published-but-unremapped awaiting Candidates,
       // dispatched below with the rest of the outbox.
@@ -108,6 +136,8 @@ export function createRecoveryScannerHandler(dependencies: {
         consolidation,
         episode,
         reflection,
+        openLoopExtraction,
+        proactiveFollowupMaintenance,
         candidateRemaps,
         outbox,
       });

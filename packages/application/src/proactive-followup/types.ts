@@ -14,13 +14,13 @@ export const PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION =
 export const PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION =
   "proactive-followup-commit:v1" as const;
 export const PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION =
-  "proactive-followup-policy-bundle:v1" as const;
+  "proactive-followup-policy-bundle:v2" as const;
 export const PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION =
   "proactive-followup-opportunity:v1" as const;
 export const PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION =
   "proactive-followup-use:v1" as const;
 export const PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION =
-  "proactive-followup-prompt:v1" as const;
+  "proactive-followup-prompt:v2" as const;
 export const PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION =
   "proactive-followup-expression:v1" as const;
 export const PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION =

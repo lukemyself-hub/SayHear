@@ -21,6 +21,9 @@ const systemDescribe = testDatabaseUrl ? describe : describe.skip;
 
 const userId = asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc68");
 const now = new Date("2026-09-08T23:40:00.000Z");
+// Bundle-role admission is fail-closed without a G2 regime binding (issue
+// #207): the test seam carries a synthetic G2 manifest fingerprint.
+const G2_FINGERPRINT = `sha256:${"e".repeat(64)}`;
 const configuration: ModelRoleConfigurationSnapshot = {
   role: "open_loop.extract",
   configVersion: "system-open-loop:v1",
@@ -98,13 +101,14 @@ systemDescribe("1A.3b model role persistence", () => {
     await seededDatabase.pool.query(
       `INSERT INTO model_role_rollout_pins (
          role, rollout_pin, config_version, provider_policy_version,
-         status, activated_at
-       ) VALUES ($1, $2, $3, $4, 'active', $5)`,
+         release_fingerprint, status, activated_at
+       ) VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
       [
         configuration.role,
         configuration.rolloutPin,
         configuration.configVersion,
         configuration.providerPolicyVersion,
+        G2_FINGERPRINT,
         now,
       ],
     );
@@ -117,7 +121,12 @@ systemDescribe("1A.3b model role persistence", () => {
   it("deduplicates admission, retries once, and keeps the same logical command", async () => {
     const service = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
-      repository: new PostgresModelRoleCommandRepository(database!.pool),
+      repository: new PostgresModelRoleCommandRepository(
+        database!.pool,
+        undefined,
+        undefined,
+        G2_FINGERPRINT,
+      ),
     });
     const input = {
       userId,
@@ -252,7 +261,12 @@ systemDescribe("1A.3b model role persistence", () => {
   it("discards a late result after the owner epoch advances", async () => {
     const service = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
-      repository: new PostgresModelRoleCommandRepository(database!.pool),
+      repository: new PostgresModelRoleCommandRepository(
+        database!.pool,
+        undefined,
+        undefined,
+        G2_FINGERPRINT,
+      ),
     });
     const command = await service.admit({
       userId,

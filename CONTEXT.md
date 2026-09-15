@@ -184,6 +184,18 @@ _Avoid_: Complete Assistant Response, Resumable delivery
 由唯一权威评审（Internal Core 阶段即 Internal Owner 本人）在盲评中对每个可比回合和完整场景作出 A 更好 / 持平 / B 更好的相对判断；场景整体判断用于汇总，六个味觉维度只在争议场景中定向诊断，不加权成总分，也不设绝对分数线。
 _Avoid_: Taste Score, Composite score, Automated grading, Judge score
 
+**Evaluation Scene**:
+scenario-pack 或 F3 fixture 目录中冻结的合成对话素材，含固定用户输入与共享输入摘要；它是两侧 transcript 的共同输入，不是评审判断的单位。
+_Avoid_: Test case, Review sample
+
+**Calibration Case**:
+进入 15 例 calibration 的评审单元，由一个 scene 的 OFF/ON 两侧 transcript 加逐回合与场景整体判断构成；净偏好与回退计数只在这层汇总。
+_Avoid_: Scene, Fixture content
+
+**Evidence Fixture ID**:
+证据条目引用可复现输入的标识，指向 manifest 冻结的 fixture 与种子；它是台账与 artifact 的连接键，不是对话内容本身。
+_Avoid_: Scenario ID, Transcript hash
+
 **生命力**:
 回应让用户感到是在对一个真实在场、当下投入的倾听者说话，而不是在处理一条输入；由措辞、节奏与情绪命中共同构成。
 _Avoid_: Engagement score, Persona strength

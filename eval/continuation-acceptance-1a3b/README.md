@@ -55,7 +55,16 @@ plus the resulting `assistantText`. Both arms therefore prove that their
 Events, Memory, retrieval, Portrait, Persona, locale, safety, and Conversation
 inputs came from the same frozen catalog entry before pairing.
 
-After a clean incumbent is frozen, build either blinded review package:
+After a clean incumbent is frozen, capture the bundle-enabled candidate arm
+through the same frozen inputs (the open-loop lane evolves via the production
+extract runner; the proactive stage may append an isolated segment):
+
+```sh
+pnpm exec tsx eval/continuation-acceptance-1a3b/run-synthetic-candidate-capture.ts \
+  --out eval/continuation-acceptance-1a3b/run/continuation-candidate.json
+```
+
+Then build either blinded review package:
 
 ```sh
 pnpm exec tsx eval/continuation-acceptance-1a3b/build-review-package.ts \

@@ -1666,4 +1666,349 @@ export class PostgresProactiveFollowupRepository {
       return result.rows.length;
     });
   }
+
+  /**
+   * Owner-global variant of the terminal-reservation reconcile (issue #207
+   * layer 2c). The recovery scan owns no single owner, so it converges every
+   * owner in bounded batches; the per-owner variant above stays for targeted
+   * drills. No migration: read/write on the existing C2 tables only.
+   */
+  public async reconcileTerminalReservationsGlobal(input: Readonly<{
+    now: Date;
+    limit?: number;
+  }>): Promise<number> {
+    return inTransaction(this.pool, async (client) => {
+      const result = await client.query<{ proactive_followup_reservation_id: string }>(
+        `SELECT reservation.proactive_followup_reservation_id
+         FROM proactive_followup_reservations reservation
+         INNER JOIN generation_commands segment
+           ON segment.generation_command_id = reservation.segment_generation_command_id
+           AND segment.user_id = reservation.user_id
+         WHERE reservation.status = 'active'
+           AND segment.status IN ('succeeded', 'failed', 'interrupted')
+         ORDER BY reservation.created_at
+         LIMIT $1
+         FOR UPDATE OF reservation SKIP LOCKED`,
+        [input.limit ?? 100],
+      );
+      for (const row of result.rows) {
+        await client.query(
+          `UPDATE proactive_followup_reservations
+           SET status = 'abandoned', terminal_at = $2,
+               selection_manifest = jsonb_set(
+                 selection_manifest, '{reservationStatus}', '"abandoned"'::jsonb
+               )
+           WHERE proactive_followup_reservation_id = $1
+             AND status = 'active'`,
+          [row.proactive_followup_reservation_id, input.now],
+        );
+      }
+      return result.rows.length;
+    });
+  }
+
+  /**
+   * Standalone segment abandon for the in-request Stage path (issue #207
+   * layer 2c). Runs both the bound and unbound variants idempotently: a plan
+   * always binds before it exists, but a redelivered abandon must not fail
+   * when the first attempt already terminalized the reservation.
+   */
+  public async abandonSegment(input: Readonly<{
+    userId: string;
+    expectedDataEpoch: number;
+    reservationId: string;
+    mainGenerationCommandId: string;
+    segmentGenerationCommandId: string;
+    now: Date;
+  }>): Promise<void> {
+    return inTransaction(this.pool, async (client) => {
+      await this.abandonSegmentWithin(client, input);
+      await this.abandonUnboundSegmentWithin(client, {
+        userId: input.userId,
+        expectedDataEpoch: input.expectedDataEpoch,
+        reservationId: input.reservationId,
+        mainGenerationCommandId: input.mainGenerationCommandId,
+        now: input.now,
+      });
+    });
+  }
+
+  /**
+   * Crash-path segment reclaim for the durable workflow branch (issue #207
+   * layer 2c). Locates the active reservation by its bound segment command
+   * and abandons it; the caller terminalizes the command itself. Returns
+   * not_found when no active reservation references the command, so the
+   * already-settled happy path stays a no-op.
+   */
+  public async abandonSegmentByCommand(input: Readonly<{
+    userId: string;
+    segmentGenerationCommandId: string;
+    now: Date;
+  }>): Promise<Readonly<{ outcome: "abandoned" | "not_found" }>> {
+    return inTransaction(this.pool, async (client) => {
+      const found = await client.query<{
+        proactive_followup_reservation_id: string;
+        expected_data_epoch: string;
+        main_generation_command_id: string;
+      }>(
+        `SELECT proactive_followup_reservation_id, expected_data_epoch::text,
+                main_generation_command_id
+         FROM proactive_followup_reservations
+         WHERE segment_generation_command_id = $1 AND user_id = $2
+           AND status = 'active'
+         FOR UPDATE`,
+        [input.segmentGenerationCommandId, input.userId],
+      );
+      const row = found.rows[0];
+      if (!row) return { outcome: "not_found" };
+      await this.abandonSegmentWithin(client, {
+        userId: input.userId,
+        expectedDataEpoch: Number(row.expected_data_epoch),
+        reservationId: row.proactive_followup_reservation_id,
+        mainGenerationCommandId: row.main_generation_command_id,
+        segmentGenerationCommandId: input.segmentGenerationCommandId,
+        now: input.now,
+      });
+      return { outcome: "abandoned" };
+    });
+  }
+
+  /**
+   * Turn-context read for Stage prepare (issue #207 layer 2c). Resolves the
+   * owning session/exchange/sequence/source-revision/epoch/timezone plus the
+   * main command locale from the request event revision. Null when the
+   * revision is gone, purged, superseded, fenced, or owner-inactive.
+   */
+  public async readTurnContext(input: Readonly<{
+    userId: string;
+    requestEventRevisionId: string;
+    mainGenerationCommandId: string;
+  }>): Promise<Readonly<{
+    dailySessionId: string;
+    continuousExchangeNo: number;
+    currentUserEventSequence: number;
+    currentSourceRevision: number;
+    dialogueRevision: number;
+    expectedDataEpoch: number;
+    timeZone: string;
+    interactionTurnId: string;
+    locale: string;
+  }> | null> {
+    const result = await this.pool.query<{
+      daily_session_id: string;
+      continuous_exchange_no: number;
+      sequence_no: string;
+      source_revision: string;
+      dialogue_revision: string;
+      data_epoch: string;
+      timezone_at_start: string;
+      interaction_turn_id: string;
+      locale: string | null;
+    }>(
+      `SELECT event.daily_session_id::text,
+              turn.continuous_exchange_no,
+              event.sequence_no::text,
+              session.source_revision::text,
+              session.dialogue_revision::text,
+              owner.data_epoch::text,
+              session.timezone_at_start,
+              turn.interaction_turn_id::text,
+              main.locale
+       FROM conversation_event_revisions revision
+       INNER JOIN conversation_events event
+         ON event.conversation_event_id = revision.conversation_event_id
+         AND event.user_id = revision.user_id
+       INNER JOIN interaction_turns turn
+         ON turn.interaction_turn_id = event.interaction_turn_id
+         AND turn.user_id = event.user_id
+       INNER JOIN daily_sessions session
+         ON session.daily_session_id = event.daily_session_id
+         AND session.user_id = event.user_id
+       INNER JOIN app_users owner
+         ON owner.user_id = revision.user_id
+       INNER JOIN generation_commands main
+         ON main.generation_command_id = $3
+         AND main.user_id = revision.user_id
+       WHERE revision.conversation_event_revision_id = $1
+         AND revision.user_id = $2
+         AND revision.content_purged_at IS NULL
+         AND event.actor = 'user'
+         AND event.lifecycle_status = 'active'
+         AND event.current_revision_id = revision.conversation_event_revision_id
+         AND owner.status = 'active'`,
+      [input.requestEventRevisionId, input.userId, input.mainGenerationCommandId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      dailySessionId: row.daily_session_id,
+      continuousExchangeNo: row.continuous_exchange_no,
+      currentUserEventSequence: Number(row.sequence_no),
+      currentSourceRevision: Number(row.source_revision),
+      dialogueRevision: Number(row.dialogue_revision),
+      expectedDataEpoch: Number(row.data_epoch),
+      timeZone: row.timezone_at_start,
+      interactionTurnId: row.interaction_turn_id,
+      locale: row.locale ?? "en-US",
+    };
+  }
+
+  /**
+   * Latest dialogue projection mapped onto the selection snapshot (issue
+   * #207 layer 2c). Reports current only when the projection covers the
+   * request event under the session's live revisions; anything older reports
+   * lagging so the selector fails closed with dialogue_state_not_ready.
+   */
+  public async readDialogueSnapshot(input: Readonly<{
+    userId: string;
+    dailySessionId: string;
+    dialogueRevision: number | null;
+    sourceRevision: number;
+    currentUserEventSequence: number;
+    requestEventRevisionId: string;
+  }>): Promise<import("@sayhear/application").ProactiveFollowupDialogueSnapshot | null> {
+    const result = await this.pool.query<{
+      covered_through_sequence_no: string;
+      dialogue_revision: string;
+      source_revision: string;
+      content: unknown;
+    }>(
+      `SELECT version.covered_through_sequence_no::text,
+              version.dialogue_revision::text,
+              version.source_revision::text,
+              version.content
+       FROM dialogue_state_versions version
+       INNER JOIN daily_sessions session
+         ON session.daily_session_id = version.daily_session_id
+         AND session.user_id = version.user_id
+       WHERE version.user_id = $1
+         AND version.daily_session_id = $2
+       ORDER BY version.version_no DESC
+       LIMIT 1`,
+      [input.userId, input.dailySessionId],
+    );
+    const row = result.rows[0];
+    if (!row || typeof row.content !== "object" || row.content === null) {
+      return null;
+    }
+    const content = row.content as Record<string, unknown>;
+    const focus = content.current_request_requires_focus as
+      | { value?: unknown; confidence?: unknown; sourceRevisionIds?: unknown }
+      | undefined;
+    const covered = Number(row.covered_through_sequence_no);
+    const revisionMatch =
+      input.dialogueRevision === null ||
+      Number(row.dialogue_revision) === input.dialogueRevision;
+    const current =
+      covered === input.currentUserEventSequence &&
+      revisionMatch &&
+      Number(row.source_revision) === input.sourceRevision;
+    const coveredEvent = await this.pool.query<{
+      current_revision_id: string | null;
+    }>(
+      `SELECT event.current_revision_id
+       FROM conversation_events event
+       WHERE event.user_id = $1 AND event.daily_session_id = $2
+         AND event.sequence_no = $3`,
+      [input.userId, input.dailySessionId, covered],
+    );
+    return {
+      status: current ? "current" : "lagging",
+      coveredThroughSequence: covered,
+      currentEventSequence: covered,
+      currentEventRevisionId:
+        coveredEvent.rows[0]?.current_revision_id ??
+        input.requestEventRevisionId,
+      currentRequestRequiresFocus: {
+        value:
+          typeof focus?.value === "boolean" || focus?.value === null
+            ? (focus.value as boolean | null)
+            : null,
+        confidence:
+          typeof focus?.confidence === "number" ? focus.confidence : 0,
+        sourceRevisionIds: Array.isArray(focus?.sourceRevisionIds)
+          ? (focus.sourceRevisionIds as unknown[]).filter(
+              (entry): entry is string => typeof entry === "string",
+            )
+          : [],
+      },
+    };
+  }
+
+  /**
+   * Revision text read for disposition classification (issue #207 layer 2c).
+   * Null when the revision is gone or purged; the caller leaves the use
+   * unsettled and the target stays closed.
+   */
+  public async readEventRevisionText(input: Readonly<{
+    userId: string;
+    revisionId: string;
+  }>): Promise<Readonly<{ text: string }> | null> {
+    const result = await this.pool.query<{ canonical_text: string }>(
+      `SELECT revision.canonical_text
+       FROM conversation_event_revisions revision
+       WHERE revision.conversation_event_revision_id = $1
+         AND revision.user_id = $2
+         AND revision.content_purged_at IS NULL`,
+      [input.revisionId, input.userId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return { text: row.canonical_text };
+  }
+
+  /**
+   * Committed uses still awaiting their next-event disposition (issue #207
+   * layer 2c). Newest first; the caller classifies at most the latest
+   * same-session use per turn.
+   */
+  public async listUsesAwaitingDisposition(input: Readonly<{
+    userId: string;
+    limit?: number;
+  }>): Promise<
+    readonly Readonly<{
+      useId: string;
+      assistantEventRevisionId: string;
+      targetKind: ProactiveFollowupTargetKind;
+      targetId: string;
+      targetVersionId: string;
+      promptUserEventSequence: number;
+      promptDailySessionId: string;
+    }>[]
+  > {
+    const result = await this.pool.query<{
+      proactive_followup_use_id: string;
+      assistant_event_revision_id: string;
+      target_kind: ProactiveFollowupTargetKind;
+      target_id: string;
+      target_version_id: string;
+      prompt_user_event_sequence: string;
+      daily_session_id: string;
+    }>(
+      `SELECT use.proactive_followup_use_id,
+              use.assistant_event_revision_id,
+              use.target_kind, use.target_id, use.target_version_id,
+              use.prompt_user_event_sequence::text,
+              use.daily_session_id::text
+       FROM proactive_followup_uses use
+       WHERE use.user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM proactive_followup_dispositions disposition
+           WHERE disposition.proactive_followup_use_id = use.proactive_followup_use_id
+             AND disposition.user_id = $1
+         )
+       ORDER BY use.created_at DESC
+       LIMIT $2`,
+      [input.userId, input.limit ?? 5],
+    );
+    return result.rows.map((row) => ({
+      useId: row.proactive_followup_use_id,
+      assistantEventRevisionId: row.assistant_event_revision_id,
+      targetKind: row.target_kind,
+      targetId: row.target_id,
+      targetVersionId: row.target_version_id,
+      promptUserEventSequence: Number(row.prompt_user_event_sequence),
+      promptDailySessionId: row.daily_session_id,
+    }));
+  }
 }

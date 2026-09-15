@@ -42,6 +42,9 @@ const OWNER = fixedInternalOwnerPrincipal.userId;
 const SELF_ENTITY_ID = "f0000000-0000-7000-8000-000000000001";
 const SELF_ENTITY_VERSION_ID = "f0000000-0000-7000-8000-000000000002";
 const BASE_TIME = Date.parse("2026-09-09T08:00:00.000Z");
+// G1 admission is fail-closed without a release binding (issue #207):
+// the test seam carries a synthetic G1 manifest fingerprint.
+const G1_FINGERPRINT = `sha256:${"d".repeat(64)}`;
 const INTERVAL_MS = 30 * 60 * 1000;
 const READINESS_POLICY = "reflection-readiness:v1";
 
@@ -141,13 +144,14 @@ async function seedRoleConfiguration(
   await pool.query(
     `INSERT INTO model_role_rollout_pins (
        role, rollout_pin, config_version, provider_policy_version,
-       status, activated_at
-     ) VALUES ($1, $2, $3, $4, 'active', $5)`,
+       release_fingerprint, status, activated_at
+     ) VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
     [
       configuration.role,
       configuration.rolloutPin,
       configuration.configVersion,
       configuration.providerPolicyVersion,
+      G1_FINGERPRINT,
       new Date(BASE_TIME),
     ],
   );
@@ -266,7 +270,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         weeklyRoleConfiguration,
         validatorRoleConfiguration,
       ]),
-      repository: new PostgresModelRoleCommandRepository(seeded.pool),
+      repository: new PostgresModelRoleCommandRepository(
+        seeded.pool,
+        undefined,
+        G1_FINGERPRINT,
+      ),
     });
     reflectionRepository = new PostgresReflectionRepository(seeded.pool, {
       entryFor: (predicateId) =>

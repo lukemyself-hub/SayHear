@@ -1,12 +1,15 @@
 import type { Pool } from "pg";
 
 import {
+  asEvidenceItemId,
   asOpenLoopId,
   asOpenLoopVersionId,
   asUserId,
 } from "@sayhear/domain";
 import {
+  isOpenLoopKind,
   selectFormationCandidates,
+  type OpenLoopExtractionRepository,
   type OpenLoopKind,
   type OpenLoopTerminalStatus,
 } from "@sayhear/application";
@@ -49,8 +52,242 @@ export type OpenLoopClosureEffect = Readonly<{
  * creates another logical Loop. All valid effects and the run settlement
  * share one transaction; failure leaves no partial Loop/Version/link behind.
  */
-export class PostgresOpenLoopRepository {
+export class PostgresOpenLoopRepository implements OpenLoopExtractionRepository {
   public constructor(private readonly pool: Pool) {}
+
+  /**
+   * Per-Event extraction trigger scan (issue #207 layer 2b). Lists the
+   * current final/corrected user revisions with no settled extraction run
+   * for the policy version. Superseded revisions are never listed: only
+   * the current revision of an Event carries extractable Evidence.
+   */
+  public async listEventsNeedingExtraction(input: Readonly<{
+    policyVersion: string;
+    limit: number;
+  }>): Promise<
+    readonly Readonly<{
+      eventRevisionId: string;
+      userId: ReturnType<typeof asUserId>;
+      sourceRevision: number;
+      expectedDataEpoch: number;
+    }>[]
+  > {
+    const result = await this.pool.query<{
+      event_revision_id: string;
+      user_id: string;
+      source_revision: string;
+      data_epoch: string;
+    }>(
+      `SELECT revision.conversation_event_revision_id AS event_revision_id,
+              revision.user_id AS user_id,
+              revision.revision::text AS source_revision,
+              owner.data_epoch::text AS data_epoch
+       FROM conversation_event_revisions revision
+       INNER JOIN conversation_events event
+         ON event.conversation_event_id = revision.conversation_event_id
+         AND event.user_id = revision.user_id
+       INNER JOIN app_users owner
+         ON owner.user_id = revision.user_id
+       WHERE event.actor = 'user'
+         AND event.event_type = 'message'
+         AND event.lifecycle_status = 'active'
+         AND revision.transcript_status IN ('final', 'corrected')
+         AND revision.content_purged_at IS NULL
+         AND event.current_revision_id = revision.conversation_event_revision_id
+         AND NOT EXISTS (
+           SELECT 1 FROM open_loop_run_outcomes run
+           WHERE run.source_event_revision_id = revision.conversation_event_revision_id
+             AND run.policy_version = $1
+             AND run.status = 'settled'
+         )
+       ORDER BY revision.created_at ASC
+       LIMIT $2`,
+      [input.policyVersion, input.limit],
+    );
+    return result.rows.map((row) => ({
+      eventRevisionId: row.event_revision_id,
+      userId: asUserId(row.user_id),
+      sourceRevision: Number(row.source_revision),
+      expectedDataEpoch: Number(row.data_epoch),
+    }));
+  }
+
+  /**
+   * Resolve the per-Event subject of an admitted extract attempt from the
+   * generation command row (mirroring the narrative-validation attempt
+   * context read). The model-role outbox carries the owner as its subject,
+   * so the durable Workflow resolves the Event revision here. Role and
+   * owner are fenced in the query; anything else reports not_found.
+   */
+  public async readAttemptEventRevision(input: Readonly<{
+    userId: ReturnType<typeof asUserId>;
+    generationCommandId: string;
+  }>): Promise<
+    | Readonly<{ outcome: "ready"; eventRevisionId: string }>
+    | Readonly<{ outcome: "not_found" }>
+  > {
+    const result = await this.pool.query<{ subject_id: string }>(
+      `SELECT gc.subject_id
+       FROM generation_commands gc
+       WHERE gc.generation_command_id = $1
+         AND gc.user_id = $2
+         AND gc.model_role = 'open_loop.extract'
+         AND gc.subject_type = 'conversation_event_revision'`,
+      [input.generationCommandId, input.userId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return { outcome: "not_found" };
+    }
+    return { outcome: "ready", eventRevisionId: row.subject_id };
+  }
+
+  /**
+   * Frozen per-Event extraction input. Returns stale when the revision is
+   * gone, purged, superseded, or fenced, so a late attempt fails closed
+   * without burning the workflow retry budget.
+   */
+  public async readExtractionSnapshot(input: Readonly<{
+    eventRevisionId: string;
+  }>): Promise<
+    | Readonly<{
+        outcome: "ready";
+        snapshot: {
+          userId: ReturnType<typeof asUserId>;
+          eventRevisionId: string;
+          sourceRevision: number;
+          expectedDataEpoch: number;
+          locale: string;
+          timeZone: string;
+          userText: string;
+          evidenceCommittedAt: string;
+          evidence: readonly {
+            evidenceItemId: ReturnType<typeof asEvidenceItemId>;
+            revisionId: string;
+            locatorType: string;
+            locatorKey: string;
+            committedAt: string;
+          }[];
+          identityCandidates: readonly {
+            openLoopId: ReturnType<typeof asOpenLoopId>;
+            kind: OpenLoopKind;
+            canonicalClaimKey: string | null;
+            expectedStartAt: string | null;
+            expectedEndAt: string | null;
+          }[];
+          currentOpenCount: number;
+        };
+      }>
+    | Readonly<{ outcome: "stale" }>
+  > {
+    const event = await this.pool.query<{
+      user_id: string;
+      revision: string;
+      data_epoch: string;
+      locale: string;
+      canonical_text: string;
+      created_at: string;
+      timezone_at_start: string;
+      current_revision_id: string | null;
+    }>(
+      `SELECT revision.user_id AS user_id,
+              revision.revision::text AS revision,
+              owner.data_epoch::text AS data_epoch,
+              revision.locale AS locale,
+              revision.canonical_text AS canonical_text,
+              revision.created_at::text AS created_at,
+              session.timezone_at_start AS timezone_at_start,
+              event.current_revision_id::text AS current_revision_id
+       FROM conversation_event_revisions revision
+       INNER JOIN conversation_events event
+         ON event.conversation_event_id = revision.conversation_event_id
+         AND event.user_id = revision.user_id
+       INNER JOIN daily_sessions session
+         ON session.daily_session_id = event.daily_session_id
+         AND session.user_id = event.user_id
+       INNER JOIN app_users owner
+         ON owner.user_id = revision.user_id
+       WHERE revision.conversation_event_revision_id = $1
+         AND event.actor = 'user'
+         AND event.event_type = 'message'
+         AND event.lifecycle_status = 'active'
+         AND revision.transcript_status IN ('final', 'corrected')
+         AND revision.content_purged_at IS NULL`,
+      [input.eventRevisionId],
+    );
+    const row = event.rows[0];
+    if (!row || row.current_revision_id !== input.eventRevisionId) {
+      return { outcome: "stale" };
+    }
+    const evidence = await this.pool.query<{
+      evidence_item_id: string;
+      source_revision_id: string;
+      locator_type: string;
+      locator_key: string;
+      created_at: string;
+    }>(
+      `SELECT evidence_item_id::text AS evidence_item_id,
+              source_revision_id::text AS source_revision_id,
+              locator_type,
+              locator_key,
+              created_at::text AS created_at
+       FROM evidence_items
+       WHERE source_revision_id = $1
+         AND status = 'active'
+       ORDER BY locator_key ASC`,
+      [input.eventRevisionId],
+    );
+    const candidates = await this.pool.query<{
+      open_loop_id: string;
+      open_loop_kind: string;
+      canonical_claim_key: string | null;
+      expected_start_at: string | null;
+      expected_end_at: string | null;
+    }>(
+      `SELECT l.open_loop_id::text AS open_loop_id,
+              v.open_loop_kind AS open_loop_kind,
+              v.canonical_claim_key AS canonical_claim_key,
+              v.expected_start_at::text AS expected_start_at,
+              v.expected_end_at::text AS expected_end_at
+       FROM open_loops l
+       INNER JOIN open_loop_versions v
+         ON v.open_loop_version_id = l.current_version_id
+       WHERE l.user_id = $1
+         AND l.deleted_at IS NULL
+         AND v.status = 'open'`,
+      [row.user_id],
+    );
+    return {
+      outcome: "ready",
+      snapshot: {
+        userId: asUserId(row.user_id),
+        eventRevisionId: input.eventRevisionId,
+        sourceRevision: Number(row.revision),
+        expectedDataEpoch: Number(row.data_epoch),
+        locale: row.locale,
+        timeZone: row.timezone_at_start,
+        userText: row.canonical_text,
+        evidenceCommittedAt: row.created_at,
+        evidence: evidence.rows.map((item) => ({
+          evidenceItemId: asEvidenceItemId(item.evidence_item_id),
+          revisionId: item.source_revision_id,
+          locatorType: item.locator_type,
+          locatorKey: item.locator_key,
+          committedAt: item.created_at,
+        })),
+        identityCandidates: candidates.rows
+          .filter((candidate) => isOpenLoopKind(candidate.open_loop_kind))
+          .map((candidate) => ({
+            openLoopId: asOpenLoopId(candidate.open_loop_id),
+            kind: candidate.open_loop_kind as OpenLoopKind,
+            canonicalClaimKey: candidate.canonical_claim_key,
+            expectedStartAt: candidate.expected_start_at,
+            expectedEndAt: candidate.expected_end_at,
+          })),
+        currentOpenCount: candidates.rows.length,
+      },
+    };
+  }
 
   public async commitEventEffects(input: Readonly<{
     userId: string;
@@ -635,5 +872,121 @@ export class PostgresOpenLoopRepository {
       [input.userId, input.sourceEventRevisionId, input.policyVersion],
     );
     return outcome.rows.length > 0;
+  }
+
+  /**
+   * Lane-watermark probe for proactive selection (issue #207 layer 2c). True
+   * when any in-scope user event at or before the request sequence still
+   * lacks a settled extraction run, in which case the open-loop lane reports
+   * incomplete and selection fails closed instead of ranking a stale view.
+   */
+  public async hasUnsettledExtraction(input: Readonly<{
+    userId: string;
+    policyVersion: string;
+    throughSequence: number;
+  }>): Promise<boolean> {
+    const result = await this.pool.query<{ found: string }>(
+      `SELECT 1 AS found
+       FROM conversation_event_revisions revision
+       INNER JOIN conversation_events event
+         ON event.conversation_event_id = revision.conversation_event_id
+         AND event.user_id = revision.user_id
+       WHERE revision.user_id = $1
+         AND event.actor = 'user'
+         AND event.event_type = 'message'
+         AND event.lifecycle_status = 'active'
+         AND event.sequence_no <= $3
+         AND revision.transcript_status IN ('final', 'corrected')
+         AND revision.content_purged_at IS NULL
+         AND event.current_revision_id = revision.conversation_event_revision_id
+         AND NOT EXISTS (
+           SELECT 1 FROM open_loop_run_outcomes run
+           WHERE run.source_event_revision_id = revision.conversation_event_revision_id
+             AND run.policy_version = $2
+             AND run.status = 'settled'
+         )
+       LIMIT 1`,
+      [input.userId, input.policyVersion, input.throughSequence],
+    );
+    return result.rows.length > 0;
+  }
+
+  /**
+   * Formation lineage for proactive selection (issue #207 layer 2c).
+   * Returns the forming event revision per loop plus the latest committed
+   * proactive use time for least-recently-used ranking. Loops without a use
+   * report null and rank as never-used per the v1 selection policy.
+   */
+  public async readLoopFormation(input: Readonly<{
+    userId: string;
+    openLoopIds: readonly string[];
+  }>): Promise<
+    Readonly<
+      Record<string, { sourceEventRevisionId: string; lastUsedAt: string | null }>
+    >
+  > {
+    if (input.openLoopIds.length === 0) return {};
+    const result = await this.pool.query<{
+      open_loop_id: string;
+      source_event_revision_id: string;
+      last_used_at: string | null;
+    }>(
+      `SELECT l.open_loop_id,
+              v.source_event_revision_id::text,
+              MAX(use.created_at)::text AS last_used_at
+       FROM open_loops l
+       INNER JOIN open_loop_versions v
+         ON v.open_loop_version_id = l.current_version_id
+       LEFT JOIN proactive_followup_uses use
+         ON use.target_id = l.open_loop_id
+         AND use.user_id = l.user_id
+         AND use.target_kind = 'open_loop'
+       WHERE l.user_id = $1
+         AND l.open_loop_id = ANY($2::uuid[])
+       GROUP BY l.open_loop_id, v.source_event_revision_id`,
+      [input.userId, input.openLoopIds],
+    );
+    return Object.fromEntries(
+      result.rows.map((row) => [
+        row.open_loop_id,
+        {
+          sourceEventRevisionId: row.source_event_revision_id,
+          lastUsedAt: row.last_used_at,
+        },
+      ]),
+    );
+  }
+
+  /**
+   * Content-gated current summary for the segment provider request (issue
+   * #207 layer 2c). Mirrors the readOpenLane gating: expired content,
+   * purged content, and inactive sources yield null so the model renders a
+   * generic expression without inventing facts.
+   */
+  public async readCurrentSummary(input: Readonly<{
+    userId: string;
+    openLoopId: string;
+    now: Date;
+  }>): Promise<string | null> {
+    const result = await this.pool.query<{ localized_summary: string | null }>(
+      `SELECT CASE
+                WHEN v.content_expires_at IS NOT NULL
+                  AND $3::timestamptz >= v.content_expires_at THEN NULL
+                ELSE v.localized_summary
+              END AS localized_summary
+       FROM open_loops l
+       INNER JOIN open_loop_versions v
+         ON v.open_loop_version_id = l.current_version_id
+       INNER JOIN evidence_items evidence
+         ON evidence.evidence_item_id = v.source_evidence_item_id
+         AND evidence.status = 'active'
+       WHERE l.open_loop_id = $1
+         AND l.user_id = $2
+         AND l.deleted_at IS NULL
+         AND v.status = 'open'
+         AND v.content_purged_at IS NULL`,
+      [input.openLoopId, input.userId, input.now.toISOString()],
+    );
+    return result.rows[0]?.localized_summary ?? null;
   }
 }

@@ -21,6 +21,9 @@ const systemDescribe = testDatabaseUrl ? describe : describe.skip;
 
 const OWNER = asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc68");
 const BASE_TIME = Date.parse("2026-09-20T00:00:00.000Z");
+// Bundle-role admission is fail-closed without a G2 regime binding (issue
+// #207): the test seam carries a synthetic G2 manifest fingerprint.
+const G2_FINGERPRINT = `sha256:${"e".repeat(64)}`;
 const POLICY = "open-loop-formation:v1";
 const EXPIRY_POLICY = "open-loop-expiry:v1";
 
@@ -130,7 +133,12 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
   async function admitExtractCommand(revisionId: string) {
     const service = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
-      repository: new PostgresModelRoleCommandRepository(database!.pool),
+      repository: new PostgresModelRoleCommandRepository(
+        database!.pool,
+        undefined,
+        undefined,
+        G2_FINGERPRINT,
+      ),
     });
     return service.admit({
       userId: OWNER,
@@ -202,13 +210,14 @@ systemDescribe("C1 open loop lifecycle (issue #204)", () => {
     await seeded.pool.query(
       `INSERT INTO model_role_rollout_pins (
          role, rollout_pin, config_version, provider_policy_version,
-         status, activated_at
-       ) VALUES ($1, $2, $3, $4, 'active', $5)`,
+         release_fingerprint, status, activated_at
+       ) VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
       [
         configuration.role,
         configuration.rolloutPin,
         configuration.configVersion,
         configuration.providerPolicyVersion,
+        G2_FINGERPRINT,
         now,
       ],
     );
