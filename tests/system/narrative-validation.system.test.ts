@@ -46,6 +46,9 @@ const systemDescribe = testDatabaseUrl ? describe : describe.skip;
 
 const userId = fixedInternalOwnerPrincipal.userId;
 const baseTime = new Date("2026-09-09T08:00:00.000Z");
+// G1 admission is fail-closed without a release binding (issue #207):
+// the test seam carries a synthetic G1 manifest fingerprint.
+const G1_FINGERPRINT = `sha256:${"d".repeat(64)}`;
 
 const configuration: ModelRoleConfigurationSnapshot = {
   role: "narrative.validate",
@@ -115,13 +118,14 @@ async function seedConfigQueries(
   await database.pool.query(
     `INSERT INTO model_role_rollout_pins (
        role, rollout_pin, config_version, provider_policy_version,
-       status, activated_at
-     ) VALUES ($1, $2, $3, $4, 'active', $5)`,
+       release_fingerprint, status, activated_at
+     ) VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
     [
       configuration.role,
       configuration.rolloutPin,
       configuration.configVersion,
       configuration.providerPolicyVersion,
+      G1_FINGERPRINT,
       baseTime,
     ],
   );
@@ -309,7 +313,11 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
     await seedConfigQueries(seededDatabase);
     commandService = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
-      repository: new PostgresModelRoleCommandRepository(seededDatabase.pool),
+      repository: new PostgresModelRoleCommandRepository(
+        seededDatabase.pool,
+        undefined,
+        G1_FINGERPRINT,
+      ),
     });
   });
 

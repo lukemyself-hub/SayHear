@@ -64,7 +64,14 @@ export function assertModelRoleWorkflowInput(
   if (!isModelRole(input.modelRole)) {
     throw new Error(`Unknown 1A.3b model role: ${input.modelRole}.`);
   }
-  if (!isG1ModelRole(input.modelRole)) {
+  // G2 (issue #207 layer 2c): the extract lane and the proactive segment
+  // crash path join the durable model-role workflow; bio.write stays
+  // deferred for G3.
+  if (
+    !isG1ModelRole(input.modelRole) &&
+    input.modelRole !== "open_loop.extract" &&
+    input.modelRole !== "proactive.followup"
+  ) {
     throw new Error(
       `Model role ${input.modelRole} is deferred until a later release stage.`,
     );
@@ -110,6 +117,8 @@ function mapAttemptOutcome(
   switch (outcome) {
     case "built":
     case "completed":
+    case "extracted":
+    case "duplicate":
       return "succeeded";
     case "retryable_failed":
       return "retry_scheduled";
@@ -135,12 +144,14 @@ async function runModelRoleStep(
 ): Promise<ModelRoleWorkflowResult> {
   "use step";
   const {
+    OPEN_LOOP_EXTRACTION_POLICY_VERSION,
     asGenerationCommandId,
     asModelRunAttemptId,
     asUserId,
     RecoveryGateClosedError,
     runEpisodeBuildAttempt,
     runNarrativeValidationAttempt,
+    runOpenLoopExtractAttempt,
     runReflectionAttempt,
   } = await import("@sayhear/application");
   const { createServerComposition } = await import("../server-composition");
@@ -224,6 +235,80 @@ async function runModelRoleStep(
       attempt.modelRole,
       "discarded",
       readiness.reason ?? "attempt_not_ready",
+    );
+  }
+
+  if (input.modelRole === "open_loop.extract") {
+    // The outbox subject is the owner; the per-Event revision resolves from
+    // the generation command row. Bundle verification rides on top of the
+    // G1 subset check above, mirroring the provider-egress discipline.
+    await composition.modelRoleCommandService.verifyActiveG2Release?.();
+    const subject =
+      await composition.openLoopRepository.readAttemptEventRevision({
+        userId,
+        generationCommandId: asGenerationCommandId(
+          attempt.generationCommandId,
+        ),
+      });
+    if (subject.outcome !== "ready") {
+      return resultFor(attempt.modelRole, "discarded", "attempt_not_ready");
+    }
+    const dependencies = composition.openLoopEntrypointDependencies();
+    const result = await runOpenLoopExtractAttempt({
+      ...dependencies,
+      command: {
+        workflowCommandId: input.workflowCommandId,
+        eventRevisionId: subject.eventRevisionId,
+        sourceRevision: attempt.sourceRevision,
+        generationCommandId: attempt.generationCommandId,
+        modelRunAttemptId: attempt.modelRunAttemptId,
+        attemptNo: attempt.attemptNo,
+        attemptKind: attempt.attemptKind,
+        rolloutPin: attempt.rolloutPin,
+        // Domain settlement keys on the frozen lane policy, not the role
+        // envelope version carried by the outbox.
+        policyVersion: OPEN_LOOP_EXTRACTION_POLICY_VERSION,
+        expectedDataEpoch: attempt.expectedDataEpoch,
+      },
+      recoveryGate: composition.recoveryGate,
+      recoveryOwnerId: userId,
+    });
+    return resultFor(
+      attempt.modelRole,
+      mapAttemptOutcome(result.outcome),
+      result.errorCode,
+    );
+  }
+
+  if (input.modelRole === "proactive.followup") {
+    // The segment generates in-request inside the turn harness; the durable
+    // workflow owns only the crash path. A redelivered segment command means
+    // the turn died between reservation and commit, so reclaim the active
+    // reservation (if any) and terminalize the command. No model call, no
+    // retry: proactive.followup never retries by product definition.
+    await composition.modelRoleCommandService.verifyActiveG2Release?.();
+    const reclaimed =
+      await composition.proactiveFollowupRepository.abandonSegmentByCommand({
+        userId: String(userId),
+        segmentGenerationCommandId: attempt.generationCommandId,
+        now: composition.clock(),
+      });
+    await composition.modelRoleCommandService.discardAttempt({
+      userId,
+      generationCommandId: asGenerationCommandId(attempt.generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(attempt.modelRunAttemptId),
+      reason:
+        reclaimed.outcome === "abandoned"
+          ? "segment_abandoned"
+          : "already_settled",
+      now: composition.clock(),
+    });
+    return resultFor(
+      attempt.modelRole,
+      "discarded",
+      reclaimed.outcome === "abandoned"
+        ? "segment_abandoned"
+        : "attempt_settled",
     );
   }
 

@@ -441,7 +441,7 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
         ordinal: 0 as const,
       },
       selectionPolicyVersion: PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
-      promptPolicyVersion: "proactive-followup-prompt:v1",
+      promptPolicyVersion: "proactive-followup-prompt:v2",
       policyBundleVersion: PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
       policyBundle: { fixture: true },
       now: BASE_TIME,

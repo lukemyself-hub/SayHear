@@ -1,4 +1,6 @@
 export * from "./types";
+export * from "./provider";
+export * from "./stage";
 export { selectProactiveFollowupTarget } from "./selection";
 export {
   PROACTIVE_FOLLOWUP_COOLDOWN_DAYS,

@@ -258,6 +258,52 @@ export type OpenLoopClosurePlan =
         | "no_reasonable_target";
     }>;
 
+/**
+ * Role-scoped producer seam for `open_loop.extract` (issue #207 layer 2b):
+ * receives the frozen typed per-Event input and returns transient proposals
+ * plus closure assertions; eligibility, identity, capacity, and admission
+ * stay in deterministic code. The model never persists state and never
+ * closes a Loop by itself.
+ */
+export type OpenLoopExtractModelProvider = Readonly<{
+  role: "open_loop.extract";
+  extractProposals(
+    request: OpenLoopExtractModelRequest,
+  ): Promise<OpenLoopExtractModelOutput>;
+}>;
+
+export type OpenLoopExtractModelRequest = Readonly<{
+  userId: UserId;
+  eventRevisionId: string;
+  locale: string;
+  timeZone: string;
+  /** Full user utterance; evidence spans below are the citable locators. */
+  userText: string;
+  evidenceCommittedAt: string;
+  evidence: readonly OpenLoopExtractEvidenceInput[];
+  openLoops: readonly OpenLoopExtractLoopInput[];
+}>;
+
+export type OpenLoopExtractEvidenceInput = Readonly<{
+  evidenceItemId: EvidenceItemId;
+  revisionId: string;
+  locatorType: string;
+  locatorKey: string;
+  committedAt: string;
+}>;
+
+export type OpenLoopExtractLoopInput = Readonly<{
+  openLoopId: OpenLoopId;
+  kind: OpenLoopKind;
+  localizedSummary: string | null;
+  expectedStartAt: string | null;
+}>;
+
+export type OpenLoopExtractModelOutput = Readonly<{
+  proposals: readonly OpenLoopProposal[];
+  closures: readonly OpenLoopClosureProposal[];
+}>;
+
 /** Deterministic per-Event capacity bounds (v1). */
 export const MAX_NEW_LOOPS_PER_EVENT = 4;
 export const MAX_CURRENT_OPEN_LOOPS_PER_OWNER = 128;

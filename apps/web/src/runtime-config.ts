@@ -1,6 +1,8 @@
 import {
   verifyOneA3bG1ReleaseManifest,
+  verifyOneA3bG2ReleaseManifest,
   type OneA3bG1ReleaseManifest,
+  type OneA3bG2ReleaseManifest,
 } from "@sayhear/application";
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -56,6 +58,20 @@ function g1StageFullyRequested(environment: Environment): boolean {
   return (
     environment.SAYHEAR_EPISODE_BUILD_ENABLED === "true" &&
     environment.SAYHEAR_REFLECTION_ENABLED === "true"
+  );
+}
+
+function g2StageRequested(environment: Environment): boolean {
+  return (
+    environment.SAYHEAR_OPEN_LOOP_EXTRACTION_ENABLED === "true" ||
+    environment.SAYHEAR_PROACTIVE_FOLLOWUP_ENABLED === "true"
+  );
+}
+
+function g2StageFullyRequested(environment: Environment): boolean {
+  return (
+    environment.SAYHEAR_OPEN_LOOP_EXTRACTION_ENABLED === "true" &&
+    environment.SAYHEAR_PROACTIVE_FOLLOWUP_ENABLED === "true"
   );
 }
 
@@ -128,6 +144,87 @@ export function resolveOneA3bG1ReleaseManifest(
   return manifest;
 }
 
+/**
+ * Resolve and verify the G2 Open Loop / Proactive bundle artifact. An absent
+ * artifact keeps the stage closed. A present artifact must link to the exact
+ * active G1 manifest (ADR-0134: G1 → G2 → G3, no split bundle); otherwise
+ * startup fails closed. The two G2 write switches must open together and
+ * require the artifact, mirroring the G1 switch discipline; resolution
+ * alone still opens no switch.
+ */
+export function resolveOneA3bG2ReleaseManifest(
+  environment: Environment,
+): OneA3bG2ReleaseManifest | null {
+  const raw = environment.SAYHEAR_1A_3B_G2_RELEASE_MANIFEST;
+  if (g2StageRequested(environment) && !g2StageFullyRequested(environment)) {
+    throw new Error(
+      "SAYHEAR_OPEN_LOOP_EXTRACTION_ENABLED and SAYHEAR_PROACTIVE_FOLLOWUP_ENABLED must be enabled together for the evaluated 1A.3b G2 bundle.",
+    );
+  }
+  if (!raw || raw.trim() === "") {
+    if (g2StageRequested(environment)) {
+      throw new Error(
+        "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST is required when an 1A.3b G2 write switch is enabled.",
+      );
+    }
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST must be valid JSON.",
+    );
+  }
+
+  let verification: ReturnType<typeof verifyOneA3bG2ReleaseManifest>;
+  try {
+    verification = verifyOneA3bG2ReleaseManifest(parsed);
+  } catch {
+    throw new Error(
+      "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST failed structural verification.",
+    );
+  }
+  if (!verification.passed) {
+    throw new Error(
+      `SAYHEAR_1A_3B_G2_RELEASE_MANIFEST is invalid: ${verification.mismatches.join("; ")}`,
+    );
+  }
+  const manifest = parsed as OneA3bG2ReleaseManifest;
+  const deployedCommit =
+    environment.VERCEL_GIT_COMMIT_SHA ??
+    environment.SAYHEAR_DEPLOYED_GIT_COMMIT_SHA;
+  if (g2StageFullyRequested(environment) && !deployedCommit) {
+    throw new Error(
+      "SAYHEAR_DEPLOYED_GIT_COMMIT_SHA or VERCEL_GIT_COMMIT_SHA is required when the G2 write switches are enabled.",
+    );
+  }
+  if (deployedCommit && manifest.gitCommit !== deployedCommit) {
+    throw new Error(
+      "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST gitCommit does not match the deployed commit.",
+    );
+  }
+  if (g2StageRequested(environment) && manifest.status !== "active") {
+    throw new Error(
+      "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST must be active before a G2 write switch can open.",
+    );
+  }
+  const g1ReleaseManifest = resolveOneA3bG1ReleaseManifest(environment);
+  if (!g1ReleaseManifest || g1ReleaseManifest.status !== "active") {
+    throw new Error(
+      "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST requires the switched (active) 1A.3b G1 release.",
+    );
+  }
+  if (manifest.baseG1ReleaseFingerprint !== g1ReleaseManifest.fingerprint) {
+    throw new Error(
+      "SAYHEAR_1A_3B_G2_RELEASE_MANIFEST does not link to the active G1 release fingerprint.",
+    );
+  }
+  return manifest;
+}
+
 export function assertSafeRuntimeConfiguration(
   environment: Environment,
 ): SayHearDeployment {
@@ -174,6 +271,7 @@ export function assertSafeRuntimeConfiguration(
   }
 
   resolveOneA3bG1ReleaseManifest(environment);
+  resolveOneA3bG2ReleaseManifest(environment);
 
   return deployment;
 }
@@ -204,6 +302,7 @@ function explicitSwitch(environment: Environment, name: string): boolean {
 export function loadRuntimeConfiguration(environment: Environment) {
   const deployment = assertSafeRuntimeConfiguration(environment);
   const oneA3bG1ReleaseManifest = resolveOneA3bG1ReleaseManifest(environment);
+  const oneA3bG2ReleaseManifest = resolveOneA3bG2ReleaseManifest(environment);
   const testNow = environment.SAYHEAR_TEST_NOW
     ? new Date(environment.SAYHEAR_TEST_NOW)
     : null;
@@ -410,6 +509,17 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_REFLECTION_ENABLED",
     ),
+    // G2 (issue #207): the Open Loop extraction and Proactive follow-up
+    // stages follow the same explicit-switch discipline and must open
+    // together; either switch alone keeps the whole bundle closed.
+    openLoopExtractionEnabled: explicitSwitch(
+      environment,
+      "SAYHEAR_OPEN_LOOP_EXTRACTION_ENABLED",
+    ),
+    proactiveFollowupEnabled: explicitSwitch(
+      environment,
+      "SAYHEAR_PROACTIVE_FOLLOWUP_ENABLED",
+    ),
   });
 
   return Object.freeze({
@@ -478,6 +588,9 @@ export function loadRuntimeConfiguration(environment: Environment) {
     }),
     oneA3bG1: Object.freeze({
       releaseManifest: oneA3bG1ReleaseManifest,
+    }),
+    oneA3bG2: Object.freeze({
+      releaseManifest: oneA3bG2ReleaseManifest,
     }),
     writeSwitches,
   });
