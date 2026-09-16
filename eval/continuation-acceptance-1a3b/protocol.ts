@@ -8,6 +8,8 @@ import {
 export const F3_CATALOG_VERSION = "1a3b-f3-fixtures:v1" as const;
 export const F3_MANIFEST_VERSION = "1a3b-f3-manifest:v1" as const;
 export const F3_RUN_VERSION = "1a3b-f3-synthetic-run:v1" as const;
+export const F3_CLEAN_INCUMBENT_VERSION =
+  "1a3b-f3-clean-incumbent:v1" as const;
 export const F3_REVIEW_PACKAGE_VERSION = "1a3b-f3-review-package:v1" as const;
 export const F3_LEDGER_VERSION = "1a3b-f3-adjudication:v1" as const;
 export const F3_BIO_INSPECTION_VERSION = "1a3b-f3-bio-inspection:v1" as const;
@@ -299,6 +301,26 @@ export type BaselineReference = Readonly<{
   version: "1a3b-f3-baseline-reference:v1";
 }>;
 
+export type CleanIncumbentManifest = Readonly<{
+  configurationFingerprint: string;
+  configId: string;
+  generatedAt: string;
+  gitCommit: string;
+  hardGates: Readonly<{
+    checkedFixtureCount: number;
+    failures: number;
+    passed: boolean;
+    path: string;
+    sha256: string;
+  }>;
+  run: Readonly<{
+    path: string;
+    sha256: string;
+  }>;
+  synthetic: true;
+  version: typeof F3_CLEAN_INCUMBENT_VERSION;
+}>;
+
 export type SyntheticRunTurn = SyntheticTurn &
   Readonly<{ assistantText: string }>;
 
@@ -404,6 +426,7 @@ export type InputSummary = Readonly<{
 
 export type ReviewPackage = Readonly<{
   hardGateReport: Readonly<{
+    advisories: readonly string[];
     checkedFixtureCount: number;
     failures: readonly string[];
     passed: boolean;

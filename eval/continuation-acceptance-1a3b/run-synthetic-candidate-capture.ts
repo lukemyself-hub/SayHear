@@ -27,7 +27,7 @@
  * Usage:
  *   tsx eval/continuation-acceptance-1a3b/run-synthetic-candidate-capture.ts \
  *     [--deterministic] [--only <fixtureId>] [--continue-on-error] \
- *     [--catalog <path>] [--pins <path>] [--out <path>] \
+ *     [--env-file <path>] [--catalog <path>] [--pins <path>] [--out <path>] \
  *     [--hard-gates-out <path>] [--lanes-out <path>]
  *
  * The deterministic double proves the plumbing without network calls: the
@@ -156,6 +156,7 @@ type ParsedArguments = Readonly<{
   catalog: string;
   continueOnError: boolean;
   deterministic: boolean;
+  envFile: string | null;
   hardGatesOut: string;
   lanesOut: string;
   only: string | null;
@@ -169,6 +170,7 @@ function parseArguments(): ParsedArguments {
     catalog: DEFAULT_CATALOG,
     continueOnError: false,
     deterministic: false,
+    envFile: null as string | null,
     hardGatesOut: DEFAULT_HARD_GATES_OUT,
     lanesOut: DEFAULT_LANES_OUT,
     only: null as string | null,
@@ -180,6 +182,7 @@ function parseArguments(): ParsedArguments {
     if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
     else if (argument === "--continue-on-error") values.continueOnError = true;
     else if (argument === "--deterministic") values.deterministic = true;
+    else if (argument === "--env-file") values.envFile = required(arguments_, ++index, argument);
     else if (argument === "--hard-gates-out") values.hardGatesOut = required(arguments_, ++index, argument);
     else if (argument === "--lanes-out") values.lanesOut = required(arguments_, ++index, argument);
     else if (argument === "--only") values.only = required(arguments_, ++index, argument);
@@ -1331,11 +1334,15 @@ type ScenarioCapture = {
 };
 
 async function main(): Promise<void> {
+  const arguments_ = parseArguments();
   const environment = (() => {
-    loadDotEnv();
+    loadDotEnv(
+      arguments_.envFile
+        ? { override: true, path: arguments_.envFile }
+        : undefined,
+    );
     return process.env;
   })();
-  const arguments_ = parseArguments();
   const catalog = JSON.parse(
     await readFile(resolve(arguments_.catalog), "utf8"),
   ) as unknown as FixtureCatalog;

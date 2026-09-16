@@ -1,9 +1,10 @@
 # 1A.3b F3 synthetic acceptance tools
 
 F3 owns the reproducible evidence inputs for Continuation, Bio naturalness,
-and `narrative.validate`. The catalog is fictional and synthetic. These tools
-never connect to PostgreSQL, read `DATABASE_URL`, call a Provider, or read a
-production conversation source.
+and `narrative.validate`. The catalog is fictional and synthetic. Fixture,
+manifest, review, and verification tools never connect to PostgreSQL, read
+`DATABASE_URL`, or read a production conversation source. The capture tools
+call the pinned Provider only with the versioned synthetic catalog.
 
 ## What is frozen
 
@@ -55,12 +56,28 @@ plus the resulting `assistantText`. Both arms therefore prove that their
 Events, Memory, retrieval, Portrait, Persona, locale, safety, and Conversation
 inputs came from the same frozen catalog entry before pairing.
 
+Capture a clean incumbent with an explicit env file. Explicit loading overrides
+stale inherited values and parses `.env.neon` without shell-expanding special
+characters in database URLs:
+
+```sh
+pnpm exec tsx eval/continuation-acceptance-1a3b/run-synthetic-capture.ts \
+  --env-file .env.neon \
+  --git-commit <full-40-character-product-commit> \
+  --baseline-manifest-out eval/continuation-acceptance-1a3b/run/clean-incumbent.json
+```
+
+Only a complete real-provider run with 18/18 passing hard gates writes the
+clean-incumbent manifest. The acceptance-manifest builder re-reads the run and
+hard-gate report, recomputes the gates, and verifies both hashes.
+
 After a clean incumbent is frozen, capture the bundle-enabled candidate arm
 through the same frozen inputs (the open-loop lane evolves via the production
 extract runner; the proactive stage may append an isolated segment):
 
 ```sh
 pnpm exec tsx eval/continuation-acceptance-1a3b/run-synthetic-candidate-capture.ts \
+  --env-file .env.neon \
   --out eval/continuation-acceptance-1a3b/run/continuation-candidate.json
 ```
 

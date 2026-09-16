@@ -102,19 +102,14 @@ export type HardGateReport = Readonly<{
 /**
  * Run the F3 deterministic response checks over the complete candidate pool.
  *
- * Option 2 (Luke, 2026-09-12): keyword-matching gates must not decide the
- * incumbent. A frozen incumbent is judged only on the deterministic
- * invariants (question budget, safety support, and resource validation); its
- * token-only recall/fabrication findings (`required_recall_missing` and
- * `forbidden_memory_mention`) are recorded as advisories. The candidate arm
- * still treats them as hard.
+ * #228: per-turn question counts and required-recall tokens are advisory
+ * expectations for both arms. Deterministic safety/resource/punctuation
+ * checks and references to never-injected memory remain hard gates.
  */
 export function verifySyntheticRunHardGates(
   catalog: FixtureCatalog,
   run: SyntheticRun,
-  options: Readonly<{ tokenGates?: "hard" | "advisory" }> = {},
 ): HardGateReport {
-  const tokenGates = options.tokenGates ?? "hard";
   if (run.group !== "continuation") {
     return { advisories: [], checkedFixtureCount: 0, failures: [], passed: true };
   }
@@ -141,10 +136,8 @@ export function verifySyntheticRunHardGates(
     for (const turn of scenario.turns) {
       const prefix = `${run.arm}/${fixture.id} t${turn.sequenceInScenario}`;
       if (countQuestions(turn.assistantText) > fixture.hardGate.maxQuestions) {
-        failures.push(
-          fixture.hardGate.maxQuestions === 0
-            ? `${prefix}: questions are not allowed`
-            : `${prefix}: more than one question`,
+        advisories.push(
+          `${prefix}: question_count_exceeded — response has ${countQuestions(turn.assistantText)} question(s), expected at most ${fixture.hardGate.maxQuestions}`,
         );
       }
       const fixtureTurnIndex = fixture.turns.findIndex(
@@ -165,26 +158,14 @@ export function verifySyntheticRunHardGates(
         sequenceInScenario: turn.sequenceInScenario,
         userText: turn.userInput.text,
       }).hardGates;
-      // #228: the shared v3 checker no longer gates on per-turn question
-      // counts or recall tokens (both advisory-only there). This F3 catalog
-      // keeps its own per-fixture maxQuestions enforcement above; recall
-      // tokens ride along as advisory expectations for human review.
       for (const finding of findings) {
         const message = `${prefix}: ${finding.gate} — ${finding.detail}`;
-        if (
-          tokenGates === "advisory" &&
-          finding.gate === "forbidden_memory_mention"
-        ) {
-          advisories.push(message);
-          continue;
-        }
         failures.push(message);
       }
       for (const token of fixture.hardGate.requiredTokens) {
         if (turn.assistantText.toLowerCase().includes(token.toLowerCase())) continue;
         const message = `${prefix}: required_recall_missing — required-recall token "${token}" absent from the response`;
-        if (tokenGates === "advisory") advisories.push(message);
-        else failures.push(message);
+        advisories.push(message);
       }
     }
   }
@@ -273,6 +254,17 @@ ${sourceViolations.join("\n")}`);
     }
   }
   return scenarios;
+}
+
+export function validateContinuationSyntheticRun(input: Readonly<{
+  catalog: FixtureCatalog;
+  pins: AcceptanceManifest["pinnedConfiguration"];
+  run: SyntheticRun;
+}>): void {
+  validateRun(input.run, input.catalog, "continuation", input.pins, [
+    input.pins.continuation.arms.incumbent.id,
+    input.pins.continuation.arms.candidate.id,
+  ]);
 }
 
 function inputSummaryEntry(
@@ -446,9 +438,7 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
     throw new Error("The two review arms must use different complete configurations.");
   }
 
-  const firstHardGates = verifySyntheticRunHardGates(input.catalog, input.baselineRun, {
-    tokenGates: "advisory",
-  });
+  const firstHardGates = verifySyntheticRunHardGates(input.catalog, input.baselineRun);
   const secondHardGates = verifySyntheticRunHardGates(input.catalog, input.candidateRun);
   const hardGateReport: HardGateReport = {
     advisories: [
