@@ -13,7 +13,7 @@
   ],
   "currentIncumbent": {
     "status": "clean",
-    "commit": "6eb078507fc19252cc86a47af0eb90577792b526",
+    "commit": "08a47085b81e76eb34a9f9577d28a64a94f30699",
     "manifestPath": "eval/continuation-acceptance-1a3b/run/clean-incumbent.json",
     "confirmedHardGateFailures": 0
   }
