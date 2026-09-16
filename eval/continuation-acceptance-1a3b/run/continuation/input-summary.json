@@ -1,0 +1,352 @@
+{
+  "catalogVersion": "1a3b-f3-fixtures:v1",
+  "entries": [
+    {
+      "fixtureId": "cont-stop-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-task-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-incomplete-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-memory-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-extra-zh",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:635b33bc5b87b290535e9269b0882d8a359b0b8504ccab7c7f82bc9903c39186",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:a5b425bbad84980e961fa47cdc6ae05d8fc62b641b213ae5d56942ef47a8906a",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7653f46dd6b5819dc8bebe535bd13c4fe99c59e44f68a75aee7b57c49b310094",
+          "retrieval": "sha256:212d5794f1fc68e0b391d795601e832a408133fec05469fd2c7b7edc9fda1419",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:a765ce84857ef7fb6cee629856de79a91db71358cfc41f7547e7ea7d5938dc86"
+      }
+    },
+    {
+      "fixtureId": "cont-extra-en-2",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-sensitive-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-open-loop-zh",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:635b33bc5b87b290535e9269b0882d8a359b0b8504ccab7c7f82bc9903c39186",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:a5b425bbad84980e961fa47cdc6ae05d8fc62b641b213ae5d56942ef47a8906a",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7653f46dd6b5819dc8bebe535bd13c4fe99c59e44f68a75aee7b57c49b310094",
+          "retrieval": "sha256:212d5794f1fc68e0b391d795601e832a408133fec05469fd2c7b7edc9fda1419",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:a765ce84857ef7fb6cee629856de79a91db71358cfc41f7547e7ea7d5938dc86"
+      }
+    },
+    {
+      "fixtureId": "cont-open-loop-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-memory-greeting-zh",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:635b33bc5b87b290535e9269b0882d8a359b0b8504ccab7c7f82bc9903c39186",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:a5b425bbad84980e961fa47cdc6ae05d8fc62b641b213ae5d56942ef47a8906a",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7653f46dd6b5819dc8bebe535bd13c4fe99c59e44f68a75aee7b57c49b310094",
+          "retrieval": "sha256:212d5794f1fc68e0b391d795601e832a408133fec05469fd2c7b7edc9fda1419",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:a765ce84857ef7fb6cee629856de79a91db71358cfc41f7547e7ea7d5938dc86"
+      }
+    },
+    {
+      "fixtureId": "cont-risk-sensitive-mix",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:89cb7ee4fb7b6239b428ebc48072b5842c7dec7dbc64542b997b6b606dc65543",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:cd218b7d087587b205efe98b0bc5510646ceda1640c65808f6d0b2a9757905d0",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7b3a3782a9d8f893d036da1d2a9e2b38433b533cf1f350cffe911abbc34daca8",
+          "retrieval": "sha256:4e0e8105e8c95b0e9ee6e5d13ec1ea73c61bdd59d3f5ea9030dfc0c31bd91a82",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:0104edcd3ff5b97f0c392ad4de37aad2d2e0af237dd290369721232d48435fc6"
+      }
+    },
+    {
+      "fixtureId": "cont-repeat-zh",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:635b33bc5b87b290535e9269b0882d8a359b0b8504ccab7c7f82bc9903c39186",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:a5b425bbad84980e961fa47cdc6ae05d8fc62b641b213ae5d56942ef47a8906a",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7653f46dd6b5819dc8bebe535bd13c4fe99c59e44f68a75aee7b57c49b310094",
+          "retrieval": "sha256:212d5794f1fc68e0b391d795601e832a408133fec05469fd2c7b7edc9fda1419",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:a765ce84857ef7fb6cee629856de79a91db71358cfc41f7547e7ea7d5938dc86"
+      }
+    },
+    {
+      "fixtureId": "cont-greeting-en",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:dbbb0922c0ebeffa2bb6a4053ccf17c817b92044e9c23025a424bd6e0e3a577d",
+          "locale": "sha256:d047aed45bf222f8a3f5be9679134ff48dbfe934d48d49c34b7ef08338cbbfea",
+          "memory": "sha256:cc1eacdaf31b52201a8f587936aa2e85d5a32e546030ca6ace6281e2413d5e95",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:8f93864ea6d871f4866605795c1db57b42446b0759e079a9611ba75fa10a5578",
+          "retrieval": "sha256:aad161a6cb6f1625aad3e9e3c9ae3c2d35317b60024c165c9bd7161a5162cca3",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:9a27ecb2ff67aafb60804368035627c588f45677a72b4534a5e8cf3bbfd8bf06"
+      }
+    },
+    {
+      "fixtureId": "cont-stop-lane-mix",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:89cb7ee4fb7b6239b428ebc48072b5842c7dec7dbc64542b997b6b606dc65543",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:cd218b7d087587b205efe98b0bc5510646ceda1640c65808f6d0b2a9757905d0",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7b3a3782a9d8f893d036da1d2a9e2b38433b533cf1f350cffe911abbc34daca8",
+          "retrieval": "sha256:4e0e8105e8c95b0e9ee6e5d13ec1ea73c61bdd59d3f5ea9030dfc0c31bd91a82",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:0104edcd3ff5b97f0c392ad4de37aad2d2e0af237dd290369721232d48435fc6"
+      }
+    },
+    {
+      "fixtureId": "cont-surveillance-zh",
+      "intentionalDifference": {
+        "keys": [
+          "open_loop_bundle",
+          "proactive_bundle"
+        ],
+        "statement": "Both arms use this exact frozen input; only the Open Loop / Proactive bundle may differ."
+      },
+      "sharedInput": {
+        "components": {
+          "conversation": "sha256:dc562fb243298ad826e3018ba38569e7fcac4f4a02ad17be117ef8bc443148f8",
+          "events": "sha256:635b33bc5b87b290535e9269b0882d8a359b0b8504ccab7c7f82bc9903c39186",
+          "locale": "sha256:d3c2b748dd2a3a8d49165532b32bde0d94ed44630a804aa8bff93d1fff0154b3",
+          "memory": "sha256:a5b425bbad84980e961fa47cdc6ae05d8fc62b641b213ae5d56942ef47a8906a",
+          "persona": "sha256:43a47c7517ef58a7e3abccfa1ee5d3efb26b37bc46dba3d2658c513de80806e3",
+          "portrait": "sha256:7653f46dd6b5819dc8bebe535bd13c4fe99c59e44f68a75aee7b57c49b310094",
+          "retrieval": "sha256:212d5794f1fc68e0b391d795601e832a408133fec05469fd2c7b7edc9fda1419",
+          "safety": "sha256:402c57fa2e59bc2c8f016dbec5e0952cf004ecfaa4e6258c0120a35a002686b4"
+        },
+        "fingerprint": "sha256:a765ce84857ef7fb6cee629856de79a91db71358cfc41f7547e7ea7d5938dc86"
+      }
+    }
+  ],
+  "group": "continuation",
+  "version": "1a3b-f3-input-summary:v1"
+}

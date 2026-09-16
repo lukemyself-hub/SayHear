@@ -1,0 +1,157 @@
+{
+  "protocol": "blind-pairwise:v2",
+  "scorer": "",
+  "scoredAt": "",
+  "scenarios": [
+    {
+      "scenarioId": "cont-stop-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-task-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-incomplete-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-memory-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-extra-zh",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-extra-en-2",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-sensitive-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-open-loop-zh",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-open-loop-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-memory-greeting-zh",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-risk-sensitive-mix",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-repeat-zh",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-greeting-en",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-stop-lane-mix",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "cont-surveillance-zh",
+      "overallChoice": "tie",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "armOrder": [
+    "continuation-incumbent-1a3a",
+    "continuation-bundle-1a3b-v1"
+  ],
+  "generatedAt": "2026-09-16T04:19:28.131Z",
+  "mapping": {
+    "cont-stop-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-task-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-incomplete-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-memory-en": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-bundle-1a3b-v1"
+    },
+    "cont-extra-zh": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-bundle-1a3b-v1"
+    },
+    "cont-extra-en-2": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-sensitive-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-open-loop-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-open-loop-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-memory-greeting-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-risk-sensitive-mix": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-repeat-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-greeting-en": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-bundle-1a3b-v1"
+    },
+    "cont-stop-lane-mix": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-surveillance-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    }
+  },
+  "protocol": "blind-pairwise:v2",
+  "seed": 196
+}

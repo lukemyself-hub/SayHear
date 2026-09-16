@@ -1,0 +1,131 @@
+{
+  "arm": "continuation-bundle-1a3b-v1",
+  "fixtures": [
+    {
+      "fixtureId": "cont-open-loop-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-memory-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-greeting-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-task-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-risk-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-sensitive-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-stop-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-incomplete-en",
+      "formedLoops": [],
+      "extractCalls": 1,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-surveillance-zh",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-repeat-zh",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-open-loop-zh",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-memory-greeting-zh",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-task-topic-zh",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-risk-sensitive-mix",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-stop-lane-mix",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-extra-en",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-extra-zh",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    },
+    {
+      "fixtureId": "cont-extra-en-2",
+      "formedLoops": [],
+      "extractCalls": 2,
+      "extractErrors": 0,
+      "segmentsCommitted": 0
+    }
+  ]
+}

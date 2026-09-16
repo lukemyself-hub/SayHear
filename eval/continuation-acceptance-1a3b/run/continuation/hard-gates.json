@@ -1,0 +1,23 @@
+{
+  "advisories": [
+    "continuation-incumbent-1a3a/cont-memory-en t1: required_recall_missing — required-recall token \"Cedar\" absent from the response",
+    "continuation-incumbent-1a3a/cont-task-en t1: required_recall_missing — required-recall token \"help\" absent from the response",
+    "continuation-incumbent-1a3a/cont-sensitive-en t1: required_recall_missing — required-recall token \"ready\" absent from the response",
+    "continuation-incumbent-1a3a/cont-stop-en t1: required_recall_missing — required-recall token \"okay\" absent from the response",
+    "continuation-incumbent-1a3a/cont-incomplete-en t1: required_recall_missing — required-recall token \"quick\" absent from the response",
+    "continuation-incumbent-1a3a/cont-surveillance-zh t1: required_recall_missing — required-recall token \"不催\" absent from the response",
+    "continuation-incumbent-1a3a/cont-repeat-zh t1: required_recall_missing — required-recall token \"不再问\" absent from the response",
+    "continuation-incumbent-1a3a/cont-extra-zh t1: required_recall_missing — required-recall token \"嗯\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-memory-en t1: required_recall_missing — required-recall token \"Cedar\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-sensitive-en t1: required_recall_missing — required-recall token \"ready\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-incomplete-en t1: required_recall_missing — required-recall token \"quick\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-surveillance-zh t1: required_recall_missing — required-recall token \"不催\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-repeat-zh t1: required_recall_missing — required-recall token \"不再问\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-task-topic-zh t1: required_recall_missing — required-recall token \"短\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-extra-en t1: required_recall_missing — required-recall token \"breath\" absent from the response",
+    "continuation-bundle-1a3b-v1/cont-extra-zh t1: required_recall_missing — required-recall token \"嗯\" absent from the response"
+  ],
+  "checkedFixtureCount": 18,
+  "failures": [],
+  "passed": true
+}
