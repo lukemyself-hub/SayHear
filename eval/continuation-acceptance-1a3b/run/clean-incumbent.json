@@ -1,0 +1,19 @@
+{
+  "configurationFingerprint": "sha256:581e75060ea246676a9fb794756aece2149aad4583b8a2b2a6c84253202240ae",
+  "configId": "continuation-incumbent-1a3a",
+  "generatedAt": "2026-09-16T01:32:11.335Z",
+  "gitCommit": "6eb078507fc19252cc86a47af0eb90577792b526",
+  "hardGates": {
+    "checkedFixtureCount": 18,
+    "failures": 0,
+    "passed": true,
+    "path": "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json",
+    "sha256": "sha256:3a40aa71d2d3b2fc902f9f50fb46a7685c1e192072a794d0f660d7a4bb70b7e7"
+  },
+  "run": {
+    "path": "eval/continuation-acceptance-1a3b/run/continuation-incumbent.json",
+    "sha256": "sha256:41c806164870282759732aa85853972dbbe2df11a7b91cac4a401ca77f2fc6b6"
+  },
+  "synthetic": true,
+  "version": "1a3b-f3-clean-incumbent:v1"
+}

@@ -12,9 +12,9 @@
     { "issue": 186, "name": "memory-continuity-en turn 4 missing Cairn token", "confirmed": true }
   ],
   "currentIncumbent": {
-    "status": "requires-clean-rebaseline",
-    "commit": null,
-    "manifestPath": null,
-    "confirmedHardGateFailures": null
+    "status": "clean",
+    "commit": "6eb078507fc19252cc86a47af0eb90577792b526",
+    "manifestPath": "eval/continuation-acceptance-1a3b/run/clean-incumbent.json",
+    "confirmedHardGateFailures": 0
   }
 }
