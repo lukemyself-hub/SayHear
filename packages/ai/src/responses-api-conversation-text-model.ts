@@ -32,6 +32,26 @@ function providerParameters(
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(parameters ?? {})) {
     if (PROTECTED_REQUEST_KEYS.has(key)) continue;
+    if (key === "reasoningEffort") {
+      if ("reasoning" in result) {
+        throw new ProviderDispatchError(
+          "configuration",
+          "Responses API reasoning was supplied more than once.",
+        );
+      }
+      result.reasoning = { effort: value };
+      continue;
+    }
+    if (key === "responseFormat") {
+      if ("text" in result) {
+        throw new ProviderDispatchError(
+          "configuration",
+          "Responses API text format was supplied more than once.",
+        );
+      }
+      result.text = { format: { type: value } };
+      continue;
+    }
     const wireKey = RESPONSES_PARAMETER_ALIASES[key] ?? key;
     if (wireKey in result && wireKey !== key) {
       throw new ProviderDispatchError(

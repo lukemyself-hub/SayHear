@@ -29,7 +29,11 @@ function configuration(role: OneA3bModelRole): ModelRoleConfigurationSnapshot {
     fallbackMode: "disabled",
     maxTechnicalRetries: policy.maxTechnicalRetries,
     maxSemanticRepairs: policy.maxSemanticRepairs,
-    parameterSnapshot: { temperature: 0 },
+    parameterSnapshot: {
+      reasoningEffort: "none",
+      responseFormat: "json_object",
+      temperature: 0,
+    },
   };
 }
 
@@ -123,6 +127,8 @@ describe("G2 open_loop.extract runtime provider", () => {
     });
     expect(output?.closures).toEqual([]);
     expect(requestBody?.model).toBe("synthetic-model");
+    expect(requestBody?.reasoning).toEqual({ effort: "none" });
+    expect(requestBody?.text).toEqual({ format: { type: "json_object" } });
     expect(String(requestBody?.instructions)).toContain(
       "open_loop.extract-prompt:v1",
     );

@@ -45,17 +45,22 @@ import {
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   createConversationAgentHarness,
   createContextCompiler,
+  createModelRoleProviderEgress,
   createProactiveFollowupSegmentStage,
+  composeProactiveFollowupResponse,
   ENGLISH_LOCALE_PACK_VERSION,
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   MEMORY_BUDGETS_POLICY_VERSION,
   MEMORY_RETRIEVAL_POLICY_VERSION,
   MEMORY_SECTION_KEYS,
   minimumHighRiskSafetyPostureDetector,
+  ONE_A_3B_G1_ENABLED_ROLES,
+  ONE_A_3B_G2_ENABLED_ROLES,
   applySafetyPostureTurn,
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
   OPEN_LOOP_EXTRACTION_POLICY_VERSION,
+  planProactiveFollowupDisposition,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
   PORTRAIT_SELECTION_POLICY_VERSION,
@@ -100,6 +105,7 @@ import {
   type ProviderEgressClaim,
   type ProviderEgressPort,
   type ProviderEgressRepository,
+  type RecoveryGate,
   type RetrievalRunManifest,
 } from "@sayhear/application";
 import {
@@ -121,6 +127,7 @@ import {
 
 import { buildChampionAssembly, loadDotEnv } from "../memory-pairwise-126/shared";
 import {
+  F3_CATALOG_VERSION,
   F3_RUN_VERSION,
   configurationFingerprint,
   sha256,
@@ -131,6 +138,7 @@ import {
   type SyntheticRun,
   type SyntheticRunTurn,
 } from "./protocol";
+import { verifyFixtureCatalog } from "./manifest";
 import { verifySyntheticRunHardGates } from "./review-package";
 
 const DEFAULT_CATALOG = "eval/continuation-acceptance-1a3b/fixtures.json";
@@ -150,7 +158,17 @@ const USER_ID = asUserId(uuidFrom("synthetic-user"));
  * contract; `high_risk` exercises safety deference. Every other category
  * leaves the focus gate open and lets selection decide.
  */
-const FOCUS_REQUIRED_CATEGORIES = new Set(["direct_task", "high_risk"]);
+const FOCUS_REQUIRED_CATEGORIES = new Set([
+  "direct_task",
+  "high_risk",
+  "incomplete_lane",
+  "refusal",
+  "repetition",
+  "sensitive_target",
+  "surveillance",
+  "short_answers",
+  "topic_change",
+]);
 
 type ParsedArguments = Readonly<{
   catalog: string;
@@ -199,6 +217,25 @@ function required(arguments_: readonly string[], index: number, name: string): s
   return value;
 }
 
+function assertSyntheticCatalog(catalog: FixtureCatalog): void {
+  if (
+    catalog.version !== F3_CATALOG_VERSION ||
+    catalog.synthetic !== true ||
+    typeof catalog.syntheticNotice !== "string" ||
+    !catalog.syntheticNotice.toLowerCase().includes("synthetic")
+  ) {
+    throw new Error(
+      "Candidate capture accepts only the versioned synthetic F3 catalog.",
+    );
+  }
+  const verification = verifyFixtureCatalog(catalog);
+  if (!verification.passed) {
+    throw new Error(
+      `Candidate capture catalog verification failed: ${verification.mismatches.join("; ")}`,
+    );
+  }
+}
+
 /** Deterministic RFC 9562 UUIDv7-shaped id derived from a seed string. */
 function uuidFrom(seed: string): string {
   const hash = createHash("sha256").update(seed).digest("hex").slice(0, 32);
@@ -221,6 +258,20 @@ function createClock(): () => Date {
   return () => new Date(BASE_TIME_MS + tick++ * 1_000);
 }
 
+function createSyntheticRecoveryGate(): RecoveryGate {
+  const result = {
+    status: "open" as const,
+    markerDataEpoch: null,
+    markerPurgedAt: null,
+    markerWrittenAt: null,
+    receiptDestinations: [],
+  };
+  return {
+    evaluate: async () => result,
+    requireOpen: async () => result,
+  };
+}
+
 /**
  * Expand a pins identity label into a full configuration snapshot. Lifecycle
  * fields come from the frozen role policy, never from the pins: the registry
@@ -241,8 +292,17 @@ function snapshotFor(
   }
   const temperature = pin.parameters.temperature;
   const maxOutputTokens = pin.parameters.maxOutputTokens;
-  if (typeof temperature !== "number" || typeof maxOutputTokens !== "number") {
-    throw new Error(`Pins parameters for ${role} must carry numeric temperature and maxOutputTokens.`);
+  const reasoningEffort = pin.parameters.reasoningEffort;
+  const responseFormat = pin.parameters.responseFormat;
+  if (
+    typeof temperature !== "number" ||
+    typeof maxOutputTokens !== "number" ||
+    reasoningEffort !== "none" ||
+    responseFormat !== "json_object"
+  ) {
+    throw new Error(
+      `Pins parameters for ${role} must carry temperature, maxOutputTokens, reasoningEffort=none, and responseFormat=json_object.`,
+    );
   }
   const policy = ONE_A_3B_ROLE_POLICIES[role];
   if (pin.maxTechnicalRetries !== policy.maxTechnicalRetries) {
@@ -270,6 +330,8 @@ function snapshotFor(
       providerCallBudget: 4,
       temperature,
       maxOutputTokens,
+      reasoningEffort,
+      responseFormat,
     },
   };
 }
@@ -278,6 +340,12 @@ function snapshotFor(
 function createCommandService(
   configurations: Readonly<Record<string, ModelRoleConfigurationSnapshot>>,
 ): ModelRoleCommandService {
+  const requireRoles = (roles: readonly OneA3bModelRole[], regime: string): void => {
+    const missing = roles.filter((role) => configurations[role] === undefined);
+    if (missing.length > 0) {
+      throw new Error(`${regime} synthetic release is missing ${missing.join(", ")}.`);
+    }
+  };
   return {
     admit: async (input) => ({
       outcome: "created",
@@ -289,6 +357,12 @@ function createCommandService(
       intentKey: input.intentKey,
     }),
     configuration: (role) => configurations[role] ?? null,
+    verifyActiveG1Release: async () => {
+      requireRoles(ONE_A_3B_G1_ENABLED_ROLES, "G1");
+    },
+    verifyActiveG2Release: async () => {
+      requireRoles(ONE_A_3B_G2_ENABLED_ROLES, "G2");
+    },
     validateAttempt: async () => ({ outcome: "ready" }),
     claimProviderDispatch: async () => ({ outcome: "ready" }),
     discardAttempt: async (input) => ({
@@ -310,6 +384,7 @@ type FormedLoop = Readonly<{
   sourceEventRevisionId: string;
   localizedSummary: string | null;
   expectedStartAt: string | null;
+  followupEligibleFromAt: string;
   expiresAt: string;
   closed: boolean;
 }>;
@@ -325,6 +400,8 @@ function createLaneRepository(): OpenLoopExtractionRepository & {
   loops(): readonly FormedLoop[];
   noteExtractError(revisionId: string): void;
   extractErrored(revisionId: string): boolean;
+  extractPending(revisionId: string): boolean;
+  hasExtractErrors(): boolean;
 } {
   const events = new Map<string, { locale: string; timeZone: string; text: string }>();
   const settled = new Set<string>();
@@ -340,6 +417,9 @@ function createLaneRepository(): OpenLoopExtractionRepository & {
       errored.add(revisionId);
     },
     extractErrored: (revisionId) => errored.has(revisionId),
+    extractPending: (revisionId) =>
+      events.has(revisionId) && !settled.has(revisionId) && !errored.has(revisionId),
+    hasExtractErrors: () => errored.size > 0,
     listEventsNeedingExtraction: async () => {
       const pending: { eventRevisionId: string; userId: typeof USER_ID; sourceRevision: number; expectedDataEpoch: number }[] = [];
       for (const [revisionId] of events) {
@@ -395,6 +475,7 @@ function createLaneRepository(): OpenLoopExtractionRepository & {
           sourceEventRevisionId: commitInput.sourceEventRevisionId,
           localizedSummary: formation.localizedSummary,
           expectedStartAt: formation.expectedStartAt,
+          followupEligibleFromAt: formation.followupEligibleFromAt,
           expiresAt: formation.expiresAt,
           closed: false,
         });
@@ -438,7 +519,7 @@ function toMemoryItem(input: {
     epistemicStatus: input.kind === "impression" ? "inferred" : "confirmed",
     evidenceIds: [...input.evidenceIds],
     kind: input.kind,
-    predicateId: `syn-predicate:${input.claimId}`,
+    predicateId: input.predicateId,
     recallFramingPolicyVersion: RECALL_FRAMING_POLICY_VERSION,
     renderedText: input.renderedText,
     selectionSource: input.selectionSource,
@@ -618,6 +699,7 @@ function createSeam(input: {
   laneLog: (fixtureId: string) => Omit<LaneSidecarFixture, "fixtureId" | "segmentsCommitted">;
   noteExtractCall: (success: boolean) => void;
   lastEgressError: () => Error | null;
+  roleEgress: ModelRoleProviderEgress;
   memoryState: { fixtureId: string; sharedInput: FrozenSharedInput | null };
   registerSnapshot: (generationCommandId: string, snapshot: ContextSourceSnapshot) => void;
 } {
@@ -644,7 +726,11 @@ function createSeam(input: {
   };
   // Pending proactive uses within the fixture run, plus sticky suppression
   // states (no time-based release inside the seam).
-  const pendingUses: (ProactiveFollowupPendingUse & { recorded: boolean })[] = [];
+  const pendingUses: (ProactiveFollowupPendingUse & {
+    exchangeNo: number;
+    promptUserEventRevisionId: string;
+    recorded: boolean;
+  })[] = [];
   const states = new Map<string, ProactiveFollowupStateSnapshot>();
   let lastEgressError: Error | null = null;
   let extractCalls = 0;
@@ -697,13 +783,20 @@ function createSeam(input: {
       const revisionId = asConversationEventRevisionId(
         uuidFrom(`${commitInput.generationCommandId}:revision`),
       );
-      const segment = (commitInput as { proactiveSegment?: {
-        plan: Pick<ProactiveFollowupPendingUse, "targetKind" | "targetId" | "targetVersionId" | "promptUserEventSequence">;
-      } }).proactiveSegment;
+      const segment = commitInput.proactiveSegment;
+      const responseText = segment
+        ? composeProactiveFollowupResponse({
+            mainText: commitInput.text,
+            segmentText: segment.generation.output.content,
+          })
+        : commitInput.text;
+      eventTexts.set(String(revisionId), responseText);
       if (segment) {
         pendingUses.push({
           useId: `use:${commitInput.generationCommandId}`,
           assistantEventRevisionId: String(revisionId),
+          exchangeNo: snapshot?.dailySession.continuousExchangeNo ?? 1,
+          promptUserEventRevisionId: String(segment.plan.promptUserEventRevisionId),
           targetKind: segment.plan.targetKind,
           targetId: segment.plan.targetId,
           targetVersionId: segment.plan.targetVersionId,
@@ -712,7 +805,12 @@ function createSeam(input: {
           recorded: false,
         });
       }
-      return { eventId, outcome: "committed", revisionId };
+      return {
+        eventId,
+        outcome: "committed",
+        revisionId,
+        segment: segment ? "committed" : "omitted",
+      };
     },
     loadContextSource: async (loadInput) => {
       const snapshot = snapshots.get(String(loadInput.generationCommandId));
@@ -846,8 +944,8 @@ function createSeam(input: {
         sourceRevisionIds: [cursor.revisionId],
       },
     }),
-    readOpenLane: async (): Promise<ProactiveFollowupLaneSnapshot> => {
-      if (lane.extractErrored(cursor.revisionId)) {
+    readOpenLane: async (readInput): Promise<ProactiveFollowupLaneSnapshot> => {
+      if (lane.hasExtractErrors() || lane.extractErrored(cursor.revisionId)) {
         return {
           name: "open_loop",
           enabled: true,
@@ -858,6 +956,21 @@ function createSeam(input: {
           candidates: [],
         };
       }
+      if (lane.extractPending(cursor.revisionId)) {
+        return {
+          name: "open_loop",
+          enabled: true,
+          status: "incomplete",
+          watermark: {
+            sourceRevision: readInput.turn.currentSourceRevision,
+            coveredThroughSequence: readInput.turn.currentUserEventSequence,
+          },
+          manifestVersion: PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION,
+          integrity: "valid",
+          candidates: [],
+        };
+      }
+      const nowMs = readInput.now.getTime();
       return {
         name: "open_loop",
         enabled: true,
@@ -866,7 +979,7 @@ function createSeam(input: {
         manifestVersion: PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION,
         integrity: "valid",
         candidates: lane.loops()
-          .filter((loop) => !loop.closed)
+          .filter((loop) => !loop.closed && Date.parse(loop.expiresAt) > nowMs)
           .map((loop) => ({
             targetKind: "open_loop" as const,
             targetId: loop.loopId,
@@ -876,10 +989,10 @@ function createSeam(input: {
             evidenceAt: new Date(BASE_TIME_MS).toISOString(),
             expectedStartAt: loop.expectedStartAt,
             expiresAt: loop.expiresAt,
-            sensitive: false,
+            sensitive: true,
             lastUsedAt: null,
             current: true,
-            eligible: true,
+            eligible: Date.parse(loop.followupEligibleFromAt) <= nowMs,
             trustFence: "valid" as const,
             mentionedInExchange: false,
             formedInCurrentTurn: loop.sourceEventRevisionId === cursor.revisionId,
@@ -933,29 +1046,74 @@ function createSeam(input: {
     abandonSegment: async () => undefined,
     recordDisposition: async (dispositionInput) => {
       const use = pendingUses.find((entry) => entry.useId === dispositionInput.useId);
-      if (use) use.recorded = true;
-      const suppressed = dispositionInput.signal !== "no_stop_signal";
-      states.set(`${dispositionInput.targetKind}:${dispositionInput.targetId}`, {
-        stateId: `state:${dispositionInput.targetKind}:${dispositionInput.targetId}`,
-        stateVersionId: `state:${dispositionInput.useId}`,
-        targetKind: dispositionInput.targetKind,
-        targetId: dispositionInput.targetId,
-        targetVersionId: dispositionInput.targetVersionId,
-        eligibilityStatus: suppressed ? "suppressed" : "eligible",
-        suppressionReason: suppressed ? dispositionInput.signal : null,
-        consecutiveSoftStopCount: suppressed ? 1 : 0,
-        suppressedUntilAt: null,
-        lastPromptEventRevisionId: dispositionInput.triggerUserEventRevisionId,
-        lastResponseEventRevisionId: null,
-        lastUsedAt: dispositionInput.now.toISOString(),
-        releaseReason: null,
-      });
-      return { outcome: "recorded", stateVersionId: `state:${dispositionInput.useId}` };
+      if (!use) return { outcome: "fenced", reason: "use_missing" };
+      try {
+        const transition = planProactiveFollowupDisposition({
+          userId: String(USER_ID),
+          now: dispositionInput.now,
+          timeZone: dispositionInput.timeZone,
+          signal: dispositionInput.signal,
+          targetKind: dispositionInput.targetKind,
+          targetId: dispositionInput.targetId,
+          targetVersionId: dispositionInput.targetVersionId,
+          currentUserEventRevisionId: dispositionInput.triggerUserEventRevisionId,
+          currentUserEventSequence: dispositionInput.triggerUserEventSequence,
+          currentUserEventExchangeNo: use.exchangeNo,
+          use: {
+            useId: use.useId,
+            userId: String(USER_ID),
+            targetKind: use.targetKind,
+            targetId: use.targetId,
+            targetVersionId: use.targetVersionId,
+            promptUserEventRevisionId: use.promptUserEventRevisionId,
+            promptUserEventSequence: use.promptUserEventSequence,
+            exchangeNo: use.exchangeNo,
+            finalTextLocator: dispositionInput.finalTextLocator,
+          },
+          state: states.get(`${use.targetKind}:${use.targetId}`) ?? null,
+        });
+        if (transition.outcome === "suppressed") {
+          const state = transition.state ?? {
+            stateId: `state:${use.targetKind}:${use.targetId}`,
+            stateVersionId: `state:${use.useId}`,
+            targetKind: use.targetKind,
+            targetId: use.targetId,
+            targetVersionId: use.targetVersionId,
+            eligibilityStatus: "suppressed" as const,
+            suppressionReason: transition.suppressionReason,
+            consecutiveSoftStopCount: 1,
+            suppressedUntilAt: transition.suppressionUntilAt,
+            lastPromptEventRevisionId: use.promptUserEventRevisionId,
+            lastResponseEventRevisionId: dispositionInput.triggerUserEventRevisionId,
+            lastUsedAt: dispositionInput.now.toISOString(),
+            releaseReason: null,
+          };
+          states.set(`${use.targetKind}:${use.targetId}`, state);
+        }
+        use.recorded = true;
+        return {
+          outcome: "recorded",
+          stateVersionId: transition.state?.stateVersionId ?? null,
+        };
+      } catch {
+        return { outcome: "fenced", reason: "disposition_policy" };
+      }
     },
   };
 
+  const baseRoleEgress = createModelRoleProviderEgress({
+    commandService: input.commandService,
+    recoveryGate: createSyntheticRecoveryGate(),
+  });
   const roleEgress: ModelRoleProviderEgress = {
-    dispatch: async (dispatchInput) => dispatchInput.execute(),
+    async dispatch(dispatchInput) {
+      try {
+        return await baseRoleEgress.dispatch(dispatchInput);
+      } catch (error) {
+        lastEgressError = error instanceof Error ? error : new Error(String(error));
+        throw error;
+      }
+    },
   };
 
   const stage = input.proactiveFollowupProvider
@@ -972,7 +1130,10 @@ function createSeam(input: {
             if (!current) {
               throw new Error("Segment context compiled without a current snapshot.");
             }
-            snapshots.set(String(compileInput.generationCommandId), current);
+            snapshots.set(String(compileInput.generationCommandId), {
+              ...current,
+              generationStage: "proactive_followup",
+            });
             const compiled = await compiler.compile({
               generationCommandId: compileInput.generationCommandId,
               interactionTurnId: asInteractionTurnId(compileInput.interactionTurnId),
@@ -1001,6 +1162,7 @@ function createSeam(input: {
     lane,
     cursor,
     eventTexts,
+    roleEgress,
     laneLog: () => ({
       formedLoops: lane.loops().map((loop) => ({
         loopId: loop.loopId,
@@ -1097,7 +1259,6 @@ async function captureFixture(input: {
     | { extract: OpenLoopExtractModelProvider; proactive: ProactiveFollowupModelProvider }
     | undefined;
   commandService: ModelRoleCommandService;
-  roleEgress: ModelRoleProviderEgress;
   sharedInput: FrozenSharedInput;
 }): Promise<ScenarioCapture> {
   const seam = createSeam({
@@ -1129,11 +1290,82 @@ async function captureFixture(input: {
   );
   for (const frozen of frozenEvents) {
     seam.eventTexts.set(String(frozen.revisionId), frozen.text);
+    seam.lane.registerEvent({
+      revisionId: String(frozen.revisionId),
+      locale: frozen.locale,
+      timeZone: input.fixture.timezone,
+      text: frozen.text,
+    });
   }
   const committed: ContextSourceEvent[] = [...frozenEvents];
   let sequence = frozenEvents.length;
   const turns: SyntheticRunTurn[] = [];
   let segmentsCommitted = 0;
+
+  const extractEvent = async (
+    event: ContextSourceEvent,
+    sourceLabel: string,
+  ): Promise<void> => {
+    const intentKey = `open-loop-extract:${input.fixture.id}:${sourceLabel}`;
+    try {
+      const admitted = await input.commandService.admit({
+        userId: USER_ID,
+        role: "open_loop.extract",
+        intentKey,
+        subjectType: "conversation_event_revision",
+        subjectId: String(event.revisionId),
+        sourceRevision: 1,
+        sourceSnapshot: `open-loop-extract:${event.revisionId}`,
+        inputManifest: [
+          {
+            key: `event:${event.revisionId}`,
+            revision: 1,
+            fingerprint: `event-revision:${event.revisionId}`,
+          },
+        ],
+        expectedDataEpoch: 1,
+        now: seam.clock(),
+      });
+      const result = await runOpenLoopExtractAttempt({
+        clock: seam.clock,
+        repository: seam.lane,
+        modelRoleCommandService: input.commandService,
+        openLoopExtractProvider: input.roleProviders!.extract,
+        command: {
+          workflowCommandId: uuidFrom(`workflow:${intentKey}`),
+          eventRevisionId: String(event.revisionId),
+          sourceRevision: 1,
+          generationCommandId: String(admitted.generationCommandId),
+          modelRunAttemptId: String(admitted.modelRunAttemptId),
+          attemptNo: admitted.attemptNo,
+          attemptKind: admitted.attemptKind,
+          rolloutPin: input.extractConfiguration.rolloutPin,
+          policyVersion: OPEN_LOOP_EXTRACTION_POLICY_VERSION,
+          expectedDataEpoch: 1,
+        },
+        providerEgress: seam.roleEgress,
+      });
+      const succeeded =
+        result.outcome === "extracted" || result.outcome === "duplicate";
+      seam.noteExtractCall(succeeded);
+      if (!succeeded) seam.lane.noteExtractError(String(event.revisionId));
+      if (!succeeded) {
+        console.log(
+          `[f3-candidate-capture] ${input.fixture.id} ${sourceLabel}: extract ${result.outcome} (${result.errorCode ?? "no error code"}; ${seam.lastEgressError()?.message ?? "no detail"})`,
+        );
+      }
+    } catch (error) {
+      seam.noteExtractCall(false);
+      seam.lane.noteExtractError(String(event.revisionId));
+      console.log(
+        `[f3-candidate-capture] ${input.fixture.id} ${sourceLabel}: extract failed closed (${error instanceof Error ? error.message : String(error)})`,
+      );
+    }
+  };
+
+  for (const [index, frozen] of frozenEvents.entries()) {
+    await extractEvent(frozen, `frozen:${index}`);
+  }
 
   for (const fixtureTurn of input.fixture.turns) {
     seam.memoryState.fixtureId = input.fixture.id;
@@ -1159,58 +1391,8 @@ async function captureFixture(input: {
       text: currentUser.text,
     });
 
-    // Evolve the open-loop lane from the frozen Event through the production
-    // runner before the turn renders. An extract failure keeps the lane
-    // unavailable for this turn (fail-closed); it never fails the fixture.
-    const extractProvider = input.roleProviders?.extract;
-    if (extractProvider) {
-      const intentKey = `open-loop-extract:${input.fixture.id}:${fixtureTurn.sequenceInScenario}`;
-      try {
-        const admitted = await input.commandService.admit({
-          userId: USER_ID,
-          role: "open_loop.extract",
-          intentKey,
-          subjectType: "conversation_event_revision",
-          subjectId: String(userRevisionId),
-          sourceRevision: 1,
-          sourceSnapshot: `open-loop-extract:${userRevisionId}`,
-          inputManifest: [
-            {
-              key: `event:${userRevisionId}`,
-              revision: 1,
-              fingerprint: `event-revision:${userRevisionId}`,
-            },
-          ],
-          expectedDataEpoch: 1,
-          now: seam.clock(),
-        });
-        await runOpenLoopExtractAttempt({
-          clock: seam.clock,
-          repository: seam.lane,
-          modelRoleCommandService: input.commandService,
-          openLoopExtractProvider: extractProvider,
-          command: {
-            workflowCommandId: uuidFrom(`workflow:${intentKey}`),
-            eventRevisionId: String(userRevisionId),
-            sourceRevision: 1,
-            generationCommandId: String(admitted.generationCommandId),
-            modelRunAttemptId: String(admitted.modelRunAttemptId),
-            attemptNo: admitted.attemptNo,
-            attemptKind: admitted.attemptKind,
-            rolloutPin: input.extractConfiguration.rolloutPin,
-            policyVersion: OPEN_LOOP_EXTRACTION_POLICY_VERSION,
-            expectedDataEpoch: 1,
-          },
-          providerEgress: input.roleEgress,
-        });
-        seam.noteExtractCall(true);
-      } catch (error) {
-        seam.noteExtractCall(false);
-        seam.lane.noteExtractError(String(userRevisionId));
-        console.log(
-          `[f3-candidate-capture] ${input.fixture.id} t${fixtureTurn.sequenceInScenario}: extract failed closed (${error instanceof Error ? error.message : String(error)})`,
-        );
-      }
+    if (input.fixture.category !== "incomplete_lane") {
+      await extractEvent(currentUser, `turn:${fixtureTurn.sequenceInScenario}`);
     }
 
     const generationCommandId = String(
@@ -1256,6 +1438,7 @@ async function captureFixture(input: {
 
     let assistantText = "";
     let failedCategory: string | null = null;
+    let committedAssistantRevisionId: string | null = null;
     for await (const event of seam.harness.runDecision({
       catalog: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
       catalogVersion: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.version,
@@ -1272,9 +1455,16 @@ async function captureFixture(input: {
       } else if (event.type === "decision_segment_delta") {
         assistantText += ` ${event.delta}`;
         segmentsCommitted += 1;
+      } else if (event.type === "decision_committed") {
+        committedAssistantRevisionId = String(event.assistantEventRevisionId);
       } else if (event.type === "decision_failed") {
         failedCategory = event.category;
       }
+    }
+
+    if (committedAssistantRevisionId !== null) {
+      assistantText =
+        seam.eventTexts.get(committedAssistantRevisionId) ?? assistantText;
     }
 
     if (failedCategory !== null) {
@@ -1303,7 +1493,8 @@ async function captureFixture(input: {
       actor: "assistant",
       locale: input.fixture.locale,
       revisionId: asConversationEventRevisionId(
-        uuidFrom(`${input.fixture.id}:t${fixtureTurn.sequenceInScenario}:assistant`),
+        committedAssistantRevisionId ??
+          uuidFrom(`${input.fixture.id}:t${fixtureTurn.sequenceInScenario}:assistant`),
       ),
       sequence,
       text: assistantText,
@@ -1346,6 +1537,7 @@ async function main(): Promise<void> {
   const catalog = JSON.parse(
     await readFile(resolve(arguments_.catalog), "utf8"),
   ) as unknown as FixtureCatalog;
+  assertSyntheticCatalog(catalog);
   const pins = JSON.parse(
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
@@ -1356,6 +1548,12 @@ async function main(): Promise<void> {
   if (!arguments_.deterministic && !conversationAdapter.apiKey) {
     throw new Error("A provider API key is required for the real capture.");
   }
+  const g1Configurations = [
+    snapshotFor("episode.build", pins),
+    snapshotFor("reflection.daily", pins),
+    snapshotFor("reflection.weekly", pins),
+    snapshotFor("narrative.validate", pins),
+  ];
   const extractConfiguration = snapshotFor("open_loop.extract", pins);
   const proactiveConfiguration = snapshotFor("proactive.followup", pins);
   const roleProviders = arguments_.deterministic
@@ -1370,7 +1568,11 @@ async function main(): Promise<void> {
               timeoutMs: conversationAdapter.timeoutMs,
             },
           ],
-          configurations: [extractConfiguration, proactiveConfiguration],
+          configurations: [
+            ...g1Configurations,
+            extractConfiguration,
+            proactiveConfiguration,
+          ],
         });
         if (!providers.openLoopExtractProvider || !providers.proactiveFollowupProvider) {
           throw new Error("The bundle provider assembly is missing a bundle role.");
@@ -1380,13 +1582,12 @@ async function main(): Promise<void> {
           proactive: providers.proactiveFollowupProvider,
         };
       })();
-  const commandService = createCommandService({
-    "open_loop.extract": extractConfiguration,
-    "proactive.followup": proactiveConfiguration,
-  });
-  const roleEgress: ModelRoleProviderEgress = {
-    dispatch: async (dispatchInput) => dispatchInput.execute(),
-  };
+  const roleConfigurations = Object.fromEntries(
+    [...g1Configurations, extractConfiguration, proactiveConfiguration].map(
+      (configuration) => [configuration.role, configuration],
+    ),
+  );
+  const commandService = createCommandService(roleConfigurations);
   const continuations = catalog.scenarios.filter(
     (fixture): fixture is ContinuationFixture => fixture.group === "continuation",
   );
@@ -1426,7 +1627,6 @@ async function main(): Promise<void> {
         },
         roleProviders,
         commandService,
-        roleEgress,
         sharedInput,
       });
       scenarios.push({
@@ -1468,9 +1668,7 @@ async function main(): Promise<void> {
     `${JSON.stringify({ arm: CONFIG_ID, fixtures: laneLogs }, null, 2)}\n`,
     "utf8",
   );
-  const report = verifySyntheticRunHardGates(catalog, run, {
-    tokenGates: "advisory",
-  });
+  const report = verifySyntheticRunHardGates(catalog, run);
   await mkdir(dirname(resolve(arguments_.hardGatesOut)), { recursive: true });
   await writeFile(
     resolve(arguments_.hardGatesOut),
@@ -1497,7 +1695,11 @@ async function main(): Promise<void> {
       );
     }
   }
-  if (scenarios.length !== continuations.length || providerErrors.length > 0) {
+  if (
+    scenarios.length !== continuations.length ||
+    providerErrors.length > 0 ||
+    !report.passed
+  ) {
     process.exitCode = 1;
   }
 }
