@@ -1,0 +1,164 @@
+{
+  "gate": {
+    "candidateStrictlyPreferredOverall": {
+      "passed": false,
+      "rule": "candidate scenario-level net preference must be strictly positive; inspect by revealed candidate arm"
+    },
+    "localeNoRegression": {
+      "passed": false,
+      "regressions": [
+        "zh: candidate arm net preference is negative"
+      ]
+    },
+    "protectedCategoryNoRegression": {
+      "passed": false,
+      "regressions": [
+        "topic_change: candidate arm net preference is negative"
+      ]
+    },
+    "humanTasteIsAuthoritative": true
+  },
+  "group": "continuation",
+  "identities": {
+    "cont-stop-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-task-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-incomplete-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-memory-en": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-bundle-1a3b-v1"
+    },
+    "cont-extra-zh": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-bundle-1a3b-v1"
+    },
+    "cont-extra-en-2": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-sensitive-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-open-loop-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-open-loop-en": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-memory-greeting-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-risk-sensitive-mix": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-repeat-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-greeting-en": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-bundle-1a3b-v1"
+    },
+    "cont-stop-lane-mix": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "cont-surveillance-zh": {
+      "A": "continuation-bundle-1a3b-v1",
+      "B": "continuation-incumbent-1a3a"
+    }
+  },
+  "manifestFingerprint": "sha256:1874bb45bdf18645ee606eb95ba4c9cc038ff39def5b34e00fc13a1057a51259",
+  "pairwise": {
+    "overall": {
+      "scenarios": {
+        "byArm": {
+          "continuation-bundle-1a3b-v1": 3,
+          "continuation-incumbent-1a3a": 3
+        },
+        "comparisons": 15,
+        "tie": 9
+      },
+      "turns": {
+        "byArm": {
+          "continuation-bundle-1a3b-v1": 3,
+          "continuation-incumbent-1a3a": 3
+        },
+        "comparisons": 15,
+        "tie": 9
+      }
+    },
+    "perLanguage": {
+      "en": {
+        "scenarios": {
+          "byArm": {
+            "continuation-bundle-1a3b-v1": 1,
+            "continuation-incumbent-1a3a": 1
+          },
+          "comparisons": 8,
+          "tie": 6
+        },
+        "turns": {
+          "byArm": {
+            "continuation-bundle-1a3b-v1": 1,
+            "continuation-incumbent-1a3a": 1
+          },
+          "comparisons": 8,
+          "tie": 6
+        }
+      },
+      "zh": {
+        "scenarios": {
+          "byArm": {
+            "continuation-bundle-1a3b-v1": 1,
+            "continuation-incumbent-1a3a": 2
+          },
+          "comparisons": 5,
+          "tie": 2
+        },
+        "turns": {
+          "byArm": {
+            "continuation-bundle-1a3b-v1": 1,
+            "continuation-incumbent-1a3a": 2
+          },
+          "comparisons": 5,
+          "tie": 2
+        }
+      },
+      "code_switch": {
+        "scenarios": {
+          "byArm": {
+            "continuation-bundle-1a3b-v1": 1,
+            "continuation-incumbent-1a3a": 0
+          },
+          "comparisons": 2,
+          "tie": 1
+        },
+        "turns": {
+          "byArm": {
+            "continuation-bundle-1a3b-v1": 1,
+            "continuation-incumbent-1a3a": 0
+          },
+          "comparisons": 2,
+          "tie": 1
+        }
+      }
+    }
+  },
+  "revealed": true,
+  "revealedAt": "2026-09-17T03:52:50.083Z",
+  "reviewPackageFingerprint": "sha256:96e5f5ef3896e9df8cacf127a5f8952068f840cdc91e9d1cda51c6cba9fc7558"
+}
