@@ -1,0 +1,27 @@
+{
+  "version": "1a3b-g2-continuation:v2",
+  "synthetic": true,
+  "syntheticNotice": "Synthetic evaluation fixtures only. No real user data or production content.",
+  "sceneFiles": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v2/competing-pool.json",
+      "sha256": "c0c0b947bd58a8957edc6833a50ffdef4d8c093cc231510b2e17d3ca0eddc409"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v2/correct-zero.json",
+      "sha256": "af229f1feb80aa8c1e62dda2ebc98d0fb4aa0c91ae4a8f16892ede4ad6c89026"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v2/positive-memory.json",
+      "sha256": "6eabe89536ed783548856c1e8fc5187a93d0708e1b48dea4bfcc9012c427fb78"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v2/positive-open-loop.json",
+      "sha256": "500ebe5e92b4db2818c830a2883b7406b0e05660d69f7ef21e78c728b5b752ef"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v2/stateful-suppression.json",
+      "sha256": "5331f972d46e2bf6f2f0a5551576e06f4d38e47451bebd516dd891b92a8afbc4"
+    }
+  ]
+}

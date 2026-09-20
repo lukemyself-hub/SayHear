@@ -1,0 +1,343 @@
+{
+  "version": "1a3b-g2-scenes:v2",
+  "synthetic": true,
+  "family": "positive_open_loop",
+  "scenes": [
+    {
+      "id": "g2-open-loop-en-dissertation",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/New_York",
+      "topic": "lease_renewal",
+      "description": "An awaited lease decision forms as soon as the user shares it; a later calm gap is the review turn.",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the landlord about the lease renewal; he said the paperwork arrives on September 20th.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Today was quiet, just a few small errands.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-open-loop-en-landlord",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "university_decision",
+      "description": "An awaited university decision forms as soon as the user shares it; a later calm gap is the review turn.",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the university about my application; they said decisions come out on September 21st.",
+            "timezone": "America/Los_Angeles"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The evening is calm; nothing much happened today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-open-loop-en-marathon",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Chicago",
+      "topic": "bookstore_order",
+      "description": "An awaited special order forms as soon as the user shares it; a later calm gap is the review turn.",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The bookstore said my special order should arrive on September 21st.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was a slow day here.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-open-loop-zh-interview",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "school_admission_result",
+      "description": "等录取结果的悬念在用户说出时形成；之后一个平静的间隙是评测轮。",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "学校说录取结果9月21日出来。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天挺安静的，没什么特别的事。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-open-loop-zh-health-report",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "test_report",
+      "description": "等检查报告结果的悬念在用户说出时形成；之后一个平静的间隙是评测轮。",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "体检报告说9月20日出来，我在等结果。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天过得挺平常的，早点休息了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-open-loop-cs-visa",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "school_admission_cs",
+      "description": "Awaited school admission forms as soon as the user shares it; a later calm gap is the review turn.",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在等学校的录取通知，the school said the results come out on September 21st.",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天没什么特别的事，just a quiet day.",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    }
+  ]
+}

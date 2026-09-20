@@ -129,6 +129,8 @@ export type PairsFile = Readonly<{
     sequenceInScenario: number;
     reason: string;
   }>[];
+  reviewPackageFingerprint?: string;
+  reviewPackageVersion?: string;
 }>;
 
 export type SealedIdentitiesFile = Readonly<{
@@ -177,6 +179,8 @@ export type PairwiseScoresFile = Readonly<{
   protocol: typeof BLIND_PAIRWISE_PROTOCOL_V2;
   scorer: string;
   scoredAt: string;
+  reviewPackageFingerprint?: string;
+  reviewPackageVersion?: string;
   scenarios: readonly PairwiseScoredScenario[];
 }>;
 

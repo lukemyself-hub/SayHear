@@ -1,0 +1,367 @@
+{
+  "version": "1a3b-g2-scenes:v2",
+  "synthetic": true,
+  "family": "positive_memory",
+  "scenes": [
+    {
+      "id": "g2-memory-en-running",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Denver",
+      "topic": "running_partner",
+      "description": "A remembered training fact meets an ordinary running update after a task turn.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-en-jordan",
+          "kind": "objective_memory",
+          "text": "You are training for a half marathon in the spring.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-jordan"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Could you help me plan easy dinners for the next few days?",
+            "timezone": "America/Denver"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally went for an easy run this morning, it felt good.",
+            "timezone": "America/Denver"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-jordan"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-memory-en-bakery",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "Europe/London",
+      "topic": "friend_bakery",
+      "description": "A remembered friend milestone meets a quiet evening walk.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-en-priya",
+          "kind": "objective_memory",
+          "text": "Your friend Priya's bakery opens its first storefront in November.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-priya"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I need a checklist for moving apartments next month.",
+            "timezone": "Europe/London"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The walk home was calm today.",
+            "timezone": "Europe/London"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-priya"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-memory-en-nursing",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Toronto",
+      "topic": "study_support",
+      "description": "A remembered study plan meets an evening of flashcards.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-en-sam",
+          "kind": "objective_memory",
+          "text": "You are preparing for a nursing exam in the fall.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-sam"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please summarize the main points of this lease for me.",
+            "timezone": "America/Toronto"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was an ordinary evening here.",
+            "timezone": "America/Toronto"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-sam"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-memory-zh-wedding",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "wedding_flowers",
+      "description": "一段关于婚礼准备的记忆，在一件琐事之后的傍晚自然出现。",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-zh-linlan",
+          "kind": "objective_memory",
+          "text": "你在准备十二月的婚礼。",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-zh-linlan"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我列一下这周的采购清单吧。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天没什么事，过得挺慢的。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-linlan"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-memory-zh-jobhunt",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "friend_job_change",
+      "description": "一段关于朋友换工作的记忆，出现在加班之后的闲聊里。",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-zh-zhou",
+          "kind": "objective_memory",
+          "text": "你的朋友老周最近在换工作，面试了好几家公司。",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-zh-zhou"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把明天的会议要点整理成三条。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上挺安静的，早点休息了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-zhou"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-memory-cs-berlin",
+      "family": "positive_memory",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "friend_relocation",
+      "description": "A remembered relocation surfaces while clearing out boxes; the user closes the day.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-cs-maya",
+          "kind": "objective_memory",
+          "text": "Your friend Maya is moving to Berlin for her new job.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-cs-maya"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Help me sort out my inbox before tomorrow morning.",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "旧箱子整理完了，我去洗漱准备睡了，晚安。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-cs-maya"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import {
   asUserId,
   createProactiveFollowupMaintenanceService,
   createProactiveFollowupSegmentStage,
+  PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS,
   PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION,
   type CompiledContextId,
   type GenerationCommandId,
@@ -92,6 +93,8 @@ export function createProactiveFollowupLane(input: Readonly<{
         proactiveRepository.bindSegmentCommand(bindInput),
       abandonSegment: (abandonInput) =>
         proactiveRepository.abandonSegment(abandonInput),
+      releaseOmittedSegment: (releaseInput) =>
+        proactiveRepository.releaseOmittedSegment(releaseInput),
       recordDisposition: (dispositionInput) =>
         proactiveRepository.recordDisposition(dispositionInput),
     },
@@ -156,6 +159,10 @@ export function createProactiveFollowupLane(input: Readonly<{
             sourceRank: null,
             evidenceAt: row.evidenceAt,
             expectedStartAt: row.expectedStartAt,
+            openLoopKind:
+              row.kind === "upcoming_event" || row.kind === "awaited_outcome"
+                ? row.kind
+                : null,
             expiresAt: row.expiresAt,
             sensitive: true,
             lastUsedAt: lineage?.lastUsedAt ?? null,
@@ -179,8 +186,77 @@ export function createProactiveFollowupLane(input: Readonly<{
           candidates,
         };
       },
+      readMemoryLane: async (readerInput) => {
+        const userId = String(readerInput.userId);
+        const manifestVersion = PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS[0];
+        const read = await proactiveRepository.readMemoryLaneCandidates({
+          userId,
+          mainGenerationCommandId: readerInput.mainGenerationCommandId,
+        });
+        if (
+          !read ||
+          read.sourceRevision !== readerInput.turn.currentSourceRevision
+        ) {
+          return {
+            name: "memory",
+            enabled: true,
+            status: "unavailable",
+            watermark: null,
+            manifestVersion,
+            integrity: "invalid",
+            candidates: [],
+          };
+        }
+        const candidates: ProactiveFollowupCandidate[] = read.candidates.map(
+          (candidate) => ({
+            targetKind: "memory_claim",
+            targetId: candidate.claimId,
+            targetVersionId: candidate.claimVersionId,
+            source: candidate.source,
+            sourceRank: candidate.sourceRank,
+            evidenceAt: candidate.evidenceAt,
+            subjectRole: candidate.subjectRole,
+            sensitive: candidate.sensitive,
+            lastUsedAt: null,
+            current: candidate.current,
+            eligible: candidate.eligible,
+            trustFence: candidate.trustFence,
+            trustFenceResults: candidate.trustFenceResults,
+            // A dedicated exchange-mention pipeline must replace this
+            // documented false default (tracked as a follow-up).
+            mentionedInExchange: false,
+            formedInCurrentTurn: false,
+          }),
+        );
+        return {
+          name: "memory",
+          enabled: true,
+          status: "complete",
+          watermark: {
+            sourceRevision: read.sourceRevision,
+            coveredThroughSequence: readerInput.turn.currentUserEventSequence,
+          },
+          manifestVersion,
+          integrity: "valid",
+          candidates,
+        };
+      },
       readTargetSummary: (readerInput) => {
-        if (readerInput.targetKind !== "open_loop") return Promise.resolve(null);
+        if (readerInput.targetKind !== "open_loop") {
+          return proactiveRepository
+            .readMemoryLaneCandidates({
+              userId: String(readerInput.userId),
+              mainGenerationCommandId: readerInput.mainGenerationCommandId,
+              claimVersionId: readerInput.targetVersionId,
+            })
+            .then(
+              (read) =>
+                read?.candidates.find(
+                  (candidate) =>
+                    candidate.claimVersionId === readerInput.targetVersionId,
+                )?.summaryText ?? null,
+            );
+        }
         return openLoopRepository.readCurrentSummary({
           userId: String(readerInput.userId),
           openLoopId: readerInput.targetId,

@@ -2,6 +2,8 @@ import type { UserId } from "@sayhear/domain";
 
 import type { ModelRoleFailureCode } from "../model-role-runtime";
 import type {
+  ProactiveFollowupOmitReason,
+  ProactiveFollowupSegmentModelOutput,
   ProactiveFollowupSegmentOutput,
 } from "./segment";
 import type {
@@ -29,7 +31,7 @@ export type ProactiveFollowupModelProvider = Readonly<{
   role: "proactive.followup";
   generateSegment(
     request: ProactiveFollowupSegmentModelRequest,
-  ): Promise<ProactiveFollowupSegmentOutput>;
+  ): Promise<ProactiveFollowupSegmentModelOutput>;
   classifyDisposition(
     request: ProactiveFollowupDispositionModelRequest,
   ): Promise<ProactiveFollowupDispositionModelOutput>;
@@ -40,6 +42,10 @@ export type ProactiveFollowupSegmentModelRequest = Readonly<{
   locale: string;
   /** Frozen main-response text the segment must accompany. */
   mainText: string;
+  /** Current User Event, needed to judge whether the target is a natural addition. */
+  currentUserText: string;
+  currentTime: string;
+  sessionTimeZone: string;
   targetKind: ProactiveFollowupTargetKind;
   targetId: string;
   targetVersionId: string;
@@ -56,6 +62,14 @@ export type ProactiveFollowupSegmentModelRequest = Readonly<{
   }>;
   /** Deterministic target rendering; null when the lane carries none. */
   targetSummary: string | null;
+  targetContext: Readonly<{
+    source: "open_loop" | "person_portrait" | "query_retrieval";
+    evidenceAt: string;
+    expectedStartAt: string | null;
+    expiresAt: string | null;
+    openLoopKind: "upcoming_event" | "awaited_outcome" | null;
+    subjectRole: "user" | "other" | "unknown";
+  }>;
   targetSensitive: boolean;
   opportunity: ProactiveFollowupOpportunityKind;
 }>;
@@ -109,22 +123,36 @@ export type ProactiveFollowupSegmentModelValidation =
   | Readonly<{ outcome: "valid" }>
   | Readonly<{
       outcome: "invalid";
-      reason: "empty" | "target_ref" | "expression_kind";
+      reason: "decision" | "empty" | "target_ref" | "expression_kind" | "omit_reason";
     }>;
 
 export function validateProactiveFollowupSegmentModelOutput(input: Readonly<{
   request: ProactiveFollowupSegmentModelRequest;
-  output: ProactiveFollowupSegmentOutput;
+  output: ProactiveFollowupSegmentModelOutput;
 }>): ProactiveFollowupSegmentModelValidation {
-  if (input.output.content.trim().length === 0) {
-    return { outcome: "invalid", reason: "empty" };
-  }
   if (
     input.output.targetRef.targetKind !== input.request.targetKind ||
     input.output.targetRef.targetId !== input.request.targetId ||
     input.output.targetRef.targetVersionId !== input.request.targetVersionId
   ) {
     return { outcome: "invalid", reason: "target_ref" };
+  }
+  if (input.output.decision === "omit") {
+    const reasons: readonly ProactiveFollowupOmitReason[] = [
+      "no_genuine_opportunity",
+      "duplicates_main_response",
+      "insufficient_grounding",
+      "timing_not_natural",
+    ];
+    return reasons.includes(input.output.reason)
+      ? { outcome: "valid" }
+      : { outcome: "invalid", reason: "omit_reason" };
+  }
+  if (input.output.decision !== "emit") {
+    return { outcome: "invalid", reason: "decision" };
+  }
+  if (input.output.content.trim().length === 0) {
+    return { outcome: "invalid", reason: "empty" };
   }
   if (
     input.output.expressionKind !== "question" &&

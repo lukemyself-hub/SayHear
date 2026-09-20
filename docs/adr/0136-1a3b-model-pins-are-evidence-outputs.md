@@ -18,3 +18,27 @@ it passes every absolute labelled-data and deterministic gate. DeepSeek's
 incumbent and an available OpenAI configuration are expected initial
 candidates, not preselected winners; an unavailable candidate is recorded as
 unavailable rather than treated as a loss or silently replaced.
+
+## Amendment (2026-09-18, Luke-approved bounded exception)
+
+For the G2 continuation round, `proactive.followup` binds
+`proactive-expression-v2` as its sole verified configuration, and the
+two-complete-configuration comparison is explicitly deferred (no separate
+expression-style review is planned at this time). Rationale: the earlier
+comparison produced no perceivable difference between its arms (9 of 15
+scene-level verdicts were ties) because the review surface could not expose
+expression-relevant differences; the accepted improvement direction is
+Evaluation Scene / judged-content matching, not a new prompt variant. This is
+a recorded, bounded exception, not a silent replacement: any later round that
+introduces a competing configuration revives the comparison requirement
+before a pin can claim a winner. `bio.write` is unaffected.
+
+## Amendment (2026-09-20, Luke-approved failed-candidate iteration)
+
+The frozen `proactive-expression-v2` ON-vs-OFF review lost 3–12 with no ties.
+Luke authorized a replacement candidate for the next acceptance round rather
+than promoting, rerunning, or editing v2. `proactive-expression-v3` adds a typed
+`emit | omit` decision, target timing and subject-role context, and explicit
+grounding/non-duplication rules. It is the sole candidate in the next
+ON-vs-OFF round under the same bounded exception; it is not called a winner
+until that new round passes. The failed v2 scores and captures remain frozen.

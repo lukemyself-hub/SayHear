@@ -1,0 +1,292 @@
+{
+  "version": "1a3b-g2-scenes:v2",
+  "synthetic": true,
+  "family": "competing_pool",
+  "scenes": [
+    {
+      "id": "g2-competing-en-loop-vs-memory",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "Europe/Lisbon",
+      "topic": "lease_renewal",
+      "description": "A fuzzy awaited-outcome mention with no verifiable anchor must not form a loop; the non-sensitive memory claim is cited instead.",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-en-ines",
+          "kind": "objective_memory",
+          "text": "Inês is learning Portuguese guitar this year.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-ines"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 1,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm waiting to hear back from the landlord about the lease renewal; he said sometime this week.",
+            "timezone": "Europe/Lisbon"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The evening is quiet; I'm just tidying up a bit.",
+            "timezone": "Europe/Lisbon"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-ines"
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-competing-en-two-memories",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "two_friend_milestones",
+      "description": "Two eligible Memory Claims in one lane; the lower source rank wins.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-en-tomas",
+          "kind": "objective_memory",
+          "text": "Tomás is opening a small record shop next month.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-tomas"
+          ]
+        },
+        {
+          "id": "g2-mem-en-marta",
+          "kind": "objective_memory",
+          "text": "Marta is finishing her thesis this semester.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-marta"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "memory_claim",
+          "memoryId": "g2-mem-en-marta"
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Summarize this contract clause for me.",
+            "timezone": "America/Los_Angeles"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm making tea and finally sitting down for a bit.",
+            "timezone": "America/Seattle"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-tomas"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-competing-zh-loop-vs-memory",
+      "family": "competing_pool",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "school_admission",
+      "description": "没有可核验锚点的模糊等待表述不成环；改为引用非敏感记忆。",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-zh-he",
+          "kind": "objective_memory",
+          "text": "何川在准备注册会计师考试。",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-zh-he"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 1,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在等学校的录取通知，说这两周会发。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天事情都处理完了，挺安静的。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-he"
+            }
+          },
+          "clockAdvanceDays": 10
+        }
+      ]
+    },
+    {
+      "id": "g2-competing-cs-portrait-vs-query",
+      "family": "competing_pool",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "portrait_and_claim",
+      "description": "Portrait and query-retrieved Memory Claims compete; the declared rank wins.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-cs-lena",
+          "kind": "objective_memory",
+          "text": "Lena is preparing for a dance recital in June.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-cs-lena"
+          ]
+        }
+      ],
+      "portrait": [
+        {
+          "id": "g2-portrait-cs-book",
+          "claimId": "g2-portrait-cs-book",
+          "kind": "objective_memory",
+          "text": "用户最近在坚持每天晚上读书半小时。",
+          "sensitive": false
+        }
+      ],
+      "competitors": [
+        {
+          "kind": "memory_claim",
+          "memoryId": "g2-mem-cs-lena"
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Sort these receipts by date for me.",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今晚难得清闲，准备早点睡。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-portrait-cs-book"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

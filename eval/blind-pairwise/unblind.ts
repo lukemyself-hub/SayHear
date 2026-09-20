@@ -121,6 +121,13 @@ function validateV1Scores(scores: unknown, pairs: PairsFile): ScoresFile {
       "v1 scores.json must carry scorer, scoredAt, and a scenarios array.",
     );
   }
+  if (
+    pairs.reviewPackageFingerprint !== undefined &&
+    (scores.reviewPackageFingerprint !== pairs.reviewPackageFingerprint ||
+      scores.reviewPackageVersion !== pairs.reviewPackageVersion)
+  ) {
+    throw new Error("v2 scores.json does not match this review package fingerprint.");
+  }
   const pairScenariosById = new Map(
     pairs.scenarios.map((scenario) => [scenario.scenarioId, scenario]),
   );

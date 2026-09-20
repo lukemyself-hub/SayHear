@@ -1,0 +1,13 @@
+{
+  "version": "1a3b-g2-expression-decision:v2",
+  "expressionRunSha256": null,
+  "winnerConfigId": "proactive-expression-v2",
+  "winnerRolePinSha256": "sha256:627093cd3ccad17f9300dea6b5b3c100cfea09a091308d0312b4f7abddba8ec3",
+  "decisionSha256": "sha256:0a10d642badfc9d262df63ece3a8ec4287f92217d4ec64a07fca1ab2567b9e7e",
+  "waiver": {
+    "approvedBy": "luke",
+    "approvedAt": "2026-09-18",
+    "reason": "ADR-0136 bounded exception: proactive-expression-v2 binds as the sole verified configuration for this round; the two-configuration comparison is deferred with no separate expression-style review planned, because the earlier comparison produced no perceivable difference (9 of 15 scene verdicts tied) and the accepted improvement direction is Evaluation Scene / judged-content matching.",
+    "adrAmendment": "docs/adr/0136-1a3b-model-pins-are-evidence-outputs.md#amendment-2026-09-18-luke-approved-bounded-exception"
+  }
+}

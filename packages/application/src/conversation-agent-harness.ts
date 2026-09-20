@@ -348,23 +348,25 @@ export function createConversationAgentHarness(dependencies: {
         if (plan) {
           try {
             const generation = await proactiveStage.generate(plan, signal);
-            const validation = validateProactiveFollowupSegmentOutput({
-              mainText: completeText,
-              output: generation.output,
-              plan,
-            });
-            if (validation.outcome === "invalid") {
-              throw new InvalidProactiveFollowupSegmentError(
-                validation.reason,
-              );
+            if (generation.outcome === "emit") {
+              const validation = validateProactiveFollowupSegmentOutput({
+                mainText: completeText,
+                output: generation.output,
+                plan,
+              });
+              if (validation.outcome === "invalid") {
+                throw new InvalidProactiveFollowupSegmentError(
+                  validation.reason,
+                );
+              }
+              // Validate the exact composition boundary before handing the
+              // frozen segment to the repository's atomic commit.
+              composeProactiveFollowupResponse({
+                mainText: completeText,
+                segmentText: generation.output.content,
+              });
+              proactiveSegment = { generation, plan };
             }
-            // Validate the exact composition boundary before handing the
-            // frozen segment to the repository's atomic commit.
-            composeProactiveFollowupResponse({
-              mainText: completeText,
-              segmentText: generation.output.content,
-            });
-            proactiveSegment = { generation, plan };
           } catch (error) {
             await abandonProactiveFollowupSegment(
               proactiveStage,

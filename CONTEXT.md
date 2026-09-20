@@ -196,6 +196,22 @@ _Avoid_: Scene, Fixture content
 证据条目引用可复现输入的标识，指向 manifest 冻结的 fixture 与种子；它是台账与 artifact 的连接键，不是对话内容本身。
 _Avoid_: Scenario ID, Transcript hash
 
+**Review-Worthy Scene**:
+满足三条资格才可进入人工盲评的 Evaluation Scene：两侧在 Backend-Decision Product 上确有差异、被评判的质量必须由人而不是机械检查判定、且该产物在可比回合或 Context Panel 中可见。
+_Avoid_: Candidate case, Interesting scene
+
+**Contract-Only Scene**:
+其声明行为完全由确定性机械检查覆盖、因而不得占用人工盲评名额的 Evaluation Scene（correct-zero 对照、抑制持续、冷却释放等）。
+_Avoid_: Skipped scene, Excluded fixture
+
+**Backend-Decision Product**:
+选择或状态决策在会话中的可见产物（片段出现/缺席、被选中的目标、被引用的 Memory Claim）；措辞层面的差异不属于它。
+_Avoid_: Content, Output, Wording
+
+**Context Panel**:
+与两侧 transcript 并列展示的中性、无臂别信息面，展示该 scene 开始时共享的前置知识（可用 Memory Claim、Open Loop 及其既有使用/抑制状态），使评审人能判读后端逻辑而不被揭示哪一侧是哪一臂。
+_Avoid_: Sidecar, Diagnostics, Operator notes
+
 **生命力**:
 回应让用户感到是在对一个真实在场、当下投入的倾听者说话，而不是在处理一条输入；由措辞、节奏与情绪命中共同构成。
 _Avoid_: Engagement score, Persona strength

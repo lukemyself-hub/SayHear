@@ -1,0 +1,20 @@
+{
+  "version": "1a3b-g2-expression-decision:v2",
+  "expressionRunSha256": null,
+  "winnerConfigId": "proactive-expression-v3",
+  "winnerRolePinSha256": "sha256:8729dad1ba201def9f3b0dc06a7fbc6c3fde75394f36a2ebc0b400e26638abc7",
+  "decisionSha256": "sha256:81dd6806a6b5016277dabec876d3d55299d00bec0b5a002922b7f765b594e700",
+  "waiver": {
+    "approvedBy": "luke",
+    "approvedAt": "2026-09-20",
+    "reason": "ADR-0136 failed-candidate iteration: proactive-expression-v3 is the sole candidate authorized for the next ON-vs-OFF acceptance round after v2 lost 3-12; this is not a winner claim.",
+    "adrAmendment": "docs/adr/0136-1a3b-model-pins-are-evidence-outputs.md#amendment-2026-09-20-luke-approved-failed-candidate-iteration"
+  },
+  "generatedAt": "2026-09-20T23:17:13.899Z",
+  "decision": {
+    "kind": "luke-approved-bounded-exception",
+    "decidedAt": "2026-09-20",
+    "reason": "After the frozen v2 candidate lost 3-12, Luke authorized the emit-or-omit, grounding, identity, timing, and non-duplication iteration as the sole configuration for the next ON-vs-OFF acceptance round."
+  },
+  "authorizationSha256": "sha256:4caaa5b72bd7d93fb644bbbbb5b0aeaf380fc15436cb9149a663b045cb8265f8"
+}

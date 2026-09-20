@@ -1044,6 +1044,7 @@ function createSeam(input: {
     }),
     bindSegmentCommand: async () => ({ outcome: "bound" }),
     abandonSegment: async () => undefined,
+    releaseOmittedSegment: async () => ({ outcome: "released" }),
     recordDisposition: async (dispositionInput) => {
       const use = pendingUses.find((entry) => entry.useId === dispositionInput.useId);
       if (!use) return { outcome: "fenced", reason: "use_missing" };
@@ -1226,6 +1227,7 @@ function deterministicRoleProviders(): {
     proactive: {
       role: "proactive.followup",
       generateSegment: async (request) => ({
+        decision: "emit",
         content: "记着呢。",
         expressionKind: "acknowledgment",
         targetRef: {

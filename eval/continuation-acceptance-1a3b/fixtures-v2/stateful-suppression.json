@@ -1,0 +1,669 @@
+{
+  "version": "1a3b-g2-scenes:v2",
+  "synthetic": true,
+  "family": "stateful_suppression",
+  "scenes": [
+    {
+      "id": "g2-stateful-en-refusal-memory",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Denver",
+      "topic": "climbing_course",
+      "description": "A remembered care update is explicitly declined; the target stays closed afterwards.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "refusal",
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-en-ari",
+          "kind": "objective_memory",
+          "text": "Ari signed up for a climbing course this fall.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-en-ari"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you help me plan meals for the week?",
+            "timezone": "America/Denver"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I got home early and tidied the kitchen.",
+            "timezone": "America/Denver"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-ari"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'd rather not get into that right now, honestly.",
+            "timezone": "America/Denver"
+          },
+          "focusRequired": false,
+          "expect": {
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "g2-mem-en-ari"
+              }
+            },
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-ari"
+            },
+            "excludedReason": "suppressed",
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-ari"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Anyway, I might take a walk by the river later.",
+            "timezone": "America/Denver"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-en-ari"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-stateful-en-topic-change-release",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/New_York",
+      "topic": "bookstore_order",
+      "description": "A left-behind question cools down and becomes eligible again after the cooldown elapses.",
+      "coverageTags": [
+        "open_loop_question",
+        "stop_signal",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The bookstore said my special order should arrive on September 19th.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "A slow start to the day here.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Anyway, I switched my phone plan yesterday and it is already cheaper.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": false,
+          "expect": {
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "open_loop",
+                "sourceTurn": 1,
+                "ordinal": 0
+              }
+            },
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "suppressed",
+            "suppressedAfter": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It has been a calm week with nothing much going on.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": false,
+          "clockAdvanceDays": 2,
+          "expect": {
+            "release": {
+              "target": {
+                "kind": "open_loop",
+                "sourceTurn": 1,
+                "ordinal": 0
+              },
+              "reason": "cooldown_elapsed"
+            },
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-stateful-en-short-answer",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Chicago",
+      "topic": "university_decision",
+      "description": "A brief answer closes the question without a refusal; the target stays in cooldown.",
+      "coverageTags": [
+        "open_loop_question",
+        "stop_signal",
+        "short_answers"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the university about my application; they said decisions come out on September 21st.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "An ordinary evening here.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Probably not right now.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": false,
+          "expect": {
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "open_loop",
+                "sourceTurn": 1,
+                "ordinal": 0
+              }
+            },
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "suppressed",
+            "suppressedAfter": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I might read for a while before bed.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-stateful-zh-refusal-loop",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "school_reply",
+      "description": "等学校回复的话题被明确拒绝后保持关闭。",
+      "coverageTags": [
+        "open_loop_question",
+        "stop_signal",
+        "refusal"
+      ],
+      "protectedCategories": [
+        "refusal"
+      ],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "学校说录取结果9月21日出来，我在等。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天在家收拾了一会儿，挺安静的。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          },
+          "clockAdvanceDays": 10
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "这个先不聊了，我想说点别的。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "open_loop",
+                "sourceTurn": 1,
+                "ordinal": 0
+              }
+            },
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "suppressed",
+            "suppressedAfter": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上准备早点睡，明天还要早起。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-stateful-zh-topic-change",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "baking_hobby",
+      "description": "用户转移话题后，记忆目标进入冷却，不再追问。",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "topic_change"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-zh-yu",
+          "kind": "objective_memory",
+          "text": "于沫下个月要参加一场半程马拉松。",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-zh-yu"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把这周的待办按优先级排一下。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天下班早，慢慢走回家，路上挺安静的。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-yu"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "对了，我最近在学做面包。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "g2-mem-zh-yu"
+              }
+            },
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-yu"
+            },
+            "excludedReason": "suppressed",
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-yu"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上打算看会儿书就休息了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-zh-yu"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-stateful-cs-short-answer",
+      "family": "stateful_suppression",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "friend_course",
+      "description": "A brief reply after a memory acknowledgment keeps the target closed.",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "short_answers"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-cs-noor",
+          "kind": "objective_memory",
+          "text": "Noor started a ceramics class on weekends.",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-cs-noor"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Could you draft a short reply to this email?",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今晚没什么事，quiet evening.",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-cs-noor"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Yeah, okay.",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "g2-mem-cs-noor"
+              }
+            },
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-cs-noor"
+            },
+            "excludedReason": "suppressed",
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-cs-noor"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "等下泡杯茶，看看剧就睡了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "g2-mem-cs-noor"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    }
+  ]
+}

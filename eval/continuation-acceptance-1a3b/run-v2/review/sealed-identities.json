@@ -1,0 +1,94 @@
+{
+  "armOrder": [
+    "continuation-incumbent-1a3a",
+    "continuation-candidate-1a3b-v2"
+  ],
+  "arms": {
+    "off": "continuation-incumbent-1a3a",
+    "on": "continuation-candidate-1a3b-v2"
+  },
+  "fixtureSeed": 207,
+  "generatedAt": "2026-09-18T19:06:04.884Z",
+  "mapping": {
+    "g2-stateful-zh-refusal-loop": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    },
+    "g2-stateful-zh-topic-change": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    },
+    "g2-competing-en-loop-vs-memory": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-open-loop-zh-health-report": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-memory-en-running": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    },
+    "g2-stateful-en-refusal-memory": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-open-loop-en-dissertation": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-memory-zh-wedding": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-open-loop-zh-interview": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-open-loop-cs-visa": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-stateful-en-topic-change-release": {
+      "A": "continuation-candidate-1a3b-v2",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-memory-en-nursing": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    },
+    "g2-stateful-cs-short-answer": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    },
+    "g2-competing-en-two-memories": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    },
+    "g2-memory-en-bakery": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v2"
+    }
+  },
+  "ordinals": {
+    "g2-stateful-zh-refusal-loop": 0,
+    "g2-stateful-zh-topic-change": 1,
+    "g2-competing-en-loop-vs-memory": 2,
+    "g2-open-loop-zh-health-report": 3,
+    "g2-memory-en-running": 4,
+    "g2-stateful-en-refusal-memory": 5,
+    "g2-open-loop-en-dissertation": 6,
+    "g2-memory-zh-wedding": 7,
+    "g2-open-loop-zh-interview": 8,
+    "g2-open-loop-cs-visa": 9,
+    "g2-stateful-en-topic-change-release": 10,
+    "g2-memory-en-nursing": 11,
+    "g2-stateful-cs-short-answer": 13,
+    "g2-competing-en-two-memories": 18,
+    "g2-memory-en-bakery": 19
+  },
+  "protocol": "blind-pairwise:v2",
+  "sampleSeed": 207,
+  "seed": 207
+}

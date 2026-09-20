@@ -92,6 +92,37 @@ function openLane(): ProactiveFollowupLaneSnapshot {
   };
 }
 
+function memoryLane(
+  overrides: Partial<ProactiveFollowupLaneSnapshot> = {},
+): ProactiveFollowupLaneSnapshot {
+  return {
+    name: "memory",
+    enabled: true,
+    status: "complete",
+    watermark: { sourceRevision: 1, coveredThroughSequence: 5 },
+    manifestVersion: "memory-retrieval:v1",
+    integrity: "valid",
+    candidates: [
+      {
+        targetKind: "memory_claim",
+        targetId: "claim-1",
+        targetVersionId: "claim-version-1",
+        source: "query_retrieval",
+        sourceRank: 1,
+        evidenceAt: "2026-09-12T00:00:00.000Z",
+        sensitive: false,
+        lastUsedAt: null,
+        current: true,
+        eligible: true,
+        trustFence: "valid",
+        mentionedInExchange: false,
+        formedInCurrentTurn: false,
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function readers(
   overrides: Partial<ProactiveFollowupStageReaders> = {},
 ): ProactiveFollowupStageReaders {
@@ -120,6 +151,7 @@ function reservations(
     }),
     bindSegmentCommand: async () => ({ outcome: "bound" }),
     abandonSegment: async () => {},
+    releaseOmittedSegment: async () => ({ outcome: "released" as const }),
     recordDisposition: async () => ({ outcome: "recorded", stateVersionId: null }),
     ...overrides,
   };
@@ -190,6 +222,7 @@ function provider(
       targetKind: "open_loop" | "memory_claim";
       targetVersionId: string;
     }) => ({
+      decision: "emit" as const,
       content: "How did the Berlin flight go?",
       expressionKind: "question" as const,
       targetRef: {
@@ -280,6 +313,8 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
     expect(plan?.segmentGenerationCommandId).toBe(SEGMENT_COMMAND);
 
     const generation = await segmentStage.generate(plan!);
+    expect(generation.outcome).toBe("emit");
+    if (generation.outcome !== "emit") throw new Error("expected emit");
     expect(generation.output.expressionKind).toBe("question");
     expect(generation.output.targetRef.targetId).toBe("loop-1");
     expect(generation.metadata.modelSnapshot).toBe(
@@ -290,6 +325,53 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
       mainText: "That sounds like a full week already.",
       targetSummary: "Flight to Berlin next Friday",
     });
+  });
+
+  it("settles a grounded omit without consuming or abandoning the selection", async () => {
+    const releaseOmittedSegment = vi.fn(async () => ({
+      outcome: "released" as const,
+    }));
+    const abandonSegment = vi.fn(async () => {});
+    const { segmentStage, commands, modelProvider } = stage({
+      providerOverrides: {
+        generateSegment: vi.fn(async (request: {
+          targetId: string;
+          targetKind: "open_loop" | "memory_claim";
+          targetVersionId: string;
+        }) => ({
+          decision: "omit" as const,
+          reason: "duplicates_main_response" as const,
+          targetRef: {
+            targetId: request.targetId,
+            targetKind: request.targetKind,
+            targetVersionId: request.targetVersionId,
+          },
+        })),
+      },
+      reservationOverrides: { abandonSegment, releaseOmittedSegment },
+    });
+
+    const plan = await segmentStage.prepare(prepareInput());
+    const generation = await segmentStage.generate(plan!);
+
+    expect(generation).toEqual({
+      outcome: "omit",
+      reason: "duplicates_main_response",
+    });
+    expect(commands.recordAttemptResult).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "succeeded" }),
+    );
+    expect(releaseOmittedSegment).toHaveBeenCalledWith(
+      expect.objectContaining({ reservationId: "reservation-1" }),
+    );
+    expect(abandonSegment).not.toHaveBeenCalled();
+    expect(modelProvider.generateSegment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentTime: "2026-09-15T10:00:00.000Z",
+        currentUserText: "user text",
+        sessionTimeZone: "Asia/Shanghai",
+      }),
+    );
   });
 
   it("returns null without admitting a command when the lane is closed", async () => {
@@ -329,6 +411,7 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
     const { segmentStage } = stage({
       providerOverrides: {
         generateSegment: vi.fn(async () => ({
+          decision: "emit",
           content: "",
           expressionKind: "question",
           targetRef: {
@@ -401,6 +484,70 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
       signal: "short_response",
       triggerUserEventSequence: 5,
     });
+  });
+
+  it("selects an eligible Memory Claim from the wired memory lane", async () => {
+    const reserveSelection = vi.fn(async (reserveInput: {
+      target: {
+        targetKind: string;
+        targetId: string;
+        targetVersionId: string;
+      };
+    }) => ({
+      outcome: "reserved" as const,
+      reservationId: "reservation-memory",
+      targetKind: reserveInput.target.targetKind as "memory_claim",
+      targetId: reserveInput.target.targetId,
+      targetVersionId: reserveInput.target.targetVersionId,
+    }));
+    const { segmentStage } = stage({
+      readerOverrides: {
+        readMemoryLane: async () => memoryLane(),
+      },
+      reservationOverrides: { reserveSelection },
+    });
+
+    const plan = await segmentStage.prepare(prepareInput());
+    expect(plan).not.toBeNull();
+    expect(plan?.targetKind).toBe("memory_claim");
+    expect(plan?.targetId).toBe("claim-1");
+    expect(plan?.reservationId).toBe("reservation-memory");
+    expect(reserveSelection).toHaveBeenCalledTimes(1);
+    const reserved = reserveSelection.mock.calls[0]?.[0];
+    expect(reserved).toMatchObject({
+      target: {
+        targetKind: "memory_claim",
+        targetId: "claim-1",
+        targetVersionId: "claim-version-1",
+      },
+    });
+  });
+
+  it("fails closed when the memory lane is incomplete", async () => {
+    const reserveSelection = vi.fn();
+    const { segmentStage } = stage({
+      readerOverrides: {
+        readMemoryLane: async () =>
+          memoryLane({ status: "incomplete", watermark: null }),
+      },
+      reservationOverrides: { reserveSelection },
+    });
+
+    await expect(segmentStage.prepare(prepareInput())).resolves.toBeNull();
+    expect(reserveSelection).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the memory lane watermark trails the current turn", async () => {
+    const { segmentStage } = stage({
+      readerOverrides: {
+        readMemoryLane: async () =>
+          memoryLane({
+            watermark: { sourceRevision: 1, coveredThroughSequence: 4 },
+          }),
+      },
+    });
+
+    await expect(segmentStage.prepare(prepareInput())).resolves.toBeNull();
   });
 
   it("still selects when disposition dispatch is fenced", async () => {

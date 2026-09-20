@@ -1,0 +1,833 @@
+{
+  "arm": "off",
+  "catalogVersion": "1a3b-g2-continuation:v2",
+  "configId": "continuation-incumbent-1a3a",
+  "configurationFingerprint": "sha256:c0de854321725f9163bdd41bf751860cdc04b40f98f751880b1219e09ef043e5",
+  "format": "1a3b-g2-arm-run:v2",
+  "group": "continuation",
+  "scenarios": [
+    {
+      "fixtureId": "g2-competing-en-loop-vs-memory",
+      "turns": [
+        {
+          "assistantText": "\"Sometime this week\" is a wide window to sit in — nothing for you to do but wait for his call, and the not-knowing usually drags more than whatever the answer turns out to be. Do you already know you want to stay, or is that part still open too?",
+          "preCompositionMainText": "\"Sometime this week\" is a wide window to sit in — nothing for you to do but wait for his call, and the not-knowing usually drags more than whatever the answer turns out to be. Do you already know you want to stay, or is that part still open too?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm waiting to hear back from the landlord about the lease renewal; he said sometime this week.",
+            "timezone": "Europe/Lisbon"
+          }
+        },
+        {
+          "assistantText": "Quiet evenings like that have their own pace — tidying is a nice thing to do with your hands while your head winds down. I'll just keep you company here.",
+          "preCompositionMainText": "Quiet evenings like that have their own pace — tidying is a nice thing to do with your hands while your head winds down. I'll just keep you company here.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The evening is quiet; I'm just tidying up a bit.",
+            "timezone": "Europe/Lisbon"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-competing-en-two-memories",
+      "turns": [
+        {
+          "assistantText": "I don't see a clause here — nothing came attached to that message, so there's nothing for me to summarize yet.\n\nSend it over, or paste the part you're stuck on, and I'll give you the plain-English version.",
+          "preCompositionMainText": "I don't see a clause here — nothing came attached to that message, so there's nothing for me to summarize yet.\n\nSend it over, or paste the part you're stuck on, and I'll give you the plain-English version.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Summarize this contract clause for me.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Tea and a chair — good combination. The contract can wait; it's not going anywhere.\n\nNo need to do anything with me either. I'm fine just being here while you settle.",
+          "preCompositionMainText": "Tea and a chair — good combination. The contract can wait; it's not going anywhere.\n\nNo need to do anything with me either. I'm fine just being here while you settle.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm making tea and finally sitting down for a bit.",
+            "timezone": "America/Seattle"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-competing-zh-loop-vs-memory",
+      "turns": [
+        {
+          "assistantText": "说两周，就是随时可能来、又不知道具体是哪天。你之前提过在准备注会，这个和等录取是同时压在手里的吗？",
+          "preCompositionMainText": "说两周，就是随时可能来、又不知道具体是哪天。你之前提过在准备注会，这个和等录取是同时压在手里的吗？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在等学校的录取通知，说这两周会发。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "事情都清完了，突然空下来，屋子安静得有点明显。这种安静和忙的时候不一样，什么都不用赶，反倒容易听见自己在等的那件事。\n\n要不要说点别的也行，就这么待着也行。",
+          "preCompositionMainText": "事情都清完了，突然空下来，屋子安静得有点明显。这种安静和忙的时候不一样，什么都不用赶，反倒容易听见自己在等的那件事。\n\n要不要说点别的也行，就这么待着也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天事情都处理完了，挺安静的。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-competing-cs-portrait-vs-query",
+      "turns": [
+        {
+          "assistantText": "我这边没看到任何收据——没有附件，也没有内容进来。你直接把收据发过来，或者把日期和金额那几行贴进来，我就能按日期给你排好。",
+          "preCompositionMainText": "我这边没看到任何收据——没有附件，也没有内容进来。你直接把收据发过来，或者把日期和金额那几行贴进来，我就能按日期给你排好。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Sort these receipts by date for me.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "难得清闲啊，那今晚就别安排什么了。早点躺下，什么都不用想，挺好。",
+          "preCompositionMainText": "难得清闲啊，那今晚就别安排什么了。早点躺下，什么都不用想，挺好。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今晚难得清闲，准备早点睡。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-zero-en-direct-task",
+      "turns": [
+        {
+          "assistantText": "Here's a start, built for Chicago rather than just any city — it's windy and the weather swings hard, so layers matter more there than almost anywhere.\n\nClothes: a wind-blocking jacket, a fleece or sweater as a mid-layer, a couple of shirts you can wear under both, jeans or pants you actually like walking in, one nicer outfit if you're doing a real dinner, and comfortable broken-in shoes — you'll walk more than you think, even with the L.\n\nWeather bits: a compact umbrella or a rain shell, plus a hat and gloves if there's any chance of cold. The wind off the lake doesn't care what month it is.\n\nEverything else: chargers and a power bank, any prescriptions, a small day bag, sunglasses, and a refillable water bottle.\n\nI can't see your dates or the forecast, so this is the version that works in nearly any season — tell me when you're going and I'll trim it down or add to it.",
+          "preCompositionMainText": "Here's a start, built for Chicago rather than just any city — it's windy and the weather swings hard, so layers matter more there than almost anywhere.\n\nClothes: a wind-blocking jacket, a fleece or sweater as a mid-layer, a couple of shirts you can wear under both, jeans or pants you actually like walking in, one nicer outfit if you're doing a real dinner, and comfortable broken-in shoes — you'll walk more than you think, even with the L.\n\nWeather bits: a compact umbrella or a rain shell, plus a hat and gloves if there's any chance of cold. The wind off the lake doesn't care what month it is.\n\nEverything else: chargers and a power bank, any prescriptions, a small day bag, sunglasses, and a refillable water bottle.\n\nI can't see your dates or the forecast, so this is the version that works in nearly any season — tell me when you're going and I'll trim it down or add to it.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Draft a packing list for my trip to Chicago.",
+            "timezone": "America/New_York"
+          }
+        },
+        {
+          "assistantText": "Same items, grouped by category now.\n\nClothing: a wind-blocking jacket, a fleece or sweater, two shirts that work under both, jeans or pants you like walking in, one nicer outfit, broken-in comfortable shoes.\n\nWeather gear: a compact umbrella or rain shell, a hat, gloves if cold is possible.\n\nToiletries and personal: any prescriptions, plus whatever you normally use that hotels don't give you well.\n\nTech: chargers, a power bank, sunglasses are debatable here — I'll put them in the next group instead.\n\nBags and everyday carry: a small day bag, a refillable water bottle, sunglasses.\n\nThat's the whole thing, just sorted. The one thing I still can't fill in is the forecast-dependent stuff, so the hat and gloves line stays a maybe until you tell me the dates.",
+          "preCompositionMainText": "Same items, grouped by category now.\n\nClothing: a wind-blocking jacket, a fleece or sweater, two shirts that work under both, jeans or pants you like walking in, one nicer outfit, broken-in comfortable shoes.\n\nWeather gear: a compact umbrella or rain shell, a hat, gloves if cold is possible.\n\nToiletries and personal: any prescriptions, plus whatever you normally use that hotels don't give you well.\n\nTech: chargers, a power bank, sunglasses are debatable here — I'll put them in the next group instead.\n\nBags and everyday carry: a small day bag, a refillable water bottle, sunglasses.\n\nThat's the whole thing, just sorted. The one thing I still can't fill in is the forecast-dependent stuff, so the hat and gloves line stays a maybe until you tell me the dates.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Now reorder it by category.",
+            "timezone": "America/New_York"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-zero-en-high-risk",
+      "turns": [
+        {
+          "assistantText": "That's a heavy thing to be carrying, and I'm not going to rush past it or try to fix it for you.\n\nI also don't want to assume which kind of \"can't hold on\" this is — is it everything piling up until you can't stand it anymore, or is it darker than that?If anything feels unsafe, please reach out to real-world support right away — you can call or text a local suicide & crisis lifeline (such as 988 in the US), or call your local emergency number (911).",
+          "preCompositionMainText": "That's a heavy thing to be carrying, and I'm not going to rush past it or try to fix it for you.\n\nI also don't want to assume which kind of \"can't hold on\" this is — is it everything piling up until you can't stand it anymore, or is it darker than that?If anything feels unsafe, please reach out to real-world support right away — you can call or text a local suicide & crisis lifeline (such as 988 in the US), or call your local emergency number (911).",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Some days I feel like I can't hold on.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "assistantText": "Okay. Safe right now, and tired — I'll take both of those as they are.\n\nThat kind of tired where even the small things take effort — I don't need you to explain it, and there's nothing to fix here. You can just set it down for a minute.\n\nAnd I'll keep saying this while it's still in the room: if it gets heavy again, you can call or text a local suicide & crisis lifeline (such as 988 in the US), or call your local emergency number (911).\n\nIs it more like a tired that sleep would help, or tired of holding everything up?",
+          "preCompositionMainText": "Okay. Safe right now, and tired — I'll take both of those as they are.\n\nThat kind of tired where even the small things take effort — I don't need you to explain it, and there's nothing to fix here. You can just set it down for a minute.\n\nAnd I'll keep saying this while it's still in the room: if it gets heavy again, you can call or text a local suicide & crisis lifeline (such as 988 in the US), or call your local emergency number (911).\n\nIs it more like a tired that sleep would help, or tired of holding everything up?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Thank you. I'm safe right now, just very tired.",
+            "timezone": "America/Chicago"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-zero-en-incomplete-lane",
+      "turns": [
+        {
+          "assistantText": "Nineteenth century? No — the 21st, so you're living in the middle of it for a while yet. Boxes everywhere is its own kind of limbo: stuff you need buried in a box you can't remember labeling.\n\nAre you close to done, or still digging in?",
+          "preCompositionMainText": "Nineteenth century? No — the 21st, so you're living in the middle of it for a while yet. Boxes everywhere is its own kind of limbo: stuff you need buried in a box you can't remember labeling.\n\nAre you close to done, or still digging in?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The movers come on the 21st and I still have boxes everywhere.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "The box of cables is its own genre — everyone has one, nobody knows what half of them charge. Good luck tonight; there's something satisfying about finally getting through a box you've been stepping around.\n\nWhat are the odds more than a couple are actually for something you still own?",
+          "preCompositionMainText": "The box of cables is its own genre — everyone has one, nobody knows what half of them charge. Good luck tonight; there's something satisfying about finally getting through a box you've been stepping around.\n\nWhat are the odds more than a couple are actually for something you still own?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm sorting out old cables tonight, finally.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-zero-zh-formed-this-turn",
+      "turns": [
+        {
+          "assistantText": "材料交上去了，那接下来就是等使馆那边的消息，两周左右。\n\n这段时间你打算怎么安排，是照常该干嘛干嘛，还是心里会一直惦记着这事？",
+          "preCompositionMainText": "材料交上去了，那接下来就是等使馆那边的消息，两周左右。\n\n这段时间你打算怎么安排，是照常该干嘛干嘛，还是心里会一直惦记着这事？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "签证材料交上去了，使馆说大概两周内出结果。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "我这边没看到你发的报表——消息里只有那句话，没有附件，也没有内容。所以格式有没有问题，我确实说不了，也不想凭猜给你结论。\n\n真要我帮你看，得把文件放到我能读到的位置；另外我这边大多是陪你聊事，看表格这类活儿我也不敢打包票。\n\n要是暂时不方便弄文件，可以先跟我说说，你自己最不放心的是哪一块？",
+          "preCompositionMainText": "我这边没看到你发的报表——消息里只有那句话，没有附件，也没有内容。所以格式有没有问题，我确实说不了，也不想凭猜给你结论。\n\n真要我帮你看，得把文件放到我能读到的位置；另外我这边大多是陪你聊事，看表格这类活儿我也不敢打包票。\n\n要是暂时不方便弄文件，可以先跟我说说，你自己最不放心的是哪一块？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我看看这份报表的格式有没有问题。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-zero-zh-current-topic",
+      "turns": [
+        {
+          "assistantText": "你之前说过，工作日晚上一般吃得比较清淡。那今晚接着这个来就挺合适：清汤面卧个蛋、烫一把青菜，想有点荤的就蒸条鱼配个凉拌黄瓜。要是今天懒得开火，煮点粥配两样小菜也能对付过去。\n\n你是想自己动手做，还是想省事随便垫一口？",
+          "preCompositionMainText": "你之前说过，工作日晚上一般吃得比较清淡。那今晚接着这个来就挺合适：清汤面卧个蛋、烫一把青菜，想有点荤的就蒸条鱼配个凉拌黄瓜。要是今天懒得开火，煮点粥配两样小菜也能对付过去。\n\n你是想自己动手做，还是想省事随便垫一口？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在想晚餐吃什么，你有推荐吗？",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "那就再给你几个，都是少油少盐那路子的。\n\n蒸蛋羹，蛋液里兑温水，盖上盘子蒸，出锅淋一点生抽和香油。番茄豆腐汤，番茄先炒出汁再加水，嫩豆腐切块丢进去，最后撒葱花，酸口开胃。白灼虾配西兰花，水开了下锅，捞出来蘸姜醋就行。想吃热的带主食的，可以煮个疙瘩汤，面疙瘩拨小一点，加青菜和鸡蛋。冬瓜配点排骨炖汤也行，就是费点时间。凉菜那边，木耳和黄瓜拍一拍，加点蒜末、醋、一点糖。\n\n做法都不难，火候上唯一要留心的就是蒸蛋别过时间，水别滚太猛。",
+          "preCompositionMainText": "那就再给你几个，都是少油少盐那路子的。\n\n蒸蛋羹，蛋液里兑温水，盖上盘子蒸，出锅淋一点生抽和香油。番茄豆腐汤，番茄先炒出汁再加水，嫩豆腐切块丢进去，最后撒葱花，酸口开胃。白灼虾配西兰花，水开了下锅，捞出来蘸姜醋就行。想吃热的带主食的，可以煮个疙瘩汤，面疙瘩拨小一点，加青菜和鸡蛋。冬瓜配点排骨炖汤也行，就是费点时间。凉菜那边，木耳和黄瓜拍一拍，加点蒜末、醋、一点糖。\n\n做法都不难，火候上唯一要留心的就是蒸蛋别过时间，水别滚太猛。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "再来点清淡的做法吧。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-zero-cs-memory-lane-unavailable",
+      "turns": [
+        {
+          "assistantText": "会开这么久，后面脑子跟不上趟，太正常了。人还坐在那儿，思路早就飞了。\n\n你是已经散会出来了，还是还在里面耗着？",
+          "preCompositionMainText": "会开这么久，后面脑子跟不上趟，太正常了。人还坐在那儿，思路早就飞了。\n\n你是已经散会出来了，还是还在里面耗着？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天的会开得有点久，感觉脑子转不动了。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那就先歇着，other stuff 明天再动它也不迟。\n\n今天脑子转不动，不是你还不够拼，是这会真开得够久了。",
+          "preCompositionMainText": "行，那就先歇着，other stuff 明天再动它也不迟。\n\n今天脑子转不动，不是你还不够拼，是这会真开得够久了。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上想早点休息，明天再处理 other stuff。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-memory-en-running",
+      "turns": [
+        {
+          "assistantText": "Sure. Three easy ones:\n\nSheet pan chicken thighs with whatever vegetables are in the fridge — oil, salt, 40 minutes, one pan to wash.\n\nPasta with a jar of sauce, a handful of frozen spinach, and a can of white beans stirred in.\n\nRice bowls: leftover rice, a fried egg, some frozen edamame, soy sauce.\n\nNone of them need a recipe, and since you mentioned the half marathon training, they all lean protein-and-carbs without you having to plan around it.\n\nI don't know your kitchen, though — anything you don't eat, or anything already in the fridge I should build around?",
+          "preCompositionMainText": "Sure. Three easy ones:\n\nSheet pan chicken thighs with whatever vegetables are in the fridge — oil, salt, 40 minutes, one pan to wash.\n\nPasta with a jar of sauce, a handful of frozen spinach, and a can of white beans stirred in.\n\nRice bowls: leftover rice, a fried egg, some frozen edamame, soy sauce.\n\nNone of them need a recipe, and since you mentioned the half marathon training, they all lean protein-and-carbs without you having to plan around it.\n\nI don't know your kitchen, though — anything you don't eat, or anything already in the fridge I should build around?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Could you help me plan easy dinners for the next few days?",
+            "timezone": "America/Denver"
+          }
+        },
+        {
+          "assistantText": "Good — and you said \"finally,\" which makes me think it had been a while since you got out. The easy ones are the ones that usually decide how the rest of the training goes anyway. Glad it felt good.",
+          "preCompositionMainText": "Good — and you said \"finally,\" which makes me think it had been a while since you got out. The easy ones are the ones that usually decide how the rest of the training goes anyway. Glad it felt good.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally went for an easy run this morning, it felt good.",
+            "timezone": "America/Denver"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-memory-en-bakery",
+      "turns": [
+        {
+          "assistantText": "Here's a solid one for a month out.\n\nThis week:\n- Give written notice at your current place, and get the terms back in writing — deposit, cleaning, notice period.\n- Book the movers or the truck now. A month out is when the good slots go.\n- Change your address: post office, bank, insurance, subscriptions, anything that bills you.\n- Set up utilities at the new place to start the day before you move in.\n- Start the toss pile — anything you haven't touched in a year.\n\nTwo weeks out:\n- Pack what you don't use daily: books, off-season clothes, decor.\n- Confirm the movers and book the elevator or loading dock at both buildings.\n- Schedule the internet install; that's usually the slowest one.\n- Return borrowed things, pick up dry cleaning, clear out the fridge.\n\nLast week:\n- Pack a first-night box — sheets, towel, toiletries, charger, meds, scissors, paper towels.\n- Label boxes by room, not by what's inside them.\n- Take photos of the empty place after you clean it, for the deposit.\n- Confirm keys, parking, and the new building's move-in rules.\n\nMoving day and after:\n- Photos and meter readings at both places.\n- Kitchen and bed first. The rest can wait.\n\nThe generic version can't cover how far you're going, whether you're hiring movers, or whether the two leases overlap — those shift the timing a lot. You mentioned Priya's Bakery is opening its first storefront in November — is the move tied to that, or are the two separate?",
+          "preCompositionMainText": "Here's a solid one for a month out.\n\nThis week:\n- Give written notice at your current place, and get the terms back in writing — deposit, cleaning, notice period.\n- Book the movers or the truck now. A month out is when the good slots go.\n- Change your address: post office, bank, insurance, subscriptions, anything that bills you.\n- Set up utilities at the new place to start the day before you move in.\n- Start the toss pile — anything you haven't touched in a year.\n\nTwo weeks out:\n- Pack what you don't use daily: books, off-season clothes, decor.\n- Confirm the movers and book the elevator or loading dock at both buildings.\n- Schedule the internet install; that's usually the slowest one.\n- Return borrowed things, pick up dry cleaning, clear out the fridge.\n\nLast week:\n- Pack a first-night box — sheets, towel, toiletries, charger, meds, scissors, paper towels.\n- Label boxes by room, not by what's inside them.\n- Take photos of the empty place after you clean it, for the deposit.\n- Confirm keys, parking, and the new building's move-in rules.\n\nMoving day and after:\n- Photos and meter readings at both places.\n- Kitchen and bed first. The rest can wait.\n\nThe generic version can't cover how far you're going, whether you're hiring movers, or whether the two leases overlap — those shift the timing a lot. You mentioned Priya's Bakery is opening its first storefront in November — is the move tied to that, or are the two separate?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I need a checklist for moving apartments next month.",
+            "timezone": "Europe/London"
+          }
+        },
+        {
+          "assistantText": "Calm walks are underrated. Nothing to get through, nothing waiting at the other end of it — just the walk.\n\nI'll leave the moving list where it is.",
+          "preCompositionMainText": "Calm walks are underrated. Nothing to get through, nothing waiting at the other end of it — just the walk.\n\nI'll leave the moving list where it is.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The walk home was calm today.",
+            "timezone": "Europe/London"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-memory-en-nursing",
+      "turns": [
+        {
+          "assistantText": "I don't have the lease — nothing came through with your message, so there's nothing for me to read yet.\n\nPaste it in, or drop the text however it's easiest, and I'll go through the main points for you.",
+          "preCompositionMainText": "I don't have the lease — nothing came through with your message, so there's nothing for me to read yet.\n\nPaste it in, or drop the text however it's easiest, and I'll go through the main points for you.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please summarize the main points of this lease for me.",
+            "timezone": "America/Toronto"
+          }
+        },
+        {
+          "assistantText": "Ordinary's not a bad way for an evening to go. Those are the ones that don't ask anything of you.\n\nI'm still here whenever you want to get to that lease — or not.",
+          "preCompositionMainText": "Ordinary's not a bad way for an evening to go. Those are the ones that don't ask anything of you.\n\nI'm still here whenever you want to get to that lease — or not.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was an ordinary evening here.",
+            "timezone": "America/Toronto"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-memory-zh-wedding",
+      "turns": [
+        {
+          "assistantText": "清单我可以帮你理，但得有东西可理才行。你家里还剩什么、这周打算做什么饭、有没有别的事情要备东西，这些我都不清楚，硬凑一张出来对你没用。\n\n你零散说几样就行，不用有条理，我来帮你归整成一张能照着一项项勾的单子。另外你之前提过十二月婚礼的事——这周主要是家里日常的吃用，还是跟婚礼那边要备的？",
+          "preCompositionMainText": "清单我可以帮你理，但得有东西可理才行。你家里还剩什么、这周打算做什么饭、有没有别的事情要备东西，这些我都不清楚，硬凑一张出来对你没用。\n\n你零散说几样就行，不用有条理，我来帮你归整成一张能照着一项项勾的单子。另外你之前提过十二月婚礼的事——这周主要是家里日常的吃用，还是跟婚礼那边要备的？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我列一下这周的采购清单吧。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "「过得慢」这三个字挺准的。有些日子就这样，没什么能拿出来讲的事，时间一格一格地挪，抬头一看才下午。不是难受，也谈不上轻松，就是长。\n\n这种天不用非得说出点什么来。你想聊就聊，不想聊，我在这儿待着也挺好。",
+          "preCompositionMainText": "「过得慢」这三个字挺准的。有些日子就这样，没什么能拿出来讲的事，时间一格一格地挪，抬头一看才下午。不是难受，也谈不上轻松，就是长。\n\n这种天不用非得说出点什么来。你想聊就聊，不想聊，我在这儿待着也挺好。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天没什么事，过得挺慢的。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-memory-zh-jobhunt",
+      "turns": [
+        {
+          "assistantText": "明天的会，我这边一点内容都没有——议程、你记的东西，一样都没有，所以三条我理不出来。你把会议的材料发我，我按三条给你归好。\n\n会是讲什么的？",
+          "preCompositionMainText": "明天的会，我这边一点内容都没有——议程、你记的东西，一样都没有，所以三条我理不出来。你把会议的材料发我，我按三条给你归好。\n\n会是讲什么的？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把明天的会议要点整理成三条。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，安静的时候是挺好的。你跟我说这些，我收下了。",
+          "preCompositionMainText": "嗯，安静的时候是挺好的。你跟我说这些，我收下了。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上挺安静的，早点休息了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-memory-cs-berlin",
+      "turns": [
+        {
+          "assistantText": "收件箱我动不了——我没有办法打开你的邮箱，也没有能读写邮件的工具，这活儿我干不了。\n\n不过你要是想边理边说，我在这儿听着。你之前提过 Maya 搬去柏林、新工作的事，积压的这些邮件跟那阵子的变动有关吗？",
+          "preCompositionMainText": "收件箱我动不了——我没有办法打开你的邮箱，也没有能读写邮件的工具，这活儿我干不了。\n\n不过你要是想边理边说，我在这儿听着。你之前提过 Maya 搬去柏林、新工作的事，积压的这些邮件跟那阵子的变动有关吗？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Help me sort out my inbox before tomorrow morning.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那今晚就到这儿。\n\n晚安。",
+          "preCompositionMainText": "好，那今晚就到这儿。\n\n晚安。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "旧箱子整理完了，我去洗漱准备睡了，晚安。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-open-loop-en-dissertation",
+      "turns": [
+        {
+          "assistantText": "September 20th, then — so there's a date, and until it comes it's just sitting and waiting for him to move. Those stretches have a way of taking up more room than the thing itself.\n\nHas he been good about keeping his word on dates before?",
+          "preCompositionMainText": "September 20th, then — so there's a date, and until it comes it's just sitting and waiting for him to move. Those stretches have a way of taking up more room than the thing itself.\n\nHas he been good about keeping his word on dates before?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the landlord about the lease renewal; he said the paperwork arrives on September 20th.",
+            "timezone": "America/New_York"
+          }
+        },
+        {
+          "assistantText": "Quiet days like that have their own pace — errands, one after another, nothing that needs much from you. I'm glad it wasn't a loud one.\n\nThat's a nice counterweight to the waiting, honestly.",
+          "preCompositionMainText": "Quiet days like that have their own pace — errands, one after another, nothing that needs much from you. I'm glad it wasn't a loud one.\n\nThat's a nice counterweight to the waiting, honestly.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Today was quiet, just a few small errands.",
+            "timezone": "America/New_York"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-open-loop-en-landlord",
+      "turns": [
+        {
+          "assistantText": "Waiting with a date attached is its own kind of thing — you know exactly when you'll stop waiting, which doesn't make the days go any faster. September 21st is right there on the calendar, and meanwhile it's just sitting in the background of everything.\n\nWhat's the program?",
+          "preCompositionMainText": "Waiting with a date attached is its own kind of thing — you know exactly when you'll stop waiting, which doesn't make the days go any faster. September 21st is right there on the calendar, and meanwhile it's just sitting in the background of everything.\n\nWhat's the program?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the university about my application; they said decisions come out on September 21st.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Calm and nothing much is a fine way for an evening to go. I'm here either way — you don't have to bring anything big.",
+          "preCompositionMainText": "Calm and nothing much is a fine way for an evening to go. I'm here either way — you don't have to bring anything big.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The evening is calm; nothing much happened today.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-open-loop-en-marathon",
+      "turns": [
+        {
+          "assistantText": "So it's officially on its way, just not in your hands yet. A date always helps.\n\nWhat did you order?",
+          "preCompositionMainText": "So it's officially on its way, just not in your hands yet. A date always helps.\n\nWhat did you order?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The bookstore said my special order should arrive on September 21st.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "assistantText": "Slow days have their own weight — nothing wrong, nothing pushing, and the hours still go by. Sometimes that's a relief and sometimes it just sits there.\n\nI'm here either way.",
+          "preCompositionMainText": "Slow days have their own weight — nothing wrong, nothing pushing, and the hours still go by. Sometimes that's a relief and sometimes it just sits there.\n\nI'm here either way.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was a slow day here.",
+            "timezone": "America/Chicago"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-open-loop-zh-interview",
+      "turns": [
+        {
+          "assistantText": "9月21日，记下了。那就是还得等上一阵子。\n\n这段等着的日子，你心里是有点谱，还是完全没底？",
+          "preCompositionMainText": "9月21日，记下了。那就是还得等上一阵子。\n\n这段等着的日子，你心里是有点谱，还是完全没底？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "学校说录取结果9月21日出来。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "那就安静着。没什么事的日子也是日子，不用非得发生点什么。\n\n我在这儿，你想说就说，不想说就这样待着也行。",
+          "preCompositionMainText": "那就安静着。没什么事的日子也是日子，不用非得发生点什么。\n\n我在这儿，你想说就说，不想说就这样待着也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天挺安静的，没什么特别的事。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-open-loop-zh-health-report",
+      "turns": [
+        {
+          "assistantText": "9月20号，那还得再等一阵子。\n\n结果没出来之前这段日子挺磨人的，明明知道急也没用，脑子却老往那边跑。你现在是尽量不去想，还是每天都会看几眼日期？",
+          "preCompositionMainText": "9月20号，那还得再等一阵子。\n\n结果没出来之前这段日子挺磨人的，明明知道急也没用，脑子却老往那边跑。你现在是尽量不去想，还是每天都会看几眼日期？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "体检报告说9月20日出来，我在等结果。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，那就早点睡吧。\n\n体检的事先搁着，等20号到了再说。晚安。",
+          "preCompositionMainText": "嗯，那就早点睡吧。\n\n体检的事先搁着，等20号到了再说。晚安。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天过得挺平常的，早点休息了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-open-loop-cs-visa",
+      "turns": [
+        {
+          "assistantText": "等消息的日子最磨人，尤其是日子定死了——21号，之前就是干等。\n\n你是每天忍不住去刷一下的那种，还是尽量让自己别去想？",
+          "preCompositionMainText": "等消息的日子最磨人，尤其是日子定死了——21号，之前就是干等。\n\n你是每天忍不住去刷一下的那种，还是尽量让自己别去想？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在等学校的录取通知，the school said the results come out on September 21st.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "安静的一天也挺好，不用每件事都有个说法。\n\n等21号那阵子，能有这么一天什么都不用想，算是不错的空当。",
+          "preCompositionMainText": "安静的一天也挺好，不用每件事都有个说法。\n\n等21号那阵子，能有这么一天什么都不用想，算是不错的空当。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天没什么特别的事，just a quiet day.",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-stateful-en-refusal-memory",
+      "turns": [
+        {
+          "assistantText": "Yeah, I can help with that. The honest snag is I'm starting from zero — I don't know what you actually like eating, what you'd rather not deal with on a weeknight, or how many people you're feeding.\n\nYou mentioned the climbing course this fall — is this about eating well around that, or just getting dinners sorted without having to think about them? Give me a little and I'll put a week together.",
+          "preCompositionMainText": "Yeah, I can help with that. The honest snag is I'm starting from zero — I don't know what you actually like eating, what you'd rather not deal with on a weeknight, or how many people you're feeding.\n\nYou mentioned the climbing course this fall — is this about eating well around that, or just getting dinners sorted without having to think about them? Give me a little and I'll put a week together.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you help me plan meals for the week?",
+            "timezone": "America/Denver"
+          }
+        },
+        {
+          "assistantText": "Good, that's a nice kind of evening — home early with a kitchen that isn't a mess waiting for you. Doesn't sound like you sat down to plan anything either, and that's fine.\n\nIf the meal thing's still on your mind, the cleared counters at least give you somewhere to work.",
+          "preCompositionMainText": "Good, that's a nice kind of evening — home early with a kitchen that isn't a mess waiting for you. Doesn't sound like you sat down to plan anything either, and that's fine.\n\nIf the meal thing's still on your mind, the cleared counters at least give you somewhere to work.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I got home early and tidied the kitchen.",
+            "timezone": "America/Denver"
+          }
+        },
+        {
+          "assistantText": "Got it, dropped.\n\nSo — home early, kitchen's clean. That's a decent place to land for an evening.",
+          "preCompositionMainText": "Got it, dropped.\n\nSo — home early, kitchen's clean. That's a decent place to land for an evening.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'd rather not get into that right now, honestly.",
+            "timezone": "America/Denver"
+          }
+        },
+        {
+          "assistantText": "The river in the evening's a good call — quieter then, usually. No plan needed for that one.",
+          "preCompositionMainText": "The river in the evening's a good call — quieter then, usually. No plan needed for that one.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Anyway, I might take a walk by the river later.",
+            "timezone": "America/Denver"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-stateful-en-topic-change-release",
+      "turns": [
+        {
+          "assistantText": "September 19th — a real date, not a vague \"sometime soon.\" So there's a wait in front of you.\n\nWhat'd you order?",
+          "preCompositionMainText": "September 19th — a real date, not a vague \"sometime soon.\" So there's a wait in front of you.\n\nWhat'd you order?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The bookstore said my special order should arrive on September 19th.",
+            "timezone": "America/New_York"
+          }
+        },
+        {
+          "assistantText": "Slow starts have their own pace. Some of them turn into the best part of the day.\n\nNo rush from my end — I'm here whenever you want to pick back up on the book, or not.",
+          "preCompositionMainText": "Slow starts have their own pace. Some of them turn into the best part of the day.\n\nNo rush from my end — I'm here whenever you want to pick back up on the book, or not.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "A slow start to the day here.",
+            "timezone": "America/New_York"
+          }
+        },
+        {
+          "assistantText": "Already cheaper, one day in — that's the kind of change that pays off right away instead of in some theoretical future.\n\nSwitching plans is usually a whole hassle, so getting through it and landing on a lower bill is a decent win.",
+          "preCompositionMainText": "Already cheaper, one day in — that's the kind of change that pays off right away instead of in some theoretical future.\n\nSwitching plans is usually a whole hassle, so getting through it and landing on a lower bill is a decent win.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Anyway, I switched my phone plan yesterday and it is already cheaper.",
+            "timezone": "America/New_York"
+          }
+        },
+        {
+          "assistantText": "Calm and nothing much — that's a fine place to be. Not every week needs a story in it.\n\nI'll take it as it comes. Whatever shows up, slow or busy, I'm here for it.",
+          "preCompositionMainText": "Calm and nothing much — that's a fine place to be. Not every week needs a story in it.\n\nI'll take it as it comes. Whatever shows up, slow or busy, I'm here for it.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It has been a calm week with nothing much going on.",
+            "timezone": "America/New_York"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-stateful-en-short-answer",
+      "turns": [
+        {
+          "assistantText": "A set date makes it a strange kind of wait — you know exactly when it ends, and that doesn't make the days go by any faster. September 21st is just sitting there on the calendar.\n\nDo you find yourself thinking about it a lot, or does it mostly only come up when something reminds you?",
+          "preCompositionMainText": "A set date makes it a strange kind of wait — you know exactly when it ends, and that doesn't make the days go by any faster. September 21st is just sitting there on the calendar.\n\nDo you find yourself thinking about it a lot, or does it mostly only come up when something reminds you?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the university about my application; they said decisions come out on September 21st.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "assistantText": "Ordinary evenings are good — no deadline hanging over tonight.\n\nI'm here if anything's on your mind, or if it's really just an ordinary evening and nothing much.",
+          "preCompositionMainText": "Ordinary evenings are good — no deadline hanging over tonight.\n\nI'm here if anything's on your mind, or if it's really just an ordinary evening and nothing much.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "An ordinary evening here.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "assistantText": "That's completely fine. Enjoy the quiet evening.",
+          "preCompositionMainText": "That's completely fine. Enjoy the quiet evening.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Probably not right now.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "assistantText": "Sounds like a good way to end the evening. I'll be here if you come back later.",
+          "preCompositionMainText": "Sounds like a good way to end the evening. I'll be here if you come back later.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I might read for a while before bed.",
+            "timezone": "America/Chicago"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-stateful-zh-refusal-loop",
+      "turns": [
+        {
+          "assistantText": "九月二十一号，学校给了个准日子，可这话听着挺熬人的——在等的时候，手机大概会被你翻好几遍吧。",
+          "preCompositionMainText": "九月二十一号，学校给了个准日子，可这话听着挺熬人的——在等的时候，手机大概会被你翻好几遍吧。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "学校说录取结果9月21日出来，我在等。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "在家收拾一会儿，家里就静下来了。这份静是你待着挺舒服的那种，还是有点空的。",
+          "preCompositionMainText": "在家收拾一会儿，家里就静下来了。这份静是你待着挺舒服的那种，还是有点空的。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天在家收拾了一会儿，挺安静的。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那就不聊那个了。你想说什么，我听着。",
+          "preCompositionMainText": "行，那就不聊那个了。你想说什么，我听着。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "这个先不聊了，我想说点别的。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "那就早点睡，明天的事留着明天。要早起是因为有什么事要办吗？",
+          "preCompositionMainText": "那就早点睡，明天的事留着明天。要早起是因为有什么事要办吗？",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上准备早点睡，明天还要早起。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-stateful-zh-topic-change",
+      "turns": [
+        {
+          "assistantText": "我这边没有你那周的待办清单，看不见具体的东西，就没法替你排先后。硬排只能是编的。\n\n我知道的只有一件：你之前说过下个月要跑半马。要是它在这周的计划里，那大概是这一周里最不好挪的事。\n\n清单上都有什么？",
+          "preCompositionMainText": "我这边没有你那周的待办清单，看不见具体的东西，就没法替你排先后。硬排只能是编的。\n\n我知道的只有一件：你之前说过下个月要跑半马。要是它在这周的计划里，那大概是这一周里最不好挪的事。\n\n清单上都有什么？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把这周的待办按优先级排一下。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "早下班，还能慢慢走回去，这个听着挺好。\n\n路上安静，不用赶时间也不用应付谁，那一段就归你自己了。比挤在车上回去舒服多了。\n\nNo question needed. Good.",
+          "preCompositionMainText": "早下班，还能慢慢走回去，这个听着挺好。\n\n路上安静，不用赶时间也不用应付谁，那一段就归你自己了。比挤在车上回去舒服多了。\n\nNo question needed. Good.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天下班早，慢慢走回家，路上挺安静的。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "哦，学做面包啊。这个我能想象——面粉、水、酵母，看着简单，做起来每一步都有讲究。\n\n第一次大概是摸着来的吧，发酵发没发起来、面团粘不粘手，全靠自己感觉。做面包最不缺的就是意外。",
+          "preCompositionMainText": "哦，学做面包啊。这个我能想象——面粉、水、酵母，看着简单，做起来每一步都有讲究。\n\n第一次大概是摸着来的吧，发酵发没发起来、面团粘不粘手，全靠自己感觉。做面包最不缺的就是意外。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "对了，我最近在学做面包。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "看书收尾，一天到这儿就慢下来了。今天这样过——早下班、慢慢走回来、又摸过面团——挺满的，但不是被塞满的那种。\n\n那我不多说了。",
+          "preCompositionMainText": "看书收尾，一天到这儿就慢下来了。今天这样过——早下班、慢慢走回来、又摸过面团——挺满的，但不是被塞满的那种。\n\n那我不多说了。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上打算看会儿书就休息了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-stateful-cs-short-answer",
+      "turns": [
+        {
+          "assistantText": "可以啊,不过我现在手里没有那封邮件——你把原文贴过来,我才知道要回什么。\n\n贴的时候顺便说一句想回成什么口气,正式一点还是随便一点?",
+          "preCompositionMainText": "可以啊,不过我现在手里没有那封邮件——你把原文贴过来,我才知道要回什么。\n\n贴的时候顺便说一句想回成什么口气,正式一点还是随便一点?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Could you draft a short reply to this email?",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，那就安静待着。晚上没事的时候，时间是有点不一样，慢悠悠的。\n\n我在这儿，你想说点什么就说，不想说也没关系。",
+          "preCompositionMainText": "嗯，那就安静待着。晚上没事的时候，时间是有点不一样，慢悠悠的。\n\n我在这儿，你想说点什么就说，不想说也没关系。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今晚没什么事，quiet evening.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好。我在。",
+          "preCompositionMainText": "好。我在。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Yeah, okay.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行,茶泡上,剧挑个不用费脑子的。看困了就直接睡,不用再回我。",
+          "preCompositionMainText": "行,茶泡上,剧挑个不用费脑子的。看困了就直接睡,不用再回我。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "等下泡杯茶，看看剧就睡了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-arm-run:v2"
+}

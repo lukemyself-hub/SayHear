@@ -313,6 +313,44 @@ systemDescribe("proactive.followup crash path (issue #207 layer 2c)", () => {
     ).resolves.toEqual({ outcome: "not_found" });
   });
 
+  it("releases an omitted segment without committing a use", async () => {
+    const turn = await seedTurn();
+    const mainCommandId = await seedMainCommand(turn);
+    const segmentCommandId = await seedSegmentCommand({
+      conversationEventId: turn.conversationEventId,
+      status: "prepared",
+    });
+    const reservationId = await seedReservation({
+      dailySessionId: turn.dailySessionId,
+      mainCommandId,
+      segmentCommandId,
+    });
+
+    await expect(
+      proactive!.releaseOmittedSegment({
+        userId: String(OWNER),
+        expectedDataEpoch: 1,
+        reservationId,
+        mainGenerationCommandId: mainCommandId,
+        segmentGenerationCommandId: segmentCommandId,
+        now: new Date(BASE_TIME),
+      }),
+    ).resolves.toEqual({ outcome: "released" });
+
+    const reservation = await database!.pool.query<{ status: string }>(
+      `SELECT status FROM proactive_followup_reservations
+       WHERE proactive_followup_reservation_id = $1`,
+      [reservationId],
+    );
+    expect(reservation.rows[0]?.status).toBe("released");
+    const uses = await database!.pool.query(
+      `SELECT 1 FROM proactive_followup_uses
+       WHERE segment_generation_command_id = $1`,
+      [segmentCommandId],
+    );
+    expect(uses.rowCount).toBe(0);
+  });
+
   it("converges only reservations behind terminal segment commands", async () => {
     const turn = await seedTurn();
     const mainCommandId = await seedMainCommand(turn);

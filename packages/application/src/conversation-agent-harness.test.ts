@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   asCompiledContextId,
@@ -94,8 +94,8 @@ function proactivePlan(): ProactiveFollowupSegmentPlan {
     promptUserEventRevisionId: requestEventRevisionId,
     promptUserEventSequence: 12,
     policyBundle: { source: "test" },
-    policyBundleVersion: "proactive-followup-policy-bundle:v2",
-    promptPolicyVersion: "proactive-followup-prompt:v2",
+    policyBundleVersion: "proactive-followup-policy-bundle:v3",
+    promptPolicyVersion: "proactive-followup-prompt:v3",
     reservationId: "01984477-1f9a-7d25-9d97-e588769566cb",
     segmentCompiledContextId,
     segmentGenerationCommandId,
@@ -180,8 +180,10 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       async generate() {
         generated += 1;
         return {
+          outcome: "emit" as const,
           metadata: completedMetadata,
           output: {
+            decision: "emit" as const,
             content: "I’m glad you shared that.",
             expressionKind: "acknowledgment" as const,
             targetRef: {
@@ -320,8 +322,10 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       },
       async generate() {
         return {
+          outcome: "emit" as const,
           metadata: completedMetadata,
           output: {
+            decision: "emit" as const,
             content: "I’m glad you shared that.",
             expressionKind: "acknowledgment" as const,
             targetRef: {
@@ -380,6 +384,70 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
     );
   });
 
+  it("commits only the main response when the segment stage chooses omit", async () => {
+    const egressPort: ProviderEgressPort = {
+      async *stream() {
+        yield { delta: "I hear you.", type: "delta" } as const;
+        yield { ...completedMetadata, type: "completed" } as const;
+      },
+    };
+    const plan = proactivePlan();
+    const abandon = vi.fn(async () => {});
+    let committedSegment: unknown = "not-set";
+    const proactiveFollowupStage: ProactiveFollowupSegmentStage = {
+      async prepare() {
+        return plan;
+      },
+      async generate() {
+        return {
+          outcome: "omit" as const,
+          reason: "duplicates_main_response" as const,
+        };
+      },
+      abandon,
+    };
+    const repository: ConversationAgentHarnessRepository = {
+      async claimResponseExecution() {
+        return "owner";
+      },
+      async loadResponse() {
+        throw new Error("unexpected loadResponse");
+      },
+      async commitCompleteResponse(input) {
+        committedSegment = input.proactiveSegment;
+        return {
+          eventId: assistantEventId,
+          outcome: "committed",
+          revisionId: assistantRevisionId,
+        };
+      },
+      async settleResponseFailure() {
+        throw new Error("unexpected settleResponseFailure");
+      },
+      async claimStaleResponseExecution() {
+        throw new Error("unexpected claimStaleResponseExecution");
+      },
+    };
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      egressPort,
+      proactiveFollowupStage,
+      repository,
+    });
+
+    const events: ConversationHarnessEvent[] = [];
+    for await (const event of harness.runDecision(baseCommand())) events.push(event);
+
+    expect(committedSegment).toBeUndefined();
+    expect(abandon).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "decision_segment_delta")).toBe(
+      false,
+    );
+    expect(events.some((event) => event.type === "decision_committed")).toBe(
+      true,
+    );
+  });
+
   it("preserves the main response when segment validation fails and abandons once", async () => {
     const egressPort: ProviderEgressPort = {
       async *stream() {
@@ -396,8 +464,10 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       },
       async generate() {
         return {
+          outcome: "emit" as const,
           metadata: completedMetadata,
           output: {
+            decision: "emit" as const,
             content: "This has the wrong target.",
             expressionKind: "acknowledgment" as const,
             targetRef: {

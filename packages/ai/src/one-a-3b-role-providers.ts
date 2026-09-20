@@ -13,7 +13,7 @@ import {
   type OpenLoopProposal,
   type ProactiveFollowupDispositionModelOutput,
   type ProactiveFollowupModelProvider,
-  type ProactiveFollowupSegmentOutput,
+  type ProactiveFollowupSegmentModelOutput,
   type ReflectionGenerationModelOutput,
   type ReflectionGenerationModelProvider,
 } from "@sayhear/application";
@@ -373,6 +373,12 @@ function asNarrativeOutput(value: unknown): NarrativeValidatorModelOutput {
 }
 
 const PROACTIVE_EXPRESSION_KINDS = new Set(["question", "acknowledgment"]);
+const PROACTIVE_OMIT_REASONS = new Set([
+  "no_genuine_opportunity",
+  "duplicates_main_response",
+  "insufficient_grounding",
+  "timing_not_natural",
+]);
 const PROACTIVE_TARGET_KINDS = new Set(["open_loop", "memory_claim"]);
 
 function isProactiveTargetRef(value: unknown): boolean {
@@ -387,9 +393,18 @@ function isProactiveTargetRef(value: unknown): boolean {
 
 function asProactiveSegmentOutput(
   value: unknown,
-): ProactiveFollowupSegmentOutput {
+): ProactiveFollowupSegmentModelOutput {
   const parsed = asObject(value, "proactive.followup");
   if (
+    parsed.decision === "omit" &&
+    typeof parsed.reason === "string" &&
+    PROACTIVE_OMIT_REASONS.has(parsed.reason) &&
+    isProactiveTargetRef(parsed.targetRef)
+  ) {
+    return parsed as ProactiveFollowupSegmentModelOutput;
+  }
+  if (
+    parsed.decision !== "emit" ||
     !isNonEmptyString(parsed.content) ||
     typeof parsed.expressionKind !== "string" ||
     !PROACTIVE_EXPRESSION_KINDS.has(parsed.expressionKind) ||
@@ -400,7 +415,7 @@ function asProactiveSegmentOutput(
       "proactive.followup returned an invalid output schema.",
     );
   }
-  return parsed as ProactiveFollowupSegmentOutput;
+  return parsed as ProactiveFollowupSegmentModelOutput;
 }
 
 function isProactiveDispositionLocator(value: unknown): boolean {
@@ -659,7 +674,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
               await askJson(
                 openLoopConfiguration,
                 request,
-                "Given the frozen user utterance, evidence spans, and currently open loops, return an object with proposals and closures arrays. Each proposal must contain kind, evidenceItemId, evidenceRevisionId, hasRealAnchor, isTaskLike, and proposalIndex, and may contain userTimeExpression, expectedWindow, sourceClaimVersionId, sourceEpisodeVersionId, explicitLoopBinding, or canonicalClaimKey. kind must be upcoming_event or awaited_outcome. Never propose reminders, goals, tasks, unfinished topics, or emotions; a dated obligation is task-like even with a date. expectedWindow precision must be one of instant, date, range, approximate, unknown. Cite only supplied evidence IDs and never invent IDs or facts. proposalIndex must be unique starting at 0. Each closure must contain targetOpenLoopId, proposedStatus, closureEvidenceRevisionId, closureCommittedAt, entailsTerminal, explicitCancel, and targetKind; only assert closures against the supplied open loops when the user evidence necessarily entails the terminal state, and require explicit cancel language for canceled. When uncertain, return empty arrays.",
+                "Given the frozen user utterance, evidence spans, and currently open loops, return an object with proposals and closures arrays. Each proposal must contain kind, evidenceItemId, evidenceRevisionId, hasRealAnchor, isTaskLike, and proposalIndex, and may contain userTimeExpression, expectedWindow, sourceClaimVersionId, sourceEpisodeVersionId, explicitLoopBinding, or canonicalClaimKey. kind must be upcoming_event or awaited_outcome. Emit a proposal whenever the utterance mentions a future scheduled event or an outcome the user is waiting to hear about, even if it seems minor; use an empty proposals array only when the utterance contains no future happening at all. Never propose reminders, goals, tasks, unfinished topics, or emotions; a dated obligation is task-like even with a date. expectedWindow is optional: omit it entirely when the utterance carries no real time anchor, and never invent a window. When present it must be an object with precision, startAt, endAt, and timezone: precision is one of instant, date, range, approximate, unknown; startAt and endAt are ISO-8601 instants or null; timezone is an IANA time zone name or null. Cite only supplied evidence IDs and never invent IDs or facts. proposalIndex must be unique starting at 0. Each closure must contain targetOpenLoopId, proposedStatus, closureEvidenceRevisionId, closureCommittedAt, entailsTerminal, explicitCancel, and targetKind; only assert closures against the supplied open loops when the user evidence necessarily entails the terminal state, and require explicit cancel language for canceled. When uncertain, return empty arrays.",
                 request.locale || "en-US",
               ),
             );
@@ -691,7 +706,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
               await askJson(
                 proactiveConfiguration,
                 request,
-                "Given the frozen main response, the pinned follow-up target, and the opportunity, return an object with content, expressionKind, and targetRef. expressionKind must be question or acknowledgment: an open loop normally invites one concise update question, while a memory claim defaults to an acknowledgment unless its evidence supports a concrete answerable development. A question must contain exactly one question; an acknowledgment must contain none. targetRef must echo the supplied targetRef object exactly, keeping all three fields. Keep the expression short and natural; for sensitive targets keep it gentle, brief, and answer-optional without ritual disclaimers. Never invent a recent event to manufacture a question. If no appropriate expression exists, return a brief caring acknowledgment without a question.",
+                 "Given the current user message, frozen main response, current local time, pinned follow-up target, and opportunity, decide whether one isolated append-only follow-up would add natural and specific continuity. Return either {decision:'emit', content, expressionKind, targetRef} or {decision:'omit', reason, targetRef}. Omit when there is no genuine conversational opportunity, the main response already asks about or semantically covers the target, the transition would be abrupt, grounding or identity is unclear, or the timing is not natural. Omit instead of adding generic care, an 'I'm here' sentence, a dangling this/that reference, repeated reassurance, or a repeated date or event. Omit reasons are no_genuine_opportunity, duplicates_main_response, insufficient_grounding, or timing_not_natural. For emit, expressionKind must be question or acknowledgment: an open loop normally asks one concise question about its unknown event or outcome, while a memory claim defaults to a specific acknowledgment unless its evidence supports a concrete answerable development. A question must contain exactly one question; an acknowledgment must contain none. targetRef must echo the supplied targetRef object exactly in either decision. Treat subjectRole user as the user and never refer to that person as an unrelated third party. Do not infer that an unknown or other subject is the user. Never invent progress, feelings, urgency, or a recent event. Keep emitted content short and natural; for sensitive targets keep it gentle, brief, and answer-optional without ritual disclaimers. Never rewrite the main response.",
                 request.locale || "en-US",
               ),
             );

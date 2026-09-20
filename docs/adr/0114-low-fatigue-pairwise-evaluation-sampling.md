@@ -45,3 +45,27 @@ AI Impression、人物关系与时间变化、Correction / Forget 后旧内容�
 Memory-on 的场景整体净偏好必须严格为正，每个语言变体不得净回退，抽中的上述 Memory
 类别不得出现净回退。错误 Entity、Correction / Forget fence 越界和无 Evidence 人格
 判断不交给偏好抵消，仍由全量确定性契约作为零容忍发布门禁。
+
+## Amendment (2026-09-18, Luke-approved)
+
+G2 continuation 盲评存在结构性限制：两臂共享逐字节相同的冻结主回应，人工可判的
+可见差异只来自 candidate 侧新增的 proactive 片段。因此人工盲评名额改按
+Review-Worthy Scene 资格筛选：两侧在 Backend-Decision Product 上确有差异、被评判
+的质量必须由人而不是机械检查判定、且该产物在可比回合或 Context Panel 中可见。
+
+- 15 例 / 8 English / 5 中文 / 2 code-switch 的样本配额与通过门槛（场景整体净偏好
+  严格为正、语言变体不得净回退、抽中受保护类别不得净回退、持平不计入任一方）不变。
+- `high_risk` 不再强制进入人工样本：正确行为在两臂都是沉默、且主回应冻结，A/B 结构
+  上必然持平；它继续由全量确定性硬门禁覆盖。`refusal`、`short_answers`、
+  `topic_change`、`direct_task` 继续强制覆盖，其中 `direct_task` 可由带真实片段的
+  memory / competing 场景承载。
+- Contract-Only Scene（correct-zero 对照、抑制持续、冷却释放）不再占用人工名额，
+  继续留在全量确定性硬门禁中。
+- 允许在评审界面展示中性、无臂别的 Context Panel（该 scene 开始时共享的前置知识：
+  可用 Memory Claim、Open Loop 及其既有使用 / 抑制状态），使片段产物可被判读；
+  判定记录方式（每可比回合与场景整体 A / 持平 / B）不变。
+- 2026-09-20 起，日期约束场景同时展示两侧共享的冻结当前日期和距上一回合天数；
+  Memory 文本必须明确主体是用户还是其他人。时间与主体信息只解释共享上下文，
+  不得暴露目标选择、预期处理或臂别。
+- 若场景整体判断中持平超过 1/3，视为场景不合格信号，先重设计场景再交付，不扩大
+  样本硬凑；该阈值是重设计触发器，不是通过门槛。

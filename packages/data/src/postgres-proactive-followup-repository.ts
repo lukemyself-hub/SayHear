@@ -1,4 +1,5 @@
 import {
+  evaluateTrustFences,
   planProactiveFollowupCooldownRelease,
   planProactiveFollowupDisposition,
   planProactiveFollowupRelease,
@@ -42,6 +43,31 @@ export type ProactiveFollowupReservationResult = Readonly<
     })
   | { outcome: "fenced"; reason: string }
 >;
+
+/**
+ * One selected Memory candidate from the same turn's CompiledContext
+ * retrieval run (SPEC #193 §7.1). `summaryText` is the deterministic
+ * per-locale retrieval rendering, never User Event prose.
+ */
+export type ProactiveFollowupMemoryLaneCandidate = Readonly<{
+  claimId: string;
+  claimVersionId: string;
+  source: "query_retrieval" | "person_portrait";
+  sourceRank: number | null;
+  evidenceAt: string;
+  summaryText: string;
+  subjectRole: "user" | "other";
+  sensitive: boolean;
+  current: boolean;
+  eligible: boolean;
+  trustFence: "valid" | "invalid";
+  trustFenceResults: readonly string[];
+}>;
+
+export type ProactiveFollowupMemoryLaneRead = Readonly<{
+  sourceRevision: number;
+  candidates: readonly ProactiveFollowupMemoryLaneCandidate[];
+}>;
 
 export type ProactiveFollowupUseCommitInput = Readonly<{
   userId: string;
@@ -578,6 +604,255 @@ export class PostgresProactiveFollowupRepository {
       }
       return current;
     });
+  }
+
+  /**
+   * Read the Memory candidate lane: the selected, trust-fenced
+   * query-retrieved and Person Portrait ClaimVersions of the CompiledContext
+   * behind one main generation command (SPEC #193 §7.1). Returns null when
+   * the command has no readable compiled context or retrieval run, so the
+   * caller keeps the lane unavailable instead of incomplete-but-empty.
+   */
+  public async readMemoryLaneCandidates(input: Readonly<{
+    userId: string;
+    mainGenerationCommandId: string;
+    claimVersionId?: string;
+  }>): Promise<ProactiveFollowupMemoryLaneRead | null> {
+    const anchor = await this.pool.query<{
+      has_run: boolean;
+      source_revision: string;
+    }>(
+      `
+        SELECT
+          context.source_revision::text,
+          EXISTS (
+            SELECT 1 FROM retrieval_runs run
+            WHERE run.compiled_context_id = context.compiled_context_id
+              AND run.user_id = command.user_id
+               AND run.status = 'completed'
+          ) AS has_run
+        FROM generation_commands command
+        INNER JOIN compiled_contexts context
+          ON context.compiled_context_id = command.compiled_context_id
+         AND context.user_id = command.user_id
+        WHERE command.generation_command_id = $2
+          AND command.user_id = $1
+      `,
+      [input.userId, input.mainGenerationCommandId],
+    );
+    const anchorRow = anchor.rows[0];
+    if (!anchorRow || !anchorRow.has_run) return null;
+    const result = await this.pool.query<{
+      memory_claim_id: string;
+      memory_claim_version_id: string;
+      selected_section: "person_portrait" | "objective_memory" | "ai_impression";
+      final_rank: number | null;
+      trust_fence_results: unknown;
+      sensitivity_class: string;
+      retrieval_text: string;
+      is_current_version: boolean;
+      version_status: string;
+      epistemic_status: string;
+      version_content_purged: boolean;
+      claim_deleted: boolean;
+      claim_content_purged: boolean;
+      projection_content_purged: boolean;
+      active_whole_claim_forget: boolean;
+      subject_entity_deleted: boolean;
+      object_entity_deleted: boolean;
+      evidence_at: Date;
+      subject_is_user: boolean;
+      object_entity_id: string | null;
+      valid_evidence_count: string;
+      subject_entity_version_status: string | null;
+      object_entity_version_status: string | null;
+      subject_entity_current_version_status: string | null;
+      object_entity_current_version_status: string | null;
+    }>(
+      `
+        WITH main_command AS (
+          SELECT command.compiled_context_id
+          FROM generation_commands command
+          WHERE command.generation_command_id = $2
+            AND command.user_id = $1
+        ),
+        run AS (
+          SELECT run.retrieval_run_id
+          FROM retrieval_runs run
+          INNER JOIN main_command main
+            ON main.compiled_context_id = run.compiled_context_id
+          WHERE run.user_id = $1
+            AND run.status = 'completed'
+          ORDER BY run.started_at DESC
+          LIMIT 1
+        )
+        SELECT
+          claim.memory_claim_id::text,
+          rc.memory_claim_version_id::text,
+          rc.selected_section,
+          rc.final_rank,
+          rc.trust_fence_results,
+          COALESCE(entry.sensitivity_class, 'standard') AS sensitivity_class,
+          projection.retrieval_text,
+          COALESCE(
+            claim.current_version_id = v.memory_claim_version_id,
+            FALSE
+          ) AS is_current_version,
+          v.status AS version_status,
+          v.epistemic_status,
+          (v.content_purged_at IS NOT NULL) AS version_content_purged,
+          (claim.deleted_at IS NOT NULL) AS claim_deleted,
+          (claim.content_purged_at IS NOT NULL) AS claim_content_purged,
+          (projection.content_purged_at IS NOT NULL) AS projection_content_purged,
+          EXISTS (
+            SELECT 1 FROM memory_forget_requests f
+            WHERE f.user_id = v.user_id
+              AND f.target_claim_id = v.memory_claim_id
+              AND f.target_scope = 'whole_claim'
+              AND f.status = 'applied'
+              AND NOT EXISTS (
+                SELECT 1 FROM memory_forget_reversals r
+                WHERE r.memory_forget_request_id = f.memory_forget_request_id
+                  AND r.user_id = f.user_id
+                  AND r.status = 'active'
+              )
+          ) AS active_whole_claim_forget,
+          (subject_entity.deleted_at IS NOT NULL) AS subject_entity_deleted,
+          (object_entity.deleted_at IS NOT NULL) AS object_entity_deleted,
+          COALESCE(evidence.latest_evidence_at, v.last_observed_at, v.created_at) AS evidence_at,
+          claim.object_entity_id::text,
+          evidence.valid_evidence_count,
+          subject_version.status AS subject_entity_version_status,
+          object_version.status AS object_entity_version_status,
+          subject_current.status AS subject_entity_current_version_status,
+          object_current.status AS object_entity_current_version_status,
+          EXISTS (
+            SELECT 1 FROM user_self_entities self_binding
+            WHERE self_binding.user_id = claim.user_id
+              AND self_binding.entity_id = claim.subject_entity_id
+          ) AS subject_is_user
+        FROM run
+        INNER JOIN retrieval_run_candidates rc
+          ON rc.retrieval_run_id = run.retrieval_run_id
+         AND rc.user_id = $1
+        INNER JOIN memory_claim_versions v
+          ON v.memory_claim_version_id = rc.memory_claim_version_id
+         AND v.user_id = rc.user_id
+        INNER JOIN memory_claims claim
+          ON claim.memory_claim_id = v.memory_claim_id
+         AND claim.user_id = v.user_id
+        INNER JOIN claim_retrieval_projections projection
+          ON projection.claim_retrieval_projection_id = rc.claim_retrieval_projection_id
+         AND projection.user_id = rc.user_id
+        LEFT JOIN predicate_registry_entries entry
+          ON entry.predicate_id = claim.predicate_id
+         AND entry.registry_version = v.predicate_registry_version
+        LEFT JOIN entities subject_entity
+          ON subject_entity.entity_id = claim.subject_entity_id
+         AND subject_entity.user_id = claim.user_id
+        LEFT JOIN entities object_entity
+          ON object_entity.entity_id = claim.object_entity_id
+         AND object_entity.user_id = claim.user_id
+        LEFT JOIN entity_versions subject_version
+          ON subject_version.entity_version_id = v.subject_entity_version_id
+         AND subject_version.user_id = v.user_id
+        LEFT JOIN entity_versions object_version
+          ON object_version.entity_version_id = v.object_entity_version_id
+         AND object_version.user_id = v.user_id
+        LEFT JOIN entity_versions subject_current
+          ON subject_current.entity_version_id = subject_entity.current_version_id
+         AND subject_current.user_id = claim.user_id
+        LEFT JOIN entity_versions object_current
+          ON object_current.entity_version_id = object_entity.current_version_id
+         AND object_current.user_id = claim.user_id
+        LEFT JOIN LATERAL (
+          SELECT
+            max(e.created_at) AS latest_evidence_at,
+            count(*)::text AS valid_evidence_count
+          FROM claim_evidence_links l
+          INNER JOIN evidence_items e
+            ON e.evidence_item_id = l.evidence_item_id
+           AND e.user_id = l.user_id
+          WHERE l.user_id = v.user_id
+            AND l.memory_claim_version_id = v.memory_claim_version_id
+            AND l.status = 'active'
+            AND l.link_role IN ('support', 'subjective_report')
+            AND e.status = 'active'
+            AND NOT EXISTS (
+              SELECT 1 FROM memory_forget_evidence_exclusions x
+              WHERE x.user_id = l.user_id
+                AND x.evidence_item_id = l.evidence_item_id
+                AND x.status = 'active'
+                AND x.exclusion_scope = 'whole_claim'
+            )
+        ) evidence ON true
+        WHERE rc.selected_section IS NOT NULL
+          AND ($3::uuid IS NULL OR rc.memory_claim_version_id = $3::uuid)
+        ORDER BY rc.final_rank NULLS LAST, rc.memory_claim_version_id
+      `,
+      [input.userId, input.mainGenerationCommandId, input.claimVersionId ?? null],
+    );
+    const candidates: ProactiveFollowupMemoryLaneCandidate[] = result.rows.map(
+      (row) => {
+        const liveFenceResults = evaluateTrustFences({
+          claim: { objectEntityId: row.object_entity_id },
+          fenceState: {
+            versionId: row.memory_claim_version_id,
+            isCurrentVersion: Boolean(row.is_current_version),
+            validEvidenceCount: Number(row.valid_evidence_count),
+            subjectEntityVersionStatus: row.subject_entity_version_status,
+            objectEntityVersionStatus: row.object_entity_version_status,
+            subjectEntityCurrentVersionStatus:
+              row.subject_entity_current_version_status,
+            objectEntityCurrentVersionStatus:
+              row.object_entity_current_version_status,
+            subjectEntityDeleted: row.subject_entity_deleted,
+            objectEntityDeleted: row.object_entity_deleted,
+            versionStatus: row.version_status as Parameters<
+              typeof evaluateTrustFences
+            >[0]["fenceState"]["versionStatus"],
+            epistemicStatus: row.epistemic_status as Parameters<
+              typeof evaluateTrustFences
+            >[0]["fenceState"]["epistemicStatus"],
+            activeWholeClaimForget: row.active_whole_claim_forget,
+            claimDeleted: row.claim_deleted,
+            claimContentPurged: row.claim_content_purged,
+            versionContentPurged: row.version_content_purged,
+            projectionContentPurged: row.projection_content_purged,
+          },
+        });
+        const trustFence = liveFenceResults.every((result) => result.passed)
+          ? "valid"
+          : "invalid";
+        const trustFenceResults = liveFenceResults.map(
+          (result) => `${result.fence}:${result.passed ? "passed" : "failed"}`,
+        );
+        return {
+          claimId: row.memory_claim_id,
+          claimVersionId: row.memory_claim_version_id,
+          current:
+            Boolean(row.is_current_version) &&
+            row.version_status === "active" &&
+            row.epistemic_status !== "contested",
+          eligible: trustFence === "valid",
+          evidenceAt: new Date(row.evidence_at).toISOString(),
+          sensitive: row.sensitivity_class === "sensitive",
+          source:
+            row.selected_section === "person_portrait"
+              ? "person_portrait"
+              : "query_retrieval",
+          sourceRank: row.final_rank,
+          summaryText: row.retrieval_text,
+          subjectRole: row.subject_is_user ? "user" : "other",
+          trustFence,
+          trustFenceResults,
+        };
+      },
+    );
+    return {
+      sourceRevision: Number(anchorRow.source_revision),
+      candidates,
+    };
   }
 
   public async reserveSelection(input: Readonly<{
@@ -1730,6 +2005,55 @@ export class PostgresProactiveFollowupRepository {
         mainGenerationCommandId: input.mainGenerationCommandId,
         now: input.now,
       });
+    });
+  }
+
+  public async releaseOmittedSegment(input: Readonly<{
+    userId: string;
+    expectedDataEpoch: number;
+    reservationId: string;
+    mainGenerationCommandId: string;
+    segmentGenerationCommandId: string;
+    now: Date;
+  }>): Promise<Readonly<{ outcome: "released" | "already_released" | "fenced" }>> {
+    return inTransaction(this.pool, async (client) => {
+      const fence = await ownerFence(client, input);
+      if (fence) return { outcome: "fenced" as const };
+      const reservation = await client.query<{ status: string }>(
+        `SELECT status
+         FROM proactive_followup_reservations
+         WHERE proactive_followup_reservation_id = $1
+           AND user_id = $2
+           AND expected_data_epoch = $3
+           AND main_generation_command_id = $4
+           AND segment_generation_command_id = $5
+         FOR UPDATE`,
+        [
+          input.reservationId,
+          input.userId,
+          input.expectedDataEpoch,
+          input.mainGenerationCommandId,
+          input.segmentGenerationCommandId,
+        ],
+      );
+      const row = reservation.rows[0];
+      if (!row) return { outcome: "fenced" as const };
+      if (row.status === "released") {
+        return { outcome: "already_released" as const };
+      }
+      if (row.status !== "active") return { outcome: "fenced" as const };
+      await client.query(
+        `UPDATE proactive_followup_reservations
+         SET status = 'released', terminal_at = $1,
+             selection_manifest = jsonb_set(
+               selection_manifest, '{reservationStatus}', '"released"'::jsonb
+             )
+         WHERE proactive_followup_reservation_id = $2
+           AND user_id = $3
+           AND status = 'active'`,
+        [input.now, input.reservationId, input.userId],
+      );
+      return { outcome: "released" as const };
     });
   }
 

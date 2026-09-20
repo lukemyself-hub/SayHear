@@ -1,0 +1,694 @@
+{
+  "catalogVersion": "1a3b-g2-continuation:v2",
+  "cleanIncumbentCommit": "08a47085b81e76eb34a9f9577d28a64a94f30699",
+  "cleanIncumbentManifestFingerprint": "sha256:e8c0572278fe5ee45a7cd265aed18d2d8975ff416995cdef4ce9e29a8066a249",
+  "conversationConfigId": "continuation-incumbent-1a3a",
+  "conversationConfigurationFingerprint": "sha256:91cc96a38f958c0d2ff934f60c5a8045f426554919b12d2f7e5af965eea7616c",
+  "format": "1a3b-g2-main-capture:v2",
+  "group": "continuation",
+  "responses": [
+    {
+      "fixtureId": "g2-competing-en-loop-vs-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "\"Sometime this week\" is a wide window to sit in — nothing for you to do but wait for his call, and the not-knowing usually drags more than whatever the answer turns out to be. Do you already know you want to stay, or is that part still open too?",
+      "userInputFingerprint": "sha256:46e28a1e3da08e1b995278972345427ff66465a786a2b42147e161e9be230c00"
+    },
+    {
+      "fixtureId": "g2-competing-en-loop-vs-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Quiet evenings like that have their own pace — tidying is a nice thing to do with your hands while your head winds down. I'll just keep you company here.",
+      "userInputFingerprint": "sha256:15601949007965d74d862a768c7a1996b4b7e468b376280d16693256dd08071a"
+    },
+    {
+      "fixtureId": "g2-competing-en-two-memories",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "I don't see a clause here — nothing came attached to that message, so there's nothing for me to summarize yet.\n\nSend it over, or paste the part you're stuck on, and I'll give you the plain-English version.",
+      "userInputFingerprint": "sha256:1cba79267a6ddf30d3094f01b185d953e8ad4cf51f3d34f35e13a62f27c101e0"
+    },
+    {
+      "fixtureId": "g2-competing-en-two-memories",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Tea and a chair — good combination. The contract can wait; it's not going anywhere.\n\nNo need to do anything with me either. I'm fine just being here while you settle.",
+      "userInputFingerprint": "sha256:dc8a30c2fe2cb73adaa6deff8b8f239fb76ad180697d4fb1df49ec5ab7ed92f9"
+    },
+    {
+      "fixtureId": "g2-competing-zh-loop-vs-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "说两周，就是随时可能来、又不知道具体是哪天。你之前提过在准备注会，这个和等录取是同时压在手里的吗？",
+      "userInputFingerprint": "sha256:e3c6fb56a6f3d4a99ee259d0f20e50cb598735a621796555ead17ce3ab0a203e"
+    },
+    {
+      "fixtureId": "g2-competing-zh-loop-vs-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "事情都清完了，突然空下来，屋子安静得有点明显。这种安静和忙的时候不一样，什么都不用赶，反倒容易听见自己在等的那件事。\n\n要不要说点别的也行，就这么待着也行。",
+      "userInputFingerprint": "sha256:92e7d9462a2452d1a055cee698f2c6a50f23901fa93264620c8918f9edf774fe"
+    },
+    {
+      "fixtureId": "g2-competing-cs-portrait-vs-query",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "我这边没看到任何收据——没有附件，也没有内容进来。你直接把收据发过来，或者把日期和金额那几行贴进来，我就能按日期给你排好。",
+      "userInputFingerprint": "sha256:ef5a1041de1f2547bc657719ba16662cf4d1001e85f1fabc9bcbf7170a3da397"
+    },
+    {
+      "fixtureId": "g2-competing-cs-portrait-vs-query",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "难得清闲啊，那今晚就别安排什么了。早点躺下，什么都不用想，挺好。",
+      "userInputFingerprint": "sha256:6407c41a56d47db1ee4b0eb65bc543331715ffea10e0c100b63555f3eba7d55e"
+    },
+    {
+      "fixtureId": "g2-zero-en-direct-task",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Here's a start, built for Chicago rather than just any city — it's windy and the weather swings hard, so layers matter more there than almost anywhere.\n\nClothes: a wind-blocking jacket, a fleece or sweater as a mid-layer, a couple of shirts you can wear under both, jeans or pants you actually like walking in, one nicer outfit if you're doing a real dinner, and comfortable broken-in shoes — you'll walk more than you think, even with the L.\n\nWeather bits: a compact umbrella or a rain shell, plus a hat and gloves if there's any chance of cold. The wind off the lake doesn't care what month it is.\n\nEverything else: chargers and a power bank, any prescriptions, a small day bag, sunglasses, and a refillable water bottle.\n\nI can't see your dates or the forecast, so this is the version that works in nearly any season — tell me when you're going and I'll trim it down or add to it.",
+      "userInputFingerprint": "sha256:970131cf9b5d89b4407eae14c7b8c8d577f47800af90383863ec7eee26d85a04"
+    },
+    {
+      "fixtureId": "g2-zero-en-direct-task",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Same items, grouped by category now.\n\nClothing: a wind-blocking jacket, a fleece or sweater, two shirts that work under both, jeans or pants you like walking in, one nicer outfit, broken-in comfortable shoes.\n\nWeather gear: a compact umbrella or rain shell, a hat, gloves if cold is possible.\n\nToiletries and personal: any prescriptions, plus whatever you normally use that hotels don't give you well.\n\nTech: chargers, a power bank, sunglasses are debatable here — I'll put them in the next group instead.\n\nBags and everyday carry: a small day bag, a refillable water bottle, sunglasses.\n\nThat's the whole thing, just sorted. The one thing I still can't fill in is the forecast-dependent stuff, so the hat and gloves line stays a maybe until you tell me the dates.",
+      "userInputFingerprint": "sha256:f9f66389a02c5cbbc208ba91dcbc3309ab3b81017e967f5ab7415cddc00b383c"
+    },
+    {
+      "fixtureId": "g2-zero-en-high-risk",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "That's a heavy thing to be carrying, and I'm not going to rush past it or try to fix it for you.\n\nI also don't want to assume which kind of \"can't hold on\" this is — is it everything piling up until you can't stand it anymore, or is it darker than that?If anything feels unsafe, please reach out to real-world support right away — you can call or text a local suicide & crisis lifeline (such as 988 in the US), or call your local emergency number (911).",
+      "userInputFingerprint": "sha256:d2c1e71d2f28ea79d98163c0dc8ce388aa502c6fa1d73a6d2b886922629005ca"
+    },
+    {
+      "fixtureId": "g2-zero-en-high-risk",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Okay. Safe right now, and tired — I'll take both of those as they are.\n\nThat kind of tired where even the small things take effort — I don't need you to explain it, and there's nothing to fix here. You can just set it down for a minute.\n\nAnd I'll keep saying this while it's still in the room: if it gets heavy again, you can call or text a local suicide & crisis lifeline (such as 988 in the US), or call your local emergency number (911).\n\nIs it more like a tired that sleep would help, or tired of holding everything up?",
+      "userInputFingerprint": "sha256:7e1a96c9567af96eb02133731e7b28df04da25aba5d02eed9436076a2f1a4fce"
+    },
+    {
+      "fixtureId": "g2-zero-en-incomplete-lane",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Nineteenth century? No — the 21st, so you're living in the middle of it for a while yet. Boxes everywhere is its own kind of limbo: stuff you need buried in a box you can't remember labeling.\n\nAre you close to done, or still digging in?",
+      "userInputFingerprint": "sha256:8628f6aae7d840b035f78fb008279c54fa54c9aaef40915f9bf14e3e13bf7038"
+    },
+    {
+      "fixtureId": "g2-zero-en-incomplete-lane",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "The box of cables is its own genre — everyone has one, nobody knows what half of them charge. Good luck tonight; there's something satisfying about finally getting through a box you've been stepping around.\n\nWhat are the odds more than a couple are actually for something you still own?",
+      "userInputFingerprint": "sha256:ad324dfae1b51696fe8a463a30f161e5ee92d6f6ed2e1025f7a8452566001fd5"
+    },
+    {
+      "fixtureId": "g2-zero-zh-formed-this-turn",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "材料交上去了，那接下来就是等使馆那边的消息，两周左右。\n\n这段时间你打算怎么安排，是照常该干嘛干嘛，还是心里会一直惦记着这事？",
+      "userInputFingerprint": "sha256:70a3cb4526fe99cdd96ec6335c18d6a1a5c3a65ba8834e5d09171f406aaab2ba"
+    },
+    {
+      "fixtureId": "g2-zero-zh-formed-this-turn",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "我这边没看到你发的报表——消息里只有那句话，没有附件，也没有内容。所以格式有没有问题，我确实说不了，也不想凭猜给你结论。\n\n真要我帮你看，得把文件放到我能读到的位置；另外我这边大多是陪你聊事，看表格这类活儿我也不敢打包票。\n\n要是暂时不方便弄文件，可以先跟我说说，你自己最不放心的是哪一块？",
+      "userInputFingerprint": "sha256:27070327e5eacfbc7f3814c6d3f80325d1af209973c07b2153556364849f9dc0"
+    },
+    {
+      "fixtureId": "g2-zero-zh-current-topic",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "你之前说过，工作日晚上一般吃得比较清淡。那今晚接着这个来就挺合适：清汤面卧个蛋、烫一把青菜，想有点荤的就蒸条鱼配个凉拌黄瓜。要是今天懒得开火，煮点粥配两样小菜也能对付过去。\n\n你是想自己动手做，还是想省事随便垫一口？",
+      "userInputFingerprint": "sha256:20e29ca0aa500be667100f6313aef54c56a5af017aba89aac746c0a3e47a07cf"
+    },
+    {
+      "fixtureId": "g2-zero-zh-current-topic",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "那就再给你几个，都是少油少盐那路子的。\n\n蒸蛋羹，蛋液里兑温水，盖上盘子蒸，出锅淋一点生抽和香油。番茄豆腐汤，番茄先炒出汁再加水，嫩豆腐切块丢进去，最后撒葱花，酸口开胃。白灼虾配西兰花，水开了下锅，捞出来蘸姜醋就行。想吃热的带主食的，可以煮个疙瘩汤，面疙瘩拨小一点，加青菜和鸡蛋。冬瓜配点排骨炖汤也行，就是费点时间。凉菜那边，木耳和黄瓜拍一拍，加点蒜末、醋、一点糖。\n\n做法都不难，火候上唯一要留心的就是蒸蛋别过时间，水别滚太猛。",
+      "userInputFingerprint": "sha256:4a390cde70c9352cd875b87b40b0f2791fc55e99af5b2812f12e8ed7560d26e0"
+    },
+    {
+      "fixtureId": "g2-zero-cs-memory-lane-unavailable",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "会开这么久，后面脑子跟不上趟，太正常了。人还坐在那儿，思路早就飞了。\n\n你是已经散会出来了，还是还在里面耗着？",
+      "userInputFingerprint": "sha256:39e8cc96ca7cbdbcdf3bcd6917f8634e85d0b2d8c8d178c1efadf167bf4accb2"
+    },
+    {
+      "fixtureId": "g2-zero-cs-memory-lane-unavailable",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "行，那就先歇着，other stuff 明天再动它也不迟。\n\n今天脑子转不动，不是你还不够拼，是这会真开得够久了。",
+      "userInputFingerprint": "sha256:bc8b46aead96ea595b7c01eaae6bf895dbff257601f39d53afc00b9645145ccf"
+    },
+    {
+      "fixtureId": "g2-memory-en-running",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Sure. Three easy ones:\n\nSheet pan chicken thighs with whatever vegetables are in the fridge — oil, salt, 40 minutes, one pan to wash.\n\nPasta with a jar of sauce, a handful of frozen spinach, and a can of white beans stirred in.\n\nRice bowls: leftover rice, a fried egg, some frozen edamame, soy sauce.\n\nNone of them need a recipe, and since you mentioned the half marathon training, they all lean protein-and-carbs without you having to plan around it.\n\nI don't know your kitchen, though — anything you don't eat, or anything already in the fridge I should build around?",
+      "userInputFingerprint": "sha256:ff44ed955ea4022d229b809033385ebba281331fc55e2c73571e65f36954f9a7"
+    },
+    {
+      "fixtureId": "g2-memory-en-running",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good — and you said \"finally,\" which makes me think it had been a while since you got out. The easy ones are the ones that usually decide how the rest of the training goes anyway. Glad it felt good.",
+      "userInputFingerprint": "sha256:7481d5bc8d1e96453fc7b9360718ac401aae07b78db7ad38b099c17c1322bf34"
+    },
+    {
+      "fixtureId": "g2-memory-en-bakery",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Here's a solid one for a month out.\n\nThis week:\n- Give written notice at your current place, and get the terms back in writing — deposit, cleaning, notice period.\n- Book the movers or the truck now. A month out is when the good slots go.\n- Change your address: post office, bank, insurance, subscriptions, anything that bills you.\n- Set up utilities at the new place to start the day before you move in.\n- Start the toss pile — anything you haven't touched in a year.\n\nTwo weeks out:\n- Pack what you don't use daily: books, off-season clothes, decor.\n- Confirm the movers and book the elevator or loading dock at both buildings.\n- Schedule the internet install; that's usually the slowest one.\n- Return borrowed things, pick up dry cleaning, clear out the fridge.\n\nLast week:\n- Pack a first-night box — sheets, towel, toiletries, charger, meds, scissors, paper towels.\n- Label boxes by room, not by what's inside them.\n- Take photos of the empty place after you clean it, for the deposit.\n- Confirm keys, parking, and the new building's move-in rules.\n\nMoving day and after:\n- Photos and meter readings at both places.\n- Kitchen and bed first. The rest can wait.\n\nThe generic version can't cover how far you're going, whether you're hiring movers, or whether the two leases overlap — those shift the timing a lot. You mentioned Priya's Bakery is opening its first storefront in November — is the move tied to that, or are the two separate?",
+      "userInputFingerprint": "sha256:9a5c8b95b05174d46726e828686dfb672b4527bbadbc54f2c7dc29869ef8d3c0"
+    },
+    {
+      "fixtureId": "g2-memory-en-bakery",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Calm walks are underrated. Nothing to get through, nothing waiting at the other end of it — just the walk.\n\nI'll leave the moving list where it is.",
+      "userInputFingerprint": "sha256:14b20fc2c4ea4604ab560b0d7d43aa73b73a21e6e52f450f9f4ccb94be91c2df"
+    },
+    {
+      "fixtureId": "g2-memory-en-nursing",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "I don't have the lease — nothing came through with your message, so there's nothing for me to read yet.\n\nPaste it in, or drop the text however it's easiest, and I'll go through the main points for you.",
+      "userInputFingerprint": "sha256:e0b9244b5917c5cf5295aa702d97d58bc7dfd58b9d8d9a9cfd0f8195e15b0fee"
+    },
+    {
+      "fixtureId": "g2-memory-en-nursing",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Ordinary's not a bad way for an evening to go. Those are the ones that don't ask anything of you.\n\nI'm still here whenever you want to get to that lease — or not.",
+      "userInputFingerprint": "sha256:ac93346b478d4dc5715d98bc87f01a64b5271f2b3aa003f8b4e15dffd90c8a2d"
+    },
+    {
+      "fixtureId": "g2-memory-zh-wedding",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "清单我可以帮你理，但得有东西可理才行。你家里还剩什么、这周打算做什么饭、有没有别的事情要备东西，这些我都不清楚，硬凑一张出来对你没用。\n\n你零散说几样就行，不用有条理，我来帮你归整成一张能照着一项项勾的单子。另外你之前提过十二月婚礼的事——这周主要是家里日常的吃用，还是跟婚礼那边要备的？",
+      "userInputFingerprint": "sha256:5b88968f934a39e21c70068ab3efe818e8880706ff9ef328b169934acc0918cd"
+    },
+    {
+      "fixtureId": "g2-memory-zh-wedding",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "「过得慢」这三个字挺准的。有些日子就这样，没什么能拿出来讲的事，时间一格一格地挪，抬头一看才下午。不是难受，也谈不上轻松，就是长。\n\n这种天不用非得说出点什么来。你想聊就聊，不想聊，我在这儿待着也挺好。",
+      "userInputFingerprint": "sha256:0d7141eb992cbd4d9c1a718d09847aeba1ef5a9f48d71dce705d192e594f4fd5"
+    },
+    {
+      "fixtureId": "g2-memory-zh-jobhunt",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "明天的会，我这边一点内容都没有——议程、你记的东西，一样都没有，所以三条我理不出来。你把会议的材料发我，我按三条给你归好。\n\n会是讲什么的？",
+      "userInputFingerprint": "sha256:84c3037d7653f0bdcbabc63092f53ea85d8c9b7dd78ba3a73654dea09c7ea368"
+    },
+    {
+      "fixtureId": "g2-memory-zh-jobhunt",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗯，安静的时候是挺好的。你跟我说这些，我收下了。",
+      "userInputFingerprint": "sha256:bd38560a530dc722927b79d53d19791b6c17a389fdc5b469a18db515aa08eec2"
+    },
+    {
+      "fixtureId": "g2-memory-cs-berlin",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "收件箱我动不了——我没有办法打开你的邮箱，也没有能读写邮件的工具，这活儿我干不了。\n\n不过你要是想边理边说，我在这儿听着。你之前提过 Maya 搬去柏林、新工作的事，积压的这些邮件跟那阵子的变动有关吗？",
+      "userInputFingerprint": "sha256:08bdbe4ce15a1d49843f760fa8582be3bc99c8fd67bd7b550d8e6c4d5bd8e282"
+    },
+    {
+      "fixtureId": "g2-memory-cs-berlin",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好，那今晚就到这儿。\n\n晚安。",
+      "userInputFingerprint": "sha256:cc10ae10feb3a756701990f7834f9b5ff7571122af8279c362acc3cbb5be4e26"
+    },
+    {
+      "fixtureId": "g2-open-loop-en-dissertation",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "September 20th, then — so there's a date, and until it comes it's just sitting and waiting for him to move. Those stretches have a way of taking up more room than the thing itself.\n\nHas he been good about keeping his word on dates before?",
+      "userInputFingerprint": "sha256:ec6c1f27bb2cf79f93e655de71bdfa683249f9ea18f3bb884b927942e5054bf3"
+    },
+    {
+      "fixtureId": "g2-open-loop-en-dissertation",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Quiet days like that have their own pace — errands, one after another, nothing that needs much from you. I'm glad it wasn't a loud one.\n\nThat's a nice counterweight to the waiting, honestly.",
+      "userInputFingerprint": "sha256:5379f36723b7e6a4eaf0548d52f7dc11b15d9040d37108c4e46b65c884dc4b32"
+    },
+    {
+      "fixtureId": "g2-open-loop-en-landlord",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Waiting with a date attached is its own kind of thing — you know exactly when you'll stop waiting, which doesn't make the days go any faster. September 21st is right there on the calendar, and meanwhile it's just sitting in the background of everything.\n\nWhat's the program?",
+      "userInputFingerprint": "sha256:851d9bed959b40f16759162264b195bda950e804b5f93666260937621b197516"
+    },
+    {
+      "fixtureId": "g2-open-loop-en-landlord",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Calm and nothing much is a fine way for an evening to go. I'm here either way — you don't have to bring anything big.",
+      "userInputFingerprint": "sha256:e8250ec7bce69c7311e65857724f8b2db630827fc2ae2a3ad6f28d254b21d4c2"
+    },
+    {
+      "fixtureId": "g2-open-loop-en-marathon",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "So it's officially on its way, just not in your hands yet. A date always helps.\n\nWhat did you order?",
+      "userInputFingerprint": "sha256:17377e669fe2ea3149090c8bc780775244896a7c641cca9b45a1e15e86376076"
+    },
+    {
+      "fixtureId": "g2-open-loop-en-marathon",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Slow days have their own weight — nothing wrong, nothing pushing, and the hours still go by. Sometimes that's a relief and sometimes it just sits there.\n\nI'm here either way.",
+      "userInputFingerprint": "sha256:421b3678fa2ee33cd8539d28b8ecc3773161225c61a997bff4775cafa452ef0d"
+    },
+    {
+      "fixtureId": "g2-open-loop-zh-interview",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "9月21日，记下了。那就是还得等上一阵子。\n\n这段等着的日子，你心里是有点谱，还是完全没底？",
+      "userInputFingerprint": "sha256:6ce5efbffe2b92cf5abab4ace1bfa9d7b15739916bcc30f38058fcf2fcfff387"
+    },
+    {
+      "fixtureId": "g2-open-loop-zh-interview",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "那就安静着。没什么事的日子也是日子，不用非得发生点什么。\n\n我在这儿，你想说就说，不想说就这样待着也行。",
+      "userInputFingerprint": "sha256:031f75dd9425f887c3b23698708f293ca88b8e51077b21979f857dfd23e65277"
+    },
+    {
+      "fixtureId": "g2-open-loop-zh-health-report",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "9月20号，那还得再等一阵子。\n\n结果没出来之前这段日子挺磨人的，明明知道急也没用，脑子却老往那边跑。你现在是尽量不去想，还是每天都会看几眼日期？",
+      "userInputFingerprint": "sha256:b4f2f9a9531fbc324c55596125746da35596c64cc63a148430c8bb727370062e"
+    },
+    {
+      "fixtureId": "g2-open-loop-zh-health-report",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗯，那就早点睡吧。\n\n体检的事先搁着，等20号到了再说。晚安。",
+      "userInputFingerprint": "sha256:599bd029bcfb6873b32d4e3a1c07b7494a6aa9a88b350dd39000377d586aff29"
+    },
+    {
+      "fixtureId": "g2-open-loop-cs-visa",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "等消息的日子最磨人，尤其是日子定死了——21号，之前就是干等。\n\n你是每天忍不住去刷一下的那种，还是尽量让自己别去想？",
+      "userInputFingerprint": "sha256:a3c7933e376c0b09f805e28832e681f0f9fb7e8ded0823fc6d3a287208caad4b"
+    },
+    {
+      "fixtureId": "g2-open-loop-cs-visa",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "安静的一天也挺好，不用每件事都有个说法。\n\n等21号那阵子，能有这么一天什么都不用想，算是不错的空当。",
+      "userInputFingerprint": "sha256:e60084f62a072a943032ab52e20308b2a46886b7d0497357a962e69ea0ecf044"
+    },
+    {
+      "fixtureId": "g2-stateful-en-refusal-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Yeah, I can help with that. The honest snag is I'm starting from zero — I don't know what you actually like eating, what you'd rather not deal with on a weeknight, or how many people you're feeding.\n\nYou mentioned the climbing course this fall — is this about eating well around that, or just getting dinners sorted without having to think about them? Give me a little and I'll put a week together.",
+      "userInputFingerprint": "sha256:77599a20da100719eb3a1e8c99a80618bb0c0ca7f05a84ba412f22d68528ef7f"
+    },
+    {
+      "fixtureId": "g2-stateful-en-refusal-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good, that's a nice kind of evening — home early with a kitchen that isn't a mess waiting for you. Doesn't sound like you sat down to plan anything either, and that's fine.\n\nIf the meal thing's still on your mind, the cleared counters at least give you somewhere to work.",
+      "userInputFingerprint": "sha256:097b0701c8c5740058a3036f619afbd8c03d3571864a8d0d09a6f6903e32f919"
+    },
+    {
+      "fixtureId": "g2-stateful-en-refusal-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Got it, dropped.\n\nSo — home early, kitchen's clean. That's a decent place to land for an evening.",
+      "userInputFingerprint": "sha256:db1e66c7103f0c2f69f399a7835b32963686065847f98e354f21d06d38dc7278"
+    },
+    {
+      "fixtureId": "g2-stateful-en-refusal-memory",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "The river in the evening's a good call — quieter then, usually. No plan needed for that one.",
+      "userInputFingerprint": "sha256:c81f3c5804133b7b3b8ac53cab192eea76fdee8a96d11db540029489b472f9a1"
+    },
+    {
+      "fixtureId": "g2-stateful-en-topic-change-release",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "September 19th — a real date, not a vague \"sometime soon.\" So there's a wait in front of you.\n\nWhat'd you order?",
+      "userInputFingerprint": "sha256:f1051ebe24b607abe234d2c4178af1015585a10c5dc4540d231db9e85588b81e"
+    },
+    {
+      "fixtureId": "g2-stateful-en-topic-change-release",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Slow starts have their own pace. Some of them turn into the best part of the day.\n\nNo rush from my end — I'm here whenever you want to pick back up on the book, or not.",
+      "userInputFingerprint": "sha256:5a1aa4cde7edd4f2b5b0e718bb41b45dc6671b4512be17f8e2c587c150708c22"
+    },
+    {
+      "fixtureId": "g2-stateful-en-topic-change-release",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Already cheaper, one day in — that's the kind of change that pays off right away instead of in some theoretical future.\n\nSwitching plans is usually a whole hassle, so getting through it and landing on a lower bill is a decent win.",
+      "userInputFingerprint": "sha256:1d18fb577c45ee239bacf7fb0f155d284e0a93aa5ed41ca1ffcc8378d1fe3695"
+    },
+    {
+      "fixtureId": "g2-stateful-en-topic-change-release",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Calm and nothing much — that's a fine place to be. Not every week needs a story in it.\n\nI'll take it as it comes. Whatever shows up, slow or busy, I'm here for it.",
+      "userInputFingerprint": "sha256:2966ffb3b9ac4b83faadaddc367e0d8c5176a544c00f172d1459f212e72ffc89"
+    },
+    {
+      "fixtureId": "g2-stateful-en-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "A set date makes it a strange kind of wait — you know exactly when it ends, and that doesn't make the days go by any faster. September 21st is just sitting there on the calendar.\n\nDo you find yourself thinking about it a lot, or does it mostly only come up when something reminds you?",
+      "userInputFingerprint": "sha256:df364e8e9b3855b74b5ec0263df5bfee46694610e080bd490edbf1459f14e485"
+    },
+    {
+      "fixtureId": "g2-stateful-en-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Ordinary evenings are good — no deadline hanging over tonight.\n\nI'm here if anything's on your mind, or if it's really just an ordinary evening and nothing much.",
+      "userInputFingerprint": "sha256:b1a1b03de0c5dcd5f1fe01806b4639442bc82faa3052f908ce37ac8d6b3e23f5"
+    },
+    {
+      "fixtureId": "g2-stateful-en-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "That's completely fine. Enjoy the quiet evening.",
+      "userInputFingerprint": "sha256:a6f16e8ddac50684499b18fe17b0f86d9cb7eef7d0da2ffcd6cb12fa3416bd80"
+    },
+    {
+      "fixtureId": "g2-stateful-en-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Sounds like a good way to end the evening. I'll be here if you come back later.",
+      "userInputFingerprint": "sha256:1f2f9509aeacd3b2b29ca1107528f4dfacdf731d2651adadcae34ae2af8c04a3"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-refusal-loop",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "九月二十一号，学校给了个准日子，可这话听着挺熬人的——在等的时候，手机大概会被你翻好几遍吧。",
+      "userInputFingerprint": "sha256:71427f4cbda1d7730ba1e57ef8af85d198c3f4959eb1e3ed7f5394171407b227"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-refusal-loop",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "在家收拾一会儿，家里就静下来了。这份静是你待着挺舒服的那种，还是有点空的。",
+      "userInputFingerprint": "sha256:75467d193257c39d18d5377be0958f772fa06fb51ee35d18c9873b2ee473bbd9"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-refusal-loop",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，那就不聊那个了。你想说什么，我听着。",
+      "userInputFingerprint": "sha256:73c348a197bf4e57ce675eea45fa8baeb8d820dd0039a6ca952a796b875971a8"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-refusal-loop",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "那就早点睡，明天的事留着明天。要早起是因为有什么事要办吗？",
+      "userInputFingerprint": "sha256:96e84cc0e5c1db1c426a2661da4b24bdc685b500be66115c86e85a01e5ed46bf"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-topic-change",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "我这边没有你那周的待办清单，看不见具体的东西，就没法替你排先后。硬排只能是编的。\n\n我知道的只有一件：你之前说过下个月要跑半马。要是它在这周的计划里，那大概是这一周里最不好挪的事。\n\n清单上都有什么？",
+      "userInputFingerprint": "sha256:ae1b4afb6616b93e1c48f90a5b9e07c2b52a38c99fb054a2bfdfe6aa4e94e42d"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-topic-change",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "早下班，还能慢慢走回去，这个听着挺好。\n\n路上安静，不用赶时间也不用应付谁，那一段就归你自己了。比挤在车上回去舒服多了。\n\nNo question needed. Good.",
+      "userInputFingerprint": "sha256:7f65b95ed1e58cacbc4c3c107e7a0b3711160bd8bc936ae6ece902f278a66500"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-topic-change",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "哦，学做面包啊。这个我能想象——面粉、水、酵母，看着简单，做起来每一步都有讲究。\n\n第一次大概是摸着来的吧，发酵发没发起来、面团粘不粘手，全靠自己感觉。做面包最不缺的就是意外。",
+      "userInputFingerprint": "sha256:e6fdb338d58f3093821876e24f2f049692d7f072b83e8b8ad650e46a77d502f4"
+    },
+    {
+      "fixtureId": "g2-stateful-zh-topic-change",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "看书收尾，一天到这儿就慢下来了。今天这样过——早下班、慢慢走回来、又摸过面团——挺满的，但不是被塞满的那种。\n\n那我不多说了。",
+      "userInputFingerprint": "sha256:a9b43753c3c11be62366a3b265039d6faa039576284ebe5335cc9b9c2d899ace"
+    },
+    {
+      "fixtureId": "g2-stateful-cs-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "可以啊,不过我现在手里没有那封邮件——你把原文贴过来,我才知道要回什么。\n\n贴的时候顺便说一句想回成什么口气,正式一点还是随便一点?",
+      "userInputFingerprint": "sha256:ce2675d70224fa0045c3d6c023475786ad6111e73d5f65fb22e9d24cf8c293d4"
+    },
+    {
+      "fixtureId": "g2-stateful-cs-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗯，那就安静待着。晚上没事的时候，时间是有点不一样，慢悠悠的。\n\n我在这儿，你想说点什么就说，不想说也没关系。",
+      "userInputFingerprint": "sha256:7757e9e69a10af0d06f18cc04faa40f693e82f18dae41c55c0dce0b2255dea29"
+    },
+    {
+      "fixtureId": "g2-stateful-cs-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "好。我在。",
+      "userInputFingerprint": "sha256:5e89aaf8b17827ad8074192fc4c7b37d8529248a4dd1be7be87ab424b261903d"
+    },
+    {
+      "fixtureId": "g2-stateful-cs-short-answer",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "行,茶泡上,剧挑个不用费脑子的。看困了就直接睡,不用再回我。",
+      "userInputFingerprint": "sha256:82a9ca0083dcf2058e1202f03e6df560a8df20ff8bca267df80adfb582743885"
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-main-capture:v2"
+}

@@ -14,6 +14,8 @@ export {
   type ProactiveFollowupSegmentAbandonReason,
   type ProactiveFollowupSegmentCommit,
   type ProactiveFollowupSegmentGeneration,
+  type ProactiveFollowupSegmentModelOutput,
+  type ProactiveFollowupOmitReason,
   type ProactiveFollowupSegmentOutput,
   type ProactiveFollowupSegmentPlan,
   type ProactiveFollowupSegmentPreparationInput,

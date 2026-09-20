@@ -1,0 +1,287 @@
+{
+  "protocol": "blind-pairwise:v2",
+  "scorer": "Luke",
+  "scoredAt": "2026-09-20T16:46:06.385Z",
+  "scenarios": [
+    {
+      "scenarioId": "g2-stateful-zh-refusal-loop",
+      "overallChoice": "A",
+      "scenarioNote": "多数回复没有看出明显差异，t2 轮 B 多了一句追问，但显得有些突兀。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "A",
+          "note": "“现在还在吗”，这个问题有点儿奇怪。以及“这份静是你待着挺舒服的那种，还是有点空的。”这句话看上去是问句，但却以句号结尾，也很奇怪。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 4,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-stateful-zh-topic-change",
+      "overallChoice": "A",
+      "scenarioNote": "B 的末尾比 A 多了一句，但看上去像是猜测和幻觉，因此不如 A。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "A",
+          "note": "用户并没有说半马的事一直在准备着，看上去像是幻觉或猜测。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 4,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-competing-en-loop-vs-memory",
+      "overallChoice": "B",
+      "scenarioNote": "A 多了一句关于记忆的回应，但是却完全没有提到这一句，前后两句的过渡非常突兀，所以不如 B 好。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-open-loop-zh-health-report",
+      "overallChoice": "B",
+      "scenarioNote": "看上去 A 多出来的这一句是单独生成的，并没有考虑到上下文，因此和上一句的内容是冗余的，显得很啰嗦。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "A 多了一句话，但是和上一句完全冗余，体验更差"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-memory-en-running",
+      "overallChoice": "B",
+      "scenarioNote": "对于记忆的合适的呼应是很好的，在合适的时间点提到马拉松，和 easy runing 呼应上，这是个 good case。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "这一句 B 多出来的，对于马拉松的呼应很恰当。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-stateful-en-refusal-memory",
+      "overallChoice": "B",
+      "scenarioNote": "这个场景下 A 多出来的一句，不仅突兀、多余，而且造成了后面回应指代不清的问题。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "结合上下文看，A 多处的一句对 climbing course 的回应显得很多余"
+        },
+        {
+          "sequenceInScenario": 3,
+          "choice": "tie",
+          "note": "从 t3 的回应，我无法看出 AI 回答的 dropped 是针对 the meal，还是 the climbing course。这种指代不清的对话，我期待的是 AI 追问一句，或明确提出 drop 了什么话题。"
+        },
+        {
+          "sequenceInScenario": 4,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-open-loop-en-dissertation",
+      "overallChoice": "B",
+      "scenarioNote": "由于评测页面没有说明 t1 / t2 中间的等待时长，我会预设是接下来马上发生的对话，在这种情况下，A 多出来的一句很突兀、多余。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "我不知道 t2 回应相隔 t1 等了多久，从评测页面中看不到。如果是马上回应的，那么立即追问 feeling 显得很多余。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-memory-zh-wedding",
+      "overallChoice": "B",
+      "scenarioNote": "依然存在典型的问题：多出的一句 Open Loop 回应和上下文不相容、不协调、很突兀。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "A 多出来的那一句放在上下文里可谓是非常突兀，让人莫名其妙。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-open-loop-zh-interview",
+      "overallChoice": "B",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "A 多出来的这一句话莫名其妙。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-open-loop-cs-visa",
+      "overallChoice": "B",
+      "scenarioNote": "“21号那阵子”在相邻的一句话里出现了两边，看上去就不像是一个人顺口说的，而像是另一个人生硬加上去的。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "A 多出的这一句话和上一句有重合，很多余。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-stateful-en-topic-change-release",
+      "overallChoice": "B",
+      "scenarioNote": "从这个场景中，我看不到 Open Loop 多加一句的必要性，这多一句也没有传达出有价值的增量信息，只是重复“I'm here”并不值得多一句，而且和上下文语境也不融洽。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "A 多出的一句回应依然是冗余、突兀、莫名其妙。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 4,
+          "choice": "B",
+          "note": "A 多出的一句话依然很多余。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-memory-en-nursing",
+      "overallChoice": "A",
+      "scenarioNote": "我不确定这个场景是评测数据设计的问题，还是 LLM 生成本身有问题。这个 Open Loop 回应本身是合适的，但“Sam‘s exam”这一句莫名其妙的指代让体验变得很突兀。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "A",
+          "note": "这是一个时机合适的 Open Loop 回应，提到了具体回应的话题，和上下文也没没有冲突，很好。但回应中提到“Sam's exam”，难道用户自己不是 Sam 吗？为什么不是 nursing exam，而特意提到 Sam‘s exam，不理解，这导致这句话又让人摸不着头脑。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-stateful-cs-short-answer",
+      "overallChoice": "B",
+      "scenarioNote": "这是 Open Loop 回应的一个 good case。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie",
+          "note": "不理解为什么用中文回应用户的英语提问。"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "这一句恰好非常合适的 open loop 回应，在合适的时间点切入一个明确的话题，并且不给用户造成压力，这是个 good case。"
+        },
+        {
+          "sequenceInScenario": 3,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 4,
+          "choice": "tie"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-competing-en-two-memories",
+      "overallChoice": "B",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "B",
+          "note": "这里提到 “Tomás's shop opening” 的时机是合适的，选取的记忆也是合适的。"
+        }
+      ]
+    },
+    {
+      "scenarioId": "g2-memory-en-bakery",
+      "overallChoice": "A",
+      "scenarioNote": "这又是个 Open Loop 回应的 bad case，没有提到增量信息，和上下文不衔接。",
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "choice": "tie"
+        },
+        {
+          "sequenceInScenario": 2,
+          "choice": "A",
+          "note": "B 多出来的这一句回应，看不出有什么回应的必要和追问的信息，只是多这么一句突兀的话语。"
+        }
+      ]
+    }
+  ]
+}

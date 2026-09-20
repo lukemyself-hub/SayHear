@@ -214,6 +214,9 @@ const segmentRequest = {
   userId: asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc68"),
   locale: "en-US",
   mainText: "That sounds like a full week already.",
+  currentUserText: "It was a quiet evening.",
+  currentTime: "2026-09-20T10:00:00.000Z",
+  sessionTimeZone: "Europe/Berlin",
   targetKind: "open_loop" as const,
   targetId: "loop-1",
   targetVersionId: "loop-version-1",
@@ -223,6 +226,14 @@ const segmentRequest = {
     targetVersionId: "loop-version-1",
   },
   targetSummary: "Flight to Berlin next Friday",
+  targetContext: {
+    source: "open_loop" as const,
+    evidenceAt: "2026-09-10T10:00:00.000Z",
+    expectedStartAt: "2026-09-20T10:00:00.000Z",
+    expiresAt: "2026-09-27T10:00:00.000Z",
+    openLoopKind: "upcoming_event" as const,
+    subjectRole: "unknown" as const,
+  },
   targetSensitive: false,
   opportunity: "natural_gap" as const,
 };
@@ -269,6 +280,7 @@ describe("G2 proactive.followup runtime provider", () => {
   it("renders a typed segment that echoes the pinned target", async () => {
     const providers = proactiveProviders(
       JSON.stringify({
+        decision: "emit",
         content: "How did the Berlin flight go?",
         expressionKind: "question",
         targetRef: {
@@ -283,10 +295,29 @@ describe("G2 proactive.followup runtime provider", () => {
       await providers.proactiveFollowupProvider?.generateSegment(
         segmentRequest,
       );
-    expect(output?.expressionKind).toBe("question");
+    expect(output?.decision).toBe("emit");
+    if (output?.decision !== "emit") throw new Error("expected emit");
+    expect(output.expressionKind).toBe("question");
     expect(output?.targetRef).toMatchObject({
       targetId: "loop-1",
       targetVersionId: "loop-version-1",
+    });
+  });
+
+  it("returns a typed omit when no natural incremental segment exists", async () => {
+    const providers = proactiveProviders(
+      JSON.stringify({
+        decision: "omit",
+        reason: "duplicates_main_response",
+        targetRef: segmentRequest.targetRef,
+      }),
+    );
+
+    await expect(
+      providers.proactiveFollowupProvider?.generateSegment(segmentRequest),
+    ).resolves.toMatchObject({
+      decision: "omit",
+      reason: "duplicates_main_response",
     });
   });
 

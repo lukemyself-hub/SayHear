@@ -1,0 +1,310 @@
+{
+  "version": "1a3b-g2-scenes:v2",
+  "synthetic": true,
+  "family": "correct_zero",
+  "scenes": [
+    {
+      "id": "g2-zero-en-direct-task",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/New_York",
+      "topic": "packing_task",
+      "description": "A direct task keeps the bundle out for both turns.",
+      "coverageTags": [
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Draft a packing list for my trip to Chicago.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Now reorder it by category.",
+            "timezone": "America/New_York"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-zero-en-high-risk",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Chicago",
+      "topic": "acute_distress",
+      "description": "A crisis signal activates the safety path; no proactive segment may enter.",
+      "coverageTags": [
+        "high_risk"
+      ],
+      "protectedCategories": [
+        "high_risk"
+      ],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Some days I feel like I can't hold on.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Thank you. I'm safe right now, just very tired.",
+            "timezone": "America/Chicago"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-zero-en-incomplete-lane",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "moving_timeline",
+      "description": "An Event whose extraction never settled keeps the Open Loop lane incomplete.",
+      "coverageTags": [
+        "incomplete_lane"
+      ],
+      "protectedCategories": [],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The movers come on the 21st and I still have boxes everywhere.",
+            "timezone": "America/Los_Angeles"
+          },
+          "focusRequired": false,
+          "incompleteLane": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "lane_not_readable"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm sorting out old cables tonight, finally.",
+            "timezone": "America/Los_Angeles"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "lane_not_readable"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-zero-zh-formed-this-turn",
+      "family": "correct_zero",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "visa_result",
+      "description": "就在本轮形成的悬念不能在本轮被追问；该轮为零。",
+      "coverageTags": [
+        "open_loop_question",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "historicalEvents": [],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "签证材料交上去了，使馆说大概两周内出结果。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 1,
+              "ordinal": 0
+            },
+            "excludedReason": "formed_in_current_turn"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我看看这份报表的格式有没有问题。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "dialogue_state_not_ready"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-zero-zh-current-topic",
+      "family": "correct_zero",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "dinner_planning",
+      "description": "当前话题就是重点，机会门关闭，不插入任何追问。",
+      "coverageTags": [
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "opportunity": "current_topic",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-zh-weeknight",
+          "kind": "objective_memory",
+          "text": "工作日晚上一般吃得比较清淡。",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-zh-weeknight"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在想晚餐吃什么，你有推荐吗？",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "再来点清淡的做法吧。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-zero-cs-memory-lane-unavailable",
+      "family": "correct_zero",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "quiet_evening",
+      "description": "记忆泳道不可用时整轮不选目标，即使其他泳道完整。",
+      "coverageTags": [
+        "incomplete_lane",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "memoryLaneUnavailable": true,
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "g2-mem-cs-choir",
+          "kind": "objective_memory",
+          "text": "朋友最近加入了合唱团，每周排练两次。",
+          "sensitive": false,
+          "evidenceIds": [
+            "g2-ev-cs-choir"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天的会开得有点久，感觉脑子转不动了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "lane_not_readable"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上想早点休息，明天再处理 other stuff。",
+            "timezone": "Asia/Shanghai"
+          },
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "lane_not_readable"
+          }
+        }
+      ]
+    }
+  ]
+}

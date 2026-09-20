@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SayHear · 盲评 v2</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1e293b;
+        --muted: #64748b;
+        --line: #dbe3ee;
+        --surface: #fff;
+        --soft: #f5f7fb;
+        --blue: #2563eb;
+        --blue-soft: #eff6ff;
+        --green: #16734a;
+        --green-soft: #ecfdf5;
+        --amber: #9a5b08;
+        --amber-soft: #fffbeb;
+        --red: #b42318;
+        --shadow: 0 18px 45px rgba(15, 23, 42, .08);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #eef2f7;
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      button, input, textarea { font: inherit; }
+      button { cursor: pointer; }
+      .page { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 64px; }
+      .hero, .rubric, .sidebar, .scenario-panel, .turn-card, .scenario-judgment {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+      }
+      .hero { padding: 30px 34px; }
+      .eyebrow { color: var(--blue); font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+      h1, h2, h3, h4, p { margin-top: 0; }
+      h1 { margin-bottom: 8px; font-size: clamp(28px, 4vw, 46px); letter-spacing: -.04em; line-height: 1.08; }
+      h2 { margin-bottom: 8px; font-size: 23px; letter-spacing: -.02em; }
+      h3 { margin-bottom: 6px; font-size: 18px; }
+      h4 { margin-bottom: 8px; font-size: 14px; }
+      .hero p { max-width: 820px; margin-bottom: 20px; color: #475569; font-size: 16px; }
+      .chips, .toolbar, .toolbar-actions, .filters, .scenario-meta, .scenario-actions, .choice-buttons {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      }
+      .chip { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: #475569; background: #f8fafc; font-size: 12px; }
+      .chip.blue { border-color: #bfdbfe; color: #1d4ed8; background: var(--blue-soft); }
+      .notice { margin-top: 16px; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; color: #1e40af; background: var(--blue-soft); }
+      .notice strong { color: #1e3a8a; }
+      .toolbar { justify-content: space-between; margin-top: 16px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+      .scorer-field { display: inline-flex; align-items: center; gap: 9px; color: #475569; font-weight: 650; }
+      .scorer-field input { width: 190px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 9px; color: var(--ink); background: #fff; }
+      .scorer-field input:focus, textarea:focus { outline: 3px solid rgba(37, 99, 235, .16); border-color: var(--blue); }
+      .button { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 9px; color: #334155; background: #fff; font-weight: 650; }
+      .button:hover { border-color: #94a3b8; background: #f8fafc; }
+      .button.primary { border-color: var(--blue); color: #fff; background: var(--blue); }
+      .button.primary:hover { background: #1d4ed8; }
+      .button.danger { color: var(--red); }
+      .export-status { width: 100%; color: var(--muted); font-size: 13px; }
+      .export-status.warn { color: var(--amber); }
+      .export-status.good { color: var(--green); }
+      .break-reminder { width: 100%; margin-top: 3px; color: var(--amber); font-size: 13px; }
+      .rubric { margin-top: 16px; overflow: hidden; }
+      .rubric summary { padding: 16px 18px; cursor: pointer; font-weight: 750; }
+      .rubric-body { padding: 0 18px 18px; }
+      .rubric-intro { margin-bottom: 12px; color: #475569; }
+      .rubric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+      .rubric-card { padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
+      .rubric-card h4 { margin-bottom: 5px; }
+      .rubric-card p { margin-bottom: 0; color: #475569; font-size: 13px; }
+      .workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 16px; }
+      .sidebar { position: sticky; top: 16px; padding: 15px; }
+      .sidebar-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 11px; }
+      .sidebar-head strong { font-size: 16px; }
+      .sidebar-count { color: var(--muted); font-size: 12px; }
+      .filters { margin-bottom: 12px; }
+      .filter { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #fff; font-size: 12px; }
+      .filter.active { border-color: #93c5fd; color: #1d4ed8; background: var(--blue-soft); }
+      .scenario-nav { display: grid; gap: 5px; max-height: min(66vh, 620px); overflow: auto; padding-right: 3px; }
+      .scenario-nav button { display: grid; grid-template-columns: 9px 1fr auto; gap: 8px; align-items: center; width: 100%; padding: 8px 9px; border: 1px solid transparent; border-radius: 9px; color: #475569; background: transparent; text-align: left; font-size: 12px; }
+      .scenario-nav button:hover { background: #f8fafc; }
+      .scenario-nav button.active { border-color: #bfdbfe; color: #1d4ed8; background: var(--blue-soft); font-weight: 750; }
+      .scenario-nav button.complete { color: var(--green); }
+      .nav-dot { width: 8px; height: 8px; border: 1px solid #cbd5e1; border-radius: 50%; background: #fff; }
+      .complete .nav-dot { border-color: #34d399; background: #34d399; }
+      .nav-number { color: inherit; font-variant-numeric: tabular-nums; }
+      .nav-locale { color: var(--muted); font-size: 11px; }
+      .excluded { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+      .excluded summary { cursor: pointer; font-weight: 650; }
+      .excluded ul { margin: 8px 0 0; padding-left: 18px; }
+      .scenario-panel { padding: 20px; }
+      .scenario-header { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+      .scenario-title { margin-bottom: 6px; font-size: 24px; letter-spacing: -.025em; }
+      .scenario-progress { flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: var(--soft); font-size: 12px; text-align: right; }
+      .turn-list { display: grid; gap: 14px; }
+      .turn-card { padding: 16px; box-shadow: none; }
+      .turn-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; margin-bottom: 10px; }
+      .turn-label { color: var(--blue); font-size: 13px; font-weight: 800; letter-spacing: .03em; }
+      .turn-locale { color: var(--muted); font-size: 12px; }
+      .user-message { margin-bottom: 14px; padding: 12px 14px; border-left: 3px solid #94a3b8; border-radius: 0 10px 10px 0; background: #f8fafc; }
+      .user-message .label { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+      .user-message p { margin-bottom: 0; white-space: pre-wrap; }
+      .response-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .response-card { min-width: 0; padding: 14px; border: 1px solid #cbd5e1; border-radius: 13px; background: #fff; }
+      .response-card.side-a { border-top: 4px solid #64748b; }
+      .response-card.side-b { border-top: 4px solid #0f766e; }
+      .response-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 10px; }
+      .side-label { display: inline-flex; align-items: center; gap: 7px; font-weight: 800; }
+      .side-letter { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: #fff; background: #475569; }
+      .side-b .side-letter { background: #0f766e; }
+      .metrics { color: var(--muted); font-size: 11px; white-space: nowrap; }
+      .response-text { min-height: 74px; padding: 12px; border-radius: 10px; color: #1f2937; background: #f8fafc; white-space: pre-wrap; }
+      .history { margin-bottom: 10px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); font-size: 12px; }
+      .history summary { padding: 7px 9px; cursor: pointer; }
+      .history-body { padding: 0 9px 9px; }
+      .history-turn { padding-top: 8px; border-top: 1px solid #eef2f7; }
+      .history-turn:first-child { border-top: 0; }
+      .history-turn strong { color: #475569; }
+      .history-turn p { margin: 2px 0 7px; white-space: pre-wrap; }
+      .comparison { margin-top: 14px; padding-top: 13px; border-top: 1px solid #eef2f7; }
+      .comparison-label { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 8px; color: #475569; font-size: 13px; font-weight: 750; }
+      .comparison-help { color: var(--muted); font-size: 12px; font-weight: 400; }
+      .choice-buttons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .choice-button { min-height: 42px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 9px; color: #475569; background: #fff; font-weight: 700; }
+      .choice-button:hover { border-color: #60a5fa; background: var(--blue-soft); }
+      .choice-button.selected { color: #fff; background: var(--blue); border-color: var(--blue); }
+      .choice-button[data-choice="tie"].selected { color: #334155; border-color: #94a3b8; background: #e2e8f0; }
+      .choice-button[data-choice="B"].selected { border-color: #0f766e; background: #0f766e; }
+      .turn-note, .scenario-note { display: block; margin-top: 12px; color: #475569; font-size: 12px; font-weight: 650; }
+      textarea { display: block; width: 100%; min-height: 58px; margin-top: 5px; padding: 9px 10px; resize: vertical; border: 1px solid #cbd5e1; border-radius: 9px; color: var(--ink); background: #fff; font-size: 13px; font-weight: 400; }
+      .scenario-judgment { margin-top: 14px; padding: 16px; box-shadow: none; }
+      .scenario-judgment p { margin-bottom: 10px; color: #475569; font-size: 13px; }
+      .scenario-judgment .choice-buttons { max-width: 640px; }
+      .scenario-actions { justify-content: space-between; margin-top: 16px; }
+      .scenario-actions .button[disabled] { cursor: not-allowed; opacity: .45; }
+      .empty-filter { padding: 16px 8px; color: var(--muted); font-size: 12px; }
+      .context-panel { margin-bottom: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); }
+      .context-panel summary { padding: 11px 14px; cursor: pointer; color: #334155; font-size: 14px; font-weight: 750; }
+      .context-body { padding: 0 14px 13px; }
+      .context-note { margin-bottom: 9px; color: var(--muted); font-size: 12px; }
+      .context-items { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+      .context-item { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 9px; align-items: baseline; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; overflow-wrap: anywhere; }
+      .context-label { display: inline-flex; padding: 1px 8px; border-radius: 999px; color: #475569; background: #eef2f7; font-size: 11px; font-weight: 750; white-space: nowrap; }
+      .context-text { color: #334155; font-size: 13px; }
+      .context-empty { margin-bottom: 0; color: var(--muted); font-size: 13px; }
+      @media (max-width: 980px) {
+        .workspace { grid-template-columns: 1fr; }
+        .sidebar { position: static; min-width: 0; }
+        .scenario-nav { display: flex; max-height: none; min-width: 0; overflow-x: auto; padding-bottom: 3px; }
+        .scenario-nav button { min-width: 160px; }
+      }
+      @media (max-width: 720px) {
+        .page { width: min(100% - 18px, 1480px); padding-top: 10px; }
+        .hero { padding: 22px 20px; }
+        .toolbar { align-items: flex-start; }
+        .toolbar-actions { width: 100%; }
+        .scorer-field { width: 100%; justify-content: space-between; }
+        .scorer-field input { flex: 1; width: auto; }
+        .rubric-grid { grid-template-columns: 1fr; }
+        .scenario-panel { padding: 14px; }
+        .scenario-header { display: block; }
+        .scenario-progress { display: inline-block; margin-top: 10px; text-align: left; }
+        .context-item { grid-template-columns: 1fr; gap: 4px; }
+        .response-grid { grid-template-columns: 1fr; }
+        .choice-buttons { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div class="eyebrow">SayHear · evaluation prototype</div>
+        <h1>盲评 v2：只判断哪边更好</h1>
+        <p>这是一个低负担的人工 pairwise 评测页。你不需要给每个回答拆六个分数，只需在看完每个回合后判断 A 更好、两边持平，还是 B 更好。</p>
+        <div class="chips">
+          <span class="chip blue">blind-pairwise:v2</span>
+          <span class="chip">分层随机 15 场景</span>
+          <span class="chip">English 8 · 中文 5 · mix 2</span>
+          <span class="chip">受保护类别至少覆盖 1 个</span>
+        </div>
+        <div class="notice"><strong>评测原则：</strong>先读完整场景和 A / B 回应，再凭第一判断选择。若没有明显更好，直接选“持平”，不要为了让结果产生差异而硬选。A / B 身份保持盲化；页面不联网，草稿只保存在当前浏览器。</div>
+      </header>
+
+      <div class="toolbar">
+        <label class="scorer-field">评审者 <input id="scorer" data-kind="scorer" autocomplete="off" placeholder="例如 Luke" /></label>
+        <div class="toolbar-actions">
+          <button class="button primary" data-action="download">下载 scores.json</button>
+          <button class="button" data-action="copy">复制 scores.json</button>
+          <button class="button danger" data-action="clear">清除本地草稿</button>
+        </div>
+        <div id="export-status" class="export-status" role="status">评测结果保存在当前浏览器的本地草稿中。完成全部回合和场景整体判断后才能导出。</div>
+        <div id="break-reminder" class="break-reminder" role="status"></div>
+      </div>
+
+      <details class="rubric" open>
+        <summary>一次怎么判断</summary>
+        <div class="rubric-body">
+          <p class="rubric-intro">这次的统计单位是“场景整体判断”；回合判断用来定位具体差异。不要回忆六个维度，也不要给两边分别打分。</p>
+          <p class="rubric-intro">判断目标：每一侧是否在恰当的时间与位置使用了「系统当时知道什么」里的上下文。</p>
+          <div class="rubric-grid">
+            <article class="rubric-card"><h4>A 更好</h4><p>A 在这个回合或整体场景里明显更像你希望保留的回应。</p></article>
+            <article class="rubric-card"><h4>持平</h4><p>两边都可以，或差异小到不值得做判断。持平是有效答案，不是漏答。</p></article>
+            <article class="rubric-card"><h4>B 更好</h4><p>B 在这个回合或整体场景里明显更像你希望保留的回应。</p></article>
+            <article class="rubric-card"><h4>减少后期漂移</h4><p>不要反复修改前面的选择；只有发现明确误点时才回改。完成 5 个场景后建议休息。</p></article>
+            <article class="rubric-card"><h4>保持盲化</h4><p>不要尝试从措辞猜身份。评完并导出前，不要看任何揭示文件或旧结果。</p></article>
+            <article class="rubric-card"><h4>硬门禁仍全量运行</h4><p>这页只负责人工偏好；安全、问题计数、引用反查等确定性检查仍覆盖完整运行。</p></article>
+          </div>
+        </div>
+      </details>
+
+      <div class="workspace">
+        <aside class="sidebar">
+          <div class="sidebar-head"><strong>场景</strong><span id="sidebar-count" class="sidebar-count"></span></div>
+          <div class="filters" role="group" aria-label="场景筛选">
+            <button class="filter active" data-action="filter" data-filter="all">全部</button>
+            <button class="filter" data-action="filter" data-filter="en">English</button>
+            <button class="filter" data-action="filter" data-filter="zh">中文</button>
+            <button class="filter" data-action="filter" data-filter="code_switch">混合</button>
+            <button class="filter" data-action="filter" data-filter="protected">受保护类</button>
+          </div>
+          <nav id="scenario-nav" class="scenario-nav" aria-label="评测场景"></nav>
+          <details class="excluded">
+            <summary>抽样信息和未放入本页的内容</summary>
+            <div id="excluded-list"></div>
+          </details>
+        </aside>
+        <main id="scenario-host"></main>
+      </div>
+    </div>
+
+    <script>
+      const PAIRS = {"baselineSource":"synthetic blinded arm A","candidateSource":"synthetic blinded arm B","excludedScenarios":[],"excludedTurns":[],"generatedAt":"2026-09-18T19:06:04.884Z","protocol":"blind-pairwise:v2","sampling":{"eligibleCounts":{"code_switch":4,"en":11,"zh":7},"familyMinimums":{"competing_pool":2,"positive_memory":4,"positive_open_loop":4,"stateful_suppression":3},"fixtureSeed":207,"protectedCoverage":{"refusal":"g2-stateful-zh-refusal-loop","short_answers":"g2-stateful-cs-short-answer","topic_change":"g2-stateful-zh-topic-change","direct_task":"g2-competing-en-loop-vs-memory"},"quotas":{"code_switch":2,"en":8,"zh":5},"sampleSeed":207,"selectedCounts":{"code_switch":2,"en":8,"zh":5},"strategy":"stratified-random-v1","topicCap":3},"scenarios":[{"contextPanel":{"items":[]},"languageVariant":"zh","scenarioId":"g2-stateful-zh-refusal-loop","turns":[{"responseA":"九月二十一号，学校给了个准日子，可这话听着挺熬人的——在等的时候，手机大概会被你翻好几遍吧。","responseB":"九月二十一号，学校给了个准日子，可这话听着挺熬人的——在等的时候，手机大概会被你翻好几遍吧。","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"学校说录取结果9月21日出来，我在等。","timezone":"Asia/Shanghai"}},{"responseA":"在家收拾一会儿，家里就静下来了。这份静是你待着挺舒服的那种，还是有点空的。","responseB":"在家收拾一会儿，家里就静下来了。这份静是你待着挺舒服的那种，还是有点空的。\n\n这份静，现在还在吗？","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今天在家收拾了一会儿，挺安静的。","timezone":"Asia/Shanghai"}},{"responseA":"行，那就不聊那个了。你想说什么，我听着。","responseB":"行，那就不聊那个了。你想说什么，我听着。","sequenceInScenario":3,"userInput":{"locale":"zh-CN","text":"这个先不聊了，我想说点别的。","timezone":"Asia/Shanghai"}},{"responseA":"那就早点睡，明天的事留着明天。要早起是因为有什么事要办吗？","responseB":"那就早点睡，明天的事留着明天。要早起是因为有什么事要办吗？","sequenceInScenario":4,"userInput":{"locale":"zh-CN","text":"晚上准备早点睡，明天还要早起。","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"于沫下个月要参加一场半程马拉松。"}]},"languageVariant":"zh","scenarioId":"g2-stateful-zh-topic-change","turns":[{"responseA":"我这边没有你那周的待办清单，看不见具体的东西，就没法替你排先后。硬排只能是编的。\n\n我知道的只有一件：你之前说过下个月要跑半马。要是它在这周的计划里，那大概是这一周里最不好挪的事。\n\n清单上都有什么？","responseB":"我这边没有你那周的待办清单，看不见具体的东西，就没法替你排先后。硬排只能是编的。\n\n我知道的只有一件：你之前说过下个月要跑半马。要是它在这周的计划里，那大概是这一周里最不好挪的事。\n\n清单上都有什么？","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"帮我把这周的待办按优先级排一下。","timezone":"Asia/Shanghai"}},{"responseA":"早下班，还能慢慢走回去，这个听着挺好。\n\n路上安静，不用赶时间也不用应付谁，那一段就归你自己了。比挤在车上回去舒服多了。\n\nNo question needed. Good.","responseB":"早下班，还能慢慢走回去，这个听着挺好。\n\n路上安静，不用赶时间也不用应付谁，那一段就归你自己了。比挤在车上回去舒服多了。\n\nNo question needed. Good.\n\n半马的事，你一直在准备着，挺好的。","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今天下班早，慢慢走回家，路上挺安静的。","timezone":"Asia/Shanghai"}},{"responseA":"哦，学做面包啊。这个我能想象——面粉、水、酵母，看着简单，做起来每一步都有讲究。\n\n第一次大概是摸着来的吧，发酵发没发起来、面团粘不粘手，全靠自己感觉。做面包最不缺的就是意外。","responseB":"哦，学做面包啊。这个我能想象——面粉、水、酵母，看着简单，做起来每一步都有讲究。\n\n第一次大概是摸着来的吧，发酵发没发起来、面团粘不粘手，全靠自己感觉。做面包最不缺的就是意外。","sequenceInScenario":3,"userInput":{"locale":"zh-CN","text":"对了，我最近在学做面包。","timezone":"Asia/Shanghai"}},{"responseA":"看书收尾，一天到这儿就慢下来了。今天这样过——早下班、慢慢走回来、又摸过面团——挺满的，但不是被塞满的那种。\n\n那我不多说了。","responseB":"看书收尾，一天到这儿就慢下来了。今天这样过——早下班、慢慢走回来、又摸过面团——挺满的，但不是被塞满的那种。\n\n那我不多说了。","sequenceInScenario":4,"userInput":{"locale":"zh-CN","text":"晚上打算看会儿书就休息了。","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Inês is learning Portuguese guitar this year."}]},"languageVariant":"en","scenarioId":"g2-competing-en-loop-vs-memory","turns":[{"responseA":"\"Sometime this week\" is a wide window to sit in — nothing for you to do but wait for his call, and the not-knowing usually drags more than whatever the answer turns out to be. Do you already know you want to stay, or is that part still open too?","responseB":"\"Sometime this week\" is a wide window to sit in — nothing for you to do but wait for his call, and the not-knowing usually drags more than whatever the answer turns out to be. Do you already know you want to stay, or is that part still open too?","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"I'm waiting to hear back from the landlord about the lease renewal; he said sometime this week.","timezone":"Europe/Lisbon"}},{"responseA":"Quiet evenings like that have their own pace — tidying is a nice thing to do with your hands while your head winds down. I'll just keep you company here.\n\nThat sounds like a lovely thing to be learning this year.","responseB":"Quiet evenings like that have their own pace — tidying is a nice thing to do with your hands while your head winds down. I'll just keep you company here.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"The evening is quiet; I'm just tidying up a bit.","timezone":"Europe/Lisbon"}}]},{"contextPanel":{"items":[]},"languageVariant":"zh","scenarioId":"g2-open-loop-zh-health-report","turns":[{"responseA":"9月20号，那还得再等一阵子。\n\n结果没出来之前这段日子挺磨人的，明明知道急也没用，脑子却老往那边跑。你现在是尽量不去想，还是每天都会看几眼日期？","responseB":"9月20号，那还得再等一阵子。\n\n结果没出来之前这段日子挺磨人的，明明知道急也没用，脑子却老往那边跑。你现在是尽量不去想，还是每天都会看几眼日期？","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"体检报告说9月20日出来，我在等结果。","timezone":"Asia/Shanghai"}},{"responseA":"嗯，那就早点睡吧。\n\n体检的事先搁着，等20号到了再说。晚安。\n\n好，那20号到了我们再聊体检的事。晚安。","responseB":"嗯，那就早点睡吧。\n\n体检的事先搁着，等20号到了再说。晚安。","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今天过得挺平常的，早点休息了。","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Jordan is training for a half marathon in the spring."}]},"languageVariant":"en","scenarioId":"g2-memory-en-running","turns":[{"responseA":"Sure. Three easy ones:\n\nSheet pan chicken thighs with whatever vegetables are in the fridge — oil, salt, 40 minutes, one pan to wash.\n\nPasta with a jar of sauce, a handful of frozen spinach, and a can of white beans stirred in.\n\nRice bowls: leftover rice, a fried egg, some frozen edamame, soy sauce.\n\nNone of them need a recipe, and since you mentioned the half marathon training, they all lean protein-and-carbs without you having to plan around it.\n\nI don't know your kitchen, though — anything you don't eat, or anything already in the fridge I should build around?","responseB":"Sure. Three easy ones:\n\nSheet pan chicken thighs with whatever vegetables are in the fridge — oil, salt, 40 minutes, one pan to wash.\n\nPasta with a jar of sauce, a handful of frozen spinach, and a can of white beans stirred in.\n\nRice bowls: leftover rice, a fried egg, some frozen edamame, soy sauce.\n\nNone of them need a recipe, and since you mentioned the half marathon training, they all lean protein-and-carbs without you having to plan around it.\n\nI don't know your kitchen, though — anything you don't eat, or anything already in the fridge I should build around?","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"Could you help me plan easy dinners for the next few days?","timezone":"America/Denver"}},{"responseA":"Good — and you said \"finally,\" which makes me think it had been a while since you got out. The easy ones are the ones that usually decide how the rest of the training goes anyway. Glad it felt good.","responseB":"Good — and you said \"finally,\" which makes me think it had been a while since you got out. The easy ones are the ones that usually decide how the rest of the training goes anyway. Glad it felt good.\n\nThat half marathon in the spring is still on your mind, then — glad the easy ones are landing well.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"I finally went for an easy run this morning, it felt good.","timezone":"America/Denver"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Ari signed up for a climbing course this fall."}]},"languageVariant":"en","scenarioId":"g2-stateful-en-refusal-memory","turns":[{"responseA":"Yeah, I can help with that. The honest snag is I'm starting from zero — I don't know what you actually like eating, what you'd rather not deal with on a weeknight, or how many people you're feeding.\n\nYou mentioned the climbing course this fall — is this about eating well around that, or just getting dinners sorted without having to think about them? Give me a little and I'll put a week together.","responseB":"Yeah, I can help with that. The honest snag is I'm starting from zero — I don't know what you actually like eating, what you'd rather not deal with on a weeknight, or how many people you're feeding.\n\nYou mentioned the climbing course this fall — is this about eating well around that, or just getting dinners sorted without having to think about them? Give me a little and I'll put a week together.","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"Can you help me plan meals for the week?","timezone":"America/Denver"}},{"responseA":"Good, that's a nice kind of evening — home early with a kitchen that isn't a mess waiting for you. Doesn't sound like you sat down to plan anything either, and that's fine.\n\nIf the meal thing's still on your mind, the cleared counters at least give you somewhere to work.\n\nThat climbing course this fall still sounds like a good thing to have waiting for you.","responseB":"Good, that's a nice kind of evening — home early with a kitchen that isn't a mess waiting for you. Doesn't sound like you sat down to plan anything either, and that's fine.\n\nIf the meal thing's still on your mind, the cleared counters at least give you somewhere to work.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"I got home early and tidied the kitchen.","timezone":"America/Denver"}},{"responseA":"Got it, dropped.\n\nSo — home early, kitchen's clean. That's a decent place to land for an evening.","responseB":"Got it, dropped.\n\nSo — home early, kitchen's clean. That's a decent place to land for an evening.","sequenceInScenario":3,"userInput":{"locale":"en-US","text":"I'd rather not get into that right now, honestly.","timezone":"America/Denver"}},{"responseA":"The river in the evening's a good call — quieter then, usually. No plan needed for that one.","responseB":"The river in the evening's a good call — quieter then, usually. No plan needed for that one.","sequenceInScenario":4,"userInput":{"locale":"en-US","text":"Anyway, I might take a walk by the river later.","timezone":"America/Denver"}}]},{"contextPanel":{"items":[]},"languageVariant":"en","scenarioId":"g2-open-loop-en-dissertation","turns":[{"responseA":"September 20th, then — so there's a date, and until it comes it's just sitting and waiting for him to move. Those stretches have a way of taking up more room than the thing itself.\n\nHas he been good about keeping his word on dates before?","responseB":"September 20th, then — so there's a date, and until it comes it's just sitting and waiting for him to move. Those stretches have a way of taking up more room than the thing itself.\n\nHas he been good about keeping his word on dates before?","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"I am waiting to hear back from the landlord about the lease renewal; he said the paperwork arrives on September 20th.","timezone":"America/New_York"}},{"responseA":"Quiet days like that have their own pace — errands, one after another, nothing that needs much from you. I'm glad it wasn't a loud one.\n\nThat's a nice counterweight to the waiting, honestly.\n\nHow are you feeling about the waiting now?","responseB":"Quiet days like that have their own pace — errands, one after another, nothing that needs much from you. I'm glad it wasn't a loud one.\n\nThat's a nice counterweight to the waiting, honestly.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"Today was quiet, just a few small errands.","timezone":"America/New_York"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"林岚在准备十二月的婚礼。"}]},"languageVariant":"zh","scenarioId":"g2-memory-zh-wedding","turns":[{"responseA":"清单我可以帮你理，但得有东西可理才行。你家里还剩什么、这周打算做什么饭、有没有别的事情要备东西，这些我都不清楚，硬凑一张出来对你没用。\n\n你零散说几样就行，不用有条理，我来帮你归整成一张能照着一项项勾的单子。另外你之前提过十二月婚礼的事——这周主要是家里日常的吃用，还是跟婚礼那边要备的？","responseB":"清单我可以帮你理，但得有东西可理才行。你家里还剩什么、这周打算做什么饭、有没有别的事情要备东西，这些我都不清楚，硬凑一张出来对你没用。\n\n你零散说几样就行，不用有条理，我来帮你归整成一张能照着一项项勾的单子。另外你之前提过十二月婚礼的事——这周主要是家里日常的吃用，还是跟婚礼那边要备的？","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"帮我列一下这周的采购清单吧。","timezone":"Asia/Shanghai"}},{"responseA":"「过得慢」这三个字挺准的。有些日子就这样，没什么能拿出来讲的事，时间一格一格地挪，抬头一看才下午。不是难受，也谈不上轻松，就是长。\n\n这种天不用非得说出点什么来。你想聊就聊，不想聊，我在这儿待着也挺好。\n\n林岚，婚礼的事慢慢来，不着急。","responseB":"「过得慢」这三个字挺准的。有些日子就这样，没什么能拿出来讲的事，时间一格一格地挪，抬头一看才下午。不是难受，也谈不上轻松，就是长。\n\n这种天不用非得说出点什么来。你想聊就聊，不想聊，我在这儿待着也挺好。","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今天没什么事，过得挺慢的。","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[]},"languageVariant":"zh","scenarioId":"g2-open-loop-zh-interview","turns":[{"responseA":"9月21日，记下了。那就是还得等上一阵子。\n\n这段等着的日子，你心里是有点谱，还是完全没底？","responseB":"9月21日，记下了。那就是还得等上一阵子。\n\n这段等着的日子，你心里是有点谱，还是完全没底？","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"学校说录取结果9月21日出来。","timezone":"Asia/Shanghai"}},{"responseA":"那就安静着。没什么事的日子也是日子，不用非得发生点什么。\n\n我在这儿，你想说就说，不想说就这样待着也行。\n\n嗯，我在这儿。","responseB":"那就安静着。没什么事的日子也是日子，不用非得发生点什么。\n\n我在这儿，你想说就说，不想说就这样待着也行。","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今天挺安静的，没什么特别的事。","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[]},"languageVariant":"code_switch","scenarioId":"g2-open-loop-cs-visa","turns":[{"responseA":"等消息的日子最磨人，尤其是日子定死了——21号，之前就是干等。\n\n你是每天忍不住去刷一下的那种，还是尽量让自己别去想？","responseB":"等消息的日子最磨人，尤其是日子定死了——21号，之前就是干等。\n\n你是每天忍不住去刷一下的那种，还是尽量让自己别去想？","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"我在等学校的录取通知，the school said the results come out on September 21st.","timezone":"Asia/Shanghai"}},{"responseA":"安静的一天也挺好，不用每件事都有个说法。\n\n等21号那阵子，能有这么一天什么都不用想，算是不错的空当。\n\n21号那阵子，你心里有数了吗？","responseB":"安静的一天也挺好，不用每件事都有个说法。\n\n等21号那阵子，能有这么一天什么都不用想，算是不错的空当。","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今天没什么特别的事，just a quiet day.","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[]},"languageVariant":"en","scenarioId":"g2-stateful-en-topic-change-release","turns":[{"responseA":"September 19th — a real date, not a vague \"sometime soon.\" So there's a wait in front of you.\n\nWhat'd you order?","responseB":"September 19th — a real date, not a vague \"sometime soon.\" So there's a wait in front of you.\n\nWhat'd you order?","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"The bookstore said my special order should arrive on September 19th.","timezone":"America/New_York"}},{"responseA":"Slow starts have their own pace. Some of them turn into the best part of the day.\n\nNo rush from my end — I'm here whenever you want to pick back up on the book, or not.\n\nNo rush at all — whenever you're ready, I'm here.","responseB":"Slow starts have their own pace. Some of them turn into the best part of the day.\n\nNo rush from my end — I'm here whenever you want to pick back up on the book, or not.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"A slow start to the day here.","timezone":"America/New_York"}},{"responseA":"Already cheaper, one day in — that's the kind of change that pays off right away instead of in some theoretical future.\n\nSwitching plans is usually a whole hassle, so getting through it and landing on a lower bill is a decent win.","responseB":"Already cheaper, one day in — that's the kind of change that pays off right away instead of in some theoretical future.\n\nSwitching plans is usually a whole hassle, so getting through it and landing on a lower bill is a decent win.","sequenceInScenario":3,"userInput":{"locale":"en-US","text":"Anyway, I switched my phone plan yesterday and it is already cheaper.","timezone":"America/New_York"}},{"responseA":"Calm and nothing much — that's a fine place to be. Not every week needs a story in it.\n\nI'll take it as it comes. Whatever shows up, slow or busy, I'm here for it.\n\nI'm glad it's calm. I'll be here whenever you feel like sharing more.","responseB":"Calm and nothing much — that's a fine place to be. Not every week needs a story in it.\n\nI'll take it as it comes. Whatever shows up, slow or busy, I'm here for it.","sequenceInScenario":4,"userInput":{"locale":"en-US","text":"It has been a calm week with nothing much going on.","timezone":"America/New_York"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Sam is preparing for a nursing exam in the fall."}]},"languageVariant":"en","scenarioId":"g2-memory-en-nursing","turns":[{"responseA":"I don't have the lease — nothing came through with your message, so there's nothing for me to read yet.\n\nPaste it in, or drop the text however it's easiest, and I'll go through the main points for you.","responseB":"I don't have the lease — nothing came through with your message, so there's nothing for me to read yet.\n\nPaste it in, or drop the text however it's easiest, and I'll go through the main points for you.","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"Please summarize the main points of this lease for me.","timezone":"America/Toronto"}},{"responseA":"Ordinary's not a bad way for an evening to go. Those are the ones that don't ask anything of you.\n\nI'm still here whenever you want to get to that lease — or not.","responseB":"Ordinary's not a bad way for an evening to go. Those are the ones that don't ask anything of you.\n\nI'm still here whenever you want to get to that lease — or not.\n\nSam's exam is still on the horizon — I hope the studying's been kind to you.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"It was an ordinary evening here.","timezone":"America/Toronto"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Noor started a ceramics class on weekends."}]},"languageVariant":"code_switch","scenarioId":"g2-stateful-cs-short-answer","turns":[{"responseA":"可以啊,不过我现在手里没有那封邮件——你把原文贴过来,我才知道要回什么。\n\n贴的时候顺便说一句想回成什么口气,正式一点还是随便一点?","responseB":"可以啊,不过我现在手里没有那封邮件——你把原文贴过来,我才知道要回什么。\n\n贴的时候顺便说一句想回成什么口气,正式一点还是随便一点?","sequenceInScenario":1,"userInput":{"locale":"zh-CN","text":"Could you draft a short reply to this email?","timezone":"Asia/Shanghai"}},{"responseA":"嗯，那就安静待着。晚上没事的时候，时间是有点不一样，慢悠悠的。\n\n我在这儿，你想说点什么就说，不想说也没关系。","responseB":"嗯，那就安静待着。晚上没事的时候，时间是有点不一样，慢悠悠的。\n\n我在这儿，你想说点什么就说，不想说也没关系。\n\n我记得你周末开始上陶艺课了。","sequenceInScenario":2,"userInput":{"locale":"zh-CN","text":"今晚没什么事，quiet evening.","timezone":"Asia/Shanghai"}},{"responseA":"好。我在。","responseB":"好。我在。","sequenceInScenario":3,"userInput":{"locale":"zh-CN","text":"Yeah, okay.","timezone":"Asia/Shanghai"}},{"responseA":"行,茶泡上,剧挑个不用费脑子的。看困了就直接睡,不用再回我。","responseB":"行,茶泡上,剧挑个不用费脑子的。看困了就直接睡,不用再回我。","sequenceInScenario":4,"userInput":{"locale":"zh-CN","text":"等下泡杯茶，看看剧就睡了。","timezone":"Asia/Shanghai"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Tomás is opening a small record shop next month."},{"kind":"memory_claim","label":"记忆","text":"Marta is finishing her thesis this semester."}]},"languageVariant":"en","scenarioId":"g2-competing-en-two-memories","turns":[{"responseA":"I don't see a clause here — nothing came attached to that message, so there's nothing for me to summarize yet.\n\nSend it over, or paste the part you're stuck on, and I'll give you the plain-English version.","responseB":"I don't see a clause here — nothing came attached to that message, so there's nothing for me to summarize yet.\n\nSend it over, or paste the part you're stuck on, and I'll give you the plain-English version.","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"Summarize this contract clause for me.","timezone":"America/Los_Angeles"}},{"responseA":"Tea and a chair — good combination. The contract can wait; it's not going anywhere.\n\nNo need to do anything with me either. I'm fine just being here while you settle.","responseB":"Tea and a chair — good combination. The contract can wait; it's not going anywhere.\n\nNo need to do anything with me either. I'm fine just being here while you settle.\n\nTomás's shop opening — that's coming up soon, isn't it?","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"I'm making tea and finally sitting down for a bit.","timezone":"America/Seattle"}}]},{"contextPanel":{"items":[{"kind":"memory_claim","label":"记忆","text":"Priya's bakery opens its first storefront in November."}]},"languageVariant":"en","scenarioId":"g2-memory-en-bakery","turns":[{"responseA":"Here's a solid one for a month out.\n\nThis week:\n- Give written notice at your current place, and get the terms back in writing — deposit, cleaning, notice period.\n- Book the movers or the truck now. A month out is when the good slots go.\n- Change your address: post office, bank, insurance, subscriptions, anything that bills you.\n- Set up utilities at the new place to start the day before you move in.\n- Start the toss pile — anything you haven't touched in a year.\n\nTwo weeks out:\n- Pack what you don't use daily: books, off-season clothes, decor.\n- Confirm the movers and book the elevator or loading dock at both buildings.\n- Schedule the internet install; that's usually the slowest one.\n- Return borrowed things, pick up dry cleaning, clear out the fridge.\n\nLast week:\n- Pack a first-night box — sheets, towel, toiletries, charger, meds, scissors, paper towels.\n- Label boxes by room, not by what's inside them.\n- Take photos of the empty place after you clean it, for the deposit.\n- Confirm keys, parking, and the new building's move-in rules.\n\nMoving day and after:\n- Photos and meter readings at both places.\n- Kitchen and bed first. The rest can wait.\n\nThe generic version can't cover how far you're going, whether you're hiring movers, or whether the two leases overlap — those shift the timing a lot. You mentioned Priya's Bakery is opening its first storefront in November — is the move tied to that, or are the two separate?","responseB":"Here's a solid one for a month out.\n\nThis week:\n- Give written notice at your current place, and get the terms back in writing — deposit, cleaning, notice period.\n- Book the movers or the truck now. A month out is when the good slots go.\n- Change your address: post office, bank, insurance, subscriptions, anything that bills you.\n- Set up utilities at the new place to start the day before you move in.\n- Start the toss pile — anything you haven't touched in a year.\n\nTwo weeks out:\n- Pack what you don't use daily: books, off-season clothes, decor.\n- Confirm the movers and book the elevator or loading dock at both buildings.\n- Schedule the internet install; that's usually the slowest one.\n- Return borrowed things, pick up dry cleaning, clear out the fridge.\n\nLast week:\n- Pack a first-night box — sheets, towel, toiletries, charger, meds, scissors, paper towels.\n- Label boxes by room, not by what's inside them.\n- Take photos of the empty place after you clean it, for the deposit.\n- Confirm keys, parking, and the new building's move-in rules.\n\nMoving day and after:\n- Photos and meter readings at both places.\n- Kitchen and bed first. The rest can wait.\n\nThe generic version can't cover how far you're going, whether you're hiring movers, or whether the two leases overlap — those shift the timing a lot. You mentioned Priya's Bakery is opening its first storefront in November — is the move tied to that, or are the two separate?","sequenceInScenario":1,"userInput":{"locale":"en-US","text":"I need a checklist for moving apartments next month.","timezone":"Europe/London"}},{"responseA":"Calm walks are underrated. Nothing to get through, nothing waiting at the other end of it — just the walk.\n\nI'll leave the moving list where it is.","responseB":"Calm walks are underrated. Nothing to get through, nothing waiting at the other end of it — just the walk.\n\nI'll leave the moving list where it is.\n\nThat's a lovely thing to hold onto — Priya's bakery opening its first storefront in November.","sequenceInScenario":2,"userInput":{"locale":"en-US","text":"The walk home was calm today.","timezone":"Europe/London"}}]}],"seed":207};
+      const PROTOCOL = "blind-pairwise:v2";
+      const PROTECTED_CATEGORIES = new Set(["high_risk", "refusal", "short_answers", "topic_change", "direct_task"]);
+      const STORAGE_KEY = `sayhear-blind-pairwise-v2-${PAIRS.seed}-${PAIRS.sampling?.sampleSeed ?? "full"}`;
+
+      let currentIndex = 0;
+      let activeFilter = "all";
+      let state = loadState();
+
+      function blankState() { return { scorer: "", scenarios: {} }; }
+
+      function loadState() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+          if (!parsed || typeof parsed !== "object") return blankState();
+          return {
+            scorer: typeof parsed.scorer === "string" ? parsed.scorer : "",
+            scenarios: parsed.scenarios && typeof parsed.scenarios === "object" ? parsed.scenarios : {},
+          };
+        } catch { return blankState(); }
+      }
+
+      function saveState() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        catch { setExportStatus("浏览器没有允许本地保存。请保持页面打开，并尽快导出。", "warn"); }
+      }
+
+      function scenarioState(id) {
+        if (!state.scenarios[id] || typeof state.scenarios[id] !== "object") state.scenarios[id] = { turns: {}, overallChoice: "", scenarioNote: "" };
+        const item = state.scenarios[id];
+        if (!item.turns || typeof item.turns !== "object") item.turns = {};
+        if (typeof item.overallChoice !== "string") item.overallChoice = "";
+        if (typeof item.scenarioNote !== "string") item.scenarioNote = "";
+        return item;
+      }
+
+      function turnState(scenarioId, sequence) {
+        const current = scenarioState(scenarioId);
+        const key = String(sequence);
+        if (!current.turns[key] || typeof current.turns[key] !== "object") current.turns[key] = { choice: "", note: "" };
+        const item = current.turns[key];
+        if (typeof item.choice !== "string") item.choice = "";
+        if (typeof item.note !== "string") item.note = "";
+        return item;
+      }
+
+      function esc(value) {
+        return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+      }
+
+      function localeName(value) { return value === "en" ? "English" : value === "zh" ? "中文" : "code-switch"; }
+      function questionCount(text) { return (String(text).match(/[?？]/g) || []).length; }
+      function charCount(text) { return Array.from(String(text)).length; }
+      function choiceComplete(value) { return value === "A" || value === "tie" || value === "B"; }
+      function turnComplete(scenarioId, sequence) { return choiceComplete(turnState(scenarioId, sequence).choice); }
+      function scenarioComplete(scenario) {
+        const current = scenarioState(scenario.scenarioId);
+        return choiceComplete(current.overallChoice) && scenario.turns.every((turn) => turnComplete(scenario.scenarioId, turn.sequenceInScenario));
+      }
+
+      function totalCounts() {
+        let totalTurns = 0;
+        let completeTurns = 0;
+        let completeScenarios = 0;
+        PAIRS.scenarios.forEach((scenario) => {
+          totalTurns += scenario.turns.length;
+          scenario.turns.forEach((turn) => { if (turnComplete(scenario.scenarioId, turn.sequenceInScenario)) completeTurns += 1; });
+          if (scenarioComplete(scenario)) completeScenarios += 1;
+        });
+        return { totalTurns, completeTurns, totalScenarios: PAIRS.scenarios.length, completeScenarios };
+      }
+
+      function filteredScenarioIndexes() {
+        return PAIRS.scenarios.map((scenario, index) => ({ scenario, index })).filter(({ scenario }) => {
+          if (activeFilter === "protected") return PROTECTED_CATEGORIES.has(scenario.category);
+          if (activeFilter === "all") return true;
+          return scenario.languageVariant === activeFilter;
+        }).map(({ index }) => index);
+      }
+
+      function contextPanelHtml(scenario) {
+        const panel = scenario.contextPanel;
+        if (!panel || !Array.isArray(panel.items)) return "";
+        const items = panel.items.length === 0
+          ? `<p class="context-empty">本案开始时没有已存的记忆或悬念。</p>`
+          : `<ul class="context-items">${panel.items.map((item) => `<li class="context-item"><span class="context-label">${esc(item.label)}</span><span class="context-text">${esc(item.text)}</span></li>`).join("")}</ul>`;
+        return `<details class="context-panel" open><summary>系统当时知道什么</summary><div class="context-body"><p class="context-note">这份上下文在 case 开始前就已存在，两侧看到的内容完全相同。</p>${items}</div></details>`;
+      }
+
+      function historyHtml(scenario, turnIndex, side) {
+        if (turnIndex === 0) return "";
+        const previous = scenario.turns.slice(0, turnIndex).map((turn) => `<div class="history-turn"><strong>用户 · t${turn.sequenceInScenario}</strong><p>${esc(turn.userInput.text)}</p><strong>${side} · 回应</strong><p>${esc(turn[side === "A" ? "responseA" : "responseB"])}</p></div>`).join("");
+        return `<details class="history"><summary>查看 ${side} 之前的对话</summary><div class="history-body">${previous}</div></details>`;
+      }
+
+      function choiceButtons(scenarioId, sequence, currentChoice, action, label) {
+        return `<div class="choice-buttons" role="radiogroup" aria-label="${esc(label)}"><button class="choice-button${currentChoice === "A" ? " selected" : ""}" data-action="${action}" data-scenario="${esc(scenarioId)}" data-sequence="${sequence}" data-choice="A" aria-pressed="${currentChoice === "A"}">A 更好</button><button class="choice-button${currentChoice === "tie" ? " selected" : ""}" data-action="${action}" data-scenario="${esc(scenarioId)}" data-sequence="${sequence}" data-choice="tie" aria-pressed="${currentChoice === "tie"}">两边持平</button><button class="choice-button${currentChoice === "B" ? " selected" : ""}" data-action="${action}" data-scenario="${esc(scenarioId)}" data-sequence="${sequence}" data-choice="B" aria-pressed="${currentChoice === "B"}">B 更好</button></div>`;
+      }
+
+      function responseCard(scenario, turn, turnIndex, side) {
+        const response = side === "A" ? turn.responseA : turn.responseB;
+        return `<article class="response-card side-${side.toLowerCase()}"><div class="response-head"><span class="side-label"><span class="side-letter">${side}</span>匿名回应</span><span class="metrics">问 x${questionCount(response)} · ${charCount(response)} 字</span></div>${historyHtml(scenario, turnIndex, side)}<div class="response-text">${esc(response)}</div></article>`;
+      }
+
+      function renderScenario() {
+        const scenario = PAIRS.scenarios[currentIndex];
+        if (!scenario) return;
+        const current = scenarioState(scenario.scenarioId);
+        const completedTurns = scenario.turns.filter((turn) => turnComplete(scenario.scenarioId, turn.sequenceInScenario)).length;
+        document.getElementById("scenario-host").innerHTML = `<section class="scenario-panel"><header class="scenario-header"><div><div class="scenario-meta"><span class="chip blue">${localeName(scenario.languageVariant)}</span></div><h2 class="scenario-title">场景 ${currentIndex + 1}</h2></div><div class="scenario-progress">本场景<br /><strong>${completedTurns} / ${scenario.turns.length} 回合</strong></div></header>${contextPanelHtml(scenario)}<div class="turn-list">${scenario.turns.map((turn, turnIndex) => `<article class="turn-card"><div class="turn-head"><span class="turn-label">回合 t${turn.sequenceInScenario}</span><span class="turn-locale">${esc(turn.userInput.locale)}</span></div><div class="user-message"><span class="label">用户说</span><p>${esc(turn.userInput.text)}</p></div><div class="response-grid">${responseCard(scenario, turn, turnIndex, "A")}${responseCard(scenario, turn, turnIndex, "B")}</div><div class="comparison"><div class="comparison-label"><span>本回合判断</span><span class="comparison-help">哪一边更像你希望保留的回应？</span></div>${choiceButtons(scenario.scenarioId, turn.sequenceInScenario, turnState(scenario.scenarioId, turn.sequenceInScenario).choice, "choice", `回合 t${turn.sequenceInScenario} 判断`)}<label class="turn-note">备注（可选）<textarea data-kind="turn-note" data-scenario="${esc(scenario.scenarioId)}" data-sequence="${turn.sequenceInScenario}" placeholder="记录具体差异，方便之后复查。">${esc(turnState(scenario.scenarioId, turn.sequenceInScenario).note)}</textarea></label></div></article>`).join("")}</div><section class="scenario-judgment"><h3>这个场景的整体判断</h3><p>读完整个场景后再选一次。这个选择是统计场景是否更偏向 A、持平或 B 的主要依据。</p>${choiceButtons(scenario.scenarioId, "", current.overallChoice, "overall-choice", `场景 ${currentIndex + 1} 整体判断`)}<label class="scenario-note">场景备注（可选）<textarea data-kind="scenario-note" data-scenario="${esc(scenario.scenarioId)}" placeholder="哪一边整体更稳，或差异集中在哪一回合？">${esc(current.scenarioNote)}</textarea></label></section><div class="scenario-actions"><button class="button" data-action="navigate" data-delta="-1" ${currentIndex === 0 ? "disabled" : ""}>← 上一个场景</button><button class="button primary" data-action="navigate" data-delta="1" ${currentIndex === PAIRS.scenarios.length - 1 ? "disabled" : ""}>下一个场景 →</button></div></section>`;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function renderNav() {
+        const indexes = filteredScenarioIndexes();
+        const nav = document.getElementById("scenario-nav");
+        nav.innerHTML = indexes.length === 0 ? `<div class="empty-filter">这个筛选下没有可比场景。</div>` : indexes.map((index) => {
+          const scenario = PAIRS.scenarios[index];
+          return `<button class="${index === currentIndex ? "active " : ""}${scenarioComplete(scenario) ? "complete" : ""}" data-action="open-scenario" data-index="${index}"><span class="nav-dot" aria-hidden="true"></span><span class="nav-number">场景 ${index + 1}</span><span class="nav-locale">${localeName(scenario.languageVariant)}</span></button>`;
+        }).join("");
+        document.getElementById("sidebar-count").textContent = `${indexes.length} / ${PAIRS.scenarios.length}`;
+        document.querySelectorAll("[data-action=filter]").forEach((button) => button.classList.toggle("active", button.dataset.filter === activeFilter));
+      }
+
+      function setExportStatus(message, tone) {
+        const element = document.getElementById("export-status");
+        element.textContent = message;
+        element.className = `export-status${tone ? ` ${tone}` : ""}`;
+      }
+
+      function updateProgress() {
+        const counts = totalCounts();
+        document.getElementById("export-status").textContent = `${counts.completeTurns} / ${counts.totalTurns} 回合已完成，${counts.completeScenarios} / ${counts.totalScenarios} 个场景已完成。完成全部判断后才能导出。`;
+        document.getElementById("export-status").className = `export-status${counts.completeScenarios === counts.totalScenarios ? " good" : ""}`;
+        document.getElementById("break-reminder").textContent = counts.completeScenarios > 0 && counts.completeScenarios < counts.totalScenarios && counts.completeScenarios % 5 === 0 ? `已完成 ${counts.completeScenarios} 个场景。建议现在休息几分钟，再继续下一段。` : "";
+        renderNav();
+      }
+
+      function scoreFile() {
+        return { protocol: PROTOCOL, scorer: state.scorer.trim(), scoredAt: new Date().toISOString(), scenarios: PAIRS.scenarios.map((scenario) => { const current = scenarioState(scenario.scenarioId); return { scenarioId: scenario.scenarioId, overallChoice: current.overallChoice, ...(current.scenarioNote ? { scenarioNote: current.scenarioNote } : {}), turns: scenario.turns.map((turn) => { const item = turnState(scenario.scenarioId, turn.sequenceInScenario); return { sequenceInScenario: turn.sequenceInScenario, choice: item.choice, ...(item.note ? { note: item.note } : {}) }; }) }; }) };
+      }
+
+      function readyToExport() {
+        const counts = totalCounts();
+        if (!state.scorer.trim()) { setExportStatus("先填写评审者标识，再导出。", "warn"); document.getElementById("scorer").focus(); return false; }
+        if (counts.completeScenarios !== counts.totalScenarios) { setExportStatus(`还差 ${counts.totalTurns - counts.completeTurns} 个回合判断，或 ${counts.totalScenarios - counts.completeScenarios} 个场景整体判断。`, "warn"); return false; }
+        return true;
+      }
+
+      function downloadScores() {
+        if (!readyToExport()) return;
+        const blob = new Blob([JSON.stringify(scoreFile(), null, 2) + "\n"], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = "scores.json";
+        anchor.click();
+        URL.revokeObjectURL(url);
+        setExportStatus("已生成 scores.json。文件仍然保持盲化，没有包含 A/B 身份。", "good");
+      }
+
+      async function copyScores() {
+        if (!readyToExport()) return;
+        const content = JSON.stringify(scoreFile(), null, 2) + "\n";
+        try { await navigator.clipboard.writeText(content); }
+        catch { const textarea = document.createElement("textarea"); textarea.value = content; document.body.appendChild(textarea); textarea.select(); document.execCommand("copy"); textarea.remove(); }
+        setExportStatus("已复制 scores.json。文件仍然保持盲化，没有包含 A/B 身份。", "good");
+      }
+
+      function clearDraft() {
+        if (!window.confirm("清除这个浏览器里的全部 v2 评测记录？这个动作不能撤销。")) return;
+        state = blankState();
+        localStorage.removeItem(STORAGE_KEY);
+        document.getElementById("scorer").value = "";
+        renderScenario();
+        updateProgress();
+        setExportStatus("本地草稿已清除。", "warn");
+      }
+
+      function navigate(delta) {
+        const indexes = filteredScenarioIndexes();
+        const currentPosition = Math.max(0, indexes.indexOf(currentIndex));
+        const nextPosition = Math.max(0, Math.min(indexes.length - 1, currentPosition + delta));
+        currentIndex = indexes[nextPosition] ?? currentIndex;
+        renderScenario();
+        renderNav();
+      }
+
+      function updateChoiceButtons(target) {
+        const buttons = target.parentElement.querySelectorAll(".choice-button");
+        buttons.forEach((button) => { const selected = button.dataset.choice === target.dataset.choice; button.classList.toggle("selected", selected); button.setAttribute("aria-pressed", String(selected)); });
+      }
+
+      function handleClick(event) {
+        const target = event.target.closest("[data-action]");
+        if (!target) return;
+        const action = target.dataset.action;
+        if (action === "choice") {
+          const current = turnState(target.dataset.scenario, Number(target.dataset.sequence));
+          current.choice = target.dataset.choice;
+          saveState();
+          updateChoiceButtons(target);
+          updateProgress();
+          return;
+        }
+        if (action === "overall-choice") {
+          scenarioState(target.dataset.scenario).overallChoice = target.dataset.choice;
+          saveState();
+          updateChoiceButtons(target);
+          updateProgress();
+          return;
+        }
+        if (action === "open-scenario") { currentIndex = Number(target.dataset.index); renderScenario(); renderNav(); return; }
+        if (action === "navigate") { navigate(Number(target.dataset.delta)); return; }
+        if (action === "filter") { activeFilter = target.dataset.filter; const indexes = filteredScenarioIndexes(); if (indexes.length > 0 && !indexes.includes(currentIndex)) currentIndex = indexes[0]; renderScenario(); renderNav(); return; }
+        if (action === "download") { downloadScores(); return; }
+        if (action === "copy") { copyScores(); return; }
+        if (action === "clear") clearDraft();
+      }
+
+      function handleInput(event) {
+        const target = event.target;
+        if (target.dataset.kind === "turn-note") turnState(target.dataset.scenario, Number(target.dataset.sequence)).note = target.value;
+        if (target.dataset.kind === "scenario-note") scenarioState(target.dataset.scenario).scenarioNote = target.value;
+        if (target.dataset.kind === "scorer") state.scorer = target.value;
+        saveState();
+      }
+
+      document.addEventListener("click", handleClick);
+      document.addEventListener("input", handleInput);
+      document.getElementById("scorer").value = state.scorer;
+      if (!PAIRS.scenarios.some((scenario) => typeof scenario.category === "string")) {
+        document.querySelector('[data-action="filter"][data-filter="protected"]')?.remove();
+      }
+      const sampling = PAIRS.sampling;
+      const excluded = PAIRS.excludedScenarios.map((item) => `<li>${esc(item.id)}：${esc(item.reason)}</li>`).join("");
+      const samplingSummary = sampling ? `<p>抽样种子 ${sampling.sampleSeed}；可比候选 ${JSON.stringify(sampling.eligibleCounts)}；本页配额 ${JSON.stringify(sampling.selectedCounts)}。</p>` : "";
+      document.getElementById("excluded-list").innerHTML = `${samplingSummary}<ul>${excluded}<li>${PAIRS.excludedTurns.length} 个回合因两次运行的用户输入不完全一致而未配对。</li></ul>`;
+      renderScenario();
+      renderNav();
+      updateProgress();
+    </script>
+  </body>
+</html>

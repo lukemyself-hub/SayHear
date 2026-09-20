@@ -31,23 +31,49 @@ export type ProactiveFollowupSegmentPlan = Readonly<{
   userId: UserId;
 }>;
 
+export const PROACTIVE_FOLLOWUP_OMIT_REASONS = [
+  "no_genuine_opportunity",
+  "duplicates_main_response",
+  "insufficient_grounding",
+  "timing_not_natural",
+] as const;
+export type ProactiveFollowupOmitReason =
+  (typeof PROACTIVE_FOLLOWUP_OMIT_REASONS)[number];
+
+export type ProactiveFollowupTargetRef = Readonly<{
+  targetId: string;
+  targetKind: ProactiveFollowupTargetKind;
+  targetVersionId: string;
+}>;
+
 export type ProactiveFollowupSegmentOutput = Readonly<{
+  decision: "emit";
   content: string;
   expressionKind: "question" | "acknowledgment";
-  targetRef: Readonly<{
-    targetId: string;
-    targetKind: ProactiveFollowupTargetKind;
-    targetVersionId: string;
-  }>;
+  targetRef: ProactiveFollowupTargetRef;
 }>;
 
-export type ProactiveFollowupSegmentGeneration = Readonly<{
-  metadata: CompleteResponseMetadata;
-  output: ProactiveFollowupSegmentOutput;
-}>;
+export type ProactiveFollowupSegmentModelOutput =
+  | ProactiveFollowupSegmentOutput
+  | Readonly<{
+      decision: "omit";
+      reason: ProactiveFollowupOmitReason;
+      targetRef: ProactiveFollowupTargetRef;
+    }>;
+
+export type ProactiveFollowupSegmentGeneration =
+  | Readonly<{
+      outcome: "emit";
+      metadata: CompleteResponseMetadata;
+      output: ProactiveFollowupSegmentOutput;
+    }>
+  | Readonly<{
+      outcome: "omit";
+      reason: ProactiveFollowupOmitReason;
+    }>;
 
 export type ProactiveFollowupSegmentCommit = Readonly<{
-  generation: ProactiveFollowupSegmentGeneration;
+  generation: Extract<ProactiveFollowupSegmentGeneration, { outcome: "emit" }>;
   plan: ProactiveFollowupSegmentPlan;
 }>;
 

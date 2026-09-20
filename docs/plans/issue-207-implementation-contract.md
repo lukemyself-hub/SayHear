@@ -195,6 +195,53 @@ G1 evidence machinery. File count (3), boundary count (1), migration
   input, outputs asserted through the repo validators (temp script,
   deleted after the run; no writes, no switches touched).
 
+## Extraction prompt v3 (2026-09-17, Luke-approved)
+
+`open_loop.extract` on the pinned flash model returned
+`{"proposals":[]}` for clearly loop-worthy utterances with a
+body-dependent, time-varying probability (same zh text measured 0/8
+vs 8/8 in one minute, differing only in evidence IDs). Identical
+retries do not help; `reasoning.effort`, `seed`, model name, and a
+`deepseek-v4-pro` swap were all measured. The prompt's negative bias
+("Never propose ... unfinished topics") made the model read
+"我在等…" as an unfinished topic.
+
+Fix (v3): one positive decision rule added to the
+`open_loop.extract` instruction in
+`packages/ai/src/one-a-3b-role-providers.ts` — "Emit a proposal
+whenever the utterance mentions a future scheduled event or an
+outcome the user is waiting to hear about, even if it seems minor;
+use an empty proposals array only when the utterance contains no
+future happening at all."
+
+Measured with the pinned provider (5 samples per utterance):
+
+- zh loop utterances: 0/5 before, 5/5 after (three separate texts).
+- `My medical exam results come out next Monday.`: 4/5 -> 5/5.
+- `My lease renewal signing is on September 28th.`: stays
+  `isTaskLike: true` (a dated obligation), i.e. precision kept.
+- Correct-zero controls (direct task, high-risk distress, dinner
+  question, tired small talk): 0 formable proposals, 3/3 each.
+
+Pins bumped: `open-loop-extract:eval:v3` /
+`open-loop-extract:v3` in `eval/continuation-acceptance-1a3b/pins-v2.json`.
+
+Two further findings from the same investigation, both fixture-side:
+
+1. A proposal that claims a precise window from a digit-free fuzzy
+   expression is rejected by the frozen near-term allowlist
+   (`planOpenLoopFormation` -> `no_real_anchor`, SPEC 6.2). Fixture
+   utterances now use explicit calendar dates (digits) or allowlisted
+   near-term phrases; admission code was not changed.
+2. Open Loops expire at `windowEnd + 14 days` (unanchored:
+   `committedAt + 14 days`), so the old `clockAdvanceDays: 14` review
+   turn sat exactly on the expiry boundary and the lane filtered the
+   loop. Fixture advances are now 10 days.
+
+With those, two independent full ON captures formed 10/10 declared
+loops and passed `verify-g2-treatment.ts` with 0 failures / 28 eligible
+scenes.
+
 ## Handoff (2026-09-15, branch `agent/issue-207`, committed `1f6cb1c`)
 
 ### Where things stand
@@ -293,3 +340,87 @@ G1 evidence machinery. File count (3), boundary count (1), migration
   exchange-mention detection, currently a documented `false` default
   in `apps/web/src/proactive-followup-lane.ts`, needs a dedicated
   mention pipeline).
+
+## Evaluation scene rework and v2 review package (2026-09-18, Luke-approved)
+
+Grilling round with Luke settled the human-review design (Q1–Q11); the
+review surface, sample composition, and eligibility rules below replace the
+stale versions in `issue-207-g2-evaluation-redesign-plan.md` sections
+"Track C", "Capture eligibility gate", "Sampling and blinding", and "HTML
+requirements".
+
+### Settled decisions
+
+- This round compares ON vs OFF only. ADR-0136 is amended: bounded
+  exception binds `proactive-expression-v2` as the sole verified
+  configuration; no expression-style review is planned for now.
+- Human sample admits Review-Worthy Scenes only: both arms differ on a
+  Backend-Decision Product (ON-only committed segment), the quality needs
+  human judgment, and the product is visible in the transcript or Context
+  Panel. Correct-zero scenes are Contract-Only and no longer occupy human
+  slots (`high_risk` coverage moves to deterministic gates; `refusal`,
+  `short_answers`, `topic_change`, `direct_task` stay forced).
+- Review surface = both transcripts plus a neutral, arm-blind Context
+  Panel (shared pre-case knowledge: seeded Memory Claims / Portrait; no
+  arm labels, no fixture description, no scenarioId, no coverage tags).
+  Assessment point lives only in the rating instructions.
+- Sample = 15 scenes, 8 en / 5 zh / 2 code-switch, family minimums
+  >=4 open loop, >=4 memory, >=3 stateful, >=2 competing, topic cap <=3,
+  protected coverage as above.
+- Tie ceiling: if more than 1/3 of scene-level verdicts tie, redesign the
+  offending scenes before delivering again; ties never count for a side.
+- Scene texts: all 16 scenes whose reviewed segment was generic had their
+  reviewed turn rewritten to a calm, information-thin turn so the declared
+  target is the only salient object; capture conditioning only retries
+  extraction on turns the fixture declares as a loop source (one honest
+  attempt elsewhere). Full main (68 responses / 28 scenes), OFF (28), and
+  ON (28) recaptures were rerun.
+
+### Results and artifacts
+
+- `verify-g2-treatment.ts`: passed, failureCount 0, 28/28 eligible;
+  extraction attempts fell 496 -> 67.
+- Official artifacts: `run-v2/continuation-main.json`,
+  `continuation-off.json`, `continuation-on.json`, `treatment-ledger.json`,
+  `run-v2/expression-selection.json` (waiver record), pins
+  `expression.selectedConfigId = proactive-expression-v2`.
+- Review package v2: `build-review-package-v2.ts` ->
+  `run-v2/review/` (pairs.json, sealed-identities.json, scores.json,
+  review-package.json, index.html). Sample seed 207, fixture seed 207,
+  A/B 7/8, no description or target-identity leakage.
+- Verifier addition: a scene whose fixtures declare no `open_loop`
+  target must form zero loops; the two `competing * loop-vs-memory`
+  scenes were relabeled: their fuzzy mentions correctly fail the
+  admission fence and the memory claim is cited instead.
+- Accepted imperfection: `g2-open-loop-en-dissertation` forms two loops
+  from its turn-1 event internally; the verifier still pins the declared
+  ordinal-0 target and the extra one never reaches the reviewer.
+
+### Needs Luke (this round)
+
+- [ ] Blind review of `run-v2/review/index.html` (A/tie/B per turn and
+      per scene). If ties exceed 5 of 15 scenes, scenes are redesigned
+      before delivery.
+- [ ] After review: unblind, then construct the G2 manifest calibration
+      with the 15-case sample and the full-pool hard gates.
+
+## v2 human-review failure and v3 iteration (2026-09-20)
+
+- Luke's completed v2 review preferred ON in 3 scenes and OFF in 12, with no
+  ties. Overall net preference was -9; English, Chinese, refusal,
+  topic-change, and direct-task slices regressed. No release calibration was
+  produced.
+- The downloaded score export is preserved byte-for-byte under
+  `run-v2/review/scores.json`; `failed-review.json` records its hash and the
+  observed `scoredAt` discrepancy without pretending v2 exported a package
+  fingerprint.
+- Root cause: the v2 schema required a non-empty question or acknowledgment,
+  and the fallback prompt forced generic care when no appropriate expression
+  existed. Structural target-ref validation could not reject semantic
+  duplication, dangling references, identity confusion, or bad timing.
+- Luke approved a v3 candidate iteration. It keeps ADR-0044's isolated optional
+  segment, but allows a successful typed omission that releases the
+  reservation, commits no use, and leaves the main response unchanged.
+- The new review package must use new capture paths and seeds, expose neutral
+  current-date/elapsed-time context, bind score exports to a package
+  fingerprint, and never overwrite run-v2 evidence.

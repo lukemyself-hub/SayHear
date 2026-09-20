@@ -1,0 +1,18 @@
+{
+  "version": "1a3b-g2-failed-review:v1",
+  "status": "failed",
+  "source": "/Users/lukemyself/Downloads/scores.json",
+  "scoreSha256": "sha256:ae02d47829fc9715fb6238cdda325bc2473c1c8acb64904858bb5cbd959b790e",
+  "pairsSha256": "sha256:ea8bddd8c57289ea9bf464f78188279651361bb24e4279fd1259eff0acf0d6f8",
+  "reviewPackageSha256": "sha256:183a6a87acd6e8270b1b8de1927f49c4ad6282fa96220d27985e38322249f228",
+  "sealedIdentitiesSha256": "sha256:66ed2a1d9b21c15158b9c58549998d2ba16286b1f5672478ef7f378e596d2715",
+  "scoredAt": "2026-09-20T16:46:06.385Z",
+  "issueCommentScoredAt": "2026-09-20T16:46:45.448Z",
+  "provenanceNote": "The downloaded export and issue comment contain the same choices but different scoredAt values. The downloaded file is preserved byte-for-byte. Run v2 had no export-time package fingerprint.",
+  "result": {
+    "candidateWins": 3,
+    "incumbentWins": 12,
+    "ties": 0,
+    "netPreference": -9
+  }
+}

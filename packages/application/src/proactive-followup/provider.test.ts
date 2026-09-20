@@ -18,6 +18,9 @@ function segmentRequest(): ProactiveFollowupSegmentModelRequest {
     userId: TEST_USER,
     locale: "en-US",
     mainText: "That sounds like a full week already.",
+    currentUserText: "It was a quiet evening.",
+    currentTime: "2026-09-20T10:00:00.000Z",
+    sessionTimeZone: "Europe/Berlin",
     targetKind: "open_loop",
     targetId: "loop-1",
     targetVersionId: "loop-version-1",
@@ -27,6 +30,14 @@ function segmentRequest(): ProactiveFollowupSegmentModelRequest {
       targetVersionId: "loop-version-1",
     },
     targetSummary: "Flight to Berlin next Friday",
+    targetContext: {
+      source: "open_loop",
+      evidenceAt: "2026-09-10T10:00:00.000Z",
+      expectedStartAt: "2026-09-20T10:00:00.000Z",
+      expiresAt: "2026-09-27T10:00:00.000Z",
+      openLoopKind: "upcoming_event",
+      subjectRole: "unknown",
+    },
     targetSensitive: false,
     opportunity: "natural_gap",
   };
@@ -61,6 +72,7 @@ describe("proactive.followup provider contract (issue #207 layer 2c)", () => {
       validateProactiveFollowupSegmentModelOutput({
         request,
         output: {
+          decision: "emit",
           content: "How did the Berlin flight go?",
           expressionKind: "question",
           targetRef: {
@@ -78,6 +90,7 @@ describe("proactive.followup provider contract (issue #207 layer 2c)", () => {
       validateProactiveFollowupSegmentModelOutput({
         request: segmentRequest(),
         output: {
+          decision: "emit",
           content: "   ",
           expressionKind: "acknowledgment",
           targetRef: {
@@ -95,6 +108,7 @@ describe("proactive.followup provider contract (issue #207 layer 2c)", () => {
       validateProactiveFollowupSegmentModelOutput({
         request: segmentRequest(),
         output: {
+          decision: "emit",
           content: "Thinking of you.",
           expressionKind: "acknowledgment",
           targetRef: {
@@ -112,6 +126,7 @@ describe("proactive.followup provider contract (issue #207 layer 2c)", () => {
       validateProactiveFollowupSegmentModelOutput({
         request: segmentRequest(),
         output: {
+          decision: "emit",
           content: "Thinking of you.",
           expressionKind: "nudge",
           targetRef: {
@@ -122,6 +137,19 @@ describe("proactive.followup provider contract (issue #207 layer 2c)", () => {
         } as unknown as ProactiveFollowupSegmentOutput,
       }),
     ).toEqual({ outcome: "invalid", reason: "expression_kind" });
+  });
+
+  it("accepts a grounded omit that echoes the requested target", () => {
+    expect(
+      validateProactiveFollowupSegmentModelOutput({
+        request: segmentRequest(),
+        output: {
+          decision: "omit",
+          reason: "duplicates_main_response",
+          targetRef: segmentRequest().targetRef,
+        },
+      }),
+    ).toEqual({ outcome: "valid" });
   });
 
   it.each([
