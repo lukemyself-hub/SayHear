@@ -136,7 +136,12 @@ import {
   asUserId,
 } from "@sayhear/domain";
 
-import { buildChampionAssembly, loadDotEnv } from "../memory-pairwise-126/shared";
+import {
+  buildChampionAssembly,
+  gitCommit,
+  loadDotEnv,
+  trackedWorkingTreeIsDirty,
+} from "../memory-pairwise-126/shared";
 import { sha256, type FrozenSharedInput } from "./protocol";
 import {
   F3_V2_ARM_RUN_VERSION,
@@ -506,7 +511,9 @@ function createLaneRepository(): OpenLoopExtractionRepository & {
       for (const formation of commitInput.formations) {
         loopTick += 1;
         loops.push({
-          loopId: `loop:${commitInput.sourceEventRevisionId}:${loopTick}`,
+          loopId: uuidFrom(
+            `loop:${commitInput.sourceEventRevisionId}:${loopTick}`,
+          ),
           kind: formation.kind,
           sourceEventRevisionId: commitInput.sourceEventRevisionId,
           localizedSummary: formation.localizedSummary,
@@ -2430,6 +2437,12 @@ async function runScene(input: {
 
 async function main(): Promise<void> {
   const arguments_ = parseArguments();
+  if (trackedWorkingTreeIsDirty()) {
+    throw new Error(
+      "Capture requires a clean tracked working tree so evaluatorCommit is reproducible.",
+    );
+  }
+  const evaluatorCommit = gitCommit();
   const environment = (() => {
     loadDotEnv(
       arguments_.envFile ? { override: true, path: arguments_.envFile } : undefined,
@@ -2749,6 +2762,7 @@ async function main(): Promise<void> {
       cleanIncumbentManifestFingerprint,
       conversationConfigId: cleanIncumbent.configId,
       conversationConfigurationFingerprint: cleanIncumbent.configurationFingerprint,
+      evaluatorCommit,
       format: F3_V2_MAIN_RUN_VERSION,
       group: GROUP,
       responses: sceneCaptures.flatMap((capture) => capture.mainResponses),
@@ -2770,6 +2784,7 @@ async function main(): Promise<void> {
       catalogVersion: manifest.version,
       configId,
       configurationFingerprint: v2ConfigurationFingerprint(pins, configId),
+      evaluatorCommit,
       format: F3_V2_ARM_RUN_VERSION,
       group: GROUP,
       scenarios: sceneCaptures.map((capture) => ({
@@ -2791,6 +2806,7 @@ async function main(): Promise<void> {
         catalogVersion: manifest.version,
         configId,
         configurationFingerprint: run.configurationFingerprint,
+        evaluatorCommit,
         format: F3_V2_LEDGER_VERSION,
         scenarios: sceneCaptures.map((capture) => ({
           ...capture.ledger,

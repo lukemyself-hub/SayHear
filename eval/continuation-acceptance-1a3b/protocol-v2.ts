@@ -220,6 +220,7 @@ export type V2ArmRun = Readonly<{
   catalogVersion: typeof F3_V2_CATALOG_VERSION;
   configId: string;
   configurationFingerprint: string;
+  evaluatorCommit: string;
   scenarios: readonly Readonly<{
     fixtureId: string;
     turns: readonly V2RunTurn[];
@@ -249,6 +250,7 @@ export type V2MainRun = Readonly<{
   cleanIncumbentCommit: string;
   conversationConfigId: string;
   conversationConfigurationFingerprint: string;
+  evaluatorCommit: string;
   responses: readonly V2MainResponse[];
 }>;
 
@@ -367,6 +369,7 @@ export type V2TreatmentLedger = Readonly<{
   catalogVersion: typeof F3_V2_CATALOG_VERSION;
   configId: string;
   configurationFingerprint: string;
+  evaluatorCommit: string;
   scenarios: readonly V2LedgerScenario[];
 }>;
 

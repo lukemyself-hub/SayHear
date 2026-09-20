@@ -78,6 +78,14 @@ export function verifyG2Treatment(input: Readonly<{
   const failures: string[] = [];
   const { ledger, main, off, on, scenes } = input;
 
+  if (
+    main.evaluatorCommit !== off.evaluatorCommit ||
+    main.evaluatorCommit !== on.evaluatorCommit ||
+    main.evaluatorCommit !== ledger.evaluatorCommit
+  ) {
+    failures.push("main, OFF, ON, and ledger evaluator commits do not match");
+  }
+
   if (main.version !== F3_V2_MAIN_RUN_VERSION) {
     failures.push(`main run version ${main.version} is not v2`);
   }
