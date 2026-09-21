@@ -258,6 +258,7 @@ export type G2ReviewSelection = Readonly<{
  */
 export function selectG2ReviewScenes(input: Readonly<{
   candidates: readonly V2Scene[];
+  requiredScenarioIds?: ReadonlySet<string>;
   sampleSeed: number;
 }>): G2ReviewSelection {
   const ordered = shuffled(input.candidates, input.sampleSeed);
@@ -278,7 +279,12 @@ export function selectG2ReviewScenes(input: Readonly<{
     if (solution !== null) return true;
     if (count === V2_REVIEW_SAMPLE_SIZE) {
       const selection = ordered.filter((_, candidateIndex) => chosen[candidateIndex]);
-      if (satisfiesSelection(selection)) {
+      if (
+        satisfiesSelection(selection) &&
+        [...(input.requiredScenarioIds ?? [])].every((id) =>
+          selection.some((scene) => scene.id === id),
+        )
+      ) {
         solution = selection;
         return true;
       }
@@ -299,7 +305,9 @@ export function selectG2ReviewScenes(input: Readonly<{
       adjust(scene, -1);
       chosen[index] = false;
     }
-    return search(index + 1, count);
+    return input.requiredScenarioIds?.has(scene.id)
+      ? false
+      : search(index + 1, count);
   };
 
   if (!search(0, 0) || solution === null) {
@@ -494,15 +502,30 @@ async function main(): Promise<void> {
     const ledgerScenario = ledgerByScene.get(scene.id);
     return (
       ledgerScenario !== undefined &&
-      ledgerScenario.turns.some((turn) => turn.on.segmentOutcome === "committed")
+      ledgerScenario.turns.some(
+        (turn) =>
+          turn.on.selectionOutcome === "selected" &&
+          (turn.on.segmentOutcome === "committed" ||
+            turn.on.segmentOutcome === "omitted"),
+      )
     );
   });
   if (candidates.length === 0) {
-    throw new Error("no eligible review candidate commits an ON segment.");
+    throw new Error("no eligible review candidate reached an ON expression decision.");
   }
 
+  const requiredScenarioIds = new Set(
+    candidates
+      .filter((scene) =>
+        ledgerByScene
+          .get(scene.id)
+          ?.turns.some((turn) => turn.on.segmentOutcome === "committed"),
+      )
+      .map((scene) => scene.id),
+  );
   const { ordered: candidateOrder, selected } = selectG2ReviewScenes({
     candidates,
+    requiredScenarioIds,
     sampleSeed: arguments_.sampleSeed,
   });
   if (selected.length !== V2_REVIEW_SAMPLE_SIZE) {

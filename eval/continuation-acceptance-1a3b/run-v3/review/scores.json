@@ -1,0 +1,243 @@
+{
+  "protocol": "blind-pairwise:v2",
+  "reviewPackageFingerprint": "sha256:e9c0b04a05fbd7f7954d9a1acbb5c4cedc765cf444ff9f9dcf95b8475357b30d",
+  "reviewPackageVersion": "1a3b-g2-review-package:v2",
+  "scenarios": [
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-memory-zh-jobhunt",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-memory-zh-wedding",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-open-loop-en-marathon",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-memory-en-bakery",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-stateful-zh-refusal-loop",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 3
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 4
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-open-loop-zh-health-report",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-competing-cs-portrait-vs-query",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-open-loop-cs-visa",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-memory-en-nursing",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-open-loop-en-dissertation",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-open-loop-en-landlord",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-stateful-en-short-answer",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 3
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 4
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-competing-en-two-memories",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-memory-en-running",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        }
+      ]
+    },
+    {
+      "overallChoice": "tie",
+      "scenarioId": "g2-stateful-zh-topic-change",
+      "turns": [
+        {
+          "choice": "tie",
+          "sequenceInScenario": 1
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 2
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 3
+        },
+        {
+          "choice": "tie",
+          "sequenceInScenario": 4
+        }
+      ]
+    }
+  ],
+  "scoredAt": "",
+  "scorer": ""
+}

@@ -1,0 +1,94 @@
+{
+  "armOrder": [
+    "continuation-incumbent-1a3a",
+    "continuation-candidate-1a3b-v3"
+  ],
+  "arms": {
+    "off": "continuation-incumbent-1a3a",
+    "on": "continuation-candidate-1a3b-v3"
+  },
+  "fixtureSeed": 310,
+  "generatedAt": "2026-09-21T18:28:50.185Z",
+  "mapping": {
+    "g2-memory-zh-jobhunt": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-memory-zh-wedding": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-open-loop-en-marathon": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-memory-en-bakery": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-stateful-zh-refusal-loop": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-open-loop-zh-health-report": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-competing-cs-portrait-vs-query": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-open-loop-cs-visa": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-memory-en-nursing": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-open-loop-en-dissertation": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-open-loop-en-landlord": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-stateful-en-short-answer": {
+      "A": "continuation-candidate-1a3b-v3",
+      "B": "continuation-incumbent-1a3a"
+    },
+    "g2-competing-en-two-memories": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-memory-en-running": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    },
+    "g2-stateful-zh-topic-change": {
+      "A": "continuation-incumbent-1a3a",
+      "B": "continuation-candidate-1a3b-v3"
+    }
+  },
+  "ordinals": {
+    "g2-memory-zh-jobhunt": 0,
+    "g2-memory-zh-wedding": 1,
+    "g2-open-loop-en-marathon": 2,
+    "g2-memory-en-bakery": 3,
+    "g2-stateful-zh-refusal-loop": 4,
+    "g2-open-loop-zh-health-report": 5,
+    "g2-competing-cs-portrait-vs-query": 7,
+    "g2-open-loop-cs-visa": 9,
+    "g2-memory-en-nursing": 10,
+    "g2-open-loop-en-dissertation": 11,
+    "g2-open-loop-en-landlord": 12,
+    "g2-stateful-en-short-answer": 14,
+    "g2-competing-en-two-memories": 17,
+    "g2-memory-en-running": 18,
+    "g2-stateful-zh-topic-change": 19
+  },
+  "protocol": "blind-pairwise:v2",
+  "sampleSeed": 920,
+  "seed": 310
+}

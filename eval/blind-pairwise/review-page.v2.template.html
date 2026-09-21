@@ -184,7 +184,7 @@
           <span class="chip">English 8 · 中文 5 · mix 2</span>
           <span class="chip">受保护类别至少覆盖 1 个</span>
         </div>
-        <div class="notice"><strong>评测原则：</strong>先读完整场景和 A / B 回应，再凭第一判断选择。若没有明显更好，直接选“持平”，不要为了让结果产生差异而硬选。A / B 身份保持盲化；页面不联网，草稿只保存在当前浏览器。</div>
+        <div class="notice"><strong>评测原则：</strong>先读完整场景和 A / B 回应，再凭第一判断选择。若没有明显更好，直接选“持平”，不要为了让结果产生差异而硬选。A / B 身份保持盲化；页面不联网。直接以文件打开时，请在关闭页面前完成导出。</div>
       </header>
 
       <div class="toolbar">
@@ -254,6 +254,7 @@
       function blankState() { return { scorer: "", scenarios: {} }; }
 
       function loadState() {
+        if (window.location.protocol === "file:") return blankState();
         try {
           const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
           if (!parsed || typeof parsed !== "object") return blankState();
@@ -265,6 +266,7 @@
       }
 
       function saveState() {
+        if (window.location.protocol === "file:") return;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
         catch { setExportStatus("浏览器没有允许本地保存。请保持页面打开，并尽快导出。", "warn"); }
       }
@@ -414,7 +416,7 @@
       function clearDraft() {
         if (!window.confirm("清除这个浏览器里的全部 v2 评测记录？这个动作不能撤销。")) return;
         state = blankState();
-        localStorage.removeItem(STORAGE_KEY);
+        if (window.location.protocol !== "file:") localStorage.removeItem(STORAGE_KEY);
         document.getElementById("scorer").value = "";
         renderScenario();
         updateProgress();

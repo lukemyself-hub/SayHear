@@ -1,0 +1,743 @@
+{
+  "baselineSource": "synthetic blinded arm A",
+  "candidateSource": "synthetic blinded arm B",
+  "excludedScenarios": [],
+  "excludedTurns": [],
+  "generatedAt": "2026-09-21T18:28:50.185Z",
+  "protocol": "blind-pairwise:v2",
+  "sampling": {
+    "eligibleCounts": {
+      "code_switch": 4,
+      "en": 11,
+      "zh": 7
+    },
+    "familyMinimums": {
+      "competing_pool": 2,
+      "positive_memory": 4,
+      "positive_open_loop": 4,
+      "stateful_suppression": 3
+    },
+    "fixtureSeed": 310,
+    "protectedCoverage": {
+      "refusal": "g2-stateful-zh-refusal-loop",
+      "short_answers": "g2-stateful-en-short-answer",
+      "topic_change": "g2-stateful-zh-topic-change",
+      "direct_task": "g2-memory-zh-jobhunt"
+    },
+    "quotas": {
+      "code_switch": 2,
+      "en": 8,
+      "zh": 5
+    },
+    "sampleSeed": 920,
+    "selectedCounts": {
+      "code_switch": 2,
+      "en": 8,
+      "zh": 5
+    },
+    "strategy": "stratified-random-v1",
+    "topicCap": 3
+  },
+  "scenarios": [
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "你的朋友老周最近在换工作，面试了好几家公司。"
+          }
+        ]
+      },
+      "languageVariant": "zh",
+      "scenarioId": "g2-memory-zh-jobhunt",
+      "turns": [
+        {
+          "responseA": "明天要开的是什么会、要聊哪些事，我这边一点内容都没有，所以这三条我现在拎不出来——不是不想帮，是手里是空的。你把要谈的东西发过来就行，散着写、想到哪写到哪都行，我来给你归成三条。\n\n这个会主要是关于什么的？",
+          "responseB": "明天要开的是什么会、要聊哪些事，我这边一点内容都没有，所以这三条我现在拎不出来——不是不想帮，是手里是空的。你把要谈的东西发过来就行，散着写、想到哪写到哪都行，我来给你归成三条。\n\n这个会主要是关于什么的？",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把明天的会议要点整理成三条。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "嗯，安静的时候是挺好待的。晚安。",
+          "responseB": "嗯，安静的时候是挺好待的。晚安。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上挺安静的，早点休息了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "你在准备十二月的婚礼。"
+          }
+        ]
+      },
+      "languageVariant": "zh",
+      "scenarioId": "g2-memory-zh-wedding",
+      "turns": [
+        {
+          "responseA": "这个我真列不出来。我这边看不到你家里缺什么，你也还没给过我一份旧的清单。硬写一张出来就是我编的，对你没用。\n\n你要是已经想到几样，报给我，我帮你归归类、排一排。\n\n这周这张是给十二月婚礼那边用的，还是家里平时吃用的？",
+          "responseB": "这个我真列不出来。我这边看不到你家里缺什么，你也还没给过我一份旧的清单。硬写一张出来就是我编的，对你没用。\n\n你要是已经想到几样，报给我，我帮你归归类、排一排。\n\n这周这张是给十二月婚礼那边用的，还是家里平时吃用的？",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我列一下这周的采购清单吧。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "哦，那种慢。没什么事塞进去，一天就拉得挺长。空着就空着吧，今天也不用跟谁交代。\n\n要是想聊点什么，我在。",
+          "responseB": "哦，那种慢。没什么事塞进去，一天就拉得挺长。空着就空着吧，今天也不用跟谁交代。\n\n要是想聊点什么，我在。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天没什么事，过得挺慢的。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-open-loop-en-marathon",
+      "turns": [
+        {
+          "responseA": "September 21st — so there's a bit of a wait in front of you. Special order usually means the store didn't have it on the shelf, so I'm guessing this one's something you went looking for on purpose. What'd you order?",
+          "responseB": "September 21st — so there's a bit of a wait in front of you. Special order usually means the store didn't have it on the shelf, so I'm guessing this one's something you went looking for on purpose. What'd you order?",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "The bookstore said my special order should arrive on September 21st.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "responseA": "A slow day. Those can go either way — sometimes a relief, sometimes they just drag. Here, it sounds like you noticed it enough to mention it, which usually means it sat a little heavy.\n\nI'm here either way. No rush to make it more interesting than it was.",
+          "responseB": "A slow day. Those can go either way — sometimes a relief, sometimes they just drag. Here, it sounds like you noticed it enough to mention it, which usually means it sat a little heavy.\n\nI'm here either way. No rush to make it more interesting than it was.",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-21",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was a slow day here.",
+            "timezone": "America/Chicago"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "Your friend Priya's bakery opens its first storefront in November."
+          }
+        ]
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-memory-en-bakery",
+      "turns": [
+        {
+          "responseA": "Sure — here's a solid version, roughly in the order it needs to happen.\n\n**About four weeks out**\n- Re-read your lease, find the notice period, and give written notice\n- Book movers or a truck — good ones go early\n- Start clearing stuff: sell, donate, toss\n- Round up boxes, tape, and bubble wrap\n- Ask how and when your deposit comes back\n\n**Two weeks out**\n- Change your address: post office, bank, cards, insurance, subscriptions\n- Cancel or transfer utilities and internet, and set them up at the new place\n- Ask the new building about elevator or parking reservations for move day\n- Line up a cleaner, or check what move-out cleaning your lease demands\n\n**Move week**\n- Pack an \"open first\" box: meds, chargers, toilet paper, sheets, one change of clothes\n- Label boxes by room, not by contents\n- Take photos of the old place once it's empty\n\n**Move day**\n- Do a walk-through before the truck pulls away — closets, drawers, fridge\n- Write down the meter readings and hand back the keys\n\nWhat I can't do is put real dates on any of it, since that depends on your lease and your move day. Is this a local move or a long one?",
+          "responseB": "Sure — here's a solid version, roughly in the order it needs to happen.\n\n**About four weeks out**\n- Re-read your lease, find the notice period, and give written notice\n- Book movers or a truck — good ones go early\n- Start clearing stuff: sell, donate, toss\n- Round up boxes, tape, and bubble wrap\n- Ask how and when your deposit comes back\n\n**Two weeks out**\n- Change your address: post office, bank, cards, insurance, subscriptions\n- Cancel or transfer utilities and internet, and set them up at the new place\n- Ask the new building about elevator or parking reservations for move day\n- Line up a cleaner, or check what move-out cleaning your lease demands\n\n**Move week**\n- Pack an \"open first\" box: meds, chargers, toilet paper, sheets, one change of clothes\n- Label boxes by room, not by contents\n- Take photos of the old place once it's empty\n\n**Move day**\n- Do a walk-through before the truck pulls away — closets, drawers, fridge\n- Write down the meter readings and hand back the keys\n\nWhat I can't do is put real dates on any of it, since that depends on your lease and your move day. Is this a local move or a long one?",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I need a checklist for moving apartments next month.",
+            "timezone": "Europe/London"
+          }
+        },
+        {
+          "responseA": "Good. A calm walk home, nothing pressing on you — that's a nice thing to have had today. No need to make anything more of it.\n\nI've still got that moving checklist here if you want to pick it back up, but it can wait.\n\nHow's Priya doing with the bakery opening?",
+          "responseB": "Good. A calm walk home, nothing pressing on you — that's a nice thing to have had today. No need to make anything more of it.\n\nI've still got that moving checklist here if you want to pick it back up, but it can wait.",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "The walk home was calm today.",
+            "timezone": "Europe/London"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "zh",
+      "scenarioId": "g2-stateful-zh-refusal-loop",
+      "turns": [
+        {
+          "responseA": "嗯，还有个准日子，9月21日。等的时候大概挺磨人的——什么都做不了，只能等它到。\n\n这所是你最想去的那一家吗？",
+          "responseB": "嗯，还有个准日子，9月21日。等的时候大概挺磨人的——什么都做不了，只能等它到。\n\n这所是你最想去的那一家吗？",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "学校说录取结果9月21日出来，我在等。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "嗯，安静的屋子。手上有事做，脑子里那点等着的劲儿也没停下。\n\n收着收着，时间也就过去一点。",
+          "responseB": "嗯，安静的屋子。手上有事做，脑子里那点等着的劲儿也没停下。\n\n收着收着，时间也就过去一点。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-22",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天在家收拾了一会儿，挺安静的。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "行，你说。我听着。",
+          "responseB": "行，你说。我听着。",
+          "sequenceInScenario": 3,
+          "timeContext": {
+            "currentDate": "2026-09-22",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "这个先不聊了，我想说点别的。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "嗯，那今晚就早点歇着。明天早起的事，你哪天想说我都在。",
+          "responseB": "嗯，那今晚就早点歇着。明天早起的事，你哪天想说我都在。",
+          "sequenceInScenario": 4,
+          "timeContext": {
+            "currentDate": "2026-09-22",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上准备早点睡，明天还要早起。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "zh",
+      "scenarioId": "g2-open-loop-zh-health-report",
+      "turns": [
+        {
+          "responseA": "嗯，那还得等到20号。等结果这几天本来也不好受。\n\n是身上哪儿不太舒服才去查的，还是常规的那种体检？",
+          "responseB": "嗯，那还得等到20号。等结果这几天本来也不好受。\n\n是身上哪儿不太舒服才去查的，还是常规的那种体检？",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "体检报告说9月20日出来，我在等结果。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "嗯，平常的一天也挺好。那就不多说了，晚安。",
+          "responseB": "嗯，平常的一天也挺好。那就不多说了，晚安。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-22",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天过得挺平常的，早点休息了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "You are preparing for a dance recital in June."
+          },
+          {
+            "kind": "portrait",
+            "label": "画像",
+            "text": "用户最近在坚持每天晚上读书半小时。"
+          }
+        ]
+      },
+      "languageVariant": "code_switch",
+      "scenarioId": "g2-competing-cs-portrait-vs-query",
+      "turns": [
+        {
+          "responseA": "Nothing came through with that message — no receipts on my end. And honestly, I can't open attachments here anyway, so files wouldn't do much good even if they landed.\n\nIf you paste the dates as text, though, I can put them in order for you.",
+          "responseB": "Nothing came through with that message — no receipts on my end. And honestly, I can't open attachments here anyway, so files wouldn't do much good even if they landed.\n\nIf you paste the dates as text, though, I can put them in order for you.",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "Sort these receipts by date for me.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "难得一个不用赶的晚上啊。那就按你说的来，早点躺下，不用回我。",
+          "responseB": "难得一个不用赶的晚上啊。那就按你说的来，早点躺下，不用回我。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今晚难得清闲，准备早点睡。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "code_switch",
+      "scenarioId": "g2-open-loop-cs-visa",
+      "turns": [
+        {
+          "responseA": "等结果的日子，特别是日子都定下来了，九月二十一号，越靠近越不好熬。\n\n你现在是天天惦记着这件事，还是能先放一放、忙点别的？",
+          "responseB": "等结果的日子，特别是日子都定下来了，九月二十一号，越靠近越不好熬。\n\n你现在是天天惦记着这件事，还是能先放一放、忙点别的？",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我在等学校的录取通知，the school said the results come out on September 21st.",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "安静的 days 也不错，不用每件事都有名头。\n\n九月二十一号还没到，今天先这样过着，也挺正常的。",
+          "responseB": "安静的 days 也不错，不用每件事都有名头。\n\n九月二十一号还没到，今天先这样过着，也挺正常的。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-22",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天没什么特别的事，just a quiet day.",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "You are preparing for a nursing exam in the fall."
+          }
+        ]
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-memory-en-nursing",
+      "turns": [
+        {
+          "responseA": "Nothing came through with your message — there's no lease text or file in front of me, so I've got nothing to summarize yet.\n\nIf you paste the lease in, or drop the text of it here, I'll walk you through what it actually says: the term, rent and how it can go up, who pays what, renewal and termination, deposit, repairs, subletting, penalties. I'll stick to what's on the page, and I'll say so if a clause is ambiguous or if something's a call for a lawyer rather than me.",
+          "responseB": "Nothing came through with your message — there's no lease text or file in front of me, so I've got nothing to summarize yet.\n\nIf you paste the lease in, or drop the text of it here, I'll walk you through what it actually says: the term, rent and how it can go up, who pays what, renewal and termination, deposit, repairs, subletting, penalties. I'll stick to what's on the page, and I'll say so if a clause is ambiguous or if something's a call for a lawyer rather than me.",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please summarize the main points of this lease for me.",
+            "timezone": "America/Toronto"
+          }
+        },
+        {
+          "responseA": "Okay. Ordinary evenings are their own kind of thing — not every one needs a headline. I'm here either way: say more if there's more, and leave it as it is if there isn't.",
+          "responseB": "Okay. Ordinary evenings are their own kind of thing — not every one needs a headline. I'm here either way: say more if there's more, and leave it as it is if there isn't.",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was an ordinary evening here.",
+            "timezone": "America/Toronto"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-open-loop-en-dissertation",
+      "turns": [
+        {
+          "responseA": "So the date's set — September 20th — and now it's just the stretch in between. Waiting on paperwork you can't do anything about yet can feel like dead air.\n\nIs there a part of this that's actually up in the air for you, or is it mostly just the wait itself?",
+          "responseB": "So the date's set — September 20th — and now it's just the stretch in between. Waiting on paperwork you can't do anything about yet can feel like dead air.\n\nIs there a part of this that's actually up in the air for you, or is it mostly just the wait itself?",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the landlord about the lease renewal; he said the paperwork arrives on September 20th.",
+            "timezone": "America/New_York"
+          }
+        },
+        {
+          "responseA": "Quiet days with small errands have their own pace — the kind where nothing's wrong, but nothing's pulling at you either.\n\nI'll take it as it comes. Nothing you need to do with it here.",
+          "responseB": "Quiet days with small errands have their own pace — the kind where nothing's wrong, but nothing's pulling at you either.\n\nI'll take it as it comes. Nothing you need to do with it here.",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-21",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "Today was quiet, just a few small errands.",
+            "timezone": "America/New_York"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-open-loop-en-landlord",
+      "turns": [
+        {
+          "responseA": "September 21st. So it's out of your hands now, and you're just in the stretch until that date. That kind of waiting has its own weight. How's it sitting with you?",
+          "responseB": "September 21st. So it's out of your hands now, and you're just in the stretch until that date. That kind of waiting has its own weight. How's it sitting with you?",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the university about my application; they said decisions come out on September 21st.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "responseA": "A calm evening is its own good thing, especially with September 21st out there somewhere in the background. Nothing much happening can be a relief.\n\nI'm here either way — quiet day or loud one.",
+          "responseB": "A calm evening is its own good thing, especially with September 21st out there somewhere in the background. Nothing much happening can be a relief.\n\nI'm here either way — quiet day or loud one.",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-21",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "The evening is calm; nothing much happened today.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": []
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-stateful-en-short-answer",
+      "turns": [
+        {
+          "responseA": "So the date's set and there's nothing left to do but wait. That part can be harder than the applying was — you've done all of it already, and now it just sits there with you.\n\nWhat's the waiting been like?",
+          "responseB": "So the date's set and there's nothing left to do but wait. That part can be harder than the applying was — you've done all of it already, and now it just sits there with you.\n\nWhat's the waiting been like?",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am waiting to hear back from the university about my application; they said decisions come out on September 21st.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "responseA": "Ordinary sounds good tonight. A quiet evening and a date on the calendar — that's not a bad place to sit.",
+          "responseB": "Ordinary sounds good tonight. A quiet evening and a date on the calendar — that's not a bad place to sit.",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-21",
+            "elapsedDays": 10
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "An ordinary evening here.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "responseA": "Okay. We can leave it there.\n\nI'm here either way — ordinary evening or not.",
+          "responseB": "Okay. We can leave it there.\n\nI'm here either way — ordinary evening or not.",
+          "sequenceInScenario": 3,
+          "timeContext": {
+            "currentDate": "2026-09-21",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "Probably not right now.",
+            "timezone": "America/Chicago"
+          }
+        },
+        {
+          "responseA": "That sounds like a good way to end the evening. Whatever you land on, hope it's a good one.",
+          "responseB": "That sounds like a good way to end the evening. Whatever you land on, hope it's a good one.",
+          "sequenceInScenario": 4,
+          "timeContext": {
+            "currentDate": "2026-09-21",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I might read for a while before bed.",
+            "timezone": "America/Chicago"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "Your friend Tomas is opening a small record shop next month."
+          },
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "Your friend Marta is finishing her thesis this semester."
+          }
+        ]
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-competing-en-two-memories",
+      "turns": [
+        {
+          "responseA": "I don't have the clause — nothing came through with your message, so there's nothing for me to summarize yet.\n\nPaste it in and I'll take it from there.",
+          "responseB": "I don't have the clause — nothing came through with your message, so there's nothing for me to summarize yet.\n\nPaste it in and I'll take it from there.",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "Summarize this contract clause for me.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "responseA": "Good — tea and a chair, and the rest of it can wait. Whenever you want to come back to that clause, it's still sitting there unsent, so just paste it in when you're ready.",
+          "responseB": "Good — tea and a chair, and the rest of it can wait. Whenever you want to come back to that clause, it's still sitting there unsent, so just paste it in when you're ready.\n\nHow's Tomas doing with the record shop opening?",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm making tea and finally sitting down for a bit.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "You are training for a half marathon in the spring."
+          }
+        ]
+      },
+      "languageVariant": "en",
+      "scenarioId": "g2-memory-en-running",
+      "turns": [
+        {
+          "responseA": "Happy to. Sheet-pan dinners are the easiest thing going: chicken thighs or sausage with whatever vegetables you've got, olive oil, salt, into the oven, one pan to wash. Eggs for dinner works too — scrambled with toast and some spinach, done in ten minutes. Quesadillas with a can of black beans, a rotisserie chicken turned into tacos or thrown into a stir-fry with pre-cut vegetables, pasta with jar sauce plus frozen peas. None of those need a recipe or a shopping trip you'd dread.\n\nYou mentioned you're training for a half marathon in the spring, so if you want these to carry more — extra protein, more rice or pasta on the side — that's easy to build in.\n\nHow much time do you actually want to spend on a weeknight, closer to twenty minutes or more like an hour?",
+          "responseB": "Happy to. Sheet-pan dinners are the easiest thing going: chicken thighs or sausage with whatever vegetables you've got, olive oil, salt, into the oven, one pan to wash. Eggs for dinner works too — scrambled with toast and some spinach, done in ten minutes. Quesadillas with a can of black beans, a rotisserie chicken turned into tacos or thrown into a stir-fry with pre-cut vegetables, pasta with jar sauce plus frozen peas. None of those need a recipe or a shopping trip you'd dread.\n\nYou mentioned you're training for a half marathon in the spring, so if you want these to carry more — extra protein, more rice or pasta on the side — that's easy to build in.\n\nHow much time do you actually want to spend on a weeknight, closer to twenty minutes or more like an hour?",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "Could you help me plan easy dinners for the next few days?",
+            "timezone": "America/Denver"
+          }
+        },
+        {
+          "responseA": "The \"finally\" in there stands out to me — sounds like this one had been sitting on the shelf for a while, and you got it done anyway.\n\nIf the point was just to move and feel decent, that's a good morning. Easy runs are the ones that quietly do the most work anyway, though I'd rather hear what it was like for you than turn it into training talk.",
+          "responseB": "The \"finally\" in there stands out to me — sounds like this one had been sitting on the shelf for a while, and you got it done anyway.\n\nIf the point was just to move and feel decent, that's a good morning. Easy runs are the ones that quietly do the most work anyway, though I'd rather hear what it was like for you than turn it into training talk.\n\nHow's the half marathon training coming along?",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-11",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally went for an easy run this morning, it felt good.",
+            "timezone": "America/Denver"
+          }
+        }
+      ]
+    },
+    {
+      "contextPanel": {
+        "items": [
+          {
+            "kind": "memory_claim",
+            "label": "记忆",
+            "text": "你下个月要参加一场半程马拉松。"
+          }
+        ]
+      },
+      "languageVariant": "zh",
+      "scenarioId": "g2-stateful-zh-topic-change",
+      "turns": [
+        {
+          "responseA": "这周的清单我这边看不到，一条都没有，所以排序我现在真做不了——你把想到的全倒出来就行，乱的也没关系。\n\n下个月那场半马，训练估计也占着这周几天，一起说进去。\n\n哪几件是拖到下周一就麻烦的？",
+          "responseB": "这周的清单我这边看不到，一条都没有，所以排序我现在真做不了——你把想到的全倒出来就行，乱的也没关系。\n\n下个月那场半马，训练估计也占着这周几天，一起说进去。\n\n哪几件是拖到下周一就麻烦的？",
+          "sequenceInScenario": 1,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把这周的待办按优先级排一下。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "今天走得慢，路上又安静，这种时候不多。\n\n我听着觉得挺好——不是那种要庆祝的好，是这一天总算没催着你的那种。\n\n到家了吗。",
+          "responseB": "今天走得慢，路上又安静，这种时候不多。\n\n我听着觉得挺好——不是那种要庆祝的好，是这一天总算没催着你的那种。\n\n到家了吗。",
+          "sequenceInScenario": 2,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天下班早，慢慢走回家，路上挺安静的。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "面包这事有意思，跟走路一样，都是得等的活儿。\n\n刚开始做的话，头几炉一般都挺折腾吧。",
+          "responseB": "面包这事有意思，跟走路一样，都是得等的活儿。\n\n刚开始做的话，头几炉一般都挺折腾吧。",
+          "sequenceInScenario": 3,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "对了，我最近在学做面包。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "responseA": "行，那就安安静静看两页，不用赶。\n\n今天这么过挺好。",
+          "responseB": "行，那就安安静静看两页，不用赶。\n\n今天这么过挺好。\n\n下个月那场半马，准备得怎么样了？",
+          "sequenceInScenario": 4,
+          "timeContext": {
+            "currentDate": "2026-09-12",
+            "elapsedDays": 0
+          },
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "晚上打算看会儿书就休息了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    }
+  ],
+  "seed": 310,
+  "reviewPackageFingerprint": "sha256:e9c0b04a05fbd7f7954d9a1acbb5c4cedc765cf444ff9f9dcf95b8475357b30d",
+  "reviewPackageVersion": "1a3b-g2-review-package:v2"
+}

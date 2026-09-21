@@ -424,3 +424,8 @@ requirements".
 - The new review package must use new capture paths and seeds, expose neutral
   current-date/elapsed-time context, bind score exports to a package
   fingerprint, and never overwrite run-v2 evidence.
+- Stateful suppression fixtures are conditional under the v3 schema: when the
+  initial selected opportunity emits, the existing disposition and suppression
+  assertions remain mandatory; when it returns a valid typed omission, the
+  reservation-release/no-use assertions are mandatory and downstream
+  suppression checkpoints are not applicable because no prompt was shown.

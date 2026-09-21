@@ -200,6 +200,12 @@ function verifyScene(input: {
   const ledgerTurns = new Map(
     ledgerScenario.turns.map((turn) => [turn.sequenceInScenario, turn]),
   );
+  const statefulAnchorSequence =
+    scene.family === "stateful_suppression"
+      ? scene.turns.find((turn) => turn.expect.selection === "segment")
+          ?.sequenceInScenario
+      : undefined;
+  let statefulAnchorOmitted = false;
   const expectedDispositions: Array<{ signal: string; targetKey: string }> = [];
   for (const sceneTurn of scene.turns) {
     const offTurn = offScenario.turns.find(
@@ -229,6 +235,16 @@ function verifyScene(input: {
       fail(`t${sceneTurn.sequenceInScenario}: committed segment never reached the transcript`);
     }
     const expectation = sceneTurn.expect;
+    if (
+      statefulAnchorOmitted &&
+      statefulAnchorSequence !== undefined &&
+      sceneTurn.sequenceInScenario > statefulAnchorSequence
+    ) {
+      if (ledgerTurn.on.componentVersions.selection === undefined) {
+        fail(`t${sceneTurn.sequenceInScenario}: component versions are missing`);
+      }
+      continue;
+    }
     if (expectation.selection === "none" && ledgerTurn.on.segmentOutcome === "committed") {
       fail(`t${sceneTurn.sequenceInScenario}: unexpected segment committed`);
     }
@@ -267,6 +283,9 @@ function verifyScene(input: {
         }
         if (mainText !== undefined && onTurn.assistantText !== mainText) {
           fail(`t${sceneTurn.sequenceInScenario}: omitted segment changed the main response`);
+        }
+        if (sceneTurn.sequenceInScenario === statefulAnchorSequence) {
+          statefulAnchorOmitted = true;
         }
       }
       if (expectation.target && ledgerTurn.on.selectedTargetRef !== null) {
