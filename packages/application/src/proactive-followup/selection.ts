@@ -179,6 +179,11 @@ function selectionManifest(
   selectedTarget: ProactiveFollowupSelectionManifest["selectedTarget"],
 ): ProactiveFollowupSelectionManifest {
   const focus = input.dialogue.currentRequestRequiresFocus;
+  const opportunity = input.dialogue.proactiveFollowupOpportunity ?? {
+    value: null,
+    confidence: 0,
+    sourceRevisionIds: [],
+  };
   const dialogueCoreIsCurrent =
     input.dialogue.status === "current" &&
     input.dialogue.coveredThroughSequence === input.currentUserEventSequence &&
@@ -189,12 +194,18 @@ function selectionManifest(
     Number.isFinite(focus.confidence) &&
     focus.confidence >= PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR &&
     focus.sourceRevisionIds.includes(input.currentUserEventRevisionId);
+  const opportunitySignalIsCurrent =
+    opportunity.value !== null &&
+    Number.isFinite(opportunity.confidence) &&
+    opportunity.confidence >= PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR &&
+    opportunity.sourceRevisionIds.includes(input.currentUserEventRevisionId) &&
+    opportunity.value === input.opportunity;
   const dialogueIsCurrent = dialogueCoreIsCurrent && focusSignalIsCurrent;
-  const focusFreeOpportunity = ![
-    "current_topic",
-    "direct_task",
-    "urgent_or_high_risk",
-  ].includes(input.opportunity);
+  const focusFreeOpportunity =
+    opportunitySignalIsCurrent &&
+    (input.opportunity === "greeting" ||
+      input.opportunity === "open_start" ||
+      input.opportunity === "natural_gap");
   return {
     manifestVersion: PROACTIVE_FOLLOWUP_MANIFEST_VERSION,
     policyBundleVersion: PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
@@ -213,6 +224,13 @@ function selectionManifest(
     currentSourceRevision: input.currentSourceRevision,
     opportunity: input.opportunity,
     opportunityMode: input.opportunity,
+    proactiveFollowupOpportunity: {
+      ...opportunity,
+      freshness:
+        dialogueCoreIsCurrent && opportunitySignalIsCurrent
+          ? "current"
+          : "stale",
+    },
     currentRequestRequiresFocus: {
       ...focus,
       freshness: dialogueIsCurrent ? "current" : "stale",
@@ -224,9 +242,20 @@ function selectionManifest(
         reason: input.ordinaryQuestionAlreadyAsked ? "ordinary_question_present" : null,
       },
       {
+        gate: "opportunity_signal_current",
+        passed: opportunitySignalIsCurrent,
+        reason: opportunitySignalIsCurrent
+          ? null
+          : "opportunity_signal_not_current",
+      },
+      {
         gate: "focus_free_opportunity",
         passed: focusFreeOpportunity,
-        reason: focusFreeOpportunity ? null : "focus_required_by_opportunity",
+        reason: focusFreeOpportunity
+          ? null
+          : opportunitySignalIsCurrent
+            ? "focus_required_by_opportunity"
+            : "opportunity_signal_not_current",
       },
       {
         gate: "focus_signal_current",
@@ -429,10 +458,24 @@ export function selectProactiveFollowupTarget(
   if (input.ordinaryQuestionAlreadyAsked) {
     return none(input, "ordinary_question_present");
   }
+  const opportunity = input.dialogue.proactiveFollowupOpportunity ?? {
+    value: null,
+    confidence: 0,
+    sourceRevisionIds: [],
+  };
   if (
-    input.opportunity === "current_topic" ||
-    input.opportunity === "direct_task" ||
-    input.opportunity === "urgent_or_high_risk"
+    opportunity.value === null ||
+    !Number.isFinite(opportunity.confidence) ||
+    opportunity.confidence < PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR ||
+    !opportunity.sourceRevisionIds.includes(input.currentUserEventRevisionId) ||
+    opportunity.value !== input.opportunity
+  ) {
+    return none(input, "opportunity_signal_not_ready");
+  }
+  if (
+    input.opportunity !== "greeting" &&
+    input.opportunity !== "open_start" &&
+    input.opportunity !== "natural_gap"
   ) {
     return none(input, "focus_required_by_opportunity");
   }

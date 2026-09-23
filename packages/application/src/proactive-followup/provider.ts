@@ -62,10 +62,15 @@ export type ProactiveFollowupSegmentModelRequest = Readonly<{
   }>;
   /** Deterministic target rendering; null when the lane carries none. */
   targetSummary: string | null;
+  /** Exact source Event text for a selected Open Loop; absent for Memory. */
+  sourceUserText: string | null;
   targetContext: Readonly<{
     source: "open_loop" | "person_portrait" | "query_retrieval";
     evidenceAt: string;
     expectedStartAt: string | null;
+    expectedEndAt: string | null;
+    expectedTimePrecision: string | null;
+    expectedTimeZone: string | null;
     expiresAt: string | null;
     openLoopKind: "upcoming_event" | "awaited_outcome" | null;
     subjectRole: "user" | "other" | "unknown";

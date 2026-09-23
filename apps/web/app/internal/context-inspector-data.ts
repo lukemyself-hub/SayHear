@@ -10,6 +10,7 @@ export const DIALOGUE_STATE_FIELDS = [
   "emotional_intensity",
   "advice_explicitly_requested",
   "current_request_requires_focus",
+  "proactive_followup_opportunity",
   "close_intent",
   "user_willing_to_elaborate",
 ] as const;

@@ -69,6 +69,16 @@ async function readJson(file: string): Promise<unknown> {
 
 function validatePairs(value: unknown, file: string): PairsFile {
   if (
+    isRecord(value) &&
+    (value.protocol === "blind-pairwise:g2-v4" ||
+      value.protocolVersion === "blind-pairwise:g2-v4" ||
+      (isRecord(value.payload) && value.payload.protocolVersion === "blind-pairwise:g2-v4"))
+  ) {
+    throw new Error(
+      `${file} uses blind-pairwise:g2-v4; the legacy unblinder refuses v4. Use eval/continuation-acceptance-1a3b/unblind-v4.ts.`,
+    );
+  }
+  if (
     !isRecord(value) ||
     (value.protocol !== BLIND_PAIRWISE_PROTOCOL_V1 &&
       value.protocol !== BLIND_PAIRWISE_PROTOCOL_V2) ||

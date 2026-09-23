@@ -211,6 +211,17 @@ export type ProactiveFollowupStageReaders = Readonly<{
     targetVersionId: string;
     now: Date;
   }>): Promise<string | null>;
+  readOpenLoopSourceEvidence?(input: Readonly<{
+    userId: UserId;
+    targetId: string;
+    targetVersionId: string;
+    expectedSourceEventRevisionId: string;
+    now: Date;
+  }>): Promise<Readonly<{
+    eventRevisionId: string;
+    revision: number;
+    text: string;
+  }> | null>;
   readStates(input: Readonly<{
     userId: UserId;
     candidates: readonly Readonly<{
@@ -283,10 +294,14 @@ type FrozenSegmentInput = Readonly<{
   currentTime: string;
   sessionTimeZone: string;
   targetSummary: string | null;
+  sourceUserText: string | null;
   targetContext: Readonly<{
     source: ProactiveFollowupCandidate["source"];
     evidenceAt: string;
     expectedStartAt: string | null;
+    expectedEndAt: string | null;
+    expectedTimePrecision: string | null;
+    expectedTimeZone: string | null;
     expiresAt: string | null;
     openLoopKind: "upcoming_event" | "awaited_outcome" | null;
     subjectRole: "user" | "other" | "unknown";
@@ -324,15 +339,7 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
   readers: ProactiveFollowupStageReaders;
   reservations: ProactiveFollowupReservationStore;
   compiler: ProactiveFollowupSegmentCompiler;
-  /**
-   * Conservative selection opportunity. Production stays on `natural_gap`:
-   * the dialogue focus gate remains the real guard against interrupting
-   * task-focused turns. A DialogueState-content mapping must replace this
-   * default when the opportunity classes carry richer signals.
-   */
-  opportunity?: ProactiveFollowupOpportunityKind;
 }>): ProactiveFollowupSegmentStage {
-  const opportunity = dependencies.opportunity ?? "natural_gap";
   // Frozen provider inputs retained between prepare and generate. In-memory
   // only by design: generate always follows prepare in one harness execution,
   // and a lost entry fails closed (generate throws, the segment is omitted).
@@ -593,6 +600,8 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
           })
         : MEMORY_LANE_UNCONFIGURED;
       const lanes = [openLane, memoryLane] as const;
+      const opportunity = dialogue.proactiveFollowupOpportunity?.value ?? null;
+      if (opportunity === null) return null;
       const selectionInput = {
         userId: asUserIdString(input.userId),
         dailySessionId: turn.dailySessionId,
@@ -616,6 +625,35 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
         lanes: [...selectionInput.lanes],
       });
       if (selection.outcome !== "selected") return null;
+      const selectedCandidate = lanes
+        .flatMap((lane) => [...lane.candidates])
+        .find(
+          (candidate) =>
+            candidate.targetId === selection.target.targetId &&
+            candidate.targetVersionId === selection.target.targetVersionId,
+        );
+      if (!selectedCandidate) return null;
+      const sourceEvidence =
+        selectedCandidate.targetKind === "open_loop" &&
+        selectedCandidate.sourceEventRevisionId
+          ? (await dependencies.readers.readOpenLoopSourceEvidence?.({
+              userId: input.userId,
+              targetId: selectedCandidate.targetId,
+              targetVersionId: selectedCandidate.targetVersionId,
+              expectedSourceEventRevisionId:
+                selectedCandidate.sourceEventRevisionId,
+              now,
+            })) ?? null
+          : null;
+      if (
+        selectedCandidate.targetKind === "open_loop" &&
+        (!sourceEvidence ||
+          sourceEvidence.eventRevisionId !==
+            selectedCandidate.sourceEventRevisionId ||
+          !sourceEvidence.text.trim())
+      ) {
+        return null;
+      }
       const admitted = await dependencies.modelRoleCommandService.admit({
         userId: input.userId,
         role: "proactive.followup",
@@ -623,13 +661,22 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
         subjectType: "conversation_event_revision",
         subjectId: String(input.requestEventRevisionId),
         sourceRevision: turn.currentSourceRevision,
-        sourceSnapshot: `proactive-followup-segment:${String(input.requestEventRevisionId)}`,
+        sourceSnapshot: `proactive-followup-segment:${String(input.requestEventRevisionId)}${sourceEvidence ? `:open-loop-source:${sourceEvidence.eventRevisionId}:${sourceEvidence.revision}` : ""}`,
         inputManifest: [
           {
             key: `event:${String(input.requestEventRevisionId)}`,
             revision: turn.currentSourceRevision,
             fingerprint: `event-revision:${String(input.requestEventRevisionId)}`,
           },
+          ...(sourceEvidence
+            ? [
+                {
+                  key: `open-loop-source-event:${sourceEvidence.eventRevisionId}`,
+                  revision: sourceEvidence.revision,
+                  fingerprint: `event-revision:${sourceEvidence.eventRevisionId}`,
+                },
+              ]
+            : []),
         ],
         expectedDataEpoch: turn.expectedDataEpoch,
         now,
@@ -680,13 +727,6 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
           interactionTurnId: turn.interactionTurnId,
           userId: input.userId,
         });
-      const selectedCandidate = lanes
-        .flatMap((lane) => [...lane.candidates])
-        .find(
-          (candidate) =>
-            candidate.targetId === selection.target.targetId &&
-            candidate.targetVersionId === selection.target.targetVersionId,
-        );
       const targetSummary = await dependencies.readers.readTargetSummary({
         userId: input.userId,
         mainGenerationCommandId: String(input.mainGenerationCommandId),
@@ -699,7 +739,7 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
         userId: input.userId,
         revisionId: String(input.requestEventRevisionId),
       });
-      if (!selectedCandidate || !currentUserEvent) {
+      if (!currentUserEvent) {
         await dependencies.reservations.abandonSegment({
           userId: asUserIdString(input.userId),
           expectedDataEpoch: turn.expectedDataEpoch,
@@ -738,6 +778,7 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
       rememberFrozenInput(reserved.reservationId, {
         mainText: input.mainText,
         currentUserText: currentUserEvent.text,
+        sourceUserText: sourceEvidence?.text ?? null,
         currentTime: now.toISOString(),
         sessionTimeZone: turn.timeZone,
         targetSummary,
@@ -745,6 +786,10 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
           source: selectedCandidate.source,
           evidenceAt: selectedCandidate.evidenceAt,
           expectedStartAt: selectedCandidate.expectedStartAt ?? null,
+          expectedEndAt: selectedCandidate.expectedEndAt ?? null,
+          expectedTimePrecision:
+            selectedCandidate.expectedTimePrecision ?? null,
+          expectedTimeZone: selectedCandidate.expectedTimeZone ?? null,
           expiresAt: selectedCandidate.expiresAt ?? null,
           openLoopKind: selectedCandidate.openLoopKind ?? null,
           subjectRole: selectedCandidate.subjectRole ?? "unknown",
@@ -805,6 +850,7 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
                 targetVersionId: plan.targetVersionId,
               },
               targetSummary: frozen.targetSummary,
+              sourceUserText: frozen.sourceUserText,
               targetContext: frozen.targetContext,
               targetSensitive: frozen.targetSensitive,
               opportunity: frozen.opportunity,
@@ -835,6 +881,7 @@ export function createProactiveFollowupSegmentStage(dependencies: Readonly<{
             targetVersionId: plan.targetVersionId,
           },
           targetSummary: frozen.targetSummary,
+          sourceUserText: frozen.sourceUserText,
           targetContext: frozen.targetContext,
           targetSensitive: frozen.targetSensitive,
           opportunity: frozen.opportunity,

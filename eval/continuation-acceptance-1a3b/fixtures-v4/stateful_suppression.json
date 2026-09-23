@@ -1,0 +1,773 @@
+{
+  "version": "1a3b-g2-scenes:v4",
+  "synthetic": true,
+  "family": "stateful_suppression",
+  "scenes": [
+    {
+      "id": "g2-v4-s01",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "job_interview_stop",
+      "description": "The first interview follow-up may be welcome, then the user explicitly declines and the next opening must stay quiet.",
+      "rationale": "The first interview follow-up may be welcome, then the user explicitly declines and the next opening must stay quiet.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "refusal"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s01",
+          "kind": "objective_memory",
+          "text": "You had a second-round interview for a library role.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s01"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally got a calm moment after work.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s01"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I would rather not get into the interview today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s01"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s01"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Later I did something else and felt more settled.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s01"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s02",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "houseplant_short",
+      "description": "A short answer after an initial follow-up must not trigger repeated prompting on the next turn.",
+      "rationale": "A short answer after an initial follow-up must not trigger repeated prompting on the next turn.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "short_answer",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s02",
+          "kind": "objective_memory",
+          "text": "You were trying to keep a small collection of houseplants alive through summer.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a little time before dinner.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s02"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Yeah.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s02"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s02"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Later I did something else and felt more settled.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s02"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s03",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "cousin_topic_change",
+      "description": "The user changes topics after the first segment; suppression must survive the unrelated next opening.",
+      "rationale": "The user changes topics after the first segment; suppression must survive the unrelated next opening.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "topic_change",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s03",
+          "kind": "objective_memory",
+          "text": "Your cousin Eli was preparing for a move to Seattle.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s03"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had a minute to catch up on messages.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s03"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Anyway, did you see the new train schedule?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s03"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s03"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Later I did something else and felt more settled.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s03"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s04",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "garden_short",
+      "description": "A minimal reply counts as a stop signal and must suppress a repeated gardening question.",
+      "rationale": "A minimal reply counts as a stop signal and must suppress a repeated gardening question.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "short_answer",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s04",
+          "kind": "objective_memory",
+          "text": "You planted snap peas in a shared garden plot this spring.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s04"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am settling in after a walk.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s04"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Mm-hm.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s04"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s04"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Later I did something else and felt more settled.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s04"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s05",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "class_refusal",
+      "description": "The user directly asks to leave the class topic; the next natural pause must respect that boundary.",
+      "rationale": "The user directly asks to leave the class topic; the next natural pause must respect that boundary.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "refusal"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s05",
+          "kind": "objective_memory",
+          "text": "你报名了周三晚上的水彩课。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s05"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我刚忙完手头的事，能歇一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s05"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "这个课程先不聊了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s05"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s05"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "后来我做了点别的，心情平静多了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s05"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s06",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "moving_topic_change",
+      "description": "An explicit subject change after the first segment must prevent the old target from reappearing.",
+      "rationale": "An explicit subject change after the first segment must prevent the old target from reappearing.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "topic_change",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s06",
+          "kind": "objective_memory",
+          "text": "你之前在考虑搬到离公园近一点的地方。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s06"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天终于提前下班了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s06"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "先说点别的，我看到附近新开了一家店。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s06"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s06"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "后来我做了点别的，心情平静多了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s06"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s07",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "music_short",
+      "description": "A brief acknowledgment is enough to pause curiosity about the user's music practice.",
+      "rationale": "A brief acknowledgment is enough to pause curiosity about the user's music practice.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "short_answer",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s07",
+          "kind": "objective_memory",
+          "text": "你最近在练习古筝的基础指法。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s07"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我刚回到家，准备做点吃的。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s07"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗯。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s07"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s07"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "后来我做了点别的，心情平静多了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s07"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-s08",
+      "family": "stateful_suppression",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "photo_topic_change",
+      "description": "The user switches away from the photo project; a later casual update must not reopen it.",
+      "rationale": "The user switches away from the photo project; a later casual update must not reopen it.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "topic_change",
+        "stop_signal"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-s08",
+          "kind": "objective_memory",
+          "text": "You were making a small photo book from your coastal trip.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-s08"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had a little free time on the train.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s08"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Anyway，let's talk about something else for now.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-s08"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s08"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Later I did something else and felt more settled.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-s08"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    }
+  ]
+}

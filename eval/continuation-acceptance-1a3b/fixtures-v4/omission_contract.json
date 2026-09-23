@@ -1,0 +1,505 @@
+{
+  "version": "1a3b-g2-scenes:v4",
+  "synthetic": true,
+  "family": "omission_contract",
+  "scenes": [
+    {
+      "id": "g2-v4-x01",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "distant_memory",
+      "description": "A generic okay-day update has no natural bridge to an unrelated old hobby.",
+      "rationale": "A generic okay-day update has no natural bridge to an unrelated old hobby.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-x01",
+          "kind": "objective_memory",
+          "text": "You once mentioned enjoying model trains as a child.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-x01"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Could you help me find a short podcast for the drive?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Today was fine, nothing much happened.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-x01"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x02",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "main_may_cover_launch",
+      "description": "The user mentions a vague update from the same work group; the main response may already pick up the pending announcement, so the expression must check for duplication.",
+      "rationale": "The user mentions a vague update from the same work group; the main response may already pick up the pending announcement, so the expression must check for duplication.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-x02",
+          "kind": "objective_memory",
+          "text": "You were waiting for your team to announce the new product launch.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-x02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quick update from work.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "A teammate shared an update in our team chat this morning, but I have not opened it yet.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-x02"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x03",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "vague_work_change",
+      "description": "The memory is too vague to support a specific follow-up or a confident subject claim.",
+      "rationale": "The memory is too vague to support a specific follow-up or a confident subject claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "weak_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-x03",
+          "kind": "ai_impression",
+          "text": "你之前提过工作方面可能有变化。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-x03"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我今天把几件小事处理完了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "工作上好像有些变化，暂时还说不清。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-x03"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x04",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "late_night_closure",
+      "description": "The user has explicitly closed the exchange for the night, so an unrelated pending target should wait.",
+      "rationale": "The user has explicitly closed the exchange for the night, so an unrelated pending target should wait.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "closure_cue",
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我在等书店确认周末取书的时间，对方说9月23日会回复。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天已经有点晚了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我先去睡了，晚安。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x05",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "unrelated_bicycle",
+      "description": "An uneventful commute has no real connection to an old bicycle accessory memory.",
+      "rationale": "An uneventful commute has no real connection to an old bicycle accessory memory.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-x05",
+          "kind": "objective_memory",
+          "text": "You used to ride a blue bicycle with a front basket.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-x05"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finished a few chores and made lunch.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The bus was on time for once.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-x05"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x06",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "main_may_cover_plans",
+      "description": "A broad update after talking with a friend may already lead the main response to address the pending plans, so the expression must avoid asking the same thing twice.",
+      "rationale": "A broad update after talking with a friend may already lead the main response to address the pending plans, so the expression must avoid asking the same thing twice.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-x06",
+          "kind": "objective_memory",
+          "text": "你在等朋友确认这周末海边短途旅行的安排。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-x06"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我刚收到朋友发来的照片。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我和朋友聊了聊最近的安排，感觉事情在慢慢定下来。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-x06"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x07",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "unclear_old_plan",
+      "description": "A vague historical statement cannot establish what the user was waiting for.",
+      "rationale": "A vague historical statement cannot establish what the user was waiting for.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "weak_grounding",
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I might hear about something from someone later this month."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I got through the afternoon without much trouble.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Maybe there will be some news sometime soon, but I am not sure.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-x08",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "bedtime_closure",
+      "description": "The user says good night and asks not to reply; a follow-up would interrupt closure.",
+      "rationale": "The user says good night and asks not to reply; a follow-up would interrupt closure.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "closure_cue"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-x08",
+          "kind": "objective_memory",
+          "text": "You were planning to visit the botanical garden this month.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-x08"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally got home after a long day.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I'm heading to bed now，no need to reply. Good night.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-x08"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

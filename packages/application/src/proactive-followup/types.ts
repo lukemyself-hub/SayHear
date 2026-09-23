@@ -14,21 +14,21 @@ export const PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION =
 export const PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION =
   "proactive-followup-commit:v1" as const;
 export const PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION =
-  "proactive-followup-policy-bundle:v3" as const;
+  "proactive-followup-policy-bundle:v4" as const;
 export const PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION =
-  "proactive-followup-opportunity:v1" as const;
+  "proactive-followup-opportunity:v2" as const;
 export const PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION =
   "proactive-followup-use:v1" as const;
 export const PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION =
-  "proactive-followup-prompt:v3" as const;
+  "proactive-followup-prompt:v4" as const;
 export const PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION =
-  "proactive-followup-expression:v2" as const;
+  "proactive-followup-expression:v3" as const;
 export const PROACTIVE_FOLLOWUP_REASON_CODE_SCHEMA_VERSION =
-  "proactive-followup-reason-codes:v1" as const;
+  "proactive-followup-reason-codes:v2" as const;
 export const PROACTIVE_FOLLOWUP_MANIFEST_VERSION =
-  "proactive-followup-selection-manifest:v1" as const;
+  "proactive-followup-selection-manifest:v2" as const;
 export const PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION =
-  "open-loop-read:v1" as const;
+  "open-loop-read:v2" as const;
 export const PROACTIVE_FOLLOWUP_MEMORY_LANE_MANIFEST_VERSIONS = [
   "memory-retrieval:v1",
   "person-portrait:v1",
@@ -105,6 +105,11 @@ export type ProactiveFollowupCandidate = Readonly<{
   evidenceAt: string;
   /** Open Loop's frozen expected time anchor, when present. */
   expectedStartAt?: string | null;
+  expectedEndAt?: string | null;
+  expectedTimePrecision?: string | null;
+  expectedTimeZone?: string | null;
+  /** Direct source Event lineage, supplied only by the Open Loop lane. */
+  sourceEventRevisionId?: string;
   openLoopKind?: "upcoming_event" | "awaited_outcome" | null;
   /** Open Loop's frozen finite expiry. */
   expiresAt?: string | null;
@@ -144,6 +149,11 @@ export type ProactiveFollowupDialogueSnapshot = Readonly<{
     confidence: number;
     sourceRevisionIds: readonly string[];
   }>;
+  proactiveFollowupOpportunity?: Readonly<{
+    value: ProactiveFollowupOpportunityKind | null;
+    confidence: number;
+    sourceRevisionIds: readonly string[];
+  }>;
 }>;
 
 export type ProactiveFollowupStateSnapshot = Readonly<{
@@ -169,7 +179,7 @@ export type ProactiveFollowupSelectionInput = Readonly<{
   currentUserEventRevisionId: string;
   currentUserEventSequence: number;
   currentSourceRevision: number;
-  opportunity: ProactiveFollowupOpportunityKind;
+  opportunity: ProactiveFollowupOpportunityKind | null;
   ordinaryQuestionAlreadyAsked: boolean;
   dialogue: ProactiveFollowupDialogueSnapshot;
   lanes: readonly ProactiveFollowupLaneSnapshot[];
@@ -233,8 +243,14 @@ export type ProactiveFollowupSelectionManifest = Readonly<{
   currentUserEventRevisionId: string;
   currentUserEventSequence: number;
   currentSourceRevision: number;
-  opportunity: ProactiveFollowupOpportunityKind;
-  opportunityMode: ProactiveFollowupOpportunityKind;
+  opportunity: ProactiveFollowupOpportunityKind | null;
+  opportunityMode: ProactiveFollowupOpportunityKind | null;
+  proactiveFollowupOpportunity: Readonly<{
+    value: ProactiveFollowupOpportunityKind | null;
+    confidence: number;
+    sourceRevisionIds: readonly string[];
+    freshness: "current" | "stale";
+  }>;
   currentRequestRequiresFocus: Readonly<{
     value: boolean | null;
     confidence: number;

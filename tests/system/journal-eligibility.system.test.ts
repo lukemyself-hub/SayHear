@@ -874,6 +874,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
       emotional_intensity: { confidence: 0, sourceRevisionIds: [], value: null },
       advice_explicitly_requested: { confidence: 0, sourceRevisionIds: [], value: null },
       current_request_requires_focus: { confidence: 0, sourceRevisionIds: [], value: null },
+      proactive_followup_opportunity: { confidence: 0, sourceRevisionIds: [], value: null },
       close_intent: { confidence: 0, sourceRevisionIds: [], value: null },
       user_willing_to_elaborate: { confidence: 0, sourceRevisionIds: [], value: null },
     };
@@ -944,6 +945,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
           emotional_intensity: { confidence: 0, sourceRevisionIds: [], value: null },
           advice_explicitly_requested: { confidence: 0, sourceRevisionIds: [], value: null },
           current_request_requires_focus: { confidence: 0, sourceRevisionIds: [], value: null },
+          proactive_followup_opportunity: { confidence: 0, sourceRevisionIds: [], value: null },
           close_intent: { confidence: 0, sourceRevisionIds: [], value: null },
           user_willing_to_elaborate: { confidence: 0, sourceRevisionIds: [], value: null },
         },
@@ -1006,6 +1008,7 @@ describe("Authenticated Journal Eligibility System Seam — 1A.2 durability foun
           emotional_intensity: { confidence: 0, sourceRevisionIds: [], value: null },
           advice_explicitly_requested: { confidence: 0, sourceRevisionIds: [], value: null },
           current_request_requires_focus: { confidence: 0, sourceRevisionIds: [], value: null },
+          proactive_followup_opportunity: { confidence: 0, sourceRevisionIds: [], value: null },
           close_intent: { confidence: 0, sourceRevisionIds: [], value: null },
           user_willing_to_elaborate: { confidence: 0, sourceRevisionIds: [], value: null },
         },

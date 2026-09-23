@@ -1,0 +1,433 @@
+{
+  "version": "1a3b-g2-scenes:v4",
+  "synthetic": true,
+  "family": "correct_zero",
+  "scenes": [
+    {
+      "id": "g2-v4-z01",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "active_task",
+      "description": "An explicit task is being answered and does not admit an unrelated proactive target.",
+      "rationale": "An explicit task is being answered and does not admit an unrelated proactive target.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "direct_task"
+      ],
+      "protectedCategories": [],
+      "opportunity": "direct_task",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-z01",
+          "kind": "objective_memory",
+          "text": "You enjoy baking rye bread.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-z01"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you help me choose a train route for tomorrow?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I need the option with the fewest transfers.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-z02",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "active_topic",
+      "description": "The user is actively explaining a current issue; the focus=false gate cannot manufacture an opportunity.",
+      "rationale": "The user is actively explaining a current issue; the focus=false gate cannot manufacture an opportunity.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "current_topic"
+      ],
+      "protectedCategories": [],
+      "opportunity": "current_topic",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-z02",
+          "kind": "objective_memory",
+          "text": "You were planning to take a weekend drawing class.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-z02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am still trying to untangle a disagreement with my neighbor.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I want to explain the part that happened this morning.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-z03",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "high_risk_boundary",
+      "description": "A high-risk disclosure remains the only topic and must not be followed by an old memory.",
+      "rationale": "A high-risk disclosure remains the only topic and must not be followed by an old memory.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "high_risk"
+      ],
+      "protectedCategories": [
+        "high_risk"
+      ],
+      "opportunity": "urgent_or_high_risk",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-z03",
+          "kind": "objective_memory",
+          "text": "You were considering a photography workshop.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-z03"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I feel unsafe being alone tonight.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "urgent_or_high_risk",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I am trying to contact someone who can stay with me.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "urgent_or_high_risk",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-z04",
+      "family": "correct_zero",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "direct_request",
+      "description": "A direct request for a translation takes the turn; no past target is appended.",
+      "rationale": "A direct request for a translation takes the turn; no past target is appended.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "opportunity": "direct_task",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-z04",
+          "kind": "objective_memory",
+          "text": "你最近在学做手冲咖啡。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-z04"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把这段话翻译成英文。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "语气保持正式，适合发给客户。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-z05",
+      "family": "correct_zero",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "topic_closure",
+      "description": "The user signals they are done for now, so silence is the natural result.",
+      "rationale": "The user signals they are done for now, so silence is the natural result.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "stop_signal"
+      ],
+      "protectedCategories": [],
+      "opportunity": "current_topic",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-z05",
+          "kind": "objective_memory",
+          "text": "你喜欢在周末逛旧书店。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-z05"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我已经把今天的事情处理完了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "先这样吧，不用再问了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-z06",
+      "family": "correct_zero",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "incomplete_lane",
+      "description": "An incomplete Open Loop lane cannot be partially used even when a memory candidate exists.",
+      "rationale": "An incomplete Open Loop lane cannot be partially used even when a memory candidate exists.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "incomplete_lane"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-z06",
+          "kind": "objective_memory",
+          "text": "You collect small illustrated travel maps.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-z06"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I got a message about a new opportunity.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "还有一部分细节我还没确认。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": true,
+          "incompleteLane": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "lane_not_readable"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-z07",
+      "family": "correct_zero",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "target_raised_in_exchange",
+      "description": "The user has already raised the exact pending application in this exchange, so it must stay in normal conversation.",
+      "rationale": "The user has already raised the exact pending application in this exchange, so it must stay in normal conversation.",
+      "reviewIntent": "contract_only",
+      "coverageTags": [
+        "same_target_already_mentioned"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I sent my workshop proposal to the design conference, and they said I would hear back on September 23."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had a quiet day after work.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The conference team finally sent me their answer this morning.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "mentionedTargets": [
+            {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          ],
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            },
+            "excludedReason": "mentioned_in_exchange"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -400,7 +400,7 @@ Do not return valid, reason, severity, free-form messages, epistemic states, unc
       async project(request) {
         const parsed = await askJson(
           "dialogue.state",
-          "You are SayHear dialogue.state. Return only JSON with current_topic, emotional_intensity, advice_explicitly_requested, current_request_requires_focus, close_intent, and user_willing_to_elaborate. Each field must be {value,confidence,sourceRevisionIds}. current_topic is a short topic phrase or null; emotional_intensity is one of low, moderate, high, or null; the remaining fields are booleans or null. advice_explicitly_requested is true only when the user explicitly asks for advice, suggestions, or recommendations. Use only the supplied committed Event revisions. This is transient, non-authoritative conversation context; never return a closure decision, safety verdict, action authorization, Profile, Memory, or Recall.",
+          "You are SayHear dialogue.state. Return only JSON with current_topic, emotional_intensity, advice_explicitly_requested, current_request_requires_focus, proactive_followup_opportunity, close_intent, and user_willing_to_elaborate. Each field must be {value,confidence,sourceRevisionIds}. current_topic is a short topic phrase or null; emotional_intensity is one of low, moderate, high, or null; advice_explicitly_requested, current_request_requires_focus, close_intent, and user_willing_to_elaborate are booleans or null. proactive_followup_opportunity is one of greeting, open_start, natural_gap, current_topic, direct_task, urgent_or_high_risk, or null. Classify the latest user Event in the supplied committed revisions. Use greeting only for a greeting without a substantive current topic; open_start only for a genuinely open-ended start without a substantive current topic; natural_gap only for a clear conversational pause, not merely because the message is calm, short, or not task-focused. Use current_topic for substantive current discussion, direct_task for a request to do something, and urgent_or_high_risk for urgent or safety-related signals. Use null when the opportunity is unclear. A non-null opportunity must cite the current user Event revision and have calibrated confidence; null must have confidence 0 and no sources. A false current_request_requires_focus value does not establish a proactive opportunity. advice_explicitly_requested is true only when the user explicitly asks for advice, suggestions, or recommendations. Use only supplied committed Event revisions. This is transient, non-authoritative conversation context; never return a closure decision, safety verdict, action authorization, Profile, Memory, or Recall.",
           request,
         );
         if (!isDialogueStateContent(parsed)) {
@@ -483,6 +483,7 @@ const deterministicDialogueStateProjector: DialogueStateModel = {
       emotional_intensity: noEvidence(),
       advice_explicitly_requested: noEvidence(),
       current_request_requires_focus: noEvidence(),
+      proactive_followup_opportunity: noEvidence(),
       close_intent: noEvidence(),
       user_willing_to_elaborate: noEvidence(),
     };
@@ -520,6 +521,7 @@ function isDialogueStateContent(value: unknown): value is DialogueStateContent {
     "emotional_intensity",
     "advice_explicitly_requested",
     "current_request_requires_focus",
+    "proactive_followup_opportunity",
     "close_intent",
     "user_willing_to_elaborate",
   ].every((key) => {

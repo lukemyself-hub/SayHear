@@ -19,6 +19,7 @@ const dialogueFieldLabels: Readonly<
   current_request_requires_focus: "Request requires focus",
   current_topic: "Current topic",
   emotional_intensity: "Emotional intensity",
+  proactive_followup_opportunity: "Proactive follow-up opportunity",
   user_willing_to_elaborate: "Willing to elaborate",
 };
 
@@ -233,7 +234,7 @@ function InspectionReport(props: { inspection: ContextInspectorPayload }) {
             </dl>
             <div className="inspectorTableWrap">
               <table className="inspectorTable">
-                <caption>DialogueState v2 field confidence and source revisions</caption>
+                <caption>DialogueState v3 field confidence and source revisions</caption>
                 <thead>
                   <tr>
                     <th scope="col">Field</th>

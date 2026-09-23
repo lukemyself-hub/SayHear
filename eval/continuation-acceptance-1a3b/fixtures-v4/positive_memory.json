@@ -1,0 +1,506 @@
+{
+  "version": "1a3b-g2-scenes:v4",
+  "synthetic": true,
+  "family": "positive_memory",
+  "scenes": [
+    {
+      "id": "g2-v4-m01",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "running_base",
+      "description": "A new easy run naturally connects to an established half-marathon goal without repeating it.",
+      "rationale": "A new easy run naturally connects to an established half-marathon goal without repeating it.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "direct_task"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m01",
+          "kind": "objective_memory",
+          "text": "You are building a base for your first half marathon in the spring.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m01"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Could you help me make a simple grocery list for the weekend?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I squeezed in an easy jog after work, and it felt less tiring than last week.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m01"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m02",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "pottery_class",
+      "description": "A small update about making time after work fits the user's ongoing pottery class.",
+      "rationale": "A small update about making time after work fits the user's ongoing pottery class.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m02",
+          "kind": "objective_memory",
+          "text": "You started a beginner pottery class and were looking forward to learning the wheel.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I need a quick checklist for packing tomorrow.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally had an hour to myself tonight and made a little progress on something creative.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m02"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m03",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "dog_training",
+      "description": "A concrete, low-stakes update about a walk fits the ongoing work with the user's dog.",
+      "rationale": "A concrete, low-stakes update about a walk fits the ongoing work with the user's dog.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m03",
+          "kind": "objective_memory",
+          "text": "You have been practicing loose-leash walking with your dog, Moss.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m03"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is a good way to organize these notes?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "We took the longer trail today, and the walk was calmer than usual.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m03"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m04",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "sister_visit",
+      "description": "A relaxed family update makes the planned visit a specific, answerable continuation without naming the person or trip.",
+      "rationale": "A relaxed family update makes the planned visit a specific, answerable continuation without naming the person or trip.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m04",
+          "kind": "objective_memory",
+          "text": "You were planning to visit your sister Nora after her move to Portland.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m04"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you help me compare these two calendar apps?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I caught up with someone close to me on the phone and it was really nice.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m04"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m05",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "balcony_garden",
+      "description": "A small balcony gardening update is adjacent to the stored growing project without naming its plants.",
+      "rationale": "A small balcony gardening update is adjacent to the stored growing project without naming its plants.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m05",
+          "kind": "objective_memory",
+          "text": "你一直在阳台上种薄荷和罗勒。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m05"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把这段会议记录整理成三点。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "阳台上有新叶子长出来了，我剪掉几片枯叶，感觉状态不错。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m05"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m06",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "evening_course",
+      "description": "A small learning update connects to the user's ongoing course without naming it.",
+      "rationale": "A small learning update connects to the user's ongoing course without naming it.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m06",
+          "kind": "objective_memory",
+          "text": "你报名了周二晚上的基础日语课。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m06"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "这封邮件语气能不能帮我改得更清楚一点？",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "下班后我还是去参加了一个活动，前面卡住的内容今天终于听懂了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m06"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m07",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "tea_blending",
+      "description": "A short note about a successful experiment sits naturally beside the user's interest in tea without repeating it.",
+      "rationale": "A short note about a successful experiment sits naturally beside the user's interest in tea without repeating it.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m07",
+          "kind": "objective_memory",
+          "text": "你喜欢自己搭配不同的乌龙茶。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m07"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "给我一个简单的周末清洁安排吧。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我今天调了一个小配方，味道比预想的顺口。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m07"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-m08",
+      "family": "positive_memory",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "jazz_piano",
+      "description": "A short practice update leaves room for a gentle connection to the user's concrete music goal without naming the instrument.",
+      "rationale": "A short practice update leaves room for a gentle connection to the user's concrete music goal without naming the instrument.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-m08",
+          "kind": "objective_memory",
+          "text": "You have been learning the jazz piano intro to 'Blue in Green'.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-m08"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you summarize this in one sentence?",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally made time to practice again tonight，手指比上次灵活一点。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-m08"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

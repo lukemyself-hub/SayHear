@@ -29,6 +29,11 @@ const context: ContextInspectorContext = {
         sourceRevisionIds: ["revision-1"],
         value: true,
       },
+      proactive_followup_opportunity: {
+        confidence: 0.91,
+        sourceRevisionIds: ["revision-1"],
+        value: "direct_task",
+      },
       current_topic: {
         confidence: 0.9,
         sourceRevisionIds: ["revision-1"],
@@ -96,12 +101,13 @@ function section(
 }
 
 describe("Context Inspector data labels", () => {
-  it("keeps the six DialogueState v2 fields explicit", () => {
+  it("keeps the seven DialogueState v3 fields explicit", () => {
     expect(DIALOGUE_STATE_FIELDS).toEqual([
       "current_topic",
       "emotional_intensity",
       "advice_explicitly_requested",
       "current_request_requires_focus",
+      "proactive_followup_opportunity",
       "close_intent",
       "user_willing_to_elaborate",
     ]);

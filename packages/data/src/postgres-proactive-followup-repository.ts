@@ -3,6 +3,7 @@ import {
   planProactiveFollowupCooldownRelease,
   planProactiveFollowupDisposition,
   planProactiveFollowupRelease,
+  PROACTIVE_FOLLOWUP_OPPORTUNITY_KINDS,
   PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION,
   PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR,
   PROACTIVE_FOLLOWUP_EXPRESSION_POLICY_VERSION,
@@ -16,6 +17,7 @@ import {
   PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION,
   PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION,
   type ProactiveFollowupDispositionInput,
+  type ProactiveFollowupOpportunityKind,
   type ProactiveFollowupReleaseInput,
   type ProactiveFollowupSelectionManifest,
   type ProactiveFollowupStateSnapshot,
@@ -2219,6 +2221,9 @@ export class PostgresProactiveFollowupRepository {
     const focus = content.current_request_requires_focus as
       | { value?: unknown; confidence?: unknown; sourceRevisionIds?: unknown }
       | undefined;
+    const opportunity = content.proactive_followup_opportunity as
+      | { value?: unknown; confidence?: unknown; sourceRevisionIds?: unknown }
+      | undefined;
     const covered = Number(row.covered_through_sequence_no);
     const revisionMatch =
       input.dialogueRevision === null ||
@@ -2252,6 +2257,24 @@ export class PostgresProactiveFollowupRepository {
           typeof focus?.confidence === "number" ? focus.confidence : 0,
         sourceRevisionIds: Array.isArray(focus?.sourceRevisionIds)
           ? (focus.sourceRevisionIds as unknown[]).filter(
+              (entry): entry is string => typeof entry === "string",
+            )
+          : [],
+      },
+      proactiveFollowupOpportunity: {
+        value:
+          typeof opportunity?.value === "string" &&
+          PROACTIVE_FOLLOWUP_OPPORTUNITY_KINDS.includes(
+            opportunity.value as ProactiveFollowupOpportunityKind,
+          )
+            ? (opportunity.value as ProactiveFollowupOpportunityKind)
+            : null,
+        confidence:
+          typeof opportunity?.confidence === "number"
+            ? opportunity.confidence
+            : 0,
+        sourceRevisionIds: Array.isArray(opportunity?.sourceRevisionIds)
+          ? (opportunity.sourceRevisionIds as unknown[]).filter(
               (entry): entry is string => typeof entry === "string",
             )
           : [],

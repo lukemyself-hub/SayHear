@@ -1,0 +1,31 @@
+{
+  "version": "1a3b-g2-continuation:v4",
+  "synthetic": true,
+  "syntheticNotice": "Synthetic evaluation fixtures only. No real user data or production content.",
+  "sceneFiles": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4/positive_memory.json",
+      "sha256": "d57207ed638e783224d4c1bcd1d9df76496c2174db982d2ab6be907898a7c54e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4/positive_open_loop.json",
+      "sha256": "a48f9582bfe27f4cb0ddca74278a249b7845fc88b1b961cf19f9c6d3a0fa11fc"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4/competing_pool.json",
+      "sha256": "d5352ec8476388adf51e21a627b83813f85e4146bedb0f89c009b53646cdbaa1"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4/stateful_suppression.json",
+      "sha256": "a41a538432e3a53d0f5c39b54ccf9f31e828c1bba6cdb0c15a40df5d97bea52f"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4/omission_contract.json",
+      "sha256": "b51f5e572f16c8750359453f0c8f9b95463f2e25a0e94de789c5648e36c399bf"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4/correct_zero.json",
+      "sha256": "ca2fdc2007fc4a44cb1fc37eafb3b18f59c3c60b134cb26e913b860fdcb479d0"
+    }
+  ]
+}

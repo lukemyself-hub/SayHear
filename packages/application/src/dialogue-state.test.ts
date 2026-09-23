@@ -42,6 +42,11 @@ function content(): DialogueStateContent {
       sourceRevisionIds: [sourceRevisionId],
       value: false,
     },
+    proactive_followup_opportunity: {
+      confidence: 0.9,
+      sourceRevisionIds: [sourceRevisionId],
+      value: "natural_gap",
+    },
     close_intent: {
       confidence: 0,
       sourceRevisionIds: [],
@@ -56,7 +61,7 @@ function content(): DialogueStateContent {
 }
 
 describe("DialogueState", () => {
-  it("accepts the six semantic fields only when each source and confidence is explicit", () => {
+  it("accepts the seven semantic fields only when each source and confidence is explicit", () => {
     expect(() =>
       validateDialogueStateContent(content(), [sourceRevisionId]),
     ).not.toThrow();
@@ -78,6 +83,36 @@ describe("DialogueState", () => {
         [sourceRevisionId],
       ),
     ).toThrow("source revision");
+  });
+
+  it("requires proactive opportunity values to be current, typed, and evidence-bound", () => {
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          ...content(),
+          proactive_followup_opportunity: {
+            confidence: 0,
+            sourceRevisionIds: [],
+            value: null,
+          },
+        },
+        [sourceRevisionId],
+      ),
+    ).not.toThrow();
+
+    expect(() =>
+      validateDialogueStateContent(
+        {
+          ...content(),
+          proactive_followup_opportunity: {
+            confidence: 0.9,
+            sourceRevisionIds: [sourceRevisionId],
+            value: "not_an_opportunity" as never,
+          },
+        },
+        [sourceRevisionId],
+      ),
+    ).toThrow("outside the bounded policy");
   });
 
   it("rejects pre-0111 content that still carries the old four fields", () => {

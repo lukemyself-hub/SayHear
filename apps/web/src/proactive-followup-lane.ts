@@ -14,7 +14,6 @@ import {
   type ProactiveFollowupCandidate,
   type ProactiveFollowupLaneSnapshot,
   type ProactiveFollowupModelProvider,
-  type ProactiveFollowupOpportunityKind,
   type ProactiveFollowupSegmentStage,
   type ProactiveFollowupStateSnapshot,
   type UserId,
@@ -55,7 +54,6 @@ export function createProactiveFollowupLane(input: Readonly<{
       userId: UserId;
     }>): Promise<Readonly<{ id: CompiledContextId }>>;
   }>;
-  opportunity?: ProactiveFollowupOpportunityKind;
 }>): Readonly<{
   stage: ProactiveFollowupSegmentStage;
   maintenanceService: ReturnType<
@@ -71,7 +69,6 @@ export function createProactiveFollowupLane(input: Readonly<{
     modelRoleCommandService: input.modelRoleCommandService,
     providerEgress: input.providerEgress,
     provider: input.provider,
-    ...(input.opportunity === undefined ? {} : { opportunity: input.opportunity }),
     compiler: {
       compileSegmentContext: async (compileInput) => {
         const compiled = await input.compiler.compile({
@@ -157,8 +154,14 @@ export function createProactiveFollowupLane(input: Readonly<{
             targetVersionId: row.openLoopVersionId,
             source: "open_loop",
             sourceRank: null,
+            ...(lineage?.sourceEventRevisionId
+              ? { sourceEventRevisionId: lineage.sourceEventRevisionId }
+              : {}),
             evidenceAt: row.evidenceAt,
             expectedStartAt: row.expectedStartAt,
+            expectedEndAt: row.expectedEndAt,
+            expectedTimePrecision: row.timePrecision,
+            expectedTimeZone: row.timezone,
             openLoopKind:
               row.kind === "upcoming_event" || row.kind === "awaited_outcome"
                 ? row.kind
@@ -263,6 +266,14 @@ export function createProactiveFollowupLane(input: Readonly<{
           now: readerInput.now,
         });
       },
+      readOpenLoopSourceEvidence: (readerInput) =>
+        openLoopRepository.readSourceEvidence({
+          userId: String(readerInput.userId),
+          openLoopId: readerInput.targetId,
+          openLoopVersionId: readerInput.targetVersionId,
+          expectedSourceEventRevisionId:
+            readerInput.expectedSourceEventRevisionId,
+        }),
       readStates: async (readerInput) => {
         const states = await Promise.all(
           readerInput.candidates.map((candidate) =>

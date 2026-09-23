@@ -1,0 +1,474 @@
+{
+  "version": "1a3b-g2-scenes:v4",
+  "synthetic": true,
+  "family": "positive_open_loop",
+  "scenes": [
+    {
+      "id": "g2-v4-o01",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "rental_decision",
+      "description": "A newly arrived inbox message is a timely cue for the pending rental decision.",
+      "rationale": "A newly arrived inbox message is a timely cue for the pending rental decision.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted the rental application for the Cedar Street apartment; the manager said the decision should arrive by September 23."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The commute was longer than I expected today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "A couple of messages finally came in this morning, and I have not opened the last one yet.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o02",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "conference_acceptance",
+      "description": "A new inbox reply arrives on the date the user expected an update, without naming its subject.",
+      "rationale": "A new inbox reply arrives on the date the user expected an update, without naming its subject.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I sent my workshop proposal to the design conference, and they said I would hear back on September 23."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had a lot of small errands to get through today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I noticed a new reply in my inbox this morning, but I have not opened it yet.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o03",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "bike_repair",
+      "description": "A fresh notification on the expected update date is a timely cue without naming the pending repair.",
+      "rationale": "A fresh notification on the expected update date is a timely cue without naming the pending repair.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "The bike shop is checking the wheel on my commuter bike and promised an estimate by September 23."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally got outside for a short walk.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "One notification came in while I was out, but I have not checked the details yet.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o04",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "volunteer_schedule",
+      "description": "A new alert appears on the promised update date while the user leaves its subject unstated.",
+      "rationale": "A new alert appears on the promised update date while the user leaves its subject unstated.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I applied to help at the neighborhood food pantry; they said they would share the fall schedule by September 23."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It has been a full day, but nothing especially dramatic happened.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I saw something new come through today, and I have not had a chance to look yet.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o05",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "scholarship_result",
+      "description": "The promised scholarship update is due today and the user has noticed a new message.",
+      "rationale": "The promised scholarship update is due today and the user has noticed a new message.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我提交了社区奖学金申请，对方说会在9月23日通知结果。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天事情比较多，刚刚才坐下来。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "邮箱里刚多了一封新邮件，我还没来得及看。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o06",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "guitar_repair",
+      "description": "A new alert says there has been progress on the expected update date without naming the matter.",
+      "rationale": "A new alert says there has been progress on the expected update date without naming the matter.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "琴行在检查我的吉他插孔，说9月23日左右会告诉我维修方案。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我今天把桌面收拾干净了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我刚看到手机上有一条新提醒，说事情有进展。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o07",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "bookstore_event",
+      "description": "A new update appears on the promised reply date while its subject remains unstated.",
+      "rationale": "A new update appears on the promised reply date while its subject remains unstated.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我在等书店确认下周读书会的场地，他们说9月23日会回复。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天通勤路上听完了一期播客。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我刚看到有条新动态，还没来得及细看。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-o08",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "print_order",
+      "description": "A new notification arrives on the expected update date without identifying which pending matter it concerns.",
+      "rationale": "A new notification arrives on the expected update date without identifying which pending matter it concerns.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I ordered the photo prints for my desk，店里说9月23日会通知我能不能取。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had a quiet lunch break and caught up on a few messages.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Just got a notification while I was on break，我还没点开。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

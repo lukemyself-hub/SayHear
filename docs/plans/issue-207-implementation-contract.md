@@ -429,3 +429,46 @@ requirements".
   assertions remain mandatory; when it returns a valid typed omission, the
   reservation-release/no-use assertions are mandatory and downstream
   suppression checkpoints are not applicable because no prompt was shown.
+
+## v3 preflight failure and v4 dual-track acceptance (2026-09-23)
+
+The run-v3 full pool is frozen as preflight evidence, not a final human-review
+package: 34 expression decisions yielded 4 committed emits and 30 typed
+omissions; 11 of the 15 sampled scenes had identical ON/OFF responses. Its
+eligibility and package builder therefore do not satisfy the accepted G2 review
+contract. Keep all run-v2 and run-v3 files unchanged.
+
+### Review protocol
+
+- `blind-pairwise:g2-v4` samples exactly 15 actual committed emits (8 English,
+  5 Chinese, 2 code-switch). Every scene must show a visible ON-only treatment
+  difference; typed omissions and identical outcomes cannot fill a pairwise slot.
+- Pairwise quality is judged per differing turn and per complete scene with
+  A / tie / B. Shared transcript history is shown once, locale and protected
+  slices may not regress, candidate net preference must be strictly positive,
+  and ties may not exceed 5 of 15 scenes.
+- A separate 8-case omission audit includes actual typed omissions spanning
+  the four reasons, Memory / Open Loop, and all locale forms. Its only choices
+  are `沉默合适`, `本应跟进`, and `无法判断`; it passes with zero in the latter
+  two categories. Omission reason and expected outcome stay operator-only.
+- `correct_zero` remains covered by deterministic gates; it is not an omission
+  audit case because it has no selected target and must not call the expression
+  provider.
+
+### v4 evidence boundary
+
+The v4 evaluator has independent fixture, pin, protocol, and evidence paths.
+Pairwise sampling and positive coverage count actual committed emits only;
+stateful coverage requires observed use / disposition / suppression transitions.
+The verifier requires exact scenario and turn sets, recomputed fingerprints,
+frozen main response equality, reservation/use/disposition invariants, and a
+clean committed evaluator revision. It records both exact-byte `rawSha256` and
+canonical JSON hashes. The package, score, and unblinder versions are
+`1a3b-g2-review-package:v4`, `1a3b-g2-scores:v4`, and
+`blind-pairwise:g2-v4`. Reviewer payload and operator identity mapping are
+stored in physically separate directories; score export binds the exact public
+package fingerprint. Unblinding first verifies that fingerprint.
+
+The v4 capture uses one frozen seed and at most one semantic result per
+predeclared turn. Insufficient gates are a frozen failure; no semantic reruns,
+seed changes, scene deletion, or omission substitution are allowed.

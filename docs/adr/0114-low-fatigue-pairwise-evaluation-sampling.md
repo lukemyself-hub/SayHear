@@ -69,3 +69,31 @@ Review-Worthy Scene 资格筛选：两侧在 Backend-Decision Product 上确有�
   不得暴露目标选择、预期处理或臂别。
 - 若场景整体判断中持平超过 1/3，视为场景不合格信号，先重设计场景再交付，不扩大
   样本硬凑；该阈值是重设计触发器，不是通过门槛。
+
+## Amendment (2026-09-23, Luke-approved G2 v4 dual-track review)
+
+G2 v4 uses two independent human-review tracks. Emit pairwise evidence contains exactly
+15 scenes with actual committed ON-only segments, allocated 8 English / 5 Chinese /
+2 code-switch. Every sampled scene must have a visible Backend-Decision Product
+difference. Shared history appears once; only differing turns are paired. The reviewer
+records A / tie / B for each differing turn and once for the complete scene. The
+candidate passes only with strictly positive scene-level net preference, no negative
+net preference by locale or protected category, and no more than 5 scene-level ties.
+Sampling retains the existing reproducible seed, family minimums, protected coverage,
+topic cap, and 7/8 or 8/7 arm balance. Insufficient actual emits fail the package build;
+omissions and identical outcomes never fill pairwise slots.
+
+A separate omission audit contains 8 predeclared, actual typed omissions across all
+four omission reasons, Memory / Open Loop, and English / Chinese / code-switch. Its
+public review contains neutral context and target grounding, without internal reason,
+fixture expectation, arm identity, or lane diagnostics. Decisions are `沉默合适`,
+`本应跟进`, and `无法判断`; it passes only with zero `本应跟进` and zero
+`无法判断`. `correct_zero` remains a deterministic contract gate and is not an omission
+case because it has no selected target or expression-provider call.
+
+The 2026-09-20 run-v3 package is a preflight failure, not final review evidence: only
+4 of 34 expression decisions emitted, and 11 of its 15 pairwise scenes had identical
+arms. The v4 protocol uses new schemas, pins, fixtures, seeds, and evidence paths while
+preserving run-v2 and run-v3 artifacts byte-for-byte. Review package, score, and
+unblinding protocols are versioned `1a3b-g2-review-package:v4`,
+`1a3b-g2-scores:v4`, and `blind-pairwise:g2-v4`.

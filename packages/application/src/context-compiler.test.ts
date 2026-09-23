@@ -126,6 +126,11 @@ describe("Context Compiler", () => {
                 sourceRevisionIds: [coveredRevisionId],
                 value: false,
               },
+              proactive_followup_opportunity: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
               close_intent: {
                 confidence: 0,
                 sourceRevisionIds: [],
@@ -304,6 +309,11 @@ describe("Context Compiler", () => {
                 value: true,
               },
               current_request_requires_focus: {
+                confidence: 0,
+                sourceRevisionIds: [],
+                value: null,
+              },
+              proactive_followup_opportunity: {
                 confidence: 0,
                 sourceRevisionIds: [],
                 value: null,

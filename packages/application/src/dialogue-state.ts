@@ -4,6 +4,10 @@ import type {
   UserId,
 } from "@sayhear/domain";
 
+import {
+  PROACTIVE_FOLLOWUP_OPPORTUNITY_KINDS,
+  type ProactiveFollowupOpportunityKind,
+} from "./proactive-followup/types";
 import type { RecoveryGate } from "./recovery-gate";
 
 export type DialogueStateField<T> = Readonly<{
@@ -19,6 +23,9 @@ export type DialogueStateContent = Readonly<{
   >;
   advice_explicitly_requested: DialogueStateField<boolean | null>;
   current_request_requires_focus: DialogueStateField<boolean | null>;
+  proactive_followup_opportunity: DialogueStateField<
+    ProactiveFollowupOpportunityKind | null
+  >;
   close_intent: DialogueStateField<boolean | null>;
   user_willing_to_elaborate: DialogueStateField<boolean | null>;
 }>;
@@ -106,6 +113,7 @@ const fieldDefinitions = [
   "emotional_intensity",
   "advice_explicitly_requested",
   "current_request_requires_focus",
+  "proactive_followup_opportunity",
   "close_intent",
   "user_willing_to_elaborate",
 ] as const;
@@ -162,6 +170,16 @@ export function validateDialogueStateContent(
       field.value !== "high"
     ) {
       throw new Error("DialogueState emotional_intensity is outside the bounded policy.");
+    }
+    if (
+      fieldName === "proactive_followup_opportunity" &&
+      !PROACTIVE_FOLLOWUP_OPPORTUNITY_KINDS.includes(
+        field.value as ProactiveFollowupOpportunityKind,
+      )
+    ) {
+      throw new Error(
+        "DialogueState proactive_followup_opportunity is outside the bounded policy.",
+      );
     }
     if (
       booleanFieldNames.includes(

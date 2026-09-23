@@ -145,3 +145,56 @@ for Continuation, or the complete Bio writer/validator configuration for Bio.
 The tools produce evidence artifacts; they do not claim that a Provider run,
 hosted Workflow export, Luke's review, or formal release acceptance has
 happened. Those remain separate AC-X and hosted evidence steps.
+
+## G2 v4 dual-track review
+
+Issue #207's v4 tools are separate from the frozen v2 and v3 evidence. They use
+hand-authored `fixtures-v4/`, `pins-v4.json`, and `run-v4/`. Each main-response
+turn is captured once; a main response containing a question is retained and
+left to the production gate. The full-pool verifier must pass before a review
+package can be built.
+
+Run the capture only from a clean, committed evaluator checkout with the
+approved provider environment. Never pass production conversation data to
+these synthetic captures:
+
+```sh
+node --import tsx/esm eval/continuation-acceptance-1a3b/verify-fixtures-v4.ts
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v4-capture.ts \
+  --mode main --env-file .env.neon
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v4-capture.ts \
+  --mode off --env-file .env.neon
+node --import tsx/esm eval/continuation-acceptance-1a3b/build-v4-expression-selection.ts
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v4-capture.ts \
+  --mode on --env-file .env.neon \
+  --expression-selection eval/continuation-acceptance-1a3b/run-v4/operator/expression-selection.json
+node --import tsx/esm eval/continuation-acceptance-1a3b/verify-g2-treatment-v4.ts
+node --import tsx/esm eval/continuation-acceptance-1a3b/build-review-package-v4.ts
+```
+
+The package builder selects 15 actual committed emits and eight predeclared
+typed omissions. Public artifacts are in `run-v4/review/`; sealed identities
+and unblind inputs stay in `run-v4/operator/`. Do not open the sealed mapping
+before the human review is complete.
+
+Start the offline review page on localhost:
+
+```sh
+pnpm eval:g2:v4:review
+```
+
+Open <http://127.0.0.1:4177/>. The page saves drafts in browser local storage,
+exports `scores-v4.json`, and does not load remote assets. After the reviewer
+has completed and exported the score file, unblind with the package, score,
+and operator-only mapping:
+
+```sh
+pnpm eval:g2:v4:unblind -- \
+  --public eval/continuation-acceptance-1a3b/run-v4/review/public-package.json \
+  --scores eval/continuation-acceptance-1a3b/run-v4/review/scores-v4.json \
+  --sealed eval/continuation-acceptance-1a3b/run-v4/operator/sealed-identities.json \
+  --out eval/continuation-acceptance-1a3b/run-v4/operator/unblinded-v4.json
+```
+
+The v4 unblinder verifies the raw payload fingerprint before reading sealed
+identities. The legacy pairwise unblinder accepts only its v1/v2 protocols.

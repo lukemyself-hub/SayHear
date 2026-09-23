@@ -1,0 +1,208 @@
+{
+  "version": "1a3b-g2-pins:v4",
+  "syntheticOnly": true,
+  "shared": {
+    "events": "synthetic-events:v1",
+    "memory": "frozen-memory-claims:v1",
+    "retrieval": "memory-retrieval-query:v3",
+    "portrait": "portrait-selection:v1",
+    "persona": "canonical-persona:v2",
+    "locale": "locale-packs:v2",
+    "safety": "safety-resources:v2",
+    "conversation": "conversation-harness:v3"
+  },
+  "roles": {
+    "episode.build": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "episode-build:eval:v2",
+      "schemaVersion": "episode-proposal:v1",
+      "policyVersion": "episode-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 4000,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "open_loop.extract": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "open-loop-extract:eval:v3",
+      "schemaVersion": "open-loop-proposal:v1",
+      "policyVersion": "open-loop-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 700,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "reflection.daily": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "reflection-daily:eval:v3",
+      "schemaVersion": "reflection-proposal:v1",
+      "policyVersion": "reflection-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 4000,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "reflection.weekly": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "reflection-weekly:eval:v3",
+      "schemaVersion": "reflection-proposal:v1",
+      "policyVersion": "reflection-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 4000,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "bio.write": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "bio-write:eval:v1",
+      "schemaVersion": "bio-draft:v1",
+      "policyVersion": "bio-publish:v1",
+      "parameters": {
+        "temperature": 0.3,
+        "maxOutputTokens": 1200,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "narrative.validate": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "policyVersion": "narrative-validation:v1",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 4000,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "proactive.followup": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "proactive-followup-prompt:v4",
+      "schemaVersion": "proactive-segment:v3",
+      "policyVersion": "proactive-followup-policy-bundle:v4",
+      "parameters": {
+        "temperature": 0.4,
+        "maxOutputTokens": 240,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 0,
+      "fallback": "none"
+    }
+  },
+  "continuation": {
+    "allowedDifferenceKeys": [
+      "open_loop_bundle",
+      "proactive_bundle"
+    ],
+    "arms": {
+      "off": {
+        "id": "continuation-incumbent-1a3a",
+        "openLoop": {
+          "configVersion": "open-loop-disabled:v1",
+          "promptVersion": "not-enabled",
+          "schemaVersion": "not-enabled",
+          "policyVersion": "not-enabled"
+        },
+        "proactive": {
+          "configVersion": "proactive-disabled:v1",
+          "promptVersion": "not-enabled",
+          "schemaVersion": "not-enabled",
+          "policyVersion": "not-enabled"
+        }
+      },
+      "on": {
+        "id": "continuation-candidate-1a3b-v4",
+        "openLoop": {
+          "configVersion": "open-loop-extract:v3",
+          "promptVersion": "open-loop-extract:eval:v3",
+          "schemaVersion": "open-loop-proposal:v1",
+          "policyVersion": "open-loop-admission:v1"
+        },
+        "proactive": {
+          "configVersion": "proactive-followup:v4",
+          "promptVersion": "proactive-followup-prompt:v4",
+          "schemaVersion": "proactive-segment:v3",
+          "policyVersion": "proactive-followup-policy-bundle:v4"
+        }
+      }
+    }
+  },
+  "expression": {
+    "selectedConfigId": "proactive-expression-v4",
+    "configurations": [
+      {
+        "id": "proactive-expression-v4",
+        "pin": {
+          "provider": "deepseek",
+          "model": "deepseek-v4-flash",
+          "snapshot": "deepseek-flash",
+          "promptVersion": "proactive-followup-prompt:v4",
+          "schemaVersion": "proactive-segment:v3",
+          "policyVersion": "proactive-followup-policy-bundle:v4",
+          "parameters": {
+            "temperature": 0.4,
+            "maxOutputTokens": 240,
+            "reasoningEffort": "none",
+            "responseFormat": "json_object"
+          },
+          "maxTechnicalRetries": 0,
+          "fallback": "none"
+        }
+      }
+    ]
+  },
+  "validator": {
+    "configuration": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "policyVersion": "narrative-validation:v1",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 4000,
+        "reasoningEffort": "none",
+        "responseFormat": "json_object"
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    }
+  }
+}

@@ -42,3 +42,14 @@ than promoting, rerunning, or editing v2. `proactive-expression-v3` adds a typed
 grounding/non-duplication rules. It is the sole candidate in the next
 ON-vs-OFF round under the same bounded exception; it is not called a winner
 until that new round passes. The failed v2 scores and captures remain frozen.
+
+## Amendment (2026-09-23, Luke-approved v4 evidence iteration)
+
+The v3 capture and its review package are frozen as a failed preflight: the full pool
+produced 4 emits and 30 typed omissions, while 11 of 15 sampled scenes had no visible
+ON/OFF difference. The v4 acceptance round keeps `proactive-expression-v4` as the sole
+candidate under the bounded single-configuration exception. It does not claim a winner
+before the dual-track review passes. The 15-scene pairwise sample is drawn only from
+actual committed emits; 8 actual typed omissions are reviewed separately. Both outcomes
+are recorded without altering prior captures, pins, or scores. Any future competing
+expression configuration revives the complete-configuration comparison requirement.

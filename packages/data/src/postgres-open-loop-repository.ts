@@ -755,6 +755,9 @@ export class PostgresOpenLoopRepository implements OpenLoopExtractionRepository 
       kind: string;
       localizedSummary: string | null;
       expectedStartAt: string | null;
+      expectedEndAt: string | null;
+      timePrecision: string;
+      timezone: string | null;
       expiresAt: string;
       evidenceAt: string;
       followupEligible: boolean;
@@ -770,6 +773,9 @@ export class PostgresOpenLoopRepository implements OpenLoopExtractionRepository 
       open_loop_kind: string;
       localized_summary: string | null;
       expected_start_at: string | null;
+      expected_end_at: string | null;
+      time_precision: string;
+      timezone: string | null;
       followup_eligible_from_at: string;
       expires_at: string;
       content_expires_at: string | null;
@@ -785,6 +791,9 @@ export class PostgresOpenLoopRepository implements OpenLoopExtractionRepository 
                 ELSE v.localized_summary
               END AS localized_summary,
               v.expected_start_at::text,
+              v.expected_end_at::text,
+              v.time_precision,
+              v.timezone,
               v.followup_eligible_from_at::text,
               v.expires_at::text,
               v.content_expires_at::text,
@@ -814,6 +823,9 @@ export class PostgresOpenLoopRepository implements OpenLoopExtractionRepository 
       kind: row.open_loop_kind,
       localizedSummary: row.localized_summary,
       expectedStartAt: row.expected_start_at,
+      expectedEndAt: row.expected_end_at,
+      timePrecision: row.time_precision,
+      timezone: row.timezone,
       expiresAt: row.expires_at,
       evidenceAt: row.evidence_at,
       followupEligible: true,
@@ -988,5 +1000,96 @@ export class PostgresOpenLoopRepository implements OpenLoopExtractionRepository 
       [input.openLoopId, input.userId, input.now.toISOString()],
     );
     return result.rows[0]?.localized_summary ?? null;
+  }
+
+  /**
+   * Read the exact, current User Event Evidence that formed one selected
+   * Open Loop. The text is transient Provider input; it is never written to
+   * the loop, selection manifest, or use record. Corrections, Purge, or an
+   * ambiguous multi-loop binding make this read fail closed.
+   */
+  public async readSourceEvidence(input: Readonly<{
+    userId: string;
+    openLoopId: string;
+    openLoopVersionId: string;
+    expectedSourceEventRevisionId: string;
+  }>): Promise<Readonly<{
+    eventRevisionId: string;
+    revision: number;
+    text: string;
+  }> | null> {
+    const result = await this.pool.query<{
+      source_event_revision_id: string;
+      source_revision: number;
+      canonical_text: string;
+      binding_count: string;
+    }>(
+      `SELECT revision.conversation_event_revision_id::text
+                AS source_event_revision_id,
+              revision.revision AS source_revision,
+              revision.canonical_text,
+              COUNT(*) OVER ()::text AS binding_count
+       FROM open_loops loop
+       INNER JOIN open_loop_versions version
+         ON version.open_loop_version_id = loop.current_version_id
+        AND version.open_loop_version_id = $3
+       INNER JOIN evidence_items evidence
+         ON evidence.evidence_item_id = version.source_evidence_item_id
+        AND evidence.user_id = loop.user_id
+        AND evidence.status = 'active'
+        AND evidence.source_actor = 'user'
+        AND evidence.source_revision_id = version.source_event_revision_id
+       INNER JOIN conversation_event_revisions revision
+         ON revision.conversation_event_revision_id =
+            version.source_event_revision_id
+        AND revision.user_id = loop.user_id
+        AND revision.content_purged_at IS NULL
+       INNER JOIN conversation_events event
+         ON event.conversation_event_id = revision.conversation_event_id
+        AND event.user_id = loop.user_id
+        AND event.actor = 'user'
+        AND event.current_revision_id = revision.conversation_event_revision_id
+       WHERE loop.user_id = $1
+         AND loop.open_loop_id = $2
+         AND loop.deleted_at IS NULL
+         AND version.status = 'open'
+         AND version.content_purged_at IS NULL
+         AND version.source_event_revision_id = $4
+         AND (
+           SELECT COUNT(*)
+           FROM open_loops other_loop
+           INNER JOIN open_loop_versions other_version
+             ON other_version.open_loop_version_id = other_loop.current_version_id
+           WHERE other_loop.user_id = loop.user_id
+             AND other_loop.deleted_at IS NULL
+             AND other_version.status = 'open'
+             AND other_version.source_event_revision_id = version.source_event_revision_id
+             AND other_version.open_loop_kind = version.open_loop_kind
+             AND other_version.expected_start_at IS NOT DISTINCT FROM version.expected_start_at
+             AND other_version.expected_end_at IS NOT DISTINCT FROM version.expected_end_at
+             AND other_version.time_precision = version.time_precision
+             AND other_version.timezone IS NOT DISTINCT FROM version.timezone
+         ) = 1`,
+      [
+        input.userId,
+        input.openLoopId,
+        input.openLoopVersionId,
+        input.expectedSourceEventRevisionId,
+      ],
+    );
+    const row = result.rows[0];
+    if (
+      result.rows.length !== 1 ||
+      !row ||
+      Number(row.binding_count) !== 1 ||
+      !row.canonical_text.trim()
+    ) {
+      return null;
+    }
+    return {
+      eventRevisionId: row.source_event_revision_id,
+      revision: row.source_revision,
+      text: row.canonical_text,
+    };
   }
 }

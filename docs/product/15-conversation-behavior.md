@@ -76,11 +76,15 @@ Proactive Memory Follow-up 遵循：
 
 - 每段 Continuous Exchange 最多一次，不设必须主动追问的配额；
 - 用户只有问候、开放式开场或交流出现自然空档时，可以主动选择过去事项；
+- 版本化 DialogueState 将当前 User Event 分类为 `greeting`、`open_start`、
+  `natural_gap`、`current_topic`、`direct_task`、`urgent_or_high_risk` 或 `null`；
+  前三类才允许进入候选选择。分类必须达到版本化置信门槛并引用当前 Event
+  revision；缺失、低置信度、过期或来源不匹配时 fail closed；
 - 用户正在表达实质性当前话题、提出直接任务，或出现紧急 / 高风险信号时，
   本轮不选择过去事项，不在处理完当前内容后附加无关旧事；
 - `current_request_requires_focus=true` 时不选择；该字段为 `null`、未引用当前
   User Event、版本落后或未达版本化置信门槛时，本轮同样 fail closed。
-  `false` 只表示这一道门通过，不代表必须主动表达关心；
+  `false` 只表示这一道门通过，不代表存在主动机会，也不代表必须主动表达关心；
 - 只能使用 active、未过期、非 contested、非 dormant、未被 Forget 的 Memory
   或 Open Loop；没有 Proactive Follow-up State 记录表示此前从未被抑制，可以通过该门，
   不需要预建一条 eligible 记录；

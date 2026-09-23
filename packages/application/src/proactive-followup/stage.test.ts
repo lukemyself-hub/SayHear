@@ -59,6 +59,11 @@ function dialogue(): ProactiveFollowupDialogueSnapshot {
       confidence: 0.9,
       sourceRevisionIds: [REVISION],
     },
+    proactiveFollowupOpportunity: {
+      value: "natural_gap",
+      confidence: 0.9,
+      sourceRevisionIds: [REVISION],
+    },
   };
 }
 
@@ -68,7 +73,7 @@ function openLane(): ProactiveFollowupLaneSnapshot {
     enabled: true,
     status: "complete",
     watermark: { sourceRevision: 1, coveredThroughSequence: 5 },
-    manifestVersion: "open-loop-read:v1",
+    manifestVersion: "open-loop-read:v2",
     integrity: "valid",
     candidates: [
       {
@@ -77,6 +82,7 @@ function openLane(): ProactiveFollowupLaneSnapshot {
         targetVersionId: "loop-version-1",
         source: "open_loop",
         sourceRank: null,
+        sourceEventRevisionId: "source-event-revision-1",
         evidenceAt: "2026-09-10T00:00:00.000Z",
         expectedStartAt: "2026-09-20T00:00:00.000Z",
         expiresAt: "2026-09-27T00:00:00.000Z",
@@ -132,6 +138,11 @@ function readers(
     readOpenLane: async () => openLane(),
     readStates: async () => [],
     readEventRevisionText: async () => ({ text: "user text" }),
+    readOpenLoopSourceEvidence: async () => ({
+      eventRevisionId: "source-event-revision-1",
+      revision: 1,
+      text: "I am waiting to hear whether the lease renewal was approved.",
+    }),
     listUsesAwaitingDisposition: async () => [],
     readTargetSummary: async () => "Flight to Berlin next Friday",
     ...overrides,
@@ -142,13 +153,13 @@ function reservations(
   overrides: Partial<ProactiveFollowupReservationStore> = {},
 ): ProactiveFollowupReservationStore {
   return {
-    reserveSelection: async () => ({
-      outcome: "reserved",
+    reserveSelection: vi.fn(async () => ({
+      outcome: "reserved" as const,
       reservationId: "reservation-1",
-      targetKind: "open_loop",
+      targetKind: "open_loop" as const,
       targetId: "loop-1",
       targetVersionId: "loop-version-1",
-    }),
+    })),
     bindSegmentCommand: async () => ({ outcome: "bound" }),
     abandonSegment: async () => {},
     releaseOmittedSegment: async () => ({ outcome: "released" as const }),
@@ -324,7 +335,57 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
     expect(modelProvider.generateSegment.mock.calls[0]?.[0]).toMatchObject({
       mainText: "That sounds like a full week already.",
       targetSummary: "Flight to Berlin next Friday",
+      sourceUserText:
+        "I am waiting to hear whether the lease renewal was approved.",
     });
+  });
+
+  it("does not call the expression provider when the current event is not an opportunity", async () => {
+    const { segmentStage, modelProvider, commands, reservationStore } = stage({
+      readerOverrides: {
+        readDialogue: async () => ({
+          ...dialogue(),
+          proactiveFollowupOpportunity: {
+            value: "current_topic",
+            confidence: 0.95,
+            sourceRevisionIds: [REVISION],
+          },
+        }),
+      },
+    });
+
+    await expect(segmentStage.prepare(prepareInput())).resolves.toBeNull();
+    expect(commands.admit).not.toHaveBeenCalled();
+    expect(reservationStore.reserveSelection).not.toHaveBeenCalled();
+    expect(modelProvider.generateSegment).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when opportunity evidence is stale or below the confidence floor", async () => {
+    for (const opportunity of [
+      {
+        value: "greeting" as const,
+        confidence: 0.69,
+        sourceRevisionIds: [REVISION],
+      },
+      {
+        value: "greeting" as const,
+        confidence: 0.99,
+        sourceRevisionIds: ["another-event-revision"],
+      },
+    ]) {
+      const { segmentStage, commands, modelProvider } = stage({
+        readerOverrides: {
+          readDialogue: async () => ({
+            ...dialogue(),
+            proactiveFollowupOpportunity: opportunity,
+          }),
+        },
+      });
+
+      await expect(segmentStage.prepare(prepareInput())).resolves.toBeNull();
+      expect(commands.admit).not.toHaveBeenCalled();
+      expect(modelProvider.generateSegment).not.toHaveBeenCalled();
+    }
   });
 
   it("settles a grounded omit without consuming or abandoning the selection", async () => {

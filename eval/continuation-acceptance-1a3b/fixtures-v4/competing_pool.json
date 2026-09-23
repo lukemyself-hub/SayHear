@@ -1,0 +1,451 @@
+{
+  "version": "1a3b-g2-scenes:v4",
+  "synthetic": true,
+  "family": "competing_pool",
+  "scenes": [
+    {
+      "id": "g2-v4-c01",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "rental_vs_baking",
+      "description": "A fresh inbox cue on the expected decision date makes the Open Loop more timely than the unrelated baking memory.",
+      "rationale": "A fresh inbox cue on the expected decision date makes the Open Loop more timely than the unrelated baking memory.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted the rental application for Maple Court; the manager said the decision should arrive by September 23."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-c01",
+          "kind": "objective_memory",
+          "text": "You like trying sourdough recipes on weekends.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-c01"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "memory_claim",
+          "memoryId": "mem-c01"
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have been catching up on house things today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "A new message just came in, and I have not opened it yet.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-c02",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "choir_vs_garden",
+      "description": "A reflective music update is adjacent to the choir memory; the unrelated garden loop should lose.",
+      "rationale": "A reflective music update is adjacent to the choir memory; the unrelated garden loop should lose.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "The community garden coordinator said they would confirm my volunteer slot by September 23."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-c02",
+          "kind": "objective_memory",
+          "text": "You joined the Thursday community choir and were learning the alto part.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-c02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had a few things to finish after work.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I had music on while I finished chores, and I caught myself humming along.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-c02"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-c03",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "flight_vs_pottery",
+      "description": "A fresh notification on the promised reply date makes the pending travel decision more timely than the unrelated class memory.",
+      "rationale": "A fresh notification on the promised reply date makes the pending travel decision more timely than the unrelated class memory.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I am waiting for the airline to confirm the seat change; they said they would reply by September 23."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-c03",
+          "kind": "objective_memory",
+          "text": "You started a pottery class at the community studio.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-c03"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "memory_claim",
+          "memoryId": "mem-c03"
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I got through my morning meetings without any surprises.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I noticed a fresh notification in my inbox this morning.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-c04",
+      "family": "competing_pool",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "course_vs_ticket",
+      "description": "A small hands-on learning update is adjacent to the user's course memory; the pending concert ticket is unrelated.",
+      "rationale": "A small hands-on learning update is adjacent to the user's course memory; the pending concert ticket is unrelated.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我在等音乐节的候补票通知，对方说9月23日前会更新。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-c04",
+          "kind": "objective_memory",
+          "text": "你报名了周末的烘焙入门课。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-c04"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天处理完了几封工作邮件。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我今天弄明白了一个之前卡住的小技巧，感觉顺手多了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-c04"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-c05",
+      "family": "competing_pool",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "venue_vs_walk",
+      "description": "A new email arrives on the promised reply date, making the Open Loop more timely than the unrelated walking memory.",
+      "rationale": "A new email arrives on the promised reply date, making the Open Loop more timely than the unrelated walking memory.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question"
+      ],
+      "protectedCategories": [],
+      "opportunity": "open_start",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我在等社区中心确认读书会的房间，对方说9月23日会回复。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-c05",
+          "kind": "objective_memory",
+          "text": "你喜欢沿着河边散步。",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-c05"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "memory_claim",
+          "memoryId": "mem-c05"
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天午饭吃得比平时晚。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我刚收到一封新邮件，还没来得及点开看。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v4-c06",
+      "family": "competing_pool",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "podcast_vs_laptop",
+      "description": "A short recording update is adjacent to the user's neighborhood audio project, not the unrelated repair loop.",
+      "rationale": "A short recording update is adjacent to the user's neighborhood audio project, not the unrelated repair loop.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment"
+      ],
+      "protectedCategories": [],
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "The repair shop is checking my laptop fan and said they would send an estimate by September 23."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-c06",
+          "kind": "objective_memory",
+          "text": "You have been recording short neighborhood-history podcasts.",
+          "sensitive": false,
+          "evidenceIds": [
+            "evidence-mem-c06"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I finally cleared a few things from my desk.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I recorded a quick intro for a neighborhood project，声音比上周自然。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-c06"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

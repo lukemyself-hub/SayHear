@@ -38,7 +38,7 @@ function candidate(
 function selectionInput(
   overrides: Partial<ProactiveFollowupSelectionInput> = {},
 ): ProactiveFollowupSelectionInput {
-  return {
+  const input: ProactiveFollowupSelectionInput = {
     userId: "user-1",
     dailySessionId: "session-1",
     continuousExchangeNo: 3,
@@ -57,6 +57,11 @@ function selectionInput(
         confidence: 0.91,
         sourceRevisionIds: ["user-revision-2"],
       },
+      proactiveFollowupOpportunity: {
+        value: "natural_gap",
+        confidence: 0.91,
+        sourceRevisionIds: ["user-revision-2"],
+      },
     },
     lanes: [
       {
@@ -64,7 +69,7 @@ function selectionInput(
         enabled: true,
         status: "complete",
         watermark: { sourceRevision: 8, coveredThroughSequence: 2 },
-        manifestVersion: "open-loop-read:v1",
+        manifestVersion: "open-loop-read:v2",
         integrity: "valid",
         candidates: [candidate()],
       },
@@ -91,6 +96,24 @@ function selectionInput(
     now: NOW,
     ...overrides,
   };
+  if (overrides.opportunity !== undefined && overrides.dialogue === undefined) {
+    const currentOpportunity = input.dialogue.proactiveFollowupOpportunity ?? {
+      value: null,
+      confidence: 0,
+      sourceRevisionIds: [],
+    };
+    return {
+      ...input,
+      dialogue: {
+        ...input.dialogue,
+        proactiveFollowupOpportunity: {
+          ...currentOpportunity,
+          value: overrides.opportunity,
+        },
+      },
+    };
+  }
+  return input;
 }
 
 function state(
@@ -192,7 +215,7 @@ describe("C2 deterministic target selection", () => {
             enabled: true,
             status: "complete",
             watermark: { sourceRevision: 8, coveredThroughSequence: 2 },
-            manifestVersion: "open-loop-read:v1",
+            manifestVersion: "open-loop-read:v2",
             integrity: "valid",
             candidates: [
               candidate({
@@ -286,6 +309,23 @@ describe("C2 deterministic target selection", () => {
         }),
       ),
     ).toMatchObject({ outcome: "none", reason: "lane_not_readable" });
+  });
+
+  it("fails closed when the current turn is missing a high-confidence opportunity", () => {
+    expect(
+      selectProactiveFollowupTarget(
+        selectionInput({
+          dialogue: {
+            ...selectionInput().dialogue,
+            proactiveFollowupOpportunity: {
+              value: "natural_gap",
+              confidence: 0.69,
+              sourceRevisionIds: ["user-revision-2"],
+            },
+          },
+        }),
+      ),
+    ).toMatchObject({ outcome: "none", reason: "opportunity_signal_not_ready" });
   });
 
   it("ignores disabled lanes and rejects candidates assigned to the wrong lane", () => {

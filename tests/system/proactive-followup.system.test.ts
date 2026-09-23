@@ -330,6 +330,11 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
           confidence: 1,
           sourceRevisionIds: [PROMPT_REVISION_ID],
         },
+        proactiveFollowupOpportunity: {
+          value: "open_start",
+          confidence: 1,
+          sourceRevisionIds: [PROMPT_REVISION_ID],
+        },
       },
       lanes: [
         {
