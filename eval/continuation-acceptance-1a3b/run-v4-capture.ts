@@ -33,6 +33,7 @@ import { dirname, resolve } from "node:path";
 
 import {
   CANONICAL_PERSONA_VERSION,
+  CHINESE_LOCALE_PACK_VERSION,
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   CLAIM_RETRIEVAL_PROJECTION_POLICY_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
@@ -77,6 +78,7 @@ import {
   runOpenLoopExtractAttempt,
   SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
   SAFETY_POSTURE_POLICY_VERSION,
+  SAFETY_RESOURCE_WHITELIST_VERSION,
   selectProactiveFollowupTarget,
   validateSafetyPostureContent,
   type ClaimKind,
@@ -1837,9 +1839,11 @@ function sharedInputForScene(scene: V4Scene): FrozenSharedInput {
     config: {
       conversation: "conversation-harness:v3",
       locale:
-        scene.languageVariant === "en" ? "locale-pack-en:v4" : "locale-pack-zh:v4",
-      persona: "canonical-persona:v4",
-      safety: "safety-resources:v4",
+        scene.languageVariant === "en"
+          ? ENGLISH_LOCALE_PACK_VERSION
+          : CHINESE_LOCALE_PACK_VERSION,
+      persona: CANONICAL_PERSONA_VERSION,
+      safety: SAFETY_RESOURCE_WHITELIST_VERSION,
     },
     events: scene.historicalEvents.map((event, index) => ({
       id: `${scene.id}:historical:${index}`,
