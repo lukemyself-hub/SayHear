@@ -76,6 +76,7 @@ import {
   RETRIEVAL_LANE_PRIORITY,
   RETRIEVAL_QUERY_CONSTRUCTION_POLICY_VERSION,
   runOpenLoopExtractAttempt,
+  resolveConversationLocale,
   SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
   SAFETY_POSTURE_POLICY_VERSION,
   SAFETY_RESOURCE_WHITELIST_VERSION,
@@ -1755,13 +1756,15 @@ let retrievalRunIdTick = 0;
 
 function policyVersionsFor(sharedInput: FrozenSharedInput): ContextPolicyVersions {
   const locale = sharedInput.config.locale;
-  const localePolicyVersion =
-    locale.toLowerCase().includes("zh") || locale.toLowerCase().includes("en")
-      ? locale
-      : ENGLISH_LOCALE_PACK_VERSION;
+  if (
+    locale !== CHINESE_LOCALE_PACK_VERSION &&
+    locale !== ENGLISH_LOCALE_PACK_VERSION
+  ) {
+    throw new Error(`Unsupported locale pack version: ${locale}`);
+  }
   return {
     canonicalPersonaVersion: sharedInput.config.persona || CANONICAL_PERSONA_VERSION,
-    localePolicyVersion,
+    localePolicyVersion: locale,
     outputFormatVersion: "conversation-output:v1",
     personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
     personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
@@ -1839,7 +1842,7 @@ function sharedInputForScene(scene: V4Scene): FrozenSharedInput {
     config: {
       conversation: "conversation-harness:v3",
       locale:
-        scene.languageVariant === "en"
+        resolveConversationLocale(scene.locale) === "en"
           ? ENGLISH_LOCALE_PACK_VERSION
           : CHINESE_LOCALE_PACK_VERSION,
       persona: CANONICAL_PERSONA_VERSION,
