@@ -198,3 +198,103 @@ pnpm eval:g2:v4:unblind -- \
 
 The v4 unblinder verifies the raw payload fingerprint before reading sealed
 identities. The legacy pairwise unblinder accepts only its v1/v2 protocols.
+
+## G2 v5 precision-first acceptance
+
+v5 keeps the v4 evidence immutable and runs in separate paths. First generate
+and verify the independent 44-scene calibration set, then run its main, OFF,
+and ON captures once. Analyze the result before authoring the formal pool:
+
+```sh
+node --import tsx/esm eval/continuation-acceptance-1a3b/verify-fixtures-v5.ts \
+  eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v5-capture.ts \
+  --mode main --catalog eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json \
+  --pins eval/continuation-acceptance-1a3b/pins-v5.json \
+  --env-file .env.neon \
+  --main-out eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-main.json
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v5-capture.ts \
+  --mode off --catalog eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json \
+  --pins eval/continuation-acceptance-1a3b/pins-v5.json \
+  --env-file .env.neon \
+  --main-in eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-main.json \
+  --off-out eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-off.json
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v5-capture.ts \
+  --mode on --catalog eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json \
+  --pins eval/continuation-acceptance-1a3b/pins-v5.json \
+  --env-file .env.neon \
+  --main-in eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-main.json \
+  --on-out eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-on.json \
+  --ledger-out eval/continuation-acceptance-1a3b/run-v5-calibration-1/treatment-ledger.json \
+  --expression-selection eval/continuation-acceptance-1a3b/run-v5/operator/expression-selection.json
+node --import tsx/esm eval/continuation-acceptance-1a3b/verify-g2-treatment-v5.ts \
+  --catalog eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json \
+  --main-run eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-main.json \
+  --off-run eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-off.json \
+  --on-run eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-on.json \
+  --ledger eval/continuation-acceptance-1a3b/run-v5-calibration-1/treatment-ledger.json \
+  --verification eval/continuation-acceptance-1a3b/run-v5-calibration-1/verification.json
+node --import tsx/esm eval/continuation-acceptance-1a3b/analyze-v5-calibration.ts
+```
+
+The analyzer requires nonzero executable emits in every positive family and
+three matching typed omissions for each reason. It computes each formal family
+size as `ceil(2k/p)`, rounds up to ten, then enforces the 80–160 positive-pool
+bound. A zero rate, unstable omission, or over-cap plan pauses formal capture.
+If a demonstrated defect needs a second calibration, generate round 2; never
+reuse or resample round 1 scenes.
+
+Only after calibration passes, generate the formal fixtures from the frozen
+family counts, verify the catalog, and prepare its pre-registration:
+
+```sh
+node --import tsx/esm eval/continuation-acceptance-1a3b/prepare-v5-formal.ts
+```
+
+Review and commit the implementation and pre-registered inputs, then confirm
+the tracked worktree is clean before the first formal Provider call. The
+current catalog freezes three ordered batches inside the 80–160 positive-scene
+cap; all eight omission audits and the correct-zero controls are in batch 1.
+Each formal turn is captured once. Begin with batch 1:
+
+```sh
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v5-capture.ts \
+  --mode main --catalog eval/continuation-acceptance-1a3b/fixtures-v5.json \
+  --pins eval/continuation-acceptance-1a3b/pins-v5.json --env-file .env.neon --batch batch-1
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v5-capture.ts \
+  --mode off --catalog eval/continuation-acceptance-1a3b/fixtures-v5.json \
+  --pins eval/continuation-acceptance-1a3b/pins-v5.json --env-file .env.neon --batch batch-1
+node --import tsx/esm eval/continuation-acceptance-1a3b/run-v5-capture.ts \
+  --mode on --catalog eval/continuation-acceptance-1a3b/fixtures-v5.json \
+  --pins eval/continuation-acceptance-1a3b/pins-v5.json --env-file .env.neon \
+  --batch batch-1 \
+  --expression-selection eval/continuation-acceptance-1a3b/run-v5/operator/expression-selection.json
+pnpm eval:g2:v5:merge --batches batch-1
+pnpm eval:g2:v5:verify
+```
+
+Batch runs write isolated files under `run-v5/batches/<batch-id>/`; OFF and ON
+replay that same batch's frozen main file. After each merge and verification,
+run the next batch only when `passed` is true, `reviewReady` is false, and
+`pendingSampleQuotas` is nonempty. For batch 2 or 3, repeat the three capture
+commands with that exact `--batch` ID, then merge the ordered prefix, for
+example `pnpm eval:g2:v5:merge --batches batch-1,batch-2`, and verify again.
+Stop when `reviewReady` is true or any hard gate fails; recall failure never
+triggers another batch. The verifier checks exact scene/turn sets, frozen main
+text, raw and canonical hashes for each batch, typed treatment state, and
+recall when the sample becomes available or all batches are exhausted. The
+page builder refuses to run unless final verification has zero failures,
+marks `reviewReady`, and supports the fixed-seed ten-case quotas.
+
+After a passing verifier, build and serve the human page with:
+
+```sh
+node --import tsx/esm eval/continuation-acceptance-1a3b/build-review-package-v5.ts
+pnpm eval:g2:v5:review
+```
+
+It contains ten actual emit comparisons and eight typed-omission judgments.
+The public page and operator mapping stay separate. Do not unblind before the
+reviewer exports all scores; v5 unblinding checks the 10/8 sample, 5/5 arm
+placement, every protected-turn reference, omission quotas, and the package
+fingerprint. A passing review still does not create or publish a G2 manifest.

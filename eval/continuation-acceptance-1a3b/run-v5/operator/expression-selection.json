@@ -1,0 +1,19 @@
+{
+  "version": "1a3b-g2-expression-decision:v5",
+  "expressionRunSha256": null,
+  "winnerConfigId": "proactive-expression-v5",
+  "winnerRolePinSha256": "sha256:96a804dfeb7717e8cd3b88bdb128fac854d9b1ede94398f80e52cd5c26a59b58",
+  "decisionSha256": "sha256:49f790f8c80d4e9e0b02ede1f38ef95f27c1d84e813ebccce3b0fcc2d487caa3",
+  "authorizationSha256": "sha256:3f2c5c8991582aaf7adffe7152af185fc55c55d4ecb80b86c581c70b836f020a",
+  "decision": {
+    "kind": "single_candidate_iteration",
+    "decidedAt": "2026-09-23",
+    "reason": "The G2 v5 candidate is evaluated against OFF under the approved dual-track protocol; expression-style comparison remains deferred under ADR-0136's bounded exception."
+  },
+  "waiver": {
+    "approvedBy": "luke",
+    "approvedAt": "2026-09-23",
+    "reason": "Luke-approved v5 acceptance iteration recorded in ADR-0136.",
+    "adrAmendment": "0136:2026-09-23"
+  }
+}

@@ -962,9 +962,6 @@ function createSeam(input: {
           recorded: false,
         });
       }
-      if (!segment && evidence.segmentOutcome === "not_reached") {
-        evidence.segmentOutcome = "omitted";
-      }
       return {
         eventId,
         outcome: "committed",
@@ -1472,7 +1469,7 @@ function createSeam(input: {
     },
     abandonSegment: async () => {
       evidence.reservationOutcome = "abandoned";
-      evidence.segmentOutcome = "omitted";
+      evidence.segmentOutcome = "failed";
     },
     releaseOmittedSegment: async () => {
       evidence.reservationOutcome = "released";

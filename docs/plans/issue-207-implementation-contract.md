@@ -472,3 +472,47 @@ package fingerprint. Unblinding first verifies that fingerprint.
 The v4 capture uses one frozen seed and at most one semantic result per
 predeclared turn. Insufficient gates are a frozen failure; no semantic reruns,
 seed changes, scene deletion, or omission substitution are allowed.
+
+## v5 precision-first acceptance (2026-09-23)
+
+The full-pool v4 capture remains immutable failed evidence. v5 retains the
+production behavior that the main response is independent and its ordinary
+question suppresses the G2 stage. A typed `omit` is valid; the expression
+provider is not semantically retried.
+
+### Review gates
+
+- Pairwise uses exactly 10 actual committed emits: 5 English, 3 Chinese, 2
+  code-switch. The sample includes at least 3 Memory, 3 Open Loop, 2 complete
+  stateful trajectories, and 1 competing-pool scene; one remaining case is
+  selected by the frozen seed. A/B positions are balanced 5/5.
+- Refusal, short-answer, topic-change, and direct-task protected categories
+  appear in sampled scenes with a visible treatment difference.
+- Candidate scene-level net preference is strictly positive, no locale or
+  protected slice regresses, and no more than 3 of 10 scene decisions are ties.
+- The separate omission audit uses 8 actual typed omissions, two per reason,
+  across Memory / Open Loop and English / Chinese / code-switch. `本应跟进`
+  and `无法判断` must both be zero.
+- Emit recall is at least 30% over predeclared opportunities whose frozen main
+  has no ordinary question and whose current opportunity, lanes, and expected
+  eligible target pass deterministic selection. Selection mismatch is a hard
+  failure and cannot be removed from the denominator. Report the complete
+  positive-scene funnel as well.
+
+### Evidence and bounded supplementation
+
+The capture ledger distinguishes `not_reached`, typed `omitted`, `committed`,
+and `failed`. Only a Provider-returned typed omit with released reservation is
+an omission audit outcome. Correct-zero checks provider calls and state changes,
+not the absence label used when the stage was never reached. Scene-level
+competitors participate in target-pool verification, and an ordinary-question
+skip does not masquerade as a missing candidate pool.
+
+Development calibration uses disjoint synthetic scenes. After calibration,
+the complete formal catalog, pins, seed, and at most three capture batches are
+pre-registered and hashed before the first Provider call. Every turn receives
+one semantic result. A later batch may run only when all observed hard gates
+pass and the current pool lacks a language or family sample quota. All batches
+remain in the full-pool verifier input. A recall failure freezes the round;
+it cannot trigger supplementation. v5 artifacts use new schema and evidence
+paths, and no v4 result is rewritten or reused.

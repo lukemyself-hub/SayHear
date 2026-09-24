@@ -31,6 +31,10 @@
     "test:system": "vitest run tests/system",
     "eval:g2:v4:review": "node eval/continuation-acceptance-1a3b/serve-review-v4.mjs",
     "eval:g2:v4:unblind": "node --import tsx/esm eval/continuation-acceptance-1a3b/unblind-v4.ts",
+    "eval:g2:v5:review": "node eval/continuation-acceptance-1a3b/serve-review-v5.mjs",
+    "eval:g2:v5:unblind": "node --import tsx/esm eval/continuation-acceptance-1a3b/unblind-v5.ts",
+    "eval:g2:v5:verify": "node --import tsx/esm eval/continuation-acceptance-1a3b/verify-g2-treatment-v5.ts",
+    "eval:g2:v5:merge": "node --import tsx/esm eval/continuation-acceptance-1a3b/merge-v5-captures.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck",
     "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test && pnpm build"
   },

@@ -1,0 +1,519 @@
+{
+  "version": "1a3b-g2-scenes:v5",
+  "synthetic": true,
+  "family": "positive_open_loop",
+  "scenes": [
+    {
+      "id": "g2-v5-cal1-ol-001",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-1-1",
+      "description": "A still-pending the North Pier print studio's risograph booking has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the North Pier print studio's risograph booking has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the North Pier print studio's risograph booking; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 18 Celsius to Fahrenheit for my notes. (note A)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm glad to have a quiet minute.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-002",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-1-2",
+      "description": "A still-pending the Marigold community choir's room request has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Marigold community choir's room request has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Marigold community choir's room request; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you turn 3.5 miles into kilometers for a route card? (note B)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, good to see you. I have a little pause now.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-003",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-1-3",
+      "description": "A still-pending the Alder Street repair café's parts order has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Alder Street repair café's parts order has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Alder Street repair café's parts order; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate a 15 percent tip on 28 dollars. (note C)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; I have a calm moment before the day gets busy.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-004",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-1-4",
+      "description": "A still-pending the Harborview pottery studio's kiln slot has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Harborview pottery studio's kiln slot has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了港景陶艺工作室的窑炉时段，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 2.4 升换算成杯数，用在食谱里。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面啦，我刚好能安静一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-005",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-1-5",
+      "description": "A still-pending the Juniper neighborhood library's meeting room has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Juniper neighborhood library's meeting room has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了杜松社区图书馆的会议室，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 18 摄氏度换算成华氏度，我要记下来。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，又见面了。我现在刚好有一会儿空闲。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-006",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-1-6",
+      "description": "A still-pending the Willow Lane bike co-op's wheel estimate has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Willow Lane bike co-op's wheel estimate has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了柳巷自行车合作社的车轮报价，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把 3.5 英里换算成公里，写在路线卡上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，很高兴再聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-007",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-1-7",
+      "description": "A still-pending the Lantern House theater's volunteer schedule has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Lantern House theater's volunteer schedule has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Lantern House 剧场的 volunteer schedule；they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "帮我算一下 28 dollars 的 15 percent tip。 (note G)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning! 现在有片刻空闲。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-ol-008",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-1-8",
+      "description": "A still-pending the Seabird makerspace's laser-cutter orientation has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Seabird makerspace's laser-cutter orientation has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Seabird 创客空间的 laser-cutter 培训；they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.4 liters to cups，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again, 很高兴再聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

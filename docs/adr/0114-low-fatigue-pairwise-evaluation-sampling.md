@@ -97,3 +97,38 @@ arms. The v4 protocol uses new schemas, pins, fixtures, seeds, and evidence path
 preserving run-v2 and run-v3 artifacts byte-for-byte. Review package, score, and
 unblinding protocols are versioned `1a3b-g2-review-package:v4`,
 `1a3b-g2-scores:v4`, and `blind-pairwise:g2-v4`.
+
+## Amendment (2026-09-23, Luke-approved G2 v5 precision-first review)
+
+The frozen v4 full-pool capture does not meet its emit or omission gates. G2 v5
+keeps the production rule that the main response is generated independently,
+and an ordinary question prevents a proactive segment in that turn. A typed
+`omit` is valid; neither provider calls nor fixture selection may force an emit.
+
+- The v5 pairwise sample contains 10 scenes with committed ON-only segments:
+  5 English, 3 Chinese, and 2 code-switch. It requires at least 3 Memory, 3
+  Open Loop, 2 complete stateful trajectories, and 1 competing-pool scene; the
+  remaining case is selected with the frozen seed. A/B placement is balanced
+  5/5. Refusal, short-answer, topic-change, and direct-task coverage must occur
+  in sampled scenes with visible treatment.
+- Candidate scene-level net preference remains strictly positive; no language
+  or protected slice may regress. At most 3 of 10 scene decisions may be ties.
+- A separate audit contains 8 actual typed omissions, two for each omission
+  reason. It covers Memory and Open Loop and all three language variants. The
+  public choices remain `沉默合适`, `本应跟进`, and `无法判断`; both latter
+  counts must be zero.
+- Recall is measured over predeclared positive turns that have a frozen main
+  response without an ordinary question, a complete current opportunity and
+  candidate view, and the expected eligible target selected. Committed emits
+  divided by those executable opportunities must be at least 30%. The report
+  also shows the complete funnel from all predeclared positive turns. A
+  selection mismatch is a hard failure, not a denominator exclusion.
+- Calibration scenes are disjoint from the formal pool. The formal pool,
+  pins, seeds, and up to three sequential capture batches are frozen before
+  the first Provider call. Each turn receives one semantic result. Later
+  batches may address only a remaining language or family sample quota; all
+  captured results remain in the full-pool gates. A recall shortfall cannot
+  trigger another batch.
+- The v5 schemas, pins, fixtures, captures, review package, scores, and
+  unblinder are versioned separately. The failed v4 artifacts and scores stay
+  unchanged.

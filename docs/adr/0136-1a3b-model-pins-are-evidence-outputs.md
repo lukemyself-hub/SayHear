@@ -53,3 +53,20 @@ before the dual-track review passes. The 15-scene pairwise sample is drawn only 
 actual committed emits; 8 actual typed omissions are reviewed separately. Both outcomes
 are recorded without altering prior captures, pins, or scores. Any future competing
 expression configuration revives the complete-configuration comparison requirement.
+
+## Amendment (2026-09-23, Luke-approved v5 precision-first iteration)
+
+The v4 full-pool capture is frozen as a failed preflight. The v5 candidate keeps
+the single-configuration exception and pins a new proactive expression prompt
+and policy bundle that address observed target duplication and generic
+action-question failures. It does not alter the main conversation
+configuration, the deterministic selector, or the ordinary-question gate.
+
+The v5 acceptance contract requires 10 actual emit pairwise cases, 8 actual
+typed omission audits, and at least 30% emit recall among independently
+predeclared executable opportunities. Calibration uses disjoint scenes. A
+limited, pre-registered supplemental cohort may run only to satisfy a remaining
+language or family sample quota; no semantic outcome is retried, and every
+captured outcome remains in the verifier input. A failed pool remains frozen
+and cannot be converted into acceptance evidence by changing its pins, sample,
+or score.

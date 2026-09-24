@@ -257,7 +257,12 @@ export function verifyG2Treatment(input: Readonly<{
       (scene) =>
         scene.reviewIntent === "omission_audit" &&
         ledgerByScene.get(scene.id)?.turns.some(
-          (turn) => turn.on.segmentOutcome === "omitted",
+          (turn) =>
+            turn.on.selectionOutcome === "selected" &&
+            turn.on.segmentProviderCallCount === 1 &&
+            turn.on.segmentOutcome === "omitted" &&
+            OMIT_REASONS.has(turn.on.segmentOmitReason ?? "") &&
+            turn.on.reservationOutcome === "released",
         ),
     )
     .map((scene) => scene.id);
@@ -385,6 +390,9 @@ function verifyScene(input: {
       fail(`t${sceneTurn.sequenceInScenario}: omitted segment carries unexpected text`);
     }
     const expectation = sceneTurn.expect;
+    const skippedForOrdinaryQuestion =
+      ledgerTurn.on.selectionOutcome === "not_reached" &&
+      (ledgerTurn.on.ordinaryQuestionCount ?? 0) > 0;
     if (expectation.selection === "none" && ledgerTurn.on.segmentOutcome === "committed") {
       fail(`t${sceneTurn.sequenceInScenario}: unexpected segment committed`);
     }
@@ -398,7 +406,7 @@ function verifyScene(input: {
       }
       continue;
     }
-    if (expectation.selection === "segment") {
+    if (expectation.selection === "segment" && !skippedForOrdinaryQuestion) {
       if (ledgerTurn.on.selectionOutcome !== "selected") {
         fail(
           `t${sceneTurn.sequenceInScenario}: expected selection, got ${ledgerTurn.on.selectionOutcome} (${ledgerTurn.on.selectionReason ?? "no reason"})`,
@@ -455,7 +463,11 @@ function verifyScene(input: {
         }
       }
     }
-    if (scene.family === "competing_pool" && expectation.selection === "segment") {
+    if (
+      scene.family === "competing_pool" &&
+      expectation.selection === "segment" &&
+      !skippedForOrdinaryQuestion
+    ) {
       const selectedTarget = expectation.target;
       const competitors = scene.competitors ?? [];
       if (!selectedTarget || competitors.length === 0) {
@@ -515,7 +527,7 @@ function verifyScene(input: {
         );
       }
     }
-    if (expectation.excludedTarget && !stageRan) {
+    if (expectation.excludedTarget && !stageRan && !skippedForOrdinaryQuestion) {
       if (ledgerTurn.on.ordinaryQuestionCount === 0) {
         fail(
           `t${sceneTurn.sequenceInScenario}: stage was skipped without an ordinary question`,
@@ -627,7 +639,7 @@ function verifyScene(input: {
     if (ledgerTurn.on.componentVersions.selection === undefined) {
       fail(`t${sceneTurn.sequenceInScenario}: component versions are missing`);
     }
-    if (expectation.selection === "segment") {
+    if (expectation.selection === "segment" && !skippedForOrdinaryQuestion) {
       const family = scene.family;
       if (
         family === "positive_memory" ||
@@ -645,16 +657,18 @@ function verifyScene(input: {
   if (ledgerScenario.family === "correct_zero" && ledgerScenario.turns.some((turn) => turn.on.segmentOutcome === "committed")) {
     fail("correct_zero scene committed a segment");
   }
-  const declaresLoop = scene.turns.some((sceneTurn) => {
-    const refs = [
-      sceneTurn.expect.target,
-      sceneTurn.expect.excludedTarget,
-      sceneTurn.expect.disposition?.target,
-      sceneTurn.expect.release?.target,
-      sceneTurn.expect.suppressedAfter,
-    ];
-    return refs.some((ref) => ref?.kind === "open_loop");
-  });
+  const declaresLoop =
+    (scene.competitors ?? []).some((ref) => ref.kind === "open_loop") ||
+    scene.turns.some((sceneTurn) => {
+      const refs = [
+        sceneTurn.expect.target,
+        sceneTurn.expect.excludedTarget,
+        sceneTurn.expect.disposition?.target,
+        sceneTurn.expect.release?.target,
+        sceneTurn.expect.suppressedAfter,
+      ];
+      return refs.some((ref) => ref?.kind === "open_loop");
+    });
   if (!declaresLoop && (ledgerScenario.formedLoopSchedules?.length ?? 0) > 0) {
     fail("scene formed a loop although no open_loop target is declared");
   }
@@ -765,7 +779,11 @@ export function verifyG2PoolCoverage(input: Readonly<{
         (turn) =>
           turn.on.segmentProviderCallCount !== 0 ||
           turn.on.segmentOutcome === "committed" ||
-          turn.on.segmentOutcome === "omitted",
+          turn.on.selectedTargetRef !== null ||
+          turn.on.reservationOutcome !== null ||
+          turn.on.segmentCommandId !== null ||
+          (turn.on.segmentOutcome === "omitted" &&
+            turn.on.segmentOmitReason !== null),
       )
     ) {
       failures.push(`${scene.id}: correct_zero entered expression generation`);
@@ -878,8 +896,10 @@ async function main(): Promise<void> {
     failures,
     passed: failures.length === 0,
   };
-  await mkdir(resolve(root, paths.verification, ".."), { recursive: true });
-  await writeFile(resolve(root, paths.verification), `${JSON.stringify(output, null, 2)}\n`, "utf8");
+  if (process.env.G2_V4_AUDIT_ONLY !== "1") {
+    await mkdir(resolve(root, paths.verification, ".."), { recursive: true });
+    await writeFile(resolve(root, paths.verification), `${JSON.stringify(output, null, 2)}\n`, "utf8");
+  }
   console.log(JSON.stringify({ eligible: report.eligibleScenarioIds, verification: output }, null, 2));
   if (!output.passed) process.exitCode = 1;
 }

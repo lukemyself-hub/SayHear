@@ -1,0 +1,739 @@
+{
+  "version": "1a3b-g2-scenes:v5",
+  "synthetic": true,
+  "family": "omission_contract",
+  "scenes": [
+    {
+      "id": "g2-v5-cal1-omit-01",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-1",
+      "description": "Typed-omit probe for no_genuine_opportunity; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared no_genuine_opportunity reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Alder Street repair café's parts order; they promised to confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.4 liters to cups for this recipe, please. (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; I have a calm moment before the day gets busy.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-02",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-1-2",
+      "description": "Typed-omit probe for no_genuine_opportunity; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared no_genuine_opportunity reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal1-omit-02",
+          "kind": "objective_memory",
+          "text": "你在把家里的食谱卡整理成手写小册子。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal1-omit-02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 18 摄氏度换算成华氏度，我要记下来。（记录 I）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面啦，我刚好能安静一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal1-omit-02"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-03",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-3",
+      "description": "Typed-omit probe for no_genuine_opportunity; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared no_genuine_opportunity reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Stonebridge 语言交流会的 table booking；they promised to confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you turn 3.5 miles into kilometers，放到 route card 上？ (note J)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again, 我现在刚好有一会儿空闲。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-04",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-4",
+      "description": "Typed-omit probe for duplicates_main_response; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared duplicates_main_response reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Ridgeview climbing gym's beginner-session time; they promised to confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate a 15 percent tip on 28 dollars. (note K)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I got the confirmation about the Ridgeview climbing gym's beginner-session time; it is settled now, and I'm relieved.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-05",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-1-5",
+      "description": "Typed-omit probe for duplicates_main_response; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared duplicates_main_response reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了桤木街维修咖啡馆的零件订单，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 2.4 升换算成杯数，用在食谱里。（记录 L）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，桤木街维修咖啡馆的零件订单已经确认好了，事情解决了，我现在可以放心了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-06",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-6",
+      "description": "Typed-omit probe for duplicates_main_response; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared duplicates_main_response reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Seabird 创客空间的 laser-cutter 培训；they promised to confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 18°C to Fahrenheit，写在我的 notes 里。 (note M)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, Seabird 创客空间的 laser-cutter 培训 已经确认好了，it's settled now，我放心了。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-07",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-7",
+      "description": "The visible memory does not ground a specific target question.",
+      "rationale": "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "insufficient_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal1-omit-07",
+          "kind": "ai_impression",
+          "text": "You may enjoy some kind of creative activity, but no specific one was recorded.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal1-omit-07"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you turn 3.5 miles into kilometers for a route card? (note N)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm glad to have a quiet minute.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal1-omit-07"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-08",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-1-8",
+      "description": "The visible memory does not ground a specific target question.",
+      "rationale": "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "insufficient_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal1-omit-08",
+          "kind": "ai_impression",
+          "text": "你可能对某种创意活动感兴趣，但具体是什么没有记录。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal1-omit-08"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算一下 28 美元的 15% 小费。（记录 O）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，很高兴再聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal1-omit-08"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-09",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-9",
+      "description": "The visible memory does not ground a specific target question.",
+      "rationale": "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "insufficient_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal1-omit-09",
+          "kind": "ai_impression",
+          "text": "You可能喜欢某种 creative activity，但没有记录具体是哪种。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal1-omit-09"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.4 liters to cups，做 recipe 用。 (note P)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning! 现在有片刻空闲。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal1-omit-09"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-10",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-10",
+      "description": "Typed-omit probe for timing_not_natural; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared timing_not_natural reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "timing_not_natural"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal1-omit-10",
+          "kind": "objective_memory",
+          "text": "You were testing a small batch of orange-cardamom biscuits.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal1-omit-10"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 18 Celsius to Fahrenheit for my notes. (note Q)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I'm in the school pickup line and need to keep my attention here for a bit.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal1-omit-10"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-11",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-1-11",
+      "description": "Typed-omit probe for timing_not_natural; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared timing_not_natural reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "timing_not_natural"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了石桥语言交流会的桌位预约，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我把 3.5 英里换算成公里，写在路线卡上。（记录 R）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我现在正在接孩子放学，手上有点忙，晚些时候再安静下来。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal1-omit-12",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-1-12",
+      "description": "Typed-omit probe for timing_not_natural; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared timing_not_natural reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "timing_not_natural"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal1-omit-12",
+          "kind": "objective_memory",
+          "text": "You想给 reading lamp 做 simple wooden stand。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal1-omit-12"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "帮我算一下 28 dollars 的 15 percent tip。 (note S)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, 我现在在 school pickup line，得先专心处理眼前的事。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal1-omit-12"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
