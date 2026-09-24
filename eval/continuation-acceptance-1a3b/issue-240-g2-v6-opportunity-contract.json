@@ -1,0 +1,155 @@
+{
+  "version": "sayhear-g2-v6-opportunity-contract:v1",
+  "status": "frozen-for-next-synthetic-input",
+  "purpose": "将 G2 v5 诊断结论转化为 v6 合成场景准入与机会判定契约；不改变生产策略，不回写 v4/v5 证据。",
+  "scope": {
+    "families": [
+      "positive_open_loop",
+      "positive_memory",
+      "stateful_suppression",
+      "competing_pool",
+      "omission_audit"
+    ],
+    "pragmaticCategoryValues": [
+      "greeting",
+      "open_start",
+      "natural_gap",
+      "quiet",
+      "closure",
+      "leave",
+      "current_topic",
+      "direct_task",
+      "urgent_or_high_risk"
+    ],
+    "naturalOpportunityVerdicts": [
+      "valid",
+      "conditional",
+      "invalid"
+    ],
+    "expressionPossibleValues": [
+      "valid",
+      "conditional",
+      "none"
+    ],
+    "negativePragmaticValues": [
+      "quiet",
+      "closure",
+      "leave",
+      "current_topic",
+      "direct_task",
+      "urgent_or_high_risk"
+    ],
+    "typedOutcomes": [
+      "emit",
+      "omit"
+    ],
+    "omitReasons": [
+      "insufficient_grounding",
+      "duplicates_main_response",
+      "timing_not_natural",
+      "no_genuine_opportunity"
+    ]
+  },
+  "attributionLabels": [
+    "sample_mislabel",
+    "main_response_occupied",
+    "selector_or_timing_subject_error",
+    "expression_generator_misjudgment",
+    "no_valid_expression",
+    "typed_reason_error",
+    "stateful_anchor_not_committed"
+  ],
+  "rowFields": [
+    "mechanicalExecutable",
+    "pragmaticCategory",
+    "scenarioAdmission",
+    "naturalOpportunity",
+    "expressionPossible",
+    "currentMainCoversTarget",
+    "previousAssistantMentionedTarget",
+    "sourceEvidenceQuality",
+    "subjectStatus",
+    "localWindowStatus",
+    "validSegment",
+    "expectedOutcome",
+    "providerOutcome",
+    "providerReason",
+    "providerOutcomeCorrect",
+    "providerReasonCorrect",
+    "primaryAttribution",
+    "secondaryAttributions",
+    "independentReviewConclusion",
+    "competingPool",
+    "adjudication"
+  ],
+  "stageRules": {
+    "mechanicalExecutable": [
+      "当前 Event 的 opportunity 必须是 greeting、open_start 或 natural_gap，而不是直接任务、紧急/高风险、当前话题或明确安静/收尾。",
+      "当前主回应必须是冻结的 main response；主回应占用同一 target 时仍记录为机械可执行，但在自然机会层判 no_valid_expression。",
+      "候选必须通过当前、eligible、trust fence、未在 exchange 提及、未在当前 turn 形成、rank tuple 有效等确定性候选门禁。",
+      "不得把 main ordinary question 当作可插入 segment 的机会；v5 的 mem-002 必须保留在排除记录中，不改写 31 的机械分母。"
+    ],
+    "naturalOpportunity": [
+      "用户当前话术必须真的邀请继续：greeting、open_start 或 natural_gap；quiet、closure、leave、direct_task、urgent_or_high_risk 不因模型判断而升级为机会。",
+      "当前 main response 若已点名 target、传达同一 update/status/progress 或已提出同一 target-specific question，判 main_response_occupied；泛泛的‘我在/你想说什么’不算覆盖。",
+      "previous assistant 是否刚提过 target 必须单独记录；它不是无条件硬排除，但与当前 closure、过早窗口或重复整段回应组合时判无自然机会。",
+      "只有 target-specific、简短、非重复且不制造新事实的片段可判 expressionPossible=true；泛泛 acknowledgement 不足以把无具体 target 变成机会。"
+    ],
+    "openLoop": [
+      "Open Loop 必须有明确 subject、pending awaited outcome、local window、source Evidence 和唯一 target；不能用相邻 topic 或相似名称替代。",
+      "sourceUserText 必须是提交到当前会话的第一方 user Event 原文；第二人称历史摘要、AI 转述或无法确认主体的文本不能作为主体 Evidence。",
+      "awaited_outcome 只有在 local window 到达后才可进入 follow-up eligibility；expected time 到达不等于 outcome 已完成。",
+      "date-only 的‘by September 23’必须保留 precision；不能把 UTC 午夜当作 Los Angeles 当地日界线，也不能把当天早晨自动视为已过 deadline。",
+      "问题只询问 target-specific unknown outcome 或 development；不能要求用户开启、决定、计划或执行当前消息。"
+    ],
+    "memory": [
+      "Memory target 必须有可追溯的 objective/ai impression Claim，并且不是当前主回应已覆盖的同一 target。",
+      "Memory 的自然形式优先为具体 acknowledgement；只有存在 target-specific unknown development 时才可提问。",
+      "不得重复当前 topic、不得把主回应已经说过的具体内容再次追加，也不得从 broad AI impression 臆造具体活动。"
+    ],
+    "competingPool": [
+      "每个 competing candidate 都必须在同一冻结时点、同一 local window、同一 subject/Evidence 条件下合法；存在一个非法 loser 时，整个 competing pool 不得作为 clean v6 positive。",
+      "winner 只由既有 sensitivity-first、lexicographic rank tuple 和确定性 tie-break 决定；不得以模型对当前话术的 salience 代替 rank。",
+      "台账必须同时记录合法/非法 candidate、各自 rank、winner 和预期 expression kind。",
+      "winner 是 Memory 时，若 Memory target 本身可写但 Open Loop winner 非法，保留 expression diagnosis，scenarioAdmission 仍为 invalid_competing_pool。"
+    ],
+    "stateful": [
+      "anchor turn 必须实际产生 committed typed use，才允许把后续 disposition/suppression 作为 stateful evidence；anchor omitted 时后续重选不能算 suppression 成功。",
+      "anchor 的 subject、timed window、current opportunity、main occupancy 和 expected segment 必须在 blind review 前冻结。",
+      "后续每个 turn 预注册一个 disposition/cooldown expectation；short_response、refused、topic_changed、no_stop_signal 必须分别验证。",
+      "stateful row 的 fullTrajectoryEligible 只有在 anchor committed、后续 state transition 和最终 suppression/release 全部符合预注册预期时才为 true。",
+      "不得用 incomplete lane、provider 未到达或重试掩盖缺失的 state transition。"
+    ]
+  },
+  "omitReasonPrecedence": [
+    "insufficient_grounding：target、subject、source Evidence、window 或关系无法唯一确定。",
+    "duplicates_main_response：冻结 main response 已经语义覆盖同一 target。",
+    "timing_not_natural：target 可识别且 main 未覆盖，但时点、combined response、用户 focus 或 tone 使追加不自然。",
+    "no_genuine_opportunity：前三个条件不成立，且当前话术没有具体、自然、值得承接的连接。"
+  ],
+  "v6AdmissionRules": [
+    "输入、pins、配置和预注册期望在 v6 第一个 Provider call 前冻结；Provider 输出与人工裁定在 run 后记录，不得回写冻结输入；同一 target/Event/text 不得重用 v4/v5 失败案例。",
+    "每条正例必须逐项通过：真实 greeting/open_start/natural_gap、main 不覆盖 target、previous mention 已记录、target Evidence 直接且主体明确、local window 明确、合法 expression 可写。",
+    "每条 stateful 正例必须先有 committed anchor，再有独立预注册的 disposition turn；缺任一项不计入可验收 stateful positive。",
+    "每条 competing positive 必须有完整合法 candidate pool 和可复算 rank；不能用被时间或主体门禁排除的 candidate 制造竞争压力。",
+    "每条 omission probe 必须隔离一个主要 negative 轴；同一个 probe 同时 quiet、duplicate、focused meeting 时，只能判 partial，不得用它证明单一 reason 的稳定性。",
+    "对 broad AI impression、date-only deadline、second-person historical summary、code-switch、当前 focus 和 prior assistant mention 建立独立 slice。",
+    "blind review 在读取 Provider reason/ledger 之前完成；blind artifact 只保存 fixture/main 输入和 reviewer conclusion，不保存 Provider reason/ledger 字段；adjudicator 记录 disagreement、最终标签和证据依据。",
+    "保留所有机械机会与 typed emit/omit 统计；不得因样本误标而缩小 v5 的 31 分母。"
+  ],
+  "prohibitedChanges": [
+    "不得改写或重跑 v4/v5 原始 evidence。",
+    "不得为本次诊断修改生产 selector、expression generator、main response、rank、typed output 或 fail-closed 行为。",
+    "不得把 v5 的 1/31 anchor emit 改写成更高或更低分母。",
+    "不得把缺失的 run artifact 猜回、重建或伪装为原件。"
+  ],
+  "diagnosticProvenance": {
+    "issue": "#240",
+    "sourceDiagnosis": "eval/continuation-acceptance-1a3b/issue-240-g2-v5-diagnosis.json",
+    "sourceReport": "docs/research/issue-240-g2-v5-diagnosis.md",
+    "blindReviewArtifact": "eval/continuation-acceptance-1a3b/issue-240-blind-review.json",
+    "sourceRound": "v5-calibration-2",
+    "sourceDomainTime": "2026-09-23T00:00:00.000Z",
+    "freshClonePolicy": "Run artifacts are untracked in the reviewed worktree; a missing artifact is evidence_missing, never permission to reconstruct it."
+  }
+}
