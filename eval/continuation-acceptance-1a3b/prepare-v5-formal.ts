@@ -9,8 +9,6 @@ import { V5_SAMPLE_SEED } from "./sampling-v5";
 import { verifyV5Catalog } from "./verify-fixtures-v5";
 
 const ROOT = "eval/continuation-acceptance-1a3b";
-const CALIBRATION_CATALOG = `${ROOT}/fixtures-v5-calibration-1.json`;
-const CALIBRATION_REPORT = `${ROOT}/run-v5-calibration-1/calibration-report.json`;
 const POSITIVE_COUNTS_PATH = `${ROOT}/formal-positive-counts-v5.json`;
 const FORMAL_CATALOG = `${ROOT}/fixtures-v5.json`;
 const PINS_PATH = `${ROOT}/pins-v5.json`;
@@ -32,14 +30,26 @@ function sceneContentFingerprint(scene: V5Scene): string {
 }
 
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const calibrationRoundIndex = args.indexOf("--calibration-round");
+  const calibrationRound = calibrationRoundIndex < 0
+    ? 1
+    : Number(args[calibrationRoundIndex + 1]);
+  if (calibrationRound !== 1 && calibrationRound !== 2) {
+    throw new Error("--calibration-round must be 1 or 2.");
+  }
+  const CALIBRATION_CATALOG = `${ROOT}/fixtures-v5-calibration-${calibrationRound}.json`;
+  const CALIBRATION_RUN = `${ROOT}/run-v5-calibration-${calibrationRound}`;
+  const CALIBRATION_REPORT = `${CALIBRATION_RUN}/calibration-report.json`;
+  const CALIBRATION_VERIFICATION = `${CALIBRATION_RUN}/verification.json`;
   const calibration = JSON.parse(await readFile(resolve(CALIBRATION_REPORT), "utf8")) as {
     passed: boolean;
     round: number;
     plannedPositiveCounts: Record<string, number> | null;
     families: Readonly<Record<string, { plannedCount: number | null }>>;
   };
-  if (!calibration.passed || calibration.round !== 1 || !calibration.plannedPositiveCounts) {
-    throw new Error("Formal fixtures require a passing first calibration and its frozen count calculation.");
+  if (!calibration.passed || calibration.round !== calibrationRound || !calibration.plannedPositiveCounts) {
+    throw new Error(`Formal fixtures require a passing calibration round ${calibrationRound} and its frozen count calculation.`);
   }
   const counts = Object.fromEntries(Object.entries(calibration.families).map(([family, item]) => [family, item.plannedCount])) as Record<string, number>;
   if (sha256(counts) !== sha256(calibration.plannedPositiveCounts)) {
@@ -62,7 +72,7 @@ async function main(): Promise<void> {
   const formalScenes = formalFiles.flatMap((entry) => entry.file.scenes);
   const calibrationManifestRaw = await readFile(resolve(CALIBRATION_CATALOG), "utf8");
   const calibrationManifest = JSON.parse(calibrationManifestRaw) as V5CatalogManifest;
-  const calibrationVerificationRaw = await readFile(resolve(`${ROOT}/run-v5-calibration-1/verification.json`), "utf8");
+  const calibrationVerificationRaw = await readFile(resolve(CALIBRATION_VERIFICATION), "utf8");
   const calibrationVerification = JSON.parse(calibrationVerificationRaw) as {
     inputFingerprints: readonly Readonly<{ path: string; rawSha256: string; canonicalJsonSha256: string }>[];
     passed: boolean;
@@ -133,7 +143,7 @@ async function main(): Promise<void> {
       report: { path: CALIBRATION_REPORT, rawSha256: rawSha256(calibrationRaw), canonicalJsonSha256: sha256(JSON.parse(calibrationRaw) as unknown) },
       catalog: { path: CALIBRATION_CATALOG, rawSha256: rawSha256(calibrationManifestRaw), canonicalJsonSha256: sha256(JSON.parse(calibrationManifestRaw) as unknown) },
       sceneFiles: calibrationFiles.map((entry, index) => ({ path: calibrationManifest.sceneFiles[index]!.path, rawSha256: rawSha256(entry.raw), canonicalJsonSha256: sha256(JSON.parse(entry.raw) as unknown) })),
-      verification: { path: `${ROOT}/run-v5-calibration-1/verification.json`, rawSha256: rawSha256(calibrationVerificationRaw), canonicalJsonSha256: sha256(JSON.parse(calibrationVerificationRaw) as unknown) },
+      verification: { path: CALIBRATION_VERIFICATION, rawSha256: rawSha256(calibrationVerificationRaw), canonicalJsonSha256: sha256(JSON.parse(calibrationVerificationRaw) as unknown) },
     },
     formalPurpose: catalog.purpose,
     plannedPositiveCounts: catalog.plannedPositiveCounts,

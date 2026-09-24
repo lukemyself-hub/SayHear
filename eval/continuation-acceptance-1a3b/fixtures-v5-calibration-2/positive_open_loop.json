@@ -1,0 +1,519 @@
+{
+  "version": "1a3b-g2-scenes:v5",
+  "synthetic": true,
+  "family": "positive_open_loop",
+  "scenes": [
+    {
+      "id": "g2-v5-cal2-ol-001",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-1",
+      "description": "A still-pending the Eastbank community kitchen's volunteer rota has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Eastbank community kitchen's volunteer rota has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Eastbank community kitchen's volunteer rota; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note A)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-002",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-2",
+      "description": "A still-pending the Willowbrook arts center's pottery-room booking has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Willowbrook arts center's pottery-room booking has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Willowbrook arts center's pottery-room booking; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note B)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Good to be back. I'm sitting with a little space before anything else.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-003",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-3",
+      "description": "A still-pending the Northfield trail group's bridge update has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Northfield trail group's bridge update has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Northfield trail group's bridge update; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note C)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; no rush on my end, just a calm few minutes.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-004",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-2-4",
+      "description": "A still-pending the Lantern Market's stall assignment has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Lantern Market's stall assignment has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了灯市集的摊位分配，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 D）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，又来打个招呼，就这样。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-005",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-2-5",
+      "description": "A still-pending the Cedar Grove library's equipment request has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Cedar Grove library's equipment request has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了雪松林图书馆的设备申请，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 E）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我回来坐一会儿，让周围安静片刻。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-006",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-2-6",
+      "description": "A still-pending the Blue Heron theater's rehearsal-room access has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Blue Heron theater's rehearsal-room access has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了蓝鹭剧场的排练室使用安排，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-007",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-7",
+      "description": "A still-pending the Red Maple garden's seed-library shelf has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Red Maple garden's seed-library shelf has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Red Maple 社区花园的 seed-library shelf；they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note G)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-ol-008",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-8",
+      "description": "A still-pending the Stonepath repair club's wheel-truing appointment has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Stonepath repair club's wheel-truing appointment has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Stonepath 维修小组的 wheel-truing appointment；they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，又来 say hello，就这样。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

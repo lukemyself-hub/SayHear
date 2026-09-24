@@ -1,0 +1,751 @@
+{
+  "version": "1a3b-g2-scenes:v5",
+  "synthetic": true,
+  "family": "omission_contract",
+  "scenes": [
+    {
+      "id": "g2-v5-cal2-omit-01",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-1",
+      "description": "Typed-omit probe for no_genuine_opportunity; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared no_genuine_opportunity reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Eastbank community kitchen's volunteer rota; they promised to confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you scale 180 grams of flour up by one and a half? (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Just dropping by to say hello; I don't have anything in particular to get into.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-02",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-2-2",
+      "description": "Typed-omit probe for no_genuine_opportunity; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared no_genuine_opportunity reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-02",
+          "kind": "objective_memory",
+          "text": "你想把零散的天文笔记装订成一本小册子。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-02"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 I）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我只是来打个招呼，现在没有特别想聊的事。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-02"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-03",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-3",
+      "description": "Typed-omit probe for no_genuine_opportunity; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared no_genuine_opportunity reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "no_genuine_opportunity",
+      "coverageTags": [
+        "no_real_opportunity"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Red Maple 社区花园的 seed-library shelf；they promised to confirm by September 23, 2026."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 7.25 kilograms to pounds，放在 shipping label 上。 (note J)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Just来打个招呼，没什么 particular 想聊的。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-04",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-4",
+      "description": "Typed-omit probe for duplicates_main_response; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared duplicates_main_response reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-04",
+          "kind": "objective_memory",
+          "text": "You wanted to learn the first pattern on a new hand drum.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-04"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note K)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-04"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-05",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-2-5",
+      "description": "Typed-omit probe for duplicates_main_response; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared duplicates_main_response reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-05",
+          "kind": "objective_memory",
+          "text": "你之前在用樱桃木边角料削一把小木勺。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-05"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 L）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-05"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-06",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-6",
+      "description": "Typed-omit probe for duplicates_main_response; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared duplicates_main_response reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "duplicates_main_response",
+      "coverageTags": [
+        "main_response_overlap"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-06",
+          "kind": "objective_memory",
+          "text": "You打算给 autumn window 做 paper lantern。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-06"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Find the midpoint of 46 and 82，写进 worksheet。 (note M)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-06"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-07",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-7",
+      "description": "The visible memory does not ground a specific target question.",
+      "rationale": "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "insufficient_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-07",
+          "kind": "ai_impression",
+          "text": "You may enjoy some kind of creative activity, but no specific one was recorded.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-07"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note N)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-07"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-08",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-2-8",
+      "description": "The visible memory does not ground a specific target question.",
+      "rationale": "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "insufficient_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-08",
+          "kind": "ai_impression",
+          "text": "你可能对某种创意活动感兴趣，但具体是什么没有记录。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-08"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "3.75 小时一共是多少分钟？（记录 O）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-08"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-09",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-9",
+      "description": "The visible memory does not ground a specific target question.",
+      "rationale": "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "insufficient_grounding",
+      "coverageTags": [
+        "insufficient_grounding"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-09",
+          "kind": "ai_impression",
+          "text": "You可能喜欢某种 creative activity，但没有记录具体是哪种。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-09"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note P)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-09"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-10",
+      "family": "omission_contract",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-10",
+      "description": "Typed-omit probe for timing_not_natural; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared timing_not_natural reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "timing_not_natural"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-10",
+          "kind": "objective_memory",
+          "text": "You hoped to bind your loose astronomy notes into one booklet.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-10"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note Q)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I'm heading into a meeting and need to get my notes in order first.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-10"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-11",
+      "family": "omission_contract",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-omission-2-11",
+      "description": "Typed-omit probe for timing_not_natural; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared timing_not_natural reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "timing_not_natural"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了红枫社区花园的种子图书架，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 R）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我现在正赶去开会，还得先把手头材料理好。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-omit-12",
+      "family": "omission_contract",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-omission-2-12",
+      "description": "Typed-omit probe for timing_not_natural; the target is selected and expression is called in a legal greeting window.",
+      "rationale": "The actual greeting and frozen main response must support the declared timing_not_natural reason; the provider result is not substituted.",
+      "reviewIntent": "omission_audit",
+      "expectedOmissionReason": "timing_not_natural",
+      "coverageTags": [
+        "timing_not_natural"
+      ],
+      "protectedCategories": [],
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-omit-12",
+          "kind": "objective_memory",
+          "text": "You想学新手鼓上的 first pattern。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-omit-12"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note S)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, 我现在要进 meeting，得先整理好 notes。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-omit-12"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

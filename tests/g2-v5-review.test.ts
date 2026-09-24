@@ -6,7 +6,7 @@ import { fingerprintReviewPayload, unblindV5, type V5ReviewInput } from "../eval
 import { selectV5PairwiseSample } from "../eval/continuation-acceptance-1a3b/sampling-v5";
 import { v5RecordsMatchExactSet, type V5CatalogManifest, type V5LedgerScenario, type V5LedgerTurn, type V5Scene } from "../eval/continuation-acceptance-1a3b/protocol-v5";
 import { sha256 } from "../eval/continuation-acceptance-1a3b/protocol";
-import { isActualV5TypedOmission, selectedExpectedEligibleTarget } from "../eval/continuation-acceptance-1a3b/verify-g2-treatment-v5";
+import { hasCommittedStatefulAnchorUse, isActualV5TypedOmission, selectedExpectedEligibleTarget } from "../eval/continuation-acceptance-1a3b/verify-g2-treatment-v5";
 import { verifyV5Catalog } from "../eval/continuation-acceptance-1a3b/verify-fixtures-v5";
 import { splitV5FormalBatches } from "../eval/continuation-acceptance-1a3b/batching-v5";
 
@@ -159,6 +159,31 @@ describe("G2 v5 review gates", () => {
     expect(isActualV5TypedOmission({ ...base, on: { ...base.on, segmentProviderCallCount: 0, reservationOutcome: "abandoned" } } as unknown as V5LedgerTurn)).toBe(false);
   });
 
+  it("requires a committed anchor use before checking a stateful suppression tail", () => {
+    const scene = {
+      id: "stateful-scene",
+      family: "stateful_suppression",
+      turns: [
+        { sequenceInScenario: 1, expect: { selection: "none" } },
+        { sequenceInScenario: 2, expect: { selection: "segment" } },
+        { sequenceInScenario: 3, expect: { selection: "none", disposition: { signal: "refused" } } },
+      ],
+    } as unknown as V5Scene;
+    const ledger = (segmentOutcome: string, typedUseOutcome: string | null) => ({
+      fixtureId: scene.id,
+      turns: [
+        { sequenceInScenario: 1, on: {} },
+        { sequenceInScenario: 2, on: { segmentOutcome, typedUseOutcome } },
+        { sequenceInScenario: 3, on: {} },
+      ],
+    }) as unknown as V5LedgerScenario;
+
+    expect(hasCommittedStatefulAnchorUse(scene, ledger("omitted", null))).toBe(false);
+    expect(hasCommittedStatefulAnchorUse(scene, ledger("not_reached", null))).toBe(false);
+    expect(hasCommittedStatefulAnchorUse(scene, ledger("committed", "committed"))).toBe(true);
+    expect(hasCommittedStatefulAnchorUse({ ...scene, family: "positive_memory" }, ledger("committed", "committed"))).toBe(false);
+  });
+
   it("keeps an expected target mismatch out of recall and rejects it mechanically", () => {
     const scene = {
       id: "wrong-target",
@@ -218,5 +243,34 @@ describe("G2 v5 review gates", () => {
     const old = await verifyV5Catalog({ manifest: JSON.parse(oldRaw) as V5CatalogManifest, root: process.cwd() });
     expect(old.passed).toBe(false);
     expect(old.mismatches.some((entry) => entry.includes("not 1a3b-g2-continuation:v5"))).toBe(true);
+  });
+
+  it("keeps the second calibration set disjoint and repairs its declared probes", async () => {
+    const loadScenes = async (round: 1 | 2): Promise<V5Scene[]> => {
+      const manifest = JSON.parse(await readFile(`${ROOT}/fixtures-v5-calibration-${round}.json`, "utf8")) as V5CatalogManifest;
+      const verification = await verifyV5Catalog({ manifest, root: process.cwd() });
+      expect(verification.passed).toBe(true);
+      const files = await Promise.all(manifest.sceneFiles.map(async (entry) =>
+        JSON.parse(await readFile(entry.path, "utf8")) as { scenes: V5Scene[] },
+      ));
+      return files.flatMap((file) => file.scenes);
+    };
+    const first = await loadScenes(1);
+    const second = await loadScenes(2);
+    const fingerprint = (scene: V5Scene) => JSON.stringify({
+      historicalEvents: scene.historicalEvents.map((entry) => entry.text),
+      memory: scene.memory.map((entry) => entry.text),
+      portrait: scene.portrait.map((entry) => entry.text),
+      turns: scene.turns.map((turn) => turn.userInput.text),
+    });
+    const firstContent = new Set(first.map(fingerprint));
+    expect(second).toHaveLength(44);
+    expect(new Set(second.map((scene) => scene.id)).size).toBe(44);
+    expect(second.some((scene) => firstContent.has(fingerprint(scene)))).toBe(false);
+    const duplicateProbes = second.filter((scene) => scene.expectedOmissionReason === "duplicates_main_response");
+    expect(duplicateProbes).toHaveLength(3);
+    expect(duplicateProbes.every((scene) => scene.turns[1]?.expect.target?.kind === "memory_claim")).toBe(true);
+    const statefulTargetKinds = new Set(second.filter((scene) => scene.family === "stateful_suppression").map((scene) => scene.turns.find((turn) => turn.expect.selection === "segment")?.expect.target?.kind));
+    expect(statefulTargetKinds).toEqual(new Set(["memory_claim", "open_loop"]));
   });
 });

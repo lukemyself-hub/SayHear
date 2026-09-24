@@ -1,0 +1,655 @@
+{
+  "version": "1a3b-g2-scenes:v5",
+  "synthetic": true,
+  "family": "competing_pool",
+  "scenes": [
+    {
+      "id": "g2-v5-cal2-comp-001",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-competing_pool-2-1",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Eastbank community kitchen's volunteer rota; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-001",
+          "kind": "objective_memory",
+          "text": "You were preparing a set of pressed leaves for a small frame.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-001"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note A)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet stretch to myself for a moment.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-002",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-competing_pool-2-2",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Willowbrook arts center's pottery-room booking; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-002",
+          "kind": "objective_memory",
+          "text": "You wanted to learn the first pattern on a new hand drum.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-002"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note B)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet stretch to myself for a moment.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-002"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-003",
+      "family": "competing_pool",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-competing_pool-2-3",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted the Northfield trail group's bridge update; they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-003",
+          "kind": "objective_memory",
+          "text": "You were testing which balcony planter drains best after rain.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-003"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note C)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet stretch to myself for a moment.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-003"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-004",
+      "family": "competing_pool",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-competing_pool-2-4",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了灯市集的摊位分配，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-004",
+          "kind": "objective_memory",
+          "text": "你想把零散的天文笔记装订成一本小册子。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-004"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 D）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿安静时间。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-004"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-005",
+      "family": "competing_pool",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-competing_pool-2-5",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了雪松林图书馆的设备申请，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-005",
+          "kind": "objective_memory",
+          "text": "你之前在用樱桃木边角料削一把小木勺。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-005"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 E）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿安静时间。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-005"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-006",
+      "family": "competing_pool",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-competing_pool-2-6",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "你联系了蓝鹭剧场的排练室使用安排，对方说会在 2026 年 9 月 23 日前确认。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-006",
+          "kind": "objective_memory",
+          "text": "你想记下散步路上遇到的植物名称。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-006"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿安静时间。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-006"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-007",
+      "family": "competing_pool",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-competing_pool-2-7",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Red Maple 社区花园的 seed-library shelf；they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-007",
+          "kind": "objective_memory",
+          "text": "You在把 old postcards 整理成 month-by-month album。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-007"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note G)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet moment，刚好能歇一下。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-007"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v5-cal2-comp-008",
+      "family": "competing_pool",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-competing_pool-2-8",
+      "description": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "rationale": "At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "natural_gap",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "You contacted Stonepath 维修小组的 wheel-truing appointment；they said they would confirm by September 23, 2026."
+        }
+      ],
+      "memory": [
+        {
+          "id": "mem-g2-v5-cal2-comp-008",
+          "kind": "objective_memory",
+          "text": "You打算给 autumn window 做 paper lantern。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v5-cal2-comp-008"
+          ]
+        }
+      ],
+      "portrait": [],
+      "competitors": [
+        {
+          "kind": "open_loop",
+          "sourceTurn": 0,
+          "ordinal": 0
+        }
+      ],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet moment，刚好能歇一下。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v5-cal2-comp-008"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

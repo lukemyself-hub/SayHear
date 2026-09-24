@@ -101,6 +101,25 @@ export function selectedExpectedEligibleTarget(
     candidate.rankTuple !== null;
 }
 
+/**
+ * A stateful tail is only an acceptance trajectory after the declared anchor
+ * created a committed use. A skipped or omitted anchor has nothing for a later
+ * user response to suppress.
+ */
+export function hasCommittedStatefulAnchorUse(
+  scene: V5Scene,
+  ledgerScenario: V5LedgerScenario,
+): boolean {
+  if (scene.family !== "stateful_suppression") return false;
+  const anchor = scene.turns.find((turn) => turn.expect.selection === "segment");
+  if (!anchor) return false;
+  const captured = ledgerScenario.turns.find(
+    (turn) => turn.sequenceInScenario === anchor.sequenceInScenario,
+  );
+  return captured?.on.segmentOutcome === "committed" &&
+    captured.on.typedUseOutcome === "committed";
+}
+
 export function isActualV5TypedOmission(
   turn: V5LedgerTurn,
   expectedReason?: string,
@@ -486,7 +505,10 @@ function verifyScene(input: {
       ? scene.turns.find((turn) => turn.expect.selection === "segment")
           ?.sequenceInScenario
       : undefined;
-  let statefulAnchorOmitted = false;
+  const statefulAnchorHasCommittedUse = hasCommittedStatefulAnchorUse(
+    scene,
+    ledgerScenario,
+  );
   const expectedDispositions: Array<{ signal: string; targetKey: string }> = [];
   for (const sceneTurn of scene.turns) {
     const offTurn = offScenario.turns.find(
@@ -546,18 +568,18 @@ function verifyScene(input: {
     const skippedForOrdinaryQuestion =
       ledgerTurn.on.selectionOutcome === "not_reached" &&
       (ledgerTurn.on.ordinaryQuestionCount ?? 0) > 0;
-    if (expectation.selection === "none" && ledgerTurn.on.segmentOutcome === "committed") {
-      fail(`t${sceneTurn.sequenceInScenario}: unexpected segment committed`);
-    }
     if (
-      statefulAnchorOmitted &&
       statefulAnchorSequence !== undefined &&
-      sceneTurn.sequenceInScenario > statefulAnchorSequence
+      sceneTurn.sequenceInScenario > statefulAnchorSequence &&
+      !statefulAnchorHasCommittedUse
     ) {
       if (ledgerTurn.on.componentVersions.selection === undefined) {
         fail(`t${sceneTurn.sequenceInScenario}: component versions are missing`);
       }
       continue;
+    }
+    if (expectation.selection === "none" && ledgerTurn.on.segmentOutcome === "committed") {
+      fail(`t${sceneTurn.sequenceInScenario}: unexpected segment committed`);
     }
     if (expectation.selection === "segment" && !skippedForOrdinaryQuestion) {
       if (ledgerTurn.on.selectionOutcome !== "selected") {
@@ -597,9 +619,6 @@ function verifyScene(input: {
         }
         if (mainText !== undefined && onTurn.assistantText !== mainText) {
           fail(`t${sceneTurn.sequenceInScenario}: omitted segment changed the main response`);
-        }
-        if (sceneTurn.sequenceInScenario === statefulAnchorSequence) {
-          statefulAnchorOmitted = true;
         }
       }
       if (expectation.target && ledgerTurn.on.selectedTargetRef === null) {

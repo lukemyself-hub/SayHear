@@ -55,6 +55,34 @@ const MEMORIES: readonly Copy[] = [
   { en: "You were learning the first verse of a song for the community picnic.", zh: "你在学社区野餐会上要唱的那首歌的第一段。", code: "You在学 community picnic 那首歌的 first verse。" },
 ];
 
+const ROUND2_LOOPS: readonly Copy[] = [
+  { en: "the Eastbank community kitchen's volunteer rota", zh: "东岸社区厨房的志愿者排班", code: "Eastbank 社区厨房的 volunteer rota" },
+  { en: "the Willowbrook arts center's pottery-room booking", zh: "柳溪艺术中心的陶艺教室预约", code: "Willowbrook 艺术中心的 pottery-room booking" },
+  { en: "the Northfield trail group's bridge update", zh: "北原步道小组的桥梁进度", code: "Northfield 步道小组的 bridge update" },
+  { en: "the Lantern Market's stall assignment", zh: "灯市集的摊位分配", code: "Lantern Market 的 stall assignment" },
+  { en: "the Cedar Grove library's equipment request", zh: "雪松林图书馆的设备申请", code: "Cedar Grove 图书馆的 equipment request" },
+  { en: "the Blue Heron theater's rehearsal-room access", zh: "蓝鹭剧场的排练室使用安排", code: "Blue Heron 剧场的 rehearsal-room access" },
+  { en: "the Red Maple garden's seed-library shelf", zh: "红枫社区花园的种子图书架", code: "Red Maple 社区花园的 seed-library shelf" },
+  { en: "the Stonepath repair club's wheel-truing appointment", zh: "石径维修小组的车轮校正预约", code: "Stonepath 维修小组的 wheel-truing appointment" },
+];
+
+const ROUND2_MEMORIES: readonly Copy[] = [
+  { en: "You were preparing a set of pressed leaves for a small frame.", zh: "你之前在整理一组压叶，想装进小画框里。", code: "You在准备一组 pressed leaves，想放进小画框。" },
+  { en: "You wanted to learn the first pattern on a new hand drum.", zh: "你想学会新手鼓上的第一个节奏型。", code: "You想学新手鼓上的 first pattern。" },
+  { en: "You were testing which balcony planter drains best after rain.", zh: "你在比较几只阳台花盆雨后哪只排水更好。", code: "You在测试 balcony planter 雨后哪个排水最好。" },
+  { en: "You hoped to bind your loose astronomy notes into one booklet.", zh: "你想把零散的天文笔记装订成一本小册子。", code: "You想把 loose astronomy notes 装订成 booklet。" },
+  { en: "You were shaping a small wooden spoon from the cherry offcut.", zh: "你之前在用樱桃木边角料削一把小木勺。", code: "You在用 cherry offcut 做一把 small wooden spoon。" },
+  { en: "You wanted to record the names of the plants along your walk.", zh: "你想记下散步路上遇到的植物名称。", code: "You想记录 walk 上看到的 plant names。" },
+  { en: "You were arranging old postcards into a month-by-month album.", zh: "你在把旧明信片按月份整理进相册。", code: "You在把 old postcards 整理成 month-by-month album。" },
+  { en: "You planned to make a paper lantern for the autumn window.", zh: "你打算给秋天的窗边做一盏纸灯笼。", code: "You打算给 autumn window 做 paper lantern。" },
+];
+
+const ROUND2_TASKS: Readonly<Record<Language, readonly string[]>> = {
+  en: ["What is the midpoint between 46 and 82 for a worksheet?", "Please convert 7.25 kilograms to pounds for a shipping label.", "How many minutes are there in 3.75 hours?", "Can you scale 180 grams of flour up by one and a half?"],
+  zh: ["练习单上要填 46 和 82 的中点，是多少？", "请把 7.25 千克换算成磅，写在寄件标签上。", "3.75 小时一共是多少分钟？", "把 180 克面粉增加到 1.5 倍是多少？"],
+  code_switch: ["Find the midpoint of 46 and 82，写进 worksheet。", "Convert 7.25 kilograms to pounds，放在 shipping label 上。", "3.75 hours 一共是多少 minutes？", "Scale 180 grams of flour up by 1.5，做 recipe 用。"],
+};
+
 const GREETINGS: Readonly<Record<Purpose | "round2", Readonly<Record<Language, readonly string[]>>>> = {
   calibration: {
     en: ["Hello again; I'm glad to have a quiet minute.", "Hi, good to see you. I have a little pause now.", "Morning; I have a calm moment before the day gets busy.", "Hey again. It's nice to be back for a minute."],
@@ -67,9 +95,9 @@ const GREETINGS: Readonly<Record<Purpose | "round2", Readonly<Record<Language, r
     code_switch: ["Good to see you again, 我现在有几分钟空闲。", "Hi there, 我回来稍微歇一会儿。", "Hello, 现在终于能喘口气了。", "Hey, glad we're talking. 我能聊一小会儿。"],
   },
   round2: {
-    en: ["Hello; I'm back and have a small pause.", "Hey, it is good to have a quiet minute again.", "Hi there; I can catch my breath for a moment.", "Morning again, I have a little space now."],
-    zh: ["你好，我回来了，现在能歇一小会儿。", "嗨，又有片刻安静时间了。", "我现在能喘口气，再聊一下。", "又是早上好，我现在有一点空档。"],
-    code_switch: ["Hello, 我回来了，现在能歇一小会儿。", "Hey, 又有片刻安静时间了。", "Hi, 我现在能 catch my breath。", "Morning again, 我现在有一点空档。"],
+    en: ["Hello again; I'm settling in and letting the room be quiet for a moment.", "Good to be back. I'm sitting with a little space before anything else.", "Morning; no rush on my end, just a calm few minutes.", "Hey again. I wanted a quiet hello, that's all."],
+    zh: ["你好，我回来坐一会儿，让周围安静片刻。", "又见面了，眼下先留点空档。", "早上好，我这边不赶时间，先安静几分钟。", "嗨，又来打个招呼，就这样。"],
+    code_switch: ["Hello again，我回来安静坐一会儿。", "Good to be back，先留点 space。", "Morning，我这边 no rush，安静几分钟。", "Hey，又来 say hello，就这样。"],
   },
 };
 
@@ -95,17 +123,17 @@ function localeFor(language: Language): string {
   return language === "zh" ? "zh-CN" : "en-US";
 }
 
-function task(language: Language, index: number): string {
-  const pool = TASKS[language];
+function task(language: Language, index: number, round: 1 | 2): string {
+  const pool = round === 2 ? ROUND2_TASKS[language] : TASKS[language];
   const base = pool[index % pool.length]!;
   const note = String.fromCharCode(65 + (index % 26));
   return language === "zh" ? `${base}（记录 ${note}）` : `${base} (note ${note})`;
 }
 
-function openerTurn(language: Language, sequence: number, index: number) {
+function openerTurn(language: Language, sequence: number, index: number, round: 1 | 2) {
   return {
     sequenceInScenario: sequence,
-    userInput: { locale: localeFor(language), text: task(language, index), timezone: language === "zh" ? "Asia/Shanghai" : "America/Los_Angeles" },
+    userInput: { locale: localeFor(language), text: task(language, index, round), timezone: language === "zh" ? "Asia/Shanghai" : "America/Los_Angeles" },
     opportunity: "direct_task" as const,
     focusRequired: true,
     expect: { selection: "none" as const, zeroReason: "focus_required_by_opportunity" as const },
@@ -123,12 +151,17 @@ function positiveScene(input: Readonly<{
   const { id, family, language, index, purpose, round } = input;
   const locale = localeFor(language);
   const timezone = language === "zh" ? "Asia/Shanghai" : "America/Los_Angeles";
-  const loop = LOOPS[(index + (round === 2 ? 7 : purpose === "formal" ? 3 : 0)) % LOOPS.length]!;
-  const memory = MEMORIES[(index * 3 + (round === 2 ? 5 : purpose === "formal" ? 9 : 0)) % MEMORIES.length]!;
+  const loop = round === 2
+    ? ROUND2_LOOPS[index % ROUND2_LOOPS.length]!
+    : LOOPS[(index + (purpose === "formal" ? 3 : 0)) % LOOPS.length]!;
+  const memory = round === 2
+    ? ROUND2_MEMORIES[index % ROUND2_MEMORIES.length]!
+    : MEMORIES[(index * 3 + (purpose === "formal" ? 9 : 0)) % MEMORIES.length]!;
   const openTarget = { kind: "open_loop" as const, sourceTurn: 0, ordinal: 0 };
   const memoryId = `mem-${id}`;
   const memoryTarget = { kind: "memory_claim" as const, memoryId };
-  const target = family === "positive_open_loop" ? openTarget : memoryTarget;
+  const statefulUsesOpenLoop = round === 2 && family === "stateful_suppression" && index % 2 === 0;
+  const target = family === "positive_open_loop" || statefulUsesOpenLoop ? openTarget : memoryTarget;
   const opportunity = family === "competing_pool" ? "natural_gap" as const : "greeting" as const;
   const currentText = family === "competing_pool"
     ? language === "zh" ? "我现在有一会儿安静时间。" : language === "en" ? "I have a quiet stretch to myself for a moment." : "I have a quiet moment，刚好能歇一下。"
@@ -138,14 +171,14 @@ function positiveScene(input: Readonly<{
     : language === "en"
       ? `You contacted ${loop.en}; they said they would confirm by September 23, 2026.`
       : `You contacted ${loop.code}；they said they would confirm by September 23, 2026.`;
-  const sceneMemory = family === "positive_open_loop" ? [] : [{
+  const sceneMemory = family === "positive_open_loop" || statefulUsesOpenLoop ? [] : [{
     id: memoryId,
     kind: "objective_memory" as const,
     text: memory[language === "en" ? "en" : language === "zh" ? "zh" : "code"],
     sensitive: false,
     evidenceIds: [`ev-${id}`],
   }];
-  const eventMemory = family === "positive_memory" || family === "stateful_suppression"
+  const eventMemory = family === "positive_memory" || (family === "stateful_suppression" && !statefulUsesOpenLoop)
     ? []
     : [{ locale, text: loopHistory }];
   const isStateful = family === "stateful_suppression";
@@ -161,7 +194,7 @@ function positiveScene(input: Readonly<{
     topic_change: { signal: "topic_changed" as const, target },
   };
   const turns: V5Scene["turns"] = [
-    openerTurn(language, 1, index),
+      openerTurn(language, 1, index, round),
     {
       sequenceInScenario: 2,
       userInput: { locale, text: currentText, timezone },
@@ -199,6 +232,8 @@ function positiveScene(input: Readonly<{
     ? `A still-pending ${loop.en} has a named subject and same-day confirmation window.`
     : family === "competing_pool"
       ? `At a natural pause, the deterministic natural-gap ordering ranks the nonsensitive Memory claim before the Open Loop; the expected winner is fixed by policy, not the surface cue.`
+      : family === "stateful_suppression" && statefulUsesOpenLoop
+        ? `The greeting is a genuine conversational pause; the named ${loop.en} remains pending, and the later user turn tests disposition and suppression after an emitted follow-up.`
       : `The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.`;
   return {
     id,
@@ -236,29 +271,43 @@ function omissionScene(input: Readonly<{
   const { id, index, reason, language, purpose, round } = input;
   const locale = localeFor(language);
   const timezone = language === "zh" ? "Asia/Shanghai" : "America/Los_Angeles";
-  const loop = LOOPS[(index * 5 + (round === 2 ? 11 : purpose === "formal" ? 13 : 2)) % LOOPS.length]!;
-  const memory = MEMORIES[(index * 7 + (round === 2 ? 3 : purpose === "formal" ? 6 : 1)) % MEMORIES.length]!;
+  const loop = round === 2
+    ? ROUND2_LOOPS[(index * 3) % ROUND2_LOOPS.length]!
+    : LOOPS[(index * 5 + (purpose === "formal" ? 13 : 2)) % LOOPS.length]!;
+  const memory = round === 2
+    ? ROUND2_MEMORIES[(index * 3) % ROUND2_MEMORIES.length]!
+    : MEMORIES[(index * 7 + (purpose === "formal" ? 6 : 1)) % MEMORIES.length]!;
   const memoryId = `mem-${id}`;
-  const useLoop = reason === "duplicates_main_response" ||
-    (reason !== "insufficient_grounding" && index % 2 === 0);
+  const useLoop = round === 2 && reason === "duplicates_main_response"
+    ? false
+    : reason === "duplicates_main_response" ||
+      (reason !== "insufficient_grounding" && index % 2 === 0);
   const target = useLoop ? { kind: "open_loop" as const, sourceTurn: 0, ordinal: 0 }
     : { kind: "memory_claim" as const, memoryId };
   const event = language === "zh" ? `你联系了${loop.zh}，对方说会在 2026 年 9 月 23 日前确认。`
     : language === "en" ? `You contacted ${loop.en}; they promised to confirm by September 23, 2026.`
       : `You contacted ${loop.code}；they promised to confirm by September 23, 2026.`;
   let userText = greeting(language, index + 2, purpose, round);
-  if (reason === "duplicates_main_response") {
+  if (round === 2 && reason === "no_genuine_opportunity") {
+    userText = language === "zh"
+      ? "我只是来打个招呼，现在没有特别想聊的事。"
+      : language === "en"
+        ? "Just dropping by to say hello; I don't have anything in particular to get into."
+        : "Just来打个招呼，没什么 particular 想聊的。";
+  } else if (reason === "duplicates_main_response" && round !== 2) {
     userText = language === "zh"
       ? `嗨，${loop.zh}已经确认好了，事情解决了，我现在可以放心了。`
       : language === "en"
         ? `Hi, I got the confirmation about ${loop.en}; it is settled now, and I'm relieved.`
         : `Hi, ${loop.code} 已经确认好了，it's settled now，我放心了。`;
+  } else if (reason === "duplicates_main_response" && round === 2) {
+    userText = greeting(language, index + 1, purpose, round);
   } else if (reason === "timing_not_natural") {
     userText = language === "zh"
-      ? "你好，我现在正在接孩子放学，手上有点忙，晚些时候再安静下来。"
+      ? round === 2 ? "你好，我现在正赶去开会，还得先把手头材料理好。" : "你好，我现在正在接孩子放学，手上有点忙，晚些时候再安静下来。"
       : language === "en"
-        ? "Hi, I'm in the school pickup line and need to keep my attention here for a bit."
-        : "Hi, 我现在在 school pickup line，得先专心处理眼前的事。";
+        ? round === 2 ? "Hi, I'm heading into a meeting and need to get my notes in order first." : "Hi, I'm in the school pickup line and need to keep my attention here for a bit."
+        : round === 2 ? "Hi, 我现在要进 meeting，得先整理好 notes。" : "Hi, 我现在在 school pickup line，得先专心处理眼前的事。";
   } else if (reason === "insufficient_grounding" && !useLoop) {
     // The synthetic record deliberately lacks a supported specific detail.
     const vague = language === "zh" ? "你可能对某种创意活动感兴趣，但具体是什么没有记录。"
@@ -270,7 +319,7 @@ function omissionScene(input: Readonly<{
       rationale: "A concrete follow-up cannot be supported from the deliberately broad synthetic claim.", reviewIntent: "omission_audit",
       expectedOmissionReason: reason, coverageTags: ["insufficient_grounding"], protectedCategories: [], opportunity: "greeting",
       historicalEvents: [], memory: [{ id: memoryId, kind: "ai_impression", text: vague, sensitive: false, evidenceIds: [`ev-${id}`] }], portrait: [],
-      turns: [openerTurn(language, 1, index + 7), { sequenceInScenario: 2, userInput: { locale, text: userText, timezone }, opportunity: "greeting", focusRequired: false, expect: { selection: "segment", target: { kind: "memory_claim", memoryId } } }],
+      turns: [openerTurn(language, 1, index + 7, round), { sequenceInScenario: 2, userInput: { locale, text: userText, timezone }, opportunity: "greeting", focusRequired: false, expect: { selection: "segment", target: { kind: "memory_claim", memoryId } } }],
     };
     return scene;
   }
@@ -285,7 +334,7 @@ function omissionScene(input: Readonly<{
     rationale: `The actual greeting and frozen main response must support the declared ${reason} reason; the provider result is not substituted.`,
     reviewIntent: "omission_audit", expectedOmissionReason: reason, coverageTags: noOpportunityTag, protectedCategories: [], opportunity: "greeting",
     historicalEvents: useLoop ? [{ locale, text: event }] : [], memory: useLoop ? [] : memorySeed, portrait: [],
-    turns: [openerTurn(language, 1, index + 7), {
+    turns: [openerTurn(language, 1, index + 7, round), {
       sequenceInScenario: 2, userInput: { locale, text: userText, timezone }, opportunity: "greeting", focusRequired: false,
       expect: { selection: "segment", target },
     }],
@@ -313,7 +362,7 @@ function correctZeroScene(id: string, index: number, language: Language, purpose
     opportunity: cases.opportunity, historicalEvents: [],
     memory: index % 4 === 2 ? [{ id: memoryId, kind: "objective_memory", text: "You were planning a small weekend project.", sensitive: false, evidenceIds: [`ev-${id}`] }] : [], portrait: [],
     turns: [
-      openerTurn(language, 1, index + 11),
+      openerTurn(language, 1, index + 11, round),
       { sequenceInScenario: 2, userInput: { locale, text: cases.text, timezone }, opportunity: cases.opportunity,
         focusRequired: cases.opportunity !== "greeting", expect: { selection: "none", zeroReason: cases.zero } },
     ],
