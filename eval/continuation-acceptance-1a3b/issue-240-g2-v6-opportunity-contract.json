@@ -150,6 +150,6 @@
     "blindReviewArtifact": "eval/continuation-acceptance-1a3b/issue-240-blind-review.json",
     "sourceRound": "v5-calibration-2",
     "sourceDomainTime": "2026-09-23T00:00:00.000Z",
-    "freshClonePolicy": "Run artifacts are untracked in the reviewed worktree; a missing artifact is evidence_missing, never permission to reconstruct it."
+    "freshClonePolicy": "Run artifacts are tracked in the evidence commit; a missing or hash-mismatched artifact is evidence_missing, never permission to reconstruct it."
   }
 }

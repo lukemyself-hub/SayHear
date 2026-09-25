@@ -133,31 +133,31 @@
             "path": "eval/continuation-acceptance-1a3b/run-v4/operator/expression-selection.json",
             "rawSha256": "35d11163cc2efacfe070178031b2ce128fbb39bba55b56aadf5c298b9cb8ea03",
             "canonicalJsonSha256": "sha256:9c6e5b2b322b254c09ffff87324171274e3b644c7cc82b2a060350c46421eb69",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v4/continuation-main.json",
             "rawSha256": "85fd98825eb143ec04af29b34b3b9e3c068561c8b7af5f34b9cda9003451a928",
             "canonicalJsonSha256": "sha256:91f691d1377df4be76213d838817f1fb752a9c1796a438666f50ee6d635822ee",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v4/continuation-off.json",
             "rawSha256": "dd6e00289ad42ffccd3debd456a8f5a7933d8a029511125a872891baa21d1a43",
             "canonicalJsonSha256": "sha256:b923f9d39a963f18dd541596263c4458a823f70d46e9f2d5d7bff4bed31b7794",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v4/continuation-on.json",
             "rawSha256": "d30a38192188603579acdd3ddfa4819b4866dd3f9606415b81d29ce5aad76685",
             "canonicalJsonSha256": "sha256:af980ebe1e287bc868997aa6c773acc1793826e91bfba908e3b41cad80c600c2",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v4/treatment-ledger.json",
             "rawSha256": "05b41c4dc13a0d3dc8604f932f441ee9bda6006198602e8da4f3a764f7977355",
             "canonicalJsonSha256": "sha256:f43e0144ed10a014eebd3a259590ff28f84f56a9b8eb6621f507dc8ed5697645",
-            "tracked": false
+            "tracked": true
           }
         ],
         "rawRunHashes": {
@@ -244,25 +244,25 @@
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-main.json",
             "rawSha256": "0ab79b7087e5d200eba4333cc9f574e1b66894db970f40f7fc18c2c503cb13b6",
             "canonicalJsonSha256": "sha256:1200d8b8d989ffc3cbec1238811fc9482e7126f3e54260d1d3b421e1f4aa830d",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-off.json",
             "rawSha256": "e0c7c77529fc38583746857fac6e81f6562f3e8f0d20c7aac7f6b9b5a6ba66b1",
             "canonicalJsonSha256": "sha256:e0604c82aa61a50d9a220837ecefe77b195ef1d2320d8308d52d9a6582288623",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-on.json",
             "rawSha256": "79505d325f5a35404002f2b5ff9f69573688104580646137f78786679299cb9e",
             "canonicalJsonSha256": "sha256:7b60214d8475734ed4bce3caa0e8619f9ab3f63c0736143fb9afaa917eaf3336",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/treatment-ledger.json",
             "rawSha256": "8dbbcecb1532e72c51d34cb7a507280a1180ef3aa274a05510a4efc5aba51998",
             "canonicalJsonSha256": "sha256:8652f7a946f041f880df82579c1777653aff66bf9b2b623d23d33bb11f64c245",
-            "tracked": false
+            "tracked": true
           }
         ],
         "rawRunHashes": {
@@ -349,25 +349,25 @@
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/continuation-main.json",
             "rawSha256": "fe69ea20a8a07a5e16d6cfaa2d56a3463f3a284eb150bdea973f407d311841c9",
             "canonicalJsonSha256": "sha256:f6744e1a21124a3bb054e16f2cd7d656ac26c71c1db227a463928fe99722bfe5",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/continuation-off.json",
             "rawSha256": "bed303d075871a70e644aceba20142970401e25a11a92f834112712ad620171f",
             "canonicalJsonSha256": "sha256:70b6bdfc876b08bd7624639276d4a4e0231b07da8dda3ab02101809f9d611125",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/continuation-on.json",
             "rawSha256": "5e95dc3ce222f686df3cc94f92076ab535a7bb8b7ea1351086bd8694a3096ca0",
             "canonicalJsonSha256": "sha256:734e3b85f7222b9f7f5bcbf6cd3c11e41fd8ec8b558071e79e6b21ab617dca15",
-            "tracked": false
+            "tracked": true
           },
           {
             "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/treatment-ledger.json",
             "rawSha256": "3437f453208a1c7510c6a130dd286d9c9f1dfffe5fef4d69beea022a865724d5",
             "canonicalJsonSha256": "sha256:8df42b0685c84dc6d78c54dd427e62383a28b9e551adfad50c5adcfb76d7082c",
-            "tracked": false
+            "tracked": true
           }
         ],
         "rawRunHashes": {
@@ -389,12 +389,12 @@
         "review seed",
         "expression selection manifest"
       ],
-      "untrackedRunArtifacts": [
+      "trackedRunArtifacts": [
         "run-v4",
         "run-v5-calibration-1",
         "run-v5-calibration-2"
       ],
-      "freshCloneRisk": "The run artifacts are present in this worktree but are not tracked by Git; a fresh clone may not contain the original bytes. Do not reconstruct or overwrite them from this diagnosis."
+      "freshCloneRisk": "The run artifacts are now tracked by Git alongside this diagnosis; a fresh clone must verify the recorded hashes and report evidence_missing on any missing or mismatched bytes."
     }
   },
   "independentReview": {

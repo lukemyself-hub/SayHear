@@ -20,7 +20,7 @@
 | v5-r1 | evaluator `c7a8af98bef49a83d242cc3b6a95a11becd85cb5`; verification `da9c7b24c890b58fb2a4e1faab6b9ca3fdfcd241bf0cec1e29fc595c1969d5f3`; main `0ab79b7087e5d200eba4333cc9f574e1b66894db970f40f7fc18c2c503cb13b6`; off `e0c7c77529fc38583746857fac6e81f6562f3e8f0d20c7aac7f6b9b5a6ba66b1`; on `79505d325f5a35404002f2b5ff9f69573688104580646137f78786679299cb9e`; ledger `8dbbcecb1532e72c51d34cb7a507280a1180ef3aa274a05510a4efc5aba51998`; report `8f347222fd5756c3ac57d14bfd032251a7cb6a607e5cb71d4ae64c652ebcd34a` |
 | v5-r2 | evaluator `f0d03b41d288afce2acff8c7de820061bbe3212c`; verification `381d34994326615b52cc64e9141802e9391d506a0c073386037416b0bd75c318`; main `fe69ea20a8a07a5e16d6cfaa2d56a3463f3a284eb150bdea973f407d311841c9`; off `bed303d075871a70e644aceba20142970401e25a11a92f834112712ad620171f`; on `5e95dc3ce222f686df3cc94f92076ab535a7bb8b7ea1351086bd8694a3096ca0`; ledger `3437f453208a1c7510c6a130dd286d9c9f1dfffe5fef4d69beea022a865724d5`; report `ed0b2b074063537b8ac47dd7c9f806891b85fb11b32c16c00c60ade4ce10391b` |
 
-v5 round 2 catalog、scene files、pins、review seed、expression-selection manifest 是 Git 跟踪输入；`run-v4/`、`run-v5-calibration-1/`、`run-v5-calibration-2/` 的 run artifacts 在当前工作树存在但未跟踪。新 clone 可能缺少这些原始字节；缺失时只能报告 `evidence_missing`，不能重建、覆盖或猜测。
+v5 round 2 catalog、scene files、pins、review seed、expression-selection manifest 是 Git 跟踪输入；`run-v4/`、`run-v5-calibration-1/`、`run-v5-calibration-2/` 的 run artifacts 也已随 evidence commit 纳入 Git。新 clone 应校验本文件记录的 hash；缺失或不匹配时只能报告 `evidence_missing`，不能重建、覆盖或猜测。
 盲态 artifact SHA-256：`0b6f52fae039f16581b18b7fa9164480d86b8d4d9f6dc3e48054cfd7c1d9627c`。该文件只含 fixture/main 输入和 reviewer conclusion，不含 Provider reason、segment outcome 或 ledger 字段。
 
 ## 关键根因

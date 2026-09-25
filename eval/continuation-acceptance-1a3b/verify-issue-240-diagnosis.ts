@@ -645,8 +645,8 @@ async function verifyIssue240EvidenceInternal(
       try {
         const raw = await readFile(resolve(root, fingerprint.path), "utf8");
         if (rawSha256(raw) !== fingerprint.rawSha256) errors.push(`${roundId}: hash mismatch for ${fingerprint.path}`);
-        const expectedTracked = !fingerprint.path.includes("/run-v4/") && !fingerprint.path.includes("/run-v5-calibration-1/") && !fingerprint.path.includes("/run-v5-calibration-2/");
-        if (fingerprint.tracked !== expectedTracked || fingerprint.tracked !== isTracked(root, fingerprint.path)) errors.push(`${roundId}: tracking status mismatch for ${fingerprint.path}`);
+        const actualTracked = isTracked(root, fingerprint.path);
+        if (fingerprint.tracked !== actualTracked) errors.push(`${roundId}: tracking status mismatch for ${fingerprint.path}`);
       } catch {
         errors.push(`${roundId}: evidence missing ${fingerprint.path}`);
       }
