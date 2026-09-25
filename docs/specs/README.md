@@ -23,6 +23,8 @@ Accepted
   — Core Flow 1A.2P（Internal Core）— `ready-for-agent`
 - [#107 — Internal Core / Core Flow 1A.3a — Memory & Recall](https://github.com/lukemyself-hub/SayHear/issues/107)
   — Core Flow 1A.3a（Internal Core）— `ready-for-agent`
+- [#239 — Core Flow 1A.3b G2 — v6 主动关心评测修复](https://github.com/lukemyself-hub/SayHear/issues/239)
+  — Core Flow 1A.3b / G2（支持 #207）— `ready-for-agent`
 
 创建 SPEC 后，在这里增加一条简短索引，包含：
 
