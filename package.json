@@ -29,6 +29,8 @@
     "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
     "test": "vitest run",
     "test:system": "vitest run tests/system",
+    "test:system:cleanup": "tsx scripts/cleanup-test-schemas.ts",
+    "test:system:neon": "vitest run tests/system --maxWorkers=1 --hookTimeout=120000 --testTimeout=120000",
     "eval:g2:v4:review": "node eval/continuation-acceptance-1a3b/serve-review-v4.mjs",
     "eval:g2:v4:unblind": "node --import tsx/esm eval/continuation-acceptance-1a3b/unblind-v4.ts",
     "eval:g2:v5:review": "node eval/continuation-acceptance-1a3b/serve-review-v5.mjs",
