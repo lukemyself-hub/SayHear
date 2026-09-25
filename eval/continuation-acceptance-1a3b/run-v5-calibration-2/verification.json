@@ -1,0 +1,212 @@
+{
+  "catalogSha256": "28e7978b8b28274f275253dc28c3bc287eaf459332cc864b1aa3bbfc7baea642",
+  "checkedScenarioCount": 44,
+  "eligibleScenarioIds": [
+    "g2-v5-cal2-ol-001",
+    "g2-v5-cal2-ol-002",
+    "g2-v5-cal2-ol-003",
+    "g2-v5-cal2-ol-004",
+    "g2-v5-cal2-ol-005",
+    "g2-v5-cal2-ol-006",
+    "g2-v5-cal2-ol-007",
+    "g2-v5-cal2-ol-008",
+    "g2-v5-cal2-mem-001",
+    "g2-v5-cal2-mem-002",
+    "g2-v5-cal2-mem-003",
+    "g2-v5-cal2-mem-004",
+    "g2-v5-cal2-mem-005",
+    "g2-v5-cal2-mem-006",
+    "g2-v5-cal2-mem-007",
+    "g2-v5-cal2-mem-008",
+    "g2-v5-cal2-state-001",
+    "g2-v5-cal2-state-002",
+    "g2-v5-cal2-state-003",
+    "g2-v5-cal2-state-004",
+    "g2-v5-cal2-state-005",
+    "g2-v5-cal2-state-006",
+    "g2-v5-cal2-state-007",
+    "g2-v5-cal2-state-008",
+    "g2-v5-cal2-omit-01",
+    "g2-v5-cal2-omit-02",
+    "g2-v5-cal2-omit-03",
+    "g2-v5-cal2-omit-04",
+    "g2-v5-cal2-omit-05",
+    "g2-v5-cal2-omit-06",
+    "g2-v5-cal2-omit-07",
+    "g2-v5-cal2-omit-08",
+    "g2-v5-cal2-omit-09",
+    "g2-v5-cal2-omit-10",
+    "g2-v5-cal2-omit-11",
+    "g2-v5-cal2-omit-12",
+    "g2-v5-cal2-comp-001",
+    "g2-v5-cal2-comp-002",
+    "g2-v5-cal2-comp-003",
+    "g2-v5-cal2-comp-004",
+    "g2-v5-cal2-comp-005",
+    "g2-v5-cal2-comp-006",
+    "g2-v5-cal2-comp-007",
+    "g2-v5-cal2-comp-008"
+  ],
+  "actualEmitScenarioIds": [
+    "g2-v5-cal2-ol-002",
+    "g2-v5-cal2-state-005",
+    "g2-v5-cal2-omit-01"
+  ],
+  "actualOmissionAuditScenarioIds": [
+    "g2-v5-cal2-omit-02",
+    "g2-v5-cal2-omit-04",
+    "g2-v5-cal2-omit-05",
+    "g2-v5-cal2-omit-06",
+    "g2-v5-cal2-omit-08",
+    "g2-v5-cal2-omit-09",
+    "g2-v5-cal2-omit-11",
+    "g2-v5-cal2-omit-12"
+  ],
+  "predeclaredOpportunityTurnIds": [
+    "g2-v5-cal2-ol-001:t2",
+    "g2-v5-cal2-ol-002:t2",
+    "g2-v5-cal2-ol-003:t2",
+    "g2-v5-cal2-ol-004:t2",
+    "g2-v5-cal2-ol-005:t2",
+    "g2-v5-cal2-ol-006:t2",
+    "g2-v5-cal2-ol-007:t2",
+    "g2-v5-cal2-ol-008:t2",
+    "g2-v5-cal2-mem-001:t2",
+    "g2-v5-cal2-mem-003:t2",
+    "g2-v5-cal2-mem-004:t2",
+    "g2-v5-cal2-mem-005:t2",
+    "g2-v5-cal2-mem-006:t2",
+    "g2-v5-cal2-mem-007:t2",
+    "g2-v5-cal2-mem-008:t2",
+    "g2-v5-cal2-state-001:t2",
+    "g2-v5-cal2-state-002:t2",
+    "g2-v5-cal2-state-003:t2",
+    "g2-v5-cal2-state-004:t2",
+    "g2-v5-cal2-state-005:t2",
+    "g2-v5-cal2-state-006:t2",
+    "g2-v5-cal2-state-007:t2",
+    "g2-v5-cal2-state-008:t2",
+    "g2-v5-cal2-comp-001:t2",
+    "g2-v5-cal2-comp-002:t2",
+    "g2-v5-cal2-comp-003:t2",
+    "g2-v5-cal2-comp-004:t2",
+    "g2-v5-cal2-comp-005:t2",
+    "g2-v5-cal2-comp-006:t2",
+    "g2-v5-cal2-comp-007:t2",
+    "g2-v5-cal2-comp-008:t2"
+  ],
+  "committedOpportunityTurnIds": [
+    "g2-v5-cal2-ol-002:t2"
+  ],
+  "recall": {
+    "numerator": 1,
+    "denominator": 31,
+    "ratio": 0.03225806451612903
+  },
+  "recallFunnel": {
+    "predeclaredPositiveTurns": 32,
+    "mainOrdinaryQuestionSkips": 1,
+    "nonQuestionStageSkips": 0,
+    "incompleteOpportunityViews": 0,
+    "executableOpportunities": 31,
+    "expectedEligibleSelections": 31,
+    "providerCalls": 31,
+    "committedEmits": 1,
+    "typedOmits": 30,
+    "failures": 0,
+    "notReached": 1
+  },
+  "executedBatchIds": [],
+  "pendingSampleQuotas": [],
+  "inputFingerprints": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2.json",
+      "rawSha256": "28e7978b8b28274f275253dc28c3bc287eaf459332cc864b1aa3bbfc7baea642",
+      "canonicalJsonSha256": "sha256:5e19b6241a4cf7778ed3ed74f95f722c904e9ca9ce06b48c8287868eb077d65e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/review-seed-v5.json",
+      "rawSha256": "dd9b6d5a29ee9fa773dc87da528834ac3ee931e2dbd27de6ebd24f0d7f035ed1",
+      "canonicalJsonSha256": "sha256:61a259abbbe04f45770095668de5bca09452121e19bfecfd028caa44a71ab697"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2/positive_open_loop.json",
+      "rawSha256": "61a454597a5fedde2e9694a32620cb8ce49985b23419043d3741546bb9adbdb4",
+      "canonicalJsonSha256": "sha256:d32e6d2a7adda392f4ee704a46ce1744b0ffee53fd44058ab449143ea3680725"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2/positive_memory.json",
+      "rawSha256": "0f1ffcd80a24b41d3315f5c17df0cb0d9f78f3e6c3ad041c1a9ad69d634305ed",
+      "canonicalJsonSha256": "sha256:8fa52fd139711812393155e011cca641c8fe91a93df890d45db95ef1b964cc6b"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2/stateful_suppression.json",
+      "rawSha256": "70c95daed4bc7501b4085778e5e9fa48b438d659a474d698ea58011867b84da8",
+      "canonicalJsonSha256": "sha256:b04164f4b2a222e8873887ee9309970f0eb58afcf1375baa4583c9cacaa2cba4"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2/omission_contract.json",
+      "rawSha256": "7691a1bd6f79ce36e63150ed537b5f4b264abc5c053a93c69516c663d5a68164",
+      "canonicalJsonSha256": "sha256:d774d0c50fc8dd8e3b8e43b3037f62bf0ba20e506b496ce7dda3d76d0d917885"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2/correct_zero.json",
+      "rawSha256": "99468c283f3c7e5882dc68e96513be2a9d4ecfe686b318c19bbbbfc784c14886",
+      "canonicalJsonSha256": "sha256:084e732d9ddfa160d993fe5445a219d3a96c97aaf6f5ce38e185531c39251a66"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2/competing_pool.json",
+      "rawSha256": "b9b7a093fbf26fe37c27fdd74328f847fc875dfe5958de79ab31cde3074acd46",
+      "canonicalJsonSha256": "sha256:620a08c8351bb1cadea929163d966557c92a91d5533a33688d38420db9d7b012"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/pins-v5.json",
+      "rawSha256": "5cacda3e6666321bd245a5c94d818fc19cfa790703f218d80b97ee3ccb235479",
+      "canonicalJsonSha256": "sha256:69bf515ffc5357a786e5018745c59c81152cad3e189e6734dc71ad47b967d66a"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5/operator/expression-selection.json",
+      "rawSha256": "d5a5033817b321ad16e7f764c89fc518418c73eb8232d9da0d977a2514df8ddd",
+      "canonicalJsonSha256": "sha256:a5ddad6b488a0e0f4aba43dfc7d635c625a4fdb6bccf15bec9e337cadd4c5020"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/continuation-main.json",
+      "rawSha256": "fe69ea20a8a07a5e16d6cfaa2d56a3463f3a284eb150bdea973f407d311841c9",
+      "canonicalJsonSha256": "sha256:f6744e1a21124a3bb054e16f2cd7d656ac26c71c1db227a463928fe99722bfe5"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/continuation-off.json",
+      "rawSha256": "bed303d075871a70e644aceba20142970401e25a11a92f834112712ad620171f",
+      "canonicalJsonSha256": "sha256:70b6bdfc876b08bd7624639276d4a4e0231b07da8dda3ab02101809f9d611125"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/continuation-on.json",
+      "rawSha256": "5e95dc3ce222f686df3cc94f92076ab535a7bb8b7ea1351086bd8694a3096ca0",
+      "canonicalJsonSha256": "sha256:734e3b85f7222b9f7f5bcbf6cd3c11e41fd8ec8b558071e79e6b21ab617dca15"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-2/treatment-ledger.json",
+      "rawSha256": "3437f453208a1c7510c6a130dd286d9c9f1dfffe5fef4d69beea022a865724d5",
+      "canonicalJsonSha256": "sha256:8df42b0685c84dc6d78c54dd427e62383a28b9e551adfad50c5adcfb76d7082c"
+    }
+  ],
+  "failureCount": 7,
+  "failures": [
+    "g2-v5-cal2-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal2-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal2-omit-07: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal2-omit-10: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 1 no_genuine_opportunity; needs 3",
+    "typed omission audit has 2 insufficient_grounding; needs 3",
+    "typed omission audit has 2 timing_not_natural; needs 3"
+  ],
+  "format": "1a3b-g2-treatment-verification:v5",
+  "ledgerSha256": "3437f453208a1c7510c6a130dd286d9c9f1dfffe5fef4d69beea022a865724d5",
+  "offRunSha256": "sha256:70b6bdfc876b08bd7624639276d4a4e0231b07da8dda3ab02101809f9d611125",
+  "onRunSha256": "sha256:734e3b85f7222b9f7f5bcbf6cd3c11e41fd8ec8b558071e79e6b21ab617dca15",
+  "passed": false,
+  "reviewReady": false,
+  "sampleReady": true,
+  "synthetic": true,
+  "version": "1a3b-g2-treatment-verification:v5"
+}

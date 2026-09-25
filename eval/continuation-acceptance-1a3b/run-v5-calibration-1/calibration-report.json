@@ -1,0 +1,89 @@
+{
+  "version": "1a3b-g2-calibration-analysis:v5",
+  "round": 1,
+  "passed": false,
+  "pauseReason": "calibration verification failed; repair only demonstrated defects before an independent round",
+  "families": {
+    "positive_open_loop": {
+      "opportunities": 4,
+      "committedEmits": 2,
+      "p": 0.5,
+      "formulaMinimum": 20,
+      "plannedCount": 20
+    },
+    "positive_memory": {
+      "opportunities": 4,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "stateful_suppression": {
+      "opportunities": 5,
+      "committedEmits": 1,
+      "p": 0.2,
+      "formulaMinimum": 20,
+      "plannedCount": 20
+    },
+    "competing_pool": {
+      "opportunities": 7,
+      "committedEmits": 1,
+      "p": 0.14285714285714285,
+      "formulaMinimum": 20,
+      "plannedCount": 20
+    }
+  },
+  "omissionReasons": {
+    "no_genuine_opportunity": {
+      "declared": 3,
+      "actualTypedOmissions": 0,
+      "stable": false
+    },
+    "duplicates_main_response": {
+      "declared": 3,
+      "actualTypedOmissions": 0,
+      "stable": false
+    },
+    "insufficient_grounding": {
+      "declared": 3,
+      "actualTypedOmissions": 1,
+      "stable": false
+    },
+    "timing_not_natural": {
+      "declared": 3,
+      "actualTypedOmissions": 3,
+      "stable": true
+    }
+  },
+  "plannedPositiveCounts": null,
+  "totalFormalPositiveScenes": null,
+  "verificationPassed": false,
+  "verificationFailures": [
+    "g2-v5-cal1-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-02: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-04: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-05: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-06: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-08: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-09: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 0 no_genuine_opportunity; needs 3",
+    "typed omission audit has 0 duplicates_main_response; needs 3",
+    "typed omission audit has 1 insufficient_grounding; needs 3",
+    "g2-v5-cal1-state-001: t4: exclusion reason suppressed not visible for memory_claim:mem-g2-v5-cal1-state-001",
+    "g2-v5-cal1-state-001: t4: suppression checkpoint has no matching state",
+    "g2-v5-cal1-state-004: t4: unexpected segment committed",
+    "g2-v5-cal1-state-004: t4: exclusion reason suppressed not visible for memory_claim:mem-g2-v5-cal1-state-004",
+    "g2-v5-cal1-state-004: t4: suppression checkpoint has no matching state",
+    "g2-v5-cal1-state-005: t4: unexpected segment committed",
+    "g2-v5-cal1-state-006: t4: unexpected segment committed",
+    "g2-v5-cal1-state-008: t4: exclusion reason suppressed not visible for memory_claim:mem-g2-v5-cal1-state-008",
+    "g2-v5-cal1-state-008: t4: suppression checkpoint has no matching state",
+    "g2-v5-cal1-omit-04: t2: expected selection, got none (no_eligible_target)",
+    "g2-v5-cal1-omit-04: t2: expected emit or typed omit, got not_reached",
+    "g2-v5-cal1-omit-04: t2: selected target reference is missing",
+    "g2-v5-cal1-omit-05: t2: expected selection, got none (no_eligible_target)",
+    "g2-v5-cal1-omit-05: t2: expected emit or typed omit, got not_reached",
+    "g2-v5-cal1-omit-05: t2: selected target reference is missing"
+  ]
+}

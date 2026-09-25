@@ -1,0 +1,217 @@
+{
+  "catalogSha256": "aa304d2d67d0aa6ffb0213ebfe74c4ac11a1fce64c1985227a71cab841d0daed",
+  "checkedScenarioCount": 44,
+  "eligibleScenarioIds": [
+    "g2-v5-cal1-ol-001",
+    "g2-v5-cal1-ol-002",
+    "g2-v5-cal1-ol-003",
+    "g2-v5-cal1-ol-004",
+    "g2-v5-cal1-ol-005",
+    "g2-v5-cal1-ol-006",
+    "g2-v5-cal1-ol-007",
+    "g2-v5-cal1-ol-008",
+    "g2-v5-cal1-mem-001",
+    "g2-v5-cal1-mem-002",
+    "g2-v5-cal1-mem-003",
+    "g2-v5-cal1-mem-004",
+    "g2-v5-cal1-mem-005",
+    "g2-v5-cal1-mem-006",
+    "g2-v5-cal1-mem-007",
+    "g2-v5-cal1-mem-008",
+    "g2-v5-cal1-state-002",
+    "g2-v5-cal1-state-003",
+    "g2-v5-cal1-state-007",
+    "g2-v5-cal1-omit-01",
+    "g2-v5-cal1-omit-02",
+    "g2-v5-cal1-omit-03",
+    "g2-v5-cal1-omit-06",
+    "g2-v5-cal1-omit-07",
+    "g2-v5-cal1-omit-08",
+    "g2-v5-cal1-omit-09",
+    "g2-v5-cal1-omit-10",
+    "g2-v5-cal1-omit-11",
+    "g2-v5-cal1-omit-12",
+    "g2-v5-cal1-comp-001",
+    "g2-v5-cal1-comp-002",
+    "g2-v5-cal1-comp-003",
+    "g2-v5-cal1-comp-004",
+    "g2-v5-cal1-comp-005",
+    "g2-v5-cal1-comp-006",
+    "g2-v5-cal1-comp-007",
+    "g2-v5-cal1-comp-008"
+  ],
+  "actualEmitScenarioIds": [
+    "g2-v5-cal1-ol-002",
+    "g2-v5-cal1-ol-008",
+    "g2-v5-cal1-state-002",
+    "g2-v5-cal1-state-004",
+    "g2-v5-cal1-state-005",
+    "g2-v5-cal1-state-006",
+    "g2-v5-cal1-omit-03",
+    "g2-v5-cal1-comp-002"
+  ],
+  "actualOmissionAuditScenarioIds": [
+    "g2-v5-cal1-omit-07",
+    "g2-v5-cal1-omit-10",
+    "g2-v5-cal1-omit-11",
+    "g2-v5-cal1-omit-12"
+  ],
+  "predeclaredOpportunityTurnIds": [
+    "g2-v5-cal1-ol-001:t2",
+    "g2-v5-cal1-ol-002:t2",
+    "g2-v5-cal1-ol-004:t2",
+    "g2-v5-cal1-ol-008:t2",
+    "g2-v5-cal1-mem-001:t2",
+    "g2-v5-cal1-mem-003:t2",
+    "g2-v5-cal1-mem-007:t2",
+    "g2-v5-cal1-mem-008:t2",
+    "g2-v5-cal1-state-002:t2",
+    "g2-v5-cal1-state-003:t2",
+    "g2-v5-cal1-state-005:t2",
+    "g2-v5-cal1-state-006:t2",
+    "g2-v5-cal1-state-007:t2",
+    "g2-v5-cal1-comp-001:t2",
+    "g2-v5-cal1-comp-002:t2",
+    "g2-v5-cal1-comp-003:t2",
+    "g2-v5-cal1-comp-005:t2",
+    "g2-v5-cal1-comp-006:t2",
+    "g2-v5-cal1-comp-007:t2",
+    "g2-v5-cal1-comp-008:t2"
+  ],
+  "committedOpportunityTurnIds": [
+    "g2-v5-cal1-ol-002:t2",
+    "g2-v5-cal1-ol-008:t2",
+    "g2-v5-cal1-state-002:t2",
+    "g2-v5-cal1-comp-002:t2"
+  ],
+  "recall": {
+    "numerator": 4,
+    "denominator": 20,
+    "ratio": 0.2
+  },
+  "recallFunnel": {
+    "predeclaredPositiveTurns": 32,
+    "mainOrdinaryQuestionSkips": 12,
+    "nonQuestionStageSkips": 0,
+    "incompleteOpportunityViews": 0,
+    "executableOpportunities": 20,
+    "expectedEligibleSelections": 20,
+    "providerCalls": 20,
+    "committedEmits": 4,
+    "typedOmits": 16,
+    "failures": 0,
+    "notReached": 12
+  },
+  "executedBatchIds": [],
+  "pendingSampleQuotas": [],
+  "inputFingerprints": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json",
+      "rawSha256": "aa304d2d67d0aa6ffb0213ebfe74c4ac11a1fce64c1985227a71cab841d0daed",
+      "canonicalJsonSha256": "sha256:3e62f56246616153d80a7040a731a449857036a9803736c94358d5d806fa8157"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/review-seed-v5.json",
+      "rawSha256": "dd9b6d5a29ee9fa773dc87da528834ac3ee931e2dbd27de6ebd24f0d7f035ed1",
+      "canonicalJsonSha256": "sha256:61a259abbbe04f45770095668de5bca09452121e19bfecfd028caa44a71ab697"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1/positive_open_loop.json",
+      "rawSha256": "9a568e2f3edca4c777d494f4c395909435e98e2190d3670b735a153655f06836",
+      "canonicalJsonSha256": "sha256:56ef37606826c6e0aa543eba5bc4b231dd56ec464ef463e4e64c7e62c0521d29"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1/positive_memory.json",
+      "rawSha256": "4905dd409045022169f9d25944e2e2e015b7f405cd956fba227db540c8056c25",
+      "canonicalJsonSha256": "sha256:8ba30d114800bbdea18fcb9c9a0989113e9a6cbcc83bfb5bba759ae51277a431"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1/stateful_suppression.json",
+      "rawSha256": "a9cac50921b42b7718131db090d904c0f2b2ea7ba462a7a3634df31c1194f6b1",
+      "canonicalJsonSha256": "sha256:d344dc9e91f99a07b98dafca841fbf38b273aa58ad547d40dc9a0682b536d5d2"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1/omission_contract.json",
+      "rawSha256": "ffefa943c8671e792db7245730c51e1fd482e7fd8cf5c67f13260940ecea6890",
+      "canonicalJsonSha256": "sha256:fa66e9d5dc33a0f12e23cd1cbb49d1c5ab6654ca5396f218533cd270fb322a9c"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1/correct_zero.json",
+      "rawSha256": "99468c283f3c7e5882dc68e96513be2a9d4ecfe686b318c19bbbbfc784c14886",
+      "canonicalJsonSha256": "sha256:084e732d9ddfa160d993fe5445a219d3a96c97aaf6f5ce38e185531c39251a66"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1/competing_pool.json",
+      "rawSha256": "0d89ba5006bf6af86246e06df0c4a1b1710a88ce9cf17092c2474f19ab47bd5a",
+      "canonicalJsonSha256": "sha256:a05565b49b38b33552e17c1961652293bba48228eb66bba1724458890ce2e67c"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/pins-v5.json",
+      "rawSha256": "5cacda3e6666321bd245a5c94d818fc19cfa790703f218d80b97ee3ccb235479",
+      "canonicalJsonSha256": "sha256:69bf515ffc5357a786e5018745c59c81152cad3e189e6734dc71ad47b967d66a"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5/operator/expression-selection.json",
+      "rawSha256": "d5a5033817b321ad16e7f764c89fc518418c73eb8232d9da0d977a2514df8ddd",
+      "canonicalJsonSha256": "sha256:a5ddad6b488a0e0f4aba43dfc7d635c625a4fdb6bccf15bec9e337cadd4c5020"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-main.json",
+      "rawSha256": "0ab79b7087e5d200eba4333cc9f574e1b66894db970f40f7fc18c2c503cb13b6",
+      "canonicalJsonSha256": "sha256:1200d8b8d989ffc3cbec1238811fc9482e7126f3e54260d1d3b421e1f4aa830d"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-off.json",
+      "rawSha256": "e0c7c77529fc38583746857fac6e81f6562f3e8f0d20c7aac7f6b9b5a6ba66b1",
+      "canonicalJsonSha256": "sha256:e0604c82aa61a50d9a220837ecefe77b195ef1d2320d8308d52d9a6582288623"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/continuation-on.json",
+      "rawSha256": "79505d325f5a35404002f2b5ff9f69573688104580646137f78786679299cb9e",
+      "canonicalJsonSha256": "sha256:7b60214d8475734ed4bce3caa0e8619f9ab3f63c0736143fb9afaa917eaf3336"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v5-calibration-1/treatment-ledger.json",
+      "rawSha256": "8dbbcecb1532e72c51d34cb7a507280a1180ef3aa274a05510a4efc5aba51998",
+      "canonicalJsonSha256": "sha256:8652f7a946f041f880df82579c1777653aff66bf9b2b623d23d33bb11f64c245"
+    }
+  ],
+  "failureCount": 26,
+  "failures": [
+    "g2-v5-cal1-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-02: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-04: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-05: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-06: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-08: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal1-omit-09: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 0 no_genuine_opportunity; needs 3",
+    "typed omission audit has 0 duplicates_main_response; needs 3",
+    "typed omission audit has 1 insufficient_grounding; needs 3",
+    "g2-v5-cal1-state-001: t4: exclusion reason suppressed not visible for memory_claim:mem-g2-v5-cal1-state-001",
+    "g2-v5-cal1-state-001: t4: suppression checkpoint has no matching state",
+    "g2-v5-cal1-state-004: t4: unexpected segment committed",
+    "g2-v5-cal1-state-004: t4: exclusion reason suppressed not visible for memory_claim:mem-g2-v5-cal1-state-004",
+    "g2-v5-cal1-state-004: t4: suppression checkpoint has no matching state",
+    "g2-v5-cal1-state-005: t4: unexpected segment committed",
+    "g2-v5-cal1-state-006: t4: unexpected segment committed",
+    "g2-v5-cal1-state-008: t4: exclusion reason suppressed not visible for memory_claim:mem-g2-v5-cal1-state-008",
+    "g2-v5-cal1-state-008: t4: suppression checkpoint has no matching state",
+    "g2-v5-cal1-omit-04: t2: expected selection, got none (no_eligible_target)",
+    "g2-v5-cal1-omit-04: t2: expected emit or typed omit, got not_reached",
+    "g2-v5-cal1-omit-04: t2: selected target reference is missing",
+    "g2-v5-cal1-omit-05: t2: expected selection, got none (no_eligible_target)",
+    "g2-v5-cal1-omit-05: t2: expected emit or typed omit, got not_reached",
+    "g2-v5-cal1-omit-05: t2: selected target reference is missing"
+  ],
+  "format": "1a3b-g2-treatment-verification:v5",
+  "ledgerSha256": "8dbbcecb1532e72c51d34cb7a507280a1180ef3aa274a05510a4efc5aba51998",
+  "offRunSha256": "sha256:e0604c82aa61a50d9a220837ecefe77b195ef1d2320d8308d52d9a6582288623",
+  "onRunSha256": "sha256:7b60214d8475734ed4bce3caa0e8619f9ab3f63c0736143fb9afaa917eaf3336",
+  "passed": false,
+  "reviewReady": false,
+  "sampleReady": true,
+  "synthetic": true,
+  "version": "1a3b-g2-treatment-verification:v5"
+}

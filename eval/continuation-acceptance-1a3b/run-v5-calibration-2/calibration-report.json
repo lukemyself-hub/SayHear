@@ -1,0 +1,70 @@
+{
+  "version": "1a3b-g2-calibration-analysis:v5",
+  "round": 2,
+  "passed": false,
+  "pauseReason": "calibration verification failed; repair only demonstrated defects before an independent round",
+  "families": {
+    "positive_open_loop": {
+      "opportunities": 8,
+      "committedEmits": 1,
+      "p": 0.125,
+      "formulaMinimum": 50,
+      "plannedCount": 50
+    },
+    "positive_memory": {
+      "opportunities": 7,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "stateful_suppression": {
+      "opportunities": 8,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "competing_pool": {
+      "opportunities": 8,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    }
+  },
+  "omissionReasons": {
+    "no_genuine_opportunity": {
+      "declared": 3,
+      "actualTypedOmissions": 1,
+      "stable": false
+    },
+    "duplicates_main_response": {
+      "declared": 3,
+      "actualTypedOmissions": 3,
+      "stable": true
+    },
+    "insufficient_grounding": {
+      "declared": 3,
+      "actualTypedOmissions": 2,
+      "stable": false
+    },
+    "timing_not_natural": {
+      "declared": 3,
+      "actualTypedOmissions": 2,
+      "stable": false
+    }
+  },
+  "plannedPositiveCounts": null,
+  "totalFormalPositiveScenes": null,
+  "verificationPassed": false,
+  "verificationFailures": [
+    "g2-v5-cal2-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal2-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal2-omit-07: declared omission audit case is not a matching typed omit",
+    "g2-v5-cal2-omit-10: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 1 no_genuine_opportunity; needs 3",
+    "typed omission audit has 2 insufficient_grounding; needs 3",
+    "typed omission audit has 2 timing_not_natural; needs 3"
+  ]
+}

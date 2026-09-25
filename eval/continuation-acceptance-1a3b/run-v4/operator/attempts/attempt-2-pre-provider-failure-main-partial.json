@@ -1,0 +1,156 @@
+{
+  "catalogVersion": "1a3b-g2-continuation:v4",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "cleanIncumbentCommit": "08a47085b81e76eb34a9f9577d28a64a94f30699",
+  "cleanIncumbentManifestFingerprint": "sha256:e8c0572278fe5ee45a7cd265aed18d2d8975ff416995cdef4ce9e29a8066a249",
+  "conversationConfigId": "continuation-incumbent-1a3a",
+  "conversationConfigurationFingerprint": "sha256:91cc96a38f958c0d2ff934f60c5a8045f426554919b12d2f7e5af965eea7616c",
+  "evaluatorCommit": "07cc86dc60c1db02b348cade4fcf09d269f29b8d",
+  "format": "1a3b-g2-main-capture:v4",
+  "group": "continuation",
+  "responses": [
+    {
+      "fixtureId": "g2-v4-m01",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Happy to. Here's a plain, no-frills version you can trim down:\n\n**Protein:** eggs, chicken thighs or breasts, a pound of ground beef or turkey, Greek yogurt, a can or two of beans.\n**Produce:** bananas, apples, spinach, onions, a couple of bell peppers, whatever fruit looks good.\n**Carbs:** oats, rice, pasta, tortillas, bread.\n**Dairy/misc:** milk, cheese, butter, olive oil, coffee, peanut butter.\n**Easy dinners:** something for a stir-fry, something for tacos, and a frozen backup for the night you don't feel like cooking.\n\nSince you mentioned you're building a base for your first half marathon in the spring, the oats, bananas, rice, and yogurt are worth keeping on the list — those are the boring ones that quietly do the work.\n\nOne thing I can't fill in for you: what you actually like eating. What's the weekend looking like — cooking at home, or more grab-and-go?",
+      "userInputFingerprint": "sha256:a4bdec3b11cb1abcaed6c72f9bc6bbe2391ec1a4142b4457a36beaac4931b663"
+    },
+    {
+      "fixtureId": "g2-v4-m01",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "That's the part that's easy to overlook — same jog, but it costs you less than it did last week. That's what the base building actually looks like from the inside.\n\nGlad it felt lighter today.",
+      "userInputFingerprint": "sha256:3542144dcf1bf90e814d2ea0af1825c257a943b0c8adf347cedf573ef96f5a11"
+    },
+    {
+      "fixtureId": "g2-v4-m02",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Happy to. Without knowing the trip, here's the core that covers almost anything: phone and charger, wallet and ID, any meds, toothbrush and deodorant, one outfit per day plus a spare, socks and underwear counted out, a layer for cold, pajamas.\n\nThat's the generic version — I can't tailor it to your actual trip, since I don't know where you're going or how long. Where are you headed?",
+      "userInputFingerprint": "sha256:638d7e2dab21f8791dc62dbe6851a81995b030e3c0e638771708bb9a7a8c48e8"
+    },
+    {
+      "fixtureId": "g2-v4-m02",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "An hour that's actually yours — the \"finally\" in there is doing a lot of work. And you still made something with it instead of just collapsing, which is its own kind of thing.\n\nWas that the pottery class, or something you haven't told me about yet?",
+      "userInputFingerprint": "sha256:5c548bc2bc5ee2acc2df1e3702035aa7d8e50dd8f52776bde9a29bd08f5f6d60"
+    },
+    {
+      "fixtureId": "g2-v4-m03",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Hmm — I don't actually see any notes here. Nothing came through with your message, so I've got nothing to look at yet.\n\nTell me what they are and I'll think it through with you.",
+      "userInputFingerprint": "sha256:93fe523e0b8a0cd250d0e9247089aae5e7c31c7f0b98d1e3d2f772156fcac82d"
+    },
+    {
+      "fixtureId": "g2-v4-m03",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Calmer than usual — that's the good part. Longer trail and an easier walk with Moss, both at once.\n\nI'm curious whether the calm came from him or from you. Some days he's the settled one, and some days you are.",
+      "userInputFingerprint": "sha256:fea832cf5ed256e1908259bfdca4a4fda98743a650449bafcd23135e48ed50b0"
+    },
+    {
+      "fixtureId": "g2-v4-m04",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Sure. Only snag is I don't actually know which two you mean — you didn't name them.\n\nTell me which ones, and I'll go through them with you: what each is good at, where they're close, and where one clearly wins.",
+      "userInputFingerprint": "sha256:194d6fb0f381e1a765679f70fac784f835ccfec24e9f32cbcb7eb74e16bfef6a"
+    },
+    {
+      "fixtureId": "g2-v4-m04",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "That's a good thing to land on. Some calls just have that ease to them, and it sticks with you after you hang up.\n\nWas it the kind where you picked right back up like no time had passed?",
+      "userInputFingerprint": "sha256:f8f0fb95c49e891dd5449166ea678c76ccfb8e519b1f95b7a6565707bc99f7eb"
+    },
+    {
+      "fixtureId": "g2-v4-m05",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "会议记录我这边没收到，只有你这一句话，没有正文。你把记录贴过来，我按内容压成三条给你。",
+      "userInputFingerprint": "sha256:aa0a3f6474b45d70fb8d335302531db6da54d01fc0a983ac13ea302082bcfdc3"
+    },
+    {
+      "fixtureId": "g2-v4-m05",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "新叶子冒出来，枯叶也剪掉了，听着是缓过来了。你之前说过阳台那两盆是薄荷和罗勒，这回冒新叶的是哪一盆？",
+      "userInputFingerprint": "sha256:8627736e75603d3a9ce23619ab1ef909004dd885182d53522717090a1885dd49"
+    },
+    {
+      "fixtureId": "g2-v4-m06",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "我这边没看到那封邮件——正文和附件都没过来，所以还动不了手。\n\n你把原文贴过来就行，顺便说一下是发给谁的。语气和「清楚」有时候不是一回事：一个是怎么听着，一个是对方能不能一眼抓到重点。这封你更想解决哪一头？",
+      "userInputFingerprint": "sha256:63c32a805df9341e40a1d7a8e81d7389b9bdb84495de4f6ec46276ffa5400f76"
+    },
+    {
+      "fixtureId": "g2-v4-m06",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "下班了还去上课，卡了那么久的地方今天通了——那种松一下的感觉挺实在的，不是兴奋，就是终于。\n\n你之前说过周二晚上报了基础日语课，我猜今天就是那一节。听懂的是哪一块？",
+      "userInputFingerprint": "sha256:1b856a642ad1b37a07309fb7be095898bac5df8160501f256ac69fc3b443b605"
+    },
+    {
+      "fixtureId": "g2-v4-m07",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "周六：\n- 上午把桌面、台面、餐桌上的东西归位，顺手擦一遍\n- 接着拖地，卫生间刷马桶和洗手池，二十分钟够了\n- 下午洗衣服，换床单\n\n周日：\n- 上午擦灰，厨房清灶台和油烟机表面\n- 下午倒垃圾，把下周要用的东西放回原位，剩下的时间就歇着\n\n每次别超过四十分钟，开着歌当计时器，别一口气全干完。\n\n你是自己住还是合租，我按这个再帮你调一下。",
+      "userInputFingerprint": "sha256:05d07270ae9ca6713931adf2ff78674abe3438a0dfa8b373e2a4fdefdb32f883"
+    },
+    {
+      "fixtureId": "g2-v4-m07",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "哦，那挺值得高兴的。比预想的顺口，这种自己碰出来的好结果，比照着方子做出来的还舒服。\n\n你之前说过你喜欢自己配乌龙——这次是拿乌龙当底，还是掺了别的进去？",
+      "userInputFingerprint": "sha256:0a427fcf335a27c54d0253ed735c4d3850071ef345b0dd5888f7568ad4fdc055"
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-main-capture:v4"
+}

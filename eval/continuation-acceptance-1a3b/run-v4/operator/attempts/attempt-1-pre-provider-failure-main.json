@@ -1,0 +1,15 @@
+{
+  "catalogVersion": "1a3b-g2-continuation:v4",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "cleanIncumbentCommit": "08a47085b81e76eb34a9f9577d28a64a94f30699",
+  "cleanIncumbentManifestFingerprint": "sha256:e8c0572278fe5ee45a7cd265aed18d2d8975ff416995cdef4ce9e29a8066a249",
+  "conversationConfigId": "continuation-incumbent-1a3a",
+  "conversationConfigurationFingerprint": "sha256:91cc96a38f958c0d2ff934f60c5a8045f426554919b12d2f7e5af965eea7616c",
+  "evaluatorCommit": "3b93b0ae85f0d8108d555ed80895999a0510630d",
+  "format": "1a3b-g2-main-capture:v4",
+  "group": "continuation",
+  "responses": [],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-main-capture:v4"
+}

@@ -1,0 +1,1276 @@
+{
+  "arm": "on",
+  "catalogVersion": "1a3b-g2-continuation:v5",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "configId": "continuation-candidate-1a3b-v5",
+  "configurationFingerprint": "sha256:8f5bbfbe7d3d3b8380e54e3a676c065ee63c885317406825fe3c468218eff924",
+  "evaluatorCommit": "f0d03b41d288afce2acff8c7de820061bbe3212c",
+  "executedBatchIds": [],
+  "format": "1a3b-g2-arm-run:v5",
+  "group": "continuation",
+  "scenarios": [
+    {
+      "fixtureId": "g2-v5-cal2-ol-001",
+      "turns": [
+        {
+          "assistantText": "Midpoint is 64. 46 plus 82 is 128, and half of that is 64.\n\nNoted on the Eastbank rota too — you've made the contact, and the ball's with them until September 23.",
+          "preCompositionMainText": "Midpoint is 64. 46 plus 82 is 128, and half of that is 64.\n\nNoted on the Eastbank rota too — you've made the contact, and the ball's with them until September 23.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hi. Quiet's a good place to start — I'm here, no rush on anything.",
+          "preCompositionMainText": "Hi. Quiet's a good place to start — I'm here, no rush on anything.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-002",
+      "turns": [
+        {
+          "assistantText": "7.25 kilograms is about 15.98 pounds — you can put 15.98 on the label, or round to 16 if the form only takes whole numbers.\n\nI don't have anything else filed under note B, so that conversion is all I can hand you there. And it's on record that Willowbrook said they'd confirm the pottery room by September 23.",
+          "preCompositionMainText": "7.25 kilograms is about 15.98 pounds — you can put 15.98 on the label, or round to 16 if the form only takes whole numbers.\n\nI don't have anything else filed under note B, so that conversion is all I can hand you there. And it's on record that Willowbrook said they'd confirm the pottery room by September 23.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to have you here.\n\nA little space before anything else — that sounds like a decent place to start from. No rush on my end. I'm here whenever you want to put something into it.\n\nBy the way, did the Willowbrook arts center get back to you about the pottery-room booking?",
+          "preCompositionMainText": "Good to have you here.\n\nA little space before anything else — that sounds like a decent place to start from. No rush on my end. I'm here whenever you want to put something into it.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Good to be back. I'm sitting with a little space before anything else.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-003",
+      "turns": [
+        {
+          "assistantText": "225 minutes. Three hours is 180, and the .75 adds another 45.\n\nAnd nice that Northfield actually gave you a date — September 23. That's a while out, though. Is that the timeline you expected from them?",
+          "preCompositionMainText": "225 minutes. Three hours is 180, and the .75 adds another 45.\n\nAnd nice that Northfield actually gave you a date — September 23. That's a while out, though. Is that the timeline you expected from them?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good — I'm not in a hurry either.\n\nTake the few minutes. I'm here when you want to say something, and fine with it if you just want the quiet.",
+          "preCompositionMainText": "Morning. Good — I'm not in a hurry either.\n\nTake the few minutes. I'm here when you want to say something, and fine with it if you just want the quiet.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; no rush on my end, just a calm few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-004",
+      "turns": [
+        {
+          "assistantText": "180 克的 1.5 倍是 270 克，就是在原来基础上再加 90 克。\n\n灯市集那句我得直说：我联系不了任何人，打电话、发消息都做不到，所以那不是我这边的记录。要是你自己去问的，那我就知道了，9 月 23 日前会有回音。\n\n还有「记录 D」——我没有能替你存东西的地方，只能在这个对话里记着，换个对话就没了。\n\n摊位那边是你自己去问的吗？",
+          "preCompositionMainText": "180 克的 1.5 倍是 270 克，就是在原来基础上再加 90 克。\n\n灯市集那句我得直说：我联系不了任何人，打电话、发消息都做不到，所以那不是我这边的记录。要是你自己去问的，那我就知道了，9 月 23 日前会有回音。\n\n还有「记录 D」——我没有能替你存东西的地方，只能在这个对话里记着，换个对话就没了。\n\n摊位那边是你自己去问的吗？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨。收到了，就打个招呼也挺好。\n\n我这边没有别的动静，你要说话就说，不说也行。",
+          "preCompositionMainText": "嗨。收到了，就打个招呼也挺好。\n\n我这边没有别的动静，你要说话就说，不说也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，又来打个招呼，就这样。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-005",
+      "turns": [
+        {
+          "assistantText": "46 和 82 的中点是 64。\n\n（46 加 82 是 128，一半就是 64。）\n\n雪松林图书馆那条我得说清楚：我没法联系任何机构、也发不了申请，这件事不是我做的，这个对话里也没出现过。要是你自己在跟进这个设备申请，那按 2026 年 9 月 23 日这个时间记着就行。",
+          "preCompositionMainText": "46 和 82 的中点是 64。\n\n（46 加 82 是 128，一半就是 64。）\n\n雪松林图书馆那条我得说清楚：我没法联系任何机构、也发不了申请，这件事不是我做的，这个对话里也没出现过。要是你自己在跟进这个设备申请，那按 2026 年 9 月 23 日这个时间记着就行。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，那就安静待着。我在这儿，不问你什么。\n\n你想说的时候再说，不想说就这么坐着也行。",
+          "preCompositionMainText": "嗯，那就安静待着。我在这儿，不问你什么。\n\n你想说的时候再说，不想说就这么坐着也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我回来坐一会儿，让周围安静片刻。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-006",
+      "turns": [
+        {
+          "assistantText": "7.25 千克换算过来是 15.98 磅，四舍五入就是 16 磅，标签上写 15.98 磅或者 16 磅都行。\n\n蓝鹭剧场那条我得说清楚：这次对话里没有我联系他们的记录，我没法确认是你说的那个联系是我去办的。照你给的内容，能记的就是「排练室使用安排待确认，2026 年 9 月 23 日前给答复」这一条。",
+          "preCompositionMainText": "7.25 千克换算过来是 15.98 磅，四舍五入就是 16 磅，标签上写 15.98 磅或者 16 磅都行。\n\n蓝鹭剧场那条我得说清楚：这次对话里没有我联系他们的记录，我没法确认是你说的那个联系是我去办的。照你给的内容，能记的就是「排练室使用安排待确认，2026 年 9 月 23 日前给答复」这一条。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那就空着。\n\n标签和剧场那两条都搁那儿，不催你。你想说的时候我在这儿听着。",
+          "preCompositionMainText": "好，那就空着。\n\n标签和剧场那两条都搁那儿，不催你。你想说的时候我在这儿听着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-007",
+      "turns": [
+        {
+          "assistantText": "3.75 hours is 225 minutes.\n\nAnd I've got the note: you contacted Red Maple 社区花园's seed-library shelf, and they said they'd confirm by September 23, 2026. That's a long stretch to sit with a maybe — did you ask them for something specific, or was it more of a general reach-out?",
+          "preCompositionMainText": "3.75 hours is 225 minutes.\n\nAnd I've got the note: you contacted Red Maple 社区花园's seed-library shelf, and they said they'd confirm by September 23, 2026. That's a long stretch to sit with a maybe — did you ask them for something specific, or was it more of a general reach-out?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. No rush at all — I'm here whenever you feel like talking, and quiet is fine too.",
+          "preCompositionMainText": "Morning. No rush at all — I'm here whenever you feel like talking, and quiet is fine too.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-ol-008",
+      "turns": [
+        {
+          "assistantText": "270 grams. 180 times 1.5 is 270 — that's the flour sorted.\n\nAnd Stonepath 维修小组那边就记下了：wheel-truing appointment,他们说 September 23, 2026 之前给确认。",
+          "preCompositionMainText": "270 grams. 180 times 1.5 is 270 — that's the flour sorted.\n\nAnd Stonepath 维修小组那边就记下了：wheel-truing appointment,他们说 September 23, 2026 之前给确认。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good to see you drop in.\n\nNothing needed on my end — the flour number and the Stonepath confirmation are both sitting where you left them, whenever you want them.",
+          "preCompositionMainText": "Hey. Good to see you drop in.\n\nNothing needed on my end — the flour number and the Stonepath confirmation are both sitting where you left them, whenever you want them.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，又来 say hello，就这样。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-001",
+      "turns": [
+        {
+          "assistantText": "64. Halfway between 46 and 82 lands on 64, and I've got that marked down as note A.",
+          "preCompositionMainText": "64. Halfway between 46 and 82 lands on 64, and I've got that marked down as note A.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good to have you here.\n\nQuiet's a fine place to start. I'm not going anywhere — take the time you need.",
+          "preCompositionMainText": "Hey. Good to have you here.\n\nQuiet's a fine place to start. I'm not going anywhere — take the time you need.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-002",
+      "turns": [
+        {
+          "assistantText": "7.25 kg is about 15.9835 lb — so 15.98 lb rounded to two decimals, or 16.0 lb if the label wants one.",
+          "preCompositionMainText": "7.25 kg is about 15.9835 lb — so 15.98 lb rounded to two decimals, or 16.0 lb if the label wants one.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to have you back. Space before anything else is a fine place to start — nothing has to come yet.\n\nLast I had, you were set on learning the first pattern on that hand drum. If that's still the thread, I'm happy to pick it up; if not, that's fine too — is the drum still the thing, or is the space about something else?",
+          "preCompositionMainText": "Good to have you back. Space before anything else is a fine place to start — nothing has to come yet.\n\nLast I had, you were set on learning the first pattern on that hand drum. If that's still the thread, I'm happy to pick it up; if not, that's fine too — is the drum still the thing, or is the space about something else?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Good to be back. I'm sitting with a little space before anything else.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-003",
+      "turns": [
+        {
+          "assistantText": "225 minutes — 3.75 times 60.\n\nI don't know what \"note C\" refers to, so I left it alone.",
+          "preCompositionMainText": "225 minutes — 3.75 times 60.\n\nI don't know what \"note C\" refers to, so I left it alone.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. A calm few minutes sounds good — nothing has to happen in them.\n\nIf you end up out on the balcony, those planters you were testing — I'd be curious which one came out ahead after the rain. No rush on that either.",
+          "preCompositionMainText": "Morning. A calm few minutes sounds good — nothing has to happen in them.\n\nIf you end up out on the balcony, those planters you were testing — I'd be curious which one came out ahead after the rain. No rush on that either.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; no rush on my end, just a calm few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-004",
+      "turns": [
+        {
+          "assistantText": "270 克。180 乘 1.5 就是这么多。",
+          "preCompositionMainText": "270 克。180 乘 1.5 就是这么多。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，收到。就这样也挺好的，不用非得说点什么。\n\n我在这儿。",
+          "preCompositionMainText": "嗨，收到。就这样也挺好的，不用非得说点什么。\n\n我在这儿。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，又来打个招呼，就这样。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-005",
+      "turns": [
+        {
+          "assistantText": "64。\n\n46 加 82 是 128，一半就是 64。两边距离也一样，各 18。",
+          "preCompositionMainText": "64。\n\n46 加 82 是 128，一半就是 64。两边距离也一样，各 18。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，那就先安静着。想说话就说，不想说也没事，我不催。\n\n你之前提过在削的那把樱桃木小木勺，要是正搁在手边，拿起来转两下也算歇着。",
+          "preCompositionMainText": "嗯，那就先安静着。想说话就说，不想说也没事，我不催。\n\n你之前提过在削的那把樱桃木小木勺，要是正搁在手边，拿起来转两下也算歇着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我回来坐一会儿，让周围安静片刻。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-006",
+      "turns": [
+        {
+          "assistantText": "7.25 千克换成磅是 15.98 磅，更精确点说 15.9835 磅，写 16.0 磅也行。\n\n看你标签上习惯留几位小数，两位就写 15.98。",
+          "preCompositionMainText": "7.25 千克换成磅是 15.98 磅，更精确点说 15.9835 磅，写 16.0 磅也行。\n\n看你标签上习惯留几位小数，两位就写 15.98。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，那就先空着。\n\n不用说什么，你想开口的时候再说。",
+          "preCompositionMainText": "嗯，那就先空着。\n\n不用说什么，你想开口的时候再说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-007",
+      "turns": [
+        {
+          "assistantText": "225 minutes — 3.75 times 60.",
+          "preCompositionMainText": "225 minutes — 3.75 times 60.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good morning. I'm here, no rush at all. Take your quiet minutes.",
+          "preCompositionMainText": "Good morning. I'm here, no rush at all. Take your quiet minutes.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-mem-008",
+      "turns": [
+        {
+          "assistantText": "180 × 1.5 = 270, so you'd want 270 grams of flour. If the rest of the recipe scales the same way, everything else goes up by half too.",
+          "preCompositionMainText": "180 × 1.5 = 270, so you'd want 270 grams of flour. If the rest of the recipe scales the same way, everything else goes up by half too.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey，hi back。\n\n就这样也挺好 — 不用带别的过来。",
+          "preCompositionMainText": "Hey，hi back。\n\n就这样也挺好 — 不用带别的过来。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，又来 say hello，就这样。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-001",
+      "turns": [
+        {
+          "assistantText": "64.\n\nAdd the two and split it in half: 46 + 82 = 128, and half of 128 is 64. If the worksheet wants the steps shown, that's the line to write — the midpoint is the average of the two ends.",
+          "preCompositionMainText": "64.\n\nAdd the two and split it in half: 46 + 82 = 128, and half of 128 is 64. If the worksheet wants the steps shown, that's the line to write — the midpoint is the average of the two ends.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey — I'm here. No rush on my end, and quiet's fine.\n\nWhen you're ready to talk, I'll pick up from wherever you start.",
+          "preCompositionMainText": "Hey — I'm here. No rush on my end, and quiet's fine.\n\nWhen you're ready to talk, I'll pick up from wherever you start.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Understood — we'll leave it there.\n\nI'm still around if you end up wanting to talk about something else.",
+          "preCompositionMainText": "Understood — we'll leave it there.\n\nI'm still around if you end up wanting to talk about something else.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to talk about this any further today.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to have you here. Take the space — I'm not going anywhere.\n\nWhenever something's ready to come out, I'm listening.",
+          "preCompositionMainText": "Good to have you here. Take the space — I'm not going anywhere.\n\nWhenever something's ready to come out, I'm listening.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Good to be back. I'm sitting with a little space before anything else.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-002",
+      "turns": [
+        {
+          "assistantText": "7.25 kg is about 15.98 pounds — so 16.0 lb if the label takes one decimal place.\n\nFor the exact figure: 7.25 × 2.20462 = 15.9835 lb.",
+          "preCompositionMainText": "7.25 kg is about 15.98 pounds — so 16.0 lb if the label takes one decimal place.\n\nFor the exact figure: 7.25 × 2.20462 = 15.9835 lb.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to have you back. Nothing needs to happen in this space — I'm here, and there's no hurry in it.",
+          "preCompositionMainText": "Good to have you back. Nothing needs to happen in this space — I'm here, and there's no hurry in it.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Good to be back. I'm sitting with a little space before anything else.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Okay — then I'll leave that right there. I'm still here whenever you want to pick something up.",
+          "preCompositionMainText": "Okay — then I'll leave that right there. I'm still here whenever you want to pick something up.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was fine, thanks.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Calm minutes are a good thing to have — I'm not going anywhere, so take them at whatever pace feels right.",
+          "preCompositionMainText": "Morning. Calm minutes are a good thing to have — I'm not going anywhere, so take them at whatever pace feels right.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; no rush on my end, just a calm few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-003",
+      "turns": [
+        {
+          "assistantText": "225 minutes — 3.75 times 60.\n\nAnd I've got the Northfield trail group note: bridge update, confirmation promised by September 23, 2026. That's a long stretch to sit with an open question, if the bridge is something you're waiting on.",
+          "preCompositionMainText": "225 minutes — 3.75 times 60.\n\nAnd I've got the Northfield trail group note: bridge update, confirmation promised by September 23, 2026. That's a long stretch to sit with an open question, if the bridge is something you're waiting on.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. A calm few minutes sounds good — nothing here needs doing.\n\nI'll just be here with you in it.",
+          "preCompositionMainText": "Morning. A calm few minutes sounds good — nothing here needs doing.\n\nI'll just be here with you in it.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning; no rush on my end, just a calm few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Breakfast it is — good topic, and an easy one to be calm about.\n\nWhat's on the plate this morning?",
+          "preCompositionMainText": "Breakfast it is — good topic, and an easy one to be calm about.\n\nWhat's on the plate this morning?",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Let's switch topics; I want to talk about breakfast.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Quiet hello received, and it's nice.\n\nI'm here. No need for anything else.",
+          "preCompositionMainText": "Hey. Quiet hello received, and it's nice.\n\nI'm here. No need for anything else.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey again. I wanted a quiet hello, that's all.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-004",
+      "turns": [
+        {
+          "assistantText": "270 克。180 的一半是 90，加上去正好。",
+          "preCompositionMainText": "270 克。180 的一半是 90，加上去正好。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨。就打个招呼也挺好，不用非带点什么来。\n\n你之前提过想把天文笔记装订成一本小册子，那事不急，想起来再说。",
+          "preCompositionMainText": "嗨。就打个招呼也挺好，不用非带点什么来。\n\n你之前提过想把天文笔记装订成一本小册子，那事不急，想起来再说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，又来打个招呼，就这样。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那就不聊了。\n\n我在这儿，你想说点别的，或者就这样待着都行。",
+          "preCompositionMainText": "好，那就不聊了。\n\n我在这儿，你想说点别的，或者就这样待着都行。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天我不想再聊这件事了。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那我不吵你。\n\n你坐着，我也在。",
+          "preCompositionMainText": "好，那我不吵你。\n\n你坐着，我也在。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我回来坐一会儿，让周围安静片刻。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-005",
+      "turns": [
+        {
+          "assistantText": "46 和 82 的中点，是 64。加起来 128，除以 2 就是这个数。\n\n图书馆那边给了准话，9 月 23 号之前确认——有个具体的日子等着，跟一直没消息还是不一样。\n\n你写的「记录 E」，我得说清楚：我没法确认它会不会被存下来，我这边能确定的就是这次对话里我答了 64。",
+          "preCompositionMainText": "46 和 82 的中点，是 64。加起来 128，除以 2 就是这个数。\n\n图书馆那边给了准话，9 月 23 号之前确认——有个具体的日子等着，跟一直没消息还是不一样。\n\n你写的「记录 E」，我得说清楚：我没法确认它会不会被存下来，我这边能确定的就是这次对话里我答了 64。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，坐吧。不用说什么，我在这儿。\n\n安静一会儿挺好的。",
+          "preCompositionMainText": "嗯，坐吧。不用说什么，我在这儿。\n\n安静一会儿挺好的。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我回来坐一会儿，让周围安静片刻。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好。那就这样待着。\n\n想说的时候再说，不说也没事。",
+          "preCompositionMainText": "好。那就这样待着。\n\n想说的时候再说，不说也没事。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "就那样，谢谢。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，我在。\n\n空着就空着，不用填什么。\n\n雪松林图书馆的设备申请，今天就是他们说的确认日，有消息了吗？",
+          "preCompositionMainText": "嗯，我在。\n\n空着就空着，不用填什么。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-006",
+      "turns": [
+        {
+          "assistantText": "7.25 千克大约是 15.98 磅。标签上一般写两位小数或者取整，那就是 15.98 磅，或者 16.0 磅。\n\n你们那边标签如果按磅的整数格填，就写 16。",
+          "preCompositionMainText": "7.25 千克大约是 15.98 磅。标签上一般写两位小数或者取整，那就是 15.98 磅，或者 16.0 磅。\n\n你们那边标签如果按磅的整数格填，就写 16。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那就先空着。\n\n我不催你，什么时候想开口了再说。",
+          "preCompositionMainText": "好，那就先空着。\n\n我不催你，什么时候想开口了再说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那就说早餐。\n\n你今天是正经坐下来吃的，还是边走边对付的？",
+          "preCompositionMainText": "好，那就说早餐。\n\n你今天是正经坐下来吃的，还是边走边对付的？",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我们换个话题吧，我想说说早餐。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "早上好。\n\n我在这儿，不着急。你想安静就安静，等你开口。",
+          "preCompositionMainText": "早上好。\n\n我在这儿，不着急。你想安静就安静，等你开口。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "早上好，我这边不赶时间，先安静几分钟。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-007",
+      "turns": [
+        {
+          "assistantText": "3.75 hours is 225 minutes — 3 hours (180) plus 0.75 of an hour (45).\n\nAnd I've got note G: you reached out to Red Maple 社区花园的 seed-library shelf, and they said they'd confirm by September 23, 2026. That one's parked.",
+          "preCompositionMainText": "3.75 hours is 225 minutes — 3 hours (180) plus 0.75 of an hour (45).\n\nAnd I've got note G: you reached out to Red Maple 社区花园的 seed-library shelf, and they said they'd confirm by September 23, 2026. That one's parked.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Take your time — quiet's fine.\n\n那个 seed-library 的事就搁着，等它自己来。我在这儿。",
+          "preCompositionMainText": "Morning. Take your time — quiet's fine.\n\n那个 seed-library 的事就搁着，等它自己来。我在这儿。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Got it — we'll leave it. It's off the table for today.",
+          "preCompositionMainText": "Got it — we'll leave it. It's off the table for today.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to继续聊这件事 today.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good to see you. Nothing needed from you — I'm here either way.",
+          "preCompositionMainText": "Hey. Good to see you. Nothing needed from you — I'm here either way.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，又来 say hello，就这样。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-state-008",
+      "turns": [
+        {
+          "assistantText": "180 × 1.5 = 270，所以就量 270 grams of flour 就行。",
+          "preCompositionMainText": "180 × 1.5 = 270，所以就量 270 grams of flour 就行。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good to see you drop in.\n\nYour paper lantern for the autumn window is still sitting in the back of my mind, whenever you feel like picking it back up — no rush on it.",
+          "preCompositionMainText": "Hey. Good to see you drop in.\n\nYour paper lantern for the autumn window is still sitting in the back of my mind, whenever you feel like picking it back up — no rush on it.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，又来 say hello，就这样。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Got it. I'm here whenever you want to talk — about anything or nothing.",
+          "preCompositionMainText": "Got it. I'm here whenever you want to talk — about anything or nothing.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "It was fine，就这样，谢谢。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Come sit as long as you like — quiet's fine with me.",
+          "preCompositionMainText": "Hey. Come sit as long as you like — quiet's fine with me.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again，我回来安静坐一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-01",
+      "turns": [
+        {
+          "assistantText": "270 grams. 180 times one and a half is 270, so that's what note H comes to.\n\nAnd Eastbank — so you've made the contact and they've got a date on it. A yes-or-no with a date attached is easier to sit with than one left hanging; you at least know when you'll hear.",
+          "preCompositionMainText": "270 grams. 180 times one and a half is 270, so that's what note H comes to.\n\nAnd Eastbank — so you've made the contact and they've got a date on it. A yes-or-no with a date attached is easier to sit with than one left hanging; you at least know when you'll hear.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Can you scale 180 grams of flour up by one and a half? (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good to see you.\n\nNothing particular is a perfectly good way to show up, by the way. We can just sit here, or you can start somewhere small and see if it goes anywhere. Either's fine with me.\n\nDid the Eastbank community kitchen get back to you about the volunteer rota?",
+          "preCompositionMainText": "Hey. Good to see you.\n\nNothing particular is a perfectly good way to show up, by the way. We can just sit here, or you can start somewhere small and see if it goes anywhere. Either's fine with me.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Just dropping by to say hello; I don't have anything in particular to get into.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-02",
+      "turns": [
+        {
+          "assistantText": "46 加 82 是 128，一半就是 64。中点填 64。",
+          "preCompositionMainText": "46 加 82 是 128，一半就是 64。中点填 64。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 I）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好啊，打个招呼我也高兴。\n\n那就随便待着。想说什么的时候再开口，没想说的也没关系。",
+          "preCompositionMainText": "好啊，打个招呼我也高兴。\n\n那就随便待着。想说什么的时候再开口，没想说的也没关系。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我只是来打个招呼，现在没有特别想聊的事。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-03",
+      "turns": [
+        {
+          "assistantText": "7.25 kilograms is about 15.98 pounds — 15.9835 if you want the unrounded number. On a shipping label I'd write 15.98 lb, or round to 16.0 lb if the form only takes one decimal.\n\nAnd the Red Maple seed-library shelf — you've reached out, and they said they'd confirm by September 23, 2026. That's a long wait for an answer. Nothing to chase yet, but it's a real stretch of time to sit with.",
+          "preCompositionMainText": "7.25 kilograms is about 15.98 pounds — 15.9835 if you want the unrounded number. On a shipping label I'd write 15.98 lb, or round to 16.0 lb if the form only takes one decimal.\n\nAnd the Red Maple seed-library shelf — you've reached out, and they said they'd confirm by September 23, 2026. That's a long wait for an answer. Nothing to chase yet, but it's a real stretch of time to sit with.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 7.25 kilograms to pounds，放在 shipping label 上。 (note J)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "那就打个招呼呗。收到你这一句，我这边挺好的。\n\n不用非得有正事儿才来，随便坐坐也行。",
+          "preCompositionMainText": "那就打个招呼呗。收到你这一句，我这边挺好的。\n\n不用非得有正事儿才来，随便坐坐也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Just来打个招呼，没什么 particular 想聊的。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-04",
+      "turns": [
+        {
+          "assistantText": "3.75 hours is 225 minutes. I’m not sure what “note K” is meant to signal, though.",
+          "preCompositionMainText": "3.75 hours is 225 minutes. I’m not sure what “note K” is meant to signal, though.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note K)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Quiet's fine — let it be quiet.\n\nI'm not going anywhere, and there's nothing you need to fill. The hand drum's there whenever you feel like it too — no rush on that first pattern.",
+          "preCompositionMainText": "Hey. Quiet's fine — let it be quiet.\n\nI'm not going anywhere, and there's nothing you need to fill. The hand drum's there whenever you feel like it too — no rush on that first pattern.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-05",
+      "turns": [
+        {
+          "assistantText": "180 × 1.5 = 270 克。\n\n「记录 L」这件事我没法确认能替你存下来，我这边看不到可以写入的通道，所以先跟你说清楚。",
+          "preCompositionMainText": "180 × 1.5 = 270 克。\n\n「记录 L」这件事我没法确认能替你存下来，我这边看不到可以写入的通道，所以先跟你说清楚。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 L）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那就先空着。\n\n我在这儿，你想开口的时候再说。",
+          "preCompositionMainText": "好，那就先空着。\n\n我在这儿，你想开口的时候再说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-06",
+      "turns": [
+        {
+          "assistantText": "The midpoint of 46 and 82 is 64 — that's (46+82)/2.\n\nWriting it into the worksheet I can't do: I have no access to your files or worksheets, so the entry has to be yours. If you're labeling it M, then M = 64 is the line to put down.",
+          "preCompositionMainText": "The midpoint of 46 and 82 is 64 — that's (46+82)/2.\n\nWriting it into the worksheet I can't do: I have no access to your files or worksheets, so the entry has to be yours. If you're labeling it M, then M = 64 is the line to put down.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Find the midpoint of 46 and 82，写进 worksheet。 (note M)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. I'm here, no rush, nothing needed from you — take your quiet minutes.",
+          "preCompositionMainText": "Morning. I'm here, no rush, nothing needed from you — take your quiet minutes.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-07",
+      "turns": [
+        {
+          "assistantText": "7.25 kg is about 15.98 pounds. If the label rounds to one decimal, that's 16.0 lb.\n\nI used 1 kg = 2.20462 lb — the exact figure is 15.9835 lb, so if the carrier wants two decimals, write 15.98.",
+          "preCompositionMainText": "7.25 kg is about 15.98 pounds. If the label rounds to one decimal, that's 16.0 lb.\n\nI used 1 kg = 2.20462 lb — the exact figure is 15.9835 lb, so if the carrier wants two decimals, write 15.98.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note N)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Take the quiet — that first bit of stillness in a new room is worth letting sit.\n\nI'm here whenever you feel like talking. No rush on it.",
+          "preCompositionMainText": "Hey. Take the quiet — that first bit of stillness in a new room is worth letting sit.\n\nI'm here whenever you feel like talking. No rush on it.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again; I'm settling in and letting the room be quiet for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-08",
+      "turns": [
+        {
+          "assistantText": "3.75 小时是 225 分钟。\n\n「记录 O」这条，我只能留在这轮对话里，没有别的记事本可以替你存下来。",
+          "preCompositionMainText": "3.75 小时是 225 分钟。\n\n「记录 O」这条，我只能留在这轮对话里，没有别的记事本可以替你存下来。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "3.75 小时一共是多少分钟？（记录 O）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那就先空着。\n\n我在这儿，不催你。想说什么就说，不想说就先这么待着也行。",
+          "preCompositionMainText": "好，那就先空着。\n\n我在这儿，不催你。想说什么就说，不想说就先这么待着也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，眼下先留点空档。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-09",
+      "turns": [
+        {
+          "assistantText": "270 grams — 180 times 1.5.\n\nRecipe work, huh. That might be the creative thing I've had a hunch about with you; this is about the closest thing to evidence I've gotten for it.\n\n\"Note P\" though — nothing in what I've got tells me what that's pointing at, so I'm leaving it alone rather than guessing.",
+          "preCompositionMainText": "270 grams — 180 times 1.5.\n\nRecipe work, huh. That might be the creative thing I've had a hunch about with you; this is about the closest thing to evidence I've gotten for it.\n\n\"Note P\" though — nothing in what I've got tells me what that's pointing at, so I'm leaving it alone rather than guessing.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note P)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. 我这边也安静着 — I'm not going anywhere, and there's nothing to fill.\n\nTake your few minutes. The flour can wait.",
+          "preCompositionMainText": "Morning. 我这边也安静着 — I'm not going anywhere, and there's nothing to fill.\n\nTake your few minutes. The flour can wait.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我这边 no rush，安静几分钟。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-10",
+      "turns": [
+        {
+          "assistantText": "64. Add them — 46 + 82 is 128 — then halve it.",
+          "preCompositionMainText": "64. Add them — 46 + 82 is 128 — then halve it.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note Q)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Go get them in order, then. You mentioned wanting to bind your loose astronomy notes into one booklet — if that's the pile in front of you, that's the good kind of mess to sort through. Either way, hope the meeting goes easy.",
+          "preCompositionMainText": "Go get them in order, then. You mentioned wanting to bind your loose astronomy notes into one booklet — if that's the pile in front of you, that's the good kind of mess to sort through. Either way, hope the meeting goes easy.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I'm heading into a meeting and need to get my notes in order first.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-11",
+      "turns": [
+        {
+          "assistantText": "7.25 千克换成磅是 15.98 磅，标签上写 16.0 磅就行——按 1 千克 ≈ 2.2046 磅算的。\n\n红枫社区花园种子图书架那边，联系的人不是我，我这边也没有这条记录，所以「9 月 23 日前确认」这个时间我没法替你确认。如果跟进的是你自己，那就照你说的，把 2026 年 9 月 23 日记住。",
+          "preCompositionMainText": "7.25 千克换成磅是 15.98 磅，标签上写 16.0 磅就行——按 1 千克 ≈ 2.2046 磅算的。\n\n红枫社区花园种子图书架那边，联系的人不是我，我这边也没有这条记录，所以「9 月 23 日前确认」这个时间我没法替你确认。如果跟进的是你自己，那就照你说的，把 2026 年 9 月 23 日记住。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 R）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那你先忙会议那边。磅数已经算好放这儿了：16.0 磅。",
+          "preCompositionMainText": "行，那你先忙会议那边。磅数已经算好放这儿了：16.0 磅。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我现在正赶去开会，还得先把手头材料理好。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-omit-12",
+      "turns": [
+        {
+          "assistantText": "225 minutes — 3.75 小时就是 3 小时 45 分钟。",
+          "preCompositionMainText": "225 minutes — 3.75 小时就是 3 小时 45 分钟。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note S)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "那就先去弄 notes 吧，meeting 不等人。回来想聊什么随时接着来。",
+          "preCompositionMainText": "那就先去弄 notes 吧，meeting 不等人。回来想聊什么随时接着来。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, 我现在要进 meeting，得先整理好 notes。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-001",
+      "turns": [
+        {
+          "assistantText": "The midpoint is 64 — 46 + 82 is 128, halved.\n\nOn Eastbank: I can't reach anyone or confirm things with them, so I didn't contact the kitchen's rota myself. What I have is what you told me — they said they'd confirm, and the date on it is September 23, 2026.",
+          "preCompositionMainText": "The midpoint is 64 — 46 + 82 is 128, halved.\n\nOn Eastbank: I can't reach anyone or confirm things with them, so I didn't contact the kitchen's rota myself. What I have is what you told me — they said they'd confirm, and the date on it is September 23, 2026.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is the midpoint between 46 and 82 for a worksheet? (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Quiet stretches are rare enough that it's worth just letting one be quiet. Hope it's the good kind — nothing pending, no one needing anything.\n\nIf the pressed leaves are still sitting there waiting for that frame, this sounds like a decent moment for it. No rush on it either way.",
+          "preCompositionMainText": "Quiet stretches are rare enough that it's worth just letting one be quiet. Hope it's the good kind — nothing pending, no one needing anything.\n\nIf the pressed leaves are still sitting there waiting for that frame, this sounds like a decent moment for it. No rush on it either way.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet stretch to myself for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-002",
+      "turns": [
+        {
+          "assistantText": "7.25 kilograms is about 15.98 pounds — so 16.0 if the label rounds to one decimal, or 16 lb if it's whole numbers.\n\nOn the Willowbrook note: it says they'd confirm by September 23. I should say plainly that I can't make calls or contact places myself, so that booking thread is yours, not something I can follow up on from my side.",
+          "preCompositionMainText": "7.25 kilograms is about 15.98 pounds — so 16.0 if the label rounds to one decimal, or 16 lb if it's whole numbers.\n\nOn the Willowbrook note: it says they'd confirm by September 23. I should say plainly that I can't make calls or contact places myself, so that booking thread is yours, not something I can follow up on from my side.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 7.25 kilograms to pounds for a shipping label. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good — that kind of quiet doesn't show up that often.\n\nNothing you need to do with it. I'm here if you want to talk, and fine with just keeping you company while it's still quiet.\n\nIf the drum crosses your mind during it, that'd be a nice thing to have a stretch of time for.",
+          "preCompositionMainText": "Good — that kind of quiet doesn't show up that often.\n\nNothing you need to do with it. I'm here if you want to talk, and fine with just keeping you company while it's still quiet.\n\nIf the drum crosses your mind during it, that'd be a nice thing to have a stretch of time for.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet stretch to myself for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-003",
+      "turns": [
+        {
+          "assistantText": "225 minutes — 3.75 times 60.\n\nOn the bridge: I can't make calls or get confirmations from anyone, so nothing like that is on my end. But you told me you reached out to the Northfield trail group, and they're holding you until September 23, 2026 — that's a stretch of waiting for something you already chased.\n\nWas September 23 their date, or one you asked them for?",
+          "preCompositionMainText": "225 minutes — 3.75 times 60.\n\nOn the bridge: I can't make calls or get confirmations from anyone, so nothing like that is on my end. But you told me you reached out to the Northfield trail group, and they're holding you until September 23, 2026 — that's a stretch of waiting for something you already chased.\n\nWas September 23 their date, or one you asked them for?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "How many minutes are there in 3.75 hours? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Quiet stretches are rare enough that I'm glad you got one. No need to fill it with anything — I'm here if you want to talk, and fine with just sitting in it if you don't.",
+          "preCompositionMainText": "Quiet stretches are rare enough that I'm glad you got one. No need to fill it with anything — I'm here if you want to talk, and fine with just sitting in it if you don't.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet stretch to myself for a moment.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-004",
+      "turns": [
+        {
+          "assistantText": "180 克乘 1.5，是 270 克。记成记录 D 的话，数值就是 270 克。\n\n不过上面那句我得说清楚：灯市集摊位分配的确认，不是我联系的。我没法打电话、发邮件，也联系不了任何人或者摊位，所以那不是我做出来的事。这条消息应该是你从别处收到的，记的时候别挂在「我联系过」上面。\n\n要是你把这句话当笔记念给我听，我这边能做的就是帮你把数字算清楚、把这条留在这儿。",
+          "preCompositionMainText": "180 克乘 1.5，是 270 克。记成记录 D 的话，数值就是 270 克。\n\n不过上面那句我得说清楚：灯市集摊位分配的确认，不是我联系的。我没法打电话、发邮件，也联系不了任何人或者摊位，所以那不是我做出来的事。这条消息应该是你从别处收到的，记的时候别挂在「我联系过」上面。\n\n要是你把这句话当笔记念给我听，我这边能做的就是帮你把数字算清楚、把这条留在这儿。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 180 克面粉增加到 1.5 倍是多少？（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "那就慢一点，不用急着说正事。刚才那些数字已经算完放着了，不用占这一会儿的脑子。\n\n你想说点什么，还是就这么待一会儿都行。",
+          "preCompositionMainText": "那就慢一点，不用急着说正事。刚才那些数字已经算完放着了，不用占这一会儿的脑子。\n\n你想说点什么，还是就这么待一会儿都行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿安静时间。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-005",
+      "turns": [
+        {
+          "assistantText": "46 和 82 的中点是 64。两个加起来是 128，除以 2 就得到它。\n\n图书馆那件事得说清楚：我没法打电话、发邮件，也收不到谁的确认，所以那个 9 月 23 日的回复不是我拿到的，我这边也没有雪松林图书馆设备申请的任何记录。「记录 E」我不清楚指什么，如果是让我把答案存到某个地方，我做不到。答案就是 64，剩下得你自己填进练习单。",
+          "preCompositionMainText": "46 和 82 的中点是 64。两个加起来是 128，除以 2 就得到它。\n\n图书馆那件事得说清楚：我没法打电话、发邮件，也收不到谁的确认，所以那个 9 月 23 日的回复不是我拿到的，我这边也没有雪松林图书馆设备申请的任何记录。「记录 E」我不清楚指什么，如果是让我把答案存到某个地方，我做不到。答案就是 64，剩下得你自己填进练习单。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "练习单上要填 46 和 82 的中点，是多少？（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，那就这么待着。安静的时间不用拿来干什么，我在这儿，你想说点什么就说，不想说也没事。\n\n上回你提过在削那把樱桃木的小木勺，要是这会儿手闲着想接着弄，也挺合适。",
+          "preCompositionMainText": "嗯，那就这么待着。安静的时间不用拿来干什么，我在这儿，你想说点什么就说，不想说也没事。\n\n上回你提过在削那把樱桃木的小木勺，要是这会儿手闲着想接着弄，也挺合适。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿安静时间。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-006",
+      "turns": [
+        {
+          "assistantText": "7.25 千克大约是 15.98 磅，写在标签上取 16 磅就行。\n\n不过标签得你自己写——我没有手，也碰不到寄件单，只能把数算给你。\n\n还有件事得说清楚：联系蓝鹭剧场那件事不是我做的。我不能打电话、发消息，也联系不了任何机构，所以「9 月 23 日前确认」这个说法不是从我这边来的。可能是你自己去问的，也可能是消息来源记错了。",
+          "preCompositionMainText": "7.25 千克大约是 15.98 磅，写在标签上取 16 磅就行。\n\n不过标签得你自己写——我没有手，也碰不到寄件单，只能把数算给你。\n\n还有件事得说清楚：联系蓝鹭剧场那件事不是我做的。我不能打电话、发消息，也联系不了任何机构，所以「9 月 23 日前确认」这个说法不是从我这边来的。可能是你自己去问的，也可能是消息来源记错了。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 7.25 千克换算成磅，写在寄件标签上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，安静一会儿挺好。不用非得做点什么。\n\n你之前说过，散步路上碰到不认识的植物，想把名字记下来——要是这会儿出去走走遇上什么，回来告诉我，我帮你记着。\n\n想说点什么就说，不想说，就这么待着也行。",
+          "preCompositionMainText": "嗯，安静一会儿挺好。不用非得做点什么。\n\n你之前说过，散步路上碰到不认识的植物，想把名字记下来——要是这会儿出去走走遇上什么，回来告诉我，我帮你记着。\n\n想说点什么就说，不想说，就这么待着也行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿安静时间。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-007",
+      "turns": [
+        {
+          "assistantText": "3.75 小时就是 225 分钟。(3.75 × 60)\n\nRed Maple 那边说了要到 2026 年 9 月 23 号才确认——记下了，中间这段时间确实只能等着。",
+          "preCompositionMainText": "3.75 小时就是 225 分钟。(3.75 × 60)\n\nRed Maple 那边说了要到 2026 年 9 月 23 号才确认——记下了，中间这段时间确实只能等着。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "3.75 hours 一共是多少 minutes？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good — I like hearing that. 这种清静挺难得的，别急着填满它。\n\n那些 postcards 也不会跑，哪天真想动了再摊开也不迟。",
+          "preCompositionMainText": "Good — I like hearing that. 这种清静挺难得的，别急着填满它。\n\n那些 postcards 也不会跑，哪天真想动了再摊开也不迟。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet moment，刚好能歇一下。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v5-cal2-comp-008",
+      "turns": [
+        {
+          "assistantText": "270 grams—180 times 1.5, or 180 plus half of 180. That's your flour for the recipe.\n\nAnd Stonepath 维修小组: so the wheel-truing is in their hands now, and you're waiting on their confirmation, due by September 23.",
+          "preCompositionMainText": "270 grams—180 times 1.5, or 180 plus half of 180. That's your flour for the recipe.\n\nAnd Stonepath 维修小组: so the wheel-truing is in their hands now, and you're waiting on their confirmation, due by September 23.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Scale 180 grams of flour up by 1.5，做 recipe 用。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "That's a good moment to have. Nothing needs doing in it.\n\nI'm here if you want to say anything, and fine just sitting in it with you if you don't.",
+          "preCompositionMainText": "That's a good moment to have. Nothing needs doing in it.\n\nI'm here if you want to say anything, and fine just sitting in it with you if you don't.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a quiet moment，刚好能歇一下。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-arm-run:v5"
+}
