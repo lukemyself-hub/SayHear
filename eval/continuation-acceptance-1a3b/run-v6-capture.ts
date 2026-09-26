@@ -351,11 +351,11 @@ function snapshotFor(
   if (
     typeof temperature !== "number" ||
     typeof maxOutputTokens !== "number" ||
-    reasoningEffort !== "none" ||
+    (reasoningEffort !== "none" && !(role === "proactive.followup" && reasoningEffort === "low")) ||
     responseFormat !== "json_object"
   ) {
     throw new Error(
-      `Pins parameters for ${role} must carry temperature, maxOutputTokens, reasoningEffort=none, and responseFormat=json_object.`,
+      `Pins parameters for ${role} must carry temperature, maxOutputTokens, an allowed reasoningEffort, and responseFormat=json_object.`,
     );
   }
   const policy = ONE_A_3B_ROLE_POLICIES[role];
