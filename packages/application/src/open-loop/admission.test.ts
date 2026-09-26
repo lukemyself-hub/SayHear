@@ -288,6 +288,59 @@ describe("time windows, horizon and DST", () => {
     expect(plan).toMatchObject({ action: "skip", reasonCode: "no_real_anchor" });
   });
 
+  it("keeps a Shanghai bounded third-party outcome closed until its supported start", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "2026 年 11 月 4 日上午十点到十二点",
+        expectedWindow: {
+          startAt: "2026-11-04T02:00:00.000Z",
+          endAt: "2026-11-04T04:00:00.000Z",
+          precision: "range",
+          timezone: "Asia/Shanghai",
+        },
+      }),
+      sourceUserText: "李雯说电台会在 2026 年 11 月 4 日上午十点到十二点回复她，我还不知道结果。",
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "Asia/Shanghai",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.precision).toBe("range");
+      expect(plan.followupEligibleFromAt).toBe("2026-11-04T02:00:00.000Z");
+      expect(isOpenLoopEligibleForFollowup({
+        followupEligibleFromAt: plan.followupEligibleFromAt,
+        expiresAt: plan.expiresAt,
+        now: new Date("2026-11-04T01:59:59.999Z"),
+      })).toBe(false);
+    }
+  });
+
+  it("preserves the 25-hour Los Angeles fall-back date window", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "November 1, 2026",
+        expectedWindow: {
+          startAt: "2026-11-01T07:00:00.000Z",
+          endAt: "2026-11-02T08:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      sourceUserText: "I asked for the print; the answer should arrive on November 1, 2026.",
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.expectedEndAt).toBe("2026-11-02T08:00:00.000Z");
+      expect(plan.followupEligibleFromAt).toBe("2026-11-01T07:00:00.000Z");
+    }
+  });
+
   it("keeps a date-only window on the Los Angeles spring-forward day at local midnight", () => {
     const plan = planOpenLoopFormation({
       proposal: baseProposal({

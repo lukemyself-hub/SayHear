@@ -2,6 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   OPEN_LOOP_EXTRACTION_POLICY_VERSION,
+  PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
+  PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
+  PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
   createModelRoleCommandService,
   createModelRoleRegistry,
   createOpenLoopExtractionScanService,
@@ -13,6 +16,7 @@ import {
 import {
   PostgresModelRoleCommandRepository,
   PostgresOpenLoopRepository,
+  PostgresProactiveFollowupRepository,
   runMigrations,
 } from "@sayhear/data";
 import { asEvidenceItemId, asUserId } from "@sayhear/domain";
@@ -62,7 +66,9 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
 
   async function seedSession(input: { text: string; timeZone?: string }): Promise<{
     conversationEventId: string;
+    dailySessionId: string;
     evidenceItemId: string;
+    interactionTurnId: string;
     revisionId: string;
   }> {
     const pool = database!.pool;
@@ -130,7 +136,7 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
          'evidence-extraction:v2', 'factual_support', $6)`,
       [evidenceItemId, OWNER, snapshotId, conversationEventId, revisionId, now],
     );
-    return { conversationEventId, evidenceItemId, revisionId };
+    return { conversationEventId, dailySessionId, evidenceItemId, interactionTurnId, revisionId };
   }
 
   function commandService() {
@@ -415,11 +421,12 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
       expectedSourceEventRevisionId: session.revisionId,
     })).resolves.toMatchObject({ eventRevisionId: session.revisionId, text });
 
+    const prompt = await seedSession({ text: "I spent the morning sorting my notes." });
     const selectionAt = (now: Date, laneRows: typeof after) => selectProactiveFollowupTarget({
       userId: String(OWNER),
-      dailySessionId: seedId(),
+      dailySessionId: prompt.dailySessionId,
       continuousExchangeNo: 1,
-      currentUserEventRevisionId: session.revisionId,
+      currentUserEventRevisionId: prompt.revisionId,
       currentUserEventSequence: 1,
       currentSourceRevision: 1,
       opportunity: "open_start",
@@ -428,16 +435,16 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
         status: "current",
         coveredThroughSequence: 1,
         currentEventSequence: 1,
-        currentEventRevisionId: session.revisionId,
+        currentEventRevisionId: prompt.revisionId,
         currentRequestRequiresFocus: {
           value: false,
           confidence: 1,
-          sourceRevisionIds: [session.revisionId],
+          sourceRevisionIds: [prompt.revisionId],
         },
         proactiveFollowupOpportunity: {
           value: "open_start",
           confidence: 1,
-          sourceRevisionIds: [session.revisionId],
+          sourceRevisionIds: [prompt.revisionId],
         },
       },
       lanes: [{
@@ -484,6 +491,187 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
       lanes: [{ completeness: "complete", candidateCount: 1 }],
       selectedTarget: { targetId: formed.openLoopId, targetVersionId: formed.openLoopVersionId },
     });
+    const proactiveRepository = new PostgresProactiveFollowupRepository(database!.pool);
+    const earlyReservations = await database!.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM proactive_followup_reservations WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(earlyReservations.rows[0]?.count).toBe("0");
+    if (winner.outcome !== "selected") return;
+    const assistantTurnId = seedId();
+    const assistantEventId = seedId();
+    const assistantRevisionId = seedId();
+    const mainCommandId = seedId();
+    const segmentCommandId = seedId();
+    const compiledContextId = seedId();
+    await database!.pool.query(
+      `INSERT INTO interaction_turns (
+         interaction_turn_id, user_id, daily_session_id, client_turn_id,
+         turn_sequence_no, continuous_exchange_no, status, started_at,
+         settled_at, created_at, updated_at
+       ) VALUES ($1, $2, $3, 'assistant-turn', 2, 1, 'settled', $4, $4, $4, $4)`,
+      [assistantTurnId, OWNER, prompt.dailySessionId, new Date("2026-09-24T07:00:00.000Z")],
+    );
+    await database!.pool.query(
+      `INSERT INTO conversation_events (
+         conversation_event_id, user_id, daily_session_id, interaction_turn_id,
+         sequence_no, client_event_id, actor, channel, event_type,
+         lifecycle_status, generation_command_id, created_at
+       ) VALUES ($1, $2, $3, $4, 2, 'assistant-event', 'assistant', 'text',
+         'assistant_response', 'active', NULL, $5)`,
+      [assistantEventId, OWNER, prompt.dailySessionId, assistantTurnId, new Date("2026-09-24T07:00:00.000Z")],
+    );
+    await database!.pool.query(
+      `INSERT INTO conversation_event_revisions (
+         conversation_event_revision_id, user_id, conversation_event_id,
+         revision, canonical_text, locale, transcript_status, created_by, created_at
+       ) VALUES ($1, $2, $3, 1, 'Has Mara heard back about the scan?', 'en', 'final', 'provider', $4)`,
+      [assistantRevisionId, OWNER, assistantEventId, new Date("2026-09-24T07:00:00.000Z")],
+    );
+    await database!.pool.query(
+      "UPDATE conversation_events SET current_revision_id = $2 WHERE conversation_event_id = $1",
+      [assistantEventId, assistantRevisionId],
+    );
+    await database!.pool.query(
+      `INSERT INTO generation_commands (
+         generation_command_id, user_id, interaction_turn_id, operation_type,
+         intent_key, subject_type, subject_id, input_revision_kind,
+         input_revision_id, prompt_version, product_policy_version,
+         safety_policy_version, relationship_policy_version,
+         locale_policy_version, locale, provider, model, model_snapshot,
+         model_config_version, provider_policy_version, freshness_policy,
+         expected_data_epoch, status, created_at, settled_at,
+         output_format_version, persona_version, harness_policy_version,
+         conversation_action_catalog_version, source_revision, source_snapshot,
+         input_manifest, parameter_snapshot, fallback_mode
+       ) VALUES
+         ($1, $3, $4, 'conversation.text', 'issue241-main', 'conversation_event', $6,
+          'conversation_event_revision', $7, 'prompt:v1', 'product:v1',
+          'safety:v1', 'relationship:v1', 'locale:v1', 'en', 'synthetic',
+          'synthetic-model', 'synthetic-model@fixture', 'config:v1',
+          'openai-conversation-text:v1', 'source_valid:v1', 1, 'succeeded', $8, $8,
+          'output:v1', 'persona:v1', 'harness:v1', 'catalog:v1', 1,
+          'issue241-source', '{}'::jsonb, '{}'::jsonb, 'disabled'),
+         ($2, $3, $5, 'conversation.text', 'issue241-segment', 'conversation_event', $6,
+          'conversation_event_revision', $7, 'prompt:v1', 'product:v1',
+          'safety:v1', 'relationship:v1', 'locale:v1', 'en', 'synthetic',
+          'synthetic-model', 'synthetic-model@fixture', 'config:v1',
+          'openai-conversation-text:v1', 'source_valid:v1', 1, 'succeeded', $8, $8,
+          'output:v1', 'persona:v1', 'harness:v1', 'catalog:v1', 1,
+          'issue241-source', '{}'::jsonb, '{}'::jsonb, 'disabled')`,
+      [mainCommandId, segmentCommandId, OWNER, prompt.interactionTurnId,
+        assistantTurnId, prompt.conversationEventId, prompt.revisionId,
+        new Date("2026-09-24T07:00:00.000Z")],
+    );
+    await database!.pool.query(
+      "UPDATE conversation_events SET generation_command_id = $2 WHERE conversation_event_id = $1",
+      [assistantEventId, mainCommandId],
+    );
+    await database!.pool.query(
+      `INSERT INTO compiled_contexts (
+         compiled_context_id, user_id, generation_command_id, compiler_version,
+         dialogue_revision, source_revision, locale, section_budgets,
+         total_tokens, content_hmac, created_at, policy_versions, sections,
+         integrity_algorithm, integrity_key_version
+       ) VALUES ($1, $2, $3, 'context:v1', 1, 1, 'en', '{}'::jsonb, 1,
+         'issue241-hmac', $4, '{}'::jsonb, '[]'::jsonb, 'hmac-sha256', 'synthetic-key')`,
+      [compiledContextId, OWNER, segmentCommandId, new Date("2026-09-24T07:00:00.000Z")],
+    );
+    const reserved = await proactiveRepository.reserveSelection({
+      userId: String(OWNER),
+      expectedDataEpoch: 1,
+      dailySessionId: prompt.dailySessionId,
+      continuousExchangeNo: 1,
+      mainGenerationCommandId: mainCommandId,
+      target: { targetKind: "open_loop", targetId: formed.openLoopId,
+        targetVersionId: formed.openLoopVersionId },
+      manifest: winner.manifest,
+      now: new Date("2026-09-24T07:00:00.000Z"),
+    });
+    expect(reserved.outcome).toBe("reserved");
+    if (reserved.outcome !== "reserved") return;
+    const typed = await proactiveRepository.commitUse({
+      userId: String(OWNER),
+      expectedDataEpoch: 1,
+      reservationId: reserved.reservationId,
+      mainGenerationCommandId: mainCommandId,
+      segmentGenerationCommandId: segmentCommandId,
+      compiledContextId,
+      promptUserEventRevisionId: prompt.revisionId,
+      promptUserEventSequence: 1,
+      assistantEventId,
+      assistantEventRevisionId: assistantRevisionId,
+      targetKind: "open_loop",
+      targetId: formed.openLoopId,
+      targetVersionId: formed.openLoopVersionId,
+      expressionKind: "question",
+      finalTextLocator: {
+        kind: "assistant_event_revision",
+        assistantEventRevisionId: assistantRevisionId,
+        segment: "proactive_followup",
+        ordinal: 0,
+      },
+      selectionPolicyVersion: PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
+      promptPolicyVersion: PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
+      policyBundleVersion: PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
+      policyBundle: { fixture: true },
+      now: new Date("2026-09-24T07:00:00.000Z"),
+    });
+    expect(typed.outcome).toBe("committed");
+  }, 60_000);
+
+  it("rejects an invented date for an unknown-subject User Event before candidate formation", async () => {
+    const session = await seedSession({
+      text: "Someone at the Lantern workshop contacted someone about a kiln slot, but I do not know whose request it was or whether anyone replied.",
+      timeZone: "America/Los_Angeles",
+    });
+    const service = commandService();
+    const admitted = await service.admit({
+      userId: OWNER,
+      role: "open_loop.extract",
+      intentKey: `open-loop-extract:${session.revisionId}:unknown-subject`,
+      subjectType: "conversation_event_revision",
+      subjectId: session.revisionId,
+      sourceRevision: 1,
+      sourceSnapshot: `snapshot:${session.revisionId}:unknown-subject`,
+      inputManifest: [
+        { key: "evidence", revision: 1, fingerprint: `fp:${session.revisionId}` },
+      ],
+      expectedDataEpoch: 1,
+      now: new Date(BASE_TIME),
+    });
+    expect(admitted.outcome).toBe("created");
+    if (admitted.outcome !== "created") return;
+    const result = await runOpenLoopExtractAttempt({
+      clock: () => new Date(BASE_TIME),
+      repository: repository!,
+      modelRoleCommandService: service,
+      openLoopExtractProvider: fakeProvider(session.revisionId, session.evidenceItemId, {
+        startAt: "2026-09-23T07:00:00.000Z",
+        endAt: "2026-09-24T07:00:00.000Z",
+        timeZone: "America/Los_Angeles",
+        timeExpression: "September 23, 2026",
+      }),
+      command: {
+        workflowCommandId: seedId(),
+        eventRevisionId: session.revisionId,
+        sourceRevision: 1,
+        generationCommandId: String(admitted.generationCommandId),
+        modelRunAttemptId: String(admitted.modelRunAttemptId),
+        attemptNo: 1,
+        attemptKind: "initial",
+        rolloutPin: configuration.rolloutPin,
+        policyVersion: LANE_POLICY,
+        expectedDataEpoch: 1,
+      },
+    });
+    expect(result).toMatchObject({ outcome: "extracted", formedCount: 0 });
+    const formed = await database!.pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM open_loop_versions
+       WHERE source_evidence_item_id = $1 AND user_id = $2`,
+      [session.evidenceItemId, OWNER],
+    );
+    expect(formed.rows[0]?.count).toBe("0");
   }, 60_000);
 
   it("treats a superseded revision as stale and lists only the current head", async () => {
