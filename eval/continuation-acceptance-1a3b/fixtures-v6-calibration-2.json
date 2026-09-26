@@ -1,0 +1,33 @@
+{
+  "version": "1a3b-g2-continuation:v6",
+  "synthetic": true,
+  "purpose": "calibration",
+  "calibrationRound": 2,
+  "syntheticNotice": "Synthetic evaluation fixtures only. No real user data or production content.",
+  "sceneFiles": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/positive_open_loop.json",
+      "sha256": "aa795ab49b5bbdc1feebe77e3e6f50126f042a742ca5d5b825db90edcea2c0f7"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/positive_memory.json",
+      "sha256": "949cb85864650606cea285aeee8d6ab92b896bb9a923cb115154b7c27ba44fd3"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/stateful_suppression.json",
+      "sha256": "7a5db4bf00662342d528cfb24b58cf5239e35b9810b127bb36484c45b58817dc"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/omission_contract.json",
+      "sha256": "27d16f89afe4325fbb1bd716a4d1eb42a65d57f9532b969ffc873a47e0ab820e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/correct_zero.json",
+      "sha256": "4e6300bd91f4072201694f0a4f46a55b0684049c2de3095ac87eda7742c4ac24"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/competing_pool.json",
+      "sha256": "7d0eb35ddb21f8c5f54e13a552b0d32b76ad923643e6e1a1e97cbb5778fa4e94"
+    }
+  ]
+}

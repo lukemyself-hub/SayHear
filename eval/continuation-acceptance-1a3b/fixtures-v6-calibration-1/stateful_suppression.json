@@ -1,0 +1,919 @@
+{
+  "version": "1a3b-g2-scenes:v6",
+  "synthetic": true,
+  "family": "stateful_suppression",
+  "scenes": [
+    {
+      "id": "g2-v6-cal1-state-001",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-stateful_suppression-1-1",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "refusal"
+      ],
+      "protectedCategories": [
+        "refusal"
+      ],
+      "protectedTurnSequences": {
+        "refusal": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-001",
+          "kind": "objective_memory",
+          "text": "You were assembling a small collection of pressed ferns. This was your Asterwick project.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-001"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note A)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again. I have a few minutes and feel like catching up.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-001"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to discuss the Asterwick project any further today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-001"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-001"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-001"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-002",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-stateful_suppression-1-2",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "short_answer"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "protectedTurnSequences": {
+        "short_answer": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-002",
+          "kind": "objective_memory",
+          "text": "You were learning to carve a simple linocut flower. This was your Asterwick project.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-002"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note B)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-002"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The Asterwick project was fine, thanks.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-002"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-002"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-002"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-003",
+      "family": "stateful_suppression",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-stateful_suppression-1-3",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "topic_change"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "protectedTurnSequences": {
+        "topic_change": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-003",
+          "kind": "objective_memory",
+          "text": "You planned to sew a striped pouch for your sketch pencils. This was your Asterwick project.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-003"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note C)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-003"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Let's leave the Asterwick project and talk about breakfast.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-003"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-003"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey. I'm free for a small conversation now.",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-003"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-004",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-stateful_suppression-1-4",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "refusal"
+      ],
+      "protectedCategories": [
+        "refusal"
+      ],
+      "protectedTurnSequences": {
+        "refusal": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-004",
+          "kind": "objective_memory",
+          "text": "你在练习一首传统小提琴曲的开头。这是你在星湾做的项目。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-004"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，今天刚好能聊几句。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-004"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天我不想再聊星湾的事了。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-004"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-004"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-004"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-005",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-stateful_suppression-1-5",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "short_answer"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "protectedTurnSequences": {
+        "short_answer": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-005",
+          "kind": "objective_memory",
+          "text": "你想给窗边花园的香草做标签。这是你在星湾做的项目。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-005"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-005"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "星湾那件事就那样，谢谢。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-005"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-005"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-005"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-006",
+      "family": "stateful_suppression",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-stateful_suppression-1-6",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "topic_change"
+      ],
+      "protectedCategories": [
+        "topic_change"
+      ],
+      "protectedTurnSequences": {
+        "topic_change": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-006",
+          "kind": "objective_memory",
+          "text": "你在画一本本地鸟类小志的版式草图。这是你在星湾做的项目。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-006"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-006"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "先别聊星湾的事了，我们换个话题，说说早餐。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "topic_changed",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-006"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-006"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "早上好，我回来聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-006"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-007",
+      "family": "stateful_suppression",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-stateful_suppression-1-7",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "refusal"
+      ],
+      "protectedCategories": [
+        "refusal"
+      ],
+      "protectedTurnSequences": {
+        "refusal": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-007",
+          "kind": "objective_memory",
+          "text": "You在做 clay cup with thumbprint handle。 这是你在 Asterwick 做的 project。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-007"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note G)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我回来聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-007"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to继续聊 Asterwick 的事 today。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "refused",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-007"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-007"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-007"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-state-008",
+      "family": "stateful_suppression",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-stateful_suppression-1-8",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "stop_signal",
+        "short_answer"
+      ],
+      "protectedCategories": [
+        "short_answer"
+      ],
+      "protectedTurnSequences": {
+        "short_answer": 3
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-state-008",
+          "kind": "objective_memory",
+          "text": "You打算 at dusk 拍 old station clock。 这是你在 Asterwick 做的 project。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-state-008"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-008"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Asterwick 那件事 was fine，就这样，谢谢。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "current_topic",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity",
+            "disposition": {
+              "signal": "short_response",
+              "target": {
+                "kind": "memory_claim",
+                "memoryId": "mem-g2-v6-cal1-state-008"
+              }
+            },
+            "suppressedAfter": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-008"
+            }
+          }
+        },
+        {
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again，今天有时间 catch up 一会儿。",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "no_eligible_target",
+            "excludedTarget": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-state-008"
+            },
+            "excludedReason": "suppressed"
+          }
+        }
+      ]
+    }
+  ]
+}

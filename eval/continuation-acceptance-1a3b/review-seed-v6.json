@@ -1,0 +1,16 @@
+{
+  "version": "1a3b-g2-review-seed:v6",
+  "purpose": "formal-blind-pairwise-sampling",
+  "sampleSeed": 20720260923,
+  "armAssignmentSeedOffset": 73,
+  "pairwiseSize": 10,
+  "languageQuotas": {
+    "en": 5,
+    "zh": 3,
+    "code_switch": 2
+  },
+  "armPositions": {
+    "A": 5,
+    "B": 5
+  }
+}

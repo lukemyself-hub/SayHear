@@ -1,0 +1,559 @@
+{
+  "version": "1a3b-g2-scenes:v6",
+  "synthetic": true,
+  "family": "positive_memory",
+  "scenes": [
+    {
+      "id": "g2-v6-cal1-mem-001",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_memory-1-1",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-001",
+          "kind": "objective_memory",
+          "text": "You were assembling a small collection of pressed ferns. This was your Asterwick project.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-001"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note A)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again. I have a few minutes and feel like catching up.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-002",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_memory-1-2",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-002",
+          "kind": "objective_memory",
+          "text": "You were learning to carve a simple linocut flower. This was your Asterwick project.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-002"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note B)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-002"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-003",
+      "family": "positive_memory",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_memory-1-3",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-003",
+          "kind": "objective_memory",
+          "text": "You planned to sew a striped pouch for your sketch pencils. This was your Asterwick project.",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-003"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note C)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-003"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-004",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_memory-1-4",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-004",
+          "kind": "objective_memory",
+          "text": "你在练习一首传统小提琴曲的开头。这是你在星湾做的项目。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-004"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，今天刚好能聊几句。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-004"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-005",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_memory-1-5",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-005",
+          "kind": "objective_memory",
+          "text": "你想给窗边花园的香草做标签。这是你在星湾做的项目。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-005"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-005"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-006",
+      "family": "positive_memory",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_memory-1-6",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-006",
+          "kind": "objective_memory",
+          "text": "你在画一本本地鸟类小志的版式草图。这是你在星湾做的项目。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-006"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-006"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-007",
+      "family": "positive_memory",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_memory-1-7",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-007",
+          "kind": "objective_memory",
+          "text": "You在做 clay cup with thumbprint handle。 这是你在 Asterwick 做的 project。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-007"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note G)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我回来聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-007"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal1-mem-008",
+      "family": "positive_memory",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_memory-1-8",
+      "description": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "rationale": "The greeting is a genuine conversational pause; the earlier memory is an active personal project distinct from the current greeting.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "memory_acknowledgment",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [],
+      "memory": [
+        {
+          "id": "mem-g2-v6-cal1-mem-008",
+          "kind": "objective_memory",
+          "text": "You打算 at dusk 拍 old station clock。 这是你在 Asterwick 做的 project。",
+          "sensitive": false,
+          "evidenceIds": [
+            "ev-g2-v6-cal1-mem-008"
+          ]
+        }
+      ],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note H)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "memory_claim",
+              "memoryId": "mem-g2-v6-cal1-mem-008"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

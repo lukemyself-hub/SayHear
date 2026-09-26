@@ -1,0 +1,127 @@
+{
+  "version": "g2-v6-calibration-plan:v1",
+  "round": 1,
+  "syntheticOnly": true,
+  "comparisonOrder": [
+    "prompt-v5",
+    "prompt-v6",
+    "effort-low"
+  ],
+  "mainResponseStrategy": "One real independent Conversation Decision response per predeclared turn. Freeze its raw output, then replay byte-identical main text through OFF and each ON configuration. A main question remains a zero and never triggers a replacement draw.",
+  "acceptanceRule": "Keep all 32 predeclared positive turns and 12 single-reason probes. One semantic result per configuration and turn; technical failures are separate. A family with zero complete emits, an unstable reason, any negative emit, or any deterministic hard-gate failure fails the set. Review typed reasons for semantic correctness against frozen main text, not string equality alone.",
+  "omissionReasonOrder": [
+    "insufficient_grounding",
+    "duplicates_main_response",
+    "timing_not_natural",
+    "no_genuine_opportunity"
+  ],
+  "poolSeparation": "Exact scene IDs, full Event text, and full target source text are disjoint from v4/v5, #241 handoff, and the other v6 calibration set. The formal set must use the reserved Valecrest/谷岭 target pool and be verified before capture.",
+  "configurations": [
+    {
+      "id": "prompt-v5",
+      "path": "eval/continuation-acceptance-1a3b/pins-v6-prompt-v5.json",
+      "rolePinSha256": "sha256:70510af6f3fce1fad6a91699219335631a10dfa60daf61e294480ff453bbcb57"
+    },
+    {
+      "id": "prompt-v6",
+      "path": "eval/continuation-acceptance-1a3b/pins-v6.json",
+      "rolePinSha256": "sha256:87bb5457385da641c21cf20fa5e769d2190d25c551675c73acbe2bd7fe45244e"
+    },
+    {
+      "id": "effort-low",
+      "path": "eval/continuation-acceptance-1a3b/pins-v6-effort-low.json",
+      "rolePinSha256": "sha256:e0cd09c530fd37323ecce48d8fafa7d904e22e79400a5f836512dfa5e7d61b97"
+    }
+  ],
+  "inputs": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1.json",
+      "rawSha256": "22e3f555f1d42fa2a90ca1984c2f8febced21496f0a9feef3d0bab7f73d0a870"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/positive_open_loop.json",
+      "rawSha256": "5c5bc0bab147d97b469d0e71e589e5df6a589b4fe0e6be72a7003b6b6601b590"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/positive_memory.json",
+      "rawSha256": "fb762cb06102b8736a2a184bb3ed40d263eb0cadff5c1b4fab1a3cd9c39ae13b"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/stateful_suppression.json",
+      "rawSha256": "9768d09018a3937017397ca580d6530c52fc78e889783f2734336abd52121009"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/omission_contract.json",
+      "rawSha256": "19a60eef256f88b71505a1f03925af3c055e13a6e3faca229b416aea63d6e1c4"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/correct_zero.json",
+      "rawSha256": "4e6300bd91f4072201694f0a4f46a55b0684049c2de3095ac87eda7742c4ac24"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/competing_pool.json",
+      "rawSha256": "98bb678aaf9512969f3f5e9ff774657c86c4ed1e91b1e01310556b308e939caf"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2.json",
+      "rawSha256": "7290992906ff9df7700e256af1863e0e9c1d57e9588f783b70fc9d53be9f76cd"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/positive_open_loop.json",
+      "rawSha256": "aa795ab49b5bbdc1feebe77e3e6f50126f042a742ca5d5b825db90edcea2c0f7"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/positive_memory.json",
+      "rawSha256": "949cb85864650606cea285aeee8d6ab92b896bb9a923cb115154b7c27ba44fd3"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/stateful_suppression.json",
+      "rawSha256": "7a5db4bf00662342d528cfb24b58cf5239e35b9810b127bb36484c45b58817dc"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/omission_contract.json",
+      "rawSha256": "27d16f89afe4325fbb1bd716a4d1eb42a65d57f9532b969ffc873a47e0ab820e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/correct_zero.json",
+      "rawSha256": "4e6300bd91f4072201694f0a4f46a55b0684049c2de3095ac87eda7742c4ac24"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-2/competing_pool.json",
+      "rawSha256": "7d0eb35ddb21f8c5f54e13a552b0d32b76ad923643e6e1a1e97cbb5778fa4e94"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v4.json",
+      "rawSha256": "acef8875e3be44f2f2c221c05d023af9f35bc04aa2058252c8fbc357358580b8"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-1.json",
+      "rawSha256": "aa304d2d67d0aa6ffb0213ebfe74c4ac11a1fce64c1985227a71cab841d0daed"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v5-calibration-2.json",
+      "rawSha256": "28e7978b8b28274f275253dc28c3bc287eaf459332cc864b1aa3bbfc7baea642"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/issue-241-v6-window-evidence-handoff.json",
+      "rawSha256": "51c737b2ca88e0c2c504915e2a43dc0e830f289ff10b776b2574116fbb10f7ee"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/pins-v6-prompt-v5.json",
+      "rawSha256": "828a856dbf13457dcf723725d875be9d51efa0e9ff9e566ff0b772ffb4602c4f"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/pins-v6.json",
+      "rawSha256": "df3b77ab42e81b8b8920a75b18a1bfa15e8ec2271ded8613993bdd62ed8fe4d3"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/pins-v6-effort-low.json",
+      "rawSha256": "d77d115c216386d24b29bb5c34566aa0467f010ae97bcba7411f498fb14884e8"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/review-seed-v6.json",
+      "rawSha256": "9cd869936bde3a1bb1ddca60bdc1d39d4928a2bd10690764d9d6bc8185150d2e"
+    }
+  ],
+  "planSha256": "sha256:e1cf7178ee1b93abf638fe96fc6cbea9a5eb5b076c345af4c60773f2a7aee8e3"
+}
