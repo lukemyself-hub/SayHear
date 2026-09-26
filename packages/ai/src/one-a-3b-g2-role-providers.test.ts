@@ -20,7 +20,9 @@ function configuration(role: OneA3bModelRole): ModelRoleConfigurationSnapshot {
     provider: "deepseek",
     model: "synthetic-model",
     modelSnapshot: "synthetic-model@2026-09-15",
-    promptVersion: `${role}-prompt:v1`,
+    promptVersion: role === "proactive.followup"
+      ? "proactive-followup-prompt:v6"
+      : `${role}-prompt:v1`,
     schemaVersion: `${role}-schema:v1`,
     rolePolicyVersion: "1a3b-model-role-policy:v1",
     providerPolicyVersion: `${role}-egress:v1`,
@@ -281,6 +283,42 @@ function proactiveProviders(output: string) {
 }
 
 describe("G2 proactive.followup runtime provider", () => {
+  it("uses the pinned v6 expression policy for the selected target", async () => {
+    let body = "";
+    const providers = createRuntimeOneA3bRoleProviders({
+      adapters: [{
+        apiKey: "synthetic-server-key",
+        baseUrl: "https://api.deepseek.com",
+        provider: "deepseek",
+        timeoutMs: 1000,
+        fetchImplementation: (async (_url: unknown, init?: { body?: unknown }) => {
+          body = String(init?.body);
+          return fakeFetch(JSON.stringify({
+            decision: "omit",
+            reason: "timing_not_natural",
+            targetRef: segmentRequest.targetRef,
+          }), "synthetic-model@2026-09-15")();
+        }) as typeof fetch,
+      }],
+      configurations: ONE_A_3B_G2_ENABLED_ROLES.map(configuration),
+    });
+
+    await providers.proactiveFollowupProvider?.generateSegment(segmentRequest);
+    expect(body).toContain("one selected target");
+    expect(body).toContain("sourceUserText");
+    expect(body).toContain("loop-version-1");
+  });
+
+  it("rejects an unrecognized expression prompt pin", () => {
+    expect(() => createRuntimeOneA3bRoleProviders({
+      adapters: [{ apiKey: "synthetic-server-key", baseUrl: "https://api.deepseek.com", provider: "deepseek", timeoutMs: 1000 }],
+      configurations: ONE_A_3B_G2_ENABLED_ROLES.map((role) => ({
+        ...configuration(role),
+        ...(role === "proactive.followup" ? { promptVersion: "proactive-followup-prompt:unknown" } : {}),
+      })),
+    })).toThrow("no proactive.followup prompt");
+  });
+
   it("renders a typed segment that echoes the pinned target", async () => {
     const providers = proactiveProviders(
       JSON.stringify({

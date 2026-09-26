@@ -20,6 +20,7 @@ import {
 
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 import { assertRuntimeProviderEgressIntegration } from "./runtime-provider-egress";
+import { PROACTIVE_EXPRESSION_PROMPT_V6 } from "./proactive-expression-prompt-v6";
 
 export type ResponsesApiAdapter = Readonly<{
   apiKey: string;
@@ -686,6 +687,12 @@ export function createRuntimeOneA3bRoleProviders(input: {
     (candidate) => candidate.role === "proactive.followup",
   );
   if (proactiveConfiguration) {
+    if (
+      proactiveConfiguration.promptVersion !== "proactive-followup-prompt:v5" &&
+      proactiveConfiguration.promptVersion !== "proactive-followup-prompt:v6"
+    ) {
+      throw new Error("G2 runtime has no proactive.followup prompt for the configured version.");
+    }
     if (!isResponsesApiProvider(proactiveConfiguration.provider)) {
       throw new Error(
         "G2 role proactive.followup has no supported Responses API provider.",
@@ -706,6 +713,9 @@ export function createRuntimeOneA3bRoleProviders(input: {
               await askJson(
                 proactiveConfiguration,
                 request,
+                proactiveConfiguration.promptVersion === "proactive-followup-prompt:v6"
+                  ? PROACTIVE_EXPRESSION_PROMPT_V6
+                  :
                 "Read the whole combination of the current user message, frozen main response, and proposed segment before deciding. Return either {decision:'emit', content, expressionKind, targetRef} or {decision:'omit', reason, targetRef}. Emit only when the opportunity is greeting, open_start, or natural_gap and the segment adds natural, specific continuity without changing or contradicting the main response. A main response that declines, redirects, concludes, or leaves a topic behind must not be followed by a segment that reopens or presses that topic. Omit when there is no genuine opportunity, the combined response is abrupt or conflicting, grounding or identity is unclear, or timing is not natural. For an Open Loop, sourceUserText is the exact text of a committed user Event and is the direct Evidence for the pending matter: first person refers to the user, while named or third-party people must keep their stated identity. The Open Loop kind, expected window, and this exact source text must identify one pending matter; if they do not, omit with insufficient_grounding. Never treat an unknown subject as the user without this direct Evidence. For Memory targets, use only the supplied target summary and subject context. Compare currentTime in sessionTimeZone with the expected window; never describe a future event or outcome as already happened. A generic invitation does not cover a concrete target. Before emitting, compare the main response with the target itself: if the main already names the target or communicates the same update, status, or progress, omit with duplicates_main_response. Do not ask the user to open, decide, plan, or act on a current message merely because a remembered target is related; a question must ask about a target-specific unknown outcome or development, and an acknowledgment must add a specific, non-repeated connection. Use duplicates_main_response only when the main response already semantically covers this same target. Closure cues such as 'good night', 'I'm heading to bed', or 'no need to reply' make timing_not_natural. Omit instead of adding generic care, an 'I'm here' sentence, a dangling this/that reference, repeated reassurance, or a repeated date or event. Omit reasons are no_genuine_opportunity, duplicates_main_response, insufficient_grounding, or timing_not_natural. For emit, expressionKind must be question or acknowledgment: an Open Loop normally asks one concise question about its unknown event or outcome, while a Memory Claim defaults to a specific acknowledgment unless Evidence supports a concrete answerable development. The whole combined response must contain at most one question; do not rely on question punctuation alone to classify Chinese questions. targetRef must echo the supplied targetRef object exactly in either decision. Never invent progress, feelings, urgency, or a recent event. Keep emitted content short and natural; for sensitive targets keep it gentle, brief, and answer-optional without ritual disclaimers. Never rewrite the main response.",
                 request.locale || "en-US",
               ),

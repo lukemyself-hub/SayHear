@@ -18,12 +18,12 @@ import type {
 } from "./conversation-response";
 import {
   composeProactiveFollowupResponse,
+  countProactiveFollowupQuestions,
   validateProactiveFollowupSegmentOutput,
   type ProactiveFollowupSegmentAbandonReason,
   type ProactiveFollowupSegmentCommit,
   type ProactiveFollowupSegmentStage,
 } from "./proactive-followup";
-import { countFollowUpQuestions } from "./conversation-behavior";
 import type { ContextCompiler } from "./context-compiler";
 import type {
   ActionReferenceHandle,
@@ -327,7 +327,7 @@ export function createConversationAgentHarness(dependencies: {
         allowProactiveSegment &&
         proactiveStage &&
         command.requestEventRevisionId &&
-        countFollowUpQuestions(completeText) === 0
+        countProactiveFollowupQuestions(completeText) === 0
       ) {
         let plan: ProactiveFollowupSegmentCommit["plan"] | null = null;
         try {

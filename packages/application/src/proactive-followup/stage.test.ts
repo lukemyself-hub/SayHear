@@ -17,6 +17,7 @@ import {
   type ProactiveFollowupReservationStore,
   type ProactiveFollowupTurnContext,
 } from "./stage";
+import { validateProactiveFollowupSegmentOutput } from "./segment";
 import type {
   ProactiveFollowupDialogueSnapshot,
   ProactiveFollowupLaneSnapshot,
@@ -340,25 +341,28 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
     });
   });
 
-  it("does not call the expression provider when the current event is not an opportunity", async () => {
-    const { segmentStage, modelProvider, commands, reservationStore } = stage({
-      readerOverrides: {
-        readDialogue: async () => ({
-          ...dialogue(),
-          proactiveFollowupOpportunity: {
-            value: "current_topic",
-            confidence: 0.95,
-            sourceRevisionIds: [REVISION],
-          },
-        }),
-      },
-    });
+  it.each(["current_topic", "direct_task", "urgent_or_high_risk"] as const)(
+    "does not call the expression provider for %s",
+    async (opportunity) => {
+      const { segmentStage, modelProvider, commands, reservationStore } = stage({
+        readerOverrides: {
+          readDialogue: async () => ({
+            ...dialogue(),
+            proactiveFollowupOpportunity: {
+              value: opportunity,
+              confidence: 0.95,
+              sourceRevisionIds: [REVISION],
+            },
+          }),
+        },
+      });
 
-    await expect(segmentStage.prepare(prepareInput())).resolves.toBeNull();
-    expect(commands.admit).not.toHaveBeenCalled();
-    expect(reservationStore.reserveSelection).not.toHaveBeenCalled();
-    expect(modelProvider.generateSegment).not.toHaveBeenCalled();
-  });
+      await expect(segmentStage.prepare(prepareInput())).resolves.toBeNull();
+      expect(commands.admit).not.toHaveBeenCalled();
+      expect(reservationStore.reserveSelection).not.toHaveBeenCalled();
+      expect(modelProvider.generateSegment).not.toHaveBeenCalled();
+    },
+  );
 
   it("fails closed when opportunity evidence is stale or below the confidence floor", async () => {
     for (const opportunity of [
@@ -433,6 +437,57 @@ describe("proactive.followup segment stage (issue #207 layer 2c)", () => {
         sessionTimeZone: "Asia/Shanghai",
       }),
     );
+  });
+
+  it.each([
+    {
+      locale: "en-US", userText: "Hi, I have a moment.", mainText: "Good to see you.",
+      decision: "emit" as const, content: "Did you hear about the lease renewal?",
+    },
+    {
+      locale: "zh-CN", userText: "让我安静一会儿。", mainText: "好，先歇一会儿。",
+      decision: "omit" as const, reason: "timing_not_natural" as const,
+    },
+    {
+      locale: "en-US", userText: "Hi, 今天想安静一下。", mainText: "Take your time.",
+      decision: "omit" as const, reason: "timing_not_natural" as const,
+    },
+    {
+      locale: "zh-CN", userText: "你好。", mainText: "你提过租约续签，后来批下来了吗？",
+      decision: "omit" as const, reason: "duplicates_main_response" as const,
+    },
+  ])("passes the frozen $locale turn and selected Evidence through typed $decision", async (scenario) => {
+    const releaseOmittedSegment = vi.fn(async () => ({ outcome: "released" as const }));
+    const { segmentStage, modelProvider } = stage({
+      readerOverrides: {
+        readTurnContext: async () => ({ ...turnContext(), locale: scenario.locale }),
+        readEventRevisionText: async () => ({ text: scenario.userText }),
+      },
+      reservationOverrides: { releaseOmittedSegment },
+      providerOverrides: {
+        generateSegment: vi.fn(async (request: { targetRef: { targetKind: "open_loop"; targetId: string; targetVersionId: string } }) =>
+          scenario.decision === "emit"
+            ? { decision: "emit" as const, content: scenario.content, expressionKind: "question" as const, targetRef: request.targetRef }
+            : { decision: "omit" as const, reason: scenario.reason, targetRef: request.targetRef }),
+      },
+    });
+    const plan = await segmentStage.prepare({ ...prepareInput(), mainText: scenario.mainText });
+    expect(plan).not.toBeNull();
+    const result = await segmentStage.generate(plan!);
+    expect(modelProvider.generateSegment).toHaveBeenCalledWith(expect.objectContaining({
+      currentUserText: scenario.userText,
+      mainText: scenario.mainText,
+      sourceUserText: "I am waiting to hear whether the lease renewal was approved.",
+      targetRef: { targetKind: "open_loop", targetId: "loop-1", targetVersionId: "loop-version-1" },
+    }));
+    expect(result.outcome).toBe(scenario.decision);
+    if (result.outcome === "emit") {
+      expect(validateProactiveFollowupSegmentOutput({ mainText: scenario.mainText, output: result.output, plan: plan! }))
+        .toEqual({ outcome: "valid" });
+      expect(releaseOmittedSegment).not.toHaveBeenCalled();
+    } else {
+      expect(releaseOmittedSegment).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("returns null without admitting a command when the lane is closed", async () => {

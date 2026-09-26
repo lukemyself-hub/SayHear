@@ -10,6 +10,7 @@ export {
 } from "./suppression";
 export {
   composeProactiveFollowupResponse,
+  countProactiveFollowupQuestions,
   validateProactiveFollowupSegmentOutput,
   type ProactiveFollowupSegmentAbandonReason,
   type ProactiveFollowupSegmentCommit,

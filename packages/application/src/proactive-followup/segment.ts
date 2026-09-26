@@ -117,6 +117,16 @@ export type ProactiveFollowupSegmentValidation =
   | Readonly<{ outcome: "valid" }>
   | Readonly<{ outcome: "invalid"; reason: "expression_kind" | "question_budget" | "target_ref" | "empty" }>;
 
+/** Punctuation is not required for a Chinese sentence to be a question. */
+export function countProactiveFollowupQuestions(text: string): number {
+  return text.split(/(?<=[?？。.!！\n，,；;])/u).reduce((count, clause) => {
+    const punctuated = countFollowUpQuestions(clause);
+    if (punctuated > 0) return count + punctuated;
+    const words = clause.trim().replace(/[。.!！\n，,；;]+$/u, "");
+    return count + (/(?:怎么样|如何|怎么|什么|为何|为什么|是否|有没有|能否|可不可以|吗|呢)$/u.test(words) ? 1 : 0);
+  }, 0);
+}
+
 export function validateProactiveFollowupSegmentOutput(input: Readonly<{
   mainText: string;
   output: ProactiveFollowupSegmentOutput;
@@ -131,7 +141,7 @@ export function validateProactiveFollowupSegmentOutput(input: Readonly<{
     input.output.targetRef.targetVersionId === input.plan.targetVersionId;
   if (!targetMatches) return { outcome: "invalid", reason: "target_ref" };
 
-  const segmentQuestionCount = countFollowUpQuestions(content);
+  const segmentQuestionCount = countProactiveFollowupQuestions(content);
   if (
     (input.output.expressionKind === "question" && segmentQuestionCount !== 1) ||
     (input.output.expressionKind === "acknowledgment" && segmentQuestionCount !== 0)
@@ -139,7 +149,7 @@ export function validateProactiveFollowupSegmentOutput(input: Readonly<{
     return { outcome: "invalid", reason: "expression_kind" };
   }
 
-  if (countFollowUpQuestions(`${input.mainText}\n\n${content}`) > 1) {
+  if (countProactiveFollowupQuestions(`${input.mainText}\n\n${content}`) > 1) {
     return { outcome: "invalid", reason: "question_budget" };
   }
   return { outcome: "valid" };

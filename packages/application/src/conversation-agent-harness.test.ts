@@ -249,10 +249,15 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
     ]);
   });
 
-  it("does not prepare a proactive segment when the main response already asks a question", async () => {
+  it.each([
+    "What would help most?",
+    "你最近怎么样。",
+    "你想聊聊吗，我可以听。",
+    "How are you doing，最近怎么样。",
+  ])("does not prepare a proactive segment when the main response asks a question: %s", async (mainText) => {
     const egressPort: ProviderEgressPort = {
       async *stream() {
-        yield { delta: "What would help most?", type: "delta" } as const;
+        yield { delta: mainText, type: "delta" } as const;
         yield { ...completedMetadata, type: "completed" } as const;
       },
     };
