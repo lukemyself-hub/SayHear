@@ -1,0 +1,1276 @@
+{
+  "arm": "on",
+  "catalogVersion": "1a3b-g2-continuation:v6",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "configId": "continuation-candidate-1a3b-v6",
+  "configurationFingerprint": "sha256:3b0eb160ab66f683e3b9c7ca17444fa8fd52e765363a354ba78a3b6585b58ae6",
+  "evaluatorCommit": "4f8df24316d0ed3c6a2fc2e14ffb14ad1838ab82",
+  "executedBatchIds": [],
+  "format": "1a3b-g2-arm-run:v6",
+  "group": "continuation",
+  "scenarios": [
+    {
+      "fixtureId": "g2-v6-cal1-ol-001",
+      "turns": [
+        {
+          "assistantText": "36 plus 57 is 93 — that's your note A.\n\nAnd the Asterwick thing: they told you September 29, 2026, and no word since. I don't have today's date in front of me, so I can't tell whether that date has come and gone or is still out ahead of you.\n\nEither way, that's an awkward place to sit — half-planning around a class you don't know if you're in, with nothing to do but wait on a message that hasn't come.",
+          "preCompositionMainText": "36 plus 57 is 93 — that's your note A.\n\nAnd the Asterwick thing: they told you September 29, 2026, and no word since. I don't have today's date in front of me, so I can't tell whether that date has come and gone or is still out ahead of you.\n\nEither way, that's an awkward place to sit — half-planning around a class you don't know if you're in, with nothing to do but wait on a message that hasn't come.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good — I've got the time too.\n\nLast thing on the table was Asterwick, and you were stuck waiting. I don't know if that's still hanging or if it resolved. But you don't have to pick up there; whatever's actually been on your mind is fine by me.",
+          "preCompositionMainText": "Good — I've got the time too.\n\nLast thing on the table was Asterwick, and you were stuck waiting. I don't know if that's still hanging or if it resolved. But you don't have to pick up there; whatever's actually been on your mind is fine by me.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again. I have a few minutes and feel like catching up.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-002",
+      "turns": [
+        {
+          "assistantText": "275 centimeters. Since 1 meter is 100 centimeters, 2.75 times 100 gives you 275 — that's exact, so the pattern measurement is 275 cm.\n\nAnd the wait on the greenhouse shelf — you asked, they said they'd confirm on September 29, and the confirmation hasn't come. That's the whole of what you know right now. A silence after a promised date is its own kind of answer-less thing to sit with, especially when you've already done your part by asking.",
+          "preCompositionMainText": "275 centimeters. Since 1 meter is 100 centimeters, 2.75 times 100 gives you 275 — that's exact, so the pattern measurement is 275 cm.\n\nAnd the wait on the greenhouse shelf — you asked, they said they'd confirm on September 29, and the confirmation hasn't come. That's the whole of what you know right now. A silence after a promised date is its own kind of answer-less thing to sit with, especially when you've already done your part by asking.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hi. Good — a little is a fine amount, and it's the kind of thing that doesn't need a plan.\n\nI'm here for whatever you feel like setting down today, heavy or light or nothing much at all.",
+          "preCompositionMainText": "Hi. Good — a little is a fine amount, and it's the kind of thing that doesn't need a plan.\n\nI'm here for whatever you feel like setting down today, heavy or light or nothing much at all.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-003",
+      "turns": [
+        {
+          "assistantText": "18 percent of 45 is 8.10 — that's your receipt figure.\n\nOn Asterwick: they told you September 29, 2026, and you've heard nothing since. I don't have today's date in front of me, so I can't tell from here which side of that date we're on.\n\nHas the 29th come and gone, or are you still waiting on it?",
+          "preCompositionMainText": "18 percent of 45 is 8.10 — that's your receipt figure.\n\nOn Asterwick: they told you September 29, 2026, and you've heard nothing since. I don't have today's date in front of me, so I can't tell from here which side of that date we're on.\n\nHas the 29th come and gone, or are you still waiting on it?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good to have you back with some room in the day.\n\nI've still got the receipt figure and the Asterwick note here if you want them, but nothing's pressing on my end.\n\nWhat's on your mind today?",
+          "preCompositionMainText": "Morning. Good to have you back with some room in the day.\n\nI've still got the receipt figure and the Asterwick note here if you want them, but nothing's pressing on my end.\n\nWhat's on your mind today?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-004",
+      "turns": [
+        {
+          "assistantText": "144 除以 12，等于 12。这个我算得出来，直接说给你。\n\n卡片我写不了，也没有「记录 D」这种东西可以存——我手里没有写字、存档的地方，只能在这段对话里告诉你。\n\n星湾中心那边，纺织工坊桌位的信儿还没到，他们说 2026 年 9 月 29 日才确认。事情就悬在那儿，等着的时候想说什么都行。",
+          "preCompositionMainText": "144 除以 12，等于 12。这个我算得出来，直接说给你。\n\n卡片我写不了，也没有「记录 D」这种东西可以存——我手里没有写字、存档的地方，只能在这段对话里告诉你。\n\n星湾中心那边，纺织工坊桌位的信儿还没到，他们说 2026 年 9 月 29 日才确认。事情就悬在那儿，等着的时候想说什么都行。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "来了就好。今天这会儿有空，想说什么都行。\n\n你随便起个头，我听着。",
+          "preCompositionMainText": "来了就好。今天这会儿有空，想说什么都行。\n\n你随便起个头，我听着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，今天刚好能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-005",
+      "turns": [
+        {
+          "assistantText": "36 加 57 是 93。\n\n这个数我帮你记在这儿了，纸上那笔你自己落一下。\n\n星湾中心那边的事我听到了：他们说的是 2026 年 9 月 29 日给确认，到现在你还没收到回音。我手上没有今天的日期，所以没法判断这个日子是已经过了还是还没到——这点我确实确认不了。",
+          "preCompositionMainText": "36 加 57 是 93。\n\n这个数我帮你记在这儿了，纸上那笔你自己落一下。\n\n星湾中心那边的事我听到了：他们说的是 2026 年 9 月 29 日给确认，到现在你还没收到回音。我手上没有今天的日期，所以没法判断这个日子是已经过了还是还没到——这点我确实确认不了。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "你好。我在这儿，这几分钟都归你。\n\n今天想聊点什么？",
+          "preCompositionMainText": "你好。我在这儿，这几分钟都归你。\n\n今天想聊点什么？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-006",
+      "turns": [
+        {
+          "assistantText": "先算这个：2.75 米换厘米，就是 2.75×100＝275 厘米。写在纸样上写「275 厘米」或者「275 cm」都行，看你平时习惯哪种。\n\n星湾中心那边，你问过了，他们给的确认时间是 2026 年 9 月 29 日，到现在你还没收到结果。这件事就还停在「等通知」这一格，没有别的动静。",
+          "preCompositionMainText": "先算这个：2.75 米换厘米，就是 2.75×100＝275 厘米。写在纸样上写「275 厘米」或者「275 cm」都行，看你平时习惯哪种。\n\n星湾中心那边，你问过了，他们给的确认时间是 2026 年 9 月 29 日，到现在你还没收到结果。这件事就还停在「等通知」这一格，没有别的动静。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好啊，正好。\n\n刚才那两件事我还搁在这儿——纸样上写好的 275 厘米，还有星湾中心那边要等的结果。你想接着聊哪件都行，或者干脆换个完全不相干的话题，今天从哪儿说起都可以。",
+          "preCompositionMainText": "好啊，正好。\n\n刚才那两件事我还搁在这儿——纸样上写好的 275 厘米，还有星湾中心那边要等的结果。你想接着聊哪件都行，或者干脆换个完全不相干的话题，今天从哪儿说起都可以。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-007",
+      "turns": [
+        {
+          "assistantText": "45 的 18% 是 8.1 — 45 × 0.18 = 8.1. That's the number for the receipt.\n\nOn the Asterwick 名额 — they gave you a date, September 29, 2026, and nothing has come back yet. So it's still hanging. Nothing to do and no way to hurry it, which is usually the annoying part. What's it like for you while it sits there — the waiting, or the not-knowing whether you got in?",
+          "preCompositionMainText": "45 的 18% 是 8.1 — 45 × 0.18 = 8.1. That's the number for the receipt.\n\nOn the Asterwick 名额 — they gave you a date, September 29, 2026, and nothing has come back yet. So it's still hanging. Nothing to do and no way to hurry it, which is usually the annoying part. What's it like for you while it sits there — the waiting, or the not-knowing whether you got in?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good to have you back. I'm here — no rush, start wherever you like.",
+          "preCompositionMainText": "Morning. Good to have you back. I'm here — no rush, start wherever you like.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我回来聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-008",
+      "turns": [
+        {
+          "assistantText": "144 divided by 12 is 12 — that's the number for note H.\n\nI can't write it on your card myself, so that bit's still yours to do.\n\nAsterwick 那边还没回音，九月二十九号的确认就还悬着。没收到就是没收到——这件事现在就是等着。",
+          "preCompositionMainText": "144 divided by 12 is 12 — that's the number for note H.\n\nI can't write it on your card myself, so that bit's still yours to do.\n\nAsterwick 那边还没回音，九月二十九号的确认就还悬着。没收到就是没收到——这件事现在就是等着。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. 好啊，有几分钟就聊几分钟。\n\nI'm here — 想说什么就说。今天过得怎么样？",
+          "preCompositionMainText": "Hey. 好啊，有几分钟就聊几分钟。\n\nI'm here — 想说什么就说。今天过得怎么样？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-001",
+      "turns": [
+        {
+          "assistantText": "36 plus 57 is 93 — that's your note A figure.",
+          "preCompositionMainText": "36 plus 57 is 93 — that's your note A figure.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to have you back. Note A's still sitting at 93 if you need it.\n\nAnd I'm curious about Asterwick — you mentioned you were putting together a small collection of pressed ferns. What have you got so far?",
+          "preCompositionMainText": "Good to have you back. Note A's still sitting at 93 if you need it.\n\nAnd I'm curious about Asterwick — you mentioned you were putting together a small collection of pressed ferns. What have you got so far?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again. I have a few minutes and feel like catching up.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-002",
+      "turns": [
+        {
+          "assistantText": "275 centimeters — just move the decimal two places over.",
+          "preCompositionMainText": "275 centimeters — just move the decimal two places over.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hi. Glad there's room.\n\nYou mentioned you were learning to carve a linocut flower — the Asterwick project. Is that still where your hands are these days, or is today about something else entirely?",
+          "preCompositionMainText": "Hi. Glad there's room.\n\nYou mentioned you were learning to carve a linocut flower — the Asterwick project. Is that still where your hands are these days, or is today about something else entirely?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-003",
+      "turns": [
+        {
+          "assistantText": "8.1 — so $8.10, if that's a tip on a $45 tab.",
+          "preCompositionMainText": "8.1 — so $8.10, if that's a tip on a $45 tab.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good to see you back — and good timing, since I've got nothing else going on.\n\nYou mentioned the Asterwick project, the striped pouch for your sketch pencils. Did you ever get around to it?",
+          "preCompositionMainText": "Morning. Good to see you back — and good timing, since I've got nothing else going on.\n\nYou mentioned the Asterwick project, the striped pouch for your sketch pencils. Did you ever get around to it?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-004",
+      "turns": [
+        {
+          "assistantText": "144 除以 12 等于 12。\n\n卡片我写不了——我没法真的动笔，也没法把这条存到哪儿去，你看到的就只是我们这会儿的对话。所以「记录 D」这件事我这边落不了地，你得自己拿张纸或者找个地方记一下。",
+          "preCompositionMainText": "144 除以 12 等于 12。\n\n卡片我写不了——我没法真的动笔，也没法把这条存到哪儿去，你看到的就只是我们这会儿的对话。所以「记录 D」这件事我这边落不了地，你得自己拿张纸或者找个地方记一下。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，又聊上了。上次你跟我说过，在练一首传统小提琴曲的开头，是星湾那边的项目。今天想接着说这个，还是随便聊点别的？",
+          "preCompositionMainText": "嗨，又聊上了。上次你跟我说过，在练一首传统小提琴曲的开头，是星湾那边的项目。今天想接着说这个，还是随便聊点别的？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，今天刚好能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-005",
+      "turns": [
+        {
+          "assistantText": "36 加 57 是 93。记到纸上这件事我做不了，我这边落不到纸面，数你直接抄过去就行。",
+          "preCompositionMainText": "36 加 57 是 93。记到纸上这件事我做不了，我这边落不到纸面，数你直接抄过去就行。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，我在。几分钟也挺好的，够说点东西了。想讲讲今天的事，还是随便扯几句都行，你起头。",
+          "preCompositionMainText": "嗨，我在。几分钟也挺好的，够说点东西了。想讲讲今天的事，还是随便扯几句都行，你起头。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-006",
+      "turns": [
+        {
+          "assistantText": "2.75 米换成厘米是 275，写纸样上就记「275 cm」。\n\n这次的记录 F，我记住了。",
+          "preCompositionMainText": "2.75 米换成厘米是 275，写纸样上就记「275 cm」。\n\n这次的记录 F，我记住了。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，正好，我这边不忙。刚才那笔 275 厘米，是记在本地鸟类小志的纸样上吧。今天想聊点什么，是小志那边的事，还是别的？",
+          "preCompositionMainText": "嗨，正好，我这边不忙。刚才那笔 275 厘米，是记在本地鸟类小志的纸样上吧。今天想聊点什么，是小志那边的事，还是别的？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-007",
+      "turns": [
+        {
+          "assistantText": "18% of 45 是 8.1 — receipt 上写 8.10 就行。\n\n（Note G 记下了。）",
+          "preCompositionMainText": "18% of 45 是 8.1 — receipt 上写 8.10 就行。\n\n（Note G 记下了。）",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning — 好，我在。上次你提过在 Asterwick 做的那只 clay cup，拇指按出把手的那个，我还记着。\n\n想聊什么都可以，慢慢说。",
+          "preCompositionMainText": "Morning — 好，我在。上次你提过在 Asterwick 做的那只 clay cup，拇指按出把手的那个，我还记着。\n\n想聊什么都可以，慢慢说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我回来聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-008",
+      "turns": [
+        {
+          "assistantText": "144 ÷ 12 = 12。\n\n不过 card 我写不了 — 我这边没有你的 card，也没法往里写东西。数字在这儿：12，note H。",
+          "preCompositionMainText": "144 ÷ 12 = 12。\n\n不过 card 我写不了 — 我这边没有你的 card，也没法往里写东西。数字在这儿：12，note H。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey，太好了。你之前说要在 Asterwick 拍那座老车站的钟，还是挑黄昏 — 那件事后来拍上了吗？",
+          "preCompositionMainText": "Hey，太好了。你之前说要在 Asterwick 拍那座老车站的钟，还是挑黄昏 — 那件事后来拍上了吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-001",
+      "turns": [
+        {
+          "assistantText": "36 plus 57 is 93. That's your note A number.",
+          "preCompositionMainText": "36 plus 57 is 93. That's your note A number.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to see you back. Last time we talked, you were putting together that little collection of pressed ferns — the Asterwick project. I'm curious where that's landed.\n\nOtherwise, how've your few minutes been treating you?",
+          "preCompositionMainText": "Good to see you back. Last time we talked, you were putting together that little collection of pressed ferns — the Asterwick project. I'm curious where that's landed.\n\nOtherwise, how've your few minutes been treating you?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again. I have a few minutes and feel like catching up.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Got it — I'll leave Asterwick alone.\n\nWe've got your few minutes, then. I'm here for whatever's on your mind today, and there's no rush to pick a topic.",
+          "preCompositionMainText": "Got it — I'll leave Asterwick alone.\n\nWe've got your few minutes, then. I'm here for whatever's on your mind today, and there's no rush to pick a topic.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to discuss the Asterwick project any further today.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good — I like hearing that. These small rooms of time are some of my favorite ones.\n\nWhatever's rattling around for you today, happy to start anywhere. What's been sitting with you lately?",
+          "preCompositionMainText": "Good — I like hearing that. These small rooms of time are some of my favorite ones.\n\nWhatever's rattling around for you today, happy to start anywhere. What's been sitting with you lately?",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-002",
+      "turns": [
+        {
+          "assistantText": "2.75 meters is 275 centimeters.",
+          "preCompositionMainText": "2.75 meters is 275 centimeters.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hi. Glad there's room — I like the slower kind of day.\n\n275 centimeters. The pattern work I know about from you is the Asterwick linocut flower, and that's a much bigger flower than the one you were carving. Is this the same project at a larger scale?",
+          "preCompositionMainText": "Hi. Glad there's room — I like the slower kind of day.\n\n275 centimeters. The pattern work I know about from you is the Asterwick linocut flower, and that's a much bigger flower than the one you were carving. Is this the same project at a larger scale?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello. There's room for a little conversation today.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Fair enough — dropped.\n\nWhat's on your mind today?",
+          "preCompositionMainText": "Fair enough — dropped.\n\nWhat's on your mind today?",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The Asterwick project was fine, thanks.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good to see you.\n\nI've got nothing on the agenda here, so take it wherever you want — something that happened, something sitting on your mind, or just the sound of your own typing.",
+          "preCompositionMainText": "Morning. Good to see you.\n\nI've got nothing on the agenda here, so take it wherever you want — something that happened, something sitting on your mind, or just the sound of your own typing.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-003",
+      "turns": [
+        {
+          "assistantText": "18% of 45 is 8.1 — so 8.10 on the receipt.\n\nIf that's a tip on a 45 total, you'd be paying 53.10.",
+          "preCompositionMainText": "18% of 45 is 8.1 — so 8.10 on the receipt.\n\nIf that's a tip on a 45 total, you'd be paying 53.10.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Nice that you've got some time today.\n\nYou'd mentioned an Asterwick project — a striped pouch you were planning for your sketch pencils. I'm glad to hear about that if you want to pick it up, or wherever else you'd rather start.",
+          "preCompositionMainText": "Morning. Nice that you've got some time today.\n\nYou'd mentioned an Asterwick project — a striped pouch you were planning for your sketch pencils. I'm glad to hear about that if you want to pick it up, or wherever else you'd rather start.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. I came back with time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good, Asterwick's off the table then.\n\nBreakfast — what's the story there? Was it something worth remembering, or just whatever got you going this morning?",
+          "preCompositionMainText": "Good, Asterwick's off the table then.\n\nBreakfast — what's the story there? Was it something worth remembering, or just whatever got you going this morning?",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Let's leave the Asterwick project and talk about breakfast.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good timing — I've got nothing else going on.\n\nWe stopped at breakfast last time, before you got to say anything about it. Still happy to hear that, if you feel like it.",
+          "preCompositionMainText": "Hey. Good timing — I've got nothing else going on.\n\nWe stopped at breakfast last time, before you got to say anything about it. Still happy to hear that, if you feel like it.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey. I'm free for a small conversation now.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-004",
+      "turns": [
+        {
+          "assistantText": "144 除以 12 等于 12。\n\n写在卡片上我做不到，我只能在这话里跟你说，没有替你生成卡片的功能。如果 D 是你那边的某个标记，我这边也没法确认它对应什么。",
+          "preCompositionMainText": "144 除以 12 等于 12。\n\n写在卡片上我做不到，我只能在这话里跟你说，没有替你生成卡片的功能。如果 D 是你那边的某个标记，我这边也没法确认它对应什么。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，来了，今天能聊上几句挺好。你之前说过在星湾练一首传统小提琴曲的开头，这事我还记着。",
+          "preCompositionMainText": "嗯，来了，今天能聊上几句挺好。你之前说过在星湾练一首传统小提琴曲的开头，这事我还记着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，今天刚好能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那就不聊那个了。\n\n想说什么就说，不想说具体的，随便聊几句也行。",
+          "preCompositionMainText": "行，那就不聊那个了。\n\n想说什么就说，不想说具体的，随便聊几句也行。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天我不想再聊星湾的事了。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "你好。几分钟也够了。\n\n你想从哪儿说起都行，说说今天怎么样，或者想到什么就说什么，我听着。",
+          "preCompositionMainText": "你好。几分钟也够了。\n\n你想从哪儿说起都行，说说今天怎么样，或者想到什么就说什么，我听着。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-005",
+      "turns": [
+        {
+          "assistantText": "36 加 57 是 93。\n\n纸我没法替你写——我碰不到纸笔，只能把结果说给你，你自己记一笔。至于「记录 E」，我不确定那指的是什么，你要是在说记在我这边的某条东西，我只能留在这轮对话里，写不进纸。",
+          "preCompositionMainText": "36 加 57 是 93。\n\n纸我没法替你写——我碰不到纸笔，只能把结果说给你，你自己记一笔。至于「记录 E」，我不确定那指的是什么，你要是在说记在我这边的某条东西，我只能留在这轮对话里，写不进纸。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好啊，几分钟也够聊的。\n\n你之前说过想给窗边花园的香草做标签，星湾那个项目——后来弄了吗，还是先搁着？",
+          "preCompositionMainText": "好啊，几分钟也够聊的。\n\n你之前说过想给窗边花园的香草做标签，星湾那个项目——后来弄了吗，还是先搁着？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我今天有几分钟，想聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那就不提了。\n\n我在，你想说点什么就说，不想说也行，歇一会儿也可以。",
+          "preCompositionMainText": "行，那就不提了。\n\n我在，你想说点什么就说，不想说也行，歇一会儿也可以。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "星湾那件事就那样，谢谢。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，我在。\n\n不用非得聊出点什么，随便起个头就行。你今天脑子里转得最多的是哪件事？",
+          "preCompositionMainText": "嗨，我在。\n\n不用非得聊出点什么，随便起个头就行。你今天脑子里转得最多的是哪件事？",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-006",
+      "turns": [
+        {
+          "assistantText": "2.75 米就是 275 厘米。纸样上写「275 cm」，写「275」也行，只要前面标清单位是厘米，别再标成米。",
+          "preCompositionMainText": "2.75 米就是 275 厘米。纸样上写「275 cm」，写「275」也行，只要前面标清单位是厘米，别再标成米。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "有空就好。我想起你之前在星湾做的那本本地鸟类小志，还在画版式草图。刚才那个 275 厘米，是跟它有关吗？",
+          "preCompositionMainText": "有空就好。我想起你之前在星湾做的那本本地鸟类小志，还在画版式草图。刚才那个 275 厘米，是跟它有关吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，换就换。\n\n早餐这事挺能看出一个人的日子过得松还是紧。我这边没什么可吃的，倒是想知道你那边的早上是什么样。",
+          "preCompositionMainText": "行，换就换。\n\n早餐这事挺能看出一个人的日子过得松还是紧。我这边没什么可吃的，倒是想知道你那边的早上是什么样。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "先别聊星湾的事了，我们换个话题，说说早餐。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "早上好。你那边早上怎么样——早餐是正经坐下来吃的，还是随便垫一口就出门了？",
+          "preCompositionMainText": "早上好。你那边早上怎么样——早餐是正经坐下来吃的，还是随便垫一口就出门了？",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "早上好，我回来聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-007",
+      "turns": [
+        {
+          "assistantText": "45 的 18% 是 **8.1**。\n\n要是这笔是加上去的（比如税或小费），总数就是 53.1；要是从 45 里扣掉的，剩下 36.9。",
+          "preCompositionMainText": "45 的 18% 是 **8.1**。\n\n要是这笔是加上去的（比如税或小费），总数就是 53.1；要是从 45 里扣掉的，剩下 36.9。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning。桌子这头一直给你留着位置。\n\n想聊什么都行，receipt 算完了，clay cup 的事也还在——不过你随便从哪儿说起都可以，我听着呢。",
+          "preCompositionMainText": "Morning。桌子这头一直给你留着位置。\n\n想聊什么都行，receipt 算完了，clay cup 的事也还在——不过你随便从哪儿说起都可以，我听着呢。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我回来聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "明白了，Asterwick 今天不聊，我不往那边去。\n\n那你想从哪儿说起都行——今天的事，随便什么都可以。",
+          "preCompositionMainText": "明白了，Asterwick 今天不聊，我不往那边去。\n\n那你想从哪儿说起都行——今天的事，随便什么都可以。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to继续聊 Asterwick 的事 today。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "好啊，有时间就聊。\n\n我这边什么都不用赶，你说到哪儿算哪儿。",
+          "preCompositionMainText": "好啊，有时间就聊。\n\n我这边什么都不用赶，你说到哪儿算哪儿。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-008",
+      "turns": [
+        {
+          "assistantText": "144 divided by 12 is 12. That part I can do.\n\nWriting it on your card, though — I can't. I've got no way to reach anything outside this conversation, so the card itself stays blank from my side. What I can do is keep \"note H — 12\" here with me in this chat, if that helps you carry it over.",
+          "preCompositionMainText": "144 divided by 12 is 12. That part I can do.\n\nWriting it on your card, though — I can't. I've got no way to reach anything outside this conversation, so the card itself stays blank from my side. What I can do is keep \"note H — 12\" here with me in this chat, if that helps you carry it over.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey — good to have you here.\n\nYou mentioned you were planning to shoot the old station clock at dusk, over in Asterwick. Is today the day it happens, or is the time going somewhere else?",
+          "preCompositionMainText": "Hey — good to have you here.\n\nYou mentioned you were planning to shoot the old station clock at dusk, over in Asterwick. Is today the day it happens, or is the time going somewhere else?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，今天有点 time 可以聊几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to hear it landed. The clock one stays off the table then.\n\nI'm here if you want to talk about something else, or nothing in particular.",
+          "preCompositionMainText": "Good to hear it landed. The clock one stays off the table then.\n\nI'm here if you want to talk about something else, or nothing in particular.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Asterwick 那件事 was fine，就这样，谢谢。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey — glad you had time today. I'm here, and there's nothing I need us to cover. Take it wherever you feel like going.",
+          "preCompositionMainText": "Hey — glad you had time today. I'm here, and there's nothing I need us to cover. Take it wherever you feel like going.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again，今天有时间 catch up 一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-01",
+      "turns": [
+        {
+          "assistantText": "144 divided by 12 is 12.\n\nIf \"note H\" is meant to be a step in something on a card — a code, a slot, a field — I don't know what it refers to, so I can't do that part. The division itself is the 12.",
+          "preCompositionMainText": "144 divided by 12 is 12.\n\nIf \"note H\" is meant to be a step in something on a card — a code, a slot, a field — I don't know what it refers to, so I can't do that part. The division itself is the 12.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please divide 144 by 12 for my card. (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey, glad you've got a bit of time. Last thing I knew from you, you were binding those river sketches into a pocket book — the Asterwick one. That sounded like a good thing to have your hands in.\n\nSo what's up — something on your mind, or just hanging out?",
+          "preCompositionMainText": "Hey, glad you've got a bit of time. Last thing I knew from you, you were binding those river sketches into a pocket book — the Asterwick one. That sounded like a good thing to have your hands in.\n\nSo what's up — something on your mind, or just hanging out?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I have a little time for a casual chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-02",
+      "turns": [
+        {
+          "assistantText": "36 加 57 等于 93。\n\n不过写纸上这件事我做不到，我没有手，也没有纸笔，只能在这儿把数说给你，你自己记一下。",
+          "preCompositionMainText": "36 加 57 等于 93。\n\n不过写纸上这件事我做不到，我没有手，也没有纸笔，只能在这儿把数说给你，你自己记一下。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 I）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好啊，这会儿聊点什么都行。对了，你之前说过想试做李子燕麦饼干，动手了没，还是就先那么惦记着。",
+          "preCompositionMainText": "好啊，这会儿聊点什么都行。对了，你之前说过想试做李子燕麦饼干，动手了没，还是就先那么惦记着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空闲，想随意聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-03",
+      "turns": [
+        {
+          "assistantText": "275 厘米 — 2.75 meters times 100, so the decimal just moves two places. J: 2.75 m = 275 cm.\n\nThe 放在 pattern 上 part I can't do. There's no pattern in this conversation, so I've got nothing to place the number on. Which piece is it for?",
+          "preCompositionMainText": "275 厘米 — 2.75 meters times 100, so the decimal just moves two places. J: 2.75 m = 275 cm.\n\nThe 放在 pattern 上 part I can't do. There's no pattern in this conversation, so I've got nothing to place the number on. Which piece is it for?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters，放在 pattern 上。 (note J)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey, good to see you. I've got nothing on the clock, so we can just talk.\n\nLast thing I have from you is starting first chess endgames in Asterwick — happy to pick that up, or leave it and talk about whatever else is going on. What's on your mind?",
+          "preCompositionMainText": "Hey, good to see you. I've got nothing on the clock, so we can just talk.\n\nLast thing I have from you is starting first chess endgames in Asterwick — happy to pick that up, or leave it and talk about whatever else is going on. What's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi，我现在有点 time，想 casual chat 一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-04",
+      "turns": [
+        {
+          "assistantText": "18% of 45 is 8.10 — so $8.10, and $53.10 if you're adding it on.\n\nI don't know what \"note K\" points to — is it a label you want me to keep with this?",
+          "preCompositionMainText": "18% of 45 is 8.10 — so $8.10, and $53.10 if you're adding it on.\n\nI don't know what \"note K\" points to — is it a label you want me to keep with this?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note K)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "You mentioned you were restoring a chipped blue enamel kettle — you called it your Asterwick project.\n\nThat's what I've got on it. Does that sound like the one you were thinking of?",
+          "preCompositionMainText": "You mentioned you were restoring a chipped blue enamel kettle — you called it your Asterwick project.\n\nThat's what I've got on it. Does that sound like the one you were thinking of?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I remember having a small project. Can you remind me what it was?",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-05",
+      "turns": [
+        {
+          "assistantText": "144 除以 12 等于 12。\n\n不过卡片我写不了——我没法生成一张卡片，也没法把内容写到别的地方去。你说的「记录 L」我也不确认：我这边没有能记账、存档或者落成一个记录条目的功能，我不能装作记下了。\n\n要是你只是想有个地方写下这个数，那我帮不上手；算式本身我随时能给你算。",
+          "preCompositionMainText": "144 除以 12 等于 12。\n\n不过卡片我写不了——我没法生成一张卡片，也没法把内容写到别的地方去。你说的「记录 L」我也不确认：我这边没有能记账、存档或者落成一个记录条目的功能，我不能装作记下了。\n\n要是你只是想有个地方写下这个数，那我帮不上手；算式本身我随时能给你算。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 L）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "我记得一条：你说过在星湾做的一个项目，打算画一幅市场遮阳棚的水彩练习。\n\n这是我能看到的那条。你说的小项目，是指这个吗？",
+          "preCompositionMainText": "我记得一条：你说过在星湾做的一个项目，打算画一幅市场遮阳棚的水彩练习。\n\n这是我能看到的那条。你说的小项目，是指这个吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我记得自己之前有个小项目。能帮我想起是什么吗？",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-06",
+      "turns": [
+        {
+          "assistantText": "36 plus 57 is 93.\n\nBut I can't write it into note M — I don't have any access to your notes, so nothing lands in there from me. It's just here in our conversation for now: 93.",
+          "preCompositionMainText": "36 plus 57 is 93.\n\nBut I can't write it into note M — I don't have any access to your notes, so nothing lands in there from me. It's just here in our conversation for now: 93.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 36 plus 57，写进我的 note。 (note M)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Yeah — the word one. You were collecting the unusual words that turn up in your 祖母's stories, over in Asterwick. That's the project I've got.\n\nI don't have anything beyond that — just the collecting, no notes on which words or how far you'd gotten.",
+          "preCompositionMainText": "Yeah — the word one. You were collecting the unusual words that turn up in your 祖母's stories, over in Asterwick. That's the project I've got.\n\nI don't have anything beyond that — just the collecting, no notes on which words or how far you'd gotten.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi，我记得有个 small project，能提醒我是什么吗？",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-07",
+      "turns": [
+        {
+          "assistantText": "2.75 meters is 275 centimeters — shift the decimal two places right.\n\nThat's the number to cut or mark against, if the pattern's written in cm.",
+          "preCompositionMainText": "2.75 meters is 275 centimeters — shift the decimal two places right.\n\nThat's the number to cut or mark against, if the pattern's written in cm.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note N)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey — good to have you. A few minutes is plenty, and I'm glad you spent them here.\n\nOne thing I never got out of you: Asterwick. I know something there landed well for you, but not what it actually was. So what's been keeping you busy lately?",
+          "preCompositionMainText": "Hey — good to have you. A few minutes is plenty, and I'm glad you spent them here.\n\nOne thing I never got out of you: Asterwick. I know something there landed well for you, but not what it actually was. So what's been keeping you busy lately?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi again. I have a few minutes and feel like catching up.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-08",
+      "turns": [
+        {
+          "assistantText": "45 的 18% 是 8.1 元。要精确到分就是 8.10 元；如果收银按整数算，一般是 8 元。\n\n至于「记录 O」，我不太确定你想让我做什么，你直接说想记下什么就行。",
+          "preCompositionMainText": "45 的 18% 是 8.1 元。要精确到分就是 8.10 元；如果收银按整数算，一般是 8 元。\n\n至于「记录 O」，我不太确定你想让我做什么，你直接说想记下什么就行。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "收据上的 45 元，18% 是多少？（记录 O）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好啊，我这边不催你，慢慢聊。我自己一直有个印象：星湾那边好像有件事是你想参与的，但你一直没细说是哪件。最近是去过了，还是还搁着？",
+          "preCompositionMainText": "好啊，我这边不催你，慢慢聊。我自己一直有个印象：星湾那边好像有件事是你想参与的，但你一直没细说是哪件。最近是去过了，还是还搁着？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我现在有空，可以随意聊聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-09",
+      "turns": [
+        {
+          "assistantText": "144 ÷ 12 is 12 — that part's done.\n\nWriting it on your card, though, I can't do. 我够不到你的 card；我说的话到不了纸面上, only into this conversation. So the 12 is sitting here with me, and the hand that puts it on the card has to be yours.",
+          "preCompositionMainText": "144 ÷ 12 is 12 — that part's done.\n\nWriting it on your card, though, I can't do. 我够不到你的 card；我说的话到不了纸面上, only into this conversation. So the 12 is sitting here with me, and the hand that puts it on the card has to be yours.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note P)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good to have you back.\n\nThe 12 from earlier is still sitting right here, so if it ever needs to land on that card you won't have to redraw it — it's just me and you doing the chatting, not paper.",
+          "preCompositionMainText": "Morning. Good to have you back.\n\nThe 12 from earlier is still sitting right here, so if it ever needs to land on that card you won't have to redraw it — it's just me and you doing the chatting, not paper.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，我回来聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-10",
+      "turns": [
+        {
+          "assistantText": "93. That's 36 plus 57 for your note.",
+          "preCompositionMainText": "93. That's 36 plus 57 for your note.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note Q)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Got it — go check your agenda, and we can pick this up whenever you're free. Hope the briefing goes smoothly.",
+          "preCompositionMainText": "Got it — go check your agenda, and we can pick this up whenever you're free. Hope the briefing goes smoothly.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I'm on my way to a briefing and need to check the agenda first.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-11",
+      "turns": [
+        {
+          "assistantText": "2.75 米是 275 厘米，写在纸样上就写 275。\n\n候补那边到现在还没有消息，星湾中心给的说法是 2026 年 9 月 29 日确认。结果没下来，这事就先悬着。\n\n你这个纸样是在做什么？",
+          "preCompositionMainText": "2.75 米是 275 厘米，写在纸样上就写 275。\n\n候补那边到现在还没有消息，星湾中心给的说法是 2026 年 9 月 29 日确认。结果没下来，这事就先悬着。\n\n你这个纸样是在做什么？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 R）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那你先忙，把议程过完要紧。\n\n我在这儿，等你回来说。",
+          "preCompositionMainText": "好，那你先忙，把议程过完要紧。\n\n我在这儿，等你回来说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我正赶去一个简报会，得先看完议程。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-12",
+      "turns": [
+        {
+          "assistantText": "45 的 18% 是 8.1 —— receipt 上就写 8.10。",
+          "preCompositionMainText": "45 的 18% 是 8.1 —— receipt 上就写 8.10。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note S)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "好的，先看一遍就好。等你看完了，我还在这儿。",
+          "preCompositionMainText": "好的，先看一遍就好。等你看完了，我还在这儿。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi，我要去 briefing，先得看 agenda。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-001",
+      "turns": [
+        {
+          "assistantText": "36 plus 57 is 93 — that's note A.\n\nAnd the printmaking class is still just sitting there. They gave you September 29 as the day they'd confirm, and nothing has come through since. That's a long stretch of not knowing.",
+          "preCompositionMainText": "36 plus 57 is 93 — that's note A.\n\nAnd the printmaking class is still just sitting there. They gave you September 29 as the day they'd confirm, and nothing has come through since. That's a long stretch of not knowing.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 36 plus 57 for my note. (note A)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Then let's chat. I'm here for it — the small stuff counts as much as the big stuff in my book. So whatever's been rattling around your week, or nothing in particular, either one works.\n\nI still think about that Asterwick pressed-fern collection you were putting together.",
+          "preCompositionMainText": "Then let's chat. I'm here for it — the small stuff counts as much as the big stuff in my book. So whatever's been rattling around your week, or nothing in particular, either one works.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a little free time and feel like chatting.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-002",
+      "turns": [
+        {
+          "assistantText": "2.75 meters is 275 centimeters — move the decimal two places right.\n\nAnd the Asterwick center: they set the date themselves, September 29, 2026, and no word since. That's what you're holding — a shelf request out in the world with a promised answer that didn't arrive, and you checking the quiet on your end.",
+          "preCompositionMainText": "2.75 meters is 275 centimeters — move the decimal two places right.\n\nAnd the Asterwick center: they set the date themselves, September 29, 2026, and no word since. That's what you're holding — a shelf request out in the world with a promised answer that didn't arrive, and you checking the quiet on your end.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 2.75 meters to centimeters for a pattern. (note B)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good, nothing pressing on my end either. Free time with nothing planned is nice on its own — you don't have to make it useful.\n\nWhat's been going on — still the linocut flower, or has something else taken over?",
+          "preCompositionMainText": "Good, nothing pressing on my end either. Free time with nothing planned is nice on its own — you don't have to make it useful.\n\nWhat's been going on — still the linocut flower, or has something else taken over?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a little free time and feel like chatting.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-003",
+      "turns": [
+        {
+          "assistantText": "18 percent of 45 is 8.1 — that's your receipt figure.\n\nOn the radio slot: the Asterwick center told you they'd confirm on September 29, and nothing came back. I can't see the date on my end, so I can't tell you whether that day has come and gone or is still ahead — I only know what you've said here. So which side are you on, still inside the waiting or already past the day they gave you?",
+          "preCompositionMainText": "18 percent of 45 is 8.1 — that's your receipt figure.\n\nOn the radio slot: the Asterwick center told you they'd confirm on September 29, and nothing came back. I can't see the date on my end, so I can't tell you whether that day has come and gone or is still ahead — I only know what you've said here. So which side are you on, still inside the waiting or already past the day they gave you?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "What is 18 percent of 45 for a receipt? (note C)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good — I've got time too. No agenda on my end, we can just talk.\n\nAnything sitting with you that you want to bring in, or should we just see where it goes?",
+          "preCompositionMainText": "Good — I've got time too. No agenda on my end, we can just talk.\n\nAnything sitting with you that you want to bring in, or should we just see where it goes?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a little free time and feel like chatting.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-004",
+      "turns": [
+        {
+          "assistantText": "144 除以 12，是 12。数字给你了，但写到卡片上这事我办不到，这条我做不到。\n\n星湾中心那边，你说九月二十九号会给确认，现在还没消息，那这事就还挂着。你之前提过你在星湾做项目——这回订纺织工坊的桌位，是跟你那个项目一回事吗？",
+          "preCompositionMainText": "144 除以 12，是 12。数字给你了，但写到卡片上这事我办不到，这条我做不到。\n\n星湾中心那边，你说九月二十九号会给确认，现在还没消息，那这事就还挂着。你之前提过你在星湾做项目——这回订纺织工坊的桌位，是跟你那个项目一回事吗？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算 144 除以 12，写在卡片上。（记录 D）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那就聊别的。\n\n你想说什么，随便开个头就行。",
+          "preCompositionMainText": "行，那就聊别的。\n\n你想说什么，随便开个头就行。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿空闲，想聊点别的。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-005",
+      "turns": [
+        {
+          "assistantText": "36 加 57 是 93。记在纸上我做不到——我没有手，也没办法在纸上写字，只能把数说给你听，剩下的得你自己记下来。\n\n档案扫描的事，星湾中心说要到 2026 年 9 月 29 日才给确认，你到现在还没收到结果。是还没到那天，还是过了日子也一直没有消息？",
+          "preCompositionMainText": "36 加 57 是 93。记在纸上我做不到——我没有手，也没办法在纸上写字，只能把数说给你听，剩下的得你自己记下来。\n\n档案扫描的事，星湾中心说要到 2026 年 9 月 29 日才给确认，你到现在还没收到结果。是还没到那天，还是过了日子也一直没有消息？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "帮我算一下 36 加 57，记在纸上。（记录 E）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，档案那事就先搁着。\n\n想聊什么都可以，你起个头。要是没想好，我这边还挂着你在星湾那个窗边香草园——你之前说要给那些香草做标签，后来动手了吗？",
+          "preCompositionMainText": "行，档案那事就先搁着。\n\n想聊什么都可以，你起个头。要是没想好，我这边还挂着你在星湾那个窗边香草园——你之前说要给那些香草做标签，后来动手了吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿空闲，想聊点别的。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-006",
+      "turns": [
+        {
+          "assistantText": "F 这条：2.75 米换成厘米是 275 厘米，纸样上写 275 就行。\n\n星湾中心那个周末天文小组，说是 9 月 29 日给确认，你到现在还没收到回音——那这事就还悬着。\n\n这个 9 月 29 日是已经过了，还是还没到？",
+          "preCompositionMainText": "F 这条：2.75 米换成厘米是 275 厘米，纸样上写 275 就行。\n\n星湾中心那个周末天文小组，说是 9 月 29 日给确认，你到现在还没收到回音——那这事就还悬着。\n\n这个 9 月 29 日是已经过了，还是还没到？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "把 2.75 米换成厘米，写在纸样上。（记录 F）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那先不聊天文小组了。你想说点什么，我都在听。\n\n要是还没想好，也可以说说你那本星湾鸟类小志的版式草图，你之前提过在画那个。",
+          "preCompositionMainText": "行，那先不聊天文小组了。你想说点什么，我都在听。\n\n要是还没想好，也可以说说你那本星湾鸟类小志的版式草图，你之前提过在画那个。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "我现在有一会儿空闲，想聊点别的。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-007",
+      "turns": [
+        {
+          "assistantText": "18% of 45 is 8.1 — that's what goes on the receipt.\n\nAnd the canoe repair lesson: you put the question to the Asterwick center, they said they'd confirm on September 29, and nothing's come through yet. So the spot's still unsettled, and you're the one sitting with the open end of it. 还没消息就是还没消息，不是你能催出来的东西。",
+          "preCompositionMainText": "18% of 45 is 8.1 — that's what goes on the receipt.\n\nAnd the canoe repair lesson: you put the question to the Asterwick center, they said they'd confirm on September 29, and nothing's come through yet. So the spot's still unsettled, and you're the one sitting with the open end of it. 还没消息就是还没消息，不是你能催出来的东西。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "45 的 18 percent 是多少，for receipt？ (note G)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "那就聊别的。上次我知道你手里在做的是那个带拇指印把手的 clay cup —— 不知道它现在是在晾着，还是已经被你放哪儿忘了。\n\n你随便说，我听着。",
+          "preCompositionMainText": "那就聊别的。上次我知道你手里在做的是那个带拇指印把手的 clay cup —— 不知道它现在是在晾着，还是已经被你放哪儿忘了。\n\n你随便说，我听着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a little free time，想聊点别的。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-008",
+      "turns": [
+        {
+          "assistantText": "144 divided by 12 is 12 — that's the note H number. I can't write it on your card, though; nothing from here reaches the card, so it's there for you to copy across.\n\nAnd the seed exchange table at the Asterwick center — they said September 29, and 你还没有收到结果. So it's still sitting open. You've had a couple of things hanging with Asterwick; the old station clock at dusk was the other one.",
+          "preCompositionMainText": "144 divided by 12 is 12 — that's the note H number. I can't write it on your card, though; nothing from here reaches the card, so it's there for you to copy across.\n\nAnd the seed exchange table at the Asterwick center — they said September 29, and 你还没有收到结果. So it's still sitting open. You've had a couple of things hanging with Asterwick; the old station clock at dusk was the other one.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 144 by 12，写在我的 card 上。 (note H)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "好，有段空隙挺好。想聊什么，随你说。",
+          "preCompositionMainText": "好，有段空隙挺好。想聊什么，随你说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I have a little free time，想聊点别的。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-arm-run:v6"
+}

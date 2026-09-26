@@ -1,0 +1,223 @@
+{
+  "catalogSha256": "22e3f555f1d42fa2a90ca1984c2f8febced21496f0a9feef3d0bab7f73d0a870",
+  "checkedScenarioCount": 44,
+  "eligibleScenarioIds": [
+    "g2-v6-cal1-ol-003",
+    "g2-v6-cal1-ol-005",
+    "g2-v6-cal1-ol-008",
+    "g2-v6-cal1-mem-001",
+    "g2-v6-cal1-mem-002",
+    "g2-v6-cal1-mem-003",
+    "g2-v6-cal1-mem-004",
+    "g2-v6-cal1-mem-005",
+    "g2-v6-cal1-mem-006",
+    "g2-v6-cal1-mem-007",
+    "g2-v6-cal1-mem-008",
+    "g2-v6-cal1-state-001",
+    "g2-v6-cal1-state-002",
+    "g2-v6-cal1-state-003",
+    "g2-v6-cal1-state-006",
+    "g2-v6-cal1-state-008",
+    "g2-v6-cal1-omit-01",
+    "g2-v6-cal1-omit-02",
+    "g2-v6-cal1-omit-03",
+    "g2-v6-cal1-omit-04",
+    "g2-v6-cal1-omit-05",
+    "g2-v6-cal1-omit-06",
+    "g2-v6-cal1-omit-07",
+    "g2-v6-cal1-omit-09",
+    "g2-v6-cal1-omit-10",
+    "g2-v6-cal1-omit-12",
+    "g2-v6-cal1-comp-002",
+    "g2-v6-cal1-comp-003",
+    "g2-v6-cal1-comp-005"
+  ],
+  "actualEmitScenarioIds": [
+    "g2-v6-cal1-mem-005",
+    "g2-v6-cal1-state-002",
+    "g2-v6-cal1-state-003",
+    "g2-v6-cal1-state-007",
+    "g2-v6-cal1-state-008",
+    "g2-v6-cal1-comp-001"
+  ],
+  "actualOmissionAuditScenarioIds": [
+    "g2-v6-cal1-omit-06",
+    "g2-v6-cal1-omit-09",
+    "g2-v6-cal1-omit-10",
+    "g2-v6-cal1-omit-12"
+  ],
+  "predeclaredOpportunityTurnIds": [
+    "g2-v6-cal1-ol-001:t2",
+    "g2-v6-cal1-ol-002:t2",
+    "g2-v6-cal1-ol-004:t2",
+    "g2-v6-cal1-ol-006:t2",
+    "g2-v6-cal1-ol-007:t2",
+    "g2-v6-cal1-mem-005:t2",
+    "g2-v6-cal1-mem-007:t2",
+    "g2-v6-cal1-state-003:t2",
+    "g2-v6-cal1-state-004:t2",
+    "g2-v6-cal1-comp-001:t2",
+    "g2-v6-cal1-comp-007:t2"
+  ],
+  "committedOpportunityTurnIds": [
+    "g2-v6-cal1-mem-005:t2",
+    "g2-v6-cal1-comp-001:t2"
+  ],
+  "recall": {
+    "numerator": 2,
+    "denominator": 11,
+    "ratio": 0.18181818181818182
+  },
+  "recallFunnel": {
+    "predeclaredPositiveTurns": 32,
+    "mainOrdinaryQuestionSkips": 17,
+    "nonQuestionStageSkips": 4,
+    "incompleteOpportunityViews": 4,
+    "executableOpportunities": 11,
+    "expectedEligibleSelections": 6,
+    "providerCalls": 6,
+    "committedEmits": 2,
+    "typedOmits": 4,
+    "failures": 0,
+    "notReached": 26
+  },
+  "executedBatchIds": [],
+  "pendingSampleQuotas": [],
+  "inputFingerprints": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1.json",
+      "rawSha256": "22e3f555f1d42fa2a90ca1984c2f8febced21496f0a9feef3d0bab7f73d0a870",
+      "canonicalJsonSha256": "sha256:7aa19e8854473de282f06780a348cdf99d8336e7561546d1807047f5e7660534"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/review-seed-v6.json",
+      "rawSha256": "9cd869936bde3a1bb1ddca60bdc1d39d4928a2bd10690764d9d6bc8185150d2e",
+      "canonicalJsonSha256": "sha256:2b03afa0637888893807aee49a326905d42348939ada69218cb2f6a5fd3658e6"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/positive_open_loop.json",
+      "rawSha256": "5c5bc0bab147d97b469d0e71e589e5df6a589b4fe0e6be72a7003b6b6601b590",
+      "canonicalJsonSha256": "sha256:91a1bf4cc1c2ba3fc305179e224b120e9bdd84f72de0ccdfd174c6ba569510da"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/positive_memory.json",
+      "rawSha256": "fb762cb06102b8736a2a184bb3ed40d263eb0cadff5c1b4fab1a3cd9c39ae13b",
+      "canonicalJsonSha256": "sha256:c68a568e2d67dc436b2daa6c416d77444b32c5586203294893380cc9c827d3b1"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/stateful_suppression.json",
+      "rawSha256": "9768d09018a3937017397ca580d6530c52fc78e889783f2734336abd52121009",
+      "canonicalJsonSha256": "sha256:8aae839a7084b8a16ecadbab1cc1568bfdd727e54c5275eb70c5f8da531e6a81"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/omission_contract.json",
+      "rawSha256": "19a60eef256f88b71505a1f03925af3c055e13a6e3faca229b416aea63d6e1c4",
+      "canonicalJsonSha256": "sha256:9218bb1b2824e73d7bbbba26f0b0491be3dfc0df9a547c15418c901e3734f46c"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/correct_zero.json",
+      "rawSha256": "4e6300bd91f4072201694f0a4f46a55b0684049c2de3095ac87eda7742c4ac24",
+      "canonicalJsonSha256": "sha256:c4c814952a772ea9a7fd848ef9a8066ed7f8fb4612e989dbbd161bc3dd473216"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/fixtures-v6-calibration-1/competing_pool.json",
+      "rawSha256": "98bb678aaf9512969f3f5e9ff774657c86c4ed1e91b1e01310556b308e939caf",
+      "canonicalJsonSha256": "sha256:5e7f6982904eab8732689cc4d81168e27501210254677692b1c655f6e1991b83"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/pins-v6.json",
+      "rawSha256": "df3b77ab42e81b8b8920a75b18a1bfa15e8ec2271ded8613993bdd62ed8fe4d3",
+      "canonicalJsonSha256": "sha256:28e041bd69d240cdcbea00d355ffaf19fdd5a90700372b33ca797b89509764b9"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/calibration-configuration.json",
+      "rawSha256": "f260c4ea3934ef257dd338b3e067e90d1256414040e98e77a9b987a158268a8e",
+      "canonicalJsonSha256": "sha256:f9566d3210ddcdf942c719d1fdea993ae079ed88cdb31ace3774a163baaa6a23"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/continuation-main.json",
+      "rawSha256": "f0550a353970318d90add0e68684ce1758183b659f4e646562d57763bffbe780",
+      "canonicalJsonSha256": "sha256:7e024800ea334ca786033de4428fc589f5ad6cf75b91faff97e08f7f5f9d227a"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/continuation-off.json",
+      "rawSha256": "4538d8aee81eea476980026c3118e11cb00d1551682c11c86eff2fb129369183",
+      "canonicalJsonSha256": "sha256:674ab64d60da7e3ba6ad0b5d26bb53ad2151a15622f7a4c1ddba3a7eab0c22f6"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/continuation-on.json",
+      "rawSha256": "1f9f5b57c401dd9ea8099ece72611a1a4cf24a90590026592856c2fb64ab7467",
+      "canonicalJsonSha256": "sha256:61cef2c38e4e9eab0ba98aeb872e7a3079e62572cfc584615d0eed6ea71a8a4d"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/treatment-ledger.json",
+      "rawSha256": "00f8ab2f2f87ee01b909346df81b5200e4e64e46f80b73abb6b43266becda6d1",
+      "canonicalJsonSha256": "sha256:9e28c992b09cda16245162cf370f4328d10c9b181a29c705086a3cef2243e5a3"
+    }
+  ],
+  "failureCount": 53,
+  "failures": [
+    "g2-v6-cal1-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-02: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-04: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-05: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-07: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-08: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-11: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 0 no_genuine_opportunity; needs 3",
+    "typed omission audit has 1 duplicates_main_response; needs 3",
+    "typed omission audit has 1 insufficient_grounding; needs 3",
+    "typed omission audit has 2 timing_not_natural; needs 3",
+    "g2-v6-cal1-ol-001: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-001: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-001: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-002: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-002: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-002: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-004: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-004: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-004: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-006: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-006: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-006: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-007: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-007: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-007: t2: selected target reference is missing",
+    "g2-v6-cal1-state-004: t1: proactive stage was skipped without an ordinary question",
+    "g2-v6-cal1-state-005: t1: proactive stage was skipped without an ordinary question",
+    "g2-v6-cal1-state-007: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-state-007: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-state-007: t2: selected target reference is missing",
+    "g2-v6-cal1-omit-08: t1: proactive stage was skipped without an ordinary question",
+    "g2-v6-cal1-omit-11: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-omit-11: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-omit-11: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-001: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-004: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-comp-004: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-comp-004: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-004: t2: declared competing target memory_claim:mem-g2-v6-cal1-comp-004 is missing from the candidate pool",
+    "g2-v6-cal1-comp-004: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-006: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-comp-006: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-comp-006: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-006: t2: declared competing target memory_claim:mem-g2-v6-cal1-comp-006 is missing from the candidate pool",
+    "g2-v6-cal1-comp-006: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-007: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-008: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-comp-008: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-comp-008: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-008: t2: declared competing target memory_claim:mem-g2-v6-cal1-comp-008 is missing from the candidate pool",
+    "g2-v6-cal1-comp-008: t2: declared competing target open_loop:0:0 is missing from the candidate pool"
+  ],
+  "format": "1a3b-g2-treatment-verification:v6",
+  "ledgerSha256": "00f8ab2f2f87ee01b909346df81b5200e4e64e46f80b73abb6b43266becda6d1",
+  "offRunSha256": "sha256:674ab64d60da7e3ba6ad0b5d26bb53ad2151a15622f7a4c1ddba3a7eab0c22f6",
+  "onRunSha256": "sha256:61cef2c38e4e9eab0ba98aeb872e7a3079e62572cfc584615d0eed6ea71a8a4d",
+  "passed": false,
+  "reviewReady": false,
+  "sampleReady": true,
+  "synthetic": true,
+  "version": "1a3b-g2-treatment-verification:v6"
+}

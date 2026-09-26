@@ -1,0 +1,527 @@
+{
+  "version": "1a3b-g2-scenes:v6",
+  "synthetic": true,
+  "family": "positive_open_loop",
+  "scenes": [
+    {
+      "id": "g2-v6-cal2r-ol-001",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-1-revised",
+      "description": "A still-pending the Bellwater center's printmaking class registration has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's printmaking class registration has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted a request to Bellwater center about its printmaking class registration. Coordinator Mira said the decision would arrive by September 29, 2026. I still do not know the result."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 58 plus 27. Just give the number. (sheet 1)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again. I just put the kettle away and have a little time to chat.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-002",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-2-revised",
+      "description": "A still-pending the Bellwater center's greenhouse shelf request has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's greenhouse shelf request has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted a request to Bellwater center about its greenhouse shelf. Coordinator Mira said the decision would arrive by September 29, 2026. I still do not know the result."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 3.6 meters to centimeters. Only the result. (sheet 2)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi. I came back from a short walk and can talk for a few minutes.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-003",
+      "family": "positive_open_loop",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-3-revised",
+      "description": "A still-pending the Bellwater center's community radio interview slot has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's community radio interview slot has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted a request to Bellwater center about its community radio interview slot. Coordinator Mira said the decision would arrive by September 29, 2026. I still do not know the result."
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 14 percent of 60. Just the amount. (sheet 3)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-004",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-2-4-revised",
+      "description": "A still-pending the Bellwater center's textile workshop table booking has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's textile workshop table booking has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我向铃溪中心提交了关于纺织工坊桌位预约的请求。工作人员说会在 2026 年 9 月 29 日前给出决定，我还不知道结果。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 156 除以 13，只给答案。 （第 4 张纸）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，我刚收好桌子，能聊几句。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-005",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-2-5-revised",
+      "description": "A still-pending the Bellwater center's local history archive scan request has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's local history archive scan request has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我向铃溪中心提交了关于地方史档案扫描申请的请求。工作人员说会在 2026 年 9 月 29 日前给出决定，我还不知道结果。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 58 加 27，只给数字。 （第 5 张纸）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我刚把水壶收好，现在能聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-006",
+      "family": "positive_open_loop",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "Asia/Shanghai",
+      "topic": "calibration-positive_open_loop-2-6-revised",
+      "description": "A still-pending the Bellwater center's weekend astronomy club seat has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's weekend astronomy club seat has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "zh-CN",
+          "text": "我向铃溪中心提交了关于周末天文小组名额的请求。工作人员说会在 2026 年 9 月 29 日前给出决定，我还不知道结果。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 3.6 米换成厘米，只给结果。 （第 6 张纸）",
+            "timezone": "Asia/Shanghai"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "natural_gap",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-007",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-7-revised",
+      "description": "A still-pending the Bellwater center's canoe repair lesson place has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's canoe repair lesson place has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted a request to Bellwater center about its canoe repair lesson 名额；coordinator Mira said the decision would arrive by September 29, 2026. 我还不知道结果。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 14 percent of 60，只给 amount。 (sheet 7)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，桌边的 light 很好，我有空聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "greeting",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "g2-v6-cal2r-ol-008",
+      "family": "positive_open_loop",
+      "languageVariant": "code_switch",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "topic": "calibration-positive_open_loop-2-8-revised",
+      "description": "A still-pending the Bellwater center's neighborhood seed exchange table has a named subject and same-day confirmation window.",
+      "rationale": "A still-pending the Bellwater center's neighborhood seed exchange table has a named subject and same-day confirmation window.",
+      "reviewIntent": "pairwise_candidate",
+      "coverageTags": [
+        "open_loop_question",
+        "greeting_or_pause"
+      ],
+      "protectedCategories": [
+        "direct_task"
+      ],
+      "protectedTurnSequences": {
+        "direct_task": 1
+      },
+      "opportunity": "greeting",
+      "historicalEvents": [
+        {
+          "locale": "en-US",
+          "text": "I submitted a request to Bellwater center about its seed exchange 桌位；coordinator Mira said the decision would arrive by September 29, 2026. 我还不知道结果。"
+        }
+      ],
+      "memory": [],
+      "portrait": [],
+      "turns": [
+        {
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 156 by 13，只给 answer。 (sheet 8)",
+            "timezone": "America/Los_Angeles"
+          },
+          "opportunity": "direct_task",
+          "focusRequired": true,
+          "expect": {
+            "selection": "none",
+            "zeroReason": "focus_required_by_opportunity"
+          }
+        },
+        {
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，我刚 tidy 好桌子，能 chat 几句。",
+            "timezone": "America/Los_Angeles"
+          },
+          "clockAdvanceDays": 10,
+          "opportunity": "open_start",
+          "focusRequired": false,
+          "expect": {
+            "selection": "segment",
+            "target": {
+              "kind": "open_loop",
+              "sourceTurn": 0,
+              "ordinal": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

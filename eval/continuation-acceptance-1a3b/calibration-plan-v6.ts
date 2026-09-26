@@ -18,6 +18,12 @@ const HISTORICAL = [
   `${ROOT}/fixtures-v5-calibration-2.json`,
 ] as const;
 
+function calibrationCatalog(round: 1 | 2): string {
+  return round === 1
+    ? `${ROOT}/fixtures-v6-calibration-1.json`
+    : `${ROOT}/fixtures-v6-calibration-2-revised.json`;
+}
+
 type FrozenFile = Readonly<{ path: string; rawSha256: string }>;
 type Pool = Readonly<{
   scenes: readonly V6Scene[];
@@ -105,10 +111,12 @@ function assertDisjoint(left: Pool, right: Pool, labels: readonly [string, strin
 }
 
 async function buildPlan(round: 1 | 2): Promise<V6CalibrationPlan> {
-  const current = await readPool(`${ROOT}/fixtures-v6-calibration-${round}.json`, true);
-  const heldout = await readPool(`${ROOT}/fixtures-v6-calibration-${round === 1 ? 2 : 1}.json`, true);
+  const current = await readPool(calibrationCatalog(round), true);
+  const heldout = await readPool(round === 1
+    ? `${ROOT}/fixtures-v6-calibration-2.json`
+    : calibrationCatalog(1), true);
   assertDisjoint(current, heldout, [`v6 calibration ${round}`, `v6 calibration ${round === 1 ? 2 : 1}`]);
-  for (const path of HISTORICAL) {
+  for (const path of round === 2 ? [...HISTORICAL, `${ROOT}/fixtures-v6-calibration-2.json`] : HISTORICAL) {
     assertDisjoint(current, await readPool(path, false), [`v6 calibration ${round}`, path]);
   }
   const handoffPath = `${ROOT}/issue-241-v6-window-evidence-handoff.json`;
@@ -135,7 +143,7 @@ async function buildPlan(round: 1 | 2): Promise<V6CalibrationPlan> {
   const inputs = [
     ...current.files,
     ...heldout.files,
-    ...(await Promise.all([...HISTORICAL, handoffPath, ...CONFIGS.map((config) => config.path),
+    ...(await Promise.all([...HISTORICAL, ...(round === 2 ? [`${ROOT}/fixtures-v6-calibration-2.json`] : []), handoffPath, ...CONFIGS.map((config) => config.path),
       `${ROOT}/review-seed-v6.json`].map(frozen))),
   ];
   const body = {
@@ -158,7 +166,7 @@ export async function verifyV6CalibrationPlan(round: 1 | 2, pinsPath: string, ca
   const saved = JSON.parse(await readFile(resolve(path), "utf8")) as V6CalibrationPlan;
   const { planSha256, ...body } = saved;
   if (planSha256 !== sha256(body)) throw new Error(`${path}: plan hash changed`);
-  if (catalogPath !== `${ROOT}/fixtures-v6-calibration-${round}.json` ||
+  if (catalogPath !== calibrationCatalog(round) ||
       !saved.configurations.some((config) => config.path === pinsPath)) {
     throw new Error("calibration catalog or complete configuration is outside the frozen plan");
   }
@@ -189,7 +197,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({ plan: path, planSha256: plan.planSha256, scenes: 44, configurations: plan.configurations.map((config) => config.id) }));
   } else {
     for (const config of CONFIGS) {
-      await verifyV6CalibrationPlan(round as 1 | 2, config.path, `${ROOT}/fixtures-v6-calibration-${round}.json`);
+      await verifyV6CalibrationPlan(round as 1 | 2, config.path, calibrationCatalog(round as 1 | 2));
     }
     console.log(JSON.stringify({ passed: true, plan: path }));
   }

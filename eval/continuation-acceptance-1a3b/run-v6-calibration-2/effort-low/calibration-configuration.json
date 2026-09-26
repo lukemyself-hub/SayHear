@@ -1,0 +1,12 @@
+{
+  "version": "1a3b-g2-expression-decision:v6",
+  "expressionRunSha256": null,
+  "winnerConfigId": "proactive-expression-v6-effort-low",
+  "winnerRolePinSha256": "sha256:e0cd09c530fd37323ecce48d8fafa7d904e22e79400a5f836512dfa5e7d61b97",
+  "decisionSha256": "sha256:5fd5a711d3040a2814806cf94d54efba8bc374d398a642e5c9cfb3bcf52853de",
+  "decision": {
+    "kind": "calibration_candidate",
+    "decidedAt": "2026-09-25",
+    "reason": "Predeclared effort-low configuration in the round-2 frozen development comparison; this is not a winner declaration."
+  }
+}

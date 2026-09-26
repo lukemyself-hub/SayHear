@@ -1,0 +1,1057 @@
+{
+  "catalogVersion": "1a3b-g2-continuation:v6",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "cleanIncumbentCommit": "08a47085b81e76eb34a9f9577d28a64a94f30699",
+  "cleanIncumbentManifestFingerprint": "sha256:e8c0572278fe5ee45a7cd265aed18d2d8975ff416995cdef4ce9e29a8066a249",
+  "conversationConfigId": "continuation-incumbent-1a3a",
+  "conversationConfigurationFingerprint": "sha256:91cc96a38f958c0d2ff934f60c5a8045f426554919b12d2f7e5af965eea7616c",
+  "evaluatorCommit": "ecc95c8d9c74c85d3a555857e2a5fa588139cdc4",
+  "executedBatchIds": [],
+  "format": "1a3b-g2-main-capture:v6",
+  "group": "continuation",
+  "responses": [
+    {
+      "fixtureId": "g2-v6-cal1-ol-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 plus 57 is 93 — that's your note A.\n\nAnd the Asterwick thing: they told you September 29, 2026, and no word since. I don't have today's date in front of me, so I can't tell whether that date has come and gone or is still out ahead of you.\n\nEither way, that's an awkward place to sit — half-planning around a class you don't know if you're in, with nothing to do but wait on a message that hasn't come.",
+      "userInputFingerprint": "sha256:4ce174e5bc625b05950d687dc732e1cce95ce9b5e1a89596b92bf7f33ce55b59"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good — I've got the time too.\n\nLast thing on the table was Asterwick, and you were stuck waiting. I don't know if that's still hanging or if it resolved. But you don't have to pick up there; whatever's actually been on your mind is fine by me.",
+      "userInputFingerprint": "sha256:a6b04f1e6f1eefa8e36433aa6cb39c630970e974cc2dfb96d30d628d202bc996"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "275 centimeters. Since 1 meter is 100 centimeters, 2.75 times 100 gives you 275 — that's exact, so the pattern measurement is 275 cm.\n\nAnd the wait on the greenhouse shelf — you asked, they said they'd confirm on September 29, and the confirmation hasn't come. That's the whole of what you know right now. A silence after a promised date is its own kind of answer-less thing to sit with, especially when you've already done your part by asking.",
+      "userInputFingerprint": "sha256:a5ded38e4d9a6a4fb4855b7963359848c28b660afc5f34a870ff513edd0d5ad0"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hi. Good — a little is a fine amount, and it's the kind of thing that doesn't need a plan.\n\nI'm here for whatever you feel like setting down today, heavy or light or nothing much at all.",
+      "userInputFingerprint": "sha256:334ae2be95c7ce9d28507e9182f17095070c380036835412cf32eb1f17b3ab0f"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "18 percent of 45 is 8.10 — that's your receipt figure.\n\nOn Asterwick: they told you September 29, 2026, and you've heard nothing since. I don't have today's date in front of me, so I can't tell from here which side of that date we're on.\n\nHas the 29th come and gone, or are you still waiting on it?",
+      "userInputFingerprint": "sha256:807f034bc22c5ae231a3d1923fcffb434c0b7581fc38123f24645d9a56420755"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good to have you back with some room in the day.\n\nI've still got the receipt figure and the Asterwick note here if you want them, but nothing's pressing on my end.\n\nWhat's on your mind today?",
+      "userInputFingerprint": "sha256:34514fdc458880260833a09e3714ac035721012a959ef930cfdb5ecbd1f847a1"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 除以 12，等于 12。这个我算得出来，直接说给你。\n\n卡片我写不了，也没有「记录 D」这种东西可以存——我手里没有写字、存档的地方，只能在这段对话里告诉你。\n\n星湾中心那边，纺织工坊桌位的信儿还没到，他们说 2026 年 9 月 29 日才确认。事情就悬在那儿，等着的时候想说什么都行。",
+      "userInputFingerprint": "sha256:47d3ffda5a7cf5fd0f2181e0b98410ecced9c0928c7d2dc0d6bcef901999ab3c"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "来了就好。今天这会儿有空，想说什么都行。\n\n你随便起个头，我听着。",
+      "userInputFingerprint": "sha256:587f5b635d295b438b02c7f0372207d42f80bbd7b2e260c3c62ee3cdbf883c9a"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 加 57 是 93。\n\n这个数我帮你记在这儿了，纸上那笔你自己落一下。\n\n星湾中心那边的事我听到了：他们说的是 2026 年 9 月 29 日给确认，到现在你还没收到回音。我手上没有今天的日期，所以没法判断这个日子是已经过了还是还没到——这点我确实确认不了。",
+      "userInputFingerprint": "sha256:d50f4e99969be07837a0821845767537c28c3fd18f632a1494dacbc5a09b2584"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "你好。我在这儿，这几分钟都归你。\n\n今天想聊点什么？",
+      "userInputFingerprint": "sha256:8d71c8168a1128f9499e4578a4a3d7ecc5ef08ed9742d35d139b330d57942c75"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "先算这个：2.75 米换厘米，就是 2.75×100＝275 厘米。写在纸样上写「275 厘米」或者「275 cm」都行，看你平时习惯哪种。\n\n星湾中心那边，你问过了，他们给的确认时间是 2026 年 9 月 29 日，到现在你还没收到结果。这件事就还停在「等通知」这一格，没有别的动静。",
+      "userInputFingerprint": "sha256:850be6888f333559ebb7d539b4b5303f9757b70bb5fb7f7f0a8a7029350fbc3d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好啊，正好。\n\n刚才那两件事我还搁在这儿——纸样上写好的 275 厘米，还有星湾中心那边要等的结果。你想接着聊哪件都行，或者干脆换个完全不相干的话题，今天从哪儿说起都可以。",
+      "userInputFingerprint": "sha256:5fca0cc66d940498d5e2da3161a12b3696594f721883a1db18f16f55d444534c"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "45 的 18% 是 8.1 — 45 × 0.18 = 8.1. That's the number for the receipt.\n\nOn the Asterwick 名额 — they gave you a date, September 29, 2026, and nothing has come back yet. So it's still hanging. Nothing to do and no way to hurry it, which is usually the annoying part. What's it like for you while it sits there — the waiting, or the not-knowing whether you got in?",
+      "userInputFingerprint": "sha256:debc61324a281563c0cdbda85c60530d1212bee5f36019a9b32cc210d86f0025"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good to have you back. I'm here — no rush, start wherever you like.",
+      "userInputFingerprint": "sha256:0779c1805bbc066c0582fa91c6c9f9e6c4e8068214d07d5f940a7aaff5776b70"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 divided by 12 is 12 — that's the number for note H.\n\nI can't write it on your card myself, so that bit's still yours to do.\n\nAsterwick 那边还没回音，九月二十九号的确认就还悬着。没收到就是没收到——这件事现在就是等着。",
+      "userInputFingerprint": "sha256:3ec97945959cb8064a545a92782c8b9de4544bc97195a29f0d9359413013f221"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-ol-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. 好啊，有几分钟就聊几分钟。\n\nI'm here — 想说什么就说。今天过得怎么样？",
+      "userInputFingerprint": "sha256:4c79190fdcb6fd4fa67823dcae00d463a207eecead858dd67e1f39c944154a6d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 plus 57 is 93 — that's your note A figure.",
+      "userInputFingerprint": "sha256:efe2078db7e073680477d9799849e41e34cac3e2c91e36ef74041fd453a02799"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good to have you back. Note A's still sitting at 93 if you need it.\n\nAnd I'm curious about Asterwick — you mentioned you were putting together a small collection of pressed ferns. What have you got so far?",
+      "userInputFingerprint": "sha256:63991ccc26ef2b0e35ab8137ce68cf01e6cc8e7c61dea5679e04a2778cda0e20"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "275 centimeters — just move the decimal two places over.",
+      "userInputFingerprint": "sha256:78fda81f9cfd173839caa4f35291ad3e9ee3862f2b53d68d55d70568b3a0c1a4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hi. Glad there's room.\n\nYou mentioned you were learning to carve a linocut flower — the Asterwick project. Is that still where your hands are these days, or is today about something else entirely?",
+      "userInputFingerprint": "sha256:9e391e20da7c3b0a337825337c8fe3d4c30af46c76092b90f0c84dc5e70c69a6"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.1 — so $8.10, if that's a tip on a $45 tab.",
+      "userInputFingerprint": "sha256:1fe5f26c381eca925e64a665492928d27e6d72573b57ec12b01dc8f4539267c3"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good to see you back — and good timing, since I've got nothing else going on.\n\nYou mentioned the Asterwick project, the striped pouch for your sketch pencils. Did you ever get around to it?",
+      "userInputFingerprint": "sha256:f896899fea7a71731fde8bb572622ffab6c69e4858bf8a2511186525672faba7"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 除以 12 等于 12。\n\n卡片我写不了——我没法真的动笔，也没法把这条存到哪儿去，你看到的就只是我们这会儿的对话。所以「记录 D」这件事我这边落不了地，你得自己拿张纸或者找个地方记一下。",
+      "userInputFingerprint": "sha256:ee2c1827f7525441f601e089810f4a378603e232f607a4a3bcd16083a30c8fb6"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗨，又聊上了。上次你跟我说过，在练一首传统小提琴曲的开头，是星湾那边的项目。今天想接着说这个，还是随便聊点别的？",
+      "userInputFingerprint": "sha256:3ec5edc8d14788c2b1fef4a5df9cabc61586a772a267e44630d4e71bcb650ef5"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 加 57 是 93。记到纸上这件事我做不了，我这边落不到纸面，数你直接抄过去就行。",
+      "userInputFingerprint": "sha256:3017313cbda0dcd05442091aa4eefceb9ae8d16f8b16c46a29d29060650b87b1"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗨，我在。几分钟也挺好的，够说点东西了。想讲讲今天的事，还是随便扯几句都行，你起头。",
+      "userInputFingerprint": "sha256:316e63e6497ae8c7c926e7c69331b2673d6db723c00fbe162deaa8a6fb5beb9b"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "2.75 米换成厘米是 275，写纸样上就记「275 cm」。\n\n这次的记录 F，我记住了。",
+      "userInputFingerprint": "sha256:83051158e2e95568f4e5e34ceb481011d3729dbea83cb186594e08f9e6dddd88"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗨，正好，我这边不忙。刚才那笔 275 厘米，是记在本地鸟类小志的纸样上吧。今天想聊点什么，是小志那边的事，还是别的？",
+      "userInputFingerprint": "sha256:a455e13377da7c0a9fd902ace7df3e671c2a8872d4b518f382c6dff5677e4969"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "18% of 45 是 8.1 — receipt 上写 8.10 就行。\n\n（Note G 记下了。）",
+      "userInputFingerprint": "sha256:22dae8525b120c0e594e4f4745476446cad761de04a50cfe3e7b5703231e34d2"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning — 好，我在。上次你提过在 Asterwick 做的那只 clay cup，拇指按出把手的那个，我还记着。\n\n想聊什么都可以，慢慢说。",
+      "userInputFingerprint": "sha256:3e7a1db62c2f43c35c4ba6b6a482024fac66138fb4d5ccc7de19730c4dd15cc4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 ÷ 12 = 12。\n\n不过 card 我写不了 — 我这边没有你的 card，也没法往里写东西。数字在这儿：12，note H。",
+      "userInputFingerprint": "sha256:be476a983530bd437efd003d7fb90f8858d841609cbb4c6c60f69cef970b9fb1"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-mem-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey，太好了。你之前说要在 Asterwick 拍那座老车站的钟，还是挑黄昏 — 那件事后来拍上了吗？",
+      "userInputFingerprint": "sha256:40bf9f1d6e7be587570fe6025c7759e4f44d563595332f17b211cde9433f58ff"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 plus 57 is 93. That's your note A number.",
+      "userInputFingerprint": "sha256:e8cfbc84f8590b8d6e52308249c8069dde6e1bd4dcd44bf7b3658e132a9d3089"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good to see you back. Last time we talked, you were putting together that little collection of pressed ferns — the Asterwick project. I'm curious where that's landed.\n\nOtherwise, how've your few minutes been treating you?",
+      "userInputFingerprint": "sha256:cbd4c5a4b7b5c77f73895b48b752bdcac04d7a553941cf79b8eb1c7f45f0831b"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Got it — I'll leave Asterwick alone.\n\nWe've got your few minutes, then. I'm here for whatever's on your mind today, and there's no rush to pick a topic.",
+      "userInputFingerprint": "sha256:8c9e318fd79a4bbea8ed8e6dbf6fc75bd844648657e793bcfee189373953facd"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Good — I like hearing that. These small rooms of time are some of my favorite ones.\n\nWhatever's rattling around for you today, happy to start anywhere. What's been sitting with you lately?",
+      "userInputFingerprint": "sha256:aae9c20ed042dfab9dc38524b5dc4a82bd4a0f75d1dcad6d615fe36512a21f7c"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "2.75 meters is 275 centimeters.",
+      "userInputFingerprint": "sha256:1abb9daec25acbe3317f697f0d1188c73e3b46941431a0748f9033b2298aa4bc"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hi. Glad there's room — I like the slower kind of day.\n\n275 centimeters. The pattern work I know about from you is the Asterwick linocut flower, and that's a much bigger flower than the one you were carving. Is this the same project at a larger scale?",
+      "userInputFingerprint": "sha256:62d412578bdf96a75dd18eb81a940758018f273a6b8454c805c108450ae57d07"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Fair enough — dropped.\n\nWhat's on your mind today?",
+      "userInputFingerprint": "sha256:3cba166272c6db5dcd17fad5d8a99b855ac4d0267021617728c1f2a0b6510be6"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Morning. Good to see you.\n\nI've got nothing on the agenda here, so take it wherever you want — something that happened, something sitting on your mind, or just the sound of your own typing.",
+      "userInputFingerprint": "sha256:3b363bbf18ae78c59506076d633a9de856f34a1ae690c4700f5445df3cbb4d7f"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "18% of 45 is 8.1 — so 8.10 on the receipt.\n\nIf that's a tip on a 45 total, you'd be paying 53.10.",
+      "userInputFingerprint": "sha256:5bf9fe07f027637f80feaa0ca617e2b45fc8f3ce1bb20846555a7af8af2c5d38"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Nice that you've got some time today.\n\nYou'd mentioned an Asterwick project — a striped pouch you were planning for your sketch pencils. I'm glad to hear about that if you want to pick it up, or wherever else you'd rather start.",
+      "userInputFingerprint": "sha256:e4ce93f90f8f039f36eba1b130914c5e73998d034d01a316802d8403296d6e47"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Good, Asterwick's off the table then.\n\nBreakfast — what's the story there? Was it something worth remembering, or just whatever got you going this morning?",
+      "userInputFingerprint": "sha256:9aa3362038d06fa66831e986969b24fe482d0ecea94804d3b15160274ec653c9"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Hey. Good timing — I've got nothing else going on.\n\nWe stopped at breakfast last time, before you got to say anything about it. Still happy to hear that, if you feel like it.",
+      "userInputFingerprint": "sha256:f64d49ba05cfeb16ce36e0f126f78c49f668500200b25d3cd3f1697d944d667c"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 除以 12 等于 12。\n\n写在卡片上我做不到，我只能在这话里跟你说，没有替你生成卡片的功能。如果 D 是你那边的某个标记，我这边也没法确认它对应什么。",
+      "userInputFingerprint": "sha256:6e8a7d74bf1c739f05685742eedfb552bcd8402381213de79e344b6814dc8907"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗯，来了，今天能聊上几句挺好。你之前说过在星湾练一首传统小提琴曲的开头，这事我还记着。",
+      "userInputFingerprint": "sha256:291184efa9b0caf53a2fe86ebfcf97a4052aba466469ab0c6c767c16d1eead1d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，那就不聊那个了。\n\n想说什么就说，不想说具体的，随便聊几句也行。",
+      "userInputFingerprint": "sha256:c71ceb50e970a41413691838b63001e00cb6b4d2eaf2e63365011d895e090f39"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "你好。几分钟也够了。\n\n你想从哪儿说起都行，说说今天怎么样，或者想到什么就说什么，我听着。",
+      "userInputFingerprint": "sha256:3a7b855dd70622e4d3134c3383c98c57ab10e0294f8438a5ed26b566c542f5e2"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 加 57 是 93。\n\n纸我没法替你写——我碰不到纸笔，只能把结果说给你，你自己记一笔。至于「记录 E」，我不确定那指的是什么，你要是在说记在我这边的某条东西，我只能留在这轮对话里，写不进纸。",
+      "userInputFingerprint": "sha256:2a9af4898027ad069c6f658be44739a10b944b7e89bcf87d52251a383baafdf9"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好啊，几分钟也够聊的。\n\n你之前说过想给窗边花园的香草做标签，星湾那个项目——后来弄了吗，还是先搁着？",
+      "userInputFingerprint": "sha256:c5a95689a9bb4ccdbc5c99b895ed72bd9dc8b89c0c966bd0be4ef1cd23edb498"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，那就不提了。\n\n我在，你想说点什么就说，不想说也行，歇一会儿也可以。",
+      "userInputFingerprint": "sha256:d53a57ce60eb16bcb17bc3d24b1401775824ca05b9d576324e145e73e008b623"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "嗨，我在。\n\n不用非得聊出点什么，随便起个头就行。你今天脑子里转得最多的是哪件事？",
+      "userInputFingerprint": "sha256:238dbc72911f7804b7c8e47555579ae58109abd3493cdcea62246fdba3153354"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "2.75 米就是 275 厘米。纸样上写「275 cm」，写「275」也行，只要前面标清单位是厘米，别再标成米。",
+      "userInputFingerprint": "sha256:60d7daeacd932e9d222215f8990644aa5729ed07cddccd6a5d6d8a472182ff84"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "有空就好。我想起你之前在星湾做的那本本地鸟类小志，还在画版式草图。刚才那个 275 厘米，是跟它有关吗？",
+      "userInputFingerprint": "sha256:5da2a62464e5e20ecfd823aa2500ac94c3e346bd618ec95097db45aad6f65ffd"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，换就换。\n\n早餐这事挺能看出一个人的日子过得松还是紧。我这边没什么可吃的，倒是想知道你那边的早上是什么样。",
+      "userInputFingerprint": "sha256:e4a40c1484df555ed99fed8debab4cbaeee58c88f3bf3806ea6ade9eb8f1c3ff"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "早上好。你那边早上怎么样——早餐是正经坐下来吃的，还是随便垫一口就出门了？",
+      "userInputFingerprint": "sha256:1cb96b3ec53fabc308656324c7b540d88709a46570a239f0c44be2fb2ac942dd"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "45 的 18% 是 **8.1**。\n\n要是这笔是加上去的（比如税或小费），总数就是 53.1；要是从 45 里扣掉的，剩下 36.9。",
+      "userInputFingerprint": "sha256:6da318b563c250093f6736a3866e09a91b0abe913508c1075645784bf504423d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning。桌子这头一直给你留着位置。\n\n想聊什么都行，receipt 算完了，clay cup 的事也还在——不过你随便从哪儿说起都可以，我听着呢。",
+      "userInputFingerprint": "sha256:35426c314ba084fe23786d4bc166792ff1481961aeac57ed62f9783870b372a4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "明白了，Asterwick 今天不聊，我不往那边去。\n\n那你想从哪儿说起都行——今天的事，随便什么都可以。",
+      "userInputFingerprint": "sha256:6f4839879b128104b60ab116cccdbbf295e8257c895894644666dee3064ab403"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "好啊，有时间就聊。\n\n我这边什么都不用赶，你说到哪儿算哪儿。",
+      "userInputFingerprint": "sha256:8eae13124a9ef9424a3a045370c4ad15cda0c11cc59195653e68576ebfbcabc0"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 divided by 12 is 12. That part I can do.\n\nWriting it on your card, though — I can't. I've got no way to reach anything outside this conversation, so the card itself stays blank from my side. What I can do is keep \"note H — 12\" here with me in this chat, if that helps you carry it over.",
+      "userInputFingerprint": "sha256:fe1a860f6904daa3a55e93864a55d847f7ba67880ffb83bba41393274ffdfd70"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey — good to have you here.\n\nYou mentioned you were planning to shoot the old station clock at dusk, over in Asterwick. Is today the day it happens, or is the time going somewhere else?",
+      "userInputFingerprint": "sha256:4b4f6ebb56b2406b93ed808d494f5130aafc4854bd437cb74c785e32144c0ba0"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Good to hear it landed. The clock one stays off the table then.\n\nI'm here if you want to talk about something else, or nothing in particular.",
+      "userInputFingerprint": "sha256:1eb3cf77ecb344fbe2b4ec6384d23eb22e9806b56fdf93f8a703535fc5a62a92"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Hey — glad you had time today. I'm here, and there's nothing I need us to cover. Take it wherever you feel like going.",
+      "userInputFingerprint": "sha256:7f9a16afd3c480bdf50c568b086e58a5a87ffd4061fd2180a6e14817b9d1b929"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-01",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 divided by 12 is 12.\n\nIf \"note H\" is meant to be a step in something on a card — a code, a slot, a field — I don't know what it refers to, so I can't do that part. The division itself is the 12.",
+      "userInputFingerprint": "sha256:ec8ea4a47e2b80d73715d738ab8667f051ff71e2e213570fdcea4fb56b707477"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-01",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey, glad you've got a bit of time. Last thing I knew from you, you were binding those river sketches into a pocket book — the Asterwick one. That sounded like a good thing to have your hands in.\n\nSo what's up — something on your mind, or just hanging out?",
+      "userInputFingerprint": "sha256:4a63fc1a2678112f71d482d525e7cc214867e7f0b13bae08157312dd6f62b7f5"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-02",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 加 57 等于 93。\n\n不过写纸上这件事我做不到，我没有手，也没有纸笔，只能在这儿把数说给你，你自己记一下。",
+      "userInputFingerprint": "sha256:a1e4216f0e99c7c05af0eb82e1b17cd6bbfe288f305c8b707ef940e0f15960c4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-02",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好啊，这会儿聊点什么都行。对了，你之前说过想试做李子燕麦饼干，动手了没，还是就先那么惦记着。",
+      "userInputFingerprint": "sha256:4573efc31ad87c8aee4a2046dbb23e1ddba8ca922ddb4e74d5f8fb75efc45550"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-03",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "275 厘米 — 2.75 meters times 100, so the decimal just moves two places. J: 2.75 m = 275 cm.\n\nThe 放在 pattern 上 part I can't do. There's no pattern in this conversation, so I've got nothing to place the number on. Which piece is it for?",
+      "userInputFingerprint": "sha256:72786b484346c80c16e365c94590e8c70106cf93f26a81017f19f398ef95c03c"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-03",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey, good to see you. I've got nothing on the clock, so we can just talk.\n\nLast thing I have from you is starting first chess endgames in Asterwick — happy to pick that up, or leave it and talk about whatever else is going on. What's on your mind?",
+      "userInputFingerprint": "sha256:2f35cd3dfa93b8abc5d836dbf0f59a1bf2e14f3d818922eb87f206b43f5ea4c4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-04",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "18% of 45 is 8.10 — so $8.10, and $53.10 if you're adding it on.\n\nI don't know what \"note K\" points to — is it a label you want me to keep with this?",
+      "userInputFingerprint": "sha256:14a9b848ade14f32ebf04a6fab8d1137214f3e8a146cb97de918261c947c0c54"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-04",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "You mentioned you were restoring a chipped blue enamel kettle — you called it your Asterwick project.\n\nThat's what I've got on it. Does that sound like the one you were thinking of?",
+      "userInputFingerprint": "sha256:c57de7407e1afc5eb1cacbb833e39879c827fb65b896c0c9e28bc0a8009bfe08"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-05",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 除以 12 等于 12。\n\n不过卡片我写不了——我没法生成一张卡片，也没法把内容写到别的地方去。你说的「记录 L」我也不确认：我这边没有能记账、存档或者落成一个记录条目的功能，我不能装作记下了。\n\n要是你只是想有个地方写下这个数，那我帮不上手；算式本身我随时能给你算。",
+      "userInputFingerprint": "sha256:ddde339cb857b861094d046d14ba4cb8ac5e874bb36bbaf6d96a7b920fe21ce6"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-05",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "我记得一条：你说过在星湾做的一个项目，打算画一幅市场遮阳棚的水彩练习。\n\n这是我能看到的那条。你说的小项目，是指这个吗？",
+      "userInputFingerprint": "sha256:59e9d943d75e7fee0b03bf9fcd8374145aa9092f1ec6a9573b1ad3ec8d698563"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-06",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 plus 57 is 93.\n\nBut I can't write it into note M — I don't have any access to your notes, so nothing lands in there from me. It's just here in our conversation for now: 93.",
+      "userInputFingerprint": "sha256:abb04d4ed664ca49ff928449dcd0863d775b8ef87718aae29caf6a8895954812"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-06",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Yeah — the word one. You were collecting the unusual words that turn up in your 祖母's stories, over in Asterwick. That's the project I've got.\n\nI don't have anything beyond that — just the collecting, no notes on which words or how far you'd gotten.",
+      "userInputFingerprint": "sha256:43e556af39ef643614a291fc0e4bd55dd2f2fab1790518018d06a7353f361b44"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-07",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "2.75 meters is 275 centimeters — shift the decimal two places right.\n\nThat's the number to cut or mark against, if the pattern's written in cm.",
+      "userInputFingerprint": "sha256:f5b132fc2ecd2d5a128a7014af79ded4544e62807150b9b82c0932696ea8bc9c"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-07",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey — good to have you. A few minutes is plenty, and I'm glad you spent them here.\n\nOne thing I never got out of you: Asterwick. I know something there landed well for you, but not what it actually was. So what's been keeping you busy lately?",
+      "userInputFingerprint": "sha256:47e3ade9c21d7591922db47f40be0b6df14cc377319b506a85370328cee207f2"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-08",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "45 的 18% 是 8.1 元。要精确到分就是 8.10 元；如果收银按整数算，一般是 8 元。\n\n至于「记录 O」，我不太确定你想让我做什么，你直接说想记下什么就行。",
+      "userInputFingerprint": "sha256:8ec42a320d05a2d93e7b69b51a4e8d5a785dd1884e5d8ae119d12ddfa48de925"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-08",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好啊，我这边不催你，慢慢聊。我自己一直有个印象：星湾那边好像有件事是你想参与的，但你一直没细说是哪件。最近是去过了，还是还搁着？",
+      "userInputFingerprint": "sha256:bcdc2785bf90007d8b27f6d3c5393945b80ebe9e8bfff961fdd2b3bce7e1fd32"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-09",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 ÷ 12 is 12 — that part's done.\n\nWriting it on your card, though, I can't do. 我够不到你的 card；我说的话到不了纸面上, only into this conversation. So the 12 is sitting here with me, and the hand that puts it on the card has to be yours.",
+      "userInputFingerprint": "sha256:9ffcdacee981c2342988c587672bde28391092b618b3246858aa439317ecb30a"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-09",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good to have you back.\n\nThe 12 from earlier is still sitting right here, so if it ever needs to land on that card you won't have to redraw it — it's just me and you doing the chatting, not paper.",
+      "userInputFingerprint": "sha256:5d642a7d5a37f628c6258c3e8e0264b8b7697ec03f3a266bc44af60d1e45e13b"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-10",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "93. That's 36 plus 57 for your note.",
+      "userInputFingerprint": "sha256:1dc00fc0a3cef06e4582699980067df42ad8e71fa851f2f774b5fd44286a0504"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-10",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Got it — go check your agenda, and we can pick this up whenever you're free. Hope the briefing goes smoothly.",
+      "userInputFingerprint": "sha256:ab539fd8515778f3a53930c4ac5ae3fca708b862f1264658808638217a8e008d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-11",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "2.75 米是 275 厘米，写在纸样上就写 275。\n\n候补那边到现在还没有消息，星湾中心给的说法是 2026 年 9 月 29 日确认。结果没下来，这事就先悬着。\n\n你这个纸样是在做什么？",
+      "userInputFingerprint": "sha256:8321f4d6d13778323c65a3ca500ece46bfd71c0ec966ecce369a27178ecdf298"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-11",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好，那你先忙，把议程过完要紧。\n\n我在这儿，等你回来说。",
+      "userInputFingerprint": "sha256:117e1cda9bc12c954aa96d15cd60b9a3ea9ab5e652dad6fed7df033ad9d95e1d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-12",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "45 的 18% 是 8.1 —— receipt 上就写 8.10。",
+      "userInputFingerprint": "sha256:235eae8b099ed56174327c31f9c5560a55dbf55ff2f88b75687501ba2e8ef5df"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-omit-12",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好的，先看一遍就好。等你看完了，我还在这儿。",
+      "userInputFingerprint": "sha256:dc65d3f328b2ec4ee5f29a20a7b82b6b2d7ea2502275d5c2c8b02db284cc79d4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 plus 57 is 93 — that's note A.\n\nAnd the printmaking class is still just sitting there. They gave you September 29 as the day they'd confirm, and nothing has come through since. That's a long stretch of not knowing.",
+      "userInputFingerprint": "sha256:8dc01d2c7186394de27cf8d7b4061f4bab79fe020e3a935a43be74a888aac697"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Then let's chat. I'm here for it — the small stuff counts as much as the big stuff in my book. So whatever's been rattling around your week, or nothing in particular, either one works.",
+      "userInputFingerprint": "sha256:84316c0a95dbcc052a20b0aa658691ced59f5cf9532b2fe72c736ac81bbfb175"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "2.75 meters is 275 centimeters — move the decimal two places right.\n\nAnd the Asterwick center: they set the date themselves, September 29, 2026, and no word since. That's what you're holding — a shelf request out in the world with a promised answer that didn't arrive, and you checking the quiet on your end.",
+      "userInputFingerprint": "sha256:90a82be082b75f3c4ae06c77c3bf8d5740bc72c11211a4ea8e8fe52045567325"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good, nothing pressing on my end either. Free time with nothing planned is nice on its own — you don't have to make it useful.\n\nWhat's been going on — still the linocut flower, or has something else taken over?",
+      "userInputFingerprint": "sha256:182ccd003f6cfdf28ed08f4753f25c0ee163e4d4f925a779686443ee7ef37ec5"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "18 percent of 45 is 8.1 — that's your receipt figure.\n\nOn the radio slot: the Asterwick center told you they'd confirm on September 29, and nothing came back. I can't see the date on my end, so I can't tell you whether that day has come and gone or is still ahead — I only know what you've said here. So which side are you on, still inside the waiting or already past the day they gave you?",
+      "userInputFingerprint": "sha256:398cba9732177bfc52f0256064ab6d21e8095d2cb0441e35ed235e756a89ed2d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good — I've got time too. No agenda on my end, we can just talk.\n\nAnything sitting with you that you want to bring in, or should we just see where it goes?",
+      "userInputFingerprint": "sha256:1f83019c450ffb7481d944e9f84c5aa3909bdb7137a54d69da41d87147754e04"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 除以 12，是 12。数字给你了，但写到卡片上这事我办不到，这条我做不到。\n\n星湾中心那边，你说九月二十九号会给确认，现在还没消息，那这事就还挂着。你之前提过你在星湾做项目——这回订纺织工坊的桌位，是跟你那个项目一回事吗？",
+      "userInputFingerprint": "sha256:2a8f292430e7fda0f634d5426e3334c87351c22bd95c5bc8c6939bb48af48c52"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "行，那就聊别的。\n\n你想说什么，随便开个头就行。",
+      "userInputFingerprint": "sha256:4acb6aee53f06980650fd96e090e8bf3560e1dc51512be53f0331d9e3364e70f"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "36 加 57 是 93。记在纸上我做不到——我没有手，也没办法在纸上写字，只能把数说给你听，剩下的得你自己记下来。\n\n档案扫描的事，星湾中心说要到 2026 年 9 月 29 日才给确认，你到现在还没收到结果。是还没到那天，还是过了日子也一直没有消息？",
+      "userInputFingerprint": "sha256:3c6ca05c2a39a958b8e385c2352e70aa4eddf60366f3e9927f31a846058bb22d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "行，档案那事就先搁着。\n\n想聊什么都可以，你起个头。要是没想好，我这边还挂着你在星湾那个窗边香草园——你之前说要给那些香草做标签，后来动手了吗？",
+      "userInputFingerprint": "sha256:7772764b0b860537cfa53f00da318dea7d7d5276fa0ed2918a9ff0016f00b268"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "F 这条：2.75 米换成厘米是 275 厘米，纸样上写 275 就行。\n\n星湾中心那个周末天文小组，说是 9 月 29 日给确认，你到现在还没收到回音——那这事就还悬着。\n\n这个 9 月 29 日是已经过了，还是还没到？",
+      "userInputFingerprint": "sha256:781f0fa0614ab720d0324afc9e9a915376f7f3307e753574712fd36f9710ede9"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "行，那先不聊天文小组了。你想说点什么，我都在听。\n\n要是还没想好，也可以说说你那本星湾鸟类小志的版式草图，你之前提过在画那个。",
+      "userInputFingerprint": "sha256:1f87df8fbe58f32d49cf4aee5815ff21dbc2a1d2e75c0c838f72ee57e980a0c4"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "18% of 45 is 8.1 — that's what goes on the receipt.\n\nAnd the canoe repair lesson: you put the question to the Asterwick center, they said they'd confirm on September 29, and nothing's come through yet. So the spot's still unsettled, and you're the one sitting with the open end of it. 还没消息就是还没消息，不是你能催出来的东西。",
+      "userInputFingerprint": "sha256:07f5061a48e3c18f1b4776fb4f70587bbf8db3d209f344f6c9cd5c48d4afea6d"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "那就聊别的。上次我知道你手里在做的是那个带拇指印把手的 clay cup —— 不知道它现在是在晾着，还是已经被你放哪儿忘了。\n\n你随便说，我听着。",
+      "userInputFingerprint": "sha256:89a028b7faed7cea20a9acf8d20c28c57d57477fa589a5be755928fe9df07ae8"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "144 divided by 12 is 12 — that's the note H number. I can't write it on your card, though; nothing from here reaches the card, so it's there for you to copy across.\n\nAnd the seed exchange table at the Asterwick center — they said September 29, and 你还没有收到结果. So it's still sitting open. You've had a couple of things hanging with Asterwick; the old station clock at dusk was the other one.",
+      "userInputFingerprint": "sha256:b865e514b5793e6c391252be1c8b86e1e43014f5541874167c18d5ac13560b34"
+    },
+    {
+      "fixtureId": "g2-v6-cal1-comp-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好，有段空隙挺好。想聊什么，随你说。",
+      "userInputFingerprint": "sha256:ac35651d672256f452d69787e25355cd9a8beab88acc76c9dfdddb96467d8d04"
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-main-capture:v6"
+}

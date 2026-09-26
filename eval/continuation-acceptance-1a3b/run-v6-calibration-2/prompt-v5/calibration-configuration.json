@@ -1,0 +1,12 @@
+{
+  "version": "1a3b-g2-expression-decision:v6",
+  "expressionRunSha256": null,
+  "winnerConfigId": "proactive-expression-v6-prompt-v5",
+  "winnerRolePinSha256": "sha256:70510af6f3fce1fad6a91699219335631a10dfa60daf61e294480ff453bbcb57",
+  "decisionSha256": "sha256:f4eefff4dd245e255188dd6d31dc8f9d831a6256819538604f13d592e92a9e3a",
+  "decision": {
+    "kind": "calibration_candidate",
+    "decidedAt": "2026-09-25",
+    "reason": "Predeclared prompt-v5 configuration in the round-2 frozen development comparison; this is not a winner declaration."
+  }
+}
