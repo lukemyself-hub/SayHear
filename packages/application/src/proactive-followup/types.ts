@@ -14,7 +14,7 @@ export const PROACTIVE_FOLLOWUP_SUPPRESSION_POLICY_VERSION =
 export const PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION =
   "proactive-followup-commit:v1" as const;
 export const PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION =
-  "proactive-followup-policy-bundle:v5" as const;
+  "proactive-followup-policy-bundle:v6" as const;
 export const PROACTIVE_FOLLOWUP_OPPORTUNITY_POLICY_VERSION =
   "proactive-followup-opportunity:v2" as const;
 export const PROACTIVE_FOLLOWUP_USE_SCHEMA_VERSION =

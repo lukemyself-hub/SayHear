@@ -110,6 +110,164 @@ describe("versioned near-term lexical allowlist", () => {
 });
 
 describe("time windows, horizon and DST", () => {
+  it("rejects a date-only UTC-midnight window that starts before the Los Angeles day", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "September 23, 2026",
+        expectedWindow: {
+          startAt: "2026-09-23T00:00:00.000Z",
+          endAt: "2026-09-24T00:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan).toMatchObject({ action: "skip", reasonCode: "no_real_anchor" });
+  });
+
+  it("waits until a Los Angeles date-only deadline passes before selecting an awaited outcome", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "by September 23, 2026",
+        expectedWindow: {
+          startAt: "2026-09-23T07:00:00.000Z",
+          endAt: "2026-09-24T07:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.expectedStartAt).toBe("2026-09-23T07:00:00.000Z");
+      expect(plan.precision).toBe("date");
+      expect(plan.followupEligibleFromAt).toBe("2026-09-24T07:00:00.000Z");
+    }
+  });
+
+  it("uses the direct Event deadline when the proposal drops the word by", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "September 23, 2026",
+        expectedWindow: {
+          startAt: "2026-09-23T07:00:00.000Z",
+          endAt: "2026-09-24T07:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      sourceUserText: "I submitted my print; they promised an answer by September 23, 2026.",
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.followupEligibleFromAt).toBe("2026-09-24T07:00:00.000Z");
+    }
+  });
+
+  it("keeps a correctly bounded Shanghai date closed until its local start", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "2026-09-23",
+        expectedWindow: {
+          startAt: "2026-09-22T16:00:00.000Z",
+          endAt: "2026-09-23T16:00:00.000Z",
+          precision: "date",
+          timezone: "Asia/Shanghai",
+        },
+      }),
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "Asia/Shanghai",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.timezone).toBe("Asia/Shanghai");
+      expect(plan.precision).toBe("date");
+      expect(plan.followupEligibleFromAt).toBe("2026-09-22T16:00:00.000Z");
+      expect(isOpenLoopEligibleForFollowup({
+        followupEligibleFromAt: plan.followupEligibleFromAt,
+        expiresAt: plan.expiresAt,
+        now: new Date("2026-09-22T15:59:59.999Z"),
+      })).toBe(false);
+    }
+  });
+
+  it("waits past a Shanghai date-only deadline stated in Chinese", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "2026 年 9 月 23 日前确认",
+        expectedWindow: {
+          startAt: "2026-09-22T16:00:00.000Z",
+          endAt: "2026-09-23T16:00:00.000Z",
+          precision: "date",
+          timezone: "Asia/Shanghai",
+        },
+      }),
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "Asia/Shanghai",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.followupEligibleFromAt).toBe("2026-09-23T16:00:00.000Z");
+    }
+  });
+
+  it("uses the Evidence session timezone for a bounded window", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        expectedWindow: {
+          startAt: "2026-09-23T00:00:00.000Z",
+          endAt: "2026-09-23T03:00:00.000Z",
+          precision: "range",
+          timezone: "UTC",
+        },
+      }),
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan).toMatchObject({ action: "skip", reasonCode: "no_real_anchor" });
+  });
+
+  it("keeps a date-only window on the Los Angeles spring-forward day at local midnight", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "March 8, 2026",
+        expectedWindow: {
+          startAt: "2026-03-08T08:00:00.000Z",
+          endAt: "2026-03-09T07:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      evidenceCommittedAt: "2026-03-01T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.followupEligibleFromAt).toBe("2026-03-08T08:00:00.000Z");
+      expect(plan.expectedEndAt).toBe("2026-03-09T07:00:00.000Z");
+    }
+  });
+
   it("keeps exact instants end-free and expires them from the instant", () => {
     const validated = validateExpectedWindow({
       window: {

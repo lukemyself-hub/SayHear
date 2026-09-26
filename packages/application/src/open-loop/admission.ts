@@ -39,6 +39,22 @@ export type OpenLoopIdentityCandidate = Readonly<{
   expectedEndAt: string | null;
 }>;
 
+function timeExpressionWithSourceCue(
+  expression: string | null | undefined,
+  sourceUserText: string | undefined,
+): string | null | undefined {
+  if (!sourceUserText || !expression?.trim()) return expression;
+  const phrase = expression.trim();
+  const offset = sourceUserText.toLowerCase().indexOf(phrase.toLowerCase());
+  if (offset < 0) return null;
+  const preceding = sourceUserText.slice(Math.max(0, offset - 16), offset);
+  const following = sourceUserText.slice(offset + phrase.length, offset + phrase.length + 8);
+  if (/\b(?:by|before)\s*$/i.test(preceding) || /^(?:之前|以前|前|截止)/.test(following)) {
+    return `by ${phrase}`;
+  }
+  return phrase;
+}
+
 function windowsCompatible(
   left: Readonly<{ startAt: string | null; endAt: string | null }>,
   right: Readonly<{ startAt: string | null; endAt: string | null }>,
@@ -110,6 +126,7 @@ export function planOpenLoopFormation(input: Readonly<{
   proposal: OpenLoopProposal;
   evidenceCommittedAt: string;
   evidenceTimeZone: string;
+  sourceUserText?: string;
   identityCandidates: readonly OpenLoopIdentityCandidate[];
 }>): OpenLoopFormationPlan {
   const { proposal } = input;
@@ -129,6 +146,13 @@ export function planOpenLoopFormation(input: Readonly<{
     return { action: "skip", kind, reasonCode: "no_real_anchor" };
   }
   const claimedWindow = proposal.expectedWindow ?? null;
+  const sourceTimeExpression = timeExpressionWithSourceCue(
+    proposal.userTimeExpression,
+    input.sourceUserText,
+  );
+  if (claimedWindow?.precision === "date" && input.sourceUserText && !sourceTimeExpression) {
+    return { action: "skip", kind, reasonCode: "no_real_anchor" };
+  }
   const hasClaimedAnchor =
     claimedWindow !== null &&
     claimedWindow.startAt !== null &&
@@ -149,7 +173,11 @@ export function planOpenLoopFormation(input: Readonly<{
       return { action: "skip", kind, reasonCode: "no_real_anchor" };
     }
   }
-  const validated = validateExpectedWindow({ window: claimedWindow, kind });
+  const validated = validateExpectedWindow({
+    window: claimedWindow,
+    kind,
+    evidenceTimeZone: input.evidenceTimeZone,
+  });
   if ("error" in validated) {
     return {
       action: "skip",
@@ -165,7 +193,7 @@ export function planOpenLoopFormation(input: Readonly<{
     anchored: validated,
     evidenceCommittedAt: input.evidenceCommittedAt,
     evidenceTimeZone: input.evidenceTimeZone,
-    userTimeExpression: proposal.userTimeExpression,
+    userTimeExpression: sourceTimeExpression,
   });
   if ("error" in schedule) {
     return {

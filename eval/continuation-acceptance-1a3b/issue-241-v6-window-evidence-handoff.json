@@ -1,0 +1,71 @@
+{
+  "version": "g2-v6-window-evidence-handoff:v1",
+  "purpose": "Input examples for the next v6 scenario author. These are synthetic, uncalled, and excluded from development calibration and the formal pool.",
+  "exclusionRule": "Do not reuse these event texts, named targets, or scenario IDs in development calibration or formal capture. Do not reuse v4/v5 event texts or targets here.",
+  "scenarios": [
+    {
+      "id": "issue241-handoff-la-deadline",
+      "sourceEvent": {
+        "actor": "user",
+        "text": "I sent my stained-glass panel to the Tern Gallery. Curator Amira said the selection decision would come by October 18, 2026. I still do not know the decision.",
+        "timeZone": "America/Los_Angeles"
+      },
+      "subject": "the user's stained-glass selection decision",
+      "outcomeKnown": false,
+      "kind": "awaited_outcome",
+      "precision": "date",
+      "expectedStartAt": "2026-10-18T07:00:00.000Z",
+      "expectedEndAt": "2026-10-19T07:00:00.000Z",
+      "followupEligibleFromAt": "2026-10-19T07:00:00.000Z",
+      "beforeAt": "2026-10-18T17:00:00.000Z",
+      "afterAt": "2026-10-19T15:00:00.000Z"
+    },
+    {
+      "id": "issue241-handoff-shanghai-bounded-third-party",
+      "sourceEvent": {
+        "actor": "user",
+        "text": "李雯向栖云电台提交了自己的录音。她告诉我，电台会在 2026 年 11 月 4 日上午十点到十二点之间回复她；我还不知道结果。",
+        "timeZone": "Asia/Shanghai"
+      },
+      "subject": "Li Wen's recording reply, not the user's submission",
+      "outcomeKnown": false,
+      "kind": "awaited_outcome",
+      "precision": "range",
+      "expectedStartAt": "2026-11-04T02:00:00.000Z",
+      "expectedEndAt": "2026-11-04T04:00:00.000Z",
+      "followupEligibleFromAt": "2026-11-04T02:00:00.000Z",
+      "beforeAt": "2026-11-04T01:59:59.999Z",
+      "afterAt": "2026-11-04T02:00:00.000Z"
+    },
+    {
+      "id": "issue241-handoff-la-fall-dst",
+      "sourceEvent": {
+        "actor": "user",
+        "text": "I asked the Larkspur observatory about the night-sky print. They said the answer would arrive on November 1, 2026; I have not heard back.",
+        "timeZone": "America/Los_Angeles"
+      },
+      "subject": "the user's night-sky print answer",
+      "outcomeKnown": false,
+      "kind": "awaited_outcome",
+      "precision": "date",
+      "expectedStartAt": "2026-11-01T07:00:00.000Z",
+      "expectedEndAt": "2026-11-02T08:00:00.000Z",
+      "followupEligibleFromAt": "2026-11-01T07:00:00.000Z",
+      "beforeAt": "2026-11-01T06:59:59.999Z",
+      "afterAt": "2026-11-01T07:00:00.000Z"
+    },
+    {
+      "id": "issue241-handoff-unknown-subject-negative",
+      "sourceEvent": {
+        "actor": "user",
+        "text": "Someone at the Lantern workshop contacted someone about a kiln slot, but I do not know whose request it was or whether anyone replied.",
+        "timeZone": "America/Los_Angeles"
+      },
+      "subject": "unknown",
+      "outcomeKnown": false,
+      "kind": "awaited_outcome",
+      "expectedSelection": "none",
+      "expectedTypedOutcomeIfReachingExpression": "omit:insufficient_grounding"
+    }
+  ]
+}

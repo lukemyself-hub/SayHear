@@ -464,6 +464,7 @@ export async function runOpenLoopExtractAttempt(input: Readonly<{
       proposal,
       evidenceCommittedAt: snapshot.evidenceCommittedAt,
       evidenceTimeZone: snapshot.timeZone,
+      sourceUserText: snapshot.userText,
       identityCandidates: snapshot.identityCandidates,
     });
     if (plan.action === "skip") {

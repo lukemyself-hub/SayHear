@@ -19,7 +19,7 @@ import type {
  */
 export const OPEN_LOOP_EXTRACTION_POLICY_VERSION =
   "open-loop-extraction:v1";
-export const OPEN_LOOP_FORMATION_POLICY_VERSION = "open-loop-formation:v1";
+export const OPEN_LOOP_FORMATION_POLICY_VERSION = "open-loop-formation:v2";
 export const OPEN_LOOP_CLOSURE_POLICY_VERSION = "open-loop-closure:v1";
 export const OPEN_LOOP_EXPIRY_POLICY_VERSION = "open-loop-expiry:v1";
 /** Versioned near-term lexical allowlist; the model cannot invent near-term. */

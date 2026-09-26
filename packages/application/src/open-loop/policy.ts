@@ -234,6 +234,7 @@ export type ValidatedExpectedWindow =
 export function validateExpectedWindow(input: Readonly<{
   window: OpenLoopExpectedWindow | null | undefined;
   kind: OpenLoopKind;
+  evidenceTimeZone?: string;
 }>): ValidatedExpectedWindow | Readonly<{ error: "time_window_too_wide" | "time_invalid" }> {
   const window = input.window;
   if (!window || window.startAt === null) {
@@ -244,6 +245,9 @@ export function validateExpectedWindow(input: Readonly<{
     return { anchored: false };
   }
   if (!window.timezone) {
+    return { error: "time_invalid" };
+  }
+  if (input.evidenceTimeZone && window.timezone !== input.evidenceTimeZone) {
     return { error: "time_invalid" };
   }
   try {
@@ -274,6 +278,18 @@ export function validateExpectedWindow(input: Readonly<{
   if (Number.isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
     return { error: "time_invalid" };
   }
+  if (precision === "date") {
+    const startWall = zonedWallParts(start, window.timezone);
+    const endWall = zonedWallParts(end, window.timezone);
+    if (
+      startWall.hour !== 0 || startWall.minute !== 0 || startWall.second !== 0 ||
+      endWall.hour !== 0 || endWall.minute !== 0 || endWall.second !== 0 ||
+      start.getUTCMilliseconds() !== 0 || end.getUTCMilliseconds() !== 0 ||
+      diffCalendarDaysInTimeZone(start.toISOString(), end.toISOString(), window.timezone) !== 1
+    ) {
+      return { error: "time_invalid" };
+    }
+  }
   const widthDays = diffCalendarDaysInTimeZone(
     start.toISOString(),
     end.toISOString(),
@@ -298,6 +314,11 @@ export type OpenLoopSchedule = Readonly<{
   expiresAt: string;
   expirySource: OpenLoopExpirySource;
 }>;
+
+function isDateOnlyDeadline(expression: string | null | undefined): boolean {
+  if (!expression) return false;
+  return /\bby\b|\bbefore\b|之前|以前|截止|前(?:确认|回复|给出|收到)/i.test(expression);
+}
 
 /**
  * Compute the frozen schedule exactly once. Anchored upcoming events expire at
@@ -366,6 +387,10 @@ export function computeOpenLoopSchedule(input: Readonly<{
   const followupEligibleFromAt =
     input.kind === "upcoming_event"
       ? addCalendarDaysInTimeZone(windowStart.toISOString(), -14, tz)
+      : input.anchored.precision === "date" &&
+          input.anchored.endAt !== null &&
+          isDateOnlyDeadline(input.userTimeExpression)
+        ? input.anchored.endAt
       : windowStart.toISOString();
   return {
     followupEligibleFromAt,

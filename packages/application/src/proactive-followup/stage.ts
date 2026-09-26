@@ -14,6 +14,7 @@ import type {
   ModelRoleCommandService,
   ModelRoleProviderEgress,
 } from "../model-role-runtime";
+import { OPEN_LOOP_FORMATION_POLICY_VERSION } from "../open-loop/types";
 import { selectProactiveFollowupTarget } from "./selection";
 import {
   PROACTIVE_FOLLOWUP_COMMIT_POLICY_VERSION,
@@ -268,6 +269,7 @@ export const PROACTIVE_FOLLOWUP_STAGE_POLICY_BUNDLE: Readonly<
   selectionManifestVersion: PROACTIVE_FOLLOWUP_MANIFEST_VERSION,
   openLoopLaneManifestVersion:
     PROACTIVE_FOLLOWUP_OPEN_LOOP_LANE_MANIFEST_VERSION,
+  openLoopFormationPolicyVersion: OPEN_LOOP_FORMATION_POLICY_VERSION,
   dialogueConfidenceFloor: PROACTIVE_FOLLOWUP_DIALOGUE_CONFIDENCE_FLOOR,
   maxCandidates: PROACTIVE_FOLLOWUP_MAX_CANDIDATES,
 });

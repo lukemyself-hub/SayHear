@@ -59,7 +59,7 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
     return `${timeHex.slice(0, 8)}-${timeHex.slice(8, 12)}-7${counter.slice(0, 3)}-a${counter.slice(3, 6)}-${counter.slice(6, 12).padStart(12, "0")}`;
   }
 
-  async function seedSession(input: { text: string }): Promise<{
+  async function seedSession(input: { text: string; timeZone?: string }): Promise<{
     conversationEventId: string;
     evidenceItemId: string;
     revisionId: string;
@@ -80,8 +80,8 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
          last_activity_at, activity_state, current_continuous_exchange_no,
          dialogue_revision, source_revision, next_turn_sequence_no,
          next_event_sequence_no, quiescent_at, created_at, updated_at
-       ) VALUES ($1, $2, $3, 'Asia/Shanghai', $4, $4, 'quiescent', 1, 0, 1, 1, 1, $4, $4, $4)`,
-      [dailySessionId, OWNER, logicalDate, now],
+       ) VALUES ($1, $2, $3, $5, $4, $4, 'quiescent', 1, 0, 1, 1, 1, $4, $4, $4)`,
+      [dailySessionId, OWNER, logicalDate, now, input.timeZone ?? "Asia/Shanghai"],
     );
     await pool.query(
       `INSERT INTO interaction_turns (
@@ -157,19 +157,30 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
   function fakeProvider(
     revisionId: string,
     evidenceItemId: string,
+    datedOutcome?: Readonly<{
+      startAt: string;
+      endAt: string;
+      timeZone: string;
+      timeExpression: string;
+    }>,
   ): OpenLoopExtractModelProvider {
     return {
       role: "open_loop.extract",
       extractProposals: async () => ({
         proposals: [
           {
-            kind: "upcoming_event",
+            kind: datedOutcome ? "awaited_outcome" : "upcoming_event",
             evidenceItemId: asEvidenceItemId(evidenceItemId),
             evidenceRevisionId: revisionId,
             hasRealAnchor: true,
             isTaskLike: false,
-            userTimeExpression: "下周三下午",
-            expectedWindow: null,
+            userTimeExpression: datedOutcome?.timeExpression ?? "下周三下午",
+            expectedWindow: datedOutcome ? {
+              startAt: datedOutcome.startAt,
+              endAt: datedOutcome.endAt,
+              precision: "date",
+              timezone: datedOutcome.timeZone,
+            } : null,
             proposalIndex: 0,
           },
         ],
@@ -333,6 +344,76 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
       }),
     ).resolves.toEqual([]);
   });
+
+  it("keeps a direct User outcome out of the Los Angeles selector until the local deadline passes", async () => {
+    const text = "I asked Mara at the Harbor archive about my scan request; she said the answer would arrive by September 23, 2026, and I have not heard back yet.";
+    const session = await seedSession({ text, timeZone: "America/Los_Angeles" });
+    const service = commandService();
+    const admitted = await service.admit({
+      userId: OWNER,
+      role: "open_loop.extract",
+      intentKey: `open-loop-extract:${session.revisionId}:local-date`,
+      subjectType: "conversation_event_revision",
+      subjectId: session.revisionId,
+      sourceRevision: 1,
+      sourceSnapshot: `snapshot:${session.revisionId}:local-date`,
+      inputManifest: [
+        { key: "evidence", revision: 1, fingerprint: `fp:${session.revisionId}` },
+      ],
+      expectedDataEpoch: 1,
+      now: new Date(BASE_TIME),
+    });
+    expect(admitted.outcome).toBe("created");
+    if (admitted.outcome !== "created") return;
+
+    const result = await runOpenLoopExtractAttempt({
+      clock: () => new Date(BASE_TIME),
+      repository: repository!,
+      modelRoleCommandService: service,
+      openLoopExtractProvider: fakeProvider(session.revisionId, session.evidenceItemId, {
+        startAt: "2026-09-23T07:00:00.000Z",
+        endAt: "2026-09-24T07:00:00.000Z",
+        timeZone: "America/Los_Angeles",
+        timeExpression: "by September 23, 2026",
+      }),
+      command: {
+        workflowCommandId: seedId(),
+        eventRevisionId: session.revisionId,
+        sourceRevision: 1,
+        generationCommandId: String(admitted.generationCommandId),
+        modelRunAttemptId: String(admitted.modelRunAttemptId),
+        attemptNo: 1,
+        attemptKind: "initial",
+        rolloutPin: configuration.rolloutPin,
+        policyVersion: LANE_POLICY,
+        expectedDataEpoch: 1,
+      },
+    });
+    expect(result).toMatchObject({ outcome: "extracted", formedCount: 1 });
+    const before = await repository!.readOpenLane({
+      userId: OWNER,
+      now: new Date("2026-09-24T06:59:59.999Z"),
+      watermarkReadable: true,
+    });
+    const after = await repository!.readOpenLane({
+      userId: OWNER,
+      now: new Date("2026-09-24T07:00:00.000Z"),
+      watermarkReadable: true,
+    });
+    const formed = after.find((loop) =>
+      loop.expectedStartAt !== null &&
+      Date.parse(loop.expectedStartAt) === Date.parse("2026-09-23T07:00:00.000Z"),
+    );
+    expect(before.some((loop) => loop.openLoopId === formed?.openLoopId)).toBe(false);
+    expect(formed).toMatchObject({ timePrecision: "date", timezone: "America/Los_Angeles" });
+    if (!formed) return;
+    await expect(repository!.readSourceEvidence({
+      userId: OWNER,
+      openLoopId: String(formed.openLoopId),
+      openLoopVersionId: formed.openLoopVersionId,
+      expectedSourceEventRevisionId: session.revisionId,
+    })).resolves.toMatchObject({ eventRevisionId: session.revisionId, text });
+  }, 60_000);
 
   it("treats a superseded revision as stale and lists only the current head", async () => {
     const session = await seedSession({ text: "旧版本。" });

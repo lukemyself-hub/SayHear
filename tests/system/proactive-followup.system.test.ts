@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
   PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
   PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
   selectProactiveFollowupTarget,
@@ -342,7 +343,7 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
           enabled: true,
           status: "complete",
           watermark: { sourceRevision: 1, coveredThroughSequence: 1 },
-          manifestVersion: "open-loop-read:v1",
+          manifestVersion: "open-loop-read:v2",
           integrity: "valid",
           candidates: [
             {
@@ -446,7 +447,7 @@ systemDescribe("C2 proactive follow-up PostgreSQL seam (issue #205)", () => {
         ordinal: 0 as const,
       },
       selectionPolicyVersion: PROACTIVE_FOLLOWUP_SELECTION_POLICY_VERSION,
-      promptPolicyVersion: "proactive-followup-prompt:v2",
+      promptPolicyVersion: PROACTIVE_FOLLOWUP_EXPRESSION_PROMPT_VERSION,
       policyBundleVersion: PROACTIVE_FOLLOWUP_POLICY_BUNDLE_VERSION,
       policyBundle: { fixture: true },
       now: BASE_TIME,
