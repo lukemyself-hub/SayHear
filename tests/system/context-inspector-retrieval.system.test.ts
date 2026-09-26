@@ -135,6 +135,9 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
   let submitCount = 0;
   let respondCount = 0;
   let retrievalFaults: RetrievalTestSupportConfiguration | null = null;
+  // These tests assert recorded behavior, not remote PostgreSQL latency.
+  let retrievalMonotonicMs = 0;
+  let retrievalMonotonicStepMs = 1;
 
   beforeAll(async () => {
     database = await createIsolatedPostgresSchema(testDatabaseUrl);
@@ -207,6 +210,8 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
   beforeEach(async () => {
     clockNowMs = BASE_TIME;
     retrievalFaults = null;
+    retrievalMonotonicMs = 0;
+    retrievalMonotonicStepMs = 1;
     // Migrations from concurrently developed branches may add tables that
     // reference the truncated set (e.g. the #119 trust-action face); include
     // them only when they exist so the reset works before and after they land.
@@ -491,6 +496,7 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
                 localizations: registrySnapshot.localizations,
               },
               clock,
+              monotonicNow: () => (retrievalMonotonicMs += retrievalMonotonicStepMs),
               testSupport: {
                 configuration: () => retrievalFaults,
               },
@@ -716,6 +722,22 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
     // The panel shows zero injected memory for the failed round.
     expect(memoryInjectedBySection(inspection)).toEqual([]);
     expect(inspection.retrievalCandidates).toEqual([]);
+  });
+
+  it("shows a pre-run deadline failure without querying an unrecorded UUID", async () => {
+    await seedStandingMemory();
+    retrievalMonotonicStepMs = 300;
+    const generationCommandId = await respond("我在现在的公司过得还不错。");
+
+    const inspection = await inspect(generationCommandId);
+
+    expect(inspection.compiledContext.retrievalManifest).toMatchObject({
+      retrieval_run_id: "unrecorded",
+      degraded_reason_codes: ["retrieval_deadline_exceeded"],
+      deadline_exceeded_stage: "query_construction",
+    });
+    expect(inspection.retrievalCandidates).toEqual([]);
+    expect(memoryInjectedBySection(inspection)).toEqual([]);
   });
 
   it("shows a turn with zero retrieved injection while the Portrait still compiles", async () => {

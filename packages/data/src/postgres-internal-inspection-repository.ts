@@ -286,7 +286,8 @@ export class PostgresInternalInspectionRepository
         userId: input.userId,
       });
       const retrievalCandidates =
-        row.context_retrieval_manifest === null
+        row.context_retrieval_manifest === null ||
+        row.context_retrieval_manifest.retrieval_run_id === "unrecorded"
           ? []
           : await loadRetrievalCandidates(client, {
               retrievalRunId:
