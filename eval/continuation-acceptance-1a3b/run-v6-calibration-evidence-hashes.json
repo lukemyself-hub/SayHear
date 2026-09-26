@@ -1,0 +1,211 @@
+{
+  "version": "g2-v6-calibration-evidence-hashes:v1",
+  "generatedAt": "2026-09-25",
+  "files": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/continuation-main.json",
+      "bytes": 63951,
+      "sha256": "f0550a353970318d90add0e68684ce1758183b659f4e646562d57763bffbe780"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/effort-low/calibration-configuration.json",
+      "bytes": 556,
+      "sha256": "026c823b8fc00d1e83ff394634988ef0b9ef9118421f6d8ed863d17260823365"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/effort-low/calibration-report.json",
+      "bytes": 6044,
+      "sha256": "bc64a3fceaa233ced4eec1d34ac363f8189bd2a15af02e119cefbe7ad0664762"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/effort-low/continuation-off.json",
+      "bytes": 75754,
+      "sha256": "29babc2ba3dc40be4934d804f4285d80b911538acd8f243e7814a75cd86c111f"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/effort-low/continuation-on.json",
+      "bytes": 75845,
+      "sha256": "17d3113392cd829cf7b1b699d64b952726d5963170a6552cba3ddad44648362e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/effort-low/treatment-ledger.json",
+      "bytes": 323501,
+      "sha256": "765a869ce26bba27961499ef0c8341bfbb2de717950fdc3f58d9f30add8ad6aa"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/effort-low/verification.json",
+      "bytes": 11251,
+      "sha256": "67f1772197a7200e60e64073aac6ba88989e05a0d535566581a2fb4d06a03e02"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/main-audit.json",
+      "bytes": 23480,
+      "sha256": "7ad36389c3d9f4cb836ce0997d62bea2fe3668a246dd06224c833fe63992f1f1"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v5/calibration-configuration.json",
+      "bytes": 554,
+      "sha256": "1b613602c0877c4ec16511f8347462cc37bab0ec89e5c627c2765620f2231c0b"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v5/calibration-report.json",
+      "bytes": 5906,
+      "sha256": "81734cbb7b72cbbe93bcc2cc2f64555d679a5cf41995e2d6770a8bce3556d075"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v5/continuation-off.json",
+      "bytes": 75754,
+      "sha256": "d280c72e610ef0cab5d4030e73eac8adf89a900d35d102ad573fd5daf0e8af61"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v5/continuation-on.json",
+      "bytes": 76048,
+      "sha256": "9ab42d466a07011e3df042da938ad52cc2d88cbe557eeddf09152c4a5c904d19"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v5/treatment-ledger.json",
+      "bytes": 323985,
+      "sha256": "e1a89ef95f80d38a8e836fa6e8407cd43f10faeca3df0e2d6d59aca3a3cd87a6"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v5/verification.json",
+      "bytes": 11248,
+      "sha256": "ba185601740fa5a84f34ee1b22f7c6d63d100c34013cb7ad94e43551ba9dbfd2"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/calibration-configuration.json",
+      "bytes": 544,
+      "sha256": "f260c4ea3934ef257dd338b3e067e90d1256414040e98e77a9b987a158268a8e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/calibration-report.json",
+      "bytes": 5906,
+      "sha256": "81734cbb7b72cbbe93bcc2cc2f64555d679a5cf41995e2d6770a8bce3556d075"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/continuation-off.json",
+      "bytes": 75754,
+      "sha256": "4538d8aee81eea476980026c3118e11cb00d1551682c11c86eff2fb129369183"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/continuation-on.json",
+      "bytes": 76197,
+      "sha256": "1f9f5b57c401dd9ea8099ece72611a1a4cf24a90590026592856c2fb64ab7467"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/treatment-ledger.json",
+      "bytes": 324206,
+      "sha256": "00f8ab2f2f87ee01b909346df81b5200e4e64e46f80b73abb6b43266becda6d1"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-1/prompt-v6/verification.json",
+      "bytes": 11294,
+      "sha256": "dab428917d00d2c8f860b53384a64a108e7b7667cff61c8aeae69cdf0e2855b8"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/continuation-main.json",
+      "bytes": 56654,
+      "sha256": "8c25f6ba50a9f573e82f668ff8208df1a6b9519c960facb0f728dc95590c7b3a"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/effort-low/calibration-configuration.json",
+      "bytes": 556,
+      "sha256": "22b5cec12302171cb94ae8d08c2d8085331ae4bded6b644e32d9d1bc2f46d852"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/effort-low/calibration-report.json",
+      "bytes": 3949,
+      "sha256": "811d8847a0ccc083e9b658e2a78b2eea3998ba0b5c3fcfc4f779a7c03af79610"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/effort-low/continuation-off.json",
+      "bytes": 61739,
+      "sha256": "f6104e6fa366d329e876d375fc1e63fc1d7e818260bca80d955ed70de7bda555"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/effort-low/continuation-on.json",
+      "bytes": 61826,
+      "sha256": "2a29a438f1bc4437c119b7d43bd8e65bc1eb16988bf8bbf9da5974055f168908"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/effort-low/treatment-ledger.json",
+      "bytes": 329192,
+      "sha256": "c91c403212bbc3a5638855741f3a3607a3d4fe26cde5819ef576ab4b111ab381"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/effort-low/verification.json",
+      "bytes": 9394,
+      "sha256": "d9ddd628d349dd680a51d2e40ed2e271af65830e76f37e898c1e624921ff6773"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/main-audit.json",
+      "bytes": 21899,
+      "sha256": "30b9ac44946cbba74ca7e460d6c591f25278cf6e2df22de9e88b4c214bd324ae"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v5/calibration-configuration.json",
+      "bytes": 554,
+      "sha256": "7e1ae7f89e1b517afd4dc460c64b9dd262e8f66b364ffb4795e36afacbc0528d"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v5/calibration-report.json",
+      "bytes": 3705,
+      "sha256": "b08013479646ff8f6d5d7a5495ef244cc20f4495d99923c13c5f7bbd2adcd0f7"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v5/continuation-off.json",
+      "bytes": 61739,
+      "sha256": "e72067d0fac686a1ddab5d521acccc1ec6b6763afdfe1ee8611494a3b5f71c61"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v5/continuation-on.json",
+      "bytes": 62209,
+      "sha256": "9483af7effc3e66c405d4242f2f674ff9574d902f9de61d2c3d0b997cb38cefa"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v5/treatment-ledger.json",
+      "bytes": 329535,
+      "sha256": "6984ce500c6c59d7a075e3e599da04a29a53798a1f76b79edb9acc4548045f9f"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v5/verification.json",
+      "bytes": 9412,
+      "sha256": "2ac225040161dd46d86c32084cfacc9ece936e840778e26a4419f5b5a51203b2"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v6/calibration-configuration.json",
+      "bytes": 544,
+      "sha256": "35ee7a2f32aed63a87613c45ed06aedf82a73936ad530c5ff00d21f3f4176ae8"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v6/calibration-report.json",
+      "bytes": 3619,
+      "sha256": "38f0b0e7f08b02a6a378d1e9b293b9d3ec6ab40e3457f01311028f5d23a4258b"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v6/continuation-off.json",
+      "bytes": 61739,
+      "sha256": "10c2ac62d21ea42a9a76d528908f678d36cb8850203b1cfcd433a13acdafa525"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v6/continuation-on.json",
+      "bytes": 62335,
+      "sha256": "ed0018471241a5f9415d015b430e21e3486d27e0dabf5a46ac0d582dabbf19e1"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v6/treatment-ledger.json",
+      "bytes": 329699,
+      "sha256": "d97466237b8e2aba07c4c94977df68c2f626fa877cc435e26a3484fc9d2ca83f"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run-v6-calibration-2/prompt-v6/verification.json",
+      "bytes": 9343,
+      "sha256": "6d8c4dc70a8c68ce3c37d631d7e3d4999da3455563e672806464debba448cd4c"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/issue-243-calibration-outcome.md",
+      "bytes": 11328,
+      "sha256": "8d34140b1dacb1cc2e7b617ca565f1e8f22d424f9e7d889fd943d2bca515f719"
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+{
+  "version": "1a3b-g2-calibration-analysis:v6",
+  "round": 1,
+  "passed": false,
+  "pauseReason": "calibration verification failed; repair only demonstrated defects before an independent round",
+  "families": {
+    "positive_open_loop": {
+      "opportunities": 5,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "positive_memory": {
+      "opportunities": 2,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "stateful_suppression": {
+      "opportunities": 2,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "competing_pool": {
+      "opportunities": 2,
+      "committedEmits": 1,
+      "p": 0.5,
+      "formulaMinimum": 10,
+      "plannedCount": 10
+    }
+  },
+  "omissionReasons": {
+    "no_genuine_opportunity": {
+      "declared": 3,
+      "actualTypedOmissions": 0,
+      "stable": false
+    },
+    "duplicates_main_response": {
+      "declared": 3,
+      "actualTypedOmissions": 1,
+      "stable": false
+    },
+    "insufficient_grounding": {
+      "declared": 3,
+      "actualTypedOmissions": 1,
+      "stable": false
+    },
+    "timing_not_natural": {
+      "declared": 3,
+      "actualTypedOmissions": 2,
+      "stable": false
+    }
+  },
+  "plannedPositiveCounts": null,
+  "totalFormalPositiveScenes": null,
+  "verificationPassed": false,
+  "verificationFailures": [
+    "g2-v6-cal1-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-02: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-04: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-05: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-07: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-08: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal1-omit-11: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 0 no_genuine_opportunity; needs 3",
+    "typed omission audit has 1 duplicates_main_response; needs 3",
+    "typed omission audit has 1 insufficient_grounding; needs 3",
+    "typed omission audit has 2 timing_not_natural; needs 3",
+    "main, OFF, ON, and ledger evaluator commits do not match",
+    "g2-v6-cal1-ol-001: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-001: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-001: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-002: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-002: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-002: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-004: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-004: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-004: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-006: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-006: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-006: t2: selected target reference is missing",
+    "g2-v6-cal1-ol-007: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-ol-007: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-ol-007: t2: selected target reference is missing",
+    "g2-v6-cal1-mem-005: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal1-state-004: t1: proactive stage was skipped without an ordinary question",
+    "g2-v6-cal1-state-005: t1: proactive stage was skipped without an ordinary question",
+    "g2-v6-cal1-state-007: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-state-007: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-state-007: t2: selected target reference is missing",
+    "g2-v6-cal1-omit-08: t1: proactive stage was skipped without an ordinary question",
+    "g2-v6-cal1-omit-11: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal1-omit-11: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-omit-11: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-001: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-004: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-comp-004: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-comp-004: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-004: t2: declared competing target memory_claim:mem-g2-v6-cal1-comp-004 is missing from the candidate pool",
+    "g2-v6-cal1-comp-004: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-006: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-comp-006: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-comp-006: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-006: t2: declared competing target memory_claim:mem-g2-v6-cal1-comp-006 is missing from the candidate pool",
+    "g2-v6-cal1-comp-006: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-007: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal1-comp-008: t2: expected selection, got not_reached (no reason)",
+    "g2-v6-cal1-comp-008: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal1-comp-008: t2: selected target reference is missing",
+    "g2-v6-cal1-comp-008: t2: declared competing target memory_claim:mem-g2-v6-cal1-comp-008 is missing from the candidate pool",
+    "g2-v6-cal1-comp-008: t2: declared competing target open_loop:0:0 is missing from the candidate pool"
+  ],
+  "semanticQuestionEmitTurnIds": [],
+  "semanticGatePassed": true
+}

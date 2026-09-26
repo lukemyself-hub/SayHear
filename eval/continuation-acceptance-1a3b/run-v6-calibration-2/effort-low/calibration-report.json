@@ -1,0 +1,95 @@
+{
+  "version": "1a3b-g2-calibration-analysis:v6",
+  "round": 2,
+  "passed": false,
+  "pauseReason": "calibration verification failed; repair only demonstrated defects before an independent round",
+  "families": {
+    "positive_open_loop": {
+      "opportunities": 2,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "positive_memory": {
+      "opportunities": 1,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    },
+    "stateful_suppression": {
+      "opportunities": 3,
+      "committedEmits": 1,
+      "p": 0.3333333333333333,
+      "formulaMinimum": 20,
+      "plannedCount": 20
+    },
+    "competing_pool": {
+      "opportunities": 4,
+      "committedEmits": 0,
+      "p": 0,
+      "formulaMinimum": null,
+      "plannedCount": null
+    }
+  },
+  "omissionReasons": {
+    "no_genuine_opportunity": {
+      "declared": 3,
+      "actualTypedOmissions": 0,
+      "stable": false
+    },
+    "duplicates_main_response": {
+      "declared": 3,
+      "actualTypedOmissions": 2,
+      "stable": false
+    },
+    "insufficient_grounding": {
+      "declared": 3,
+      "actualTypedOmissions": 0,
+      "stable": false
+    },
+    "timing_not_natural": {
+      "declared": 3,
+      "actualTypedOmissions": 2,
+      "stable": false
+    }
+  },
+  "plannedPositiveCounts": null,
+  "totalFormalPositiveScenes": null,
+  "verificationPassed": false,
+  "verificationFailures": [
+    "g2-v6-cal2r-omit-01: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-02: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-03: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-04: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-07: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-08: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-09: declared omission audit case is not a matching typed omit",
+    "g2-v6-cal2r-omit-12: declared omission audit case is not a matching typed omit",
+    "typed omission audit has 0 no_genuine_opportunity; needs 3",
+    "typed omission audit has 2 duplicates_main_response; needs 3",
+    "typed omission audit has 0 insufficient_grounding; needs 3",
+    "typed omission audit has 2 timing_not_natural; needs 3",
+    "g2-v6-cal2r-ol-001: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal2r-ol-001: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal2r-ol-001: t2: selected target reference is missing",
+    "g2-v6-cal2r-ol-004: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal2r-mem-007: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal2r-state-003: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal2r-state-003: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal2r-state-003: t2: selected target reference is missing",
+    "g2-v6-cal2r-state-007: t2: expected selection, got none (no_eligible_target)",
+    "g2-v6-cal2r-state-007: t2: expected emit or typed omit, got not_reached",
+    "g2-v6-cal2r-state-007: t2: selected target reference is missing",
+    "g2-v6-cal2r-comp-001: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal2r-comp-001: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal2r-comp-003: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal2r-comp-003: t2: declared competing target open_loop:0:0 is missing from the candidate pool",
+    "g2-v6-cal2r-comp-005: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal2r-comp-007: t2: expected emit or typed omit, got failed",
+    "g2-v6-cal2r-comp-007: t2: declared competing target open_loop:0:0 is missing from the candidate pool"
+  ],
+  "semanticQuestionEmitTurnIds": [],
+  "semanticGatePassed": true
+}

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -43,6 +44,8 @@ export type V6CalibrationAnalysis = Readonly<{
   totalFormalPositiveScenes: number | null;
   verificationPassed: boolean;
   verificationFailures: readonly string[];
+  semanticQuestionEmitTurnIds: readonly string[];
+  semanticGatePassed: boolean;
 }>;
 
 async function main(): Promise<void> {
@@ -55,10 +58,33 @@ async function main(): Promise<void> {
   const verificationPath = arg("--verification", "eval/continuation-acceptance-1a3b/run-v6-calibration-1/verification.json");
   const outputPath = arg("--out", "eval/continuation-acceptance-1a3b/run-v6-calibration-1/calibration-report.json");
   const manifest = JSON.parse(await readFile(resolve(catalogPath), "utf8")) as V6CatalogManifest;
-  const verification = JSON.parse(await readFile(resolve(verificationPath), "utf8")) as V6TreatmentVerification;
   if (manifest.purpose !== "calibration" || !manifest.calibrationRound) throw new Error("Calibration analysis requires a numbered calibration catalog.");
+  const runDirectory = `eval/continuation-acceptance-1a3b/run-v6-calibration-${manifest.calibrationRound}`;
+  const mainAuditPath = arg("--main-audit", `${runDirectory}/main-audit.json`);
+  const mainRunPath = arg("--main-run", `${runDirectory}/continuation-main.json`);
+  const verification = JSON.parse(await readFile(resolve(verificationPath), "utf8")) as V6TreatmentVerification;
+  const mainAudit = JSON.parse(await readFile(resolve(mainAuditPath), "utf8")) as {
+    reviewedBeforeExpressionCalls: boolean;
+    mainRawSha256: string;
+    rows: readonly Readonly<{ sceneId: string; sequenceInScenario: number; currentMainHasOrdinaryQuestionSemantic: boolean }>[];
+  };
+  const mainRawSha256 = createHash("sha256").update(await readFile(resolve(mainRunPath))).digest("hex");
+  if (!mainAudit.reviewedBeforeExpressionCalls || mainAudit.mainRawSha256 !== mainRawSha256) {
+    throw new Error("Main-response semantic audit does not match the frozen main capture.");
+  }
   const sceneFiles = await Promise.all(manifest.sceneFiles.map(async (entry) => JSON.parse(await readFile(resolve(entry.path), "utf8")) as V6SceneFile));
   const scenes = sceneFiles.flatMap((file) => file.scenes);
+  const auditedTurnIds = mainAudit.rows.map((row) => `${row.sceneId}:t${row.sequenceInScenario}`);
+  const declaredAuditTurnIds = scenes.map((scene) => `${scene.id}:t2`);
+  if (auditedTurnIds.length !== declaredAuditTurnIds.length ||
+      new Set(auditedTurnIds).size !== auditedTurnIds.length ||
+      declaredAuditTurnIds.some((turnId) => !auditedTurnIds.includes(turnId))) {
+    throw new Error("Main-response semantic audit does not cover every declared t2 turn exactly once.");
+  }
+  const semanticQuestionEmitTurnIds = mainAudit.rows
+    .filter((row) => row.currentMainHasOrdinaryQuestionSemantic)
+    .map((row) => `${row.sceneId}:t${row.sequenceInScenario}`)
+    .filter((turnId) => verification.committedOpportunityTurnIds.includes(turnId));
   const sceneById = new Map(scenes.map((scene) => [scene.id, scene]));
   const opportunityFamily = new Map<string, string>();
   for (const turnId of verification.predeclaredOpportunityTurnIds) {
@@ -113,7 +139,9 @@ async function main(): Promise<void> {
   const totalFormalPositiveScenes = plannedPositiveCounts
     ? Object.values(plannedPositiveCounts).reduce((sum, count) => sum + count, 0)
     : null;
-  const pauseReason = !verification.passed
+  const pauseReason = semanticQuestionEmitTurnIds.length > 0
+    ? `semantic main-question gate failed for ${semanticQuestionEmitTurnIds.join(", ")}`
+    : !verification.passed
     ? "calibration verification failed; repair only demonstrated defects before an independent round"
     : familyZero.length > 0
       ? `zero complete emits or executable opportunities in: ${familyZero.join(", ")}`
@@ -133,6 +161,8 @@ async function main(): Promise<void> {
     totalFormalPositiveScenes,
     verificationPassed: verification.passed,
     verificationFailures: verification.failures,
+    semanticQuestionEmitTurnIds,
+    semanticGatePassed: semanticQuestionEmitTurnIds.length === 0,
   };
   await mkdir(dirname(resolve(outputPath)), { recursive: true });
   await writeFile(resolve(outputPath), `${JSON.stringify(report, null, 2)}\n`, "utf8");

@@ -1,0 +1,1276 @@
+{
+  "arm": "on",
+  "catalogVersion": "1a3b-g2-continuation:v6",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "configId": "continuation-candidate-1a3b-v6",
+  "configurationFingerprint": "sha256:29d54e4cd2a73f654a2deffc9aa749748209511938957ffac2f93bef612f2ced",
+  "evaluatorCommit": "9d20ffeb843ea3aca91fad5506aaddb14286ad11",
+  "executedBatchIds": [],
+  "format": "1a3b-g2-arm-run:v6",
+  "group": "continuation",
+  "scenarios": [
+    {
+      "fixtureId": "g2-v6-cal2r-ol-001",
+      "turns": [
+        {
+          "assistantText": "85.\n\nAnd the Bellwater thing — a date on the calendar and still no word is its own kind of heavy. That's just sitting there with you, if you want to say more about it.",
+          "preCompositionMainText": "85.\n\nAnd the Bellwater thing — a date on the calendar and still no word is its own kind of heavy. That's just sitting there with you, if you want to say more about it.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 58 plus 27. Just give the number. (sheet 1)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good timing — kettle's away, the good chair's free. I'm here.\n\nNothing's on the clock here, so we can go wherever you want with it. If something's been rattling around in your head all day, that's a fine place to start.",
+          "preCompositionMainText": "Good timing — kettle's away, the good chair's free. I'm here.\n\nNothing's on the clock here, so we can go wherever you want with it. If something's been rattling around in your head all day, that's a fine place to start.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again. I just put the kettle away and have a little time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-002",
+      "turns": [
+        {
+          "assistantText": "360 centimeters.\n\nAnd Bellwater still hasn't told you anything — Mira's date is all you've got to hold on to, and that's a long stretch of not knowing. Is it the shelf itself you're waiting on, or what you'd do with it once the answer comes?",
+          "preCompositionMainText": "360 centimeters.\n\nAnd Bellwater still hasn't told you anything — Mira's date is all you've got to hold on to, and that's a long stretch of not knowing. Is it the shelf itself you're waiting on, or what you'd do with it once the answer comes?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 3.6 meters to centimeters. Only the result. (sheet 2)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Glad you got out for a bit. I've got whatever minutes you've got — what's on your mind?",
+          "preCompositionMainText": "Hey. Glad you got out for a bit. I've got whatever minutes you've got — what's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi. I came back from a short walk and can talk for a few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-003",
+      "turns": [
+        {
+          "assistantText": "8.4 — that's 14 percent of 60.\n\nAnd the radio slot: nothing back yet, so you're sitting with the 29th as the only date you have and no way to read the room from here. That's a long time to hold something that's already out of your hands.",
+          "preCompositionMainText": "8.4 — that's 14 percent of 60.\n\nAnd the radio slot: nothing back yet, so you're sitting with the 29th as the only date you have and no way to read the room from here. That's a long time to hold something that's already out of your hands.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 14 percent of 60. Just the amount. (sheet 3)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good light at the desk makes a real difference — some mornings the whole space feels easier to sit in.\n\nI'm here, and there's no clock running on it. What's on your mind?",
+          "preCompositionMainText": "Morning. Good light at the desk makes a real difference — some mornings the whole space feels easier to sit in.\n\nI'm here, and there's no clock running on it. What's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-004",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 156 除以 13，只给答案。 （第 4 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好啊，我在。桌子收干净了，坐下来那一刻手上闲下来，脑子也跟着松一点。\n\n想聊什么就随便开头，我听着。\n\n对了，铃溪中心那边桌位预约的结果出来了吗？",
+          "preCompositionMainText": "好啊，我在。桌子收干净了，坐下来那一刻手上闲下来，脑子也跟着松一点。\n\n想聊什么就随便开头，我听着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，我刚收好桌子，能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-005",
+      "turns": [
+        {
+          "assistantText": "85。\n\n档案扫描的申请已经交上去了，按工作人员说的，要到 2026 年 9 月 29 日之前才有回音。这段时间就只能悬着等。",
+          "preCompositionMainText": "85。\n\n档案扫描的申请已经交上去了，按工作人员说的，要到 2026 年 9 月 29 日之前才有回音。这段时间就只能悬着等。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 58 加 27，只给数字。 （第 5 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "水壶收好了，那这会儿能踏实坐一会儿。想聊点什么，还是接着档案申请那事儿往下说？",
+          "preCompositionMainText": "水壶收好了，那这会儿能踏实坐一会儿。想聊点什么，还是接着档案申请那事儿往下说？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我刚把水壶收好，现在能聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-006",
+      "turns": [
+        {
+          "assistantText": "3.6 米 = 360 厘米。\n\n铃溪中心那边说的是 2026 年 9 月 29 日之前给决定，现在还没消息，那就是还悬着。这种等法最磨人，什么都做不了，只能等他们开口。",
+          "preCompositionMainText": "3.6 米 = 360 厘米。\n\n铃溪中心那边说的是 2026 年 9 月 29 日之前给决定，现在还没消息，那就是还悬着。这种等法最磨人，什么都做不了，只能等他们开口。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 3.6 米换成厘米，只给结果。 （第 6 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，回来啦。几分钟也够，我在这儿。\n\n走的还是平时那条路吗？",
+          "preCompositionMainText": "嗨，回来啦。几分钟也够，我在这儿。\n\n走的还是平时那条路吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-007",
+      "turns": [
+        {
+          "assistantText": "8.4\n\nYou've sent it off, and now it just sits with Mira until September 29. Nothing decided yet — that's where things stand.",
+          "preCompositionMainText": "8.4\n\nYou've sent it off, and now it just sits with Mira until September 29. Nothing decided yet — that's where things stand.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 14 percent of 60，只给 amount。 (sheet 7)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good light at a desk is a small, real pleasure — glad you've got it today.\n\nI'm here, take your time. What's on your mind?",
+          "preCompositionMainText": "Morning. Good light at a desk is a small, real pleasure — glad you've got it today.\n\nI'm here, take your time. What's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，桌边的 light 很好，我有空聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-008",
+      "turns": [
+        {
+          "assistantText": "12.\n\nAnd the Bellwater thing — Mira gave you a date, September 29, 2026, so the answer is still a long way off and right now you're just in the not-knowing part. You've sent the request; that's the part that was yours to do.\n\nWas that just noting where it stands, or is the waiting itself on your mind?",
+          "preCompositionMainText": "12.\n\nAnd the Bellwater thing — Mira gave you a date, September 29, 2026, so the answer is still a long way off and right now you're just in the not-knowing part. You've sent the request; that's the part that was yours to do.\n\nWas that just noting where it stands, or is the waiting itself on your mind?",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 156 by 13，只给 answer。 (sheet 8)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Freshly cleared desk, that's a good feeling — the kind you notice for about ten minutes before it fills up again.\n\nDid you tidy it because something was bugging you, or just because it was time?",
+          "preCompositionMainText": "Hey. Freshly cleared desk, that's a good feeling — the kind you notice for about ten minutes before it fills up again.\n\nDid you tidy it because something was bugging you, or just because it was time?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，我刚 tidy 好桌子，能 chat 几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-001",
+      "turns": [
+        {
+          "assistantText": "85",
+          "preCompositionMainText": "85",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 58 plus 27. Just give the number. (sheet 1)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hi again. Kettle's away, and you've got a bit of room in your day — nice. How's the Bellwater fern collection coming along?",
+          "preCompositionMainText": "Hi again. Kettle's away, and you've got a bit of room in your day — nice. How's the Bellwater fern collection coming along?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again. I just put the kettle away and have a little time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-002",
+      "turns": [
+        {
+          "assistantText": "360 centimeters",
+          "preCompositionMainText": "360 centimeters",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 3.6 meters to centimeters. Only the result. (sheet 2)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey, good to hear from you. A few minutes is plenty.\n\nLast I knew, you had that Bellwater linocut flower going — how's it treating you?",
+          "preCompositionMainText": "Hey, good to hear from you. A few minutes is plenty.\n\nLast I knew, you had that Bellwater linocut flower going — how's it treating you?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi. I came back from a short walk and can talk for a few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-003",
+      "turns": [
+        {
+          "assistantText": "8.4",
+          "preCompositionMainText": "8.4",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 14 percent of 60. Just the amount. (sheet 3)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Light like that at a desk makes everything easier, and time to actually talk is even better. Last time we talked you were planning that striped pouch for your sketch pencils — the Bellwater project. Is it sewn yet, or still just fabric on the table?",
+          "preCompositionMainText": "Morning. Light like that at a desk makes everything easier, and time to actually talk is even better. Last time we talked you were planning that striped pouch for your sketch pencils — the Bellwater project. Is it sewn yet, or still just fabric on the table?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-004",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 156 除以 13，只给答案。 （第 4 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "又见面了，能聊几句挺好的。\n\n你之前在铃溪练的那首传统小提琴曲，开头那段现在还在练吗？",
+          "preCompositionMainText": "又见面了，能聊几句挺好的。\n\n你之前在铃溪练的那首传统小提琴曲，开头那段现在还在练吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，我刚收好桌子，能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-005",
+      "turns": [
+        {
+          "assistantText": "85",
+          "preCompositionMainText": "85",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 58 加 27，只给数字。 （第 5 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，水壶归位了，那就慢慢聊。你之前说过想给窗边花园的香草做标签——那个后来弄了吗？",
+          "preCompositionMainText": "好，水壶归位了，那就慢慢聊。你之前说过想给窗边花园的香草做标签——那个后来弄了吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我刚把水壶收好，现在能聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-006",
+      "turns": [
+        {
+          "assistantText": "360 厘米。",
+          "preCompositionMainText": "360 厘米。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 3.6 米换成厘米，只给结果。 （第 6 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "回来啦。走一圈回来，人通常是松的，也可能是更累的那种松。\n\n你之前说在弄铃溪那本鸟类小志的版式草图，我还记着——今天这几分钟，是想聊这个，还是就想随便说说话？",
+          "preCompositionMainText": "回来啦。走一圈回来，人通常是松的，也可能是更累的那种松。\n\n你之前说在弄铃溪那本鸟类小志的版式草图，我还记着——今天这几分钟，是想聊这个，还是就想随便说说话？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-007",
+      "turns": [
+        {
+          "assistantText": "8.4",
+          "preCompositionMainText": "8.4",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 14 percent of 60，只给 amount。 (sheet 7)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. That light on the desk is a good thing to have while you've got time — makes the whole space feel easier to sit in. I'm here, take it wherever you want.\n\nMorning — how's the clay cup with the thumbprint handle coming along?",
+          "preCompositionMainText": "Morning. That light on the desk is a good thing to have while you've got time — makes the whole space feel easier to sit in. I'm here, take it wherever you want.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，桌边的 light 很好，我有空聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-008",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 156 by 13，只给 answer。 (sheet 8)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Freshly cleared desk, that's a good feeling — everything else can wait on the surface of it for a bit. What's on your mind?",
+          "preCompositionMainText": "Hey. Freshly cleared desk, that's a good feeling — everything else can wait on the surface of it for a bit. What's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，我刚 tidy 好桌子，能 chat 几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-001",
+      "turns": [
+        {
+          "assistantText": "85.\n\nAnd the Bellwater thing is still open, then — a date you were given, September 29, and no answer in hand yet.",
+          "preCompositionMainText": "85.\n\nAnd the Bellwater thing is still open, then — a date you were given, September 29, and no answer in hand yet.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 58 plus 27. Just give the number. (sheet 1)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Nice — kettle's away, and you've got a pocket of the day that's just yours. What's on your mind?",
+          "preCompositionMainText": "Nice — kettle's away, and you've got a pocket of the day that's just yours. What's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again. I just put the kettle away and have a little time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Understood — Bellwater's off the table. I'm here for whatever else you feel like talking about, or nothing much at all.",
+          "preCompositionMainText": "Understood — Bellwater's off the table. I'm here for whatever else you feel like talking about, or nothing much at all.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to discuss the Bellwater project any further today.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good — a few minutes is plenty. I'm glad you came back to the chat with it.\n\nHope the walk was a decent one, wherever it took you.",
+          "preCompositionMainText": "Good — a few minutes is plenty. I'm glad you came back to the chat with it.\n\nHope the walk was a decent one, wherever it took you.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi. I came back from a short walk and can talk for a few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-002",
+      "turns": [
+        {
+          "assistantText": "360 cm",
+          "preCompositionMainText": "360 cm",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 3.6 meters to centimeters. Only the result. (sheet 2)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Glad you came back with a few minutes to spare. How was the walk?",
+          "preCompositionMainText": "Hey. Glad you came back with a few minutes to spare. How was the walk?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi. I came back from a short walk and can talk for a few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Good to hear. The Bellwater thing — that was the linocut flower you mentioned you were learning to carve, right?\n\nIf it's going fine, I'm curious what part of it you're on now.",
+          "preCompositionMainText": "Good to hear. The Bellwater thing — that was the linocut flower you mentioned you were learning to carve, right?\n\nIf it's going fine, I'm curious what part of it you're on now.",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "The Bellwater project was fine, thanks.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Nice light at your desk sounds like a good start — that's the kind of thing that quietly makes a morning better.\n\nI've got the time too. What's on your mind?",
+          "preCompositionMainText": "Morning. Nice light at your desk sounds like a good start — that's the kind of thing that quietly makes a morning better.\n\nI've got the time too. What's on your mind?",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-003",
+      "turns": [
+        {
+          "assistantText": "14% of 60 is 8.4.\n\nAnd the Bellwater thing — Mira gave you a date, September 29, and you still haven't heard either way. That's a stretch of not-knowing with nothing to do in it.",
+          "preCompositionMainText": "14% of 60 is 8.4.\n\nAnd the Bellwater thing — Mira gave you a date, September 29, and you still haven't heard either way. That's a stretch of not-knowing with nothing to do in it.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 14 percent of 60. Just the amount. (sheet 3)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Nice light and no clock running — that's a good way to start.\n\nI'm here. Take it wherever you want.",
+          "preCompositionMainText": "Morning. Nice light and no clock running — that's a good way to start.\n\nI'm here. Take it wherever you want.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Breakfast it is. Bellwater's off the table.\n\nSo — what's on the plate this morning?",
+          "preCompositionMainText": "Breakfast it is. Bellwater's off the table.\n\nSo — what's on the plate this morning?",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Let's leave the Bellwater project and talk about breakfast.",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Table's clear, room's open — good.\n\nI'm here, nothing to get to. Say whatever's on your mind.",
+          "preCompositionMainText": "Hey. Table's clear, room's open — good.\n\nI'm here, nothing to get to. Say whatever's on your mind.",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey. I finished tidying the table and have a little room to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-004",
+      "turns": [
+        {
+          "assistantText": "12。",
+          "preCompositionMainText": "12。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 156 除以 13，只给答案。 （第 4 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，桌子收干净了，能坐下来说几句挺好。你之前说过在铃溪练一首传统小提琴曲的开头，还在练吗？",
+          "preCompositionMainText": "嗯，桌子收干净了，能坐下来说几句挺好。你之前说过在铃溪练一首传统小提琴曲的开头，还在练吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，我刚收好桌子，能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那就不聊它。你说想聊几句——今天想说什么都行。",
+          "preCompositionMainText": "行，那就不聊它。你说想聊几句——今天想说什么都行。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "今天我不想再聊铃溪的事了。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "你好。水壶收好，坐下歇口气，我在这儿。\n\n想从哪儿说起都行，你说了算。\n\n铃溪那首小提琴曲的开头，最近练得顺一些了吗？",
+          "preCompositionMainText": "你好。水壶收好，坐下歇口气，我在这儿。\n\n想从哪儿说起都行，你说了算。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我刚把水壶收好，现在能聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-005",
+      "turns": [
+        {
+          "assistantText": "85。\n\n铃溪中心那份申请我记下了：你已经交了，工作人员说最晚二〇二六年九月二十九日出决定，现在还没有结果。这段时间就是干等着。\n\n要是真批下来，你打算先扫哪一部分？",
+          "preCompositionMainText": "85。\n\n铃溪中心那份申请我记下了：你已经交了，工作人员说最晚二〇二六年九月二十九日出决定，现在还没有结果。这段时间就是干等着。\n\n要是真批下来，你打算先扫哪一部分？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 58 加 27，只给数字。 （第 5 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，水壶都收好了，那就坐下来说会儿话。我在。\n\n你之前提交的地方史档案扫描申请，铃溪中心那边有消息了吗？",
+          "preCompositionMainText": "行，水壶都收好了，那就坐下来说会儿话。我在。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我刚把水壶收好，现在能聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "好，那这事就先放一边，不提了。\n\n想聊别的就聊，不想说具体的也没关系，随便说两句也行。",
+          "preCompositionMainText": "好，那这事就先放一边，不提了。\n\n想聊别的就聊，不想说具体的也没关系，随便说两句也行。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "铃溪那件事就那样，谢谢。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "散步回来了，几分钟也够说几句。\n\n外面走的时候是凉快，还是还闷着？",
+          "preCompositionMainText": "散步回来了，几分钟也够说几句。\n\n外面走的时候是凉快，还是还闷着？",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-006",
+      "turns": [
+        {
+          "assistantText": "360 厘米。",
+          "preCompositionMainText": "360 厘米。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 3.6 米换成厘米，只给结果。 （第 6 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "回来啦，出去走一圈挺好的。你之前提过在给铃溪那本鸟类小志画版式草图，现在弄到哪儿了？",
+          "preCompositionMainText": "回来啦，出去走一圈挺好的。你之前提过在给铃溪那本鸟类小志画版式草图，现在弄到哪儿了？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行，那聊早餐。\n\n我这边没什么可讲的，主要听你说。你早餐一般认真吃，还是随便对付一口？",
+          "preCompositionMainText": "行，那聊早餐。\n\n我这边没什么可讲的，主要听你说。你早餐一般认真吃，还是随便对付一口？",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "先别聊铃溪的事了，我们换个话题，说说早餐。",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "早上好。早上桌边那点光是真的舒服，斜斜地照进来，不用开灯那种。\n\n我在呢，你想说什么就说，不急着有主题。",
+          "preCompositionMainText": "早上好。早上桌边那点光是真的舒服，斜斜地照进来，不用开灯那种。\n\n我在呢，你想说什么就说，不急着有主题。",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "早上好，今天桌边的光挺好，我有空聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-007",
+      "turns": [
+        {
+          "assistantText": "8.4\n\nBellwater 那边就先挂着吧——Mira 给的时间是 September 29, 2026,你说结果还没到,那就真的还没到,不用现在替它操心。",
+          "preCompositionMainText": "8.4\n\nBellwater 那边就先挂着吧——Mira 给的时间是 September 29, 2026,你说结果还没到,那就真的还没到,不用现在替它操心。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 14 percent of 60，只给 amount。 (sheet 7)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "早上好。桌边那种光,坐在那儿什么都不干也挺舒服的。\n\n我在这儿,你想聊什么都行——Bellwater 的事,或者完全不相干的。",
+          "preCompositionMainText": "早上好。桌边那种光,坐在那儿什么都不干也挺舒服的。\n\n我在这儿,你想聊什么都行——Bellwater 的事,或者完全不相干的。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，桌边的 light 很好，我有空聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "行,那就不聊它。\n\n想说别的就说,不想说具体的也行,就这么坐一会儿我也可以。",
+          "preCompositionMainText": "行,那就不聊它。\n\n想说别的就说,不想说具体的也行,就这么坐一会儿我也可以。",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "I don't want to继续聊 Bellwater 的事 today。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "桌子收拾干净了,坐下来的感觉确实不一样,眼睛都松快些。\n\n今天桌边那道光还在吗,还是已经挪走了?",
+          "preCompositionMainText": "桌子收拾干净了,坐下来的感觉确实不一样,眼睛都松快些。\n\n今天桌边那道光还在吗,还是已经挪走了?",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，我刚 tidy 好桌子，能 chat 几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-008",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 156 by 13，只给 answer。 (sheet 8)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "桌子清出来了，挺好——那种眼前空一块的感觉，我懂。\n\n对了，你之前说想在黄昏拍 Bellwater 那座老车站钟，后来拍到了吗？",
+          "preCompositionMainText": "桌子清出来了，挺好——那种眼前空一块的感觉，我懂。\n\n对了，你之前说想在黄昏拍 Bellwater 那座老车站钟，后来拍到了吗？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，我刚 tidy 好桌子，能 chat 几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "行，那就不提了。\n\n桌子空出来了，这会儿想聊点什么？",
+          "preCompositionMainText": "行，那就不提了。\n\n桌子空出来了，这会儿想聊点什么？",
+          "sequenceInScenario": 3,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Bellwater 那件事 was fine，就这样，谢谢。",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "水壶收好了，坐下来慢慢聊——这会儿你想说点什么？",
+          "preCompositionMainText": "水壶收好了，坐下来慢慢聊——这会儿你想说点什么？",
+          "sequenceInScenario": 4,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again，我刚把 kettle 收好，现在能聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-01",
+      "turns": [
+        {
+          "assistantText": "85",
+          "preCompositionMainText": "85",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 58 plus 27. Just give the number. (sheet 1)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good timing on my end too — nothing pressing here, just room to talk.\n\nWhat's been going on with you today?",
+          "preCompositionMainText": "Hey. Good timing on my end too — nothing pressing here, just room to talk.\n\nWhat's been going on with you today?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again. I just put the kettle away and have a little time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-02",
+      "turns": [
+        {
+          "assistantText": "360 厘米。\n\n「第 2 张纸」我这边看不到，只能给这个换算结果。",
+          "preCompositionMainText": "360 厘米。\n\n「第 2 张纸」我这边看不到，只能给这个换算结果。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 3.6 米换成厘米，只给结果。 （第 2 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，回来啦。几分钟也够，慢慢说。散步路上有什么在脑子里转的？",
+          "preCompositionMainText": "嗨，回来啦。几分钟也够，慢慢说。散步路上有什么在脑子里转的？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-03",
+      "turns": [
+        {
+          "assistantText": "8.4",
+          "preCompositionMainText": "8.4",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 14 percent of 60，只给 amount。 (sheet 3)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning。桌边 light 好的早上，人自然会慢一点，不急。\n\n你之前说在 Bellwater center 挑的那支 gray pencil，我还记着。要聊什么都可以，我这边听着。",
+          "preCompositionMainText": "Morning。桌边 light 好的早上，人自然会慢一点，不急。\n\n你之前说在 Bellwater center 挑的那支 gray pencil，我还记着。要聊什么都可以，我这边听着。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，桌边的 light 很好，我有空聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-04",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please divide 156 by 13. Only the answer. (sheet 4)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "You mentioned restoring a chipped blue enamel kettle — that was the Bellwater project, as you put it. That's all I've got on it; nothing about where the name came from or where the kettle ended up. Is that the one you meant?",
+          "preCompositionMainText": "You mentioned restoring a chipped blue enamel kettle — that was the Bellwater project, as you put it. That's all I've got on it; nothing about where the name came from or where the kettle ended up. Is that the one you meant?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I can't quite place that little Bellwater project I told you about.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-05",
+      "turns": [
+        {
+          "assistantText": "85",
+          "preCompositionMainText": "85",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 58 加 27，只给数字。 （第 5 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "你之前说过，铃溪那个项目是要画一幅市场遮阳棚的水彩练习。\n\n就这一件事——遮阳棚，水彩。听起来当时还只是在打算的阶段。",
+          "preCompositionMainText": "你之前说过，铃溪那个项目是要画一幅市场遮阳棚的水彩练习。\n\n就这一件事——遮阳棚，水彩。听起来当时还只是在打算的阶段。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，之前在铃溪做的那个小项目，我一下想不起是什么了。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-06",
+      "turns": [
+        {
+          "assistantText": "360 厘米",
+          "preCompositionMainText": "360 厘米",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Convert 3.6 meters to centimeters，只给 result。 (sheet 6)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "你在 Bellwater 那个 project，是收集你祖母故事里那些 unusual words — 那些不常见的说法、老词。\n\nThat's how you described it to me, anyway. 具体是哪些词，我这边就没有了。",
+          "preCompositionMainText": "你在 Bellwater 那个 project，是收集你祖母故事里那些 unusual words — 那些不常见的说法、老词。\n\nThat's how you described it to me, anyway. 具体是哪些词，我这边就没有了。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi，我一下想不起之前在 Bellwater 做的 little project 了。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-07",
+      "turns": [
+        {
+          "assistantText": "8.4",
+          "preCompositionMainText": "8.4",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 14 percent of 60. Just the amount. (sheet 7)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Desk light and nowhere to be — that's a good combination. Bellwater's still hazy on my end, by the way: I know you liked being there, but not what you were actually doing. So what's on your mind this morning?",
+          "preCompositionMainText": "Morning. Desk light and nowhere to be — that's a good combination. Bellwater's still hazy on my end, by the way: I know you liked being there, but not what you were actually doing. So what's on your mind this morning?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-08",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 156 除以 13，只给答案。 （第 8 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗯，桌子收好，心里也空出点地方了。想聊什么都行——今天过得怎么样？",
+          "preCompositionMainText": "嗯，桌子收好，心里也空出点地方了。想聊什么都行——今天过得怎么样？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，我刚收好桌子，能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-09",
+      "turns": [
+        {
+          "assistantText": "85",
+          "preCompositionMainText": "85",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 58 plus 27，只给 number。 (sheet 9)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey — kettle's away, kitchen's yours again. Bellwater is still a loose thread in my head; I never pinned down which part of it you were into. Did anything come of that, or is tonight about something else?",
+          "preCompositionMainText": "Hey — kettle's away, kitchen's yours again. Bellwater is still a loose thread in my head; I never pinned down which part of it you were into. Did anything come of that, or is tonight about something else?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again，我刚把 kettle 收好，现在能聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-10",
+      "turns": [
+        {
+          "assistantText": "360 cm",
+          "preCompositionMainText": "360 cm",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 3.6 meters to centimeters. Only the result. (sheet 10)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Take your time — I'll be here when you land on the right floor.",
+          "preCompositionMainText": "Take your time — I'll be here when you land on the right floor.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi, I'm stepping into an elevator and need to find my floor first.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-11",
+      "turns": [
+        {
+          "assistantText": "8.4\n\n候补的事，得等到 2026 年 9 月 29 日之前才有答复，这中间不短，结果一天没下来，就一天定不了。你已经把请求交上去了。",
+          "preCompositionMainText": "8.4\n\n候补的事，得等到 2026 年 9 月 29 日之前才有答复，这中间不短，结果一天没下来，就一天定不了。你已经把请求交上去了。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 60 的 14%，只给数值。 （第 11 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "行,先忙电梯的事。我在这儿,你按完楼层再接着说。",
+          "preCompositionMainText": "行,先忙电梯的事。我在这儿,你按完楼层再接着说。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我正要进电梯，先得找好楼层。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-12",
+      "turns": [
+        {
+          "assistantText": "12",
+          "preCompositionMainText": "12",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 156 by 13，只给 answer。 (sheet 12)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Go on then — which floor? I'll wait here while you ride.",
+          "preCompositionMainText": "Go on then — which floor? I'll wait here while you ride.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi，我要进 elevator，先找 floor。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-001",
+      "turns": [
+        {
+          "assistantText": "85",
+          "preCompositionMainText": "85",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 58 plus 27. Just give the number. (sheet 1)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hi. Nice to hear from you — kettle's away, and you've got a bit of room in the day.\n\nNo rush on my end. I'm here whenever you want to pick something up.\n\nHow's the Bellwater fern collection coming along?",
+          "preCompositionMainText": "Hi. Nice to hear from you — kettle's away, and you've got a bit of room in the day.\n\nNo rush on my end. I'm here whenever you want to pick something up.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hello again. I just put the kettle away and have a little time to chat.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-002",
+      "turns": [
+        {
+          "assistantText": "360 centimeters.\n\nStill no word from Mira, then — that's a lot of waiting to just sit in.",
+          "preCompositionMainText": "360 centimeters.\n\nStill no word from Mira, then — that's a lot of waiting to just sit in.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please convert 3.6 meters to centimeters. Only the result. (sheet 2)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Good to see you back. I'm glad you came by, even for a few minutes.\n\nHow was the walk — anything worth noticing out there, or was it just the good kind of nothing?",
+          "preCompositionMainText": "Hey. Good to see you back. I'm glad you came by, even for a few minutes.\n\nHow was the walk — anything worth noticing out there, or was it just the good kind of nothing?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hi. I came back from a short walk and can talk for a few minutes.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-003",
+      "turns": [
+        {
+          "assistantText": "8.4\n\nAnd the Bellwater thing — Mira gave you a date, so you're waiting on September 29 with the answer still outside your hands. That kind of open-ended wait is its own low hum.",
+          "preCompositionMainText": "8.4\n\nAnd the Bellwater thing — Mira gave you a date, so you're waiting on September 29 with the answer still outside your hands. That kind of open-ended wait is its own low hum.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Please calculate 14 percent of 60. Just the amount. (sheet 3)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good light and no rush — that's a decent way to start a day.\n\nThe Bellwater answer was still open last we talked, with the 29th as Mira's date. If that's on your mind, start there. If it's something else, I've got the time too.",
+          "preCompositionMainText": "Morning. Good light and no rush — that's a decent way to start a day.\n\nThe Bellwater answer was still open last we talked, with the 29th as Mira's date. If that's on your mind, start there. If it's something else, I've got the time too.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning. The light at my desk is nice today, and I have time to talk.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-004",
+      "turns": [
+        {
+          "assistantText": "156 除以 13，等于 12。\n\n铃溪那边说要到 9 月 29 日之前才给决定，中间这段时间，桌位的事就只能先悬着，别的安排也不好往下排。你还没拿到结果，那就是干等一阵。\n\n桌位定下来的话，你是打算在那边做点什么？",
+          "preCompositionMainText": "156 除以 13，等于 12。\n\n铃溪那边说要到 9 月 29 日之前才给决定，中间这段时间，桌位的事就只能先悬着，别的安排也不好往下排。你还没拿到结果，那就是干等一阵。\n\n桌位定下来的话，你是打算在那边做点什么？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 156 除以 13，只给答案。 （第 4 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "收好桌子啦，那正好，我在这儿。\n\n想随口聊聊，还是有什么事搁在心里想说说？",
+          "preCompositionMainText": "收好桌子啦，那正好，我在这儿。\n\n想随口聊聊，还是有什么事搁在心里想说说？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "又见面了，我刚收好桌子，能聊几句。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-005",
+      "turns": [
+        {
+          "assistantText": "85。\n\n铃溪中心给了准日子，九月二十九号之前会有决定，结果现在还压着。申请交出去了，剩下的不归你定，只能等到那天。\n\n你想扫的是铃溪哪一段地方史？",
+          "preCompositionMainText": "85。\n\n铃溪中心给了准日子，九月二十九号之前会有决定，结果现在还压着。申请交出去了，剩下的不归你定，只能等到那天。\n\n你想扫的是铃溪哪一段地方史？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请算 58 加 27，只给数字。 （第 5 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "哎，好。水壶放好了，那就是你的时间了。\n\n想聊点什么就说，或者就这么零散说几句也行。我在。\n\n窗边花园的香草标签，后来做了吗？",
+          "preCompositionMainText": "哎，好。水壶放好了，那就是你的时间了。\n\n想聊点什么就说，或者就这么零散说几句也行。我在。",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "你好，我刚把水壶收好，现在能聊一会儿。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-006",
+      "turns": [
+        {
+          "assistantText": "360 厘米。\n\n星空小组那个请求，现在就是等着——工作人员给了 9 月 29 日这个期限，结果还没出来。这种还没定下来的日子，心里会一直挂着，我懂的。",
+          "preCompositionMainText": "360 厘米。\n\n星空小组那个请求，现在就是等着——工作人员给了 9 月 29 日这个期限，结果还没出来。这种还没定下来的日子，心里会一直挂着，我懂的。",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "请把 3.6 米换成厘米，只给结果。 （第 6 张纸）",
+            "timezone": "Asia/Shanghai"
+          }
+        },
+        {
+          "assistantText": "嗨，散步回来了。这几天外面天气还行吗，走的是你平时那条路？",
+          "preCompositionMainText": "嗨，散步回来了。这几天外面天气还行吗，走的是你平时那条路？",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "zh-CN",
+            "text": "嗨，我刚散步回来，有几分钟能聊。",
+            "timezone": "Asia/Shanghai"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-007",
+      "turns": [
+        {
+          "assistantText": "8.4。\n\nBellwater 那边的回音要等到 9 月 29 号，中间还隔着挺长一段。你说还不知道——等着一个自己没法催的结果，那种悬着的感觉是实实在在的。\n\n这段时间你是会时不时想起来，还是基本能放到一边？",
+          "preCompositionMainText": "8.4。\n\nBellwater 那边的回音要等到 9 月 29 号，中间还隔着挺长一段。你说还不知道——等着一个自己没法催的结果，那种悬着的感觉是实实在在的。\n\n这段时间你是会时不时想起来，还是基本能放到一边？",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Calculate 14 percent of 60，只给 amount。 (sheet 7)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Morning. Good light at the desk — that's a nice way to start, the kind of morning where you don't have to rush anything.\n\nI've got time too. Whatever's on your mind, or nothing in particular — either works.\n\nHow's the clay cup with the thumbprint handle coming along?",
+          "preCompositionMainText": "Morning. Good light at the desk — that's a nice way to start, the kind of morning where you don't have to rush anything.\n\nI've got time too. Whatever's on your mind, or nothing in particular — either works.",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Morning，桌边的 light 很好，我有空聊一会儿。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-008",
+      "turns": [
+        {
+          "assistantText": "Bellwater's in your hands now — request sent, Mira's the one deciding, and September 29 is when you'd hear. Until then it's just open, no result yet.\n\n156 ÷ 13 = 12.",
+          "preCompositionMainText": "Bellwater's in your hands now — request sent, Mira's the one deciding, and September 29 is when you'd hear. Until then it's just open, no result yet.\n\n156 ÷ 13 = 12.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Divide 156 by 13，只给 answer。 (sheet 8)",
+            "timezone": "America/Los_Angeles"
+          }
+        },
+        {
+          "assistantText": "Hey. Clean desk — that's a nice feeling, everything in its spot for once. I'm around, so chat away. What's on your mind?",
+          "preCompositionMainText": "Hey. Clean desk — that's a nice feeling, everything in its spot for once. I'm around, so chat away. What's on your mind?",
+          "sequenceInScenario": 2,
+          "userInput": {
+            "locale": "en-US",
+            "text": "Hey，我刚 tidy 好桌子，能 chat 几句。",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-arm-run:v6"
+}

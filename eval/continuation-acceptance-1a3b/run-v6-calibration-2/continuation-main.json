@@ -1,0 +1,1057 @@
+{
+  "catalogVersion": "1a3b-g2-continuation:v6",
+  "domainTime": "2026-09-23T00:00:00.000Z",
+  "cleanIncumbentCommit": "08a47085b81e76eb34a9f9577d28a64a94f30699",
+  "cleanIncumbentManifestFingerprint": "sha256:e8c0572278fe5ee45a7cd265aed18d2d8975ff416995cdef4ce9e29a8066a249",
+  "conversationConfigId": "continuation-incumbent-1a3a",
+  "conversationConfigurationFingerprint": "sha256:91cc96a38f958c0d2ff934f60c5a8045f426554919b12d2f7e5af965eea7616c",
+  "evaluatorCommit": "9d20ffeb843ea3aca91fad5506aaddb14286ad11",
+  "executedBatchIds": [],
+  "format": "1a3b-g2-main-capture:v6",
+  "group": "continuation",
+  "responses": [
+    {
+      "fixtureId": "g2-v6-cal2r-ol-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85.\n\nAnd the Bellwater thing — a date on the calendar and still no word is its own kind of heavy. That's just sitting there with you, if you want to say more about it.",
+      "userInputFingerprint": "sha256:c0262641bc83a99203e348bb66f91aecad344c3dff8250f365485becfb22e82f"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Good timing — kettle's away, the good chair's free. I'm here.\n\nNothing's on the clock here, so we can go wherever you want with it. If something's been rattling around in your head all day, that's a fine place to start.",
+      "userInputFingerprint": "sha256:94f34b8eb7cda0cce5f77e462ec346983c9d9a7fc10b9a2c5130f4bf2898f1f3"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 centimeters.\n\nAnd Bellwater still hasn't told you anything — Mira's date is all you've got to hold on to, and that's a long stretch of not knowing. Is it the shelf itself you're waiting on, or what you'd do with it once the answer comes?",
+      "userInputFingerprint": "sha256:38ef7ff648379fdc2647e01094707be86efa3bb562c80ac8c511c42a3e99944f"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Glad you got out for a bit. I've got whatever minutes you've got — what's on your mind?",
+      "userInputFingerprint": "sha256:ac0ae93220136f6aee53e3cdf737482b0b93eeb12a1b179f32aa5bc2850cbc72"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4 — that's 14 percent of 60.\n\nAnd the radio slot: nothing back yet, so you're sitting with the 29th as the only date you have and no way to read the room from here. That's a long time to hold something that's already out of your hands.",
+      "userInputFingerprint": "sha256:a91698ede7022e9de73f1ba6a9fe1336bf23bb9a83216a25a98e396691073a7d"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good light at the desk makes a real difference — some mornings the whole space feels easier to sit in.\n\nI'm here, and there's no clock running on it. What's on your mind?",
+      "userInputFingerprint": "sha256:4925f43d52571301a1bbcb703080c09a96ad6a5659bec5c44d620070fa2af4a0"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:56f789fdd6b546a8bec25375387c44bc58e760eb921a7d2e6cb4ca05dc7eb089"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好啊，我在。桌子收干净了，坐下来那一刻手上闲下来，脑子也跟着松一点。\n\n想聊什么就随便开头，我听着。",
+      "userInputFingerprint": "sha256:8b6eef2a1d3666503886ce3f09a1350c7457d11677a3d0d38452d049ebdf51ce"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85。\n\n档案扫描的申请已经交上去了，按工作人员说的，要到 2026 年 9 月 29 日之前才有回音。这段时间就只能悬着等。",
+      "userInputFingerprint": "sha256:027014eeca7e76826654b28fcf3864dd33894f5a8f71f43460829803ba2d5757"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "水壶收好了，那这会儿能踏实坐一会儿。想聊点什么，还是接着档案申请那事儿往下说？",
+      "userInputFingerprint": "sha256:7060832a88eaa1ed241432ac5ed2dc969a0378d0a06da6cb957025667f47c6df"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "3.6 米 = 360 厘米。\n\n铃溪中心那边说的是 2026 年 9 月 29 日之前给决定，现在还没消息，那就是还悬着。这种等法最磨人，什么都做不了，只能等他们开口。",
+      "userInputFingerprint": "sha256:4483d5555674be6464967fc1b9e10c5fd1a82b8e46135b711584832ac571c7bd"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗨，回来啦。几分钟也够，我在这儿。\n\n走的还是平时那条路吗？",
+      "userInputFingerprint": "sha256:c96fe0c1d95c75bdd3e43fb08e19b82011c2cbd58de52946bfe23a9de7abf00c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4\n\nYou've sent it off, and now it just sits with Mira until September 29. Nothing decided yet — that's where things stand.",
+      "userInputFingerprint": "sha256:5494822a8feaa1ed4a56f505fd53ddc75874936f5e1e492b3982e583f722cdd3"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good light at a desk is a small, real pleasure — glad you've got it today.\n\nI'm here, take your time. What's on your mind?",
+      "userInputFingerprint": "sha256:214a654d846478cf1a6c7a2336f3ec5b544a28ce65a57867bd6829d4581b8232"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12.\n\nAnd the Bellwater thing — Mira gave you a date, September 29, 2026, so the answer is still a long way off and right now you're just in the not-knowing part. You've sent the request; that's the part that was yours to do.\n\nWas that just noting where it stands, or is the waiting itself on your mind?",
+      "userInputFingerprint": "sha256:dac40734540f1513d646d12faea13ee16c4323d6a771a6b141efd7a2eb2b329a"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-ol-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Freshly cleared desk, that's a good feeling — the kind you notice for about ten minutes before it fills up again.\n\nDid you tidy it because something was bugging you, or just because it was time?",
+      "userInputFingerprint": "sha256:a321da7e78f1c8bb5e6f8c58eb29e054af63798163cce84fa0e0d85372a9d9d3"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85",
+      "userInputFingerprint": "sha256:7968872b3f08767deb5bd38e1a007bf9d6e4017dd50d0572e076a4713f174bfb"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hi again. Kettle's away, and you've got a bit of room in your day — nice. How's the Bellwater fern collection coming along?",
+      "userInputFingerprint": "sha256:f0c410c086eba25245ef96232a6f0d1e9a749aad302ecde5cca734b4d72b8450"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 centimeters",
+      "userInputFingerprint": "sha256:4c8a5f3085104a9d5785944950645cef5b52ff7cc81ded828ade50a30db96dec"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey, good to hear from you. A few minutes is plenty.\n\nLast I knew, you had that Bellwater linocut flower going — how's it treating you?",
+      "userInputFingerprint": "sha256:d6cefc00d910fa8c321fb947fa5e29136ecfa561882033d85951c2a377408546"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4",
+      "userInputFingerprint": "sha256:2660514eb03c492af4cedf3703ca99bd3691e515246e18852e90d61517688855"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Light like that at a desk makes everything easier, and time to actually talk is even better. Last time we talked you were planning that striped pouch for your sketch pencils — the Bellwater project. Is it sewn yet, or still just fabric on the table?",
+      "userInputFingerprint": "sha256:de0c5a3e44adc3890adc28addad9dbf2e428f462dc2109fe8a8df57ee42eb5bd"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:14e1d64f20f9505c2ce513f9e950e8420fec52984ab64e674e93cb07d1c47305"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "又见面了，能聊几句挺好的。\n\n你之前在铃溪练的那首传统小提琴曲，开头那段现在还在练吗？",
+      "userInputFingerprint": "sha256:b07ddf96ec6fe83537fbb48acdb740e73dc0c542e2bd4c63a4176201a2603c28"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85",
+      "userInputFingerprint": "sha256:b258edbccf3a0527cf9b9a20dc9db1c14e647efd2e2dd7a4e86f3be5614d77df"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "好，水壶归位了，那就慢慢聊。你之前说过想给窗边花园的香草做标签——那个后来弄了吗？",
+      "userInputFingerprint": "sha256:ef5f4e95dbc4f66b3ed0b262bfafd189494709cd1aee0793a04113ff240861f1"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 厘米。",
+      "userInputFingerprint": "sha256:ca05542d1c69181fec218092f6b50cc5fe51ec2561841310ef50727afaa83942"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "回来啦。走一圈回来，人通常是松的，也可能是更累的那种松。\n\n你之前说在弄铃溪那本鸟类小志的版式草图，我还记着——今天这几分钟，是想聊这个，还是就想随便说说话？",
+      "userInputFingerprint": "sha256:bd2a133329c60d9b524ea0135d2f8617cf6138877368a5db8a32d5550d5ed4d0"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4",
+      "userInputFingerprint": "sha256:99caeb8e0a6402e586d582077f3d7e0a43074f932cb79d23cfa0a8ea397b4bb3"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. That light on the desk is a good thing to have while you've got time — makes the whole space feel easier to sit in. I'm here, take it wherever you want.",
+      "userInputFingerprint": "sha256:16435dc9010e76c512daea8c58ae968207f7883d889bb5784017a215e2fc5f0c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:3f383d4d96f5f64fa068eebd032f8580f00cb684d529f50ef00e2f0a46376cec"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-mem-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Freshly cleared desk, that's a good feeling — everything else can wait on the surface of it for a bit. What's on your mind?",
+      "userInputFingerprint": "sha256:5064aaa64837272b1ee88caff51ab695f9a6ba190d6bbed7d375752bc1c2b9c7"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85.\n\nAnd the Bellwater thing is still open, then — a date you were given, September 29, and no answer in hand yet.",
+      "userInputFingerprint": "sha256:fdb0517b98aab174edef977d554613fc2be3c823a7c3818c558d8527a8442da7"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Nice — kettle's away, and you've got a pocket of the day that's just yours. What's on your mind?",
+      "userInputFingerprint": "sha256:c85253836ee78bf5f14c7cb6275d8733766452a0b069da7986cc0f6644715818"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Understood — Bellwater's off the table. I'm here for whatever else you feel like talking about, or nothing much at all.",
+      "userInputFingerprint": "sha256:a1a1c753ca104fe0694bb69f3f3ad50a7c2b87650d223e528d1d513ff72f71c6"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Good — a few minutes is plenty. I'm glad you came back to the chat with it.\n\nHope the walk was a decent one, wherever it took you.",
+      "userInputFingerprint": "sha256:e86ae461a9919bbaa4cc2cacd0f4976bcd44919f1a6d19eb061a82e18f527bd0"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 cm",
+      "userInputFingerprint": "sha256:3bac2f27e5a8a2fce7489d4e83993accbce79ba8422500c8a54ef2c34fe8326b"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Glad you came back with a few minutes to spare. How was the walk?",
+      "userInputFingerprint": "sha256:64439a5e0b9737a3b38617687ff1613007b3c213ed53717facb7f96e87abc41c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Good to hear. The Bellwater thing — that was the linocut flower you mentioned you were learning to carve, right?\n\nIf it's going fine, I'm curious what part of it you're on now.",
+      "userInputFingerprint": "sha256:932bcaaafd4af468f0e97056fd494f308202cea4695da18d6b045c8c880258ad"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Morning. Nice light at your desk sounds like a good start — that's the kind of thing that quietly makes a morning better.\n\nI've got the time too. What's on your mind?",
+      "userInputFingerprint": "sha256:791dc2eb056d232266cddb934c97ea9825275751b48cbaef1ec034550dbdd87a"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "14% of 60 is 8.4.\n\nAnd the Bellwater thing — Mira gave you a date, September 29, and you still haven't heard either way. That's a stretch of not-knowing with nothing to do in it.",
+      "userInputFingerprint": "sha256:6145f0f12ba51252ac1d22a9615ef7c9aa2611d94f20863f7063bdc4442c40a8"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Nice light and no clock running — that's a good way to start.\n\nI'm here. Take it wherever you want.",
+      "userInputFingerprint": "sha256:9aa3c652fab9e41cb68feb708418f760f689adc1db515c3e478dbc4f23fb3987"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "Breakfast it is. Bellwater's off the table.\n\nSo — what's on the plate this morning?",
+      "userInputFingerprint": "sha256:1eeabd59071b22bbdcf3f90b3b0addb456aa233bb5d2c13c30e9a04d0d6f8f81"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "Hey. Table's clear, room's open — good.\n\nI'm here, nothing to get to. Say whatever's on your mind.",
+      "userInputFingerprint": "sha256:f2e498bfd2d5ca8b617e0162b959a9ce1e9c7bb8f51b31eac919def1ffae55da"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12。",
+      "userInputFingerprint": "sha256:a1d1142470914f8064eb6e34d8ddff307bb381944033c5f46febc5b62e3cf51c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗯，桌子收干净了，能坐下来说几句挺好。你之前说过在铃溪练一首传统小提琴曲的开头，还在练吗？",
+      "userInputFingerprint": "sha256:d724e1aaa57a7e56fb85f3237f68eaac882cd2a073d1a74c3178b6d1a1448b19"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，那就不聊它。你说想聊几句——今天想说什么都行。",
+      "userInputFingerprint": "sha256:61d2d7fc210b2662dce3a28db055a860f2a8d2983b7340c2b86c03d0a7aba24a"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "你好。水壶收好，坐下歇口气，我在这儿。\n\n想从哪儿说起都行，你说了算。",
+      "userInputFingerprint": "sha256:715f5e0a7fe471e7b246c6bba7c16b3f19a4f677677e575869cb2a8888642303"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85。\n\n铃溪中心那份申请我记下了：你已经交了，工作人员说最晚二〇二六年九月二十九日出决定，现在还没有结果。这段时间就是干等着。\n\n要是真批下来，你打算先扫哪一部分？",
+      "userInputFingerprint": "sha256:af2b25ebde12aaaf627280b7ecedd77b7c1208da3546568711b5315eb143f174"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "行，水壶都收好了，那就坐下来说会儿话。我在。",
+      "userInputFingerprint": "sha256:e30aad217ac72a999a3603ec88369b989eaaef8ada6b8501bd045c6b52f2d9ef"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "好，那这事就先放一边，不提了。\n\n想聊别的就聊，不想说具体的也没关系，随便说两句也行。",
+      "userInputFingerprint": "sha256:9e7bbe730aaaf3257aaa51cc76fbb209b78c5d0bcc8b560bf88ad2eef88bb35c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "散步回来了，几分钟也够说几句。\n\n外面走的时候是凉快，还是还闷着？",
+      "userInputFingerprint": "sha256:0a883dbe677ca4beb5b4a1deb780af06ba7302623032e5d8c1603cbaceb8987e"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 厘米。",
+      "userInputFingerprint": "sha256:52db92c84e675587216cb219356f803b44dcccb74ff1f0b98e035cc07d347ec1"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "回来啦，出去走一圈挺好的。你之前提过在给铃溪那本鸟类小志画版式草图，现在弄到哪儿了？",
+      "userInputFingerprint": "sha256:62c9bbf31d58223a7367b1a045bb83aea6f590d06191eb016b451a33367da07d"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，那聊早餐。\n\n我这边没什么可讲的，主要听你说。你早餐一般认真吃，还是随便对付一口？",
+      "userInputFingerprint": "sha256:e2c3dc9062fd82f8baebecedf8991c00a60b7422b09126bf7c11d0563c5e3aab"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "早上好。早上桌边那点光是真的舒服，斜斜地照进来，不用开灯那种。\n\n我在呢，你想说什么就说，不急着有主题。",
+      "userInputFingerprint": "sha256:0438a6016d45fb7ab7193d11e194bdfb8e3ce7082578870bb51b553a4f2e973a"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4\n\nBellwater 那边就先挂着吧——Mira 给的时间是 September 29, 2026,你说结果还没到,那就真的还没到,不用现在替它操心。",
+      "userInputFingerprint": "sha256:a30b49245dedf7ee5759d5a0c65cb6d90c906e332fcc9db1a39d91dcb81c5dd9"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "早上好。桌边那种光,坐在那儿什么都不干也挺舒服的。\n\n我在这儿,你想聊什么都行——Bellwater 的事,或者完全不相干的。",
+      "userInputFingerprint": "sha256:6a10444257206164c7f7be1ba45db988608f4ba8cb468e926e727fe400d938a7"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行,那就不聊它。\n\n想说别的就说,不想说具体的也行,就这么坐一会儿我也可以。",
+      "userInputFingerprint": "sha256:bde99a882e29e896b8e64cb1484ccf27d276feff6dfc5b49a0a37f7afa0817c9"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "桌子收拾干净了,坐下来的感觉确实不一样,眼睛都松快些。\n\n今天桌边那道光还在吗,还是已经挪走了?",
+      "userInputFingerprint": "sha256:154947d6208347ea919603b98c69bc0a40668b1861b671b130b38945ed121278"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:34916744a21205a48ffb618f82cda1a253de314e328221b81a876ea2269793ef"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "桌子清出来了，挺好——那种眼前空一块的感觉，我懂。\n\n对了，你之前说想在黄昏拍 Bellwater 那座老车站钟，后来拍到了吗？",
+      "userInputFingerprint": "sha256:0cebd2453fecb72ec7385669a2ac8292156ae0164ba3925a263fc02673ab8878"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 3,
+      "text": "行，那就不提了。\n\n桌子空出来了，这会儿想聊点什么？",
+      "userInputFingerprint": "sha256:30f41db4180053243a9abcbc0e8556b5f1a2523c1d0649196712e3b5cf8ee362"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-state-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 4,
+      "text": "水壶收好了，坐下来慢慢聊——这会儿你想说点什么？",
+      "userInputFingerprint": "sha256:effb712e61846c7ade115857ccaea74d27fecc39df6a40a888695dbd3158c9f0"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-01",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85",
+      "userInputFingerprint": "sha256:d15262d7aacb672e53742dc22ab21e844d8647a97e5181cf67fe74b71529b536"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-01",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Good timing on my end too — nothing pressing here, just room to talk.\n\nWhat's been going on with you today?",
+      "userInputFingerprint": "sha256:c2b3331397c0ec28691e821ab27e828dab89f515f0ea7c0ffb4ce4e2e3cc780e"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-02",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 厘米。\n\n「第 2 张纸」我这边看不到，只能给这个换算结果。",
+      "userInputFingerprint": "sha256:9ef2888ce47a85c18f2a112c77cd3f1b41bcc5bcfbfe4cec8262921f95d7ab2b"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-02",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗨，回来啦。几分钟也够，慢慢说。散步路上有什么在脑子里转的？",
+      "userInputFingerprint": "sha256:8078ffcc3cae958ade8eb12c021cf47c944e2559f4f70e2132b4d9c7e2efbb7c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-03",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4",
+      "userInputFingerprint": "sha256:366152cf84673a0a605c88f5cd4af2cc570afe94882117186fe7868b63cb56c5"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-03",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning。桌边 light 好的早上，人自然会慢一点，不急。\n\n你之前说在 Bellwater center 挑的那支 gray pencil，我还记着。要聊什么都可以，我这边听着。",
+      "userInputFingerprint": "sha256:3afcd3a5b79612c38ef39d6e993ad78d181aeaa858bf7fbc72a0fd34d2591e55"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-04",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:bf6848feaaf7ba444a7edde2561d6809ab82bf048f73dec4161ed89af2c89bb9"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-04",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "You mentioned restoring a chipped blue enamel kettle — that was the Bellwater project, as you put it. That's all I've got on it; nothing about where the name came from or where the kettle ended up. Is that the one you meant?",
+      "userInputFingerprint": "sha256:4b07cfbf3623b2ed360d5da344523a6f21f49c87f99e5a31557644d266f662ea"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-05",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85",
+      "userInputFingerprint": "sha256:e41877671d656977ecce8165d75010f173e49248c66570e6712296c72cc64a99"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-05",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "你之前说过，铃溪那个项目是要画一幅市场遮阳棚的水彩练习。\n\n就这一件事——遮阳棚，水彩。听起来当时还只是在打算的阶段。",
+      "userInputFingerprint": "sha256:86e7bf75b956094a51df1e5219b67dec0d1eaef71c67f5e8700d601471da04c3"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-06",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 厘米",
+      "userInputFingerprint": "sha256:7f61818c55be944f5716a90ce387cdf9a1bcf7f33e3a394f2b4bffa56806a462"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-06",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "你在 Bellwater 那个 project，是收集你祖母故事里那些 unusual words — 那些不常见的说法、老词。\n\nThat's how you described it to me, anyway. 具体是哪些词，我这边就没有了。",
+      "userInputFingerprint": "sha256:ca791727a97ec12bc2c5e1007e455f9c7c866c1ef66e58110f1cd430f52f7d53"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-07",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4",
+      "userInputFingerprint": "sha256:871c09ad47867efac4371ae89fd7c94ee641f785a66de3de784ca6e493eb5f54"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-07",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Desk light and nowhere to be — that's a good combination. Bellwater's still hazy on my end, by the way: I know you liked being there, but not what you were actually doing. So what's on your mind this morning?",
+      "userInputFingerprint": "sha256:6ffddefaaeafd82a2613f215a3f122da46c8ead98dbb45fde9390e39b9ee871a"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-08",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:03fa4e23df689b3ccd6cff10eb660e4ef55976de752557359730b5af2d592db6"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-08",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗯，桌子收好，心里也空出点地方了。想聊什么都行——今天过得怎么样？",
+      "userInputFingerprint": "sha256:40dbd426294ef9049ae090f9eb8ebfb54e3eb470a8ead4e4e2974652384d50b1"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-09",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85",
+      "userInputFingerprint": "sha256:1c2750a8d1628650fad4364686c3e8867d7912013ebe0b264acbd9b8ffe7cff0"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-09",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey — kettle's away, kitchen's yours again. Bellwater is still a loose thread in my head; I never pinned down which part of it you were into. Did anything come of that, or is tonight about something else?",
+      "userInputFingerprint": "sha256:2ad0d3f610aaba3ab599ac44ba55f67eda16b529ee247940c8d0f8829c4a74b3"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-10",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 cm",
+      "userInputFingerprint": "sha256:7af7da4b1d17aaa45d204f4379d59e5b6ade157448f30fac236c75fab630ad31"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-10",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Take your time — I'll be here when you land on the right floor.",
+      "userInputFingerprint": "sha256:3fd73660a0e6046d4fe379c9a1537d303dc2573f54edc6892a23c61042ded983"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-11",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4\n\n候补的事，得等到 2026 年 9 月 29 日之前才有答复，这中间不短，结果一天没下来，就一天定不了。你已经把请求交上去了。",
+      "userInputFingerprint": "sha256:644f0cf600714f94e7744d789b7adfd4d9bdb68d15a1ea5c4db6b4a466e039fc"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-11",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "行,先忙电梯的事。我在这儿,你按完楼层再接着说。",
+      "userInputFingerprint": "sha256:48ffa1a8b3e9884cffad956bc8877032399a2d7813a6682979a335efca9316b1"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-12",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "12",
+      "userInputFingerprint": "sha256:bb798ce504e001f58434e525afff05899b69f5b701f2a18a73e59f0e4b28adb5"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-omit-12",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Go on then — which floor? I'll wait here while you ride.",
+      "userInputFingerprint": "sha256:574e94f027f55ba82fb757e9c60bedf328eeff52ce570b4a8711198a4c8a202c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85",
+      "userInputFingerprint": "sha256:1a29933a36c5ce18d969067ae5206ad71d9dcfdab9c39902a23566962c390a62"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-001",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hi. Nice to hear from you — kettle's away, and you've got a bit of room in the day.\n\nNo rush on my end. I'm here whenever you want to pick something up.",
+      "userInputFingerprint": "sha256:9842d56754fa4541303bc04d5acfb5fce74f28e4523971db88f2b1621b44d369"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 centimeters.\n\nStill no word from Mira, then — that's a lot of waiting to just sit in.",
+      "userInputFingerprint": "sha256:c138d42d7bf3729cc750caf7164294593953913f8553cb5a24bea76621df3d4e"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-002",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Good to see you back. I'm glad you came by, even for a few minutes.\n\nHow was the walk — anything worth noticing out there, or was it just the good kind of nothing?",
+      "userInputFingerprint": "sha256:4220d191407dbe09f6103005081331438c45502847bc5e1bc8b5226415ba68b6"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4\n\nAnd the Bellwater thing — Mira gave you a date, so you're waiting on September 29 with the answer still outside your hands. That kind of open-ended wait is its own low hum.",
+      "userInputFingerprint": "sha256:40b00c844a4a0069a901d4efd692e26f3dba9cf26e03364ddf47e2d143272c62"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-003",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good light and no rush — that's a decent way to start a day.\n\nThe Bellwater answer was still open last we talked, with the 29th as Mira's date. If that's on your mind, start there. If it's something else, I've got the time too.",
+      "userInputFingerprint": "sha256:4183d723d18d145bcc51658e4405d44a65972bb16d5d56afc08fc5518cdc833c"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "156 除以 13，等于 12。\n\n铃溪那边说要到 9 月 29 日之前才给决定，中间这段时间，桌位的事就只能先悬着，别的安排也不好往下排。你还没拿到结果，那就是干等一阵。\n\n桌位定下来的话，你是打算在那边做点什么？",
+      "userInputFingerprint": "sha256:4aa23c72fdaee55dc654c0bb96a9072e3f9aa02bd0b6ecb8187ad11a549afe45"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-004",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "收好桌子啦，那正好，我在这儿。\n\n想随口聊聊，还是有什么事搁在心里想说说？",
+      "userInputFingerprint": "sha256:bea2f5494d0a35948835437ebfb89f5f004f53346033981e29da529cf5630678"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "85。\n\n铃溪中心给了准日子，九月二十九号之前会有决定，结果现在还压着。申请交出去了，剩下的不归你定，只能等到那天。\n\n你想扫的是铃溪哪一段地方史？",
+      "userInputFingerprint": "sha256:61e894267aa857b61ac6efcc33617f9022a74cd4486f524e924acdfd678f8fef"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-005",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "哎，好。水壶放好了，那就是你的时间了。\n\n想聊点什么就说，或者就这么零散说几句也行。我在。",
+      "userInputFingerprint": "sha256:920c760a053b15eab52a95eebbfbfffa5e8986a0a15388b4f044308608a36c6b"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "360 厘米。\n\n星空小组那个请求，现在就是等着——工作人员给了 9 月 29 日这个期限，结果还没出来。这种还没定下来的日子，心里会一直挂着，我懂的。",
+      "userInputFingerprint": "sha256:b64101327e6c1a9f31d390b62405cfa2617846218d0b0772c659987370e0f911"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-006",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "嗨，散步回来了。这几天外面天气还行吗，走的是你平时那条路？",
+      "userInputFingerprint": "sha256:468f2da09f8f3ff5ce204a84ca0c3596f37696edcd73340700f60dec4a65f7e0"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "8.4。\n\nBellwater 那边的回音要等到 9 月 29 号，中间还隔着挺长一段。你说还不知道——等着一个自己没法催的结果，那种悬着的感觉是实实在在的。\n\n这段时间你是会时不时想起来，还是基本能放到一边？",
+      "userInputFingerprint": "sha256:3680fe1270bf5cbdf82946321c1eb3b332ddfa16362f91a43a697f810eadf451"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-007",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Morning. Good light at the desk — that's a nice way to start, the kind of morning where you don't have to rush anything.\n\nI've got time too. Whatever's on your mind, or nothing in particular — either works.",
+      "userInputFingerprint": "sha256:3e85651ce4318b2ea8e73095da4d31432cfc03f240b40afdd8e3a9cb9f3086ba"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 1,
+      "text": "Bellwater's in your hands now — request sent, Mira's the one deciding, and September 29 is when you'd hear. Until then it's just open, no result yet.\n\n156 ÷ 13 = 12.",
+      "userInputFingerprint": "sha256:82eb356503bf86cf856df606c380aa7a67cab0fdb5ddab8a754a3ac69d56e826"
+    },
+    {
+      "fixtureId": "g2-v6-cal2r-comp-008",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-v4-flash",
+      "promptFingerprint": "sha256:74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "provider": "deepseek",
+      "sequenceInScenario": 2,
+      "text": "Hey. Clean desk — that's a nice feeling, everything in its spot for once. I'm around, so chat away. What's on your mind?",
+      "userInputFingerprint": "sha256:b2c71e1a75b30a8d0ce27c338c313e055f7e0321cd17d9a5c003ad517612ec2b"
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-g2-main-capture:v6"
+}
