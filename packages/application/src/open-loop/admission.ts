@@ -25,7 +25,7 @@ import {
 } from "./policy";
 
 /**
- * Deterministic `open-loop-formation:v1` + `open-loop-closure:v1` core
+ * Deterministic `open-loop-formation:v2` + `open-loop-closure:v1` core
  * (issue #204, SPEC 6, ADR-0042/0132). Pure functions only: `now` and all
  * live state are injected by the caller so every rule is replayable in unit
  * tests and stable under concurrent events.
@@ -39,20 +39,29 @@ export type OpenLoopIdentityCandidate = Readonly<{
   expectedEndAt: string | null;
 }>;
 
-function timeExpressionWithSourceCue(
+function timeExpressionEvidence(
   expression: string | null | undefined,
   sourceUserText: string | undefined,
-): string | null | undefined {
-  if (!sourceUserText || !expression?.trim()) return expression;
-  const phrase = expression.trim();
-  const offset = sourceUserText.toLowerCase().indexOf(phrase.toLowerCase());
-  if (offset < 0) return null;
-  const preceding = sourceUserText.slice(Math.max(0, offset - 16), offset);
-  const following = sourceUserText.slice(offset + phrase.length, offset + phrase.length + 8);
-  if (/\b(?:by|before)\s*$/i.test(preceding) || /^(?:之前|以前|前|截止)/.test(following)) {
-    return `by ${phrase}`;
+): Readonly<{ matched: boolean; dateOnlyDeadline: boolean }> {
+  const deadlineCue = /\bby\b|\bbefore\b|之前|以前|截止|前(?:确认|回复|给出|收到)/i;
+  if (!sourceUserText) {
+    return { matched: true, dateOnlyDeadline: deadlineCue.test(expression ?? "") };
   }
-  return phrase;
+  if (!expression?.trim()) return { matched: false, dateOnlyDeadline: false };
+  const phrase = expression.trim();
+  const source = sourceUserText.toLowerCase();
+  let offset = source.indexOf(phrase.toLowerCase());
+  if (offset < 0) return { matched: false, dateOnlyDeadline: false };
+  let dateOnlyDeadline = deadlineCue.test(phrase);
+  while (offset >= 0) {
+    const preceding = sourceUserText.slice(Math.max(0, offset - 16), offset);
+    const following = sourceUserText.slice(offset + phrase.length, offset + phrase.length + 8);
+    if (/\b(?:by|before)\s*$/i.test(preceding) || /^(?:之前|以前|前|截止)/.test(following)) {
+      dateOnlyDeadline = true;
+    }
+    offset = source.indexOf(phrase.toLowerCase(), offset + phrase.length);
+  }
+  return { matched: true, dateOnlyDeadline };
 }
 
 function windowsCompatible(
@@ -146,11 +155,11 @@ export function planOpenLoopFormation(input: Readonly<{
     return { action: "skip", kind, reasonCode: "no_real_anchor" };
   }
   const claimedWindow = proposal.expectedWindow ?? null;
-  const sourceTimeExpression = timeExpressionWithSourceCue(
+  const timeEvidence = timeExpressionEvidence(
     proposal.userTimeExpression,
     input.sourceUserText,
   );
-  if (claimedWindow?.precision === "date" && input.sourceUserText && !sourceTimeExpression) {
+  if (claimedWindow?.precision === "date" && !timeEvidence.matched) {
     return { action: "skip", kind, reasonCode: "no_real_anchor" };
   }
   const hasClaimedAnchor =
@@ -193,7 +202,7 @@ export function planOpenLoopFormation(input: Readonly<{
     anchored: validated,
     evidenceCommittedAt: input.evidenceCommittedAt,
     evidenceTimeZone: input.evidenceTimeZone,
-    userTimeExpression: sourceTimeExpression,
+    dateOnlyDeadline: timeEvidence.dateOnlyDeadline,
   });
   if ("error" in schedule) {
     return {

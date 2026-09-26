@@ -315,11 +315,6 @@ export type OpenLoopSchedule = Readonly<{
   expirySource: OpenLoopExpirySource;
 }>;
 
-function isDateOnlyDeadline(expression: string | null | undefined): boolean {
-  if (!expression) return false;
-  return /\bby\b|\bbefore\b|之前|以前|截止|前(?:确认|回复|给出|收到)/i.test(expression);
-}
-
 /**
  * Compute the frozen schedule exactly once. Anchored upcoming events expire at
  * range-end + 7 local days, anchored awaited outcomes at +14, unanchored
@@ -333,7 +328,7 @@ export function computeOpenLoopSchedule(input: Readonly<{
   anchored: ValidatedExpectedWindow;
   evidenceCommittedAt: string;
   evidenceTimeZone: string;
-  userTimeExpression?: string | null | undefined;
+  dateOnlyDeadline?: boolean;
 }>): OpenLoopSchedule | Readonly<{ error: "horizon_exceeded" | "time_invalid" }> {
   const evidenceTime = new Date(input.evidenceCommittedAt);
   if (Number.isNaN(evidenceTime.getTime())) {
@@ -389,7 +384,7 @@ export function computeOpenLoopSchedule(input: Readonly<{
       ? addCalendarDaysInTimeZone(windowStart.toISOString(), -14, tz)
       : input.anchored.precision === "date" &&
           input.anchored.endAt !== null &&
-          isDateOnlyDeadline(input.userTimeExpression)
+          input.dateOnlyDeadline
         ? input.anchored.endAt
       : windowStart.toISOString();
   return {

@@ -176,6 +176,49 @@ describe("time windows, horizon and DST", () => {
     }
   });
 
+  it("honors a later deadline occurrence of the same date in direct User text", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "September 23, 2026",
+        expectedWindow: {
+          startAt: "2026-09-23T07:00:00.000Z",
+          endAt: "2026-09-24T07:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      sourceUserText: "I submitted on September 23, 2026; they will answer by September 23, 2026.",
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan.action).toBe("create_loop");
+    if (plan.action === "create_loop") {
+      expect(plan.followupEligibleFromAt).toBe("2026-09-24T07:00:00.000Z");
+    }
+  });
+
+  it("rejects a proposed date that is absent from an unknown-subject User Event", () => {
+    const plan = planOpenLoopFormation({
+      proposal: baseProposal({
+        kind: "awaited_outcome",
+        userTimeExpression: "September 23, 2026",
+        expectedWindow: {
+          startAt: "2026-09-23T07:00:00.000Z",
+          endAt: "2026-09-24T07:00:00.000Z",
+          precision: "date",
+          timezone: "America/Los_Angeles",
+        },
+      }),
+      sourceUserText: "Someone contacted someone about a kiln slot, but I do not know whose request it was or whether anyone replied.",
+      evidenceCommittedAt: "2026-09-20T00:00:00.000Z",
+      evidenceTimeZone: "America/Los_Angeles",
+      identityCandidates: [],
+    });
+    expect(plan).toMatchObject({ action: "skip", reasonCode: "no_real_anchor" });
+  });
+
   it("keeps a correctly bounded Shanghai date closed until its local start", () => {
     const plan = planOpenLoopFormation({
       proposal: baseProposal({

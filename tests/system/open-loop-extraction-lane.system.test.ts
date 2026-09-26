@@ -6,6 +6,7 @@ import {
   createModelRoleRegistry,
   createOpenLoopExtractionScanService,
   runOpenLoopExtractAttempt,
+  selectProactiveFollowupTarget,
   type ModelRoleConfigurationSnapshot,
   type OpenLoopExtractModelProvider,
 } from "@sayhear/application";
@@ -413,6 +414,76 @@ systemDescribe("open_loop.extract lane (issue #207 layer 2b)", () => {
       openLoopVersionId: formed.openLoopVersionId,
       expectedSourceEventRevisionId: session.revisionId,
     })).resolves.toMatchObject({ eventRevisionId: session.revisionId, text });
+
+    const selectionAt = (now: Date, laneRows: typeof after) => selectProactiveFollowupTarget({
+      userId: String(OWNER),
+      dailySessionId: seedId(),
+      continuousExchangeNo: 1,
+      currentUserEventRevisionId: session.revisionId,
+      currentUserEventSequence: 1,
+      currentSourceRevision: 1,
+      opportunity: "open_start",
+      ordinaryQuestionAlreadyAsked: false,
+      dialogue: {
+        status: "current",
+        coveredThroughSequence: 1,
+        currentEventSequence: 1,
+        currentEventRevisionId: session.revisionId,
+        currentRequestRequiresFocus: {
+          value: false,
+          confidence: 1,
+          sourceRevisionIds: [session.revisionId],
+        },
+        proactiveFollowupOpportunity: {
+          value: "open_start",
+          confidence: 1,
+          sourceRevisionIds: [session.revisionId],
+        },
+      },
+      lanes: [{
+        name: "open_loop",
+        enabled: true,
+        status: "complete",
+        watermark: { sourceRevision: 1, coveredThroughSequence: 1 },
+        manifestVersion: "open-loop-read:v2",
+        integrity: "valid",
+        candidates: laneRows.filter((loop) => loop.openLoopId === formed.openLoopId).map((loop) => ({
+          targetKind: "open_loop",
+          targetId: loop.openLoopId,
+          targetVersionId: loop.openLoopVersionId,
+          source: "open_loop",
+          sourceRank: null,
+          evidenceAt: loop.evidenceAt,
+          expectedStartAt: loop.expectedStartAt,
+          expectedEndAt: loop.expectedEndAt,
+          expectedTimePrecision: loop.timePrecision,
+          expectedTimeZone: loop.timezone,
+          openLoopKind: "awaited_outcome",
+          expiresAt: loop.expiresAt,
+          sensitive: false,
+          lastUsedAt: null,
+          current: true,
+          eligible: true,
+          trustFence: "valid",
+          mentionedInExchange: false,
+          formedInCurrentTurn: false,
+        })),
+      }],
+      states: [],
+      now,
+    });
+    const early = selectionAt(new Date("2026-09-24T06:59:59.999Z"), before);
+    expect(early).toMatchObject({ outcome: "none", reason: "no_eligible_target" });
+    expect(early.manifest.lanes[0]).toMatchObject({ completeness: "complete", candidateCount: 0 });
+    const winner = selectionAt(new Date("2026-09-24T07:00:00.000Z"), after);
+    expect(winner).toMatchObject({
+      outcome: "selected",
+      target: { targetKind: "open_loop", targetId: formed.openLoopId, targetVersionId: formed.openLoopVersionId },
+    });
+    expect(winner.manifest).toMatchObject({
+      lanes: [{ completeness: "complete", candidateCount: 1 }],
+      selectedTarget: { targetId: formed.openLoopId, targetVersionId: formed.openLoopVersionId },
+    });
   }, 60_000);
 
   it("treats a superseded revision as stale and lists only the current head", async () => {
