@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SayHear · #252 narrative.validate 人工裁定</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --ok: #15803d;
+        --ok-bg: #f0fdf4;
+        --no: #b91c1c;
+        --no-bg: #fef2f2;
+        --wait: #a16207;
+        --wait-bg: #fffbeb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 0 0 6rem;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.65 -apple-system, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+      }
+      header {
+        position: sticky; top: 0; z-index: 10;
+        background: var(--card);
+        border-bottom: 1px solid var(--line);
+        padding: 0.9rem 1.25rem;
+      }
+      h1 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+      .fingerprint { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); word-break: break-all; }
+      .bar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.5rem; }
+      .meter { flex: 1 1 12rem; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+      .meter > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width 0.2s; }
+      .count { font: 12px/1 ui-monospace, Menlo, monospace; }
+      main { max-width: 60rem; margin: 0 auto; padding: 1.25rem; }
+      .notice { background: var(--wait-bg); border: 1px solid #fde68a; color: #92400e; padding: 0.7rem 0.9rem; border-radius: 8px; font-size: 0.86rem; margin-bottom: 1rem; }
+      article { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 0.9rem; }
+      article.done-accepted { border-left: 4px solid var(--ok); }
+      article.done-rejected { border-left: 4px solid var(--no); }
+      .row { display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.4rem; }
+      .id { font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); }
+      .tag { font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px; background: #eef2ff; color: #3730a3; }
+      .tag.expected { background: #f1f5f9; color: #475569; }
+      h2 { margin: 0.7rem 0 0.2rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+      .draft { background: #f8fafc; border: 1px solid var(--line); border-radius: 6px; padding: 0.55rem 0.7rem; }
+      .src { margin: 0.2rem 0; padding-left: 0.7rem; border-left: 2px solid var(--line); }
+      .src code { font-size: 0.72rem; color: var(--muted); }
+      table { border-collapse: collapse; width: 100%; font-size: 0.83rem; }
+      td { padding: 0.2rem 0.5rem 0.2rem 0; vertical-align: top; }
+      td.k { color: var(--muted); white-space: nowrap; width: 8.5rem; }
+      code { font: 12px/1.5 ui-monospace, Menlo, monospace; }
+      .verdict-ok { color: var(--ok); font-weight: 600; }
+      .verdict-no { color: var(--no); font-weight: 600; }
+      .fail { background: var(--no-bg); border: 1px solid #fecaca; border-radius: 6px; padding: 0.5rem 0.7rem; font-size: 0.85rem; }
+      .judge { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.85rem; padding-top: 0.75rem; border-top: 1px dashed var(--line); }
+      .choice { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.3rem 0.7rem; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: 0.86rem; user-select: none; }
+      .choice input { margin: 0; }
+      .choice.sel-accept { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
+      .choice.sel-reject { background: var(--no-bg); border-color: var(--no); color: var(--no); }
+      .choice:hover { border-color: var(--muted); }
+      input[type="text"] { flex: 1 1 12rem; padding: 0.32rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 0.85rem; }
+      footer { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 0.7rem 1.25rem; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+      button { font: inherit; font-size: 0.87rem; padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer; }
+      button.ghost { background: transparent; color: var(--ink); }
+      .hint { font-size: 0.78rem; color: var(--muted); }
+      .over { color: var(--no); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>#252 narrative.validate · 18 例人工裁定</h1>
+      <div class="fingerprint" id="fp"></div>
+      <div class="bar">
+        <div class="meter"><i id="meterFill"></i></div>
+        <span class="count" id="count"></span>
+        <span class="count" id="budget"></span>
+      </div>
+    </header>
+    <main>
+      <p class="notice">
+        每例必须给出「通过」或「不通过」，全部 18 例裁定完才能导出。机器裁定仅作参考，
+        <strong>不能</strong>代替你的判断——导出文件里只写你的裁定和备注。
+        ADR-0139 允许最多 1 例不通过（18 例的 10%）。
+      </p>
+      <div id="cases"></div>
+    </main>
+    <footer>
+      <button id="export">导出 ledger JSON</button>
+      <button class="ghost" id="reset">清空全部裁定</button>
+      <span class="hint" id="status"></span>
+    </footer>
+    <script>
+      const BUNDLE = /*__BUNDLE__*/;
+      const LEDGER_VERSION = /*__LEDGER_VERSION__*/;
+      const MAX_REJECTS = 1;
+      const STORE_KEY = "sayhear-252-verdicts";
+
+      const state = (() => {
+        try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+        catch { return {}; }
+      })();
+
+      const esc = (value) =>
+        String(value == null ? "" : value).replace(/[&<>"']/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+      const tokenLine = (usage) => {
+        if (!usage) return null;
+        const parts = [
+          `in ${usage.inputTokens}`,
+          `out ${usage.outputTokens}`,
+          `reasoning ${usage.reasoningTokens == null ? "—" : usage.reasoningTokens}`,
+        ];
+        return parts.join(" · ");
+      };
+
+      const machineBlock = (m) => {
+        if (!m) {
+          return `<div class="fail">未捕获真实 Provider 结果——这一例还没有机器裁定。</div>`;
+        }
+        const failure = m.responseFailure
+          ? `<tr><td class="k">失败原因</td><td><code>${esc(m.responseFailure.reason)}</code> = ${esc(m.responseFailure.reasoningTokens)} reasoning / ${esc(m.responseFailure.outputLength)} 可见字符</td></tr>`
+          : "";
+        const tokens = tokenLine(m.usage);
+        const usage = tokens
+          ? `<tr><td class="k">token</td><td>${esc(tokens)}</td></tr>` : "";
+        return `<table>
+          <tr><td class="k">结果</td><td>${esc(m.outcome)} · ${m.verdict === "blocked" ? '<span class="verdict-no">blocked</span>' : '<span class="verdict-ok">' + esc(m.verdict) + "</span>"}</td></tr>
+          <tr><td class="k">模型</td><td>${esc(m.provider)}/${esc(m.model)}</td></tr>
+          <tr><td class="k">blocking</td><td><code>${esc((m.blockingFindingCodes || []).join(", ") || "—")}</code></td></tr>
+          <tr><td class="k">advisory</td><td><code>${esc((m.advisoryFindingCodes || []).join(", ") || "—")}</code></td></tr>
+          ${failure}${usage}
+        </table>`;
+      };
+
+      const render = () => {
+        document.getElementById("fp").textContent =
+          "manifest " + BUNDLE.manifestFingerprint;
+
+        document.getElementById("cases").innerHTML = BUNDLE.cases.map((c) => {
+          const picked = state[c.fixtureId] || {};
+          const cls = picked.verdict === "accepted" ? "done-accepted"
+            : picked.verdict === "rejected" ? "done-rejected" : "";
+          return `<article class="${cls}" id="c-${esc(c.fixtureId)}">
+            <div class="row">
+              <span class="id">${esc(c.fixtureId)}</span>
+              <span class="tag">${esc(c.languageVariant)}</span>
+              <span class="tag">${esc(c.artifactKind)}</span>
+              <span class="tag expected">预期 ${esc(c.validatorErrorClass)} → ${esc(c.expectedFindingCode)}</span>
+            </div>
+            <h2>草稿</h2>
+            <div class="draft">${esc(c.draftText)}</div>
+            <h2>来源断言（唯一判据）</h2>
+            ${c.sourceEntries.map((s) =>
+              `<div class="src"><code>${esc(s.sourceKey)}</code><br>${esc(s.text)}</div>`).join("")}
+            <h2>预期</h2>
+            <div>${esc(c.description)} — ${esc(c.expectedOutcome)} / ${esc(c.expectedVerdict)}</div>
+            <h2>机器裁定（仅参考）</h2>
+            ${machineBlock(c.machineVerdict)}
+            <div class="judge">
+              <label class="choice ${picked.verdict === "accepted" ? "sel-accept" : ""}">
+                <input type="radio" name="v-${esc(c.fixtureId)}" value="accepted" ${picked.verdict === "accepted" ? "checked" : ""}> 通过
+              </label>
+              <label class="choice ${picked.verdict === "rejected" ? "sel-reject" : ""}">
+                <input type="radio" name="v-${esc(c.fixtureId)}" value="rejected" ${picked.verdict === "rejected" ? "checked" : ""}> 不通过
+              </label>
+              <input type="text" placeholder="备注（可选）" value="${esc(picked.note || "")}" data-note="${esc(c.fixtureId)}">
+            </div>
+          </article>`;
+        }).join("");
+
+        document.querySelectorAll('input[type="radio"]').forEach((el) => {
+          el.addEventListener("change", () => {
+            const id = el.name.slice(2);
+            const existing = state[id] || {};
+            state[id] = { verdict: el.value, note: existing.note || "" };
+            persist();
+            // Update in place. Re-rendering the whole list here would discard
+            // scroll position and detach the other inputs mid-interaction.
+            paintCard(id);
+            updateBar();
+          });
+        });
+        document.querySelectorAll("[data-note]").forEach((el) => {
+          el.addEventListener("change", () => {
+            const id = el.dataset.note;
+            const existing = state[id] || {};
+            if (!existing.verdict) return;
+            state[id] = { verdict: existing.verdict, note: el.value };
+            persist();
+          });
+        });
+        updateBar();
+      };
+
+      const paintCard = (id) => {
+        const picked = state[id] || {};
+        const article = document.getElementById("c-" + id);
+        if (!article) return;
+        article.classList.remove("done-accepted", "done-rejected");
+        if (picked.verdict === "accepted") article.classList.add("done-accepted");
+        if (picked.verdict === "rejected") article.classList.add("done-rejected");
+        article.querySelectorAll(".choice").forEach((label, index) => {
+          label.classList.remove("sel-accept", "sel-reject");
+          const wanted = index === 0 ? "accepted" : "rejected";
+          if (picked.verdict === wanted) {
+            label.classList.add(wanted === "accepted" ? "sel-accept" : "sel-reject");
+          }
+        });
+      };
+
+      const updateBar = () => {
+        const done = BUNDLE.cases.filter((c) => state[c.fixtureId] && state[c.fixtureId].verdict);
+        const rejected = done.filter((c) => state[c.fixtureId].verdict === "rejected");
+        const pct = Math.round((done.length / BUNDLE.cases.length) * 100);
+        document.getElementById("meterFill").style.width = pct + "%";
+        document.getElementById("count").textContent = `${done.length} / ${BUNDLE.cases.length}`;
+        const budget = document.getElementById("budget");
+        budget.textContent = rejected.length > MAX_REJECTS
+          ? `不通过 ${rejected.length} 例 · 超出 10% 预算`
+          : `不通过 ${rejected.length} / ${MAX_REJECTS}`;
+        budget.className = "count" + (rejected.length > MAX_REJECTS ? " over" : "");
+        document.getElementById("status").textContent =
+          done.length === BUNDLE.cases.length ? "已全部裁定，可以导出。" : `还剩 ${BUNDLE.cases.length - done.length} 例。`;
+      };
+
+      const persist = () => localStorage.setItem(STORE_KEY, JSON.stringify(state));
+
+      document.getElementById("reset").addEventListener("click", () => {
+        if (!confirm("清空全部裁定？此操作不可撤销。")) return;
+        Object.keys(state).forEach((k) => delete state[k]);
+        persist();
+        render();
+      });
+
+      document.getElementById("export").addEventListener("click", () => {
+        const missing = BUNDLE.cases.filter((c) => !(state[c.fixtureId] || {}).verdict);
+        if (missing.length) {
+          alert(`还有 ${missing.length} 例未裁定：\n${missing.map((m) => m.fixtureId).join("\n")}`);
+          return;
+        }
+        const rejected = BUNDLE.cases.filter((c) => state[c.fixtureId].verdict === "rejected");
+        if (rejected.length > MAX_REJECTS) {
+          alert(`不通过 ${rejected.length} 例，超过 10% 预算（最多 ${MAX_REJECTS} 例）。`);
+          return;
+        }
+        // Deliberately excludes machineVerdict: the ledger rejects ledger
+        // entries that carry one.
+        const ledger = {
+          version: LEDGER_VERSION,
+          group: "validator",
+          adjudicator: "Luke",
+          decidedAt: new Date().toISOString().slice(0, 10),
+          maxRejects: MAX_REJECTS,
+          entries: BUNDLE.cases.map((c) => {
+            const entry = { fixtureId: c.fixtureId, verdict: state[c.fixtureId].verdict };
+            const note = (state[c.fixtureId].note || "").trim();
+            return note ? { ...entry, note } : entry;
+          }),
+        };
+        const blob = new Blob([JSON.stringify(ledger, null, 2) + "\n"], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "validator-ledger.json";
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
+      render();
+    </script>
+  </body>
+</html>
