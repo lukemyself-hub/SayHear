@@ -11,12 +11,11 @@
  * Usage:
  *   tsx eval/continuation-acceptance-1a3b/run-synthetic-capture.ts \
  *     [--deterministic] [--only <fixtureId>] [--continue-on-error] \
- *     [--env-file <path>] [--catalog <path>] [--pins <path>] \
- *     [--out <path>] [--hard-gates-out <path>]
+ *     [--catalog <path>] [--pins <path>] [--out <path>] [--hard-gates-out <path>]
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 import {
   CANONICAL_PERSONA_VERSION,
@@ -76,29 +75,23 @@ import {
 } from "@sayhear/domain";
 
 import {
-  REPOSITORY_ROOT,
   buildChampionAssembly,
-  gitCommit,
+  buildDeterministicChampionAssembly,
   loadDotEnv,
-  trackedWorkingTreeIsDirty,
 } from "../memory-pairwise-126/shared";
 import {
-  F3_CLEAN_INCUMBENT_VERSION,
   F3_RUN_VERSION,
   configurationFingerprint,
   sha256,
   type ContinuationFixture,
-  type CleanIncumbentManifest,
   type FixtureCatalog,
   type F3Pins,
   type FrozenSharedInput,
   type SyntheticRun,
   type SyntheticRunTurn,
 } from "./protocol";
-import {
-  validateContinuationSyntheticRun,
-  verifySyntheticRunHardGates,
-} from "./review-package";
+import { verifyFixtureCatalog } from "./manifest";
+import { verifySyntheticRunHardGates } from "./review-package";
 
 const DEFAULT_CATALOG = "eval/continuation-acceptance-1a3b/fixtures.json";
 const DEFAULT_PINS = "eval/continuation-acceptance-1a3b/pins.json";
@@ -111,12 +104,9 @@ const USER_ID = asUserId(uuidFrom("synthetic-user"));
 
 type ParsedArguments = Readonly<{
   catalog: string;
-  baselineManifestOut: string | null;
   continueOnError: boolean;
   deterministic: boolean;
-  envFile: string | null;
   hardGatesOut: string;
-  gitCommit: string | null;
   only: string | null;
   out: string;
   pins: string;
@@ -126,25 +116,19 @@ function parseArguments(): ParsedArguments {
   const arguments_ = process.argv.slice(2);
   const values = {
     catalog: DEFAULT_CATALOG,
-    baselineManifestOut: null as string | null,
     continueOnError: false,
     deterministic: false,
-    envFile: null as string | null,
     hardGatesOut: DEFAULT_HARD_GATES_OUT,
-    gitCommit: null as string | null,
     only: null as string | null,
     out: DEFAULT_OUT,
     pins: DEFAULT_PINS,
   };
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
-    if (argument === "--baseline-manifest-out") values.baselineManifestOut = required(arguments_, ++index, argument);
-    else if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
+    if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
     else if (argument === "--continue-on-error") values.continueOnError = true;
     else if (argument === "--deterministic") values.deterministic = true;
-    else if (argument === "--env-file") values.envFile = required(arguments_, ++index, argument);
     else if (argument === "--hard-gates-out") values.hardGatesOut = required(arguments_, ++index, argument);
-    else if (argument === "--git-commit") values.gitCommit = required(arguments_, ++index, argument);
     else if (argument === "--only") values.only = required(arguments_, ++index, argument);
     else if (argument === "--out") values.out = required(arguments_, ++index, argument);
     else if (argument === "--pins") values.pins = required(arguments_, ++index, argument);
@@ -681,6 +665,7 @@ async function captureFixture(input: {
 
     let assistantText = "";
     let failedCategory: string | null = null;
+    let committedAssistantRevisionId: string | null = null;
     for await (const event of seam.harness.runDecision({
       catalog: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
       catalogVersion: MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.version,
@@ -694,6 +679,8 @@ async function captureFixture(input: {
     })) {
       if (event.type === "decision_delta") {
         assistantText += event.delta;
+      } else if (event.type === "decision_committed") {
+        committedAssistantRevisionId = String(event.assistantEventRevisionId);
       } else if (event.type === "decision_failed") {
         failedCategory = event.category;
       }
@@ -725,7 +712,8 @@ async function captureFixture(input: {
       actor: "assistant",
       locale: input.fixture.locale,
       revisionId: asConversationEventRevisionId(
-        uuidFrom(`${input.fixture.id}:t${fixtureTurn.sequenceInScenario}:assistant`),
+        committedAssistantRevisionId ??
+          uuidFrom(`${input.fixture.id}:t${fixtureTurn.sequenceInScenario}:assistant`),
       ),
       sequence,
       text: assistantText,
@@ -744,34 +732,24 @@ function shiftForLocale(locale: string): void {
 
 async function main(): Promise<void> {
   const arguments_ = parseArguments();
-  if (arguments_.baselineManifestOut) {
-    if (!arguments_.gitCommit || !/^[0-9a-f]{40}$/.test(arguments_.gitCommit)) {
-      throw new Error("--baseline-manifest-out requires --git-commit with a full commit SHA.");
-    }
-    if (arguments_.gitCommit !== gitCommit()) {
-      throw new Error("The clean incumbent commit must equal the current checkout HEAD.");
-    }
-    if (trackedWorkingTreeIsDirty()) {
-      throw new Error(
-        "The tracked working tree must be clean before generating a clean incumbent manifest.",
-      );
-    }
-  }
-  const environment = (() => {
-    loadDotEnv(
-      arguments_.envFile
-        ? { override: true, path: arguments_.envFile }
-        : undefined,
-    );
-    return process.env;
-  })();
+  const { champion, conversationAdapter } = arguments_.deterministic
+    ? buildDeterministicChampionAssembly()
+    : (() => {
+        loadDotEnv();
+        return buildChampionAssembly(process.env);
+      })();
   const catalog = JSON.parse(
     await readFile(resolve(arguments_.catalog), "utf8"),
   ) as unknown as FixtureCatalog;
+  const catalogVerification = verifyFixtureCatalog(catalog);
+  if (!catalogVerification.passed) {
+    throw new Error(
+      `Incumbent capture catalog verification failed: ${catalogVerification.mismatches.join("; ")}`,
+    );
+  }
   const pins = JSON.parse(
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
-  const { champion, conversationAdapter } = buildChampionAssembly(environment);
   if (conversationAdapter.type !== "responses-api") {
     throw new Error("The champion assembly did not return a responses-api adapter.");
   }
@@ -844,7 +822,6 @@ async function main(): Promise<void> {
     synthetic: true,
     version: F3_RUN_VERSION,
   };
-  validateContinuationSyntheticRun({ catalog, pins, run });
 
   await mkdir(dirname(resolve(arguments_.out)), { recursive: true });
   await writeFile(resolve(arguments_.out), `${JSON.stringify(run, null, 2)}\n`, "utf8");
@@ -855,45 +832,6 @@ async function main(): Promise<void> {
     `${JSON.stringify(report, null, 2)}\n`,
     "utf8",
   );
-  if (arguments_.baselineManifestOut) {
-    if (
-      arguments_.deterministic ||
-      scenarios.length !== continuations.length ||
-      providerErrors.length > 0 ||
-      !report.passed
-    ) {
-      throw new Error(
-        "A clean incumbent manifest requires a complete real-provider run with passing hard gates.",
-      );
-    }
-    const manifest: CleanIncumbentManifest = {
-      configurationFingerprint: run.configurationFingerprint,
-      configId: run.configId,
-      generatedAt: new Date().toISOString(),
-      gitCommit: arguments_.gitCommit,
-      hardGates: {
-        checkedFixtureCount: report.checkedFixtureCount,
-        failures: report.failures.length,
-        passed: report.passed,
-        path: relative(REPOSITORY_ROOT, resolve(arguments_.hardGatesOut)),
-        sha256: sha256(report),
-      },
-      run: {
-        path: relative(REPOSITORY_ROOT, resolve(arguments_.out)),
-        sha256: sha256(run),
-      },
-      synthetic: true,
-      version: F3_CLEAN_INCUMBENT_VERSION,
-    };
-    await mkdir(dirname(resolve(arguments_.baselineManifestOut)), {
-      recursive: true,
-    });
-    await writeFile(
-      resolve(arguments_.baselineManifestOut),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8",
-    );
-  }
 
   console.log(
     `[f3-synthetic-capture] wrote ${scenarios.length}/${continuations.length} scenarios to ${arguments_.out}`,

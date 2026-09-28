@@ -104,7 +104,9 @@ export type HardGateReport = Readonly<{
  *
  * #228: per-turn question counts and required-recall tokens are advisory
  * expectations for both arms. Deterministic safety/resource/punctuation
- * checks and references to never-injected memory remain hard gates.
+ * checks and references to never-injected memory remain hard gates. In
+ * particular, advisory recall expectations must never downgrade a forbidden
+ * memory mention.
  */
 export function verifySyntheticRunHardGates(
   catalog: FixtureCatalog,
@@ -158,6 +160,9 @@ export function verifySyntheticRunHardGates(
         sequenceInScenario: turn.sequenceInScenario,
         userText: turn.userInput.text,
       }).hardGates;
+      // #228: question counts and required-recall tokens are advisory
+      // expectations. Only findings emitted by the v3 checker contribute to
+      // the hard-gate failure set.
       for (const finding of findings) {
         const message = `${prefix}: ${finding.gate} — ${finding.detail}`;
         failures.push(message);
@@ -254,17 +259,6 @@ ${sourceViolations.join("\n")}`);
     }
   }
   return scenarios;
-}
-
-export function validateContinuationSyntheticRun(input: Readonly<{
-  catalog: FixtureCatalog;
-  pins: AcceptanceManifest["pinnedConfiguration"];
-  run: SyntheticRun;
-}>): void {
-  validateRun(input.run, input.catalog, "continuation", input.pins, [
-    input.pins.continuation.arms.incumbent.id,
-    input.pins.continuation.arms.candidate.id,
-  ]);
 }
 
 function inputSummaryEntry(

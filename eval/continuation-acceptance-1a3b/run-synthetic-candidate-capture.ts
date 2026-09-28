@@ -20,14 +20,15 @@
  *   is sticky within the fixture run: the seam records stop signals but
  *   never time-releases them. Cooldown release is production-repository
  *   behavior outside this seam's scope.
- * - Dialogue focus is a fixed category map: `direct_task` and `high_risk`
- *   require focus (no segment: correct-zero and safety deference), every
- *   other category does not. The map is scaffolding, not policy.
+ * - Dialogue focus is a fixed category map: direct tasks, safety-sensitive
+ *   turns, stop signals, short answers, and topic changes require focus (no
+ *   segment); open pauses and memory acknowledgments leave selection open. The
+ *   map is scaffolding, not policy.
  *
  * Usage:
  *   tsx eval/continuation-acceptance-1a3b/run-synthetic-candidate-capture.ts \
  *     [--deterministic] [--only <fixtureId>] [--continue-on-error] \
- *     [--env-file <path>] [--catalog <path>] [--pins <path>] [--out <path>] \
+ *     [--catalog <path>] [--pins <path>] [--out <path>] \
  *     [--hard-gates-out <path>] [--lanes-out <path>]
  *
  * The deterministic double proves the plumbing without network calls: the
@@ -125,7 +126,11 @@ import {
   asUserId,
 } from "@sayhear/domain";
 
-import { buildChampionAssembly, loadDotEnv } from "../memory-pairwise-126/shared";
+import {
+  buildChampionAssembly,
+  buildDeterministicChampionAssembly,
+  loadDotEnv,
+} from "../memory-pairwise-126/shared";
 import {
   F3_CATALOG_VERSION,
   F3_RUN_VERSION,
@@ -153,10 +158,9 @@ const GROUP = "continuation" as const;
 const USER_ID = asUserId(uuidFrom("synthetic-user"));
 
 /**
- * Fixture categories whose current request requires focus, so the bundle
- * must stay out of the turn. `direct_task` exercises the correct-zero
- * contract; `high_risk` exercises safety deference. Every other category
- * leaves the focus gate open and lets selection decide.
+ * Direct tasks, safety-sensitive turns, stop signals, and topic changes all
+ * exercise the production focus/deference gate. Only open pauses and memory
+ * acknowledgments leave the gate open for the bundle to make a decision.
  */
 const FOCUS_REQUIRED_CATEGORIES = new Set([
   "direct_task",
@@ -174,7 +178,6 @@ type ParsedArguments = Readonly<{
   catalog: string;
   continueOnError: boolean;
   deterministic: boolean;
-  envFile: string | null;
   hardGatesOut: string;
   lanesOut: string;
   only: string | null;
@@ -188,7 +191,6 @@ function parseArguments(): ParsedArguments {
     catalog: DEFAULT_CATALOG,
     continueOnError: false,
     deterministic: false,
-    envFile: null as string | null,
     hardGatesOut: DEFAULT_HARD_GATES_OUT,
     lanesOut: DEFAULT_LANES_OUT,
     only: null as string | null,
@@ -200,7 +202,6 @@ function parseArguments(): ParsedArguments {
     if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
     else if (argument === "--continue-on-error") values.continueOnError = true;
     else if (argument === "--deterministic") values.deterministic = true;
-    else if (argument === "--env-file") values.envFile = required(arguments_, ++index, argument);
     else if (argument === "--hard-gates-out") values.hardGatesOut = required(arguments_, ++index, argument);
     else if (argument === "--lanes-out") values.lanesOut = required(arguments_, ++index, argument);
     else if (argument === "--only") values.only = required(arguments_, ++index, argument);
@@ -292,17 +293,8 @@ function snapshotFor(
   }
   const temperature = pin.parameters.temperature;
   const maxOutputTokens = pin.parameters.maxOutputTokens;
-  const reasoningEffort = pin.parameters.reasoningEffort;
-  const responseFormat = pin.parameters.responseFormat;
-  if (
-    typeof temperature !== "number" ||
-    typeof maxOutputTokens !== "number" ||
-    reasoningEffort !== "none" ||
-    responseFormat !== "json_object"
-  ) {
-    throw new Error(
-      `Pins parameters for ${role} must carry temperature, maxOutputTokens, reasoningEffort=none, and responseFormat=json_object.`,
-    );
+  if (typeof temperature !== "number" || typeof maxOutputTokens !== "number") {
+    throw new Error(`Pins parameters for ${role} must carry numeric temperature and maxOutputTokens.`);
   }
   const policy = ONE_A_3B_ROLE_POLICIES[role];
   if (pin.maxTechnicalRetries !== policy.maxTechnicalRetries) {
@@ -330,8 +322,6 @@ function snapshotFor(
       providerCallBudget: 4,
       temperature,
       maxOutputTokens,
-      reasoningEffort,
-      responseFormat,
     },
   };
 }
@@ -1044,7 +1034,6 @@ function createSeam(input: {
     }),
     bindSegmentCommand: async () => ({ outcome: "bound" }),
     abandonSegment: async () => undefined,
-    releaseOmittedSegment: async () => ({ outcome: "released" }),
     recordDisposition: async (dispositionInput) => {
       const use = pendingUses.find((entry) => entry.useId === dispositionInput.useId);
       if (!use) return { outcome: "fenced", reason: "use_missing" };
@@ -1227,7 +1216,6 @@ function deterministicRoleProviders(): {
     proactive: {
       role: "proactive.followup",
       generateSegment: async (request) => ({
-        decision: "emit",
         content: "记着呢。",
         expressionKind: "acknowledgment",
         targetRef: {
@@ -1347,8 +1335,7 @@ async function captureFixture(input: {
         },
         providerEgress: seam.roleEgress,
       });
-      const succeeded =
-        result.outcome === "extracted" || result.outcome === "duplicate";
+      const succeeded = result.outcome === "extracted" || result.outcome === "duplicate";
       seam.noteExtractCall(succeeded);
       if (!succeeded) seam.lane.noteExtractError(String(event.revisionId));
       if (!succeeded) {
@@ -1365,6 +1352,8 @@ async function captureFixture(input: {
     }
   };
 
+  // The lane is asynchronous in production, so only already-committed frozen
+  // Events can contribute a target to this turn's proactive selection.
   for (const [index, frozen] of frozenEvents.entries()) {
     await extractEvent(frozen, `frozen:${index}`);
   }
@@ -1393,6 +1382,8 @@ async function captureFixture(input: {
       text: currentUser.text,
     });
 
+    // The incomplete-lane fixture intentionally leaves the current Event
+    // unsettled, proving the stage omits the optional segment fail-closed.
     if (input.fixture.category !== "incomplete_lane") {
       await extractEvent(currentUser, `turn:${fixtureTurn.sequenceInScenario}`);
     }
@@ -1528,14 +1519,12 @@ type ScenarioCapture = {
 
 async function main(): Promise<void> {
   const arguments_ = parseArguments();
-  const environment = (() => {
-    loadDotEnv(
-      arguments_.envFile
-        ? { override: true, path: arguments_.envFile }
-        : undefined,
-    );
-    return process.env;
-  })();
+  const { champion, conversationAdapter } = arguments_.deterministic
+    ? buildDeterministicChampionAssembly()
+    : (() => {
+        loadDotEnv();
+        return buildChampionAssembly(process.env);
+      })();
   const catalog = JSON.parse(
     await readFile(resolve(arguments_.catalog), "utf8"),
   ) as unknown as FixtureCatalog;
@@ -1543,7 +1532,6 @@ async function main(): Promise<void> {
   const pins = JSON.parse(
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
-  const { champion, conversationAdapter } = buildChampionAssembly(environment);
   if (conversationAdapter.type !== "responses-api") {
     throw new Error("The champion assembly did not return a responses-api adapter.");
   }

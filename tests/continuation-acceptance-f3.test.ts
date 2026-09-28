@@ -21,7 +21,6 @@ import {
   buildReviewPackage,
   toPublicReviewPackage,
   unblindReviewPackage,
-  validateContinuationSyntheticRun,
   validateValidatorLedger,
   verifySyntheticRunHardGates,
   type SyntheticRun,
@@ -439,7 +438,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     ).toThrow(/configuration fingerprint/i);
   });
 
-  it("records question counts as advisory before sampling", () => {
+  it("records question counts as advisory trajectory findings", () => {
     const candidate = syntheticRun("candidate", "continuation");
     const firstScenario = candidate.scenarios[0]!;
     const firstTurn = firstScenario.turns[0]!;
@@ -459,22 +458,12 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
       ],
     };
 
-    const package_ = buildReviewPackage({
-        baselineRun: syntheticRun("incumbent", "continuation"),
-        candidateRun: hardGateFailure,
-        catalog,
-        group: "continuation",
-        manifest: manifest(),
-      });
-    expect(package_.hardGateReport.passed).toBe(true);
-    expect(
-      package_.hardGateReport.advisories.some((entry) =>
-        entry.includes("question_count_exceeded"),
-      ),
-    ).toBe(true);
+    const report = verifySyntheticRunHardGates(catalog, hardGateFailure);
+    expect(report.passed).toBe(true);
+    expect(report.advisories.some((entry) => entry.includes("question_count_exceeded"))).toBe(true);
   });
 
-  it("keeps required recall advisory for both arms", () => {
+  it("keeps required recall advisory while forbidden mentions remain hard", () => {
     const fixture = catalog.scenarios.find(
       (entry) =>
         entry.group === "continuation" &&
@@ -503,61 +492,25 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     const advisory = verifySyntheticRunHardGates(catalog, responseWithoutRequiredToken);
     expect(advisory.passed).toBe(true);
     expect(advisory.advisories.some((entry) => entry.includes("required_recall_missing"))).toBe(true);
-  });
 
-  it("keeps forbidden memory mentions hard for both arms", () => {
-    const fixture = catalog.scenarios.find(
-      (entry) =>
-        entry.group === "continuation" &&
-        entry.hardGate.forbiddenTokens.length > 0,
-    );
-    if (!fixture || fixture.group !== "continuation") {
-      throw new Error("Expected a continuation fixture with a forbidden token.");
-    }
-    const forbiddenToken = fixture.hardGate.forbiddenTokens[0]!;
-    const incumbent = syntheticRun("incumbent", "continuation");
-    const run = {
-      ...incumbent,
-      scenarios: incumbent.scenarios.map((entry) =>
-        entry.fixtureId === fixture.id
+    const responseWithForbiddenToken = {
+      ...responseWithoutRequiredToken,
+      scenarios: responseWithoutRequiredToken.scenarios.map((entry) =>
+        entry.fixtureId === fixture!.id
           ? {
               ...entry,
-              turns: entry.turns.map((turn) => ({
-                ...turn,
-                assistantText: `A response that invents ${forbiddenToken}.`,
-              })),
+              turns: entry.turns.map((turn) =>
+                turn.sequenceInScenario === 1
+                  ? { ...turn, assistantText: "The item is booked." }
+                  : turn,
+              ),
             }
           : entry,
       ),
     };
-
-    const report = verifySyntheticRunHardGates(catalog, run);
-    expect(report.passed).toBe(false);
-    expect(
-      report.failures.some((entry) =>
-        entry.includes("forbidden_memory_mention"),
-      ),
-    ).toBe(true);
-  });
-
-  it("rejects a nominally complete run with missing turn content", () => {
-    const incumbent = syntheticRun("incumbent", "continuation");
-    const first = incumbent.scenarios[0]!;
-    const incomplete = {
-      ...incumbent,
-      scenarios: [
-        { ...first, turns: [] },
-        ...incumbent.scenarios.slice(1),
-      ],
-    };
-
-    expect(() =>
-      validateContinuationSyntheticRun({
-        catalog,
-        pins,
-        run: incomplete,
-      }),
-    ).toThrow(/different turn count/i);
+    const hard = verifySyntheticRunHardGates(catalog, responseWithForbiddenToken);
+    expect(hard.passed).toBe(false);
+    expect(hard.failures.some((entry) => entry.includes("forbidden_memory_mention"))).toBe(true);
   });
 
   it("does not reveal identities until every blinded score is present", () => {

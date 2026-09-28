@@ -15,20 +15,10 @@ import type { TwinConversationAdapter, TwinRoleRegistry } from "./twin-harness";
 
 export const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../..");
 
-/** Load an env file. Explicit files may override stale inherited values. */
-export function loadDotEnv(options: Readonly<{
-  path?: string;
-  override?: boolean;
-}> = {}): void {
-  const envPath = options.path
-    ? path.resolve(REPOSITORY_ROOT, options.path)
-    : path.join(REPOSITORY_ROOT, ".env");
-  if (!existsSync(envPath)) {
-    if (options.path) {
-      throw new Error(`Environment file does not exist: ${envPath}`);
-    }
-    return;
-  }
+/** Load repo-root .env without overriding already-set process.env values. */
+export function loadDotEnv(): void {
+  const envPath = path.join(REPOSITORY_ROOT, ".env");
+  if (!existsSync(envPath)) return;
   for (const line of readFileSync(envPath, "utf8").split("\n")) {
     const trimmed = line.trim();
     if (trimmed.length === 0 || trimmed.startsWith("#")) continue;
@@ -39,19 +29,9 @@ export function loadDotEnv(options: Readonly<{
       .slice(separator + 1)
       .trim()
       .replace(/^["']|["']$/g, "");
-    if (options.override === true || process.env[key] === undefined) {
+    if (process.env[key] === undefined) {
       process.env[key] = value;
     }
-  }
-}
-
-export function trackedWorkingTreeIsDirty(): boolean {
-  try {
-    execFileSync("git", ["-C", REPOSITORY_ROOT, "diff", "--quiet"]);
-    execFileSync("git", ["-C", REPOSITORY_ROOT, "diff", "--cached", "--quiet"]);
-    return false;
-  } catch {
-    return true;
   }
 }
 
@@ -137,6 +117,36 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
       baseUrl: profile.baseUrl,
       timeoutMs: Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000"),
       type: "responses-api",
+    },
+  };
+}
+
+/** Build the network-free Champion identity used by synthetic doubles. */
+export function buildDeterministicChampionAssembly(): {
+  champion: ConversationTextChampion;
+  conversationAdapter: Extract<TwinConversationAdapter, { type: "responses-api" }>;
+} {
+  const model = "deepseek-v4-flash";
+  return {
+    champion: Object.freeze({
+      configVersion: "conversation-text-champion:v1",
+      consentPolicyVersion: null,
+      contextLimit: 1_000_000,
+      dataRegion: "synthetic",
+      model,
+      provider: "deepseek" as const,
+      providerPolicyVersion: "deepseek-conversation-text:v1",
+      retentionMode: "store-disabled" as const,
+      snapshot: "deepseek-flash",
+      streaming: true,
+      supportedLocales: Object.freeze(["en", "zh"]),
+      trainingPolicy: "api-data-controls" as const,
+    }),
+    conversationAdapter: {
+      apiKey: "synthetic-provider-key",
+      baseUrl: "https://synthetic.invalid",
+      timeoutMs: 1_000,
+      type: "responses-api" as const,
     },
   };
 }
