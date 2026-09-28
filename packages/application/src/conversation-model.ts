@@ -65,6 +65,11 @@ export type ConversationTextModelStreamEvent =
       modelSnapshot: string;
       outputTokens: number | null;
       providerRequestId: string | null;
+      /**
+       * Present only when the Provider reports a reasoning split, which
+       * keeps adapters that have no such concept from fabricating a zero.
+       */
+      reasoningTokens?: number | null;
       type: "completed";
     }>
   | Readonly<{
@@ -154,6 +159,13 @@ export type ProviderResponseFailure = Readonly<{
   inputTokens: number | null;
   outputLength: number;
   outputTokens: number | null;
+  /**
+   * Tokens the Provider spent on reasoning rather than on the answer. `null`
+   * means the Provider reported no split, which is not the same as zero.
+   * Issue #252 exists because this number is what separates a budget spent on
+   * reasoning from a budget spent on a truncated answer.
+   */
+  reasoningTokens: number | null;
   /**
    * Set only when the Provider itself reported the truncation, which is what
    * separates a proven budget exhaustion from an inferred one. A literal

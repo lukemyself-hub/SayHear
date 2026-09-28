@@ -745,6 +745,7 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
             outputLength: 0,
             outputTokens: 4000,
             providerReason: "max_output_tokens",
+            reasoningTokens: 4000,
           },
         );
       }),
@@ -764,6 +765,7 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
       outputLength: 0,
       outputTokens: 4000,
       providerReason: "max_output_tokens",
+      reasoningTokens: 4000,
     });
   });
 

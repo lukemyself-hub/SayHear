@@ -302,6 +302,7 @@ export function createResponsesApiConversationTextModel(input: {
               modelSnapshot: completedResponse.model,
               outputTokens: asOptionalNumber(finalUsage?.output_tokens),
               providerRequestId,
+              reasoningTokens: reasoningTokensFrom(finalUsage),
               type: "completed",
             };
           } else if (
@@ -517,8 +518,22 @@ function terminalStreamEventError(
       outputLength: emittedTextLength,
       outputTokens: asOptionalNumber(usage?.output_tokens),
       providerReason: "max_output_tokens",
+      reasoningTokens: reasoningTokensFrom(usage),
     },
   );
+}
+
+/**
+ * Issue #252: `output_tokens` counts reasoning, so a budget that looks fully
+ * spent may have produced no answer at all. The Provider reports the split
+ * under `usage.output_tokens_details`; an absent split stays null rather than
+ * becoming zero, so "did not report" is never read as "spent nothing".
+ */
+function reasoningTokensFrom(usage: unknown): number | null {
+  if (!isRecord(usage)) return null;
+  const details = usage.output_tokens_details;
+  if (!isRecord(details)) return null;
+  return asOptionalNumber(details.reasoning_tokens);
 }
 
 function categoryForStatus(status: number): ProviderDispatchErrorCategory {

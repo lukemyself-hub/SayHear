@@ -292,6 +292,7 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
     let modelSnapshot: string | null = null;
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
+    let reasoningTokens: number | null = null;
     for await (const event of model.stream({
       instructions: jsonInstructions(configuration, instructions),
       locale,
@@ -311,6 +312,7 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
         modelSnapshot = event.modelSnapshot;
         inputTokens = event.inputTokens;
         outputTokens = event.outputTokens;
+        reasoningTokens = event.reasoningTokens ?? null;
       }
     }
     if (modelSnapshot !== configuration.modelSnapshot) {
@@ -323,6 +325,7 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
       inputTokens,
       outputLength: output.length,
       outputTokens,
+      reasoningTokens,
     };
     if (output.length === 0) {
       throw untypedOutputError(configuration, usage);
@@ -348,6 +351,7 @@ type JsonCallUsage = Readonly<{
   inputTokens: number | null;
   outputLength: number;
   outputTokens: number | null;
+  reasoningTokens: number | null;
 }>;
 
 /**

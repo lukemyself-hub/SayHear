@@ -73,6 +73,7 @@ function stubResponsesApi(events: readonly string[]): void {
 
 function completedEvent(options: {
   outputTokens: number;
+  reasoningTokens?: number;
   text?: string;
 }): string {
   const deltas = options.text
@@ -85,7 +86,17 @@ function completedEvent(options: {
     response: {
       id: "resp_synthetic",
       model: "deepseek-flash",
-      usage: { input_tokens: 900, output_tokens: options.outputTokens },
+      usage: {
+        input_tokens: 900,
+        output_tokens: options.outputTokens,
+        ...(options.reasoningTokens === undefined
+          ? {}
+          : {
+              output_tokens_details: {
+                reasoning_tokens: options.reasoningTokens,
+              },
+            }),
+      },
     },
     type: "response.completed",
   })}\r\n\r\n`;
@@ -273,6 +284,33 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
     });
   });
 
+  it("records the reasoning split so a spent budget is not mistaken for a truncated answer", async () => {
+    // Issue #252's decisive evidence: all of the pinned output budget went to
+    // reasoning and none of it to the answer. `outputTokens` alone cannot show
+    // this, so the split is part of the frozen failure record.
+    stubResponsesApi([
+      completedEvent({
+        outputTokens: MAX_OUTPUT_TOKENS,
+        reasoningTokens: MAX_OUTPUT_TOKENS,
+      }),
+    ]);
+
+    expect((await validateAndCatch()).failure).toMatchObject({
+      kind: "output_budget_exhausted",
+      outputLength: 0,
+      outputTokens: MAX_OUTPUT_TOKENS,
+      reasoningTokens: MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it("keeps an unreported reasoning split as null rather than zero", async () => {
+    stubResponsesApi([completedEvent({ outputTokens: MAX_OUTPUT_TOKENS })]);
+
+    const failure = (await validateAndCatch()).failure;
+    // "Provider did not report" must never read as "spent no reasoning".
+    expect(failure?.reasoningTokens).toBeNull();
+  });
+
   it("keeps every classified failure free of draft and source text", async () => {
     stubResponsesApi([completedEvent({ outputTokens: 12 })]);
 
@@ -285,6 +323,7 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
       "outputLength",
       "outputTokens",
       "providerReason",
+      "reasoningTokens",
     ]);
   });
 });

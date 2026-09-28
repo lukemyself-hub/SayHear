@@ -70,6 +70,7 @@ describe("Responses API Conversation Text adapter", () => {
         modelSnapshot: "gpt-5.4-2026-07-01",
         outputTokens: 4,
         providerRequestId: "request_synthetic",
+        reasoningTokens: null,
         type: "completed",
       },
     ]);
@@ -137,6 +138,7 @@ describe("Responses API Conversation Text adapter", () => {
         modelSnapshot: "deepseek-v4-flash",
         outputTokens: 5,
         providerRequestId: "request_deepseek",
+        reasoningTokens: null,
         type: "completed",
       },
     ]);
@@ -300,6 +302,7 @@ describe("Responses API Conversation Text adapter", () => {
         modelSnapshot: "deepseek-v4-flash",
         outputTokens: 10,
         providerRequestId: "request_two",
+        reasoningTokens: null,
         type: "completed",
       },
     ]);
@@ -424,6 +427,130 @@ describe("Responses API Conversation Text adapter", () => {
       expect(caught).toMatchObject({ category });
       expect(String(caught)).toContain(`HTTP ${status}`);
     }
+  });
+
+  it("separates reasoning tokens from the visible output budget", async () => {
+    // Issue #252: DeepSeek spends the pinned output budget on reasoning before
+    // it emits any visible text, so `output_tokens` alone cannot show that the
+    // budget was gone. The reasoning split is what makes the evidence
+    // conclusive, and it must stay a count.
+    const model = createResponsesApiConversationTextModel({
+      apiKey: "synthetic-server-key",
+      baseUrl: DEEPSEEK_BASE_URL,
+      fetchImplementation: async () =>
+        new Response(
+          [
+            'event: response.incomplete\r\ndata: {"type":"response.incomplete","response":{"id":"resp_reasoning","model":"deepseek-flash","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":470,"output_tokens":4000,"output_tokens_details":{"reasoning_tokens":4000}}}}\r\n\r\n',
+          ].join(""),
+          { headers: { "content-type": "text/event-stream" }, status: 200 },
+        ),
+    });
+
+    let caught: unknown;
+    try {
+      for await (const _event of model.stream({
+        instructions: "Synthetic instructions",
+        locale: "en-US",
+        messages: [
+          {
+            revisionId: asConversationEventRevisionId(
+              "01984477-59a9-7d20-9d97-e588769566a0",
+            ),
+            role: "user",
+            text: "PRIVATE_DRAFT_CANARY",
+          },
+        ],
+        model: "deepseek-v4-flash",
+      })) {
+        // A truncated response must not yield a completed event.
+      }
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      category: "invalid_response",
+      failure: {
+        kind: "output_budget_exhausted",
+        inputTokens: 470,
+        outputLength: 0,
+        outputTokens: 4000,
+        reasoningTokens: 4000,
+      },
+    });
+    expect(String(caught)).not.toMatch(/PRIVATE_DRAFT_CANARY/);
+  });
+
+  it("carries the reasoning split on a completed response", async () => {
+    const model = createResponsesApiConversationTextModel({
+      apiKey: "synthetic-server-key",
+      baseUrl: DEEPSEEK_BASE_URL,
+      fetchImplementation: async () =>
+        new Response(
+          'event: response.completed\r\ndata: {"type":"response.completed","response":{"id":"resp_split","model":"deepseek-flash","usage":{"input_tokens":470,"output_tokens":3931,"output_tokens_details":{"reasoning_tokens":3600}}}}\r\n\r\n',
+          { headers: { "content-type": "text/event-stream" }, status: 200 },
+        ),
+    });
+
+    const events = [];
+    for await (const event of model.stream({
+      instructions: "Synthetic instructions",
+      locale: "en-US",
+      messages: [],
+      model: "deepseek-v4-flash",
+    })) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        costMicros: null,
+        finishReason: "completed",
+        inputTokens: 470,
+        modelSnapshot: "deepseek-flash",
+        outputTokens: 3931,
+        providerRequestId: "resp_split",
+        reasoningTokens: 3600,
+        type: "completed",
+      },
+    ]);
+  });
+
+  it("keeps an absent reasoning split as null rather than zero", async () => {
+    const model = createResponsesApiConversationTextModel({
+      apiKey: "synthetic-server-key",
+      baseUrl: OPENAI_BASE_URL,
+      fetchImplementation: async () =>
+        new Response(
+          'event: response.completed\r\ndata: {"type":"response.completed","response":{"id":"resp_no_split","model":"gpt-5.4-2026-07-01","usage":{"input_tokens":12,"output_tokens":4}}}\r\n\r\n',
+          { headers: { "content-type": "text/event-stream" }, status: 200 },
+        ),
+    });
+
+    const events = [];
+    for await (const event of model.stream({
+      instructions: "Synthetic instructions",
+      locale: "en-US",
+      messages: [],
+      model: "gpt-5.4",
+    })) {
+      events.push(event);
+    }
+
+    // A Provider that does not report reasoning must not be recorded as
+    // having spent zero reasoning tokens.
+    expect(events).toEqual([
+      {
+        costMicros: null,
+        finishReason: "completed",
+        inputTokens: 12,
+        modelSnapshot: "gpt-5.4-2026-07-01",
+        outputTokens: 4,
+        providerRequestId: "resp_no_split",
+        reasoningTokens: null,
+        type: "completed",
+      },
+    ]);
   });
 
   it("classifies an output-budget-truncated response as a content-free failure (issue #252)", async () => {
