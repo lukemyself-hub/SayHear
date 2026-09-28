@@ -117,6 +117,51 @@ usage columns on this path), and not in the capture report, which only carries
 usage on failures. Without that, "8000 is enough" cannot be distinguished
 from "8000 barely held", and the next run could still truncate.
 
+## 6a. Finding 4b — the margin at 8000, and why the budget is not the lever
+
+Resolved 2026-09-28, after successful-call usage was recorded. The full spent
+18-case pool was captured three times at the 8000-token pin on one correctly
+bound manifest (`sha256:a5696aa7`, HEAD `24ee6d7`).
+
+| Run | Completed | Failed | Heaviest successful call |
+| --- | --- | --- | --- |
+| 1 | 17 / 18 | `bio-contradiction-mix` | 6502 |
+| 2 | **18 / 18** | — | 7091 |
+| 3 | **18 / 18** | — | 7626 |
+
+Across 53 successful calls: `output` min 1144, p50 2837, p90 5379, max **7626**
+— **95.3% of the cap**. Reasoning is **97.3% of output at the median**, and
+98.8% at worst.
+
+Three things follow, and the third overturns the recommendation in §6.
+
+1. **The single case is stochastic, not stably broken.** `bio-contradiction-mix`
+   failed once and completed twice, and the budget is the only thing that
+   differs. It is not a deterministic defect.
+
+2. **Per-case variance at `temperature: 0` is enormous.** The same input, the
+   same pin, produced `bio-unsupported-mix` at 2098 and 6502 output tokens
+   across runs — a threefold spread. The Provider does not honour
+   `temperature: 0` for reasoning spend, so a single run carries real
+   truncation risk regardless of budget.
+
+3. **The upper tail tracks the cap, which means the budget is a clip, not a
+   fix.** At 4000 the failures pinned at exactly 4000. At 8000 the heaviest
+   *success* sits at 7626. Raising the ceiling moves the tail up with it. The
+   demand is unbounded, so no finite budget converts a flaky run into a
+   reliable one — it only changes how often the clip bites.
+
+The visible answer is a small, roughly constant share of the spend: the three
+`bio-contradiction-mix` attempts produced 0, 90 and 102 visible characters while
+spending 8000, 7626 and 7091 total. This is not an answer that does not fit in
+the budget. It is a model that spends the budget thinking and then writes a
+sentence.
+
+**Correction to §6.** "8000 fixed every case that had failed" was true of that
+one seven-case sample and overstated as a conclusion. 8000 is a real
+improvement — 4–7 failures per run became 0–1 — but it does not make the role
+deterministic, and it should not be described as having fixed the problem.
+
 ## 7. Finding 5 — reasoning cannot be turned off, and effort cannot be set
 
 The issue offers two remedies: raise the output budget, or shorten the
@@ -166,22 +211,30 @@ validator-specific.
 
 ## 8. Recommendation
 
-1. **Raise `maxOutputTokens`.** 4000 and 6000 are both provably insufficient;
-   8000 is the lowest tested value that cleared every case that had failed.
-2. **Close the usage-recording gap before freezing the new pin.** Record
-   `inputTokens` / `outputTokens` / `reasoningTokens` for *successful* calls
-   too, so the next configuration can be chosen against measured headroom
-   rather than an upper bound. This needs the model-role provider contract to
-   return usage, which is a wider change than the #252 diagnosis and deserves
-   its own review.
+1. **Raise `maxOutputTokens` to 8000, and stop there.** 4000 and 6000 are both
+   provably insufficient. 8000 takes the observed failure rate from 4–7 per run
+   to 0–1. But §6a shows the tail tracks the cap, so this is the last budget
+   step worth taking on its own: a larger cap would move the truncation point
+   without addressing the cause. Further budget increases should be treated as
+   buying time, not correctness.
+2. **~~Close the usage-recording gap before freezing the new pin.~~ Done.**
+   Successful-call usage is now recorded on the entrypoint and in the capture
+   report, which is what made §6a measurable. The new pin was frozen against
+   measured headroom rather than an upper bound.
 3. **Do not pursue disabling reasoning or tuning effort.** Neither exists on
    this endpoint (section 7).
-4. **Treat the budget as necessary but not sufficient.** The 44% at-least-once
-   failure rate and the reasoning-loop signature mean repeated runs are
-   required before any determinism claim.
-5. **Open a follow-up for the prompt/task shape.** Six of seven failures were
-   a reasoning loop before any answer was written. That is a task-design
-   signal, not only a budget signal, and raising the cap does not address it.
+4. **Treat the budget as necessary but not sufficient.** One case in three runs
+   still truncates, and the same input varied threefold across runs at
+   `temperature: 0`. A single acceptance run is not evidence of determinism.
+5. **The prompt/task shape is the actual fix, and it is now urgent rather than
+   optional.** Reasoning is 97.3% of output at the median; the visible answer
+   is 2–3% of the spend. The five heaviest calls across the three runs are
+   dominated by the `code_switch` variant. Tracking that signal down is the
+   only route to a run that passes reliably, and it is #254.
+6. **The gate must tolerate a residual miss.** At 8000 the expected result is
+   0–1 failures per 18, which is inside the ADR-0139 ten-percent budget of one.
+   The release should plan for one blocking failure being *possible*, not
+   merely tolerated after the fact.
 
 ## 9. Integrity caveats
 
