@@ -36,6 +36,8 @@ The guard is correct — it fails loudly rather than silently keeping the old
 budget — but activation **cannot rotate a live role**, which is the part that
 blocks a smooth release:
 
+There is no forward path. Three constraints combine:
+
 - `model_role_rollout_pins_one_active_idx` is a partial unique index on `role`
   where `status = 'active'`, so only one pin per role may be active.
 - `bindActiveG1Release` compares the requested pin set against the currently
@@ -46,12 +48,14 @@ blocks a smooth release:
   requires `hasExactG1RoleSet`, so it always revokes **all four** roles, and
   matches on `release_fingerprint`.
 
-**Consequence: there is no forward path.** Rolling a new `narrative.validate`
+Consequence: rolling a new `narrative.validate`
 config over a live deployment requires revoking the complete four-role G1 set
-and re-activating all four with the new versions. The budget fix is therefore
-a rollback-and-relaunch, not an in-place bump, and the rehearsal in B7 is not
-optional bookkeeping — it is the only rehearsal that exercises the real
-procedure.
+and re-activating all four. The budget fix is therefore a rollback-and-
+relaunch, not an in-place bump, and the rehearsal in B7 is not optional
+bookkeeping — it is the only rehearsal that exercises the real procedure.
+
+This is no longer hypothetical: production has already done exactly one such
+rotation, v1 to v2. See B1a.
 
 Activation will refuse until all of these move together:
 
@@ -69,25 +73,59 @@ Activation will refuse until all of these move together:
 - `tests/system/g1-release-activation.system.test.ts`, which builds the same
   three identities in its own helper
 
-### B1a — The version number to mint is unverified
+### B1a — ~~The version number to mint is unverified~~ **RESOLVED 2026-09-28**
 
-**Blocked. Needs a production read-only check.**
+**Answer: production is already on `g1-release:v2`. The new version is `v3`.**
 
-`docs/plans/g1-only-release-status.md` records the live active pins as "G1 v2"
-for the four roles. That phrase is ambiguous in a way that matters: it may be a
-human label for a deployment iteration, or it may be the literal config
-version. This document previously asserted that production "already holds 4000
-at v1" — that was an inference, not a verified read.
+Verified by one authorized read-only query against the hosted database
+(`transaction_read_only = on`, configuration identity only, no content tables
+read). Recorded facts:
 
-If the live config version is already `narrative.validate:g1-release:v2`, then
-minting v2 collides with it and the immutability guard throws on the first
-activation attempt. The version to mint depends on the answer, so it must be
-read from `model_role_configurations` before the migration is written, not
-after.
+- All four G1 roles are live at `g1-release:v2`, active pin
+  `<role>-g1-release-pin:v2`, release fingerprint
+  `sha256:b582a4876d3a3f78c4057c7a7e9c2cdac78750d9c5ebead176a259a714612685`.
+- All four `g1-release:v1` pins are already `revoked`, fingerprint
+  `sha256:207af8b60466efd08900d93d0f15dff3a1ea6e9448cf249ff7b778f853735b6b`.
+  A full v1→v2 rotation has already been performed through the revoke-then-
+  activate path, so that path is proven rather than theoretical.
+- `narrative.validate:g1-release:v2` holds `maxOutputTokens: 4000`. **Minting
+  v2 would have collided and thrown on first activation.** The earlier
+  inference in this document was correct to flag it and wrong to assert it.
+- Both v1 and v2 egress policies are `status = 'active'` for all four roles, so
+  multiple active policies per role coexist and are resolved by the
+  configuration row, not by status. Registering a v3 policy as active matches
+  existing practice.
+- `bio.write`, `open_loop.extract` and `proactive.followup` are `enabled =
+  false`; the G1/G2 boundary is intact in production.
+- All four roles run `maxOutputTokens: 4000`, not just `narrative.validate`.
+  Only `narrative.validate` fails, so only it needs the bump.
 
-The hosted read-only connection used on 2026-09-27 inspected only pins and row
-counts and never read configuration identities, so the answer is not already
-on file.
+### B1b — A rollout pin is bound to one manifest fingerprint
+
+**Blocked. Needs a decision.**
+
+`bindActiveG1Release` refuses a pin whose `release_fingerprint` is already set
+to a different value, so an existing pin cannot be re-pointed at a new
+release. The three roles whose parameters are unchanged therefore cannot reuse
+their live `v2` pins either, even though their configurations are untouched.
+
+This splits the change in a way that needs an explicit decision:
+
+| | config | egress policy | rollout pin |
+| --- | --- | --- | --- |
+| `narrative.validate` | new `v3` @ 8000 | new `v3` | new `v3` |
+| other three | reuse `v2` | reuse `v2` | new `v3`, pointing at config `v2` |
+
+A pin's name need not match its configuration version — the pin's foreign key
+is `(role, config_version, provider_policy_version)`, so a `v3` pin may point at
+the unchanged `v2` configuration. That keeps the other three roles' rollback
+target intact and limits the parameter change to the one role that needs it.
+
+The alternative is a uniform `v3` across all four roles, which re-versions
+configurations whose parameters did not change. Both are defensible; the first
+is the smaller change and the second is the more uniform one.
+`roleConfigurationsFromF3` currently derives all three identities from the role
+name with a hardcoded `v1`, so it needs restructuring either way.
 
 This was deliberately held back while the holdout was treated as a
 precondition. Luke's test-data decision (see §2) moves it ahead of the holdout:
