@@ -69,19 +69,23 @@ are advisory. ADR-0139 allows at most a 10% calibration miss (1 of 18);
 precision false-blocking is zero-tolerance. The 6 precision drafts must
 complete with zero blocking findings.
 
-### B4 — The 6 precision clean drafts are hardcoded and already spent
+### B4 — ~~The 6 precision clean drafts are hardcoded and already spent~~ **RESOLVED in `f47e49d`**
 
-**Blocked. Needs a small tooling change.**
-
-`PRECISION_DRAFTS` is a hardcoded array in
+`PRECISION_DRAFTS` was a hardcoded array in
 `eval/continuation-acceptance-1a3b/run-validator-capture.ts` citing
 `syn-claim-validator-en/zh/mix` — claim IDs from the **spent** catalog.
-Running `--precision` against the new holdout would silently reuse the spent
-clean drafts, which disqualifies the precision half of the acceptance.
+Running `--precision` against the new holdout would have silently reused the
+spent clean drafts, disqualifying the precision half of the acceptance.
 
-Fix: move the precision drafts into the catalog so they travel with it. Six
-new fictional clean drafts over the holdout's clock-restoration claims are
-needed.
+The capture now prefers `precisionDrafts` from the catalog when present and
+falls back to the built-in set otherwise, and the holdout supplies six clean
+drafts over its own claims. `verifyFixtureCatalog` rejects a supplied set that
+is not six unique, non-empty drafts citing claims that resolve inside the same
+catalog.
+
+`fixtures.json` was deliberately left byte-identical: `buildManifest` hashes
+the catalog bytes into the release fingerprint, so editing the spent catalog
+would have invalidated evidence already produced against it.
 
 ### B5 — Holdout fixture difficulty has not been reviewed
 
@@ -150,17 +154,16 @@ whether repeated runs are required for the gate. Tracked in #254.
 
 ## 3. Recommended order
 
-1. **B4** — move precision drafts into the catalog and author 6 new clean drafts.
-2. **B5** — Luke reviews holdout difficulty.
-3. **B2/B3** — run the holdout at `1a3b-f3-pins:v2` on the release commit, then
+1. **B5** — Luke reviews holdout difficulty.
+2. **B2/B3** — run the holdout at `1a3b-f3-pins:v2` on the release commit, then
    adjudicate all 18 plus the precision 6.
-4. **B8** — decide whether repeated runs are required, from the holdout data.
-5. Reconcile `main`, then **B1** — mint the v2 config, provider policy, and
+3. **B8** — decide whether repeated runs are required, from the holdout data.
+4. Reconcile `main`, then **B1** — mint the v2 config, provider policy, and
    rollout pin, with a migration and the evidence-producer change.
-6. **B6** — regenerate all 12 evidence sources and freeze the manifest.
-7. **B7** — hosted checks, purge/restore drills, rollback rehearsal.
-8. Human switches `cutoverState` to `active` and runs `release:g1:activate`.
-9. #251 — the seven-day single-Owner real-data evaluation.
+5. **B6** — regenerate all 12 evidence sources and freeze the manifest.
+6. **B7** — hosted checks, purge/restore drills, rollback rehearsal.
+7. Human switches `cutoverState` to `active` and runs `release:g1:activate`.
+8. #251 — the seven-day single-Owner real-data evaluation.
 
 ## 4. Known limitations of this document
 
