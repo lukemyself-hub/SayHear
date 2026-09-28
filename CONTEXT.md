@@ -476,6 +476,8 @@ _Avoid_: Temporal change, Memory Correction, Multiple allowed values
 超过 Predicate Registry 复核周期且没有新的合格跨 Session Evidence 的历史 AI Impression；它停止进入 Recall 与 Profile，但不会被删除或直接重新激活。
 _Avoid_: Forgotten Memory, Contested Memory Claim, Deleted Claim
 
+> 历史术语：以下 Open Loop / Proactive Follow-up 定义只供已归档 G2 数据与决策追溯；当前 G1 不产生或使用这些状态。见 [ADR-0141](docs/adr/0141-g1-only-release-after-g2-retirement.md)。
+
 **Open Loop**:
 由直接 User Evidence 支撑、具有明确到期边界且可被独立关闭的一个具体待发生事项或待确认结果的有期限派生状态；它不属于 Memory Claim 或 Profile。同一现实事件中的多个里程碑只有在各自有直接 User Evidence 且可以独立关闭时才形成不同 Open Loop。用户已经进入对话后，SayHear 可以据此主动表达关心，但不能在对话外发送消息、监督进度或形成任务管理。
 _Avoid_: Unfinished topic, Goal, Reminder, Task

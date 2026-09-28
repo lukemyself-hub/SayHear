@@ -8,7 +8,6 @@ import {
   ENGLISH_LOCALE_PACK_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
-  PROACTIVE_FOLLOWUP_TASK_INSTRUCTION_VERSION,
   PREVIOUS_CANONICAL_PERSONA_VERSION,
   PREVIOUS_CHINESE_LOCALE_PACK_VERSION,
   PREVIOUS_ENGLISH_LOCALE_PACK_VERSION,
@@ -153,18 +152,9 @@ describe("prompt artifact resolution", () => {
         taskInstructionVersion: ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
       },
     });
-    const proactive = resolvePromptArtifacts({
-      generationStage: "proactive_followup",
-      locale: "en-US",
-      policyVersions: {
-        ...supportedVersions,
-        taskInstructionVersion: PROACTIVE_FOLLOWUP_TASK_INSTRUCTION_VERSION,
-      },
-    });
 
     expect(decision.taskInstruction).not.toBe(finalization.taskInstruction);
     expect(finalization.taskInstruction).toContain("Action Finalization Receipt");
-    expect(proactive.taskInstruction).toContain("optional companion segment");
   });
 
   it("fails closed when a stage is pinned with the other stage's instruction", () => {
@@ -181,13 +171,6 @@ describe("prompt artifact resolution", () => {
     expect(() =>
       resolvePromptArtifacts({
         generationStage: "action_finalization",
-        locale: "en-US",
-        policyVersions: supportedVersions,
-      }),
-    ).toThrow(PromptArtifactResolutionError);
-    expect(() =>
-      resolvePromptArtifacts({
-        generationStage: "proactive_followup",
         locale: "en-US",
         policyVersions: supportedVersions,
       }),

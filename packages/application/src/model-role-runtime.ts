@@ -16,10 +16,8 @@ import {
   type RecoveryGate,
 } from "./recovery-gate";
 import {
-  ONE_A_3B_G1_ENABLED_ROLES,
-  ONE_A_3B_G2_BUNDLE_ROLES,
-  ONE_A_3B_G2_ENABLED_ROLES,
   ONE_A_3B_MODEL_ROLES,
+  ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_ROLE_POLICY_VERSION,
   isModelRoleAttemptKind,
   type ModelRoleAttemptKind,
@@ -452,13 +450,7 @@ export type PersistModelRoleAttemptDiscard = Readonly<{
     | "already_settled"
     | "attempt_metadata_mismatch"
     | "recovery_closed"
-    | "runtime_disabled"
-    /**
-     * Issue #207 layer 2c: the optional proactive segment was omitted by
-     * design (invalid output, stale reservation, or a crashed turn reclaimed
-     * by the workflow). Additive only; the G1 rollback path never emits it.
-     */
-    | "segment_abandoned";
+    | "runtime_disabled";
   now: Date;
 }>;
 
@@ -471,8 +463,7 @@ export type RecordedModelRoleAttempt = Readonly<{
     | "already_settled"
     | "attempt_metadata_mismatch"
     | "recovery_closed"
-    | "runtime_disabled"
-    | "segment_abandoned";
+    | "runtime_disabled";
   generationCommandId: GenerationCommandId;
   modelRunAttemptId: ModelRunAttemptId;
   nextModelRunAttemptId?: ModelRunAttemptId;
@@ -489,11 +480,6 @@ export type ModelRoleCommandRepository = Readonly<{
   }>): Promise<ModelRoleAttemptRecovery>;
   verifyActiveG1Release?(input: Readonly<{
     configurations: readonly ModelRoleConfigurationSnapshot[];
-  }>): Promise<void>;
-  verifyActiveG2Release?(input: Readonly<{
-    configurations: readonly ModelRoleConfigurationSnapshot[];
-    manifestFingerprint: string;
-    baseG1ReleaseFingerprint: string;
   }>): Promise<void>;
   validateAttempt(
     input: PersistModelRoleAttemptValidation,
@@ -518,7 +504,6 @@ export type ModelRoleCommandService = Readonly<{
     now: Date;
   }>): Promise<ModelRoleAttemptRecovery>;
   verifyActiveG1Release?(): Promise<void>;
-  verifyActiveG2Release?(): Promise<void>;
   configuration(
     role: OneA3bModelRole,
   ): ModelRoleConfigurationSnapshot | null;
@@ -572,18 +557,13 @@ export type ModelRoleProviderEgress = Readonly<{
   dispatch<T>(input: ModelRoleProviderDispatchInput<T>): Promise<T>;
 }>;
 
-/**
- * Build the role-aware egress port used by the 1A.3b producer roles. G1
- * roles verify the carried-over G1 release; the G2 bundle roles verify the
- * complete G2 bundle (G1 base plus bundle under the linked fingerprints).
- */
+/** Build the role-aware egress port used by the four G1 producer roles. */
 export function createModelRoleProviderEgress(input: Readonly<{
   commandService: Pick<
     ModelRoleCommandService,
     | "claimProviderDispatch"
     | "discardAttempt"
     | "verifyActiveG1Release"
-    | "verifyActiveG2Release"
   >;
   recoveryGate: RecoveryGate;
 }>): ModelRoleProviderEgress {
@@ -591,6 +571,9 @@ export function createModelRoleProviderEgress(input: Readonly<{
     async dispatch<T>(
       dispatchInput: ModelRoleProviderDispatchInput<T>,
     ) {
+      if (!(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(dispatchInput.role)) {
+        throw new ProviderDispatchError("policy_blocked", "Retired model role cannot dispatch to Provider.", false);
+      }
       try {
         await input.recoveryGate.requireOpen(dispatchInput.userId);
       } catch (error) {
@@ -614,20 +597,7 @@ export function createModelRoleProviderEgress(input: Readonly<{
         );
       }
 
-      if (
-        (ONE_A_3B_G2_BUNDLE_ROLES as readonly OneA3bModelRole[]).includes(
-          dispatchInput.role,
-        )
-      ) {
-        if (!input.commandService.verifyActiveG2Release) {
-          throw new ProviderDispatchError(
-            "configuration",
-            `Model role ${dispatchInput.role} has no G2 bundle release verifier.`,
-            false,
-          );
-        }
-        await input.commandService.verifyActiveG2Release();
-      } else if (input.commandService.verifyActiveG1Release) {
+      if (input.commandService.verifyActiveG1Release) {
         await input.commandService.verifyActiveG1Release();
       }
 
@@ -742,34 +712,15 @@ export async function executeModelRoleAttempt(input: Readonly<{
   });
 }
 
-function hasExactRoleSet(
-  roles: readonly OneA3bModelRole[],
-  expected: readonly OneA3bModelRole[],
-): boolean {
-  return (
-    roles.length === expected.length &&
-    expected.every((role) =>
-      (roles as readonly OneA3bModelRole[]).includes(role),
-    )
-  );
-}
-
 export function createModelRoleCommandService(dependencies: Readonly<{
   registry: ModelRoleRegistry;
   repository: ModelRoleCommandRepository;
-  /**
-   * G2 bundle release fingerprints (issue #207 layer 2b). The G1 base pins
-   * keep their carried-over G1 fingerprint binding on the repository; the
-   * bundle pins are verified against the G2 manifest fingerprint with the
-   * stored base-G1 linkage.
-   */
-  g2Release?: Readonly<{
-    manifestFingerprint: string;
-    baseG1ReleaseFingerprint: string;
-  }>;
 }>): ModelRoleCommandService {
   return {
     async admit(input) {
+      if (!(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(input.role)) {
+        throw new Error(`Model role ${input.role} is not admitted in the G1-only runtime.`);
+      }
       const configuration = dependencies.registry.requireConfiguration(input.role);
       const identity = buildModelRoleCommandIdentity(input);
       return dependencies.repository.admit({
@@ -792,40 +743,10 @@ export function createModelRoleCommandService(dependencies: Readonly<{
       if (!dependencies.repository.verifyActiveG1Release) {
         throw new Error("The active G1 release has no database readiness verifier.");
       }
-      // Under a G2 registry only the carried-over G1 subset is verified
-      // here; the bundle roles go through verifyActiveG2Release.
-      const configurations = dependencies.registry.enabledRoles
-        .filter((role) =>
-          (ONE_A_3B_G1_ENABLED_ROLES as readonly OneA3bModelRole[]).includes(role),
-        )
-        .map((role) => dependencies.registry.requireConfiguration(role));
-      await dependencies.repository.verifyActiveG1Release({ configurations });
-    },
-    async verifyActiveG2Release() {
-      if (!dependencies.repository.verifyActiveG2Release) {
-        throw new Error("The active G2 bundle has no database readiness verifier.");
-      }
-      if (!dependencies.g2Release) {
-        throw new Error("The active G2 bundle has no release fingerprint binding.");
-      }
-      if (
-        !hasExactRoleSet(
-          [...dependencies.registry.enabledRoles],
-          ONE_A_3B_G2_ENABLED_ROLES,
-        )
-      ) {
-        throw new Error(
-          `G2 verification requires the complete G2 bundle regime: ${ONE_A_3B_G2_ENABLED_ROLES.join(", ")}.`,
-        );
-      }
       const configurations = dependencies.registry.enabledRoles.map((role) =>
         dependencies.registry.requireConfiguration(role),
       );
-      await dependencies.repository.verifyActiveG2Release({
-        configurations,
-        manifestFingerprint: dependencies.g2Release.manifestFingerprint,
-        baseG1ReleaseFingerprint: dependencies.g2Release.baseG1ReleaseFingerprint,
-      });
+      await dependencies.repository.verifyActiveG1Release({ configurations });
     },
     async validateAttempt(input) {
       const configuration = dependencies.registry.configuration(input.role);

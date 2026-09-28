@@ -47,27 +47,3 @@ export const ONE_A_3B_G1_DEFERRED_ROLES = [
   "bio.write",
   "proactive.followup",
 ] as const satisfies readonly OneA3bModelRole[];
-
-/**
- * 1A.3b G2 (issue #207). The second direct-cutover stage enables Open Loop
- * extraction and Proactive follow-up as one version bundle on top of the
- * switched G1 roles. The two bundle roles merge together and never split;
- * only Bio stays deferred for G3.
- */
-export const ONE_A_3B_G2_BUNDLE_ROLES = [
-  "open_loop.extract",
-  "proactive.followup",
-] as const satisfies readonly OneA3bModelRole[];
-
-export const ONE_A_3B_G2_ENABLED_ROLES = [
-  "episode.build",
-  "open_loop.extract",
-  "reflection.daily",
-  "reflection.weekly",
-  "narrative.validate",
-  "proactive.followup",
-] as const satisfies readonly OneA3bModelRole[];
-
-export const ONE_A_3B_G2_DEFERRED_ROLES = [
-  "bio.write",
-] as const satisfies readonly OneA3bModelRole[];

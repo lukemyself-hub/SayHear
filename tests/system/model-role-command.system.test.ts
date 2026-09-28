@@ -21,20 +21,17 @@ const systemDescribe = testDatabaseUrl ? describe : describe.skip;
 
 const userId = asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc68");
 const now = new Date("2026-09-08T23:40:00.000Z");
-// Bundle-role admission is fail-closed without a G2 regime binding (issue
-// #207): the test seam carries a synthetic G2 manifest fingerprint.
-const G2_FINGERPRINT = `sha256:${"e".repeat(64)}`;
 const configuration: ModelRoleConfigurationSnapshot = {
-  role: "open_loop.extract",
-  configVersion: "system-open-loop:v1",
+  role: "episode.build",
+  configVersion: "system-episode:v1",
   provider: "system-test",
   model: "synthetic-model",
   modelSnapshot: "synthetic-model@fixture",
   promptVersion: "system-prompt:v1",
   schemaVersion: "system-schema:v1",
   rolePolicyVersion: "1a3b-model-role-policy:v1",
-  providerPolicyVersion: "system-open-loop-egress:v1",
-  rolloutPin: "system-open-loop-pin:v1",
+  providerPolicyVersion: "system-episode-egress:v1",
+  rolloutPin: "system-episode-pin:v1",
   freshnessPolicy: "source_valid:v1",
   fallbackMode: "disabled",
   maxTechnicalRetries: 1,
@@ -101,14 +98,13 @@ systemDescribe("1A.3b model role persistence", () => {
     await seededDatabase.pool.query(
       `INSERT INTO model_role_rollout_pins (
          role, rollout_pin, config_version, provider_policy_version,
-         release_fingerprint, status, activated_at
-       ) VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
+         status, activated_at
+       ) VALUES ($1, $2, $3, $4, 'active', $5)`,
       [
         configuration.role,
         configuration.rolloutPin,
         configuration.configVersion,
         configuration.providerPolicyVersion,
-        G2_FINGERPRINT,
         now,
       ],
     );
@@ -118,20 +114,39 @@ systemDescribe("1A.3b model role persistence", () => {
     await database?.dispose();
   });
 
+  it("rejects a retired G2 role before creating a command", async () => {
+    const service = createModelRoleCommandService({
+      registry: createModelRoleRegistry([configuration]),
+      repository: new PostgresModelRoleCommandRepository(database!.pool),
+    });
+    await expect(service.admit({
+      userId,
+      role: "open_loop.extract",
+      intentKey: "retired-role-probe",
+      subjectType: "app_user",
+      subjectId: userId,
+      sourceRevision: 1,
+      sourceSnapshot: "probe:1",
+      inputManifest: [],
+      expectedDataEpoch: 1,
+      now,
+    })).rejects.toThrow("not admitted in the G1-only runtime");
+    const rows = await database!.pool.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM generation_commands WHERE user_id = $1",
+      [userId],
+    );
+    expect(rows.rows[0]?.count).toBe(0);
+  });
+
   it("deduplicates admission, retries once, and keeps the same logical command", async () => {
     const service = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
-      repository: new PostgresModelRoleCommandRepository(
-        database!.pool,
-        undefined,
-        undefined,
-        G2_FINGERPRINT,
-      ),
+      repository: new PostgresModelRoleCommandRepository(database!.pool),
     });
     const input = {
       userId,
       role: configuration.role,
-      intentKey: "open-loop:synthetic:2026-09-08",
+      intentKey: "episode:synthetic:2026-09-08",
       subjectType: "app_user" as const,
       subjectId: userId,
       sourceRevision: 4,
@@ -261,17 +276,12 @@ systemDescribe("1A.3b model role persistence", () => {
   it("discards a late result after the owner epoch advances", async () => {
     const service = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
-      repository: new PostgresModelRoleCommandRepository(
-        database!.pool,
-        undefined,
-        undefined,
-        G2_FINGERPRINT,
-      ),
+      repository: new PostgresModelRoleCommandRepository(database!.pool),
     });
     const command = await service.admit({
       userId,
       role: configuration.role,
-      intentKey: "open-loop:synthetic:late-epoch",
+      intentKey: "episode:synthetic:late-epoch",
       subjectType: "app_user",
       subjectId: userId,
       sourceRevision: 5,

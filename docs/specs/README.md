@@ -17,6 +17,8 @@ Accepted
 
 ## Current specs
 
+- [#193 — Internal Core / Core Flow 1A.3b — current G1-only scope](https://github.com/lukemyself-hub/SayHear/issues/193) — G1 重发与 7 天体验；G2 退出、G3 暂停。
+
 - [#1 — Internal Core / Core Flow 1A.1 — Text Foundation](https://github.com/lukemyself-hub/SayHear/issues/1)
   — Core Flow 1A.1（Internal Core）— `ready-for-agent`
 - [#70 — Internal Core / Core Flow 1A.2P — Persona & Safety](https://github.com/lukemyself-hub/SayHear/issues/70)

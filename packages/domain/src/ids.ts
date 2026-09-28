@@ -122,12 +122,6 @@ export type EpisodeVersionId = string & {
 export type EpisodeCandidateId = string & {
   readonly [episodeCandidateIdBrand]: "EpisodeCandidateId";
 };
-export type OpenLoopId = string & {
-  readonly [openLoopIdBrand]: "OpenLoopId";
-};
-export type OpenLoopVersionId = string & {
-  readonly [openLoopVersionIdBrand]: "OpenLoopVersionId";
-};
 declare const narrativeValidatorRequestIdBrand: unique symbol;
 declare const narrativeValidatorResultIdBrand: unique symbol;
 
@@ -140,8 +134,6 @@ export type NarrativeValidatorResultId = string & {
 declare const episodeIdBrand: unique symbol;
 declare const episodeVersionIdBrand: unique symbol;
 declare const episodeCandidateIdBrand: unique symbol;
-declare const openLoopIdBrand: unique symbol;
-declare const openLoopVersionIdBrand: unique symbol;
 declare const reflectionIdBrand: unique symbol;
 declare const reflectionVersionIdBrand: unique symbol;
 declare const reflectionStatementIdBrand: unique symbol;
@@ -339,14 +331,6 @@ export function asEpisodeCandidateId(value: string): EpisodeCandidateId {
     value,
     "EpisodeCandidateId",
   ) as EpisodeCandidateId;
-}
-
-export function asOpenLoopId(value: string): OpenLoopId {
-  return asOpaqueUuidV7(value, "OpenLoopId") as OpenLoopId;
-}
-
-export function asOpenLoopVersionId(value: string): OpenLoopVersionId {
-  return asOpaqueUuidV7(value, "OpenLoopVersionId") as OpenLoopVersionId;
 }
 
 export function asReflectionId(value: string): ReflectionId {

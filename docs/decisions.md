@@ -92,6 +92,7 @@ Accepted
 - [`0109`](adr/0109-persona-safety-deference-persists-until-immediate-risk-clears.md)：高风险后的 Persona 让位持续到迫近危险解除（已被 0112 取代）
 - [`0112`](adr/0112-persona-safety-posture-is-session-scoped-and-releases-by-clean-turns.md)：Persona 安全姿态按 Daily Session 存活，连续干净 turn 自动解除
 - [`0113`](adr/0113-persona-and-safety-precedes-memory-recall.md)：1A.2P Persona & Safety 先于 Memory & Recall 交付，原 1A.3 拆为 1A.3a / 1A.3b，后续编号不变
+- [`0141`](adr/0141-g1-only-release-after-g2-retirement.md)：当前只重发 G1；G2 退出、G3 暂停，历史三阶段上线不再适用
 - [`0134`](adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)：1A.3b 分三阶段直接切换，已确认的正确性失败立即回滚受影响阶段
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语

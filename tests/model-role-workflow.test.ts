@@ -33,21 +33,6 @@ describe("model-role Workflow envelope", () => {
     ).toThrow("deferred");
   });
 
-  it("admits the G2 extract lane and the proactive crash path", () => {
-    expect(() =>
-      assertModelRoleWorkflowInput({
-        ...baseInput,
-        modelRole: "open_loop.extract",
-      }),
-    ).not.toThrow();
-    expect(() =>
-      assertModelRoleWorkflowInput({
-        ...baseInput,
-        modelRole: "proactive.followup",
-      }),
-    ).not.toThrow();
-  });
-
   it("rejects an attempt envelope that carries private content", () => {
     expect(() =>
       assertModelRoleWorkflowInput({

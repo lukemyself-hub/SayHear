@@ -11,6 +11,12 @@
 
 Archived
 
+## 1A.3b 历史
+
+- [#193 原三阶段 SPEC 正文](specs/issue-193-original-2026-09-27.md)保留缩小范围前的完整合同；当前执行以 Issue 最新正文为准。
+- [G2 归档分支](https://github.com/lukemyself-hub/SayHear/tree/codex/archive-g2-v6)保存 #243 两套冻结校准的原始输出、报告、哈希和失败结论，以及未合并 G2 提交；校验与归档 commit 见 [#243 评论](https://github.com/lukemyself-hub/SayHear/issues/243#issuecomment-5861000654)。
+- 当前交付范围由 [ADR-0141](../adr/0141-g1-only-release-after-g2-retirement.md) 和 [SPEC #193](https://github.com/lukemyself-hub/SayHear/issues/193) 定义。旧 G2 研究只作追溯。
+
 ## 快照
 
 | 文件 | 原用途 | 当前替代 |

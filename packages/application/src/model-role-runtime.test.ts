@@ -1,62 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { asUserId } from "@sayhear/domain";
 
 import {
   assertWorkflowSafe,
   buildModelRoleCommandIdentity,
-  createModelRoleCommandService,
   createModelRoleRegistry,
   ModelRoleConfigurationError,
   ONE_A_3B_F2_PURGE_SURFACE_CONTRACTS,
-  ONE_A_3B_G1_ENABLED_ROLES,
-  ONE_A_3B_G2_BUNDLE_ROLES,
-  ONE_A_3B_G2_ENABLED_ROLES,
   ONE_A_3B_MODEL_ROLES,
-  ONE_A_3B_ROLE_POLICIES,
   planModelRoleRecovery,
-  type ModelRoleCommandRepository,
-  type ModelRoleConfigurationSnapshot,
-  type OneA3bModelRole,
 } from "./index";
-
-function g2Configuration(role: OneA3bModelRole): ModelRoleConfigurationSnapshot {
-  const policy = ONE_A_3B_ROLE_POLICIES[role];
-  return {
-    role,
-    configVersion: `${role}:config:v1`,
-    provider: "synthetic-provider",
-    model: "synthetic-model",
-    modelSnapshot: "synthetic-model@2026-09-15",
-    promptVersion: `${role}-prompt:v1`,
-    schemaVersion: `${role}-schema:v1`,
-    rolePolicyVersion: "1a3b-model-role-policy:v1",
-    providerPolicyVersion: `${role}-egress:v1`,
-    rolloutPin: `${role}-rollout:v1`,
-    freshnessPolicy: policy.freshnessPolicy,
-    fallbackMode: "disabled",
-    maxTechnicalRetries: policy.maxTechnicalRetries,
-    maxSemanticRepairs: policy.maxSemanticRepairs,
-    parameterSnapshot: { temperature: 0 },
-  };
-}
-
-function g2Service(
-  roles: readonly OneA3bModelRole[],
-  repository: Pick<
-    ModelRoleCommandRepository,
-    "verifyActiveG1Release" | "verifyActiveG2Release"
-  >,
-) {
-  return createModelRoleCommandService({
-    registry: createModelRoleRegistry(roles.map(g2Configuration)),
-    repository: repository as ModelRoleCommandRepository,
-    g2Release: {
-      manifestFingerprint: `sha256:${"2".repeat(64)}`,
-      baseG1ReleaseFingerprint: `sha256:${"1".repeat(64)}`,
-    },
-  });
-}
 
 const userId = asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc68");
 
@@ -204,71 +158,6 @@ describe("1A.3b model role runtime", () => {
       expect(entry.independentVerifier).not.toBe("");
       expect(entry.restoreReapplyPolicy).not.toBe("");
     }
-  });
-
-  it("verifies the complete G2 bundle with both release fingerprints", async () => {
-    const verifyActiveG2Release = vi.fn(
-      async (_input: {
-        configurations: readonly ModelRoleConfigurationSnapshot[];
-        manifestFingerprint: string;
-        baseG1ReleaseFingerprint: string;
-      }) => {},
-    );
-    const service = g2Service(ONE_A_3B_G2_ENABLED_ROLES, {
-      verifyActiveG2Release,
-    });
-
-    await service.verifyActiveG2Release?.();
-    expect(verifyActiveG2Release).toHaveBeenCalledOnce();
-    const input = verifyActiveG2Release.mock.calls[0]?.[0];
-    expect(input?.manifestFingerprint).toBe(`sha256:${"2".repeat(64)}`);
-    expect(input?.baseG1ReleaseFingerprint).toBe(`sha256:${"1".repeat(64)}`);
-    expect(
-      [...(input?.configurations ?? [])].map((entry) => entry.role).sort(),
-    ).toEqual([...ONE_A_3B_G2_ENABLED_ROLES].sort());
-  });
-
-  it("refuses G2 verification unless the registry holds exactly the bundle regime", async () => {
-    const verifyActiveG2Release = vi.fn(
-      async (_input: {
-        configurations: readonly ModelRoleConfigurationSnapshot[];
-        manifestFingerprint: string;
-        baseG1ReleaseFingerprint: string;
-      }) => {},
-    );
-    const g1Only = g2Service(ONE_A_3B_G1_ENABLED_ROLES, {
-      verifyActiveG2Release,
-    });
-    await expect(g1Only.verifyActiveG2Release?.()).rejects.toThrow(
-      "complete G2 bundle",
-    );
-    expect(verifyActiveG2Release).not.toHaveBeenCalled();
-
-    const bundleOnly = g2Service(ONE_A_3B_G2_BUNDLE_ROLES, {
-      verifyActiveG2Release,
-    });
-    await expect(bundleOnly.verifyActiveG2Release?.()).rejects.toThrow(
-      "complete G2 bundle",
-    );
-    expect(verifyActiveG2Release).not.toHaveBeenCalled();
-  });
-
-  it("keeps verifying the carried-over G1 subset under an active G2 registry", async () => {
-    const verifyActiveG1Release = vi.fn(
-      async (_input: {
-        configurations: readonly ModelRoleConfigurationSnapshot[];
-      }) => {},
-    );
-    const service = g2Service(ONE_A_3B_G2_ENABLED_ROLES, {
-      verifyActiveG1Release,
-    });
-
-    await service.verifyActiveG1Release?.();
-    expect(verifyActiveG1Release).toHaveBeenCalledOnce();
-    const input = verifyActiveG1Release.mock.calls[0]?.[0];
-    expect(
-      [...(input?.configurations ?? [])].map((entry) => entry.role).sort(),
-    ).toEqual([...ONE_A_3B_G1_ENABLED_ROLES].sort());
   });
 
   it("allows only content-free model role workflow metadata", () => {

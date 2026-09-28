@@ -1,19 +1,11 @@
 import {
   asConversationEventRevisionId,
-  PROACTIVE_FOLLOWUP_MODEL_DISPOSITION_SIGNALS,
   ProviderDispatchError,
   type EpisodeProposal,
   type EpisodeBuildModelProvider,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidatorModelOutput,
   type NarrativeValidationModelProvider,
-  type OpenLoopClosureProposal,
-  type OpenLoopExtractModelOutput,
-  type OpenLoopExtractModelProvider,
-  type OpenLoopProposal,
-  type ProactiveFollowupDispositionModelOutput,
-  type ProactiveFollowupModelProvider,
-  type ProactiveFollowupSegmentOutput,
   type ReflectionGenerationModelOutput,
   type ReflectionGenerationModelProvider,
 } from "@sayhear/application";
@@ -26,18 +18,12 @@ export type ResponsesApiAdapter = Readonly<{
   baseUrl: string;
   provider: "openai" | "deepseek";
   timeoutMs: number;
-  /** Test-only transport override; production always uses global fetch. */
-  fetchImplementation?: typeof fetch;
 }>;
 
 export type OneA3bRuntimeRoleProviders = Readonly<{
   episodeBuildProvider: EpisodeBuildModelProvider;
   reflectionProvider: ReflectionGenerationModelProvider;
   narrativeValidationProvider: NarrativeValidationModelProvider;
-  /** Present only when the active regime carries an evaluated bundle config. */
-  openLoopExtractProvider?: OpenLoopExtractModelProvider;
-  /** Present only when the active regime carries an evaluated bundle config. */
-  proactiveFollowupProvider?: ProactiveFollowupModelProvider;
 }>;
 
 const SYNTHETIC_REQUEST_REVISION_ID = asConversationEventRevisionId(
@@ -257,106 +243,6 @@ function isNarrativeProposition(value: unknown): boolean {
   );
 }
 
-const OPEN_LOOP_KINDS = new Set(["upcoming_event", "awaited_outcome"]);
-const OPEN_LOOP_TIME_PRECISIONS = new Set([
-  "instant",
-  "date",
-  "range",
-  "approximate",
-  "unknown",
-]);
-const OPEN_LOOP_TERMINAL_STATUSES = new Set([
-  "occurred",
-  "resolved",
-  "canceled",
-  "expired",
-  "retracted",
-]);
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value !== "";
-}
-
-function isOptionalString(value: unknown): boolean {
-  return value === undefined || value === null || typeof value === "string";
-}
-
-function isOpenLoopExpectedWindow(value: unknown): boolean {
-  if (value === undefined || value === null) return true;
-  if (!isRecord(value)) return false;
-  return (
-    (value.startAt === null || typeof value.startAt === "string") &&
-    (value.endAt === null || typeof value.endAt === "string") &&
-    typeof value.precision === "string" &&
-    OPEN_LOOP_TIME_PRECISIONS.has(value.precision) &&
-    (value.timezone === null ||
-      value.timezone === undefined ||
-      typeof value.timezone === "string")
-  );
-}
-
-function isOpenLoopProposal(value: unknown): value is OpenLoopProposal {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.kind === "string" &&
-    OPEN_LOOP_KINDS.has(value.kind) &&
-    isNonEmptyString(value.evidenceItemId) &&
-    isNonEmptyString(value.evidenceRevisionId) &&
-    typeof value.hasRealAnchor === "boolean" &&
-    typeof value.isTaskLike === "boolean" &&
-    isOptionalString(value.userTimeExpression) &&
-    (value.expectedWindow === undefined ||
-      isOpenLoopExpectedWindow(value.expectedWindow)) &&
-    isOptionalString(value.sourceClaimVersionId) &&
-    isOptionalString(value.sourceEpisodeVersionId) &&
-    isOptionalString(value.explicitLoopBinding) &&
-    isOptionalString(value.canonicalClaimKey) &&
-    Number.isSafeInteger(value.proposalIndex) &&
-    (value.proposalIndex as number) >= 0
-  );
-}
-
-function isOpenLoopClosure(value: unknown): value is OpenLoopClosureProposal {
-  if (!isRecord(value)) return false;
-  return (
-    isNonEmptyString(value.targetOpenLoopId) &&
-    typeof value.proposedStatus === "string" &&
-    OPEN_LOOP_TERMINAL_STATUSES.has(value.proposedStatus) &&
-    isNonEmptyString(value.closureEvidenceRevisionId) &&
-    typeof value.closureCommittedAt === "string" &&
-    typeof value.entailsTerminal === "boolean" &&
-    typeof value.explicitCancel === "boolean" &&
-    typeof value.targetKind === "string" &&
-    OPEN_LOOP_KINDS.has(value.targetKind)
-  );
-}
-
-function asOpenLoopExtractOutput(
-  value: unknown,
-): OpenLoopExtractModelOutput {
-  const parsed = asObject(value, "open_loop.extract");
-  if (
-    !Array.isArray(parsed.proposals) ||
-    !parsed.proposals.every(isOpenLoopProposal) ||
-    !Array.isArray(parsed.closures) ||
-    !parsed.closures.every(isOpenLoopClosure)
-  ) {
-    throw new ProviderDispatchError(
-      "invalid_response",
-      "open_loop.extract returned an invalid output schema.",
-    );
-  }
-  const proposals = parsed.proposals as readonly OpenLoopProposal[];
-  const indices = proposals.map((proposal) => proposal.proposalIndex);
-  if (new Set(indices).size !== indices.length) {
-    throw new ProviderDispatchError(
-      "invalid_response",
-      "open_loop.extract returned duplicate proposal indices.",
-    );
-  }
-  return parsed as OpenLoopExtractModelOutput;
-}
-
 function asNarrativeOutput(value: unknown): NarrativeValidatorModelOutput {
   const parsed = asObject(value, "narrative.validate");
   if (
@@ -370,66 +256,6 @@ function asNarrativeOutput(value: unknown): NarrativeValidatorModelOutput {
     );
   }
   return parsed as NarrativeValidatorModelOutput;
-}
-
-const PROACTIVE_EXPRESSION_KINDS = new Set(["question", "acknowledgment"]);
-const PROACTIVE_TARGET_KINDS = new Set(["open_loop", "memory_claim"]);
-
-function isProactiveTargetRef(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.targetKind === "string" &&
-    PROACTIVE_TARGET_KINDS.has(value.targetKind) &&
-    isNonEmptyString(value.targetId) &&
-    isNonEmptyString(value.targetVersionId)
-  );
-}
-
-function asProactiveSegmentOutput(
-  value: unknown,
-): ProactiveFollowupSegmentOutput {
-  const parsed = asObject(value, "proactive.followup");
-  if (
-    !isNonEmptyString(parsed.content) ||
-    typeof parsed.expressionKind !== "string" ||
-    !PROACTIVE_EXPRESSION_KINDS.has(parsed.expressionKind) ||
-    !isProactiveTargetRef(parsed.targetRef)
-  ) {
-    throw new ProviderDispatchError(
-      "invalid_response",
-      "proactive.followup returned an invalid output schema.",
-    );
-  }
-  return parsed as ProactiveFollowupSegmentOutput;
-}
-
-function isProactiveDispositionLocator(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return (
-    value.kind === "assistant_event_revision" &&
-    isNonEmptyString(value.assistantEventRevisionId) &&
-    value.segment === "proactive_followup" &&
-    value.ordinal === 0
-  );
-}
-
-function asProactiveDispositionOutput(
-  value: unknown,
-): ProactiveFollowupDispositionModelOutput {
-  const parsed = asObject(value, "proactive.followup");
-  if (
-    typeof parsed.signal !== "string" ||
-    !(
-      PROACTIVE_FOLLOWUP_MODEL_DISPOSITION_SIGNALS as readonly string[]
-    ).includes(parsed.signal) ||
-    !isProactiveDispositionLocator(parsed.finalTextLocator)
-  ) {
-    throw new ProviderDispatchError(
-      "invalid_response",
-      "proactive.followup returned an invalid output schema.",
-    );
-  }
-  return parsed as ProactiveFollowupDispositionModelOutput;
 }
 
 function jsonInstructions(
@@ -453,9 +279,6 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
     apiKey: adapter.apiKey,
     baseUrl: adapter.baseUrl,
     timeoutMs: adapter.timeoutMs,
-    ...(adapter.fetchImplementation
-      ? { fetchImplementation: adapter.fetchImplementation }
-      : {}),
   });
 
   return async function askJson(
@@ -509,12 +332,9 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
 }
 
 /**
- * Construct the real Responses API adapters for the G1 roles plus the G2
- * `open_loop.extract` and `proactive.followup` bundle roles when the active
- * regime carries their evaluated configurations. The manifest supplies every
- * role's frozen model identity; this factory only supplies transport
- * credentials and refuses cross-provider configuration. A G1-only regime
- * leaves both bundle lanes closed (no bundle providers) exactly as before.
+ * Construct the real Responses API adapters for the four G1 roles. The
+ * manifest supplies every role's frozen model identity; this factory only
+ * supplies transport credentials and refuses cross-provider configuration.
  */
 export function createRuntimeOneA3bRoleProviders(input: {
   adapter?: ResponsesApiAdapter;
@@ -635,85 +455,9 @@ export function createRuntimeOneA3bRoleProviders(input: {
     },
   };
 
-  const openLoopConfiguration = input.configurations.find(
-    (candidate) => candidate.role === "open_loop.extract",
-  );
-  if (openLoopConfiguration) {
-    if (!isResponsesApiProvider(openLoopConfiguration.provider)) {
-      throw new Error(
-        "G2 role open_loop.extract has no supported Responses API provider.",
-      );
-    }
-    if (!jsonCallers.has(openLoopConfiguration.provider)) {
-      throw new Error(
-        "G2 runtime has no credential adapter for the configured open_loop.extract provider.",
-      );
-    }
-  }
-  const openLoopExtractProvider: OpenLoopExtractModelProvider | undefined =
-    openLoopConfiguration
-      ? {
-          role: "open_loop.extract",
-          async extractProposals(request) {
-            return asOpenLoopExtractOutput(
-              await askJson(
-                openLoopConfiguration,
-                request,
-                "Given the frozen user utterance, evidence spans, and currently open loops, return an object with proposals and closures arrays. Each proposal must contain kind, evidenceItemId, evidenceRevisionId, hasRealAnchor, isTaskLike, and proposalIndex, and may contain userTimeExpression, expectedWindow, sourceClaimVersionId, sourceEpisodeVersionId, explicitLoopBinding, or canonicalClaimKey. kind must be upcoming_event or awaited_outcome. Never propose reminders, goals, tasks, unfinished topics, or emotions; a dated obligation is task-like even with a date. expectedWindow precision must be one of instant, date, range, approximate, unknown. Cite only supplied evidence IDs and never invent IDs or facts. proposalIndex must be unique starting at 0. Each closure must contain targetOpenLoopId, proposedStatus, closureEvidenceRevisionId, closureCommittedAt, entailsTerminal, explicitCancel, and targetKind; only assert closures against the supplied open loops when the user evidence necessarily entails the terminal state, and require explicit cancel language for canceled. When uncertain, return empty arrays.",
-                request.locale || "en-US",
-              ),
-            );
-          },
-        }
-      : undefined;
-
-  const proactiveConfiguration = input.configurations.find(
-    (candidate) => candidate.role === "proactive.followup",
-  );
-  if (proactiveConfiguration) {
-    if (!isResponsesApiProvider(proactiveConfiguration.provider)) {
-      throw new Error(
-        "G2 role proactive.followup has no supported Responses API provider.",
-      );
-    }
-    if (!jsonCallers.has(proactiveConfiguration.provider)) {
-      throw new Error(
-        "G2 runtime has no credential adapter for the configured proactive.followup provider.",
-      );
-    }
-  }
-  const proactiveFollowupProvider: ProactiveFollowupModelProvider | undefined =
-    proactiveConfiguration
-      ? {
-          role: "proactive.followup",
-          async generateSegment(request) {
-            return asProactiveSegmentOutput(
-              await askJson(
-                proactiveConfiguration,
-                request,
-                "Given the frozen main response, the pinned follow-up target, and the opportunity, return an object with content, expressionKind, and targetRef. expressionKind must be question or acknowledgment: an open loop normally invites one concise update question, while a memory claim defaults to an acknowledgment unless its evidence supports a concrete answerable development. A question must contain exactly one question; an acknowledgment must contain none. targetRef must echo the supplied targetRef object exactly, keeping all three fields. Keep the expression short and natural; for sensitive targets keep it gentle, brief, and answer-optional without ritual disclaimers. Never invent a recent event to manufacture a question. If no appropriate expression exists, return a brief caring acknowledgment without a question.",
-                request.locale || "en-US",
-              ),
-            );
-          },
-          async classifyDisposition(request) {
-            return asProactiveDispositionOutput(
-              await askJson(
-                proactiveConfiguration,
-                request,
-                "Given the user's next message and the committed proactive segment, return an object with signal and finalTextLocator. signal must be one of no_stop_signal, short_response, evaded, refused, topic_changed. A brief but complete answer is still short_response. Ignoring the follow-up while continuing elsewhere is topic_changed. A blanket request to stop questions is refused. Otherwise return no_stop_signal. finalTextLocator must echo the supplied finalTextLocator exactly.",
-                request.locale || "en-US",
-              ),
-            );
-          },
-        }
-      : undefined;
-
   return {
     episodeBuildProvider,
     reflectionProvider,
     narrativeValidationProvider,
-    ...(openLoopExtractProvider ? { openLoopExtractProvider } : {}),
-    ...(proactiveFollowupProvider ? { proactiveFollowupProvider } : {}),
   };
 }

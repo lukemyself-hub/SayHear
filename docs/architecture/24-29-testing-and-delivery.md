@@ -1,5 +1,7 @@
 # 测试、交付顺序与升级门槛
 
+> 当前 1A.3b 执行范围以 [ADR-0141](../adr/0141-g1-only-release-after-g2-retirement.md) 与 [SPEC #193](https://github.com/lukemyself-hub/SayHear/issues/193) 为准：只重发 G1。本文下方涉及 Open Loop、对话内 Proactive Follow-up、Bio 写作或三阶段 G4 的段落保留为历史设计，不授权当前实现、上线或验收。G1 的普通 Memory Recall、Curiosity Stop Signal、Episode、Reflection、治理、Inspector 与共享叙事验证继续适用。
+
 ## TL;DR
 
 - 测试覆盖领域不变量、集成、端到端、Replay、隐私与故障注入。
