@@ -6,6 +6,12 @@ import {
 } from "../blind-pairwise/protocol";
 
 export const F3_CATALOG_VERSION = "1a3b-f3-fixtures:v1" as const;
+/**
+ * A separately authored catalog for the #252 acceptance holdout. It is a
+ * distinct version rather than a re-run of the spent catalog, so the two can
+ * never be confused in release evidence.
+ */
+export const F3_HOLDOUT_CATALOG_VERSION = "1a3b-f3-holdout-fixtures:v1" as const;
 export const F3_MANIFEST_VERSION = "1a3b-f3-manifest:v1" as const;
 export const F3_RUN_VERSION = "1a3b-f3-synthetic-run:v1" as const;
 export const F3_REVIEW_PACKAGE_VERSION = "1a3b-f3-review-package:v1" as const;
@@ -179,7 +185,7 @@ export type FixtureCatalog = Readonly<{
   sharedInputs: Readonly<Record<string, FrozenSharedInput>>;
   synthetic: true;
   syntheticNotice: string;
-  version: typeof F3_CATALOG_VERSION;
+  version: typeof F3_CATALOG_VERSION | typeof F3_HOLDOUT_CATALOG_VERSION;
 }>;
 
 export type SampleCandidate = Readonly<{
