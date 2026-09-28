@@ -243,6 +243,25 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
     });
   });
 
+  it("reads a schema violation near the exhausted budget as output_budget_exhausted", async () => {
+    // The same inference the parse path uses: a body that parsed but does not
+    // satisfy the frozen schema after spending most of the cap is far more
+    // likely truncated than schema-violating, and must not send the next
+    // versioned configuration at the schema.
+    stubResponsesApi([
+      completedEvent({
+        outputTokens: 3900,
+        text: JSON.stringify({ propositions: "wrong" }),
+      }),
+    ]);
+
+    expect((await validateAndCatch()).failure).toMatchObject({
+      kind: "output_budget_exhausted",
+      outputTokens: 3900,
+      providerReason: null,
+    });
+  });
+
   it("propagates a transport-proven budget exhaustion unchanged", async () => {
     stubResponsesApi([
       'event: response.incomplete\r\ndata: {"type":"response.incomplete","response":{"id":"resp_truncated","model":"deepseek-v4-flash","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":900,"output_tokens":4000}}}\r\n\r\n',

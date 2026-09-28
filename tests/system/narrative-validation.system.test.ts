@@ -737,7 +737,7 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
       providerFor(() => {
         throw new ProviderDispatchError(
           "invalid_response",
-          "The Provider stopped because the pinned output budget was exhausted.",
+          "The Provider reported that it stopped at the pinned output budget.",
           true,
           {
             kind: "output_budget_exhausted",

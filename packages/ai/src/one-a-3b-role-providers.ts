@@ -367,18 +367,29 @@ type JsonCallUsage = Readonly<{
  */
 const BUDGET_UTILIZATION_INFERENCE_FLOOR = 0.9;
 
+/**
+ * Whether the call spent enough of the frozen cap to be in the truncation
+ * regime. Shared by the parse path and the typed-read path so a body that
+ * fails either one is judged the same way — otherwise a truncation that still
+ * happened to parse would be blamed on the output schema.
+ */
+function budgetUtilized(
+  configuration: ModelRoleConfigurationSnapshot,
+  usage: JsonCallUsage,
+): boolean {
+  const cap = configuration.parameterSnapshot.maxOutputTokens;
+  return (
+    typeof cap === "number" &&
+    usage.outputTokens !== null &&
+    usage.outputTokens >= Math.floor(cap * BUDGET_UTILIZATION_INFERENCE_FLOOR)
+  );
+}
+
 function outputFailureKind(
   configuration: ModelRoleConfigurationSnapshot,
   usage: JsonCallUsage,
 ): ProviderResponseFailure["kind"] {
-  const cap = configuration.parameterSnapshot.maxOutputTokens;
-  if (
-    typeof cap === "number" &&
-    usage.outputTokens !== null &&
-    usage.outputTokens >= Math.floor(cap * BUDGET_UTILIZATION_INFERENCE_FLOOR)
-  ) {
-    return "output_budget_exhausted";
-  }
+  if (budgetUtilized(configuration, usage)) return "output_budget_exhausted";
   return usage.outputLength === 0 ? "empty_output" : "parse_failed";
 }
 
@@ -441,8 +452,10 @@ export function createRuntimeOneA3bRoleProviders(input: {
   /**
    * Issue #252: a parseable body that fails the frozen output schema is a
    * fourth, distinct remedy (tighten or correct the schema) and can only be
-   * proven at the typed read, so the classification is attached here. A
-   * failure that already carries a cause keeps it.
+   * proven at the typed read, so the classification is attached here. It
+   * carries the same budget inference as the parse path — a near-exhausted
+   * call that happened to parse is still far more likely truncated than
+   * schema-violating — and a failure that already carries a cause keeps it.
    */
   const askTypedJson = async <Output>(
     configuration: ModelRoleConfigurationSnapshot,
@@ -465,7 +478,13 @@ export function createRuntimeOneA3bRoleProviders(input: {
           error.category,
           error.message,
           error.settlesAttempt,
-          { ...usage, kind: "schema_mismatch", providerReason: null },
+          {
+            ...usage,
+            kind: budgetUtilized(configuration, usage)
+              ? "output_budget_exhausted"
+              : "schema_mismatch",
+            providerReason: null,
+          },
         );
       }
       throw error;
