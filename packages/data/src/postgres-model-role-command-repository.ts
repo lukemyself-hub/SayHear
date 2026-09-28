@@ -18,8 +18,6 @@ import type {
 import {
   isModelRoleAttemptKind,
   ONE_A_3B_G1_ENABLED_ROLES,
-  ONE_A_3B_G2_BUNDLE_ROLES,
-  ONE_A_3B_G2_ENABLED_ROLES,
 } from "@sayhear/application";
 import {
   asGenerationCommandId,
@@ -35,7 +33,7 @@ import type { Pool, PoolClient, QueryResultRow } from "pg";
 import { createUuidV7 } from "./uuid-v7";
 
 export class ModelRoleAdmissionRejectedError extends Error {
-  public constructor(public readonly reason: "owner" | "epoch" | "rollout") {
+  public constructor(public readonly reason: "owner" | "epoch" | "rollout" | "retired_role") {
     super(`1A.3b model role admission rejected: ${reason}.`);
     this.name = "ModelRoleAdmissionRejectedError";
   }
@@ -119,18 +117,6 @@ function hasExactG1RoleSet(roles: readonly OneA3bModelRole[]): boolean {
   return (
     roles.length === ONE_A_3B_G1_ENABLED_ROLES.length &&
     ONE_A_3B_G1_ENABLED_ROLES.every((role) => roles.includes(role))
-  );
-}
-
-/**
- * 1A.3b G2 (issue #207). The second direct-cutover stage binds Open Loop
- * extraction and Proactive follow-up as one version bundle on top of the
- * switched G1 roles; only Bio stays deferred for G3.
- */
-function hasExactG2BundleSet(roles: readonly OneA3bModelRole[]): boolean {
-  return (
-    roles.length === ONE_A_3B_G2_BUNDLE_ROLES.length &&
-    ONE_A_3B_G2_BUNDLE_ROLES.every((role) => roles.includes(role))
   );
 }
 
@@ -344,7 +330,6 @@ type G1SchemaContract = Pick<OneA3bG1ReleaseManifest["schema"], "migrations" | "
 async function assertG1SchemaContract(
   client: PoolClient,
   schemaContract: G1SchemaContract | undefined,
-  stage: "G1" | "G2" = "G1",
 ): Promise<void> {
   if (!schemaContract) return;
   const applied = await client.query<{
@@ -365,7 +350,7 @@ async function assertG1SchemaContract(
     );
   if (!matches) {
     throw new Error(
-      `Database schema does not match the frozen ${stage} migration contract ${schemaContract.fingerprint}.`,
+      `Database schema does not match the frozen G1 migration contract ${schemaContract.fingerprint}.`,
     );
   }
 }
@@ -567,29 +552,7 @@ export class PostgresModelRoleCommandRepository
     private readonly pool: Pool,
     private readonly schemaContract?: G1SchemaContract,
     private readonly releaseFingerprint?: string,
-    /**
-     * G2 bundle manifest fingerprint (issue #207 layer 2b). The G1 base
-     * pins keep their carried-over G1 fingerprint binding; only the two
-     * bundle roles match against this fingerprint. Absent means no G2
-     * regime: any bundle-role admission, validation, or result recording
-     * fails closed.
-     */
-    private readonly g2ReleaseFingerprint?: string,
   ) {}
-
-  /**
-   * Stage-scoped release fingerprint for pin matching. G1 roles always use
-   * the constructor (G1) binding; bundle roles use the G2 binding and fail
-   * closed when the deployment has no G2 regime.
-   */
-  private releaseFingerprintForRole(role: OneA3bModelRole): string | undefined {
-    if (
-      (ONE_A_3B_G2_BUNDLE_ROLES as readonly string[]).includes(role)
-    ) {
-      return this.g2ReleaseFingerprint;
-    }
-    return this.releaseFingerprint;
-  }
 
   private async assertActiveG1Release(
     client: PoolClient,
@@ -644,50 +607,6 @@ export class PostgresModelRoleCommandRepository
     }
   }
 
-  /**
-   * Assert the G2 bundle pins are active under the given G2 release before
-   * they can be revoked. Unlike the G1 assertion this deliberately does not
-   * require the G1 base pins to still be active: per ADR-0134 each stage
-   * rolls back independently, and pin revocation never touches
-   * suppression/use history.
-   */
-  private async assertActiveG2Bundle(
-    client: PoolClient,
-    configurations: readonly ModelRoleConfigurationSnapshot[],
-  ): Promise<void> {
-    if (!hasExactG2BundleSet(configurations.map((configuration) => configuration.role))) {
-      throw new Error(
-        `G2 release must contain the complete Open Loop / Proactive bundle: ${ONE_A_3B_G2_BUNDLE_ROLES.join(", ")}.`,
-      );
-    }
-    const releaseFingerprint =
-      this.g2ReleaseFingerprint ?? this.releaseFingerprint;
-    if (!releaseFingerprint || !/^sha256:[a-f0-9]{64}$/.test(releaseFingerprint)) {
-      throw new Error("G2 active rollout pins are missing their release fingerprint binding.");
-    }
-    await assertG1SchemaContract(client, this.schemaContract, "G2");
-    for (const configuration of configurations) {
-      const rollout = await lockActiveRollout(
-        client,
-        configuration.role,
-        configuration.rolloutPin,
-      );
-      if (
-        !rollout ||
-        !rolloutMatchesConfiguration(
-          rollout,
-          configuration.role,
-          configuration,
-          releaseFingerprint,
-        )
-      ) {
-        throw new Error(
-          `Active G2 rollout pin for ${configuration.role} does not match the release manifest.`,
-        );
-      }
-    }
-  }
-
   public async verifyActiveG1Release(input: Readonly<{
     configurations: readonly ModelRoleConfigurationSnapshot[];
   }>): Promise<void> {
@@ -695,74 +614,6 @@ export class PostgresModelRoleCommandRepository
     try {
       await client.query("BEGIN");
       await this.assertActiveG1Release(client, input.configurations);
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  /**
-   * Dispatch-time G2 bundle verification (issue #207 layer 2b). The
-   * carried-over G1 subset must still match its configs under the linked
-   * base-G1 fingerprint, and the bundle must match its configs under the
-   * G2 manifest fingerprint. The fingerprints ride on the call (not the
-   * constructor) because one repository serves both stages at runtime.
-   */
-  public async verifyActiveG2Release(input: Readonly<{
-    configurations: readonly ModelRoleConfigurationSnapshot[];
-    manifestFingerprint: string;
-    baseG1ReleaseFingerprint: string;
-  }>): Promise<void> {
-    const roles = input.configurations.map((configuration) => configuration.role);
-    if (
-      input.configurations.length !== ONE_A_3B_G2_ENABLED_ROLES.length ||
-      !hasExactG1RoleSet(roles.filter((role) => (ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(role))) ||
-      !hasExactG2BundleSet(roles.filter((role) => (ONE_A_3B_G2_BUNDLE_ROLES as readonly string[]).includes(role)))
-    ) {
-      throw new Error(
-        `G2 verification requires the complete G2 bundle regime: ${ONE_A_3B_G2_ENABLED_ROLES.join(", ")}.`,
-      );
-    }
-    if (
-      !/^sha256:[a-f0-9]{64}$/.test(input.manifestFingerprint) ||
-      !/^sha256:[a-f0-9]{64}$/.test(input.baseG1ReleaseFingerprint)
-    ) {
-      throw new Error(
-        "G2 verification requires the G2 manifest fingerprint and the linked base G1 fingerprint.",
-      );
-    }
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      await assertG1SchemaContract(client, this.schemaContract, "G2");
-      for (const configuration of input.configurations) {
-        const expectedFingerprint = (
-          ONE_A_3B_G2_BUNDLE_ROLES as readonly string[]
-        ).includes(configuration.role)
-          ? input.manifestFingerprint
-          : input.baseG1ReleaseFingerprint;
-        const rollout = await lockActiveRollout(
-          client,
-          configuration.role,
-          configuration.rolloutPin,
-        );
-        if (
-          !rollout ||
-          !rolloutMatchesConfiguration(
-            rollout,
-            configuration.role,
-            configuration,
-            expectedFingerprint,
-          )
-        ) {
-          throw new Error(
-            `Active G2 release pin for ${configuration.role} does not match the release manifest.`,
-          );
-        }
-      }
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -1140,229 +991,10 @@ export class PostgresModelRoleCommandRepository
   }
 
   /**
-   * Provision and activate the G2 Open Loop / Proactive bundle on top of the
-   * switched G1 stage. The base stage must still hold the complete G1 pin
-   * set under the linked base-G1 fingerprint; otherwise the bundle cannot
-   * cut over (ADR-0134: G1 → G2 → G3). Re-binding the same bundle pins
-   * under the same G2 fingerprint is idempotent, mirroring G1.
-   */
-  public async bindActiveG2Release(input: Readonly<{
-    configurations: readonly ModelRoleConfigurationSnapshot[];
-    manifestFingerprint: string;
-    baseG1ReleaseFingerprint: string;
-    now: Date;
-  }>): Promise<number> {
-    if (
-      !hasExactG2BundleSet(
-        input.configurations.map((configuration) => configuration.role),
-      ) ||
-      !/^sha256:[a-f0-9]{64}$/.test(input.manifestFingerprint) ||
-      !/^sha256:[a-f0-9]{64}$/.test(input.baseG1ReleaseFingerprint)
-    ) {
-      throw new Error(
-        "G2 activation requires the complete Open Loop / Proactive bundle, a valid manifest fingerprint, and the linked base G1 fingerprint.",
-      );
-    }
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
-      await assertG1SchemaContract(client, this.schemaContract, "G2");
-      const active = await client.query<{
-        role: string;
-        rollout_pin: string;
-        release_fingerprint: string | null;
-      }>(
-        `SELECT role, rollout_pin, release_fingerprint
-         FROM model_role_rollout_pins
-         WHERE status = 'active'
-         FOR UPDATE`,
-        [],
-      );
-      const basePins = active.rows.filter((row) =>
-        (ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(row.role),
-      );
-      if (
-        basePins.length !== ONE_A_3B_G1_ENABLED_ROLES.length ||
-        basePins.some(
-          (row) => row.release_fingerprint !== input.baseG1ReleaseFingerprint,
-        )
-      ) {
-        throw new Error(
-          "G2 activation requires the complete switched G1 pin set under the linked base release.",
-        );
-      }
-      const bundleActive = active.rows.filter((row) =>
-        (ONE_A_3B_G2_BUNDLE_ROLES as readonly string[]).includes(row.role),
-      );
-      if (bundleActive.length > 0) {
-        const requestedPins = new Map(
-          input.configurations.map((configuration) => [
-            configuration.role,
-            configuration.rolloutPin,
-          ]),
-        );
-        if (
-          bundleActive.length !== ONE_A_3B_G2_BUNDLE_ROLES.length ||
-          bundleActive.some(
-            (row) => requestedPins.get(row.role as OneA3bModelRole) !== row.rollout_pin,
-          )
-        ) {
-          throw new Error(
-            "G2 activation refuses a partial or conflicting active bundle pin set.",
-          );
-        }
-      }
-
-      for (const configuration of input.configurations) {
-        await client.query(
-          `INSERT INTO model_role_configurations (
-             role, config_version, provider, model, model_snapshot,
-             prompt_version, schema_version, role_policy_version,
-             provider_policy_version, freshness_policy, fallback_mode,
-             max_technical_retries, max_semantic_repairs,
-             parameter_snapshot, created_at
-           ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14::jsonb, $15
-           )
-           ON CONFLICT (role, config_version) DO NOTHING`,
-          [
-            configuration.role,
-            configuration.configVersion,
-            configuration.provider,
-            configuration.model,
-            configuration.modelSnapshot,
-            configuration.promptVersion,
-            configuration.schemaVersion,
-            configuration.rolePolicyVersion,
-            configuration.providerPolicyVersion,
-            configuration.freshnessPolicy,
-            configuration.fallbackMode,
-            configuration.maxTechnicalRetries,
-            configuration.maxSemanticRepairs,
-            JSON.stringify(configuration.parameterSnapshot),
-            input.now,
-          ],
-        );
-        const stored = await client.query<ConfigurationRow>(
-          `SELECT role, config_version, provider, model, model_snapshot,
-                  prompt_version, schema_version, role_policy_version,
-                  provider_policy_version, freshness_policy, fallback_mode,
-                  max_technical_retries, max_semantic_repairs,
-                  parameter_snapshot
-           FROM model_role_configurations
-           WHERE role = $1 AND config_version = $2
-           FOR UPDATE`,
-          [configuration.role, configuration.configVersion],
-        );
-        if (
-          !stored.rows[0] ||
-          !storedConfigurationMatches(stored.rows[0], configuration)
-        ) {
-          throw new Error(
-            `Immutable G2 configuration for ${configuration.role} conflicts with the release manifest.`,
-          );
-        }
-
-        const pin = await client.query<{
-          config_version: string;
-          provider_policy_version: string;
-          release_fingerprint: string | null;
-        }>(
-          `SELECT config_version, provider_policy_version, release_fingerprint
-           FROM model_role_rollout_pins
-           WHERE role = $1 AND rollout_pin = $2
-           FOR UPDATE`,
-          [configuration.role, configuration.rolloutPin],
-        );
-        if (
-          pin.rows[0] &&
-          (pin.rows[0].config_version !== configuration.configVersion ||
-            pin.rows[0].provider_policy_version !==
-              configuration.providerPolicyVersion ||
-            (pin.rows[0].release_fingerprint !== null &&
-              pin.rows[0].release_fingerprint !== input.manifestFingerprint))
-        ) {
-          throw new Error(
-            `Immutable G2 rollout pin for ${configuration.role} conflicts with the release manifest.`,
-          );
-        }
-        if (pin.rows[0]) {
-          await client.query(
-            `UPDATE model_role_rollout_pins
-             SET status = 'active', activated_at = $1, revoked_at = NULL,
-                 release_fingerprint = $2
-             WHERE role = $3 AND rollout_pin = $4`,
-            [
-              input.now,
-              input.manifestFingerprint,
-              configuration.role,
-              configuration.rolloutPin,
-            ],
-          );
-        } else {
-          await client.query(
-            `INSERT INTO model_role_rollout_pins (
-               role, rollout_pin, config_version, provider_policy_version,
-               status, activated_at, release_fingerprint
-             ) VALUES ($1, $2, $3, $4, 'active', $5, $6)`,
-            [
-              configuration.role,
-              configuration.rolloutPin,
-              configuration.configVersion,
-              configuration.providerPolicyVersion,
-              input.now,
-              input.manifestFingerprint,
-            ],
-          );
-        }
-      }
-      const definitions = await client.query(
-        `UPDATE model_role_definitions
-         SET enabled = TRUE
-         WHERE role = ANY($1::text[])`,
-        [input.configurations.map((configuration) => configuration.role)],
-      );
-      if (definitions.rowCount !== ONE_A_3B_G2_BUNDLE_ROLES.length) {
-        throw new Error("G2 activation did not enable every bundle role.");
-      }
-      for (const configuration of input.configurations) {
-        const rollout = await lockActiveRollout(
-          client,
-          configuration.role,
-          configuration.rolloutPin,
-        );
-        if (
-          !rollout ||
-          !rolloutMatchesConfiguration(
-            rollout,
-            configuration.role,
-            configuration,
-            input.manifestFingerprint,
-          )
-        ) {
-          throw new Error(
-            `Active G2 rollout pin for ${configuration.role} does not match the release manifest.`,
-          );
-        }
-      }
-      await client.query("COMMIT");
-      return ONE_A_3B_G2_BUNDLE_ROLES.length;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  /**
-   * Revoke the active pins before or during a G1 rollback, or revoke exactly
-   * the G2 Open Loop / Proactive bundle during a G2 rollback (the G1 base
-   * pins stay active and suppression/use history is never touched).
-   * Admission and late result recording lock the same rows, so a result that
-   * arrives after this transaction commits is discarded by lockActiveRollout
-   * rather than becoming current under an old release.
+   * Revoke the active pins before or during a G1 rollback. Admission and late
+   * result recording lock the same rows, so a result that arrives after this
+   * transaction commits is discarded by lockActiveRollout rather than becoming
+   * current under an old release.
    */
   public async revokeActiveRolloutPins(input: Readonly<{
     now: Date;
@@ -1370,8 +1002,7 @@ export class PostgresModelRoleCommandRepository
     configurations: readonly ModelRoleConfigurationSnapshot[];
     manifestFingerprint: string;
   }>): Promise<number> {
-    const isG2Bundle = hasExactG2BundleSet(input.roles);
-    if (!hasExactG1RoleSet(input.roles) && !isG2Bundle) {
+    if (!hasExactG1RoleSet(input.roles)) {
       throw new Error(
         `G1 rollback must revoke the complete active role set atomically: ${ONE_A_3B_G1_ENABLED_ROLES.join(", ")}.`,
       );
@@ -1380,20 +1011,12 @@ export class PostgresModelRoleCommandRepository
         new Set(input.configurations.map((configuration) => configuration.role)).size !== input.roles.length ||
         input.configurations.some((configuration) => !input.roles.includes(configuration.role)) ||
         !/^sha256:[a-f0-9]{64}$/.test(input.manifestFingerprint)) {
-      throw new Error(
-        isG2Bundle
-          ? "G2 rollback requires the exact active bundle configurations and manifest fingerprint."
-          : "G1 rollback requires the exact active role configurations and manifest fingerprint.",
-      );
+      throw new Error("G1 rollback requires the exact active role configurations and manifest fingerprint.");
     }
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      if (isG2Bundle) {
-        await this.assertActiveG2Bundle(client, input.configurations);
-      } else {
-        await this.assertActiveG1Release(client, input.configurations);
-      }
+      await this.assertActiveG1Release(client, input.configurations);
       const result = await client.query<{ role: string }>(
         `UPDATE model_role_rollout_pins
          SET status = 'revoked', revoked_at = $1
@@ -1405,9 +1028,7 @@ export class PostgresModelRoleCommandRepository
       );
       if (result.rows.length !== input.roles.length) {
         throw new Error(
-          isG2Bundle
-            ? `G2 rollback expected ${input.roles.length} active bundle pins but found ${result.rows.length}; no pins were revoked.`
-            : `G1 rollback expected ${input.roles.length} active rollout pins but found ${result.rows.length}; no pins were revoked.`,
+          `G1 rollback expected ${input.roles.length} active rollout pins but found ${result.rows.length}; no pins were revoked.`,
         );
       }
       await client.query("COMMIT");
@@ -1424,6 +1045,9 @@ export class PostgresModelRoleCommandRepository
     input: PersistModelRoleAdmission,
   ): Promise<AdmittedModelRoleCommand> {
     const { admission, configuration, identity } = input;
+    if (!(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(admission.role)) {
+      throw new ModelRoleAdmissionRejectedError("retired_role");
+    }
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -1448,20 +1072,14 @@ export class PostgresModelRoleCommandRepository
             consentPolicyVersion: rollout.policy_consent_policy_version,
           })
         : false;
-      // An undefined stage fingerprint (bundle role without a G2 regime)
-      // must reject: rolloutMatchesConfiguration skips the fingerprint
-      // check for undefined, which would fail open.
-      const releaseFingerprint =
-        this.releaseFingerprintForRole(admission.role);
       if (
         !rollout ||
         !consentActive ||
-        releaseFingerprint === undefined ||
         !rolloutMatchesConfiguration(
           rollout,
           admission.role,
           configuration,
-          releaseFingerprint,
+          this.releaseFingerprint,
         )
       ) {
         throw new ModelRoleAdmissionRejectedError("rollout");
@@ -1494,8 +1112,7 @@ export class PostgresModelRoleCommandRepository
            $13, $14, NULL, $15, 'model-role-harness:none:v1',
            'model-role-actions:none:v1', $16, 'prepared', $3, $17, $18,
            $19, $20, $21, $22::jsonb, $23::jsonb, 'disabled',
-           CASE WHEN $3 = 'proactive.followup'
-             THEN 'proactive_followup' ELSE 'decision' END,
+           'decision',
            $24
          )
          ON CONFLICT (user_id, intent_key) DO UPDATE
@@ -1718,18 +1335,14 @@ export class PostgresModelRoleCommandRepository
           consentPolicyVersion: rollout.policy_consent_policy_version,
         })
       : false;
-    // See admit(): an undefined stage fingerprint must discard, never
-    // skip the fingerprint check.
-    const releaseFingerprint = this.releaseFingerprintForRole(input.role);
     if (
       !rollout ||
       !consentActive ||
-      releaseFingerprint === undefined ||
       !rolloutMatchesConfiguration(
         rollout,
         input.role,
         input.configuration,
-        releaseFingerprint,
+        this.releaseFingerprint,
       ) ||
       !commandMatchesConfiguration(row, input.configuration)
     ) {
@@ -1961,18 +1574,14 @@ export class PostgresModelRoleCommandRepository
             consentPolicyVersion: rollout.policy_consent_policy_version,
           })
         : false;
-      // See admit(): an undefined stage fingerprint must discard, never
-      // skip the fingerprint check.
-      const releaseFingerprint = this.releaseFingerprintForRole(input.role);
       if (
         !rollout ||
         !consentActive ||
-        releaseFingerprint === undefined ||
         !rolloutMatchesConfiguration(
           rollout,
           input.role,
           input.configuration,
-          releaseFingerprint,
+          this.releaseFingerprint,
         ) ||
         row.provider !== input.configuration.provider ||
         row.model !== input.configuration.model ||

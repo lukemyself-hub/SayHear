@@ -330,6 +330,14 @@ systemDescribe("G1 release activation persistence", () => {
       }),
     ).rejects.toThrow("partial or conflicting active rollout pin set");
 
+    await expect(
+      new PostgresModelRoleCommandRepository(
+        database!.pool,
+        undefined,
+        manifestFingerprint,
+      ).verifyActiveG1Release({ configurations }),
+    ).rejects.toThrow("G1 active rollout pins are not the complete four-role set");
+
     const state = await database!.pool.query<{
       active_pins: number;
       g1_configurations: number;

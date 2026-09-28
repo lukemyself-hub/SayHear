@@ -59,13 +59,9 @@ import {
   EPISODE_BUILDER_POLICY_VERSION,
   REFLECTION_READINESS_POLICY_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
-  OPEN_LOOP_EXTRACTION_POLICY_VERSION,
-  createOpenLoopExtractionScanService,
   type EpisodeBuildEntrypointDependencies,
   type EpisodeBuildModelProvider,
   type EpisodeBuilderRepository,
-  type OpenLoopExtractModelProvider,
-  type ProactiveFollowupModelProvider,
   type ReflectionEntrypointDependencies,
   type ReflectionGenerationModelProvider,
   type ReflectionRepository,
@@ -117,13 +113,10 @@ import {
   insertCandidateRemapCommandWithin,
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
-  PostgresOpenLoopRepository,
-  PostgresProactiveFollowupRepository,
   PostgresReflectionRepository,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
-import { createProactiveFollowupLane } from "./proactive-followup-lane";
 import { loadRuntimeConfiguration } from "./runtime-config";
 import { createWorkflowStarter } from "./workflow-starter";
 
@@ -404,27 +397,12 @@ export function createServerComposition() {
     activeG1ReleaseManifest
       ? activeG1ReleaseManifest.roles.configurations
       : [];
-  // G2 (issue #207 layer 2b): the Open Loop / Proactive bundle rides on the
-  // switched G1 release. Both G2 switches plus an active G2 manifest open
-  // the six-role regime; anything less keeps the G1 registry untouched.
-  const g2SwitchesEnabled =
-    configuration.writeSwitches.openLoopExtractionEnabled &&
-    configuration.writeSwitches.proactiveFollowupEnabled;
-  const activeG2ReleaseManifest =
-    configuration.oneA3bG2.releaseManifest?.status === "active" &&
-    g2SwitchesEnabled &&
+  const g1RuntimeProviders =
     activeG1ReleaseManifest
-      ? configuration.oneA3bG2.releaseManifest
-      : null;
-  const activeModelRoleConfigurations = activeG2ReleaseManifest
-    ? activeG2ReleaseManifest.roles.configurations
-    : activeG1Configurations;
-  const modelRoleRuntimeProviders =
-    activeG1ReleaseManifest || activeG2ReleaseManifest
       ? configuration.provider.adapter === "deterministic"
         ? (() => {
             throw new Error(
-              "An active 1A.3b release manifest cannot open with the deterministic test adapter.",
+              "An active 1A.3b G1 manifest cannot open with the deterministic test adapter.",
             );
           })()
         : createRuntimeOneA3bRoleProviders({
@@ -436,35 +414,26 @@ export function createServerComposition() {
                 ? [configuration.provider.roleAdapters.deepseek]
                 : []),
             ],
-            configurations: activeModelRoleConfigurations,
+            configurations:
+              activeG1ReleaseManifest.roles.configurations,
           })
       : null;
   const modelRoleCommandService = createModelRoleCommandService({
-    registry: createModelRoleRegistry(activeModelRoleConfigurations),
+    registry: createModelRoleRegistry(activeG1Configurations),
     repository: new PostgresModelRoleCommandRepository(
       pool,
       activeG1ReleaseManifest
         ? activeG1ReleaseManifest.schema
         : undefined,
       activeG1ReleaseManifest?.fingerprint,
-      activeG2ReleaseManifest?.fingerprint,
     ),
-    ...(activeG2ReleaseManifest
-      ? {
-          g2Release: {
-            manifestFingerprint: activeG2ReleaseManifest.fingerprint,
-            baseG1ReleaseFingerprint:
-              activeG2ReleaseManifest.baseG1ReleaseFingerprint,
-          },
-        }
-      : {}),
   });
   const modelRoleProviderEgress = createModelRoleProviderEgress({
     commandService: modelRoleCommandService,
     recoveryGate,
   });
   const episodeBuildProvider: EpisodeBuildModelProvider =
-    modelRoleRuntimeProviders?.episodeBuildProvider ?? {
+    g1RuntimeProviders?.episodeBuildProvider ?? {
       role: "episode.build",
       async buildProposals() {
         throw new Error(
@@ -553,7 +522,7 @@ export function createServerComposition() {
   // runtime provider. An evaluated config and active rollout pin are
   // required before a producer workflow can validate a draft (ADR-0121).
   const narrativeValidationProvider: NarrativeValidationModelProvider =
-    modelRoleRuntimeProviders?.narrativeValidationProvider ?? {
+    g1RuntimeProviders?.narrativeValidationProvider ?? {
       role: "narrative.validate",
       async validateNarrative() {
         throw new Error(
@@ -573,7 +542,7 @@ export function createServerComposition() {
   // publishes an evaluated config (ADR-0136 / ADR-0134). The scheduler only
   // runs behind the explicit write switch.
   const reflectionProvider: ReflectionGenerationModelProvider =
-    modelRoleRuntimeProviders?.reflectionProvider ?? {
+    g1RuntimeProviders?.reflectionProvider ?? {
       role: "reflection.daily",
       async generate() {
         throw new Error(
@@ -603,59 +572,6 @@ export function createServerComposition() {
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     workflowReceiptId,
   });
-  // G2 extract lane (issue #207 layer 2b): the provider only exists under
-  // the six-role regime; otherwise the lane stays closed exactly as before.
-  // G2 proactive lane (issue #207 layer 2c): same bundle discipline — the
-  // segment/disposition producer only exists under the six-role regime.
-  const openLoopExtractProvider: OpenLoopExtractModelProvider =
-    modelRoleRuntimeProviders?.openLoopExtractProvider ?? {
-      role: "open_loop.extract",
-      async extractProposals() {
-        throw new Error(
-          "open_loop.extract has no runtime provider; admission stays closed until a G2 bundle manifest publishes an evaluated config.",
-        );
-      },
-    };
-  const proactiveFollowupProvider: ProactiveFollowupModelProvider =
-    modelRoleRuntimeProviders?.proactiveFollowupProvider ?? {
-      role: "proactive.followup",
-      async generateSegment() {
-        throw new Error(
-          "proactive.followup has no runtime provider; admission stays closed until a G2 bundle manifest publishes an evaluated config.",
-        );
-      },
-      async classifyDisposition() {
-        throw new Error(
-          "proactive.followup has no runtime provider; admission stays closed until a G2 bundle manifest publishes an evaluated config.",
-        );
-      },
-    };
-  const openLoopRepository = new PostgresOpenLoopRepository(pool);
-  const openLoopExtractionScanService = createOpenLoopExtractionScanService({
-    clock: configuration.clock,
-    policyVersion: activeG2ReleaseManifest
-      ? activeG2ReleaseManifest.policyBundle.openLoopExtractionPolicyVersion
-      : OPEN_LOOP_EXTRACTION_POLICY_VERSION,
-    repository: openLoopRepository,
-    modelRoleCommandService,
-    enabled: activeG2ReleaseManifest !== null,
-  });
-  const openLoopEntrypointDependencies = () => ({
-    clock: configuration.clock,
-    repository: openLoopRepository,
-    modelRoleCommandService,
-    providerEgress: modelRoleProviderEgress,
-    openLoopExtractProvider,
-  });
-  // G2 proactive lane (issue #207 layer 2c): same bundle discipline as the
-  // extract lane — the stage always exists, but selection stays closed until
-  // the six-role regime admits proactive.followup commands, and the segment
-  // provider throws until a G2 bundle manifest publishes an evaluated config.
-  // The lane factory call itself lives below, next to the Context Compiler
-  // it renders segment contexts with.
-  const proactiveFollowupRepository = new PostgresProactiveFollowupRepository(
-    pool,
-  );
   const dialogueStateConfiguration = journalRoleRegistry.configuration("dialogue.state");
   const dialogueStateService = createDialogueStateService({
     clock: configuration.clock,
@@ -779,20 +695,6 @@ export function createServerComposition() {
     contextCompiler,
     recoveryGate,
     repository: responseRepository,
-  });
-  // G2 proactive lane (issue #207 layer 2c): bound here because the segment
-  // compiler is the Context Compiler above.
-  const proactiveFollowupLane = createProactiveFollowupLane({
-    clock: configuration.clock,
-    modelRoleCommandService,
-    providerEgress: modelRoleProviderEgress,
-    provider: proactiveFollowupProvider,
-    proactiveRepository: proactiveFollowupRepository,
-    openLoopRepository,
-    openLoopExtractionPolicyVersion: activeG2ReleaseManifest
-      ? activeG2ReleaseManifest.policyBundle.openLoopExtractionPolicyVersion
-      : OPEN_LOOP_EXTRACTION_POLICY_VERSION,
-    compiler: contextCompiler,
   });
   // #119: the trust-action commit port and the admission-time target
   // resolver (ADR-0118). The resolver runs the bounded owner-scoped
@@ -1036,19 +938,6 @@ export function createServerComposition() {
     reflectionReadinessPolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
     narrativeValidationEntrypointDependencies,
     oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
-    oneA3bG2ReleaseManifest: configuration.oneA3bG2.releaseManifest,
-    openLoopRepository,
-    openLoopExtractProvider,
-    proactiveFollowupProvider,
-    proactiveFollowupRepository,
-    proactiveFollowupStage: proactiveFollowupLane.stage,
-    proactiveFollowupMaintenanceService:
-      proactiveFollowupLane.maintenanceService,
-    openLoopExtractionScanService,
-    openLoopEntrypointDependencies,
-    openLoopExtractionPolicyVersion: activeG2ReleaseManifest
-      ? activeG2ReleaseManifest.policyBundle.openLoopExtractionPolicyVersion
-      : OPEN_LOOP_EXTRACTION_POLICY_VERSION,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };

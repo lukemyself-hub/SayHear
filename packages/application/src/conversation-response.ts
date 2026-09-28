@@ -28,7 +28,6 @@ import type {
   UserTextTurn,
 } from "./user-text-conversation";
 import type { RecoveryGate } from "./recovery-gate";
-import type { ProactiveFollowupSegmentCommit } from "./proactive-followup";
 
 export type ConversationResponseStreamEvent =
   | Readonly<{
@@ -136,7 +135,6 @@ export type ConversationResponseRepository = Readonly<{
     generationCommandId: GenerationCommandId;
     metadata: CompleteResponseMetadata;
     modelRunAttemptId: ModelRunAttemptId;
-    proactiveSegment?: ProactiveFollowupSegmentCommit;
     /**
      * Curiosity Stop Signal proposals (issue #74) collected during this
      * Decision. They are model proposals only — the repository commits them
@@ -147,10 +145,9 @@ export type ConversationResponseRepository = Readonly<{
     userId: UserId;
   }): Promise<
     | Readonly<{
-      eventId: ConversationEventId;
-      outcome: "committed";
-      revisionId: ConversationEventRevisionId;
-      segment?: "committed" | "omitted";
+        eventId: ConversationEventId;
+        outcome: "committed";
+        revisionId: ConversationEventRevisionId;
       }>
     | Readonly<{ outcome: "fence_rejected" }>
   >;
@@ -307,9 +304,6 @@ export function createConversationResponseService(dependencies: {
         if (event.type === "decision_delta") {
           possiblyVisible = true;
           yield { delta: event.delta, type: "assistant_delta" };
-        } else if (event.type === "decision_segment_delta") {
-          possiblyVisible = true;
-          yield { delta: event.delta, type: "assistant_delta" };
         } else if (event.type === "decision_committed") {
           settled = true;
           yield {
@@ -364,12 +358,6 @@ export function createConversationResponseService(dependencies: {
               signal,
             )) {
               if (finalizationEvent.type === "decision_delta") {
-                possiblyVisible = true;
-                yield {
-                  delta: finalizationEvent.delta,
-                  type: "assistant_delta",
-                };
-              } else if (finalizationEvent.type === "decision_segment_delta") {
                 possiblyVisible = true;
                 yield {
                   delta: finalizationEvent.delta,

@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-09-07
 ---
+> Current release scope: [ADR-0141](0141-g1-only-release-after-g2-retirement.md) supersedes this decision where it concerns G2/G3 or the three-stage rollout. Historical rationale follows.
+
 
 # 1A.3b rollout is staged and correctness-triggered
 

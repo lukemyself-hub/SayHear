@@ -9,7 +9,7 @@
   与系统不变量，不属于 SPEC。
 - 根目录 `CONTEXT.md` 是术语唯一真源；`docs/adr/` 解释重要决定的原因。
 - 完整 SPEC 由 matt skills 发布为 GitHub Issue；`specs/` 只维护轻量索引和规则，
-  当前没有已发布的正式 SPEC。
+  当前 1A.3b SPEC 为 GitHub #193。
 - `tasks/` 是短期 working spec；`archive/` 只用于追溯，默认不读取。
 - 设计、开发或修改具体功能前，先检索并读取任务相关 ADR；Issue、SPEC 或文档中的
   显式链接只是最低起点，不是完整决策范围。
@@ -81,7 +81,7 @@ Accepted
 
 当前架构文档不属于 SPEC。通过 matt skills 形成的完整 SPEC 发布到 GitHub Issue，
 Issue 是唯一执行真源；[`specs/README.md`](specs/README.md) 只维护发现索引和发布
-规则，不复制正文。在正式 SPEC 出现前，产品行为读取 `product/`，实现约束读取
+规则，不复制正文。未有对应正式 SPEC 时，产品行为读取 `product/`，实现约束读取
 `architecture/`。
 
 ### 技术架构

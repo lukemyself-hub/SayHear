@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-26
 ---
+> Current release scope: [ADR-0141](0141-g1-only-release-after-g2-retirement.md) supersedes this decision where it concerns G2/G3 or the three-stage rollout. Historical rationale follows.
+
 
 # Open Loops Are Expiring Context Projections
 
