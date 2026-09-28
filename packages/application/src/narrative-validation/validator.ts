@@ -12,6 +12,7 @@ import {
   type RecoveryGate,
 } from "../recovery-gate";
 import { ProviderDispatchError } from "../conversation-model";
+import type { ProviderResponseFailure } from "../conversation-model";
 import type {
   ModelRoleAttemptKind,
   ModelRoleCommandService,
@@ -102,8 +103,26 @@ function entrypointResult(
     generationCommandId: string | null;
     modelRunAttemptId: string | null;
   } = { generationCommandId: null, modelRunAttemptId: null },
+  responseFailure: NarrativeValidationEntrypointResult["responseFailure"] = null,
 ): NarrativeValidationEntrypointResult {
-  return { draftRef, outcome, errorCode, rejectionCode, verdict, ...ledger };
+  return {
+    draftRef,
+    outcome,
+    errorCode,
+    rejectionCode,
+    verdict,
+    ...ledger,
+    responseFailure,
+  };
+}
+
+/**
+ * Issue #252: the content-free response cause, when the transport or the role
+ * provider proved one. It is evidence for the next versioned configuration
+ * only — it never changes `errorCode`, the ledger write, or the retry plan.
+ */
+function responseFailureOf(error: unknown): ProviderResponseFailure | null {
+  return error instanceof ProviderDispatchError ? (error.failure ?? null) : null;
 }
 
 /**
@@ -351,6 +370,7 @@ async function executeNarrativeAttempt(input: Readonly<{
       null,
       null,
       ledger,
+      responseFailureOf(error),
     );
   }
 

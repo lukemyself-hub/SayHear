@@ -15,6 +15,7 @@ import {
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
   type NarrativeValidationRequest,
+  type ProviderResponseFailure,
   type RecoveryGate,
 } from "@sayhear/application";
 import {
@@ -345,6 +346,7 @@ async function main(): Promise<void> {
       model: string;
       outcome: string;
       provider: string;
+      responseFailure: ProviderResponseFailure | null;
       verdict: string | null;
     }[] = [];
     // --resume keeps already-recorded completed fixtures (same manifest
@@ -362,7 +364,11 @@ async function main(): Promise<void> {
           throw new Error("Previous verdicts do not belong to the supplied manifest.");
         }
         for (const entry of previous.cases) {
-          if (entry.outcome === "completed") results.push(entry);
+          // A report resumed from before #252 has no recorded cause; keep the
+          // per-case shape uniform so the frozen artifact stays comparable.
+          if (entry.outcome === "completed") {
+            results.push({ ...entry, responseFailure: entry.responseFailure ?? null });
+          }
         }
         if (results.length > 0) {
           console.log(
@@ -436,6 +442,11 @@ async function main(): Promise<void> {
         model: narrativeConfiguration.model,
         outcome: result.outcome,
         provider: narrativeConfiguration.provider,
+        // Issue #252: a frozen `schema_incompatible` no longer hides whether
+        // the pinned output budget, an empty final answer, the JSON parse, or
+        // the frozen schema was at fault. Content-free by construction, so it
+        // is safe to keep in release evidence.
+        responseFailure: result.responseFailure,
         verdict: result.outcome === "completed" ? result.verdict : null,
         ...(arguments_.precision
           ? {
@@ -472,6 +483,13 @@ async function main(): Promise<void> {
           modelSnapshot: narrativeConfiguration.modelSnapshot,
           configVersion: narrativeConfiguration.configVersion,
           promptVersion: narrativeConfiguration.promptVersion,
+          // The frozen budget is recorded beside the causes so the next
+          // versioned configuration is chosen against measured spend, not
+          // against a guess (issue #252).
+          maxOutputTokens:
+            narrativeConfiguration.parameterSnapshot.maxOutputTokens ?? null,
+          providerCallBudget:
+            narrativeConfiguration.parameterSnapshot.providerCallBudget ?? null,
           cases: results,
         },
         null,

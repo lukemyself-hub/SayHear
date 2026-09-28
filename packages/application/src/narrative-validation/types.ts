@@ -6,6 +6,8 @@ import type {
   UserId,
 } from "@sayhear/domain";
 
+import type { ProviderResponseFailure } from "../conversation-model";
+
 /**
  * 1A.3b A2 (issue #198). The shared `narrative.validate` role (ADR-0121)
  * independently re-decomposes a frozen Reflection or Bio draft into atomic
@@ -365,4 +367,11 @@ export type NarrativeValidationEntrypointResult = Readonly<{
   /** Shared-ledger lineage for retry re-entry (null when never admitted). */
   generationCommandId: string | null;
   modelRunAttemptId: string | null;
+  /**
+   * Content-free cause of a Provider response failure (issue #252). It
+   * explains the `errorCode` for release evidence and changes neither the
+   * durable code nor the retry decision. Null whenever the failure was not
+   * proven to a specific response cause.
+   */
+  responseFailure: ProviderResponseFailure | null;
 }>;

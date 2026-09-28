@@ -8,6 +8,7 @@ import {
   NARRATIVE_VALIDATION_POLICY_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+  ProviderDispatchError,
   createModelRoleCommandService,
   createModelRoleProviderEgress,
   createModelRoleRegistry,
@@ -726,6 +727,62 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
     });
     // Validator not complete: no publish and no Candidate may be derived.
     expect(read.outcome).toBe("incomplete");
+  });
+
+  it("surfaces a content-free response cause without changing the durable failure code (#252)", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000016",
+    );
+    const deps = dependencies(
+      providerFor(() => {
+        throw new ProviderDispatchError(
+          "invalid_response",
+          "The Provider stopped because the pinned output budget was exhausted.",
+          true,
+          {
+            kind: "output_budget_exhausted",
+            inputTokens: 940,
+            outputLength: 0,
+            outputTokens: 4000,
+            providerReason: "max_output_tokens",
+          },
+        );
+      }),
+    );
+    const result = await runNarrativeValidation({
+      dependencies: deps,
+      command: { request, expectedDataEpoch: 1 },
+    });
+
+    // The durable code and the no-retry rule stay exactly as ADR-0132
+    // froze them; the cause is additive release evidence.
+    expect(result.outcome).toBe("failed");
+    expect(result.errorCode).toBe("schema_incompatible");
+    expect(result.responseFailure).toEqual({
+      kind: "output_budget_exhausted",
+      inputTokens: 940,
+      outputLength: 0,
+      outputTokens: 4000,
+      providerReason: "max_output_tokens",
+    });
+  });
+
+  it("leaves the response cause absent when the failure was not proven to one", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000017",
+    );
+    const deps = dependencies(
+      providerFor(() => {
+        throw new ProviderDispatchError("invalid_response");
+      }),
+    );
+    const result = await runNarrativeValidation({
+      dependencies: deps,
+      command: { request, expectedDataEpoch: 1 },
+    });
+
+    expect(result.errorCode).toBe("schema_incompatible");
+    expect(result.responseFailure).toBeNull();
   });
 
   it("fences validation behind the owner epoch fence", async () => {
