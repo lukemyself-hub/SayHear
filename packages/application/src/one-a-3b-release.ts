@@ -37,9 +37,9 @@ export const ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS = [
 ] as const;
 
 /**
- * G1 is the first direct-release stage. The later Open Loop, Proactive and
- * Bio producer roles stay outside this manifest, even when their shared
- * schema already exists.
+ * G1 is the current direct-release scope. Retired Open Loop and Proactive
+ * roles, and the paused Bio writer role, stay outside this manifest. Their
+ * historical role identifiers and shared read schema remain for compatibility.
  */
 export {
   ONE_A_3B_G1_DEFERRED_ROLES,
