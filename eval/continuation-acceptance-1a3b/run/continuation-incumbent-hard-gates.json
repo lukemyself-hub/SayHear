@@ -1,0 +1,13 @@
+{
+  "advisories": [
+    "continuation-incumbent-1a3a/cont-incomplete-en t1: required_recall_missing — required-recall token \"quick\" absent from the response",
+    "continuation-incumbent-1a3a/cont-surveillance-zh t1: required_recall_missing — required-recall token \"不催\" absent from the response",
+    "continuation-incumbent-1a3a/cont-repeat-zh t1: required_recall_missing — required-recall token \"不再问\" absent from the response",
+    "continuation-incumbent-1a3a/cont-task-topic-zh t1: forbidden_memory_mention — response references a never-injected detail (顺便)",
+    "continuation-incumbent-1a3a/cont-extra-en t1: required_recall_missing — required-recall token \"breath\" absent from the response",
+    "continuation-incumbent-1a3a/cont-extra-zh t1: required_recall_missing — required-recall token \"嗯\" absent from the response"
+  ],
+  "checkedFixtureCount": 18,
+  "failures": [],
+  "passed": true
+}

@@ -1,0 +1,53 @@
+{
+  "version": "sayhear-g1-6b50-evidence-hashes:v1",
+  "sourceCommit": "6b50ddae25525a481192b4d1d429af4619f51a95",
+  "releaseStatus": "blocked",
+  "note": "18/18 incumbent mechanical hard gates passed; narrative validator real-Provider capture completed 11 and failed 7 with schema_incompatible; no human verdict or release authorization.",
+  "files": [
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/baseline-reference-g1-cleanup.json",
+      "bytes": 793,
+      "sha256": "c850e9992e8face49901448f52cf054a4ed52cf217dc42b1e3eb46497efc4a24"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json",
+      "bytes": 937,
+      "sha256": "484761af1fed242eb697f2180e15e3030b83147c618322ef0cd6b0138285f8ff"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/continuation-incumbent.json",
+      "bytes": 13843,
+      "sha256": "8da5c0dd7de53b70ed5d87bd6bd10aac42c8a3705b9d52577ba3f8f1f851e3de"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/g1-evidence-production-report.json",
+      "bytes": 10477,
+      "sha256": "9f506acd2ca5c1e4af4610929ec2a49ea5eed4427a8faed58d738d1e7572dc4c"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/manifest.json",
+      "bytes": 11698,
+      "sha256": "55e9214eca7132e4597929d83c09a280014e6c3cc2e9db0ed5f47b719121ef46"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/validator-ledger.template.json",
+      "bytes": 2290,
+      "sha256": "20b44413ed44b574aad084c0efc2aeb709044b3338bbf94a293bce36b508c131"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/validator-machine-verdicts.json",
+      "bytes": 6627,
+      "sha256": "52dd0c8355f8cb9747aceb93b7c5deb62d16f93a8a339f874664400c7e18d79e"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/validator-review-bundle.json",
+      "bytes": 16949,
+      "sha256": "452ba0dabcf9138cdd6515c0e6dfac224bc1ef692c23f1b8e40f76ce8f61cc0f"
+    },
+    {
+      "path": "eval/continuation-acceptance-1a3b/run/validator-review-bundle.md",
+      "bytes": 10363,
+      "sha256": "4bf2ad00386940deaf3479150bc997b10a7b7b149a6cdf0358fbcfe48a098b00"
+    }
+  ]
+}

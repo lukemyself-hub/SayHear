@@ -1,0 +1,100 @@
+{
+  "_instructions": "Luke fills verdict per case after reading validator-review-bundle.md. Every verdict must be accepted or rejected; empty verdicts fail validation loudly. Do not add machineVerdict fields.",
+  "adjudicator": "Luke",
+  "decidedAt": "",
+  "entries": [
+    {
+      "fixtureId": "validator-bio-unsupported-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-contradiction-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-upgrade-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-absence-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-reflection-manifest-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-reflection-ambiguity-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-unsupported-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-contradiction-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-upgrade-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-absence-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-reflection-manifest-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-reflection-ambiguity-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-unsupported-mix",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-contradiction-mix",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-upgrade-mix",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-bio-absence-mix",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-reflection-manifest-mix",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "validator-reflection-ambiguity-mix",
+      "note": "",
+      "verdict": ""
+    }
+  ],
+  "group": "validator",
+  "manifestFingerprint": "sha256:b7ab2f7a69dfcf7a348a61c25d63e0ff454f8c61206fefd2a4e3f1f1e8f8c205",
+  "version": "1a3b-f3-adjudication:v1"
+}

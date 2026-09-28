@@ -1,0 +1,153 @@
+{
+  "version": "1a3b-g1-evidence-production-report:v1",
+  "generatedAt": "2026-09-28T02:44:36.949Z",
+  "runId": "g1-evidence-producer-1790563476950",
+  "status": "blocked",
+  "preflight": {
+    "currentCommit": "6b50ddae25525a481192b4d1d429af4619f51a95",
+    "f3Manifest": {
+      "path": "eval/continuation-acceptance-1a3b/run/manifest.json",
+      "fingerprint": "sha256:b7ab2f7a69dfcf7a348a61c25d63e0ff454f8c61206fefd2a4e3f1f1e8f8c205",
+      "sha256": "55e9214eca7132e4597929d83c09a280014e6c3cc2e9db0ed5f47b719121ef46",
+      "catalogSha256": "aeac56e594c5ae95b95af18c9d3880801c4f0bb2431bc6206b64881079218ae6",
+      "status": "ready_for_evaluation",
+      "comparisonAllowed": true,
+      "ready": false,
+      "mismatches": [
+        "validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'",
+        "F3 validator ledger is not bound to the F3 manifest"
+      ]
+    },
+    "validator": {
+      "acceptedCases": null,
+      "ledgerSha256": "7810a975444489b37be6cf4e3895cbac398b6c705678e5b4184f1376246c6c48",
+      "maxRejects": null,
+      "note": "Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.",
+      "precisionFalseBlockingCases": null,
+      "precisionReportSha256": null,
+      "precisionTotalCases": null,
+      "rejectedCases": null,
+      "status": "blocked",
+      "totalCases": null
+    },
+    "hardGate": {
+      "artifactSha256": "484761af1fed242eb697f2180e15e3030b83147c618322ef0cd6b0138285f8ff",
+      "failures": [],
+      "note": null,
+      "passed": true,
+      "path": "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json"
+    },
+    "hostedCanary": {
+      "artifactSha256": null,
+      "canaryRunId": null,
+      "note": "Hosted canary export is unavailable: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json'",
+      "passed": false,
+      "path": "eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json"
+    },
+    "roleMismatches": []
+  },
+  "sources": {
+    "discoveredFiles": [],
+    "validCriteria": [],
+    "errors": []
+  },
+  "criteria": [
+    {
+      "criterion": "AC-F01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-F02",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-E01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-R01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-G01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-I01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-M01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-L01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-L02",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-W01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources; hosted canary: Hosted canary export is unavailable: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json'",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-D01",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-X04",
+      "fixtureIds": [],
+      "note": "F3 preflight: validator precision report could not be read: ENOENT: no such file or directory, open '/Users/lukemyself/.codex/worktrees/g1-only-cleanup/SayHear-agent-issue-207/eval/continuation-acceptance-1a3b/run/validator-precision-report.json'; validator calibration: Validator catalog, ledger, precision report, or F3 fingerprint is unavailable.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    }
+  ],
+  "output": {
+    "evidenceDirectory": "eval/continuation-acceptance-1a3b/run/evidence",
+    "evidenceArtifactsWritten": [],
+    "manifestInputPath": "eval/continuation-acceptance-1a3b/run/g1-release-manifest-input.json",
+    "manifestInputWritten": false,
+    "assemblyError": null
+  },
+  "nextSteps": [
+    "Produce a clean incumbent rebaseline on the current checkout and rebuild the F3 manifest with comparisonAllowed=true.",
+    "Replace the validator prefill with Luke's final dated adjudication before treating calibration as verified.",
+    "Collect one independently verified, hashed source document for every missing G1 criterion; do not hand-edit passed results.",
+    "Resolve the hosted canary and raw hard-gate failures before assembling AC-W01 or AC-X04."
+  ]
+}

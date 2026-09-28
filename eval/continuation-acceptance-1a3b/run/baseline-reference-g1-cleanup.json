@@ -1,0 +1,28 @@
+{
+  "version": "1a3b-f3-baseline-reference:v1",
+  "synthetic": true,
+  "historicalIncumbent": {
+    "issue": 166,
+    "manifestPath": "eval/incumbent-baseline-1a3a/run/manifest.json",
+    "artifactPath": "eval/incumbent-baseline-1a3a/",
+    "runCommit": "a46e53eee80f78ad4eb857d968902a129e776121"
+  },
+  "historicalFindings": [
+    {
+      "issue": 186,
+      "name": "good-news-zh turn 1 stacked double question",
+      "confirmed": true
+    },
+    {
+      "issue": 186,
+      "name": "memory-continuity-en turn 4 missing Cairn token",
+      "confirmed": true
+    }
+  ],
+  "currentIncumbent": {
+    "status": "clean",
+    "commit": "6b50ddae25525a481192b4d1d429af4619f51a95",
+    "manifestPath": "eval/continuation-acceptance-1a3b/run/manifest.json",
+    "confirmedHardGateFailures": 0
+  }
+}

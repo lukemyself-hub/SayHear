@@ -1,0 +1,242 @@
+{
+  "version": "1a3b-f3-validator-machine-verdicts:v1",
+  "manifestFingerprint": "sha256:b7ab2f7a69dfcf7a348a61c25d63e0ff454f8c61206fefd2a4e3f1f1e8f8c205",
+  "capturedAt": "2026-09-28T02:50:20.792Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "modelSnapshot": "deepseek-flash",
+  "configVersion": "narrative.validate:eval-capture:v1",
+  "promptVersion": "narrative-validate:eval:v4",
+  "cases": [
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported"
+      ],
+      "errorCode": null,
+      "fixtureId": "validator-bio-unsupported-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "contradiction"
+      ],
+      "errorCode": null,
+      "fixtureId": "validator-bio-contradiction-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "kind_upgrade",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "validator-bio-upgrade-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-bio-absence-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-reflection-manifest-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "validator-reflection-ambiguity-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-bio-unsupported-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-bio-contradiction-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-bio-upgrade-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "validator-bio-absence-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "validator-reflection-manifest-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "validator-reflection-ambiguity-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported"
+      ],
+      "errorCode": null,
+      "fixtureId": "validator-bio-unsupported-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-bio-contradiction-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "kind_upgrade",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "validator-bio-upgrade-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "validator-bio-absence-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "verdict": null
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "validator-reflection-manifest-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "validator-reflection-ambiguity-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "verdict": "accepted"
+    }
+  ]
+}

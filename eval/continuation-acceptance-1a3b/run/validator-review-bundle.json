@@ -1,0 +1,486 @@
+{
+  "version": "1a3b-f3-validator-review:v1",
+  "manifestFingerprint": "sha256:b7ab2f7a69dfcf7a348a61c25d63e0ff454f8c61206fefd2a4e3f1f1e8f8c205",
+  "cases": [
+    {
+      "artifactKind": "bio",
+      "description": "Synthetic Bio draft adds a fact absent from the source.",
+      "draftText": "The user repairs radios and owns a private observatory.",
+      "draftRef": "validator-fixture:validator-bio-unsupported-en",
+      "expectedFindingCode": "unsupported",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-unsupported-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-en",
+          "text": "The fictional user repairs radios."
+        }
+      ],
+      "validatorErrorClass": "unsupported"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Synthetic Bio draft contradicts the source claim.",
+      "draftText": "The user has never repaired a radio.",
+      "draftRef": "validator-fixture:validator-bio-contradiction-en",
+      "expectedFindingCode": "contradiction",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-contradiction-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-en",
+          "text": "The fictional user repairs radios."
+        }
+      ],
+      "validatorErrorClass": "contradiction"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Synthetic Bio draft upgrades an observation into a certainty.",
+      "draftText": "The user is objectively the most patient person in every room.",
+      "draftRef": "validator-fixture:validator-bio-upgrade-en",
+      "expectedFindingCode": "kind_upgrade",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-upgrade-en",
+      "generatorManifest": [
+        {
+          "statementKey": "validator-bio-upgrade-en:statement:1",
+          "text": "The user is objectively the most patient person in every room.",
+          "propositionStatements": [
+            {
+              "propositionKey": "validator-bio-upgrade-en:proposition:1",
+              "normalizedProposition": "The user is objectively the most patient person in every room.",
+              "propositionKind": "impression",
+              "epistemicRendering": "inferred",
+              "supportKeys": [
+                "syn-claim-validator-en"
+              ]
+            }
+          ]
+        }
+      ],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-en",
+          "text": "The fictional user repairs radios."
+        }
+      ],
+      "validatorErrorClass": "epistemic_upgrade"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Synthetic Bio draft omits the material supported identity detail.",
+      "draftText": "The user is a person with many interests.",
+      "draftRef": "validator-fixture:validator-bio-absence-en",
+      "expectedFindingCode": "material_absence",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-absence-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-en",
+          "text": "The fictional user repairs radios."
+        }
+      ],
+      "validatorErrorClass": "material_absence"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic Reflection output points at the wrong frozen input manifest.",
+      "draftText": "The supplied draft claims it was generated from manifest syn-other.",
+      "draftRef": "validator-fixture:validator-reflection-manifest-en",
+      "expectedFindingCode": "manifest_mismatch",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "accepted",
+      "fixtureId": "validator-reflection-manifest-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-en",
+          "text": "The fictional user repairs radios."
+        }
+      ],
+      "validatorErrorClass": "manifest_mismatch"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic Reflection output leaves its proposition support ambiguous.",
+      "draftText": "Something about the user may be important.",
+      "draftRef": "validator-fixture:validator-reflection-ambiguity-en",
+      "expectedFindingCode": "ambiguous",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "accepted",
+      "fixtureId": "validator-reflection-ambiguity-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-en",
+          "text": "The fictional user repairs radios."
+        }
+      ],
+      "validatorErrorClass": "ambiguity"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "中文合成 Bio 加入来源没有的事实。",
+      "draftText": "用户会修理收音机，也经营一家书店。",
+      "draftRef": "validator-fixture:validator-bio-unsupported-zh",
+      "expectedFindingCode": "unsupported",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-unsupported-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-zh",
+          "text": "虚构用户会修理收音机。"
+        }
+      ],
+      "validatorErrorClass": "unsupported"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "中文合成 Bio 与来源矛盾。",
+      "draftText": "用户从来不修理收音机。",
+      "draftRef": "validator-fixture:validator-bio-contradiction-zh",
+      "expectedFindingCode": "contradiction",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-contradiction-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-zh",
+          "text": "虚构用户会修理收音机。"
+        }
+      ],
+      "validatorErrorClass": "contradiction"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "中文合成 Bio 把弱证据写成确定身份。",
+      "draftText": "用户在所有场合都是最有耐心的人。",
+      "draftRef": "validator-fixture:validator-bio-upgrade-zh",
+      "expectedFindingCode": "kind_upgrade",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-upgrade-zh",
+      "generatorManifest": [
+        {
+          "statementKey": "validator-bio-upgrade-zh:statement:1",
+          "text": "用户在所有场合都是最有耐心的人。",
+          "propositionStatements": [
+            {
+              "propositionKey": "validator-bio-upgrade-zh:proposition:1",
+              "normalizedProposition": "用户在所有场合都是最有耐心的人。",
+              "propositionKind": "impression",
+              "epistemicRendering": "inferred",
+              "supportKeys": [
+                "syn-claim-validator-zh"
+              ]
+            }
+          ]
+        }
+      ],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-zh",
+          "text": "虚构用户会修理收音机。"
+        }
+      ],
+      "validatorErrorClass": "epistemic_upgrade"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "中文合成 Bio 漏掉有来源支持的重要兴趣。",
+      "draftText": "用户是一个有很多兴趣的人。",
+      "draftRef": "validator-fixture:validator-bio-absence-zh",
+      "expectedFindingCode": "material_absence",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-absence-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-zh",
+          "text": "虚构用户会修理收音机。"
+        }
+      ],
+      "validatorErrorClass": "material_absence"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "中文合成 Reflection 指向错误 manifest。",
+      "draftText": "这条观察声称使用了另一个 manifest。",
+      "draftRef": "validator-fixture:validator-reflection-manifest-zh",
+      "expectedFindingCode": "manifest_mismatch",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "accepted",
+      "fixtureId": "validator-reflection-manifest-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-zh",
+          "text": "虚构用户会修理收音机。"
+        }
+      ],
+      "validatorErrorClass": "manifest_mismatch"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "中文合成 Reflection 没有清楚标出命题支持。",
+      "draftText": "用户可能是一个挺重要的人。",
+      "draftRef": "validator-fixture:validator-reflection-ambiguity-zh",
+      "expectedFindingCode": "ambiguous",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "accepted",
+      "fixtureId": "validator-reflection-ambiguity-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-zh",
+          "text": "虚构用户会修理收音机。"
+        }
+      ],
+      "validatorErrorClass": "ambiguity"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Mixed-language synthetic Bio adds an unsupported fact.",
+      "draftText": "用户会 repair radios，而且 runs a private studio。",
+      "draftRef": "validator-fixture:validator-bio-unsupported-mix",
+      "expectedFindingCode": "unsupported",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-unsupported-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-mix",
+          "text": "虚构用户会 repair radios。"
+        }
+      ],
+      "validatorErrorClass": "unsupported"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Mixed-language synthetic Bio contradicts the source.",
+      "draftText": "用户 never repairs radios。",
+      "draftRef": "validator-fixture:validator-bio-contradiction-mix",
+      "expectedFindingCode": "contradiction",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-contradiction-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-mix",
+          "text": "虚构用户会 repair radios。"
+        }
+      ],
+      "validatorErrorClass": "contradiction"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Mixed-language synthetic Bio upgrades an impression.",
+      "draftText": "用户 is definitely the most patient person everywhere。",
+      "draftRef": "validator-fixture:validator-bio-upgrade-mix",
+      "expectedFindingCode": "kind_upgrade",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-upgrade-mix",
+      "generatorManifest": [
+        {
+          "statementKey": "validator-bio-upgrade-mix:statement:1",
+          "text": "用户 is definitely the most patient person everywhere。",
+          "propositionStatements": [
+            {
+              "propositionKey": "validator-bio-upgrade-mix:proposition:1",
+              "normalizedProposition": "用户 is definitely the most patient person everywhere。",
+              "propositionKind": "impression",
+              "epistemicRendering": "inferred",
+              "supportKeys": [
+                "syn-claim-validator-mix"
+              ]
+            }
+          ]
+        }
+      ],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-mix",
+          "text": "虚构用户会 repair radios。"
+        }
+      ],
+      "validatorErrorClass": "epistemic_upgrade"
+    },
+    {
+      "artifactKind": "bio",
+      "description": "Mixed-language synthetic Bio drops the supported material detail.",
+      "draftText": "用户 is a person with many interests。",
+      "draftRef": "validator-fixture:validator-bio-absence-mix",
+      "expectedFindingCode": "material_absence",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "blocked",
+      "fixtureId": "validator-bio-absence-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-mix",
+          "text": "虚构用户会 repair radios。"
+        }
+      ],
+      "validatorErrorClass": "material_absence"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Mixed-language synthetic Reflection uses the wrong manifest.",
+      "draftText": "This observation uses manifest syn-other，不是冻结输入。",
+      "draftRef": "validator-fixture:validator-reflection-manifest-mix",
+      "expectedFindingCode": "manifest_mismatch",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "accepted",
+      "fixtureId": "validator-reflection-manifest-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-mix",
+          "text": "虚构用户会 repair radios。"
+        }
+      ],
+      "validatorErrorClass": "manifest_mismatch"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Mixed-language synthetic Reflection leaves support ambiguous.",
+      "draftText": "Maybe user is important somehow。",
+      "draftRef": "validator-fixture:validator-reflection-ambiguity-mix",
+      "expectedFindingCode": "ambiguous",
+      "expectedOutcome": "blocking",
+      "expectedVerdict": "accepted",
+      "fixtureId": "validator-reflection-ambiguity-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": null,
+      "plannedCoverageKeys": [
+        "syn-claim-validator-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-validator-mix",
+          "text": "虚构用户会 repair radios。"
+        }
+      ],
+      "validatorErrorClass": "ambiguity"
+    }
+  ]
+}
