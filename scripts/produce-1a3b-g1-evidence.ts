@@ -25,6 +25,8 @@ import {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
   ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
@@ -465,17 +467,18 @@ function roleConfigurationsFromF3(value: JsonObject): RoleCheck {
       mismatches.push(`F3 pin for ${role} disagrees with its frozen retry policy.`);
       continue;
     }
+    const configIteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role];
     configurations.push({
       role,
-      configVersion: `${role}:g1-release:v1`,
+      configVersion: `${role}:g1-release:${configIteration}`,
       provider,
       model,
       modelSnapshot,
       promptVersion,
       schemaVersion,
       rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-      providerPolicyVersion: `${provider}-${role}-egress:g1-release:v1`,
-      rolloutPin: `${role}-g1-release-pin:v1`,
+      providerPolicyVersion: `${provider}-${role}-egress:g1-release:${configIteration}`,
+      rolloutPin: `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
       freshnessPolicy: policy.freshnessPolicy,
       fallbackMode: "disabled",
       maxTechnicalRetries: policy.maxTechnicalRetries,

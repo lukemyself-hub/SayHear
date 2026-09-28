@@ -23,6 +23,39 @@ import { REFLECTION_READINESS_POLICY_VERSION } from "./reflection/types";
 
 export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
   "1a3b-g1-release:v1" as const;
+
+/**
+ * G1 model-configuration iteration per role.
+ *
+ * Production is live at `v2` on all four roles. Only `narrative.validate`
+ * needs a new configuration, because #252 raised only its output budget, from
+ * 4000 to 8000 tokens. The other three keep `v2` so their configurations, and
+ * therefore their rollback targets, are left exactly as they are.
+ *
+ * A configuration row is immutable, so re-declaring a version with different
+ * parameters is refused at activation. That is why the budget change cannot
+ * reuse `v2`.
+ */
+export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
+  "episode.build": "v2",
+  "reflection.daily": "v2",
+  "reflection.weekly": "v2",
+  "narrative.validate": "v3",
+} as const satisfies Readonly<
+  Record<(typeof ONE_A_3B_G1_ENABLED_ROLES)[number], string>
+>;
+
+/**
+ * G1 rollout-pin iteration, shared by all four roles.
+ *
+ * A rollout pin is bound to exactly one manifest fingerprint and
+ * `bindActiveG1Release` refuses to re-point an existing pin at a different
+ * release. So a new release needs new pins even for the three roles whose
+ * configuration is unchanged. A pin's name need not match its configuration
+ * version: its foreign key is (role, config_version, provider_policy_version),
+ * so a `v3` pin may point at an unchanged `v2` configuration.
+ */
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v3" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =

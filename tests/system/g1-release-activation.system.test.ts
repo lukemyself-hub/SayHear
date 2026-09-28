@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
   type ModelRoleConfigurationSnapshot,
@@ -23,17 +25,18 @@ const activatedAt = new Date("2026-09-12T10:00:00.000Z");
 const configurations: readonly ModelRoleConfigurationSnapshot[] =
   ONE_A_3B_G1_ENABLED_ROLES.map((role) => {
     const policy = ONE_A_3B_ROLE_POLICIES[role];
+    const configIteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role];
     return {
       role,
-      configVersion: `${role}:g1-release:v1`,
+      configVersion: `${role}:g1-release:${configIteration}`,
       provider: "deepseek",
       model: "deepseek-chat",
       modelSnapshot: "deepseek-chat@2026-09-12",
       promptVersion: `${role}-prompt:v1`,
       schemaVersion: `${role}-schema:v1`,
       rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-      providerPolicyVersion: `deepseek-${role}-egress:g1-release:v1`,
-      rolloutPin: `${role}-g1-release-pin:v1`,
+      providerPolicyVersion: `deepseek-${role}-egress:g1-release:${configIteration}`,
+      rolloutPin: `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
       freshnessPolicy: policy.freshnessPolicy,
       fallbackMode: "disabled",
       maxTechnicalRetries: policy.maxTechnicalRetries,
@@ -53,6 +56,101 @@ systemDescribe("G1 release activation persistence", () => {
   afterEach(async () => {
     await database?.dispose();
     database = undefined;
+  });
+
+  it("adopts the split v2/v3 identities: one new config, new pins everywhere", async () => {
+    const repository = new PostgresModelRoleCommandRepository(database!.pool);
+
+    // Production is already live at v2 on all four roles. #252 changes only
+    // narrative.validate's parameters, so only its configuration is new; every
+    // role still needs a new pin, because a pin is bound to one manifest
+    // fingerprint and cannot be re-pointed.
+    for (const role of ONE_A_3B_G1_ENABLED_ROLES) {
+      if (role === "narrative.validate") continue;
+      const iteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role];
+      const livePolicy = ONE_A_3B_ROLE_POLICIES[role];
+      await database!.pool.query(
+        `INSERT INTO model_role_configurations (
+           role, config_version, provider, model, model_snapshot, prompt_version,
+           schema_version, role_policy_version, provider_policy_version,
+           freshness_policy, fallback_mode, max_technical_retries,
+           max_semantic_repairs, parameter_snapshot, created_at
+         ) VALUES ($1,$2,'deepseek','deepseek-chat','deepseek-chat@2026-09-12',
+                   $3,$4,$5,$6,$7,'disabled',$8,$9,$10,$11)`,
+        [
+          role,
+          `${role}:g1-release:${iteration}`,
+          `${role}-prompt:v1`,
+          `${role}-schema:v1`,
+          ONE_A_3B_ROLE_POLICY_VERSION,
+          `deepseek-${role}-egress:g1-release:${iteration}`,
+          livePolicy.freshnessPolicy,
+          livePolicy.maxTechnicalRetries,
+          livePolicy.maxSemanticRepairs,
+          JSON.stringify({ temperature: 0 }),
+          activatedAt,
+        ],
+      );
+      await database!.pool.query(
+        `INSERT INTO model_role_rollout_pins (
+           role, rollout_pin, config_version, provider_policy_version,
+           status, activated_at, release_fingerprint
+         ) VALUES ($1,$2,$3,$4,'active',$5,$6)`,
+        [
+          role,
+          `${role}-g1-release-pin:v1`,
+          `${role}:g1-release:${iteration}`,
+          `deepseek-${role}-egress:g1-release:${iteration}`,
+          activatedAt,
+          `sha256:${"b".repeat(64)}`,
+        ],
+      );
+    }
+
+    // A different pin name for an unchanged configuration is not a
+    // configuration conflict, so activation proceeds once the superseded pins
+    // are revoked.
+    await database!.pool.query(
+      `UPDATE model_role_rollout_pins
+       SET status = 'revoked', revoked_at = $1`,
+      [activatedAt],
+    );
+
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+
+    const active = await database!.pool.query<{
+      config_version: string;
+      role: string;
+      rollout_pin: string;
+    }>(
+      `SELECT role, rollout_pin, config_version
+       FROM model_role_rollout_pins
+       WHERE status = 'active'
+       ORDER BY role`,
+    );
+
+    expect(active.rows).toEqual(
+      ONE_A_3B_G1_ENABLED_ROLES.map((role) => ({
+        role,
+        rollout_pin: `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
+        config_version: `${role}:g1-release:${ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role]}`,
+      })).sort((left, right) => left.role.localeCompare(right.role)),
+    );
+    // Only narrative.validate gained a configuration; the other three reused
+    // the version already in place.
+    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["narrative.validate"]).toBe("v3");
+    const counts = await database!.pool.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM model_role_configurations
+       WHERE role = ANY($1::text[])`,
+      [[...ONE_A_3B_G1_ENABLED_ROLES]],
+    );
+    expect(counts.rows[0]!.count).toBe(4);
   });
 
   it("provisions all four roles, revokes them, and reactivates the same immutable rows", async () => {
