@@ -6,7 +6,7 @@ import type {
   UserId,
 } from "@sayhear/domain";
 
-import type { ProviderResponseFailure } from "../conversation-model";
+import type { ModelRoleCallUsage, ProviderResponseFailure } from "../conversation-model";
 
 /**
  * 1A.3b A2 (issue #198). The shared `narrative.validate` role (ADR-0121)
@@ -135,8 +135,15 @@ export type NarrativeValidatorModelOutput = Readonly<{
  */
 export type NarrativeValidationModelProvider = Readonly<{
   role: "narrative.validate";
+  /**
+   * `onUsage` receives the content-free token accounting for the call whether
+   * it produced an answer or not. It is a request-scoped callback rather than
+   * shared mutable state because one provider instance serves concurrent
+   * commands. A Provider that cannot report usage simply never calls it.
+   */
   validateNarrative(
     request: NarrativeValidatorModelRequest,
+    onUsage?: (usage: ModelRoleCallUsage) => void,
   ): Promise<NarrativeValidatorModelOutput>;
 }>;
 
@@ -374,4 +381,12 @@ export type NarrativeValidationEntrypointResult = Readonly<{
    * proven to a specific response cause.
    */
   responseFailure: ProviderResponseFailure | null;
+  /**
+   * Content-free token accounting for the Provider call, recorded for a
+   * completed validation as well as a failed one. Issue #252: without the
+   * successful spend there is no evidence that a new output budget has
+   * headroom, because the calls that fit leave no record. Null when the
+   * Provider reported no usage.
+   */
+  usage: ModelRoleCallUsage | null;
 }>;

@@ -131,6 +131,22 @@ async function validateAndCatch(): Promise<ProviderDispatchError> {
   return caught;
 }
 
+const VALIDATOR_OUTPUT = {
+  coverageKeys: ["syn-claim-1"],
+  propositions: [
+    {
+      ambiguous: false,
+      contradicted: false,
+      epistemicRendering: "confirmed",
+      propositionKey: "p1",
+      propositionKind: "fact",
+      supportKeys: ["syn-claim-1"],
+      text: "the user repaired a radio.",
+      unsupported: false,
+    },
+  ],
+} as const;
+
 describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -139,24 +155,7 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
 
   it("returns a well-formed validator output without a failure", async () => {
     stubResponsesApi([
-      completedEvent({
-        outputTokens: 120,
-        text: JSON.stringify({
-          coverageKeys: ["syn-claim-1"],
-          propositions: [
-            {
-              ambiguous: false,
-              contradicted: false,
-              epistemicRendering: "confirmed",
-              propositionKey: "p1",
-              propositionKind: "fact",
-              supportKeys: ["syn-claim-1"],
-              text: "the user repaired a radio.",
-              unsupported: false,
-            },
-          ],
-        }),
-      }),
+      completedEvent({ outputTokens: 120, text: JSON.stringify(VALIDATOR_OUTPUT) }),
     ]);
 
     await expect(
@@ -311,6 +310,49 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
     expect(failure?.reasoningTokens).toBeNull();
   });
 
+  it("reports call usage for a successful response, not only a failure", async () => {
+    // Issue #252: usage recorded only on failures cannot prove that a new
+    // budget has headroom, because the cases that fit are the ones that leave
+    // no record. The headroom question needs the successful spend too.
+    stubResponsesApi([
+      completedEvent({
+        outputTokens: 3931,
+        reasoningTokens: 3600,
+        text: JSON.stringify(VALIDATOR_OUTPUT),
+      }),
+    ]);
+
+    const seen: unknown[] = [];
+    await providers().narrativeValidationProvider.validateNarrative(
+      VALIDATOR_REQUEST,
+      (usage) => seen.push(usage),
+    );
+
+    expect(seen).toEqual([
+      {
+        inputTokens: 900,
+        outputTokens: 3931,
+        reasoningTokens: 3600,
+      },
+    ]);
+  });
+
+  it("reports usage before a schema failure so the failure and the spend agree", async () => {
+    stubResponsesApi([
+      completedEvent({ outputTokens: 30, reasoningTokens: 10, text: "{}" }),
+    ]);
+
+    const seen: unknown[] = [];
+    await providers()
+      .narrativeValidationProvider.validateNarrative(VALIDATOR_REQUEST, (usage) =>
+        seen.push(usage),
+      )
+      .catch(() => undefined);
+
+    expect(seen).toEqual([
+      { inputTokens: 900, outputTokens: 30, reasoningTokens: 10 },
+    ]);
+  });
   it("keeps every classified failure free of draft and source text", async () => {
     stubResponsesApi([completedEvent({ outputTokens: 12 })]);
 

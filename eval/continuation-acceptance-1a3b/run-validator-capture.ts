@@ -12,6 +12,7 @@ import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+  type ModelRoleCallUsage,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
   type NarrativeValidationRequest,
@@ -347,6 +348,7 @@ async function main(): Promise<void> {
       outcome: string;
       provider: string;
       responseFailure: ProviderResponseFailure | null;
+      usage: ModelRoleCallUsage | null;
       verdict: string | null;
     }[] = [];
     // --resume keeps already-recorded completed fixtures (same manifest
@@ -367,7 +369,11 @@ async function main(): Promise<void> {
           // A report resumed from before #252 has no recorded cause; keep the
           // per-case shape uniform so the frozen artifact stays comparable.
           if (entry.outcome === "completed") {
-            results.push({ ...entry, responseFailure: entry.responseFailure ?? null });
+            results.push({
+              ...entry,
+              responseFailure: entry.responseFailure ?? null,
+              usage: entry.usage ?? null,
+            });
           }
         }
         if (results.length > 0) {
@@ -447,6 +453,10 @@ async function main(): Promise<void> {
         // the frozen schema was at fault. Content-free by construction, so it
         // is safe to keep in release evidence.
         responseFailure: result.responseFailure,
+        // Recorded for completed calls too. Only the calls that fit in the
+        // budget prove the budget has headroom, so leaving them blank would
+        // make "8000 is enough" indistinguishable from "8000 barely held".
+        usage: result.usage,
         verdict: result.outcome === "completed" ? result.verdict : null,
         ...(arguments_.precision
           ? {

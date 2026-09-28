@@ -431,6 +431,7 @@ export {
   type ConversationTextModel,
   type ConversationTextModelRequest,
   type ConversationTextModelStreamEvent,
+  type ModelRoleCallUsage,
   type ProviderDispatchErrorCategory,
   type ProviderEgressClaim,
   type ProviderEgressPort,

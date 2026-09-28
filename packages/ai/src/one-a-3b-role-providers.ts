@@ -3,6 +3,7 @@ import {
   ProviderDispatchError,
   type EpisodeProposal,
   type EpisodeBuildModelProvider,
+  type ModelRoleCallUsage,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidatorModelOutput,
   type NarrativeValidationModelProvider,
@@ -467,6 +468,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
     instructions: string,
     locale: string,
     read: (parsed: unknown, role: string) => Output,
+    onUsage?: (usage: ModelRoleCallUsage) => void,
   ): Promise<Output> => {
     const { parsed, usage } = await askJson(
       configuration,
@@ -474,6 +476,15 @@ export function createRuntimeOneA3bRoleProviders(input: {
       instructions,
       locale,
     );
+    // Reported before the typed read so a call that fails the schema still
+    // leaves its spend on record; the failure itself carries the same counts.
+    // Narrowed explicitly so the callback receives exactly its declared type
+    // rather than the wider internal record.
+    onUsage?.({
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      reasoningTokens: usage.reasoningTokens,
+    });
     try {
       return read(parsed, configuration.role);
     } catch (error) {
@@ -560,13 +571,14 @@ export function createRuntimeOneA3bRoleProviders(input: {
 
   const narrativeValidationProvider: NarrativeValidationModelProvider = {
     role: "narrative.validate",
-    async validateNarrative(request) {
+    async validateNarrative(request, onUsage) {
       return askTypedJson(
         narrativeConfiguration,
         request,
         "Independently decompose the draft into propositions and report source coverage. Return an object with propositions and coverageKeys arrays. Each proposition must contain propositionKey, text, propositionKind, epistemicRendering, supportKeys, unsupported, contradicted, and ambiguous. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Use only supplied source keys. Each proposition text must be an exact verbatim quote (a contiguous substring) of the draft text; never paraphrase, normalize, reorder, or translate its wording. Flag semantics. Mark unsupported true only when no supplied source states or directly entails the proposition; paraphrase that preserves meaning counts as supported. Mark contradicted true only when a supplied source states the opposite of the proposition; absence of support is unsupported, never contradicted. Mark ambiguous true only when a reference in the proposition cannot be resolved from the draft itself (for example an entity, quantity, or comparison with no identifiable antecedent) so that source linkage is impossible; inelegant wording or anything resolvable from context is not ambiguous. When uncertain about any flag, leave it false.",
         request.draftLocale ?? "en-US",
         asNarrativeOutput,
+        onUsage,
       );
     },
   };

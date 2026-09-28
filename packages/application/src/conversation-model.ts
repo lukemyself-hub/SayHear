@@ -137,6 +137,23 @@ export type ProviderDispatchErrorCategory =
   | "unknown";
 
 /**
+ * Content-free token accounting for one Provider call. Counts only, never
+ * request or response text, so it is safe to keep in release evidence and in
+ * logs produced on private data.
+ *
+ * `reasoningTokens` is `null` when the Provider reported no reasoning split,
+ * which is not the same as zero. Issue #252 exists because this number
+ * separates a budget spent on reasoning from a budget spent on a truncated
+ * answer, and because a successful call's spend is the only evidence that a
+ * new budget actually has headroom.
+ */
+export type ModelRoleCallUsage = Readonly<{
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+}>;
+
+/**
  * Content-free reason a Provider response could not be turned into a typed
  * model output (issue #252). `invalid_response` on its own cannot separate an
  * exhausted output budget from an empty final answer, an unparseable body, or
@@ -144,36 +161,26 @@ export type ProviderDispatchErrorCategory =
  * needs a different remedy: a larger versioned budget, a shorter prompt, a
  * stricter schema, or a provider fix.
  *
- * Every field is a count or a closed enum, so this record satisfies the
- * Provider Egress rule that dispatch telemetry carries no body text
- * (architecture §15.8.1 step 4) and can be written to release evidence on
- * private data without redaction. `outputLength` is a character count of the
- * final visible output, never the output itself.
+ * Carries the same usage record as a successful call so one artifact shape
+ * describes every attempt, whether or not it produced an answer.
  */
-export type ProviderResponseFailure = Readonly<{
-  kind:
-    | "output_budget_exhausted"
-    | "empty_output"
-    | "parse_failed"
-    | "schema_mismatch";
-  inputTokens: number | null;
-  outputLength: number;
-  outputTokens: number | null;
-  /**
-   * Tokens the Provider spent on reasoning rather than on the answer. `null`
-   * means the Provider reported no split, which is not the same as zero.
-   * Issue #252 exists because this number is what separates a budget spent on
-   * reasoning from a budget spent on a truncated answer.
-   */
-  reasoningTokens: number | null;
-  /**
-   * Set only when the Provider itself reported the truncation, which is what
-   * separates a proven budget exhaustion from an inferred one. A literal
-   * union, not a free string, so no Provider-supplied text can reach release
-   * evidence through this field.
-   */
-  providerReason: "max_output_tokens" | null;
-}>;
+export type ProviderResponseFailure = ModelRoleCallUsage &
+  Readonly<{
+    kind:
+      | "output_budget_exhausted"
+      | "empty_output"
+      | "parse_failed"
+      | "schema_mismatch";
+    /** Characters of final visible output. A count, never the text itself. */
+    outputLength: number;
+    /**
+     * Set only when the Provider itself reported the truncation, which is what
+     * separates a proven budget exhaustion from an inferred one. A literal
+     * union, not a free string, so no Provider-supplied text can reach release
+     * evidence through this field.
+     */
+    providerReason: "max_output_tokens" | null;
+  }>;
 
 export class ProviderDispatchError extends Error {
   public constructor(

@@ -12,7 +12,10 @@ import {
   type RecoveryGate,
 } from "../recovery-gate";
 import { ProviderDispatchError } from "../conversation-model";
-import type { ProviderResponseFailure } from "../conversation-model";
+import type {
+  ModelRoleCallUsage,
+  ProviderResponseFailure,
+} from "../conversation-model";
 import type {
   ModelRoleAttemptKind,
   ModelRoleCommandService,
@@ -104,6 +107,7 @@ function entrypointResult(
     modelRunAttemptId: string | null;
   } = { generationCommandId: null, modelRunAttemptId: null },
   responseFailure: NarrativeValidationEntrypointResult["responseFailure"] = null,
+  usage: NarrativeValidationEntrypointResult["usage"] = null,
 ): NarrativeValidationEntrypointResult {
   return {
     draftRef,
@@ -113,6 +117,7 @@ function entrypointResult(
     verdict,
     ...ledger,
     responseFailure,
+    usage,
   };
 }
 
@@ -288,6 +293,11 @@ async function executeNarrativeAttempt(input: Readonly<{
   };
 
   let modelOutput: NarrativeValidatorModelOutput;
+  // Request-scoped so concurrent commands cannot interleave usage records.
+  let callUsage: ModelRoleCallUsage | null = null;
+  const onUsage = (usage: ModelRoleCallUsage) => {
+    callUsage = usage;
+  };
   try {
     const providerRequest = {
       userId: request.userId,
@@ -320,10 +330,12 @@ async function executeNarrativeAttempt(input: Readonly<{
           execute: () =>
             input.dependencies.narrativeValidationProvider.validateNarrative(
               providerRequest,
+              onUsage,
             ),
         })
       : await input.dependencies.narrativeValidationProvider.validateNarrative(
           providerRequest,
+          onUsage,
         );
   } catch (error) {
     if (
@@ -340,6 +352,8 @@ async function executeNarrativeAttempt(input: Readonly<{
         null,
         null,
         ledger,
+        null,
+        callUsage,
       );
     }
     const failureCode = classifyNarrativeProviderError(error);
@@ -371,6 +385,7 @@ async function executeNarrativeAttempt(input: Readonly<{
       null,
       ledger,
       responseFailureOf(error),
+      callUsage,
     );
   }
 
@@ -413,7 +428,16 @@ async function executeNarrativeAttempt(input: Readonly<{
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
     });
-    return entrypointResult(request.draftRef, "fenced", committed.reason, null, null, ledger);
+    return entrypointResult(
+      request.draftRef,
+      "fenced",
+      committed.reason,
+      null,
+      null,
+      ledger,
+      null,
+      callUsage,
+    );
   }
   const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
     userId: request.userId,
@@ -436,9 +460,20 @@ async function executeNarrativeAttempt(input: Readonly<{
       null,
       null,
       ledger,
+      null,
+      callUsage,
     );
   }
-  return entrypointResult(request.draftRef, "completed", null, null, result.outcome, ledger);
+  return entrypointResult(
+    request.draftRef,
+    "completed",
+    null,
+    null,
+    result.outcome,
+    ledger,
+    null,
+    callUsage,
+  );
 }
 
 function sha256(value: string): string {

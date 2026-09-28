@@ -16,6 +16,7 @@ import {
   runNarrativeValidationAttempt,
   runNarrativeValidationMaintenance,
   readNarrativeValidationOutcome,
+  type ModelRoleCallUsage,
   type ModelRoleCommandService,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
@@ -204,11 +205,14 @@ function providerFor(
   script: (
     request: NarrativeValidatorModelRequest,
   ) => NarrativeValidatorModelOutput,
+  reportUsage?: ModelRoleCallUsage,
 ): NarrativeValidationModelProvider {
   return {
     role: "narrative.validate",
-    async validateNarrative(request) {
-      return script(request);
+    async validateNarrative(request, onUsage) {
+      const output = script(request);
+      if (reportUsage) onUsage?.(reportUsage);
+      return output;
     },
   };
 }
@@ -785,6 +789,38 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
 
     expect(result.errorCode).toBe("schema_incompatible");
     expect(result.responseFailure).toBeNull();
+  });
+
+  it("records the call usage of a successful validation (issue #252 headroom)", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000018",
+    );
+    // A Provider that reports nothing must leave usage null, never a
+    // fabricated zero.
+    const quiet = dependencies(providerFor(() => acceptedOutput()));
+    const quietResult = await runNarrativeValidation({
+      dependencies: quiet,
+      command: { request, expectedDataEpoch: 1 },
+    });
+    expect(quietResult.outcome).toBe("completed");
+    expect(quietResult.usage).toBeNull();
+
+    const request2 = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000019",
+    );
+    const reported: ModelRoleCallUsage = {
+      inputTokens: 470,
+      outputTokens: 3931,
+      reasoningTokens: 3600,
+    };
+    const loud = dependencies(providerFor(() => acceptedOutput(), reported));
+    const result = await runNarrativeValidation({
+      dependencies: loud,
+      command: { request: request2, expectedDataEpoch: 1 },
+    });
+
+    expect(result.outcome).toBe("completed");
+    expect(result.usage).toEqual(reported);
   });
 
   it("fences validation behind the owner epoch fence", async () => {
