@@ -33,7 +33,27 @@ fixed":
 Consequence: rolling out 8000 tokens **cannot** reuse
 `narrative.validate:g1-release:v1`, which production already holds at 4000.
 The guard is correct — it fails loudly rather than silently keeping the old
-budget — but it means activation will refuse until all of these move together:
+budget — but activation **cannot rotate a live role**, which is the part that
+blocks a smooth release:
+
+- `model_role_rollout_pins_one_active_idx` is a partial unique index on `role`
+  where `status = 'active'`, so only one pin per role may be active.
+- `bindActiveG1Release` compares the requested pin set against the currently
+  active set and throws `G1 activation refuses a partial or conflicting active
+  rollout pin set` on any difference, including a single role moving to a new
+  pin. Mixed-version active sets are not representable.
+- `revokeActiveRolloutPins` — the only path that sets `status = 'revoked'` —
+  requires `hasExactG1RoleSet`, so it always revokes **all four** roles, and
+  matches on `release_fingerprint`.
+
+**Consequence: there is no forward path.** Rolling a new `narrative.validate`
+config over a live deployment requires revoking the complete four-role G1 set
+and re-activating all four with the new versions. The budget fix is therefore
+a rollback-and-relaunch, not an in-place bump, and the rehearsal in B7 is not
+optional bookkeeping — it is the only rehearsal that exercises the real
+procedure.
+
+Activation will refuse until all of these move together:
 
 - a new `configVersion`, e.g. `narrative.validate:g1-release:v2`
 - a new `providerPolicyVersion`, e.g. `deepseek-narrative.validate-egress:g1-release:v2`
@@ -46,6 +66,28 @@ budget — but it means activation will refuse until all of these move together:
   `providerPolicyVersion: \`${provider}-${role}-egress:g1-release:v1\`` and
   `rolloutPin: \`${role}-g1-release-pin:v1\`` — it will emit a v1 identity for a
   v2 configuration until changed
+- `tests/system/g1-release-activation.system.test.ts`, which builds the same
+  three identities in its own helper
+
+### B1a — The version number to mint is unverified
+
+**Blocked. Needs a production read-only check.**
+
+`docs/plans/g1-only-release-status.md` records the live active pins as "G1 v2"
+for the four roles. That phrase is ambiguous in a way that matters: it may be a
+human label for a deployment iteration, or it may be the literal config
+version. This document previously asserted that production "already holds 4000
+at v1" — that was an inference, not a verified read.
+
+If the live config version is already `narrative.validate:g1-release:v2`, then
+minting v2 collides with it and the immutability guard throws on the first
+activation attempt. The version to mint depends on the answer, so it must be
+read from `model_role_configurations` before the migration is written, not
+after.
+
+The hosted read-only connection used on 2026-09-27 inspected only pins and row
+counts and never read configuration identities, so the answer is not already
+on file.
 
 This was deliberately held back while the holdout was treated as a
 precondition. Luke's test-data decision (see §2) moves it ahead of the holdout:
