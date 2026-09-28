@@ -380,7 +380,7 @@ function verifyRolePin(pin: unknown, expectedRole: string, mismatches: string[])
 /** Verify all seven independently pinned roles and the no-preselected-winner shape. */
 export function verifyPins(pins: F3Pins): PinsVerification {
   const mismatches: string[] = [];
-  if (pins.version !== "1a3b-f3-pins:v1") mismatches.push("unsupported F3 pins version");
+  if (pins.version !== "1a3b-f3-pins:v2") mismatches.push("unsupported F3 pins version");
   if (pins.syntheticOnly !== true) mismatches.push("pins must be synthetic-only");
   if (!isRecord(pins.roles)) {
     mismatches.push("pins.roles must be an object");
