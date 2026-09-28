@@ -13,6 +13,17 @@ type JsonObject = Record<string, unknown>;
 const F3_MANIFEST_VERSION = "1a3b-f3-manifest:v1";
 const F3_PINS_VERSION = "1a3b-f3-pins:v2";
 const F3_CATALOG_VERSION = "1a3b-f3-fixtures:v1";
+/**
+ * The #252 acceptance holdout. A separately authored catalog, so it carries its
+ * own version and can never be confused with the spent one in release
+ * evidence. The two are deliberately different strings rather than one version
+ * with a different content hash.
+ */
+const F3_HOLDOUT_CATALOG_VERSION = "1a3b-f3-holdout-fixtures:v1";
+const F3_CATALOG_VERSIONS: readonly string[] = [
+  F3_CATALOG_VERSION,
+  F3_HOLDOUT_CATALOG_VERSION,
+];
 const F3_LEDGER_VERSION = "1a3b-f3-adjudication:v1";
 const F3_ROLES = [
   "episode.build",
@@ -815,13 +826,16 @@ function verifyScenario(
   }
 }
 
-function verifyF3Catalog(value: unknown, mismatches: string[]): Set<string> {
+/** Exported for the holdout catalog contract test. */
+export function verifyF3Catalog(value: unknown, mismatches: string[]): Set<string> {
   const scenarioIds = new Set<string>();
   if (!isRecord(value)) {
     mismatches.push("F3 catalog must be an object");
     return scenarioIds;
   }
-  if (value.version !== F3_CATALOG_VERSION) mismatches.push("unsupported F3 catalog version");
+  if (typeof value.version !== "string" || !F3_CATALOG_VERSIONS.includes(value.version)) {
+    mismatches.push("unsupported F3 catalog version");
+  }
   if (value.synthetic !== true) mismatches.push("F3 catalog must be synthetic-only");
   if (!nonEmpty(value.syntheticNotice) || !value.syntheticNotice.toLowerCase().includes("synthetic")) {
     mismatches.push("F3 catalog must explain that all fixtures are synthetic");
@@ -1179,7 +1193,10 @@ export function verifyOneA3bF3ReleaseArtifacts(input: Readonly<{
   if (!catalogReference) {
     mismatches.push("F3 manifest catalog hash is required");
   } else {
-    if (catalogReference.version !== F3_CATALOG_VERSION) {
+    if (
+      typeof catalogReference.version !== "string" ||
+      !F3_CATALOG_VERSIONS.includes(catalogReference.version)
+    ) {
       mismatches.push("F3 manifest catalog version is not frozen");
     }
     if (catalogReference.sha256 !== safeSha256Fingerprint(input.catalog)) {

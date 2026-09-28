@@ -13,6 +13,7 @@ import { verifyValidatorPrecisionReportArtifact } from "../scripts/verify-1a3b-g
 import {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   verifyOneA3bF3ReleaseArtifacts,
+  verifyF3Catalog,
   verifyOneA3bG1EvidenceArtifact,
   verifyOneA3bG1RoleConfigurationsAgainstF3,
 } from "@sayhear/application";
@@ -123,6 +124,31 @@ describe("1A.3b G1 evidence lineage", () => {
     });
 
     expect(mismatches).toEqual([]);
+  });
+
+  it("accepts the #252 holdout catalog as a distinct frozen F3 catalog version", () => {
+    const holdout = readFixture("../eval/continuation-acceptance-1a3b/holdout/fixtures.json");
+    const spent = readFixture("../eval/continuation-acceptance-1a3b/fixtures.json");
+
+    // The holdout is a separately authored catalog, so it carries its own
+    // version string. Without accepting it here, the sealed acceptance run
+    // could be captured but never certified into the release.
+    const holdoutMismatches: string[] = [];
+    verifyF3Catalog(holdout, holdoutMismatches);
+    expect(holdoutMismatches).not.toContain("unsupported F3 catalog version");
+
+    // The incumbent must keep verifying; accepting a second version must not
+    // relax the first.
+    const spentMismatches: string[] = [];
+    verifyF3Catalog(spent, spentMismatches);
+    expect(spentMismatches).not.toContain("unsupported F3 catalog version");
+
+    // An unrecognised version is still refused, so the allowlist is not a
+    // blanket pass. Which catalog a manifest actually used is settled by the
+    // catalog sha256 the manifest freezes, not by the version string.
+    const unknownMismatches: string[] = [];
+    verifyF3Catalog({ ...holdout, version: "1a3b-f3-fixtures:v9" }, unknownMismatches);
+    expect(unknownMismatches).toContain("unsupported F3 catalog version");
   });
 
   it("binds AC-D01 deployment evidence to the release identity, not the full manifest", () => {

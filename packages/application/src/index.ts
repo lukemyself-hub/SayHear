@@ -138,6 +138,7 @@ export {
 export {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   verifyOneA3bF3ReleaseArtifacts,
+  verifyF3Catalog,
   verifyOneA3bG1EvidenceArtifact,
   verifyOneA3bG1RoleConfigurationsAgainstF3,
   type OneA3bG1EvidenceArtifact,
