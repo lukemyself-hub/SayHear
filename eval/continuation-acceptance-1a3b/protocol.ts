@@ -431,6 +431,12 @@ export type InputSummary = Readonly<{
 
 export type ReviewPackage = Readonly<{
   hardGateReport: Readonly<{
+    /**
+     * Whether the deterministic hard gates applied to this comparison at all.
+     * False for the Bio naturalness comparison. It is recorded separately from
+     * `passed` so a gate that never ran cannot be read as a gate that passed.
+     */
+    applicable: boolean;
     checkedFixtureCount: number;
     failures: readonly string[];
     passed: boolean;

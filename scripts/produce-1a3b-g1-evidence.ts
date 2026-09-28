@@ -626,8 +626,13 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
     ? value.failures.filter((entry): entry is string => typeof entry === "string")
     : [];
   const checkedFixtureCount = objectNumber(value, "checkedFixtureCount");
+  // The 18-fixture count already refuses a report that checked nothing, which
+  // is how a non-Continuation comparison used to satisfy AC-X04 vacuously.
+  // Requiring `applicable` as well makes that intent explicit at the artifact
+  // boundary rather than relying on the count alone.
   const passed =
     value.passed === true &&
+    value.applicable === true &&
     failures.length === 0 &&
     checkedFixtureCount === 18;
   return {
@@ -635,9 +640,11 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
     failures,
     note: passed
       ? null
-      : failures.length > 0
-        ? `Hard-gate artifact reports ${failures.length} failure(s).`
-        : "Hard-gate artifact is not a passed complete 18-fixture report.",
+      : value.applicable !== true
+        ? "Hard-gate artifact is not an applicable report."
+        : failures.length > 0
+          ? `Hard-gate artifact reports ${failures.length} failure(s).`
+          : "Hard-gate artifact is not a passed complete 18-fixture report.",
     passed,
     path: relativeRepositoryPath(path),
   };

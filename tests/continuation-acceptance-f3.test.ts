@@ -496,6 +496,48 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     ).toThrow(/configuration fingerprint/i);
   });
 
+  it("fails the hard gates loudly instead of passing when nothing was checked", () => {
+    // A validator-only catalog, like the #252 holdout. It has no Continuation
+    // pool, so the hard gates must refuse rather than report a pass having
+    // checked nothing.
+    const holdout = JSON.parse(
+      readFileSync(
+        resolve(root, "eval/continuation-acceptance-1a3b/holdout/fixtures.json"),
+        "utf8",
+      ),
+    ) as Parameters<typeof verifySyntheticRunHardGates>[0];
+
+    const emptyPool = verifySyntheticRunHardGates(
+      holdout,
+      syntheticRun("incumbent", "continuation"),
+    );
+
+    expect(emptyPool.applicable).toBe(true);
+    expect(emptyPool.passed).toBe(false);
+    expect(emptyPool.checkedFixtureCount).toBe(0);
+    expect(emptyPool.failures.join(" ")).toMatch(/Continuation pool/i);
+
+    // A run that is not a Continuation run is not applicable, and must not be
+    // readable as a pass.
+    const wrongGroup = verifySyntheticRunHardGates(
+      catalog,
+      syntheticRun("incumbent", "bio_naturalness"),
+    );
+
+    expect(wrongGroup.applicable).toBe(false);
+    expect(wrongGroup.passed).toBe(false);
+    expect(wrongGroup.checkedFixtureCount).toBe(0);
+
+    // The incumbent path is unchanged: a real Continuation run over the full
+    // pool still checks every fixture.
+    const real = verifySyntheticRunHardGates(
+      catalog,
+      syntheticRun("incumbent", "continuation"),
+    );
+    expect(real.applicable).toBe(true);
+    expect(real.checkedFixtureCount).toBe(18);
+  });
+
   it("checks deterministic hard gates across the complete pool before sampling", () => {
     const candidate = syntheticRun("candidate", "continuation");
     const firstScenario = candidate.scenarios[0]!;

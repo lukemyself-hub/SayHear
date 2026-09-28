@@ -94,6 +94,14 @@ function sameInput(left: unknown, right: unknown): boolean {
 
 export type HardGateReport = Readonly<{
   advisories: readonly string[];
+  /**
+   * False when the gate does not apply to this run at all, which is the case
+   * for the Bio naturalness comparison. A not-applicable report must never be
+   * read as a pass: the two were previously the same value, so a catalog with
+   * no Continuation pool produced passed: true with checkedFixtureCount 0 and
+   * AC-X04 was satisfied without a single fixture being checked.
+   */
+  applicable: boolean;
   checkedFixtureCount: number;
   failures: readonly string[];
   passed: boolean;
@@ -116,11 +124,28 @@ export function verifySyntheticRunHardGates(
 ): HardGateReport {
   const tokenGates = options.tokenGates ?? "hard";
   if (run.group !== "continuation") {
-    return { advisories: [], checkedFixtureCount: 0, failures: [], passed: true };
+    return {
+      advisories: [],
+      applicable: false,
+      checkedFixtureCount: 0,
+      failures: [],
+      passed: false,
+    };
   }
   const fixtures = catalog.scenarios.filter(
     (fixture): fixture is ContinuationFixture => fixture.group === "continuation",
   );
+  if (fixtures.length === 0) {
+    return {
+      advisories: [],
+      applicable: true,
+      checkedFixtureCount: 0,
+      failures: [
+        "hard gates require a catalog with a Continuation pool; this catalog has none",
+      ],
+      passed: false,
+    };
+  }
   const scenarios = runScenariosById(run);
   const failures: string[] = [];
   const advisories: string[] = [];
@@ -190,6 +215,7 @@ export function verifySyntheticRunHardGates(
   }
   return {
     advisories,
+    applicable: true,
     checkedFixtureCount: fixtures.length,
     failures,
     passed: failures.length === 0,
@@ -455,11 +481,16 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
       ...firstHardGates.advisories,
       ...secondHardGates.advisories,
     ],
+    applicable: firstHardGates.applicable && secondHardGates.applicable,
     checkedFixtureCount: firstHardGates.checkedFixtureCount,
     failures: [...firstHardGates.failures, ...secondHardGates.failures],
     passed: firstHardGates.passed && secondHardGates.passed,
   };
-  if (!hardGateReport.passed) {
+  // A gate that does not apply to this comparison group is not a failure, so it
+  // must not throw here. Where it does apply, it must pass — and AC-X04 evidence
+  // generation separately requires applicable: true, so a gate that silently
+  // applied to nothing can never certify the release.
+  if (hardGateReport.applicable && !hardGateReport.passed) {
     throw new Error(`Synthetic hard gates failed:\n${hardGateReport.failures.join("\n")}`);
   }
 
@@ -771,7 +802,10 @@ export function unblindReviewPackage(input: {
   if (input.package.packageFingerprint !== expectedFingerprint) {
     throw new Error("Review package fingerprint does not match its contents.");
   }
-  if (!input.package.hardGateReport.passed) {
+  if (
+    input.package.hardGateReport.applicable &&
+    !input.package.hardGateReport.passed
+  ) {
     throw new Error("Cannot reveal a package with failed deterministic hard gates.");
   }
   const scored = validateScores(input.scores, input.package.pairs);
