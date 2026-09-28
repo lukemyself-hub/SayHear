@@ -154,8 +154,13 @@ export type ProviderResponseFailure = Readonly<{
   inputTokens: number | null;
   outputLength: number;
   outputTokens: number | null;
-  /** Closed set of Provider-reported wire reasons; never a free-text message. */
-  providerReason: string | null;
+  /**
+   * Set only when the Provider itself reported the truncation, which is what
+   * separates a proven budget exhaustion from an inferred one. A literal
+   * union, not a free string, so no Provider-supplied text can reach release
+   * evidence through this field.
+   */
+  providerReason: "max_output_tokens" | null;
 }>;
 
 export class ProviderDispatchError extends Error {

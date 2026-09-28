@@ -166,9 +166,8 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
   });
 
   it("reads an empty final answer spent to the frozen budget as output_budget_exhausted", async () => {
-    // The observed #252 signature: HTTP 200, full reasoning spend against the
-    // pinned cap, zero characters of final JSON. The cap is what separates
-    // this from a Provider that simply emitted nothing.
+    // The observed #252 signature: HTTP 200, most of the reasoning budget
+    // spent, zero characters of final JSON.
     stubResponsesApi([completedEvent({ outputTokens: MAX_OUTPUT_TOKENS })]);
 
     expect((await validateAndCatch()).failure).toMatchObject({
@@ -200,6 +199,36 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
       kind: "output_budget_exhausted",
       outputLength: 16,
       outputTokens: MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it("reads a parse failure just below the cap as output_budget_exhausted", async () => {
+    // Issue #252's own evidence: successful `narrative.validate` calls spent
+    // 3931 and 3687 tokens against a 4000 cap. A truncation landing at 92% of
+    // the cap must not be recorded as a malformed body, or the release gate
+    // points the next versioned configuration at the schema instead of the
+    // budget.
+    stubResponsesApi([
+      completedEvent({ outputTokens: 3687, text: '{"propositions":[{"text":"未' }),
+    ]);
+
+    expect((await validateAndCatch()).failure).toMatchObject({
+      kind: "output_budget_exhausted",
+      outputTokens: 3687,
+      // Only the Provider-reported reason proves exhaustion; this is inferred.
+      providerReason: null,
+    });
+  });
+
+  it("keeps a low-spend malformed body as parse_failed", async () => {
+    stubResponsesApi([
+      completedEvent({ outputTokens: 1500, text: '{"propositions":[{"text":"未' }),
+    ]);
+
+    expect((await validateAndCatch()).failure).toMatchObject({
+      kind: "parse_failed",
+      outputTokens: 1500,
+      providerReason: null,
     });
   });
 

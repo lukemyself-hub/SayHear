@@ -351,13 +351,22 @@ type JsonCallUsage = Readonly<{
 }>;
 
 /**
- * Issue #252: some Providers stop at the frozen `max_output_tokens` cap
- * without reporting `max_output_tokens` in `incomplete_details`. When the
- * reported output tokens reached the cap, the pinned budget — not the output
- * format — is the thing that ran out, and a Provider that spent the whole cap
- * without emitting a character is the same truncation seen from the other
- * side. Only counts are compared; no response text is inspected.
+ * Issue #252: some Providers truncate at the frozen `max_output_tokens` cap
+ * without reporting `max_output_tokens` in `incomplete_details`, so a parse
+ * failure alone cannot name the budget as the cause. The #252 capture shows
+ * `narrative.validate` routinely spending 92–98% of its cap on successful
+ * calls, so a response that failed to produce typed output after spending
+ * this much of the cap is in the truncation regime, not the malformed-output
+ * regime — a threshold of exactly 1.0 would report those as `parse_failed`
+ * and point the next versioned configuration at the wrong remedy.
+ *
+ * This is an inference, never a proof: only the Provider-reported reason
+ * proves exhaustion, and the two stay distinguishable through
+ * `providerReason`. The floor is a named constant so changing it is a
+ * reviewable code decision, not a silent drift in a frozen artifact.
  */
+const BUDGET_UTILIZATION_INFERENCE_FLOOR = 0.9;
+
 function outputFailureKind(
   configuration: ModelRoleConfigurationSnapshot,
   usage: JsonCallUsage,
@@ -366,7 +375,7 @@ function outputFailureKind(
   if (
     typeof cap === "number" &&
     usage.outputTokens !== null &&
-    usage.outputTokens >= cap
+    usage.outputTokens >= Math.floor(cap * BUDGET_UTILIZATION_INFERENCE_FLOOR)
   ) {
     return "output_budget_exhausted";
   }
