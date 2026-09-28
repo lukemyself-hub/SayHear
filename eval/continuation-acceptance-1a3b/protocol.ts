@@ -180,11 +180,32 @@ export type Fixture =
   | BioNaturalnessFixture
   | ValidatorFixture;
 
+/**
+ * A clean draft used by the zero-false-blocking precision set. It cites a claim
+ * from the same catalog's `sharedInputs`, so a holdout can carry its own
+ * precision drafts instead of reusing the ones the capture script hardcodes.
+ */
+export type PrecisionDraft = Readonly<{
+  id: string;
+  locale: string;
+  inputRef: string;
+  claimId: string;
+  draftText: string;
+}>;
+
 export type FixtureCatalog = Readonly<{
   scenarios: readonly Fixture[];
   sharedInputs: Readonly<Record<string, FrozenSharedInput>>;
   synthetic: true;
   syntheticNotice: string;
+  /**
+   * Optional. When present, `--precision` uses these drafts instead of the
+   * capture script's built-in set, which is bound to the spent catalog's claim
+   * IDs. Absent means the built-in set is used, which is what the incumbent
+   * catalog relies on; its bytes are hashed into already-produced release
+   * fingerprints and must not change.
+   */
+  precisionDrafts?: readonly PrecisionDraft[];
   version: typeof F3_CATALOG_VERSION | typeof F3_HOLDOUT_CATALOG_VERSION;
 }>;
 

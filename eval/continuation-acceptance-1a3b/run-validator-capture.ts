@@ -93,8 +93,12 @@ function parseArguments(): { catalog: string; continueOnError: boolean; manifest
  * Clean-draft precision probe: fully source-faithful Bio drafts (no planted
  * error) with a correct writer manifest. A clean draft must complete with
  * zero blocking findings; any blocking finding is a false positive.
+ *
+ * These are bound to the spent catalog's claim IDs. A holdout that was never
+ * used for tuning must supply its own via `precisionDrafts` in its catalog, or
+ * its precision half would silently reuse spent drafts.
  */
-const PRECISION_DRAFTS = [
+const BUILT_IN_PRECISION_DRAFTS = [
   { id: "precision-clean-en-1", locale: "en-US", inputRef: "validator-en", claimId: "syn-claim-validator-en", draftText: "The user repairs radios." },
   { id: "precision-clean-en-2", locale: "en-US", inputRef: "validator-en", claimId: "syn-claim-validator-en", draftText: "Repairing radios is what the user does." },
   { id: "precision-clean-zh-1", locale: "zh-CN", inputRef: "validator-zh", claimId: "syn-claim-validator-zh", draftText: "该用户会修理收音机。" },
@@ -292,7 +296,9 @@ async function main(): Promise<void> {
     let cases: readonly { fixtureId: string; validatorErrorClass: string; request: NarrativeValidationRequest }[] = bundles;
     if (arguments_.precision) {
       const typedCatalog = catalog as FixtureCatalog;
-      cases = PRECISION_DRAFTS.map((draft) => {
+      const precisionDrafts =
+        typedCatalog.precisionDrafts ?? BUILT_IN_PRECISION_DRAFTS;
+      cases = precisionDrafts.map((draft) => {
         const sharedInput = typedCatalog.sharedInputs[draft.inputRef];
         const claim = sharedInput?.memory.find((candidate) => candidate.id === draft.claimId);
         if (!claim) throw new Error(`Precision draft ${draft.id} cites unknown claim ${draft.claimId}.`);

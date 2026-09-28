@@ -2,6 +2,50 @@
   "version": "1a3b-f3-holdout-fixtures:v1",
   "synthetic": true,
   "syntheticNotice": "Fully synthetic, fictional holdout acceptance set. Generated 2026-09-28 on a different fictional domain from the spent F3 catalog so no case is a re-skin of a case that already ran. Requires Luke's difficulty review before it counts as an acceptance holdout.",
+  "precisionDrafts": [
+    {
+      "id": "holdout-precision-clean-en-1",
+      "locale": "en-US",
+      "inputRef": "holdout-en",
+      "claimId": "syn-claim-holdout-en",
+      "draftText": "The fictional user restores old clocks."
+    },
+    {
+      "id": "holdout-precision-clean-en-2",
+      "locale": "en-US",
+      "inputRef": "holdout-en",
+      "claimId": "syn-claim-holdout-en",
+      "draftText": "Restoring old clocks is what the fictional user does."
+    },
+    {
+      "id": "holdout-precision-clean-zh-1",
+      "locale": "zh-CN",
+      "inputRef": "holdout-zh",
+      "claimId": "syn-claim-holdout-zh",
+      "draftText": "虚构用户修理古董钟表。"
+    },
+    {
+      "id": "holdout-precision-clean-zh-2",
+      "locale": "zh-CN",
+      "inputRef": "holdout-zh",
+      "claimId": "syn-claim-holdout-zh",
+      "draftText": "修理古董钟表是虚构用户会做的事情。"
+    },
+    {
+      "id": "holdout-precision-clean-mix-1",
+      "locale": "zh-CN",
+      "inputRef": "holdout-mix",
+      "claimId": "syn-claim-holdout-mix",
+      "draftText": "Restoring old clocks 是虚构用户会做的事情。"
+    },
+    {
+      "id": "holdout-precision-clean-mix-2",
+      "locale": "zh-CN",
+      "inputRef": "holdout-mix",
+      "claimId": "syn-claim-holdout-mix",
+      "draftText": "虚构用户会 restore old clocks。"
+    }
+  ],
   "sharedInputs": {
     "holdout-en": {
       "events": [

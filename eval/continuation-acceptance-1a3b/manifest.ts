@@ -291,6 +291,34 @@ export function verifyFixtureCatalog(catalog: FixtureCatalog): FixtureVerificati
     }
   }
 
+  // A holdout that carries its own precision drafts must carry six of them,
+  // each citing a claim from its own shared inputs. The incumbent carries none
+  // and relies on the capture script's built-in set, whose claim IDs match its
+  // own catalog; this check never fires for it.
+  const precisionDrafts = catalog.precisionDrafts;
+  if (precisionDrafts) {
+    if (precisionDrafts.length !== 6) {
+      mismatches.push("catalog precisionDrafts must contain 6 clean drafts");
+    }
+    for (const draft of precisionDrafts) {
+      if (ids.has(draft.id)) {
+        mismatches.push(`duplicate fixture ID ${draft.id}`);
+      }
+      ids.add(draft.id);
+      const sharedInput = catalog.sharedInputs[draft.inputRef];
+      if (!sharedInput) {
+        mismatches.push(`${draft.id} cites unknown shared input ${draft.inputRef}`);
+        continue;
+      }
+      if (!sharedInput.memory.some((candidate) => candidate.id === draft.claimId)) {
+        mismatches.push(`${draft.id} cites unknown claim ${draft.claimId}`);
+      }
+      if (!draft.draftText.trim()) {
+        mismatches.push(`${draft.id} has an empty draft text`);
+      }
+    }
+  }
+
   // A catalog's requirements are scoped to the groups it actually carries, so
   // a validator-only acceptance holdout can be verified without inventing a
   // Continuation and Bio pool it will never run. No check is relaxed for a
