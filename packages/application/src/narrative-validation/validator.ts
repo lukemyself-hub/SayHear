@@ -13,6 +13,10 @@ import {
 } from "../recovery-gate";
 import { ProviderDispatchError } from "../conversation-model";
 import type {
+  ModelRoleCallUsage,
+  ProviderResponseFailure,
+} from "../conversation-model";
+import type {
   ModelRoleAttemptKind,
   ModelRoleCommandService,
   ModelRoleFailureCode,
@@ -102,8 +106,28 @@ function entrypointResult(
     generationCommandId: string | null;
     modelRunAttemptId: string | null;
   } = { generationCommandId: null, modelRunAttemptId: null },
+  responseFailure: NarrativeValidationEntrypointResult["responseFailure"] = null,
+  usage: NarrativeValidationEntrypointResult["usage"] = null,
 ): NarrativeValidationEntrypointResult {
-  return { draftRef, outcome, errorCode, rejectionCode, verdict, ...ledger };
+  return {
+    draftRef,
+    outcome,
+    errorCode,
+    rejectionCode,
+    verdict,
+    ...ledger,
+    responseFailure,
+    usage,
+  };
+}
+
+/**
+ * Issue #252: the content-free response cause, when the transport or the role
+ * provider proved one. It is evidence for the next versioned configuration
+ * only — it never changes `errorCode`, the ledger write, or the retry plan.
+ */
+function responseFailureOf(error: unknown): ProviderResponseFailure | null {
+  return error instanceof ProviderDispatchError ? (error.failure ?? null) : null;
 }
 
 /**
@@ -269,6 +293,11 @@ async function executeNarrativeAttempt(input: Readonly<{
   };
 
   let modelOutput: NarrativeValidatorModelOutput;
+  // Request-scoped so concurrent commands cannot interleave usage records.
+  let callUsage: ModelRoleCallUsage | null = null;
+  const onUsage = (usage: ModelRoleCallUsage) => {
+    callUsage = usage;
+  };
   try {
     const providerRequest = {
       userId: request.userId,
@@ -301,10 +330,12 @@ async function executeNarrativeAttempt(input: Readonly<{
           execute: () =>
             input.dependencies.narrativeValidationProvider.validateNarrative(
               providerRequest,
+              onUsage,
             ),
         })
       : await input.dependencies.narrativeValidationProvider.validateNarrative(
           providerRequest,
+          onUsage,
         );
   } catch (error) {
     if (
@@ -321,6 +352,8 @@ async function executeNarrativeAttempt(input: Readonly<{
         null,
         null,
         ledger,
+        null,
+        callUsage,
       );
     }
     const failureCode = classifyNarrativeProviderError(error);
@@ -351,6 +384,8 @@ async function executeNarrativeAttempt(input: Readonly<{
       null,
       null,
       ledger,
+      responseFailureOf(error),
+      callUsage,
     );
   }
 
@@ -393,7 +428,16 @@ async function executeNarrativeAttempt(input: Readonly<{
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
     });
-    return entrypointResult(request.draftRef, "fenced", committed.reason, null, null, ledger);
+    return entrypointResult(
+      request.draftRef,
+      "fenced",
+      committed.reason,
+      null,
+      null,
+      ledger,
+      null,
+      callUsage,
+    );
   }
   const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
     userId: request.userId,
@@ -416,9 +460,20 @@ async function executeNarrativeAttempt(input: Readonly<{
       null,
       null,
       ledger,
+      null,
+      callUsage,
     );
   }
-  return entrypointResult(request.draftRef, "completed", null, null, result.outcome, ledger);
+  return entrypointResult(
+    request.draftRef,
+    "completed",
+    null,
+    null,
+    result.outcome,
+    ledger,
+    null,
+    callUsage,
+  );
 }
 
 function sha256(value: string): string {

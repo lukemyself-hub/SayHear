@@ -1,5 +1,5 @@
 {
-  "version": "1a3b-f3-pins:v1",
+  "version": "1a3b-f3-pins:v2",
   "syntheticOnly": true,
   "shared": {
     "events": "synthetic-events:v1",
@@ -12,26 +12,140 @@
     "conversation": "conversation-harness:v3"
   },
   "roles": {
-    "episode.build": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "episode-build:eval:v2", "schemaVersion": "episode-proposal:v1", "policyVersion": "episode-admission:v1", "parameters": { "temperature": 0.2, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "open_loop.extract": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "open-loop-extract:eval:v1", "schemaVersion": "open-loop-proposal:v1", "policyVersion": "open-loop-admission:v1", "parameters": { "temperature": 0.2, "maxOutputTokens": 700 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "reflection.daily": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "reflection-daily:eval:v3", "schemaVersion": "reflection-proposal:v1", "policyVersion": "reflection-admission:v1", "parameters": { "temperature": 0.2, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "reflection.weekly": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "reflection-weekly:eval:v3", "schemaVersion": "reflection-proposal:v1", "policyVersion": "reflection-admission:v1", "parameters": { "temperature": 0.2, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "bio.write": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "bio-write:eval:v1", "schemaVersion": "bio-draft:v1", "policyVersion": "bio-publish:v1", "parameters": { "temperature": 0.3, "maxOutputTokens": 1200 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "narrative.validate": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:eval:v4", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" },
-    "proactive.followup": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "proactive-followup-prompt:v2", "schemaVersion": "proactive-segment:v1", "policyVersion": "proactive-followup-policy-bundle:v2", "parameters": { "temperature": 0.4, "maxOutputTokens": 240 }, "maxTechnicalRetries": 0, "fallback": "none" }
+    "episode.build": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "episode-build:eval:v2",
+      "schemaVersion": "episode-proposal:v1",
+      "policyVersion": "episode-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 4000
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "open_loop.extract": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "open-loop-extract:eval:v1",
+      "schemaVersion": "open-loop-proposal:v1",
+      "policyVersion": "open-loop-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 700
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "reflection.daily": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "reflection-daily:eval:v3",
+      "schemaVersion": "reflection-proposal:v1",
+      "policyVersion": "reflection-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 4000
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "reflection.weekly": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "reflection-weekly:eval:v3",
+      "schemaVersion": "reflection-proposal:v1",
+      "policyVersion": "reflection-admission:v1",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 4000
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "bio.write": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "bio-write:eval:v1",
+      "schemaVersion": "bio-draft:v1",
+      "policyVersion": "bio-publish:v1",
+      "parameters": {
+        "temperature": 0.3,
+        "maxOutputTokens": 1200
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "narrative.validate": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "policyVersion": "narrative-validation:v1",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 8000
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    },
+    "proactive.followup": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "proactive-followup-prompt:v2",
+      "schemaVersion": "proactive-segment:v1",
+      "policyVersion": "proactive-followup-policy-bundle:v2",
+      "parameters": {
+        "temperature": 0.4,
+        "maxOutputTokens": 240
+      },
+      "maxTechnicalRetries": 0,
+      "fallback": "none"
+    }
   },
   "continuation": {
-    "allowedDifferenceKeys": ["open_loop_bundle", "proactive_bundle"],
+    "allowedDifferenceKeys": [
+      "open_loop_bundle",
+      "proactive_bundle"
+    ],
     "arms": {
       "incumbent": {
         "id": "continuation-incumbent-1a3a",
-        "openLoop": { "configVersion": "open-loop-disabled:v1", "promptVersion": "not-enabled", "schemaVersion": "not-enabled", "policyVersion": "not-enabled" },
-        "proactive": { "configVersion": "proactive-disabled:v1", "promptVersion": "not-enabled", "schemaVersion": "not-enabled", "policyVersion": "not-enabled" }
+        "openLoop": {
+          "configVersion": "open-loop-disabled:v1",
+          "promptVersion": "not-enabled",
+          "schemaVersion": "not-enabled",
+          "policyVersion": "not-enabled"
+        },
+        "proactive": {
+          "configVersion": "proactive-disabled:v1",
+          "promptVersion": "not-enabled",
+          "schemaVersion": "not-enabled",
+          "policyVersion": "not-enabled"
+        }
       },
       "candidate": {
         "id": "continuation-bundle-1a3b-v1",
-        "openLoop": { "configVersion": "open-loop-extract:v1", "promptVersion": "open-loop-extract:eval:v1", "schemaVersion": "open-loop-proposal:v1", "policyVersion": "open-loop-admission:v1" },
-        "proactive": { "configVersion": "proactive-followup:v1", "promptVersion": "proactive-followup-prompt:v2", "schemaVersion": "proactive-segment:v1", "policyVersion": "proactive-followup-policy-bundle:v2" }
+        "openLoop": {
+          "configVersion": "open-loop-extract:v1",
+          "promptVersion": "open-loop-extract:eval:v1",
+          "schemaVersion": "open-loop-proposal:v1",
+          "policyVersion": "open-loop-admission:v1"
+        },
+        "proactive": {
+          "configVersion": "proactive-followup:v1",
+          "promptVersion": "proactive-followup-prompt:v2",
+          "schemaVersion": "proactive-segment:v1",
+          "policyVersion": "proactive-followup-policy-bundle:v2"
+        }
       }
     }
   },
@@ -39,17 +153,82 @@
     "configurations": [
       {
         "id": "bio-deepseek-v1",
-        "writer": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "bio-write:deepseek:v1", "schemaVersion": "bio-draft:v1", "policyVersion": "bio-publish:v1", "parameters": { "temperature": 0.3, "maxOutputTokens": 1200 }, "maxTechnicalRetries": 1, "fallback": "none" },
-        "validator": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:deepseek:v2", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 900 }, "maxTechnicalRetries": 1, "fallback": "none" }
+        "writer": {
+          "provider": "deepseek",
+          "model": "deepseek-v4-flash",
+          "snapshot": "deepseek-flash",
+          "promptVersion": "bio-write:deepseek:v1",
+          "schemaVersion": "bio-draft:v1",
+          "policyVersion": "bio-publish:v1",
+          "parameters": {
+            "temperature": 0.3,
+            "maxOutputTokens": 1200
+          },
+          "maxTechnicalRetries": 1,
+          "fallback": "none"
+        },
+        "validator": {
+          "provider": "deepseek",
+          "model": "deepseek-v4-flash",
+          "snapshot": "deepseek-flash",
+          "promptVersion": "narrative-validate:deepseek:v2",
+          "schemaVersion": "narrative-findings:v1",
+          "policyVersion": "narrative-validation:v1",
+          "parameters": {
+            "temperature": 0,
+            "maxOutputTokens": 900
+          },
+          "maxTechnicalRetries": 1,
+          "fallback": "none"
+        }
       },
       {
         "id": "bio-openai-v1",
-        "writer": { "provider": "openai", "model": "gpt-5.4", "snapshot": "gpt-5.4", "promptVersion": "bio-write:openai:v1", "schemaVersion": "bio-draft:v1", "policyVersion": "bio-publish:v1", "parameters": { "temperature": 0.3, "maxOutputTokens": 1200 }, "maxTechnicalRetries": 1, "fallback": "none" },
-        "validator": { "provider": "openai", "model": "gpt-5.4", "snapshot": "gpt-5.4", "promptVersion": "narrative-validate:openai:v1", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 900 }, "maxTechnicalRetries": 1, "fallback": "none" }
+        "writer": {
+          "provider": "openai",
+          "model": "gpt-5.4",
+          "snapshot": "gpt-5.4",
+          "promptVersion": "bio-write:openai:v1",
+          "schemaVersion": "bio-draft:v1",
+          "policyVersion": "bio-publish:v1",
+          "parameters": {
+            "temperature": 0.3,
+            "maxOutputTokens": 1200
+          },
+          "maxTechnicalRetries": 1,
+          "fallback": "none"
+        },
+        "validator": {
+          "provider": "openai",
+          "model": "gpt-5.4",
+          "snapshot": "gpt-5.4",
+          "promptVersion": "narrative-validate:openai:v1",
+          "schemaVersion": "narrative-findings:v1",
+          "policyVersion": "narrative-validation:v1",
+          "parameters": {
+            "temperature": 0,
+            "maxOutputTokens": 900
+          },
+          "maxTechnicalRetries": 1,
+          "fallback": "none"
+        }
       }
     ]
   },
   "validator": {
-    "configuration": { "provider": "deepseek", "model": "deepseek-v4-flash", "snapshot": "deepseek-flash", "promptVersion": "narrative-validate:eval:v4", "schemaVersion": "narrative-findings:v1", "policyVersion": "narrative-validation:v1", "parameters": { "temperature": 0, "maxOutputTokens": 4000 }, "maxTechnicalRetries": 1, "fallback": "none" }
+    "configuration": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "snapshot": "deepseek-flash",
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "policyVersion": "narrative-validation:v1",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 4000
+      },
+      "maxTechnicalRetries": 1,
+      "fallback": "none"
+    }
   }
 }

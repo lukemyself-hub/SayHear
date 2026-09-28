@@ -3,6 +3,7 @@ import {
   CONTINUATION_FORCED_COVERAGE,
   CONTINUATION_SAMPLE_QUOTAS,
   F3_CATALOG_VERSION,
+  F3_HOLDOUT_CATALOG_VERSION,
   F3_MANIFEST_VERSION,
   LANGUAGE_VARIANTS,
   MODEL_ROLES,
@@ -226,8 +227,13 @@ function verifyValidatorFixture(
 /** Verify the complete synthetic catalog before any provider output is paired. */
 export function verifyFixtureCatalog(catalog: FixtureCatalog): FixtureVerification {
   const mismatches: string[] = [];
-  if (catalog.version !== F3_CATALOG_VERSION) {
-    mismatches.push(`catalog version must be ${F3_CATALOG_VERSION}`);
+  if (
+    catalog.version !== F3_CATALOG_VERSION &&
+    catalog.version !== F3_HOLDOUT_CATALOG_VERSION
+  ) {
+    mismatches.push(
+      `catalog version must be ${F3_CATALOG_VERSION} or ${F3_HOLDOUT_CATALOG_VERSION}`,
+    );
   }
   if (catalog.synthetic !== true) mismatches.push("catalog must be marked synthetic");
   if (!catalog.syntheticNotice?.toLowerCase().includes("synthetic")) {
@@ -285,15 +291,59 @@ export function verifyFixtureCatalog(catalog: FixtureCatalog): FixtureVerificati
     }
   }
 
-  if (counts.continuation !== 18) mismatches.push("Continuation pool must contain 18 fixtures");
-  if (counts.bio_naturalness !== 15) mismatches.push("Bio naturalness set must contain 15 fixtures");
-  if (counts.validator !== 18) mismatches.push("validator set must contain 18 fixtures");
+  // A holdout that carries its own precision drafts must carry six of them,
+  // each citing a claim from its own shared inputs. The incumbent carries none
+  // and relies on the capture script's built-in set, whose claim IDs match its
+  // own catalog; this check never fires for it.
+  const precisionDrafts = catalog.precisionDrafts;
+  if (precisionDrafts) {
+    if (precisionDrafts.length !== 6) {
+      mismatches.push("catalog precisionDrafts must contain 6 clean drafts");
+    }
+    for (const draft of precisionDrafts) {
+      if (ids.has(draft.id)) {
+        mismatches.push(`duplicate fixture ID ${draft.id}`);
+      }
+      ids.add(draft.id);
+      const sharedInput = catalog.sharedInputs[draft.inputRef];
+      if (!sharedInput) {
+        mismatches.push(`${draft.id} cites unknown shared input ${draft.inputRef}`);
+        continue;
+      }
+      if (!sharedInput.memory.some((candidate) => candidate.id === draft.claimId)) {
+        mismatches.push(`${draft.id} cites unknown claim ${draft.claimId}`);
+      }
+      if (!draft.draftText.trim()) {
+        mismatches.push(`${draft.id} has an empty draft text`);
+      }
+    }
+  }
+
+  // A catalog's requirements are scoped to the groups it actually carries, so
+  // a validator-only acceptance holdout can be verified without inventing a
+  // Continuation and Bio pool it will never run. No check is relaxed for a
+  // catalog that does carry a group: the incumbent still satisfies all three
+  // pools and every quota below.
+  const hasContinuation = counts.continuation > 0;
+  const hasBio = counts.bio_naturalness > 0;
+  const hasValidator = counts.validator > 0;
+  if (hasContinuation && counts.continuation !== 18) {
+    mismatches.push("Continuation pool must contain 18 fixtures");
+  }
+  if (hasBio && counts.bio_naturalness !== 15) {
+    mismatches.push("Bio naturalness set must contain 15 fixtures");
+  }
+  if (hasValidator && counts.validator !== 18) {
+    mismatches.push("validator set must contain 18 fixtures");
+  }
   for (const variant of LANGUAGE_VARIANTS) {
-    const bioCount = catalog.scenarios.filter(
-      (fixture) => fixture.group === "bio_naturalness" && fixture.languageVariant === variant,
-    ).length;
-    if (bioCount !== BIO_SAMPLE_QUOTAS[variant]) {
-      mismatches.push(`Bio naturalness ${variant} quota must be ${BIO_SAMPLE_QUOTAS[variant]}`);
+    if (hasBio) {
+      const bioCount = catalog.scenarios.filter(
+        (fixture) => fixture.group === "bio_naturalness" && fixture.languageVariant === variant,
+      ).length;
+      if (bioCount !== BIO_SAMPLE_QUOTAS[variant]) {
+        mismatches.push(`Bio naturalness ${variant} quota must be ${BIO_SAMPLE_QUOTAS[variant]}`);
+      }
     }
     for (const artifactKind of VALIDATOR_ARTIFACT_KINDS) {
       const expected = artifactKind === "bio" ? 4 : 2;
@@ -312,24 +362,29 @@ export function verifyFixtureCatalog(catalog: FixtureCatalog): FixtureVerificati
     }
   }
   for (const tag of CONTINUATION_FORCED_COVERAGE) {
-    if (!continuationCandidates.some((candidate) => candidate.coverageTags.includes(tag))) {
+    if (
+      hasContinuation &&
+      !continuationCandidates.some((candidate) => candidate.coverageTags.includes(tag))
+    ) {
       mismatches.push(`Continuation pool has no fixture for ${tag}`);
     }
   }
 
   let selectionPassed = false;
-  try {
-    const selection = selectContinuationSample({
-      candidates: continuationCandidates,
-      sampleSeed: 1960,
-    });
-    selectionPassed =
-      JSON.stringify(selection.selectedCounts) ===
-      JSON.stringify(CONTINUATION_SAMPLE_QUOTAS);
-  } catch (error) {
-    mismatches.push(`Continuation sample is not reproducible: ${String(error)}`);
+  if (hasContinuation) {
+    try {
+      const selection = selectContinuationSample({
+        candidates: continuationCandidates,
+        sampleSeed: 1960,
+      });
+      selectionPassed =
+        JSON.stringify(selection.selectedCounts) ===
+        JSON.stringify(CONTINUATION_SAMPLE_QUOTAS);
+    } catch (error) {
+      mismatches.push(`Continuation sample is not reproducible: ${String(error)}`);
+    }
+    if (!selectionPassed) mismatches.push("Continuation sample does not meet language quotas");
   }
-  if (!selectionPassed) mismatches.push("Continuation sample does not meet language quotas");
 
   return {
     counts,
@@ -380,7 +435,7 @@ function verifyRolePin(pin: unknown, expectedRole: string, mismatches: string[])
 /** Verify all seven independently pinned roles and the no-preselected-winner shape. */
 export function verifyPins(pins: F3Pins): PinsVerification {
   const mismatches: string[] = [];
-  if (pins.version !== "1a3b-f3-pins:v1") mismatches.push("unsupported F3 pins version");
+  if (pins.version !== "1a3b-f3-pins:v2") mismatches.push("unsupported F3 pins version");
   if (pins.syntheticOnly !== true) mismatches.push("pins must be synthetic-only");
   if (!isRecord(pins.roles)) {
     mismatches.push("pins.roles must be an object");

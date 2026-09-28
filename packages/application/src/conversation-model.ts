@@ -65,6 +65,11 @@ export type ConversationTextModelStreamEvent =
       modelSnapshot: string;
       outputTokens: number | null;
       providerRequestId: string | null;
+      /**
+       * Present only when the Provider reports a reasoning split, which
+       * keeps adapters that have no such concept from fabricating a zero.
+       */
+      reasoningTokens?: number | null;
       type: "completed";
     }>
   | Readonly<{
@@ -131,11 +136,59 @@ export type ProviderDispatchErrorCategory =
   | "unavailable"
   | "unknown";
 
+/**
+ * Content-free token accounting for one Provider call. Counts only, never
+ * request or response text, so it is safe to keep in release evidence and in
+ * logs produced on private data.
+ *
+ * `reasoningTokens` is `null` when the Provider reported no reasoning split,
+ * which is not the same as zero. Issue #252 exists because this number
+ * separates a budget spent on reasoning from a budget spent on a truncated
+ * answer, and because a successful call's spend is the only evidence that a
+ * new budget actually has headroom.
+ */
+export type ModelRoleCallUsage = Readonly<{
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+}>;
+
+/**
+ * Content-free reason a Provider response could not be turned into a typed
+ * model output (issue #252). `invalid_response` on its own cannot separate an
+ * exhausted output budget from an empty final answer, an unparseable body, or
+ * a well-formed body that violates the frozen output schema, and each cause
+ * needs a different remedy: a larger versioned budget, a shorter prompt, a
+ * stricter schema, or a provider fix.
+ *
+ * Carries the same usage record as a successful call so one artifact shape
+ * describes every attempt, whether or not it produced an answer.
+ */
+export type ProviderResponseFailure = ModelRoleCallUsage &
+  Readonly<{
+    kind:
+      | "output_budget_exhausted"
+      | "empty_output"
+      | "parse_failed"
+      | "schema_mismatch";
+    /** Characters of final visible output. A count, never the text itself. */
+    outputLength: number;
+    /**
+     * Set only when the Provider itself reported the truncation, which is what
+     * separates a proven budget exhaustion from an inferred one. A literal
+     * union, not a free string, so no Provider-supplied text can reach release
+     * evidence through this field.
+     */
+    providerReason: "max_output_tokens" | null;
+  }>;
+
 export class ProviderDispatchError extends Error {
   public constructor(
     public readonly category: ProviderDispatchErrorCategory,
     message = "The configured Conversation Text Provider failed.",
     public readonly settlesAttempt = true,
+    /** Present only when the failure was proven to a specific response cause. */
+    public readonly failure?: ProviderResponseFailure,
   ) {
     super(message);
     this.name = "ProviderDispatchError";

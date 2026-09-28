@@ -148,6 +148,64 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     ).toEqual(new Set(VALIDATOR_ERROR_CLASSES));
   });
 
+  it("verifies the #252 acceptance holdout and its own precision drafts", () => {
+    const holdout = JSON.parse(
+      readFileSync(
+        resolve(root, "eval/continuation-acceptance-1a3b/holdout/fixtures.json"),
+        "utf8",
+      ),
+    ) as Parameters<typeof verifyFixtureCatalog>[0];
+
+    const verification = verifyFixtureCatalog(holdout);
+
+    expect(verification.mismatches).toEqual([]);
+    expect(verification.passed).toBe(true);
+    // Validator-scoped: the holdout has no Continuation or Bio pool to run.
+    expect(verification.counts).toEqual({
+      continuation: 0,
+      bio_naturalness: 0,
+      validator: 18,
+    });
+    expect(verification.validatorByLanguage).toEqual({
+      en: { bio: 4, reflection: 2 },
+      zh: { bio: 4, reflection: 2 },
+      code_switch: { bio: 4, reflection: 2 },
+    });
+    // The precision half must travel with the catalog, not with the capture
+    // script's built-in set, which cites the spent catalog's claim IDs.
+    expect(holdout.precisionDrafts).toHaveLength(6);
+    const spentClaimIds = new Set(
+      Object.values(catalog.sharedInputs).flatMap((shared) =>
+        shared.memory.map((memory) => memory.id),
+      ),
+    );
+    for (const draft of holdout.precisionDrafts ?? []) {
+      expect(spentClaimIds.has(draft.claimId)).toBe(false);
+    }
+  });
+
+  it("rejects a holdout whose precision drafts cite unknown claims", () => {
+    const holdout = JSON.parse(
+      readFileSync(
+        resolve(root, "eval/continuation-acceptance-1a3b/holdout/fixtures.json"),
+        "utf8",
+      ),
+    ) as Parameters<typeof verifyFixtureCatalog>[0];
+    const kept = holdout.precisionDrafts ?? [];
+    const badDraft = { ...kept[0]!, claimId: "syn-claim-that-does-not-exist" };
+    const broken = {
+      ...holdout,
+      precisionDrafts: [...kept.slice(1), badDraft],
+    };
+
+    const verification = verifyFixtureCatalog(broken);
+
+    expect(verification.passed).toBe(false);
+    expect(verification.mismatches).toContain(
+      `${badDraft.id} cites unknown claim ${badDraft.claimId}`,
+    );
+  });
+
   it("selects the same continuation sample for the same seed", () => {
     const candidates = catalog.scenarios
       .filter((fixture) => fixture.group === "continuation")

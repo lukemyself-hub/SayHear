@@ -12,9 +12,11 @@ import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+  type ModelRoleCallUsage,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
   type NarrativeValidationRequest,
+  type ProviderResponseFailure,
   type RecoveryGate,
 } from "@sayhear/application";
 import {
@@ -91,8 +93,12 @@ function parseArguments(): { catalog: string; continueOnError: boolean; manifest
  * Clean-draft precision probe: fully source-faithful Bio drafts (no planted
  * error) with a correct writer manifest. A clean draft must complete with
  * zero blocking findings; any blocking finding is a false positive.
+ *
+ * These are bound to the spent catalog's claim IDs. A holdout that was never
+ * used for tuning must supply its own via `precisionDrafts` in its catalog, or
+ * its precision half would silently reuse spent drafts.
  */
-const PRECISION_DRAFTS = [
+const BUILT_IN_PRECISION_DRAFTS = [
   { id: "precision-clean-en-1", locale: "en-US", inputRef: "validator-en", claimId: "syn-claim-validator-en", draftText: "The user repairs radios." },
   { id: "precision-clean-en-2", locale: "en-US", inputRef: "validator-en", claimId: "syn-claim-validator-en", draftText: "Repairing radios is what the user does." },
   { id: "precision-clean-zh-1", locale: "zh-CN", inputRef: "validator-zh", claimId: "syn-claim-validator-zh", draftText: "该用户会修理收音机。" },
@@ -290,7 +296,9 @@ async function main(): Promise<void> {
     let cases: readonly { fixtureId: string; validatorErrorClass: string; request: NarrativeValidationRequest }[] = bundles;
     if (arguments_.precision) {
       const typedCatalog = catalog as FixtureCatalog;
-      cases = PRECISION_DRAFTS.map((draft) => {
+      const precisionDrafts =
+        typedCatalog.precisionDrafts ?? BUILT_IN_PRECISION_DRAFTS;
+      cases = precisionDrafts.map((draft) => {
         const sharedInput = typedCatalog.sharedInputs[draft.inputRef];
         const claim = sharedInput?.memory.find((candidate) => candidate.id === draft.claimId);
         if (!claim) throw new Error(`Precision draft ${draft.id} cites unknown claim ${draft.claimId}.`);
@@ -345,6 +353,8 @@ async function main(): Promise<void> {
       model: string;
       outcome: string;
       provider: string;
+      responseFailure: ProviderResponseFailure | null;
+      usage: ModelRoleCallUsage | null;
       verdict: string | null;
     }[] = [];
     // --resume keeps already-recorded completed fixtures (same manifest
@@ -362,7 +372,15 @@ async function main(): Promise<void> {
           throw new Error("Previous verdicts do not belong to the supplied manifest.");
         }
         for (const entry of previous.cases) {
-          if (entry.outcome === "completed") results.push(entry);
+          // A report resumed from before #252 has no recorded cause; keep the
+          // per-case shape uniform so the frozen artifact stays comparable.
+          if (entry.outcome === "completed") {
+            results.push({
+              ...entry,
+              responseFailure: entry.responseFailure ?? null,
+              usage: entry.usage ?? null,
+            });
+          }
         }
         if (results.length > 0) {
           console.log(
@@ -436,6 +454,15 @@ async function main(): Promise<void> {
         model: narrativeConfiguration.model,
         outcome: result.outcome,
         provider: narrativeConfiguration.provider,
+        // Issue #252: a frozen `schema_incompatible` no longer hides whether
+        // the pinned output budget, an empty final answer, the JSON parse, or
+        // the frozen schema was at fault. Content-free by construction, so it
+        // is safe to keep in release evidence.
+        responseFailure: result.responseFailure,
+        // Recorded for completed calls too. Only the calls that fit in the
+        // budget prove the budget has headroom, so leaving them blank would
+        // make "8000 is enough" indistinguishable from "8000 barely held".
+        usage: result.usage,
         verdict: result.outcome === "completed" ? result.verdict : null,
         ...(arguments_.precision
           ? {
@@ -472,6 +499,13 @@ async function main(): Promise<void> {
           modelSnapshot: narrativeConfiguration.modelSnapshot,
           configVersion: narrativeConfiguration.configVersion,
           promptVersion: narrativeConfiguration.promptVersion,
+          // The frozen budget is recorded beside the causes so the next
+          // versioned configuration is chosen against measured spend, not
+          // against a guess (issue #252).
+          maxOutputTokens:
+            narrativeConfiguration.parameterSnapshot.maxOutputTokens ?? null,
+          providerCallBudget:
+            narrativeConfiguration.parameterSnapshot.providerCallBudget ?? null,
           cases: results,
         },
         null,

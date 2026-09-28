@@ -120,6 +120,8 @@ export {
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_G1_RELEASE_MANIFEST_VERSION,
   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
   ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
   ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION,
@@ -431,11 +433,13 @@ export {
   type ConversationTextModel,
   type ConversationTextModelRequest,
   type ConversationTextModelStreamEvent,
+  type ModelRoleCallUsage,
   type ProviderDispatchErrorCategory,
   type ProviderEgressClaim,
   type ProviderEgressPort,
   type ProviderEgressRepository,
   type ProviderEgressStreamEvent,
+  type ProviderResponseFailure,
 } from "./conversation-model";
 export {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,

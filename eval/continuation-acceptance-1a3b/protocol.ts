@@ -6,6 +6,12 @@ import {
 } from "../blind-pairwise/protocol";
 
 export const F3_CATALOG_VERSION = "1a3b-f3-fixtures:v1" as const;
+/**
+ * A separately authored catalog for the #252 acceptance holdout. It is a
+ * distinct version rather than a re-run of the spent catalog, so the two can
+ * never be confused in release evidence.
+ */
+export const F3_HOLDOUT_CATALOG_VERSION = "1a3b-f3-holdout-fixtures:v1" as const;
 export const F3_MANIFEST_VERSION = "1a3b-f3-manifest:v1" as const;
 export const F3_RUN_VERSION = "1a3b-f3-synthetic-run:v1" as const;
 export const F3_REVIEW_PACKAGE_VERSION = "1a3b-f3-review-package:v1" as const;
@@ -174,12 +180,33 @@ export type Fixture =
   | BioNaturalnessFixture
   | ValidatorFixture;
 
+/**
+ * A clean draft used by the zero-false-blocking precision set. It cites a claim
+ * from the same catalog's `sharedInputs`, so a holdout can carry its own
+ * precision drafts instead of reusing the ones the capture script hardcodes.
+ */
+export type PrecisionDraft = Readonly<{
+  id: string;
+  locale: string;
+  inputRef: string;
+  claimId: string;
+  draftText: string;
+}>;
+
 export type FixtureCatalog = Readonly<{
   scenarios: readonly Fixture[];
   sharedInputs: Readonly<Record<string, FrozenSharedInput>>;
   synthetic: true;
   syntheticNotice: string;
-  version: typeof F3_CATALOG_VERSION;
+  /**
+   * Optional. When present, `--precision` uses these drafts instead of the
+   * capture script's built-in set, which is bound to the spent catalog's claim
+   * IDs. Absent means the built-in set is used, which is what the incumbent
+   * catalog relies on; its bytes are hashed into already-produced release
+   * fingerprints and must not change.
+   */
+  precisionDrafts?: readonly PrecisionDraft[];
+  version: typeof F3_CATALOG_VERSION | typeof F3_HOLDOUT_CATALOG_VERSION;
 }>;
 
 export type SampleCandidate = Readonly<{
@@ -274,7 +301,7 @@ export type F3Pins = Readonly<{
   }>;
   syntheticOnly: true;
   validator: Readonly<{ configuration: RolePin }>;
-  version: "1a3b-f3-pins:v1";
+  version: "1a3b-f3-pins:v2";
 }>;
 
 export type BaselineReference = Readonly<{

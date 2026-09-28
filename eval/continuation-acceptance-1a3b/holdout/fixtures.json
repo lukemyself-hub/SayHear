@@ -1,0 +1,467 @@
+{
+  "version": "1a3b-f3-holdout-fixtures:v1",
+  "synthetic": true,
+  "syntheticNotice": "Fully synthetic, fictional holdout acceptance set. Generated 2026-09-28 on a different fictional domain from the spent F3 catalog so no case is a re-skin of a case that already ran. Requires Luke's difficulty review before it counts as an acceptance holdout.",
+  "precisionDrafts": [
+    {
+      "id": "holdout-precision-clean-en-1",
+      "locale": "en-US",
+      "inputRef": "holdout-en",
+      "claimId": "syn-claim-holdout-en",
+      "draftText": "The fictional user restores old clocks."
+    },
+    {
+      "id": "holdout-precision-clean-en-2",
+      "locale": "en-US",
+      "inputRef": "holdout-en",
+      "claimId": "syn-claim-holdout-en",
+      "draftText": "Restoring old clocks is what the fictional user does."
+    },
+    {
+      "id": "holdout-precision-clean-zh-1",
+      "locale": "zh-CN",
+      "inputRef": "holdout-zh",
+      "claimId": "syn-claim-holdout-zh",
+      "draftText": "虚构用户修理古董钟表。"
+    },
+    {
+      "id": "holdout-precision-clean-zh-2",
+      "locale": "zh-CN",
+      "inputRef": "holdout-zh",
+      "claimId": "syn-claim-holdout-zh",
+      "draftText": "修理古董钟表是虚构用户会做的事情。"
+    },
+    {
+      "id": "holdout-precision-clean-mix-1",
+      "locale": "zh-CN",
+      "inputRef": "holdout-mix",
+      "claimId": "syn-claim-holdout-mix",
+      "draftText": "Restoring old clocks 是虚构用户会做的事情。"
+    },
+    {
+      "id": "holdout-precision-clean-mix-2",
+      "locale": "zh-CN",
+      "inputRef": "holdout-mix",
+      "claimId": "syn-claim-holdout-mix",
+      "draftText": "虚构用户会 restore old clocks。"
+    }
+  ],
+  "sharedInputs": {
+    "holdout-en": {
+      "events": [
+        {
+          "id": "syn-event-holdout-en",
+          "locale": "en-US",
+          "sourceRevision": "syn-rev-holdout-en",
+          "text": "The fictional source claim says only that the user restores old clocks."
+        }
+      ],
+      "memory": [
+        {
+          "id": "syn-claim-holdout-en",
+          "kind": "objective_memory",
+          "text": "The fictional user restores old clocks.",
+          "evidenceIds": [
+            "syn-event-holdout-en"
+          ]
+        }
+      ],
+      "retrieval": [
+        {
+          "id": "syn-retrieval-holdout-en",
+          "memoryId": "syn-claim-holdout-en",
+          "rank": 1,
+          "reason": "synthetic_holdout_input",
+          "selected": true
+        }
+      ],
+      "portrait": [],
+      "config": {
+        "conversation": "conversation-harness:v3",
+        "locale": "locale-pack-en:v2",
+        "persona": "canonical-persona:v2",
+        "safety": "safety-resources:v2"
+      }
+    },
+    "holdout-zh": {
+      "events": [
+        {
+          "id": "syn-event-holdout-zh",
+          "locale": "zh-CN",
+          "sourceRevision": "syn-rev-holdout-zh",
+          "text": "虚构来源只说明该用户修理古董钟表。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "syn-claim-holdout-zh",
+          "kind": "objective_memory",
+          "text": "虚构用户修理古董钟表。",
+          "evidenceIds": [
+            "syn-event-holdout-zh"
+          ]
+        }
+      ],
+      "retrieval": [
+        {
+          "id": "syn-retrieval-holdout-zh",
+          "memoryId": "syn-claim-holdout-zh",
+          "rank": 1,
+          "reason": "synthetic_holdout_input",
+          "selected": true
+        }
+      ],
+      "portrait": [],
+      "config": {
+        "conversation": "conversation-harness:v3",
+        "locale": "locale-pack-zh:v2",
+        "persona": "canonical-persona:v2",
+        "safety": "safety-resources:v2"
+      }
+    },
+    "holdout-mix": {
+      "events": [
+        {
+          "id": "syn-event-holdout-mix",
+          "locale": "zh-CN",
+          "sourceRevision": "syn-rev-holdout-mix",
+          "text": "虚构来源只说明该用户 restores old clocks。"
+        }
+      ],
+      "memory": [
+        {
+          "id": "syn-claim-holdout-mix",
+          "kind": "objective_memory",
+          "text": "虚构用户 restores old clocks.",
+          "evidenceIds": [
+            "syn-event-holdout-mix"
+          ]
+        }
+      ],
+      "retrieval": [
+        {
+          "id": "syn-retrieval-holdout-mix",
+          "memoryId": "syn-claim-holdout-mix",
+          "rank": 1,
+          "reason": "synthetic_holdout_input",
+          "selected": true
+        }
+      ],
+      "portrait": [],
+      "config": {
+        "conversation": "conversation-harness:v3",
+        "locale": "locale-pack-zh:v2",
+        "persona": "canonical-persona:v2",
+        "safety": "safety-resources:v2"
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "holdout-validator-bio-unsupported-en",
+      "group": "validator",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft adds a fact absent from the source.",
+      "inputRef": "holdout-en",
+      "artifactKind": "bio",
+      "validatorErrorClass": "unsupported",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-en"
+      ],
+      "draftText": "The fictional user restores old clocks and pilots hot-air balloons."
+    },
+    {
+      "id": "holdout-validator-bio-contradiction-en",
+      "group": "validator",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft contradicts the source claim.",
+      "inputRef": "holdout-en",
+      "artifactKind": "bio",
+      "validatorErrorClass": "contradiction",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-en"
+      ],
+      "draftText": "The fictional user has never restored a clock in their life."
+    },
+    {
+      "id": "holdout-validator-bio-epistemic_upgrade-en",
+      "group": "validator",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft upgrades an observation into a certainty.",
+      "inputRef": "holdout-en",
+      "artifactKind": "bio",
+      "validatorErrorClass": "epistemic_upgrade",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-en"
+      ],
+      "draftText": "The fictional user is without doubt the finest clock restorer alive."
+    },
+    {
+      "id": "holdout-validator-bio-material_absence-en",
+      "group": "validator",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft omits the material supported identity detail.",
+      "inputRef": "holdout-en",
+      "artifactKind": "bio",
+      "validatorErrorClass": "material_absence",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-en"
+      ],
+      "draftText": "The fictional user is a person with a great deal of patience."
+    },
+    {
+      "id": "holdout-validator-reflection-manifest_mismatch-en",
+      "group": "validator",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Reflection output points at the wrong frozen input manifest.",
+      "inputRef": "holdout-en",
+      "artifactKind": "reflection",
+      "validatorErrorClass": "manifest_mismatch",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-en"
+      ],
+      "draftText": "The supplied reflection was generated from manifest syn-holdout-other."
+    },
+    {
+      "id": "holdout-validator-reflection-ambiguity-en",
+      "group": "validator",
+      "languageVariant": "en",
+      "locale": "en-US",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Reflection output leaves its proposition support ambiguous.",
+      "inputRef": "holdout-en",
+      "artifactKind": "reflection",
+      "validatorErrorClass": "ambiguity",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-en"
+      ],
+      "draftText": "There is something about the clock that may matter to them."
+    },
+    {
+      "id": "holdout-validator-bio-unsupported-zh",
+      "group": "validator",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft adds a fact absent from the source.",
+      "inputRef": "holdout-zh",
+      "artifactKind": "bio",
+      "validatorErrorClass": "unsupported",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-zh"
+      ],
+      "draftText": "虚构用户修理古董钟表，并且在业余时间驾驶热气球。"
+    },
+    {
+      "id": "holdout-validator-bio-contradiction-zh",
+      "group": "validator",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft contradicts the source claim.",
+      "inputRef": "holdout-zh",
+      "artifactKind": "bio",
+      "validatorErrorClass": "contradiction",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-zh"
+      ],
+      "draftText": "虚构用户从来没有修理过任何钟表。"
+    },
+    {
+      "id": "holdout-validator-bio-epistemic_upgrade-zh",
+      "group": "validator",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft upgrades an observation into a certainty.",
+      "inputRef": "holdout-zh",
+      "artifactKind": "bio",
+      "validatorErrorClass": "epistemic_upgrade",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-zh"
+      ],
+      "draftText": "毫无疑问，虚构用户是世上最优秀的钟表修复师。"
+    },
+    {
+      "id": "holdout-validator-bio-material_absence-zh",
+      "group": "validator",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft omits the material supported identity detail.",
+      "inputRef": "holdout-zh",
+      "artifactKind": "bio",
+      "validatorErrorClass": "material_absence",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-zh"
+      ],
+      "draftText": "虚构用户是一个非常有耐心的人。"
+    },
+    {
+      "id": "holdout-validator-reflection-manifest_mismatch-zh",
+      "group": "validator",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Reflection output points at the wrong frozen input manifest.",
+      "inputRef": "holdout-zh",
+      "artifactKind": "reflection",
+      "validatorErrorClass": "manifest_mismatch",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-zh"
+      ],
+      "draftText": "该草稿声称由 manifest syn-holdout-other 生成。"
+    },
+    {
+      "id": "holdout-validator-reflection-ambiguity-zh",
+      "group": "validator",
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Reflection output leaves its proposition support ambiguous.",
+      "inputRef": "holdout-zh",
+      "artifactKind": "reflection",
+      "validatorErrorClass": "ambiguity",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-zh"
+      ],
+      "draftText": "关于那只钟表，有些事情可能对他们很重要。"
+    },
+    {
+      "id": "holdout-validator-bio-unsupported-mix",
+      "group": "validator",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft adds a fact absent from the source.",
+      "inputRef": "holdout-mix",
+      "artifactKind": "bio",
+      "validatorErrorClass": "unsupported",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-mix"
+      ],
+      "draftText": "虚构用户 restores old clocks 并且 flies 热气球。"
+    },
+    {
+      "id": "holdout-validator-bio-contradiction-mix",
+      "group": "validator",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft contradicts the source claim.",
+      "inputRef": "holdout-mix",
+      "artifactKind": "bio",
+      "validatorErrorClass": "contradiction",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-mix"
+      ],
+      "draftText": "虚构用户 restores old clocks 这件事其实从未发生过。"
+    },
+    {
+      "id": "holdout-validator-bio-epistemic_upgrade-mix",
+      "group": "validator",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft upgrades an observation into a certainty.",
+      "inputRef": "holdout-mix",
+      "artifactKind": "bio",
+      "validatorErrorClass": "epistemic_upgrade",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-mix"
+      ],
+      "draftText": "毫无疑问 虚构用户 是全世界唯一真正懂 clocks 的人。"
+    },
+    {
+      "id": "holdout-validator-bio-material_absence-mix",
+      "group": "validator",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Bio draft omits the material supported identity detail.",
+      "inputRef": "holdout-mix",
+      "artifactKind": "bio",
+      "validatorErrorClass": "material_absence",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-mix"
+      ],
+      "draftText": "虚构用户 是个 做事 很有规律 的人。"
+    },
+    {
+      "id": "holdout-validator-reflection-manifest_mismatch-mix",
+      "group": "validator",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Reflection output points at the wrong frozen input manifest.",
+      "inputRef": "holdout-mix",
+      "artifactKind": "reflection",
+      "validatorErrorClass": "manifest_mismatch",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-mix"
+      ],
+      "draftText": "该草稿声称来自 manifest syn-holdout-other。"
+    },
+    {
+      "id": "holdout-validator-reflection-ambiguity-mix",
+      "group": "validator",
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "timezone": "America/Los_Angeles",
+      "category": "validator_dangerous_error",
+      "description": "Synthetic holdout Reflection output leaves its proposition support ambiguous.",
+      "inputRef": "holdout-mix",
+      "artifactKind": "reflection",
+      "validatorErrorClass": "ambiguity",
+      "expectedOutcome": "blocking",
+      "sourceClaimIds": [
+        "syn-claim-holdout-mix"
+      ],
+      "draftText": "那件 关于 clocks 的事 可能 对他们 很重要。"
+    }
+  ]
+}

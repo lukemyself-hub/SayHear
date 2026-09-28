@@ -8,6 +8,7 @@ import {
   NARRATIVE_VALIDATION_POLICY_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+  ProviderDispatchError,
   createModelRoleCommandService,
   createModelRoleProviderEgress,
   createModelRoleRegistry,
@@ -15,6 +16,7 @@ import {
   runNarrativeValidationAttempt,
   runNarrativeValidationMaintenance,
   readNarrativeValidationOutcome,
+  type ModelRoleCallUsage,
   type ModelRoleCommandService,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
@@ -203,11 +205,14 @@ function providerFor(
   script: (
     request: NarrativeValidatorModelRequest,
   ) => NarrativeValidatorModelOutput,
+  reportUsage?: ModelRoleCallUsage,
 ): NarrativeValidationModelProvider {
   return {
     role: "narrative.validate",
-    async validateNarrative(request) {
-      return script(request);
+    async validateNarrative(request, onUsage) {
+      const output = script(request);
+      if (reportUsage) onUsage?.(reportUsage);
+      return output;
     },
   };
 }
@@ -726,6 +731,96 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
     });
     // Validator not complete: no publish and no Candidate may be derived.
     expect(read.outcome).toBe("incomplete");
+  });
+
+  it("surfaces a content-free response cause without changing the durable failure code (#252)", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000016",
+    );
+    const deps = dependencies(
+      providerFor(() => {
+        throw new ProviderDispatchError(
+          "invalid_response",
+          "The Provider reported that it stopped at the pinned output budget.",
+          true,
+          {
+            kind: "output_budget_exhausted",
+            inputTokens: 940,
+            outputLength: 0,
+            outputTokens: 4000,
+            providerReason: "max_output_tokens",
+            reasoningTokens: 4000,
+          },
+        );
+      }),
+    );
+    const result = await runNarrativeValidation({
+      dependencies: deps,
+      command: { request, expectedDataEpoch: 1 },
+    });
+
+    // The durable code and the no-retry rule stay exactly as ADR-0132
+    // froze them; the cause is additive release evidence.
+    expect(result.outcome).toBe("failed");
+    expect(result.errorCode).toBe("schema_incompatible");
+    expect(result.responseFailure).toEqual({
+      kind: "output_budget_exhausted",
+      inputTokens: 940,
+      outputLength: 0,
+      outputTokens: 4000,
+      providerReason: "max_output_tokens",
+      reasoningTokens: 4000,
+    });
+  });
+
+  it("leaves the response cause absent when the failure was not proven to one", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000017",
+    );
+    const deps = dependencies(
+      providerFor(() => {
+        throw new ProviderDispatchError("invalid_response");
+      }),
+    );
+    const result = await runNarrativeValidation({
+      dependencies: deps,
+      command: { request, expectedDataEpoch: 1 },
+    });
+
+    expect(result.errorCode).toBe("schema_incompatible");
+    expect(result.responseFailure).toBeNull();
+  });
+
+  it("records the call usage of a successful validation (issue #252 headroom)", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000018",
+    );
+    // A Provider that reports nothing must leave usage null, never a
+    // fabricated zero.
+    const quiet = dependencies(providerFor(() => acceptedOutput()));
+    const quietResult = await runNarrativeValidation({
+      dependencies: quiet,
+      command: { request, expectedDataEpoch: 1 },
+    });
+    expect(quietResult.outcome).toBe("completed");
+    expect(quietResult.usage).toBeNull();
+
+    const request2 = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000019",
+    );
+    const reported: ModelRoleCallUsage = {
+      inputTokens: 470,
+      outputTokens: 3931,
+      reasoningTokens: 3600,
+    };
+    const loud = dependencies(providerFor(() => acceptedOutput(), reported));
+    const result = await runNarrativeValidation({
+      dependencies: loud,
+      command: { request: request2, expectedDataEpoch: 1 },
+    });
+
+    expect(result.outcome).toBe("completed");
+    expect(result.usage).toEqual(reported);
   });
 
   it("fences validation behind the owner epoch fence", async () => {

@@ -135,6 +135,7 @@ export function createResponsesApiConversationTextModel(input: {
         // ordering intact.
         let callIdForContinuation: string | null = null;
         let textEmitted = false;
+        let emittedTextLength = 0;
         const visibleReplyFunctions = new Set(
           (request.functions ?? [])
             .filter((definition) => definition.visibleReplyRequired === true)
@@ -151,6 +152,7 @@ export function createResponsesApiConversationTextModel(input: {
               throw new ProviderDispatchError("invalid_response");
             }
             textEmitted = true;
+            emittedTextLength += delta.length;
             yield { delta, type: "delta" };
           } else if (event.type === "response.output_item.added") {
             const item = isRecord(event.item) ? event.item : null;
@@ -300,6 +302,7 @@ export function createResponsesApiConversationTextModel(input: {
               modelSnapshot: completedResponse.model,
               outputTokens: asOptionalNumber(finalUsage?.output_tokens),
               providerRequestId,
+              reasoningTokens: reasoningTokensFrom(finalUsage),
               type: "completed",
             };
           } else if (
@@ -307,7 +310,7 @@ export function createResponsesApiConversationTextModel(input: {
             event.type === "response.failed" ||
             event.type === "response.incomplete"
           ) {
-            throw new ProviderDispatchError("invalid_response");
+            throw terminalStreamEventError(event, emittedTextLength);
           }
         }
         if (!completed) {
@@ -480,6 +483,57 @@ async function* parseServerSentEvents(
   } finally {
     reader.releaseLock();
   }
+}
+
+/**
+ * Issue #252: a terminal stream event that carries
+ * `incomplete_details.reason = "max_output_tokens"` is the only wire signal
+ * that proves the frozen budget cut the generation short, so it is the one
+ * terminal failure that can name a specific cause; `response.incomplete` and
+ * `response.failed` are the two events that report it. Any other reason, and
+ * any event without one, stays a bare `invalid_response` — the durable ledger
+ * code is `schema_incompatible` either way, and guessing a cause would
+ * misdirect the next versioned configuration. The `response` body is never
+ * inspected beyond the reason string and the usage counters.
+ */
+function terminalStreamEventError(
+  event: ResponsesApiStreamEvent,
+  emittedTextLength: number,
+): ProviderDispatchError {
+  const response = isRecord(event.response) ? event.response : null;
+  const incompleteDetails = response && isRecord(response.incomplete_details)
+    ? response.incomplete_details
+    : null;
+  if (incompleteDetails?.reason !== "max_output_tokens") {
+    return new ProviderDispatchError("invalid_response");
+  }
+  const usage = response && isRecord(response.usage) ? response.usage : null;
+  return new ProviderDispatchError(
+    "invalid_response",
+    "The Provider reported that it stopped at the pinned output budget.",
+    true,
+    {
+      kind: "output_budget_exhausted",
+      inputTokens: asOptionalNumber(usage?.input_tokens),
+      outputLength: emittedTextLength,
+      outputTokens: asOptionalNumber(usage?.output_tokens),
+      providerReason: "max_output_tokens",
+      reasoningTokens: reasoningTokensFrom(usage),
+    },
+  );
+}
+
+/**
+ * Issue #252: `output_tokens` counts reasoning, so a budget that looks fully
+ * spent may have produced no answer at all. The Provider reports the split
+ * under `usage.output_tokens_details`; an absent split stays null rather than
+ * becoming zero, so "did not report" is never read as "spent nothing".
+ */
+function reasoningTokensFrom(usage: unknown): number | null {
+  if (!isRecord(usage)) return null;
+  const details = usage.output_tokens_details;
+  if (!isRecord(details)) return null;
+  return asOptionalNumber(details.reasoning_tokens);
 }
 
 function categoryForStatus(status: number): ProviderDispatchErrorCategory {
