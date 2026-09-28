@@ -6,6 +6,7 @@ import {
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidatorModelOutput,
   type NarrativeValidationModelProvider,
+  type ProviderResponseFailure,
   type ReflectionGenerationModelOutput,
   type ReflectionGenerationModelProvider,
 } from "@sayhear/application";
@@ -286,9 +287,11 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
     payload: unknown,
     instructions: string,
     locale: string,
-  ): Promise<unknown> {
+  ): Promise<{ parsed: unknown; usage: JsonCallUsage }> {
     let output = "";
     let modelSnapshot: string | null = null;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
     for await (const event of model.stream({
       instructions: jsonInstructions(configuration, instructions),
       locale,
@@ -304,7 +307,11 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
       toolsDisabled: true,
     })) {
       if (event.type === "delta") output += event.delta;
-      if (event.type === "completed") modelSnapshot = event.modelSnapshot;
+      if (event.type === "completed") {
+        modelSnapshot = event.modelSnapshot;
+        inputTokens = event.inputTokens;
+        outputTokens = event.outputTokens;
+      }
     }
     if (modelSnapshot !== configuration.modelSnapshot) {
       throw new ProviderDispatchError(
@@ -312,23 +319,70 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
         `${configuration.role} returned model snapshot ${modelSnapshot ?? "<missing>"}, expected ${configuration.modelSnapshot}.`,
       );
     }
+    const usage: JsonCallUsage = {
+      inputTokens,
+      outputLength: output.length,
+      outputTokens,
+    };
+    if (output.length === 0) {
+      throw untypedOutputError(configuration, usage);
+    }
     try {
-      return JSON.parse(output);
+      return { parsed: JSON.parse(output), usage };
     } catch {
       const fenced = /^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/i.exec(output);
       if (fenced) {
         try {
-          return JSON.parse(fenced[1] ?? "");
+          return { parsed: JSON.parse(fenced[1] ?? ""), usage };
         } catch {
           // Fall through to one typed provider failure.
         }
       }
-      throw new ProviderDispatchError(
-        "invalid_response",
-        `${configuration.role} returned non-JSON output.`,
-      );
+      throw untypedOutputError(configuration, usage);
     }
   };
+}
+
+/** Counts and lengths only; never the response text. */
+type JsonCallUsage = Readonly<{
+  inputTokens: number | null;
+  outputLength: number;
+  outputTokens: number | null;
+}>;
+
+/**
+ * Issue #252: some Providers stop at the frozen `max_output_tokens` cap
+ * without reporting `max_output_tokens` in `incomplete_details`. When the
+ * reported output tokens reached the cap, the pinned budget — not the output
+ * format — is the thing that ran out, and a Provider that spent the whole cap
+ * without emitting a character is the same truncation seen from the other
+ * side. Only counts are compared; no response text is inspected.
+ */
+function outputFailureKind(
+  configuration: ModelRoleConfigurationSnapshot,
+  usage: JsonCallUsage,
+): ProviderResponseFailure["kind"] {
+  const cap = configuration.parameterSnapshot.maxOutputTokens;
+  if (
+    typeof cap === "number" &&
+    usage.outputTokens !== null &&
+    usage.outputTokens >= cap
+  ) {
+    return "output_budget_exhausted";
+  }
+  return usage.outputLength === 0 ? "empty_output" : "parse_failed";
+}
+
+function untypedOutputError(
+  configuration: ModelRoleConfigurationSnapshot,
+  usage: JsonCallUsage,
+): ProviderDispatchError {
+  return new ProviderDispatchError(
+    "invalid_response",
+    `${configuration.role} returned output that is not a typed JSON object.`,
+    true,
+    { ...usage, kind: outputFailureKind(configuration, usage), providerReason: null },
+  );
 }
 
 /**
@@ -375,6 +429,39 @@ export function createRuntimeOneA3bRoleProviders(input: {
     }
     return caller(configuration, payload, instructions, locale);
   };
+  /**
+   * Issue #252: a parseable body that fails the frozen output schema is a
+   * fourth, distinct remedy (tighten or correct the schema) and can only be
+   * proven at the typed read, so the classification is attached here. A
+   * failure that already carries a cause keeps it.
+   */
+  const askTypedJson = async <Output>(
+    configuration: ModelRoleConfigurationSnapshot,
+    payload: unknown,
+    instructions: string,
+    locale: string,
+    read: (parsed: unknown, role: string) => Output,
+  ): Promise<Output> => {
+    const { parsed, usage } = await askJson(
+      configuration,
+      payload,
+      instructions,
+      locale,
+    );
+    try {
+      return read(parsed, configuration.role);
+    } catch (error) {
+      if (error instanceof ProviderDispatchError && error.failure === undefined) {
+        throw new ProviderDispatchError(
+          error.category,
+          error.message,
+          error.settlesAttempt,
+          { ...usage, kind: "schema_mismatch", providerReason: null },
+        );
+      }
+      throw error;
+    }
+  };
   const episodeConfiguration = requiredConfiguration(
     input.configurations,
     "episode.build",
@@ -412,13 +499,13 @@ export function createRuntimeOneA3bRoleProviders(input: {
   const episodeBuildProvider: EpisodeBuildModelProvider = {
     role: "episode.build",
     async buildProposals(request) {
-      const parsed = await askJson(
+      return askTypedJson(
         episodeConfiguration,
         request,
         "Given the frozen Evidence and active Episode records, return a JSON array of typed proposals. Each proposal must contain proposedKind, label, temporalAnchor, phase, kindFields, citedEvidenceItemIds, realWorldOccurrence, and may contain entityAnchorIds, explicitContinuity, or explicitNewOccurrence. proposedKind must come from the supplied kind catalog. phase must be one of planned, ongoing, completed, unknown. temporalAnchor start/end precision must be one of exact, month, year, approximate, unknown. Cite only supplied Evidence IDs and never invent IDs or facts.",
         request.evidence[0]?.locale ?? "en-US",
+        asEpisodeProposals,
       );
-      return asEpisodeProposals(parsed);
     },
   };
 
@@ -429,14 +516,12 @@ export function createRuntimeOneA3bRoleProviders(input: {
         request.role === "reflection.weekly"
           ? weeklyConfiguration
           : dailyConfiguration;
-      return asReflectionOutput(
-        await askJson(
-          configuration,
-          request,
-          "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.",
-          request.locale || "en-US",
-        ),
-        request.role,
+      return askTypedJson(
+        configuration,
+        request,
+        "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.",
+        request.locale || "en-US",
+        asReflectionOutput,
       );
     },
   };
@@ -444,13 +529,12 @@ export function createRuntimeOneA3bRoleProviders(input: {
   const narrativeValidationProvider: NarrativeValidationModelProvider = {
     role: "narrative.validate",
     async validateNarrative(request) {
-      return asNarrativeOutput(
-        await askJson(
-          narrativeConfiguration,
-          request,
-          "Independently decompose the draft into propositions and report source coverage. Return an object with propositions and coverageKeys arrays. Each proposition must contain propositionKey, text, propositionKind, epistemicRendering, supportKeys, unsupported, contradicted, and ambiguous. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Use only supplied source keys. Each proposition text must be an exact verbatim quote (a contiguous substring) of the draft text; never paraphrase, normalize, reorder, or translate its wording. Flag semantics. Mark unsupported true only when no supplied source states or directly entails the proposition; paraphrase that preserves meaning counts as supported. Mark contradicted true only when a supplied source states the opposite of the proposition; absence of support is unsupported, never contradicted. Mark ambiguous true only when a reference in the proposition cannot be resolved from the draft itself (for example an entity, quantity, or comparison with no identifiable antecedent) so that source linkage is impossible; inelegant wording or anything resolvable from context is not ambiguous. When uncertain about any flag, leave it false.",
-          request.draftLocale ?? "en-US",
-        ),
+      return askTypedJson(
+        narrativeConfiguration,
+        request,
+        "Independently decompose the draft into propositions and report source coverage. Return an object with propositions and coverageKeys arrays. Each proposition must contain propositionKey, text, propositionKind, epistemicRendering, supportKeys, unsupported, contradicted, and ambiguous. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Use only supplied source keys. Each proposition text must be an exact verbatim quote (a contiguous substring) of the draft text; never paraphrase, normalize, reorder, or translate its wording. Flag semantics. Mark unsupported true only when no supplied source states or directly entails the proposition; paraphrase that preserves meaning counts as supported. Mark contradicted true only when a supplied source states the opposite of the proposition; absence of support is unsupported, never contradicted. Mark ambiguous true only when a reference in the proposition cannot be resolved from the draft itself (for example an entity, quantity, or comparison with no identifiable antecedent) so that source linkage is impossible; inelegant wording or anything resolvable from context is not ambiguous. When uncertain about any flag, leave it false.",
+        request.draftLocale ?? "en-US",
+        asNarrativeOutput,
       );
     },
   };
