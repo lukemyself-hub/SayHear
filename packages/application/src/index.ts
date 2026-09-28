@@ -436,6 +436,7 @@ export {
   type ProviderEgressPort,
   type ProviderEgressRepository,
   type ProviderEgressStreamEvent,
+  type ProviderResponseFailure,
 } from "./conversation-model";
 export {
   ACTION_ENABLED_CONVERSATION_HARNESS_POLICY,

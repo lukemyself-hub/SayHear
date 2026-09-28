@@ -135,6 +135,7 @@ export function createResponsesApiConversationTextModel(input: {
         // ordering intact.
         let callIdForContinuation: string | null = null;
         let textEmitted = false;
+        let emittedTextLength = 0;
         const visibleReplyFunctions = new Set(
           (request.functions ?? [])
             .filter((definition) => definition.visibleReplyRequired === true)
@@ -151,6 +152,7 @@ export function createResponsesApiConversationTextModel(input: {
               throw new ProviderDispatchError("invalid_response");
             }
             textEmitted = true;
+            emittedTextLength += delta.length;
             yield { delta, type: "delta" };
           } else if (event.type === "response.output_item.added") {
             const item = isRecord(event.item) ? event.item : null;
@@ -307,7 +309,7 @@ export function createResponsesApiConversationTextModel(input: {
             event.type === "response.failed" ||
             event.type === "response.incomplete"
           ) {
-            throw new ProviderDispatchError("invalid_response");
+            throw incompleteResponseError(event, emittedTextLength);
           }
         }
         if (!completed) {
@@ -480,6 +482,42 @@ async function* parseServerSentEvents(
   } finally {
     reader.releaseLock();
   }
+}
+
+/**
+ * Issue #252: `response.incomplete` is the only wire signal that proves the
+ * frozen `max_output_tokens` budget cut the generation short, so it is the one
+ * terminal stream failure that can carry a specific content-free reason. Any
+ * other reason stays a bare `invalid_response` — the durable ledger code is
+ * `schema_incompatible` either way, and guessing a cause would misdirect the
+ * next versioned configuration. The `response` body is never inspected beyond
+ * the reason string and the usage counters.
+ */
+function incompleteResponseError(
+  event: ResponsesApiStreamEvent,
+  emittedTextLength: number,
+): ProviderDispatchError {
+  const response = isRecord(event.response) ? event.response : null;
+  const incompleteDetails = response && isRecord(response.incomplete_details)
+    ? response.incomplete_details
+    : null;
+  const reason = incompleteDetails?.reason;
+  if (reason !== "max_output_tokens") {
+    return new ProviderDispatchError("invalid_response");
+  }
+  const usage = response && isRecord(response.usage) ? response.usage : null;
+  return new ProviderDispatchError(
+    "invalid_response",
+    "The Provider stopped because the pinned output budget was exhausted.",
+    true,
+    {
+      kind: "output_budget_exhausted",
+      inputTokens: asOptionalNumber(usage?.input_tokens),
+      outputLength: emittedTextLength,
+      outputTokens: asOptionalNumber(usage?.output_tokens),
+      providerReason: reason,
+    },
+  );
 }
 
 function categoryForStatus(status: number): ProviderDispatchErrorCategory {

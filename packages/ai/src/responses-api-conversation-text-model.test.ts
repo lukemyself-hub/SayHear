@@ -426,6 +426,87 @@ describe("Responses API Conversation Text adapter", () => {
     }
   });
 
+  it("classifies an output-budget-truncated response as a content-free failure (issue #252)", async () => {
+    const model = createResponsesApiConversationTextModel({
+      apiKey: "synthetic-server-key",
+      baseUrl: DEEPSEEK_BASE_URL,
+      fetchImplementation: async () =>
+        new Response(
+          [
+            'event: response.output_text.delta\r\ndata: {"type":"response.output_text.delta","delta":"{\\"propositions\\":"}\r\n\r\n',
+            'event: response.incomplete\r\ndata: {"type":"response.incomplete","response":{"id":"resp_truncated","model":"deepseek-v4-flash","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":940,"output_tokens":4000}}}\r\n\r\n',
+          ].join(""),
+          { headers: { "content-type": "text/event-stream" }, status: 200 },
+        ),
+    });
+
+    let caught: unknown;
+    try {
+      for await (const _event of model.stream({
+        instructions: "Synthetic instructions",
+        locale: "en-US",
+        messages: [
+          {
+            revisionId: asConversationEventRevisionId(
+              "01984477-59a9-7d20-9d97-e588769566a0",
+            ),
+            role: "user",
+            text: "PRIVATE_DRAFT_CANARY",
+          },
+        ],
+        model: "deepseek-v4-flash",
+      })) {
+        // A truncated response must not yield a completed event.
+      }
+    } catch (error) {
+      caught = error;
+    }
+
+    // The durable category stays invalid_response so the shared ledger still
+    // records schema_incompatible and ADR-0132 keeps its no-retry rule; only
+    // the content-free reason is added.
+    expect(caught).toMatchObject({
+      category: "invalid_response",
+      failure: {
+        kind: "output_budget_exhausted",
+        inputTokens: 940,
+        outputLength: 16,
+        outputTokens: 4000,
+        providerReason: "max_output_tokens",
+      },
+    });
+    expect(String(caught)).not.toMatch(/PRIVATE_DRAFT_CANARY/);
+  });
+
+  it("keeps an unproven incomplete reason as a bare invalid_response", async () => {
+    const model = createResponsesApiConversationTextModel({
+      apiKey: "synthetic-server-key",
+      baseUrl: OPENAI_BASE_URL,
+      fetchImplementation: async () =>
+        new Response(
+          'event: response.incomplete\r\ndata: {"type":"response.incomplete","response":{"id":"resp_filtered","model":"gpt-5.4","incomplete_details":{"reason":"content_filter"}}}\r\n\r\n',
+          { headers: { "content-type": "text/event-stream" }, status: 200 },
+        ),
+    });
+
+    let caught: unknown;
+    try {
+      for await (const _event of model.stream({
+        instructions: "Synthetic instructions",
+        locale: "en-US",
+        messages: [],
+        model: "gpt-5.4",
+      })) {
+        // An unclassified incomplete response must not yield.
+      }
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({ category: "invalid_response" });
+    expect((caught as { failure?: unknown }).failure).toBeUndefined();
+  });
+
   it("does not expose Provider credentials or raw error bodies", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const warnLog = vi.spyOn(console, "warn").mockImplementation(() => {});

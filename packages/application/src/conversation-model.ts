@@ -131,11 +131,40 @@ export type ProviderDispatchErrorCategory =
   | "unavailable"
   | "unknown";
 
+/**
+ * Content-free reason a Provider response could not be turned into a typed
+ * model output (issue #252). `invalid_response` on its own cannot separate an
+ * exhausted output budget from an empty final answer, an unparseable body, or
+ * a well-formed body that violates the frozen output schema, and each cause
+ * needs a different remedy: a larger versioned budget, a shorter prompt, a
+ * stricter schema, or a provider fix.
+ *
+ * Every field is a count or a closed enum, so this record satisfies the
+ * Provider Egress rule that dispatch telemetry carries no body text
+ * (architecture §15.8.1 step 4) and can be written to release evidence on
+ * private data without redaction. `outputLength` is a character count of the
+ * final visible output, never the output itself.
+ */
+export type ProviderResponseFailure = Readonly<{
+  kind:
+    | "output_budget_exhausted"
+    | "empty_output"
+    | "parse_failed"
+    | "schema_mismatch";
+  inputTokens: number | null;
+  outputLength: number;
+  outputTokens: number | null;
+  /** Closed set of Provider-reported wire reasons; never a free-text message. */
+  providerReason: string | null;
+}>;
+
 export class ProviderDispatchError extends Error {
   public constructor(
     public readonly category: ProviderDispatchErrorCategory,
     message = "The configured Conversation Text Provider failed.",
     public readonly settlesAttempt = true,
+    /** Present only when the failure was proven to a specific response cause. */
+    public readonly failure?: ProviderResponseFailure,
   ) {
     super(message);
     this.name = "ProviderDispatchError";
