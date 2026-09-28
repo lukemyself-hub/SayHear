@@ -24,7 +24,7 @@ fixed":
 
 ### B1 — Production configuration version and egress policy (release wiring)
 
-**Blocked. Requires a migration.**
+**Next. Requires a migration. No longer gated on the holdout.**
 
 `model_role_configurations` has `PRIMARY KEY (role, config_version)`, and
 `bindActiveG1Release` compares `parameter_snapshot` on conflict, throwing
@@ -47,18 +47,24 @@ budget — but it means activation will refuse until all of these move together:
   `rolloutPin: \`${role}-g1-release-pin:v1\`` — it will emit a v1 identity for a
   v2 configuration until changed
 
-This is deliberately **not done** in this round. Changing production before
-the holdout passes would roll out a configuration with no qualifying evidence,
-which is the failure mode #252 was opened to close.
+This was deliberately held back while the holdout was treated as a
+precondition. Luke's test-data decision (see §2) moves it ahead of the holdout:
+the wiring can be built and verified now against the spent 18, and the holdout
+then certifies the finished configuration rather than gating its construction.
 
-### B2 — Holdout acceptance run not executed
+### B2 — Final acceptance run not executed
 
-**Blocked on B4 (below) and on the run itself.**
+**Blocked on the run itself. This is the last gate, not a precondition.**
 
-Not yet run: the 18-case holdout, and the 6 clean-draft precision set. Both
-must be captured at the new `1a3b-f3-pins:v2` pin on the exact release commit,
-saving raw typed output, hashes, configuration, and the new error
-classification plus per-case token usage.
+The 18-case holdout and the 6 clean-draft precision set are **sealed**. They run
+once, at final acceptance, on the exact release commit at
+`1a3b-f3-pins:v2`, saving raw typed output, hashes, configuration, the new error
+classification, and per-case token usage.
+
+Per Luke's decision (2026-09-28), the holdout is not consumed by any
+intermediate testing. Everything before this run — the v2 wiring, evidence
+regeneration, hosted checks — is verified against the **spent** 18-case catalog
+instead. See §Test data usage rule.
 
 ### B3 — Luke's per-case adjudication
 
@@ -68,6 +74,18 @@ All 18 cases must be adjudicated individually by Luke. The machine verdicts
 are advisory. ADR-0139 allows at most a 10% calibration miss (1 of 18);
 precision false-blocking is zero-tolerance. The 6 precision drafts must
 complete with zero blocking findings.
+
+### B5 — ~~Holdout fixture difficulty needs review~~ **CANCELLED by Luke, 2026-09-28**
+
+Luke's decision: the holdout does not need to be hard. The objective is a
+smooth release, not completeness on edge cases. The agent-authored fixtures
+stand as written, and their difficulty is not a gate.
+
+The original concern was that the agent already knew `bio/contradiction` and
+`bio/unsupported` exhausted the budget, and might have authored them easier than
+the incumbent's. That concern is withdrawn as a blocker. The controls that
+still apply are unchanged and still meaningful: zero-tolerance on precision
+false-blocking, per-case adjudication by Luke, and the 10% calibration cap.
 
 ### B4 — ~~The 6 precision clean drafts are hardcoded and already spent~~ **RESOLVED in `f47e49d`**
 
@@ -142,7 +160,33 @@ The Provider does not honour `temperature: 0` for reasoning spend. A single
 successful run is therefore not evidence of determinism, and it is undecided
 whether repeated runs are required for the gate. Tracked in #254.
 
-## 2. Not blocked
+Because the holdout is sealed (§2), this must be characterised on the spent 18
+using repeat runs, together with the 8000 headroom measurement that successful-
+call usage recording now makes possible. It is step 2 of the recommended order.
+
+## 2. Test data usage rule
+
+Decided by Luke on 2026-09-28, mid-#252:
+
+> Holdout 只有在正式跑最终验收的时候才需要，任何中间过程的测试，都用之前的 18 例旧 case 来做，避免划掉这个新 holdout。
+
+| Data | Allowed for | Forbidden for |
+| --- | --- | --- |
+| `fixtures.json` (spent, 18 cases) | All intermediate and diagnostic runs | Claiming acceptance evidence |
+| `holdout/fixtures.json` (fresh, 18 + 6) | The single final acceptance run | Any tuning, diagnosis, or regression check |
+
+The holdout's value is that it was never looked at. One diagnostic run against
+it converts it into tuning data and it can no longer certify the release, so it
+stays sealed until the release is otherwise ready. The spent catalog is
+unlimited and is spent already — it is the right instrument for every
+intermediate question, including whether 8000 leaves headroom.
+
+One consequence worth stating: because the holdout is sealed, the
+non-determinism question (B8) must be characterised on the spent 18, not on
+the holdout. A single acceptance run therefore cannot be treated as evidence of
+determinism unless B8 is settled first.
+
+## 3. Not blocked
 
 - Four-role G1 scope, plain Memory Recall, Inspector, and Full Purge coverage
   are unchanged; no G2 restoration.
@@ -152,20 +196,28 @@ whether repeated runs are required for the gate. Tracked in #254.
   reported; not a release blocker.
 - #253 is merged and the #249 tree is in `main` via `e78073e`.
 
-## 3. Recommended order
+## 4. Recommended order
 
-1. **B5** — Luke reviews holdout difficulty.
-2. **B2/B3** — run the holdout at `1a3b-f3-pins:v2` on the release commit, then
-   adjudicate all 18 plus the precision 6.
-3. **B8** — decide whether repeated runs are required, from the holdout data.
-4. Reconcile `main`, then **B1** — mint the v2 config, provider policy, and
-   rollout pin, with a migration and the evidence-producer change.
-5. **B6** — regenerate all 12 evidence sources and freeze the manifest.
-6. **B7** — hosted checks, purge/restore drills, rollback rehearsal.
+The objective is a smooth release. The holdout is the **last** gate, not a
+precondition for the work below, so every intermediate step is verified against
+the spent 18 cases.
+
+1. **B1** — mint the v2 config, provider policy and rollout pin, with a
+   migration and the evidence-producer change. Verify on the spent 18.
+2. **B8** — characterise non-determinism on the spent 18 (repeat runs, and the
+   8000 headroom now that successful-call usage is recorded). Decide whether
+   repeated runs are required for the gate.
+3. Reconcile `main` onto the release branch.
+4. **B6** — regenerate all 12 evidence sources and freeze the manifest.
+5. **B7** — hosted checks, purge/restore drills, rollback rehearsal.
+6. **B2/B3** — the one and only holdout run at `1a3b-f3-pins:v2` on the frozen
+   release commit, then Luke adjudicates all 18 plus the precision 6.
 7. Human switches `cutoverState` to `active` and runs `release:g1:activate`.
 8. #251 — the seven-day single-Owner real-data evaluation.
 
-## 4. Known limitations of this document
+B5 is cancelled. B4 is resolved.
+
+## 5. Known limitations of this document
 
 - No claim here is backed by a holdout run; none has happened.
 - The 8000 margin is **unmeasured**. 8000 cleared every case that had failed,
