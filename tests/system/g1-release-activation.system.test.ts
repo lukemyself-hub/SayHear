@@ -144,7 +144,7 @@ systemDescribe("G1 release activation persistence", () => {
     );
     // Only narrative.validate gained a configuration; the other three reused
     // the version already in place.
-    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["narrative.validate"]).toBe("v3");
+    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["narrative.validate"]).toBe("v4");
     const counts = await database!.pool.query<{ count: number }>(
       `SELECT count(*)::int AS count FROM model_role_configurations
        WHERE role = ANY($1::text[])`,

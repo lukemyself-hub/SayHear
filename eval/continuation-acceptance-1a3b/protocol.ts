@@ -301,7 +301,7 @@ export type F3Pins = Readonly<{
   }>;
   syntheticOnly: true;
   validator: Readonly<{ configuration: RolePin }>;
-  version: "1a3b-f3-pins:v2";
+  version: "1a3b-f3-pins:v3";
 }>;
 
 export type BaselineReference = Readonly<{

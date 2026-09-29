@@ -28,9 +28,13 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
  * G1 model-configuration iteration per role.
  *
  * Production is live at `v2` on all four roles. Only `narrative.validate`
- * needs a new configuration, because #252 raised only its output budget, from
- * 4000 to 8000 tokens. The other three keep `v2` so their configurations, and
- * therefore their rollback targets, are left exactly as they are.
+ * needs a new configuration, because #252 raised only its output budget. The
+ * first raise, 4000 to 8000, was not enough: the sealed #252 holdout run
+ * recorded 17 of 18 cases at or below 65.8% of the cap, with one case spending
+ * all 8000 on reasoning and emitting an empty body. So the budget goes to
+ * 10000, which lands as `v4` because configuration rows are immutable. The
+ * other three keep `v2` so their configurations, and therefore their rollback
+ * targets, are left exactly as they are.
  *
  * A configuration row is immutable, so re-declaring a version with different
  * parameters is refused at activation. That is why the budget change cannot
@@ -40,7 +44,7 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
   "episode.build": "v2",
   "reflection.daily": "v2",
   "reflection.weekly": "v2",
-  "narrative.validate": "v3",
+  "narrative.validate": "v4",
 } as const satisfies Readonly<
   Record<(typeof ONE_A_3B_G1_ENABLED_ROLES)[number], string>
 >;
@@ -55,7 +59,7 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * version: its foreign key is (role, config_version, provider_policy_version),
  * so a `v3` pin may point at an unchanged `v2` configuration.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v3" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v4" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =

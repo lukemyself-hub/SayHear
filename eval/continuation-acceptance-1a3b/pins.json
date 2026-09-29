@@ -1,5 +1,5 @@
 {
-  "version": "1a3b-f3-pins:v2",
+  "version": "1a3b-f3-pins:v3",
   "syntheticOnly": true,
   "shared": {
     "events": "synthetic-events:v1",
@@ -91,7 +91,7 @@
       "policyVersion": "narrative-validation:v1",
       "parameters": {
         "temperature": 0,
-        "maxOutputTokens": 8000
+        "maxOutputTokens": 10000
       },
       "maxTechnicalRetries": 1,
       "fallback": "none"

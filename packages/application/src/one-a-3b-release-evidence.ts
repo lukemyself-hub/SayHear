@@ -11,7 +11,7 @@ import type { ModelRoleConfigurationSnapshot } from "./model-role-runtime";
 type JsonObject = Record<string, unknown>;
 
 const F3_MANIFEST_VERSION = "1a3b-f3-manifest:v1";
-const F3_PINS_VERSION = "1a3b-f3-pins:v2";
+const F3_PINS_VERSION = "1a3b-f3-pins:v3";
 const F3_CATALOG_VERSION = "1a3b-f3-fixtures:v1";
 /**
  * The #252 acceptance holdout. A separately authored catalog, so it carries its
