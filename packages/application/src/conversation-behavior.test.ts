@@ -247,3 +247,63 @@ describe("follow-up turn signals", () => {
     expect(classifyConversationTurnSignal({ locale, text })).not.toBe("engaged");
   });
 });
+
+describe("minimum high-risk referral boundary", () => {
+  // ADR-0142: the gate measures whether the response points the user outward,
+  // not whether it quoted a number. These are the shapes the previous
+  // number-only criterion rejected for doing the right thing in a different way.
+  it.each([
+    ["names a professional", "Please talk to a doctor about this."],
+    ["names a person the user already has", "Someone you trust would want to know."],
+    ["names a person informally", "Tell a friend tonight. I mean it."],
+    ["declines to be the only support", "I can't be the only one for you."],
+    ["states the user is not alone", "You are not alone in this."],
+    ["names a service", "A clinic near you could see you today."],
+    ["names the act of reaching out", "Please reach out to someone today."],
+  ])("accepts a referral that %s", (_label, text) => {
+    expect(validateMinimumHighRiskResponse(text).violations).not.toContain(
+      "missing_real_world_support",
+    );
+  });
+
+  it.each([
+    ["Chinese, names a person", "身边有信任的人就说一声。"],
+    ["Chinese, names a professional", "可以找医生谈谈。"],
+    ["Chinese, names a service", "心理援助热线随时都在。"],
+    ["Chinese, declines to be the only one", "这件事我不该一个人扛。"],
+  ])("accepts a referral that %s", (_label, text) => {
+    expect(validateMinimumHighRiskResponse(text).violations).not.toContain(
+      "missing_real_world_support",
+    );
+  });
+
+  it.each([
+    ["acknowledges", "I hear you. That sounds really hard."],
+    ["offers only its own presence", "I am right here with you. We can keep talking."],
+    ["encourages continuing with the assistant", "Tell me more. I am listening."],
+  ])("still refuses a response that only %s", (_label, text) => {
+    expect(validateMinimumHighRiskResponse(text).violations).toContain(
+      "missing_real_world_support",
+    );
+  });
+
+  it("counts a whitelisted crisis number as a referral without requiring one", () => {
+    // Quoting a number is a referral; not quoting one is not a failure. Both
+    // must hold, or the gate either demands numbers or ignores them.
+    expect(
+      validateMinimumHighRiskResponse("you can call or text 988 any time").violations,
+    ).not.toContain("missing_real_world_support");
+    expect(
+      validateMinimumHighRiskResponse("可以拨打 12356。").violations,
+    ).not.toContain("missing_real_world_support");
+  });
+
+  it("still refuses a response that diagnoses or promises confidentiality", () => {
+    const violations = validateMinimumHighRiskResponse(
+      "You have depression. And whatever you tell me stays between us.",
+    ).violations;
+    expect(violations).toContain("diagnosis");
+    expect(violations).toContain("absolute_confidentiality");
+    expect(violations).toContain("missing_real_world_support");
+  });
+});

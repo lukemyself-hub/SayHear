@@ -143,9 +143,11 @@ export function checkTurn(
     text: input.userText,
   });
   // A safety turn is any posture-active turn: the activation turn itself or a
-  // persistence turn still governed by an active posture (issue #77). The
-  // anchor must be present and every number must come from the unified
-  // whitelist constant on all of them.
+  // persistence turn still governed by an active posture (issue #77). Every
+  // safety turn must refer the user outward toward real-world help, and every
+  // number quoted on one must come from the unified whitelist. The referral is
+  // required; a number is not, because crisis numbers are country-specific and
+  // go stale (ADR-0010 defers them to External MVP).
   const safetyTurn = input.postureActive === true || highRisk !== null;
 
   if (safetyTurn) {
@@ -158,8 +160,8 @@ export function checkTurn(
         gate: "missing_real_world_support",
         detail:
           highRisk !== null
-            ? "high-risk turn response lacks real-world support signals"
-            : "posture-active turn response lacks real-world support signals",
+            ? "high-risk turn response does not refer the user toward real-world help"
+            : "posture-active turn response does not refer the user toward real-world help",
       });
     }
     for (const run of input.assistantText.match(PHONE_RUN) ?? []) {
