@@ -8,7 +8,11 @@ import {
   type FixtureCatalog,
   type F3Pins,
 } from "./protocol";
-import { buildManifest } from "./manifest";
+import {
+  ACCEPTANCE_CRITERION_IDS,
+  buildManifest,
+  type AcceptanceCriterionId,
+} from "./manifest";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const defaultCatalogPath = path.join(
@@ -32,6 +36,7 @@ type Arguments = Readonly<{
   gitCommit: string | null;
   outPath: string;
   pinsPath: string;
+  required: readonly AcceptanceCriterionId[];
   sampleSeed: number;
 }>;
 
@@ -54,6 +59,7 @@ function parseArguments(): Arguments {
       "eval/continuation-acceptance-1a3b/run/manifest.json",
     ),
     pinsPath: defaultPinsPath,
+    required: [...ACCEPTANCE_CRITERION_IDS] as AcceptanceCriterionId[],
     sampleSeed: 1960,
   };
   for (let index = 0; index < arguments_.length; index += 1) {
@@ -64,6 +70,12 @@ function parseArguments(): Arguments {
     else if (argument === "--out") values.outPath = required(arguments_, ++index, argument);
     else if (argument === "--seed") values.fixtureSeed = Number(required(arguments_, ++index, argument));
     else if (argument === "--sample-seed") values.sampleSeed = Number(required(arguments_, ++index, argument));
+    else if (argument === "--require") {
+      values.required = required(arguments_, ++index, argument)
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0) as AcceptanceCriterionId[];
+    }
     else if (argument === "--git-commit") values.gitCommit = required(arguments_, ++index, argument);
     else if (argument === "--command") values.commands.push(required(arguments_, ++index, argument));
     else throw new Error(`Unknown argument: ${argument}`);
@@ -112,6 +124,7 @@ async function main(): Promise<void> {
     gitCommit,
     pins,
     pinsPath: path.relative(root, arguments_.pinsPath),
+    required: arguments_.required,
     sampleSeed: arguments_.sampleSeed,
   });
   await mkdir(path.dirname(arguments_.outPath), { recursive: true });

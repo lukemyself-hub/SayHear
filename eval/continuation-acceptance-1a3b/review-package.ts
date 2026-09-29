@@ -364,9 +364,24 @@ function expectedSampleIds(
         id: fixture.id,
         languageVariant: fixture.languageVariant,
       })),
-    quotas: manifest.bio.sampleQuotas,
+    quotas: requireBioSample(manifest).sampleQuotas,
     sampleSeed: manifest.sampleSeed,
   }).scenarioIds;
+}
+
+/**
+ * A G1-only release has no Bio sample, so a Bio comparison cannot be built
+ * against it. This is refused loudly rather than defaulting to an empty sample,
+ * which would compare nothing while looking like a real comparison.
+ */
+function requireBioSample(manifest: AcceptanceManifest): NonNullable<AcceptanceManifest["bio"]> {
+  if (!manifest.bio) {
+    throw new Error(
+      "This manifest carries no Bio naturalness sample, so a Bio comparison cannot be built. " +
+        "The release that produced it does not ship bio.write.",
+    );
+  }
+  return manifest.bio;
 }
 
 function pairScenario(
@@ -498,7 +513,7 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
   const selectedIds =
     input.group === "continuation"
       ? input.manifest.continuation.sample.scenarioIds
-      : input.manifest.bio.sampleIds;
+      : requireBioSample(input.manifest).sampleIds;
   if (canonicalJson(selectedIds) !== canonicalJson(expectedSampleIds(input.catalog, input.manifest, input.group))) {
     throw new Error("Review sample does not match the manifest's deterministic selection.");
   }
@@ -544,7 +559,7 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
   const quotas =
     input.group === "continuation"
       ? input.manifest.continuation.sample.quotas
-      : input.manifest.bio.sampleQuotas;
+      : requireBioSample(input.manifest).sampleQuotas;
   const selectedCounts =
     input.group === "continuation"
       ? input.manifest.continuation.sample.selectedCounts

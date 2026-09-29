@@ -106,6 +106,7 @@ describe("1A.3b G1 evidence lineage", () => {
       gitCommit: "b".repeat(40),
       pins: pins as any,
       sampleSeed: 1960,
+      required: ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"],
     });
     const ledger = {
       version: "1a3b-f3-adjudication:v1",
@@ -124,6 +125,67 @@ describe("1A.3b G1 evidence lineage", () => {
     });
 
     expect(mismatches).toEqual([]);
+  });
+
+  it("verifies a G1-only F3 manifest that does not ship Bio", () => {
+    const holdout = readFixture("../eval/continuation-acceptance-1a3b/holdout/fixtures.json");
+    const pins = readFixture("../eval/continuation-acceptance-1a3b/pins.json");
+    const baseline = readFixture(
+      "../eval/continuation-acceptance-1a3b/baseline-reference.json",
+    );
+    const f3Manifest = buildManifest({
+      baseline: baseline as any,
+      catalog: holdout as any,
+      commands: ["CI=true pnpm exec tsx eval/continuation-acceptance-1a3b/verify-fixtures.ts"],
+      fixtureSeed: 196,
+      gitCommit: "b".repeat(40),
+      pins: pins as any,
+      // The G1-only release ships four roles, none of them bio.write.
+      required: ["AC-X01", "AC-X03", "AC-X04", "AC-M01"],
+      sampleSeed: 1960,
+    });
+    const ledger = {
+      version: "1a3b-f3-adjudication:v1",
+      group: "validator",
+      adjudicator: "Luke",
+      decidedAt: "2026-09-10T20:00:00.000Z",
+      manifestFingerprint: f3Manifest.fingerprint,
+      entries: holdout.scenarios
+        .filter((scenario: any) => scenario.group === "validator")
+        .map((scenario: any) => ({ fixtureId: scenario.id, verdict: "accepted" })),
+    };
+
+    // No Bio gate, and therefore no Bio sample demanded of it.
+    expect(verifyOneA3bF3ReleaseArtifacts({
+      manifest: f3Manifest,
+      catalog: holdout,
+      ledger,
+    })).toEqual([]);
+
+    // A manifest that requires AC-X04 cannot be accepted without it, so the
+    // deterministic gates cannot be quietly skipped by editing the criteria.
+    const withoutHardGates = { ...f3Manifest, acceptance: { ...f3Manifest.acceptance, required: ["AC-X01", "AC-X03", "AC-M01"] } };
+    expect(
+      verifyOneA3bF3ReleaseArtifacts({
+        manifest: withoutHardGates,
+        catalog: holdout,
+        ledger: { ...ledger, manifestFingerprint: "sha256:placeholder" },
+      }).join(" "),
+    ).toMatch(/AC-X04/);
+
+    // A manifest carrying a Bio sample it never required would let a Bio
+    // comparison be built from a release that never gated on it.
+    const withUnsolicitedBio = {
+      ...f3Manifest,
+      bio: { sampleIds: [], sampleQuotas: { code_switch: 5, en: 5, zh: 5 }, total: 15 },
+    };
+    expect(
+      verifyOneA3bF3ReleaseArtifacts({
+        manifest: withUnsolicitedBio,
+        catalog: holdout,
+        ledger: { ...ledger, manifestFingerprint: "sha256:placeholder" },
+      }).join(" "),
+    ).toMatch(/AC-X02/);
   });
 
   it("accepts the #252 holdout catalog as a distinct frozen F3 catalog version", () => {

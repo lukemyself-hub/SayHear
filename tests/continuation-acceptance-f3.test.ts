@@ -37,6 +37,12 @@ const catalog = JSON.parse(
     "utf8",
   ),
 ) as Parameters<typeof verifyFixtureCatalog>[0];
+const holdout = JSON.parse(
+  readFileSync(
+    resolve(root, "eval/continuation-acceptance-1a3b/holdout/fixtures.json"),
+    "utf8",
+  ),
+) as Parameters<typeof verifyFixtureCatalog>[0];
 const pins = JSON.parse(
   readFileSync(
     resolve(root, "eval/continuation-acceptance-1a3b/pins.json"),
@@ -62,6 +68,16 @@ function cleanBaseline() {
   };
 }
 
+/** The #252 holdout reduced to its validator half: no Continuation pool. */
+function validatorOnlyCatalog(): Parameters<typeof verifyFixtureCatalog>[0] {
+  return {
+    ...holdout,
+    scenarios: holdout.scenarios.filter(
+      (fixture) => fixture.group !== "continuation",
+    ),
+  };
+}
+
 function manifest() {
   return buildManifest({
     baseline: cleanBaseline(),
@@ -70,6 +86,13 @@ function manifest() {
     fixtureSeed: 196,
     gitCommit: "0123456789abcdef0123456789abcdef01234567",
     pins,
+    required: [
+      "AC-X01",
+      "AC-X02",
+      "AC-X03",
+      "AC-X04",
+      "AC-M01",
+    ],
     sampleSeed: 1960,
   });
 }
@@ -215,6 +238,101 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     }
   });
 
+  it("builds a manifest for a G1-only release that does not ship Bio", () => {
+    // The G1-only release ships four roles, none of which is bio.write, so
+    // AC-X02 is not a gate it can satisfy. The release declares what it
+    // requires rather than inheriting a fixed five-item list.
+    const build = (overrides: Partial<Parameters<typeof buildManifest>[0]>) =>
+      buildManifest({
+        baseline: cleanBaseline(),
+        catalog: holdout,
+        commands: ["pnpm exec tsx eval/continuation-acceptance-1a3b/build-manifest.ts"],
+        fixtureSeed: 196,
+        gitCommit: "0123456789abcdef0123456789abcdef01234567",
+        pins,
+        required: ["AC-X01", "AC-X03", "AC-X04", "AC-M01"],
+        sampleSeed: 1960,
+        ...overrides,
+      });
+
+    const scoped = build({});
+
+    expect(scoped.acceptance.required).toEqual([
+      "AC-X01",
+      "AC-X03",
+      "AC-X04",
+      "AC-M01",
+    ]);
+    // No Bio pool means no Bio sample, and AC-X02 is absent from the group map
+    // rather than present-but-unenforced.
+    expect(scoped.bio).toBeNull();
+    expect(scoped.acceptance.evidenceGroups.bioNaturalness).toBeUndefined();
+    expect(scoped.continuation.poolCount).toBe(18);
+    expect(scoped.validator.total).toBe(18);
+    // The declared list is part of the release identity, so a G1-only release
+    // cannot share a fingerprint with a full one.
+    expect(scoped.fingerprint).not.toBe(manifest().fingerprint);
+
+    // Requiring a criterion the catalog cannot produce must be refused, not
+    // silently downgraded to a pass.
+    expect(() => build({ required: ["AC-X01", "AC-X02"] })).toThrow(/AC-X02/);
+    expect(() => build({ required: ["AC-X02"] })).toThrow(/AC-X02/);
+    // An unrecognised criterion is refused by name, so a typo cannot quietly
+    // narrow the gate.
+    expect(() => build({ required: ["AC-X0Z" as "AC-X01"] })).toThrow(/AC-X0Z/);
+    expect(() => build({ required: [] })).toThrow(/at least one/);
+    // AC-X04 is the one criterion a release cannot opt out of: its only data
+    // source is a Continuation run, and the evidence producer requires a full
+    // 18-fixture report. Letting a release drop it would recreate the gate that
+    // passes while checking nothing.
+    expect(() =>
+      build({ required: ["AC-X01", "AC-X03", "AC-M01"] }),
+    ).toThrow(/AC-X04/);
+    // Continuation stays mandatory for the same reason.
+    expect(() =>
+      build({ catalog: validatorOnlyCatalog(), required: ["AC-X03", "AC-X04", "AC-M01"] }),
+    ).toThrow(/Continuation pool/);
+  });
+
+  it("refuses to build a Bio comparison against a manifest that carries no Bio sample", () => {
+    // Reachable by dropping AC-X02 from a catalog that does carry Bio: the
+    // release says Bio is not a gate, so the manifest records no Bio sample
+    // even though the fixtures exist. Building a Bio comparison from it would
+    // produce a comparison that looks real while judging nothing.
+    const scoped = buildManifest({
+      baseline: cleanBaseline(),
+      catalog,
+      commands: ["pnpm exec tsx eval/continuation-acceptance-1a3b/build-manifest.ts"],
+      fixtureSeed: 196,
+      gitCommit: "0123456789abcdef0123456789abcdef01234567",
+      pins,
+      required: ["AC-X01", "AC-X03", "AC-X04", "AC-M01"],
+      sampleSeed: 1960,
+    });
+
+    expect(scoped.bio).toBeNull();
+    expect(() =>
+      buildReviewPackage({
+        baselineRun: syntheticRun("incumbent", "bio_naturalness"),
+        candidateRun: syntheticRun("candidate", "bio_naturalness"),
+        catalog,
+        group: "bio_naturalness",
+        manifest: scoped,
+      }),
+    ).toThrow(/no Bio naturalness sample/i);
+
+    // The incumbent manifest, which does require AC-X02, still compares Bio.
+    expect(() =>
+      buildReviewPackage({
+        baselineRun: syntheticRun("incumbent", "bio_naturalness"),
+        candidateRun: syntheticRun("candidate", "bio_naturalness"),
+        catalog,
+        group: "bio_naturalness",
+        manifest: manifest(),
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects a holdout whose precision drafts cite unknown claims", () => {
     const holdout = JSON.parse(
       readFileSync(
@@ -283,6 +401,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
       gitCommit: "0123456789abcdef0123456789abcdef01234567",
       pins,
       sampleSeed: 1960,
+      required: ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"],
     });
 
     expect(blocked.status).toBe("blocked_requires_clean_incumbent");
@@ -306,6 +425,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
         gitCommit: "0123456789abcdef0123456789abcdef01234567",
         pins,
         sampleSeed: 1960,
+      required: ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"],
       }),
     ).toThrow(/clean incumbent/i);
   });
@@ -437,6 +557,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
         gitCommit: "0123456789abcdef0123456789abcdef01234567",
         pins,
         sampleSeed: 1960,
+      required: ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"],
       },
       createdAt: "2026-09-08T00:00:00.000Z",
     });
@@ -449,6 +570,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
         gitCommit: "0123456789abcdef0123456789abcdef01234567",
         pins,
         sampleSeed: 1960,
+      required: ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"],
       },
       createdAt: "2026-09-08T01:00:00.000Z",
     });

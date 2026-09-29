@@ -561,9 +561,14 @@ export function verifyBaselineReference(
 
 export type AcceptanceManifest = Readonly<{
   acceptance: Readonly<{
-    evidenceGroups: Readonly<Record<string, string>>;
+    /**
+     * Which acceptance groups this release actually carries. A group the
+     * catalog does not support is absent, so a release that does not ship Bio
+     * has no Bio group rather than one that is present and unenforced.
+     */
+    evidenceGroups: Readonly<Partial<Record<string, string>>>;
     humanOwner: "Luke";
-    required: readonly ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"];
+    required: readonly AcceptanceCriterionId[];
   }>;
   baseline: Readonly<{
     currentIncumbent: BaselineReference["currentIncumbent"];
@@ -582,11 +587,12 @@ export type AcceptanceManifest = Readonly<{
   fixtureSeed: number;
   fingerprint: string;
   gitCommit: string;
+  /** Null when the release carries no Bio pool, which is the G1-only shape. */
   bio: Readonly<{
     sampleIds: readonly string[];
     sampleQuotas: Readonly<Record<LanguageVariant, number>>;
     total: number;
-  }>;
+  }> | null;
   pins: Readonly<{ sha256: string; version: string }>;
   pinnedConfiguration: F3Pins;
   sampleSeed: number;
@@ -598,6 +604,23 @@ export type AcceptanceManifest = Readonly<{
   version: typeof F3_MANIFEST_VERSION;
 }>;
 
+/** Every acceptance criterion a release may require of the F3 manifest. */
+export const ACCEPTANCE_CRITERION_IDS = Object.freeze([
+  "AC-X01",
+  "AC-X02",
+  "AC-X03",
+  "AC-X04",
+  "AC-M01",
+] as const);
+export type AcceptanceCriterionId = (typeof ACCEPTANCE_CRITERION_IDS)[number];
+
+/**
+ * The criteria a release requires. A G1-only release does not ship bio.write,
+ * so AC-X02 is not one it can satisfy; requiring it against a catalog with no
+ * Bio pool is refused rather than recorded as a silent pass. The list is part
+ * of the release identity, so two releases with different scope cannot share a
+ * fingerprint.
+ */
 export type ManifestBuildInput = Readonly<{
   baseline: BaselineReference;
   catalog: FixtureCatalog;
@@ -608,6 +631,7 @@ export type ManifestBuildInput = Readonly<{
   gitCommit: string;
   pins: F3Pins;
   pinsPath?: string;
+  required: readonly AcceptanceCriterionId[];
   sampleSeed: number;
 }>;
 
@@ -646,10 +670,6 @@ export function buildManifest(input: ManifestBuildInput): AcceptanceManifest {
   const continuationCandidates = input.catalog.scenarios.filter(
     (fixture): fixture is ContinuationFixture => fixture.group === "continuation",
   );
-  const continuation = selectContinuationSample({
-    candidates: continuationCandidates,
-    sampleSeed: input.sampleSeed,
-  });
   const bioCandidates = input.catalog.scenarios
     .filter((fixture): fixture is BioNaturalnessFixture => fixture.group === "bio_naturalness")
     .map((fixture) => ({
@@ -658,33 +678,94 @@ export function buildManifest(input: ManifestBuildInput): AcceptanceManifest {
       id: fixture.id,
       languageVariant: fixture.languageVariant,
     }));
-  const bioSample = selectFixedLanguageSample({
-    candidates: bioCandidates,
-    quotas: BIO_SAMPLE_QUOTAS,
+
+  // The release declares what it must satisfy, and the builder refuses any
+  // criterion the catalog cannot produce. Previously the five-item list was
+  // fixed and Bio sampling ran unconditionally, so a release that does not
+  // ship Bio had to certify bio.write to build a manifest at all.
+  const unknownRequired = input.required.filter(
+    (criterion) => !ACCEPTANCE_CRITERION_IDS.includes(criterion),
+  );
+  if (unknownRequired.length > 0) {
+    throw new Error(
+      `Unknown required acceptance criteria: ${unknownRequired.join(", ")}.`,
+    );
+  }
+  const duplicated = input.required.filter(
+    (criterion, index) => input.required.indexOf(criterion) !== index,
+  );
+  if (duplicated.length > 0) {
+    throw new Error(
+      `Required acceptance criteria are duplicated: ${[...new Set(duplicated)].join(", ")}.`,
+    );
+  }
+  if (input.required.length === 0) {
+    throw new Error("A release must require at least one acceptance criterion.");
+  }
+  // Checked before any sampling, so a catalog that cannot support a criterion
+  // is refused with a message about that criterion rather than a symptom from
+  // the sampler that happens to run first.
+  if (continuationCandidates.length === 0) {
+    throw new Error(
+      "AC-X01 and AC-X04 require a Continuation pool, which this catalog does not carry.",
+    );
+  }
+  if (bioCandidates.length === 0 && input.required.includes("AC-X02")) {
+    throw new Error(
+      "AC-X02 requires a Bio naturalness pool, which this catalog does not carry. " +
+        "A release that does not ship bio.write must not require it.",
+    );
+  }
+  // AC-X04 is the one criterion a release cannot opt out of: its only data
+  // source is a Continuation run, and the evidence producer demands a full
+  // 18-fixture report. A release that dropped it would recreate the gate that
+  // passes while checking nothing.
+  if (!input.required.includes("AC-X04")) {
+    throw new Error("AC-X04 is not optional: every release must require it.");
+  }
+  const continuation = selectContinuationSample({
+    candidates: continuationCandidates,
     sampleSeed: input.sampleSeed,
   });
+  // A Bio sample is recorded only when Bio is a gate. Presence of the fixtures
+  // is not enough: a release that does not require AC-X02 gets no Bio sample
+  // even from a catalog that has Bio cases, so a Bio comparison cannot be
+  // built from it later.
+  const bioSample =
+    !input.required.includes("AC-X02")
+      ? null
+      : selectFixedLanguageSample({
+          candidates: bioCandidates,
+          quotas: BIO_SAMPLE_QUOTAS,
+          sampleSeed: input.sampleSeed,
+        });
+  const evidenceGroups: Record<string, string> = {
+    continuation: "AC-X01",
+    deterministicHardGates: "AC-X04",
+    modelRoles: "AC-M01",
+    validator: "AC-X03",
+  };
+  if (bioSample) evidenceGroups["bioNaturalness"] = "AC-X02";
   const manifestWithoutHash = {
     acceptance: {
-      evidenceGroups: {
-        bioNaturalness: "AC-X02",
-        continuation: "AC-X01",
-        deterministicHardGates: "AC-X04",
-        modelRoles: "AC-M01",
-        validator: "AC-X03",
-      },
+      evidenceGroups,
       humanOwner: "Luke" as const,
-      required: ["AC-X01", "AC-X02", "AC-X03", "AC-X04", "AC-M01"] as const,
+      required: [...input.required],
     },
     baseline: {
       currentIncumbent: input.baseline.currentIncumbent,
       historicalFindingIssues: baselineVerification.historicalFindingIssues,
       historicalIncumbent: input.baseline.historicalIncumbent,
     },
-    bio: {
-      sampleIds: bioSample.scenarioIds,
-      sampleQuotas: BIO_SAMPLE_QUOTAS,
-      total: input.catalog.scenarios.filter((fixture) => fixture.group === "bio_naturalness").length,
-    },
+    bio: bioSample
+      ? {
+          sampleIds: bioSample.scenarioIds,
+          sampleQuotas: BIO_SAMPLE_QUOTAS,
+          total: input.catalog.scenarios.filter(
+            (fixture) => fixture.group === "bio_naturalness",
+          ).length,
+        }
+      : null,
     catalog: { sha256: sha256(input.catalog), version: input.catalog.version },
     commands: [...input.commands],
     comparisonAllowed: baselineVerification.comparisonAllowed,

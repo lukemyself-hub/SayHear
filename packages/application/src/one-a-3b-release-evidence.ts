@@ -868,14 +868,36 @@ export function verifyF3Catalog(value: unknown, mismatches: string[]): Set<strin
       mismatches,
     );
   }
-  if (counts.continuation !== 18) mismatches.push("F3 continuation pool must contain 18 fixtures");
-  if (counts.bio !== 15) mismatches.push("F3 Bio naturalness set must contain 15 fixtures");
-  if (counts.validator !== 18) mismatches.push("F3 validator set must contain 18 fixtures");
+  // Requirements are scoped to the groups a catalog actually carries, matching
+  // the evaluation-side verifier. A catalog with no Bio pool is the G1-only
+  // shape, where bio.write is not shipped and AC-X02 is not a gate. No check is
+  // relaxed for a catalog that does carry Bio: the incumbent still has 15 cases
+  // and every quota below still applies.
+  if (counts.continuation !== 0 && counts.continuation !== 18) {
+    mismatches.push("F3 continuation pool must contain 18 fixtures");
+  }
+  if (counts.bio !== 0 && counts.bio !== 15) {
+    mismatches.push("F3 Bio naturalness set must contain 15 fixtures");
+  }
+  if (counts.validator !== 0 && counts.validator !== 18) {
+    mismatches.push("F3 validator set must contain 18 fixtures");
+  }
+  // Per-language Bio quotas only apply once the pool exists; a catalog with no
+  // Bio cases has no per-language count to hold to 5.
+  const hasBioPool = counts.bio > 0;
   for (const language of F3_LANGUAGE_VARIANTS) {
-    if (bioByLanguage[language] !== 5) mismatches.push(`F3 Bio ${language} quota must be 5`);
-    if (validatorByLanguage[language] !== 6) mismatches.push(`F3 validator ${language} quota must be 6`);
-    if (validatorKindsByLanguage[language]?.bio !== 4) mismatches.push(`F3 validator ${language}/bio quota must be 4`);
-    if (validatorKindsByLanguage[language]?.reflection !== 2) mismatches.push(`F3 validator ${language}/reflection quota must be 2`);
+    if (hasBioPool && bioByLanguage[language] !== 5) {
+      mismatches.push(`F3 Bio ${language} quota must be 5`);
+    }
+    if (validatorByLanguage[language] !== 0 && validatorByLanguage[language] !== 6) {
+      mismatches.push(`F3 validator ${language} quota must be 6`);
+    }
+    const bioKinds = validatorKindsByLanguage[language]?.bio ?? 0;
+    const reflectionKinds = validatorKindsByLanguage[language]?.reflection ?? 0;
+    if (bioKinds !== 0 && bioKinds !== 4) mismatches.push(`F3 validator ${language}/bio quota must be 4`);
+    if (reflectionKinds !== 0 && reflectionKinds !== 2) {
+      mismatches.push(`F3 validator ${language}/reflection quota must be 2`);
+    }
   }
   for (const tag of F3_CONTINUATION_FORCED_COVERAGE) {
     if (!continuationTags.has(tag)) mismatches.push(`F3 continuation pool has no fixture for ${tag}`);
@@ -974,6 +996,17 @@ function verifyF3Sampling(
   if (!Number.isSafeInteger(manifest.fixtureSeed)) {
     mismatches.push("F3 fixtureSeed must be an integer");
   }
+  const acceptance = isRecord(manifest.acceptance) ? manifest.acceptance : null;
+  const requiredCriteria = acceptance && Array.isArray(acceptance.required)
+    ? acceptance.required.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  // AC-X04 is the criterion a release cannot drop: its only data source is a
+  // Continuation run, and the evidence producer requires a full 18-fixture
+  // report. A manifest that omits it would certify the release with the
+  // deterministic gates unchecked.
+  if (!requiredCriteria.includes("AC-X04")) {
+    mismatches.push("F3 manifest must require AC-X04");
+  }
   const scenarios = Array.isArray(catalog.scenarios)
     ? catalog.scenarios.filter(isRecord)
     : [];
@@ -1063,10 +1096,21 @@ function verifyF3Sampling(
     }
   }
 
+  // A G1-only release does not ship bio.write, so AC-X02 is not a gate it
+  // requires and the manifest carries no Bio sample. Absent Bio must be
+  // consistent with the declared criteria in both directions: a manifest that
+  // requires AC-X02 without a sample is refused, and a manifest carrying a
+  // sample nobody required is also refused, so a Bio comparison cannot be built
+  // from a release that never gated on it.
+  const requiresBio = requiredCriteria.includes("AC-X02");
   const bio = isRecord(manifest.bio) ? manifest.bio : null;
-  if (!bio) {
-    mismatches.push("F3 Bio sample is required");
-  } else {
+  if (requiresBio && !bio) {
+    mismatches.push("F3 manifest requires AC-X02 but carries no Bio sample");
+  } else if (!requiresBio && bio) {
+    mismatches.push(
+      "F3 manifest carries a Bio sample but does not require AC-X02",
+    );
+  } else if (bio) {
     if (bio.total !== 15) mismatches.push("F3 Bio total must be 15");
     if (!sameJson(bio.sampleQuotas, F3_BIO_SAMPLE_QUOTAS)) {
       mismatches.push("F3 Bio sample quotas are not the released quotas");
@@ -1211,7 +1255,18 @@ export function verifyOneA3bF3ReleaseArtifacts(input: Readonly<{
       }
     }
   }
-  if (catalogIds.size !== 51) mismatches.push("F3 catalog must contain 51 unique scenarios");
+  // The scenario count follows from the groups the catalog carries: Bio
+  // contributes 15 when present. The incumbent still sums to 51, and a catalog
+  // with a Bio pool still has to carry all 15.
+  const bioScenarioCount = Array.isArray(input.catalog.scenarios)
+    ? input.catalog.scenarios.filter(
+        (scenario) => isRecord(scenario) && scenario.group === "bio_naturalness",
+      ).length
+    : 0;
+  const expectedScenarioCount = bioScenarioCount === 0 ? 36 : 51;
+  if (catalogIds.size !== expectedScenarioCount) {
+    mismatches.push(`F3 catalog must contain ${expectedScenarioCount} unique scenarios`);
+  }
   verifyF3Ledger(
     input.ledger,
     validatorIds,
