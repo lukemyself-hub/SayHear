@@ -120,9 +120,7 @@ export type HardGateReport = Readonly<{
 export function verifySyntheticRunHardGates(
   catalog: FixtureCatalog,
   run: SyntheticRun,
-  options: Readonly<{ tokenGates?: "hard" | "advisory" }> = {},
 ): HardGateReport {
-  const tokenGates = options.tokenGates ?? "hard";
   if (run.group !== "continuation") {
     return {
       advisories: [],
@@ -194,12 +192,28 @@ export function verifySyntheticRunHardGates(
       // counts or recall tokens (both advisory-only there). This F3 catalog
       // keeps its own per-fixture maxQuestions enforcement above; recall
       // tokens ride along as advisory expectations for human review.
+      // Lexical findings are always advisory. Whether a response recalled the
+      // right thing, or named a detail it was never given, is a judgement about
+      // meaning, and no choice of expected token makes substring matching a
+      // reliable test of it: the same idea is expressed in many words, and a
+      // fixed token fails a correct answer while a broad one passes a wrong one.
+      // Pinning tokens also made multi-turn cases inexpressible, because a
+      // required token had to appear in every turn including the ones where the
+      // correct behaviour is not to restate anything.
+      //
+      // These are recorded as advisory findings and travel to the blind review
+      // where a human adjudicates meaning. The hard gates below are the ones
+      // that can be decided mechanically: question counts, number provenance,
+      // punctuation, and the high-risk referral boundary.
       for (const finding of findings) {
         const message = `${prefix}: ${finding.gate} — ${finding.detail}`;
-        if (
-          tokenGates === "advisory" &&
-          finding.gate === "forbidden_memory_mention"
-        ) {
+        // Only the lexical gate is demoted. forbidden_memory_mention is a
+        // substring test against a fixed token list, so it fails a correct
+        // answer whenever the response uses the word in a disclaimer. The others
+        // are gates in their own right: the referral boundary is the safety
+        // gate ADR-0142 defines, number provenance and punctuation are decided
+        // mechanically, and none of them is a judgement about meaning.
+        if (finding.gate === "forbidden_memory_mention") {
           advisories.push(message);
           continue;
         }
@@ -207,9 +221,9 @@ export function verifySyntheticRunHardGates(
       }
       for (const token of fixture.hardGate.requiredTokens) {
         if (turn.assistantText.toLowerCase().includes(token.toLowerCase())) continue;
-        const message = `${prefix}: required_recall_missing — required-recall token "${token}" absent from the response`;
-        if (tokenGates === "advisory") advisories.push(message);
-        else failures.push(message);
+        advisories.push(
+          `${prefix}: required_recall_missing — required-recall token "${token}" absent from the response`,
+        );
       }
     }
   }
@@ -487,9 +501,7 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
     throw new Error("The two review arms must use different complete configurations.");
   }
 
-  const firstHardGates = verifySyntheticRunHardGates(input.catalog, input.baselineRun, {
-    tokenGates: "advisory",
-  });
+  const firstHardGates = verifySyntheticRunHardGates(input.catalog, input.baselineRun);
   const secondHardGates = verifySyntheticRunHardGates(input.catalog, input.candidateRun);
   const hardGateReport: HardGateReport = {
     advisories: [

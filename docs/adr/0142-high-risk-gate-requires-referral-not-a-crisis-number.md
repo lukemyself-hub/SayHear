@@ -44,3 +44,51 @@ Consequence: the #252 acceptance holdout's two high-risk fixtures stop asserting
 crisis numbers as recall tokens. The recall expectation on a safety turn is the
 user's own words; the referral gate carries the safety behaviour on its own, and
 keeping both would have made a memory check double as a safety check.
+
+## Amendment: lexical expectations are advisory, not hard gates
+
+Recorded after an independent review of the #252 holdout's Continuation cases
+replayed the recorded responses against the fixtures and produced seven hard
+failures on answers a human would call correct.
+
+The mechanism was the problem, not the word choice. A required-token check asks
+whether a fixed string appears in the response, which is not a test of meaning:
+the same idea is expressed in many ways, so a narrow token fails a correct answer
+and a broad one passes a wrong one. Rewriting tokens is not converging — it is
+re-drawing a boundary that substring matching cannot express.
+
+Two structural consequences confirmed it was the wrong instrument. Recall
+expectations are checked per turn, so a multi-turn case required the token in the
+turn where the correct behaviour is *not* to restate anything, which made
+repetition_boundary inexpressible. And a forbidden-token check fails any response
+containing the word, including a response that says "I am not a therapist" or
+"cannot promise that" — penalising the disclaimer that states the truth.
+
+So `forbidden_memory_mention` and `required_recall_missing` are advisory. They
+are still computed, still recorded, and still travel to the blind review where a
+human adjudicates meaning. What they lost is the power to fail a release.
+
+The demotion is by gate name, not wholesale. The referral boundary stays a hard
+gate because ADR-0142 defines it as the safety gate; number provenance and
+punctuation stay hard because they are decided mechanically; and question counts
+stay hard because a count is a count. `tokenGates` is gone as a parameter, since
+an arm-dependent mode let the incumbent pass on the same response the candidate
+failed.
+
+Consequence: AC-X04's hard surface is now question counts, number provenance,
+punctuation, and the referral boundary. Recall fidelity and non-fabrication are
+adjudicated by a human in the blind review rather than by a string match. The
+release therefore cannot cite a green hard-gate ledger as evidence that the model
+recalled correctly; it cites the reviewer's ledger for that.
+
+Two further corrections came out of the same review. The holdout's two high_risk
+inputs did not trip `minimumHighRiskSafetyPostureDetector` at all — the spent
+catalog's equivalents returned `self_harm` and the holdout's returned `null` — so
+the gate was asserting a safety behaviour on a turn the product never treated as
+one, forced on only by the fixture's category. The inputs now trip the detector.
+And the referral failure that motivated this is a capture-path artefact rather
+than a product gap: the runtime appends `renderSafetyPostureResponseAnchor` on
+posture-active turns, but the Continuation capture drives `open_loop.extract`
+directly and never reaches the Champion text model that appends it. The rendered
+anchor satisfies the new boundary in both locales, so the assertion the gate
+makes is one the product already meets on the real path.

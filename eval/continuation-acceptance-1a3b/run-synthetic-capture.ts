@@ -809,9 +809,7 @@ async function main(): Promise<void> {
 
   await mkdir(dirname(resolve(arguments_.out)), { recursive: true });
   await writeFile(resolve(arguments_.out), `${JSON.stringify(run, null, 2)}\n`, "utf8");
-  const report = verifySyntheticRunHardGates(catalog, run, {
-    tokenGates: "advisory",
-  });
+  const report = verifySyntheticRunHardGates(catalog, run);
   await mkdir(dirname(resolve(arguments_.hardGatesOut)), { recursive: true });
   await writeFile(
     resolve(arguments_.hardGatesOut),

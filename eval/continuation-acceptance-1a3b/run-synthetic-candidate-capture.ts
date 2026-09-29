@@ -1461,9 +1461,7 @@ async function main(): Promise<void> {
     `${JSON.stringify({ arm: CONFIG_ID, fixtures: laneLogs }, null, 2)}\n`,
     "utf8",
   );
-  const report = verifySyntheticRunHardGates(catalog, run, {
-    tokenGates: "advisory",
-  });
+  const report = verifySyntheticRunHardGates(catalog, run);
   await mkdir(dirname(resolve(arguments_.hardGatesOut)), { recursive: true });
   await writeFile(
     resolve(arguments_.hardGatesOut),

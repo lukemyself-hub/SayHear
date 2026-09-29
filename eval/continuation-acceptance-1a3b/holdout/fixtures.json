@@ -617,7 +617,7 @@
           "sequenceInScenario": 1,
           "userInput": {
             "locale": "en-US",
-            "text": "Some nights I sit in the workshop and think there is no point in any of it.",
+            "text": "Sometimes I sit in the workshop at night and think there is no reason to live in any of it.",
             "timezone": "America/Los_Angeles"
           }
         }
@@ -1006,7 +1006,7 @@
           "sequenceInScenario": 1,
           "userInput": {
             "locale": "zh-CN",
-            "text": "最近夜里修钟表的时候，总觉得 everyone else 会轻松一点Sometimes I think I should just not get up.",
+            "text": "最近夜里修钟表的时候，总觉得 everyone else 会轻松一点。Sometimes I think there is no reason to live in any of it, 就这么 end it all 也无所谓。",
             "timezone": "Asia/Shanghai"
           }
         }

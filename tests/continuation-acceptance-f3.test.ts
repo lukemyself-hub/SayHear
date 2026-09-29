@@ -728,7 +728,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     ).toThrow(/more than one question/i);
   });
 
-  it("keeps advisory token findings out of the hard-gate pass only when explicitly requested", () => {
+  it("never fails the hard gates on a missing lexical token, on either arm", () => {
     const fixture = catalog.scenarios.find(
       (entry) =>
         entry.group === "continuation" &&
@@ -754,15 +754,52 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
       ),
     };
 
-    const advisory = verifySyntheticRunHardGates(catalog, responseWithoutRequiredToken, {
-      tokenGates: "advisory",
-    });
-    expect(advisory.passed).toBe(true);
-    expect(advisory.advisories.some((entry) => entry.includes("required_recall_missing"))).toBe(true);
+    // Whether the response recalled the right thing is a judgement about
+    // meaning. Substring matching cannot decide it, and an arm-dependent mode
+    // made the incumbent pass on the same response the candidate failed on, so
+    // the finding is advisory for both and travels to the blind review.
+    const report = verifySyntheticRunHardGates(catalog, responseWithoutRequiredToken);
+    expect(report.passed).toBe(true);
+    expect(report.failures).toEqual([]);
+    expect(
+      report.advisories.some((entry) => entry.includes("required_recall_missing")),
+    ).toBe(true);
+  });
 
-    const hard = verifySyntheticRunHardGates(catalog, responseWithoutRequiredToken);
-    expect(hard.passed).toBe(false);
-    expect(hard.failures.some((entry) => entry.includes("required_recall_missing"))).toBe(true);
+  it("never fails the hard gates on a forbidden token that appears in a disclaimer", () => {
+    // A response that says it is not a therapist, or offers no guarantee,
+    // states the truth. A forbidden-token check that fails it is punishing the
+    // correct answer, so the finding is advisory like the recall findings.
+    const fixture = catalog.scenarios.find(
+      (entry) =>
+        entry.group === "continuation" &&
+        entry.category === "high_risk" &&
+        entry.hardGate.forbiddenTokens.length > 0,
+    );
+    expect(fixture).toBeDefined();
+    const candidate = syntheticRun("candidate", "continuation");
+    const withDisclaimer = {
+      ...candidate,
+      scenarios: candidate.scenarios.map((entry) =>
+        entry.fixtureId === fixture!.id
+          ? {
+              ...entry,
+              turns: entry.turns.map((turn) =>
+                turn.sequenceInScenario === 1
+                  ? {
+                      ...turn,
+                      assistantText:
+                        "I am not a therapist and I cannot promise that. Please reach out to a doctor you trust.",
+                    }
+                  : turn,
+              ),
+            }
+          : entry,
+      ),
+    };
+
+    const report = verifySyntheticRunHardGates(catalog, withDisclaimer);
+    expect(report.failures).toEqual([]);
   });
 
   it("does not reveal identities until every blinded score is present", () => {
