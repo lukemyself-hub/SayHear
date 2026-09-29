@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CONTINUATION_FORCED_COVERAGE,
+  CONTINUATION_PROTECTED_CATEGORIES,
   CONTINUATION_SAMPLE_QUOTAS,
   F3_PAIRWISE_PROTOCOL,
   VALIDATOR_ERROR_CLASSES,
@@ -160,9 +161,13 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
 
     expect(verification.mismatches).toEqual([]);
     expect(verification.passed).toBe(true);
-    // Validator-scoped: the holdout has no Continuation or Bio pool to run.
+    // Carries a Continuation pool as well as the validator set: AC-X04 is one
+    // of the twelve required evidence contracts and its only data source is a
+    // Continuation run, so a validator-only holdout could not certify a
+    // release even if it verified. Bio is absent, because Bio naturalness
+    // certifies bio.write, which the G1-only release does not ship.
     expect(verification.counts).toEqual({
-      continuation: 0,
+      continuation: 18,
       bio_naturalness: 0,
       validator: 18,
     });
@@ -171,6 +176,32 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
       zh: { bio: 4, reflection: 2 },
       code_switch: { bio: 4, reflection: 2 },
     });
+    // The Continuation half must satisfy the same forced coverage and language
+    // quotas as the incumbent, or the seeded sample cannot be reproduced.
+    const continuationCandidates = holdout.scenarios
+      .filter((fixture) => fixture.group === "continuation")
+      .map((fixture) => ({
+        category: fixture.category,
+        coverageTags: fixture.coverageTags,
+        id: fixture.id,
+        languageVariant: fixture.languageVariant,
+      }));
+    const continuationSample = selectContinuationSample({
+      candidates: continuationCandidates,
+      sampleSeed: 1960,
+    });
+
+    expect(continuationSample.selectedCounts).toEqual({
+      code_switch: 2,
+      en: 8,
+      zh: 5,
+    });
+    expect(Object.keys(continuationSample.forcedCoverage).sort()).toEqual(
+      [...CONTINUATION_FORCED_COVERAGE].sort(),
+    );
+    expect(Object.keys(continuationSample.protectedCoverage).sort()).toEqual(
+      [...CONTINUATION_PROTECTED_CATEGORIES].sort(),
+    );
     // The precision half must travel with the catalog, not with the capture
     // script's built-in set, which cites the spent catalog's claim IDs.
     expect(holdout.precisionDrafts).toHaveLength(6);
@@ -497,18 +528,24 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
   });
 
   it("fails the hard gates loudly instead of passing when nothing was checked", () => {
-    // A validator-only catalog, like the #252 holdout. It has no Continuation
-    // pool, so the hard gates must refuse rather than report a pass having
-    // checked nothing.
+    // A catalog with no Continuation pool, so the hard gates must refuse
+    // rather than report a pass having checked nothing. This is the
+    // validator-only shape the #252 holdout started as.
     const holdout = JSON.parse(
       readFileSync(
         resolve(root, "eval/continuation-acceptance-1a3b/holdout/fixtures.json"),
         "utf8",
       ),
     ) as Parameters<typeof verifySyntheticRunHardGates>[0];
+    const validatorOnly: Parameters<typeof verifySyntheticRunHardGates>[0] = {
+      ...holdout,
+      scenarios: holdout.scenarios.filter(
+        (fixture) => fixture.group !== "continuation",
+      ),
+    };
 
     const emptyPool = verifySyntheticRunHardGates(
-      holdout,
+      validatorOnly,
       syntheticRun("incumbent", "continuation"),
     );
 
