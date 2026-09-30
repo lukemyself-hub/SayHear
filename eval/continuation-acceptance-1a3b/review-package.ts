@@ -1055,8 +1055,10 @@ export function validateValidatorLedger(input: {
   if (!Number.isInteger(maxRejects) || maxRejects < 0) {
     throw new Error("Validator ledger maxRejects must be a non-negative integer.");
   }
-  if (maxRejects > Math.floor(seen.size * 0.1)) {
-    throw new Error(`Validator ledger maxRejects ${maxRejects} exceeds the 10% error budget.`);
-  }
+  // ADR-0143: the 10% budget is recorded, not enforced. It was a semantic
+  // judgement with no gold set behind it, and it refused the ledger that
+  // reported the finding rather than the finding itself. A ledger that records
+  // rejects is now valid input; what the release does with the number is
+  // decided elsewhere, and currently is nothing.
   return { accepted, maxRejects, rejected, total: seen.size };
 }

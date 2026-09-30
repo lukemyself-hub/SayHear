@@ -99,7 +99,10 @@
     <script>
       const BUNDLE = /*__BUNDLE__*/;
       const LEDGER_VERSION = /*__LEDGER_VERSION__*/;
-      const MAX_REJECTS = 1;
+      // ADR-0143: the 10% miss budget is no longer a gate, so the page no longer
+      // implies one is available. The count is shown for information and no
+      // longer refuses the export.
+      const MAX_REJECTS = null;
       const STORE_KEY = "sayhear-252-verdicts";
 
       const state = (() => {
@@ -223,10 +226,12 @@
         document.getElementById("meterFill").style.width = pct + "%";
         document.getElementById("count").textContent = `${done.length} / ${BUNDLE.cases.length}`;
         const budget = document.getElementById("budget");
-        budget.textContent = rejected.length > MAX_REJECTS
+        budget.textContent = MAX_REJECTS === null
+          ? `不通过 ${rejected.length} 例（ADR-0143：语义判定不计入门禁）`
+          : rejected.length > MAX_REJECTS
           ? `不通过 ${rejected.length} 例 · 超出 10% 预算`
           : `不通过 ${rejected.length} / ${MAX_REJECTS}`;
-        budget.className = "count" + (rejected.length > MAX_REJECTS ? " over" : "");
+        budget.className = "count" + (MAX_REJECTS !== null && rejected.length > MAX_REJECTS ? " over" : "");
         document.getElementById("status").textContent =
           done.length === BUNDLE.cases.length ? "已全部裁定，可以导出。" : `还剩 ${BUNDLE.cases.length - done.length} 例。`;
       };
@@ -258,6 +263,13 @@
           group: "validator",
           adjudicator: "Luke",
           decidedAt: new Date().toISOString().slice(0, 10),
+          // The ledger has to carry the fingerprint of the manifest it rules on.
+          // Without it the release cannot tell whether these verdicts were made
+          // against the frozen F3 manifest or against some other one, and the
+          // check fails with "ledger does not belong to the F3 manifest". The
+          // page already displayed this value at the top; it was never written
+          // into the export.
+          manifestFingerprint: BUNDLE.manifestFingerprint,
           maxRejects: MAX_REJECTS,
           entries: BUNDLE.cases.map((c) => {
             const entry = { fixtureId: c.fixtureId, verdict: state[c.fixtureId].verdict };
