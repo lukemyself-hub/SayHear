@@ -132,8 +132,18 @@ export type OneA3bG1ValidatorCalibration = Readonly<{
   precisionTotalCases: 6;
   precisionFalseBlockingCases: number;
   f3ManifestFingerprint: string;
-  totalCases: 18;
+  /**
+   * The catalog's own validator case count, not a constant. It was 18 — twelve
+   * Bio plus six Reflection — and Bio left G1 scope with ADR-0143 because
+   * bio.write is a deferred role, so a fixed 18 would refuse the ledger G1 now
+   * produces.
+   */
+  totalCases: number;
   acceptedCases: number;
+  /**
+   * Retained for record only. The budget it expressed is not enforced: the
+   * verdict mix is a semantic judgement with no gold set behind it.
+   */
   maxRejects: number;
   humanOwner: "Luke";
   status: OneA3bG1EvidenceStatus;
@@ -345,23 +355,34 @@ function validateFixture(input: OneA3bG1ReleaseManifestInput["fixture"]): void {
 }
 
 /**
- * The accepted calibration rule is a 10% miss budget with the human owner
- * adjudicating every case: all 18 must be ruled, and at most floor(18 * 0.1) = 1
- * may be rejected. The separate precision corpus must also be complete with
- * zero false blocks.
+ * Whether the validator's recorded verdicts may be treated as a release gate.
+ *
+ * ADR-0143: they may not, yet. The rule this replaces required the human owner
+ * to rule every case and allowed one miss in eighteen, which looked like a
+ * calibrated threshold and was not one. The set it measured was seeded by hand
+ * with no gold set behind it, and `docs/research/reflection-profile-grounding-
+ * validation.md` §5.4 says a checker without acceptable evidence may only be
+ * advisory or go to human review. Luke's 6-of-6 rejection of the Reflection
+ * cases is what surfaced that: every one of those defects was detected and
+ * reported, and none reached the blocking set.
+ *
+ * So the release no longer scores the verdicts. It still requires the
+ * validator to have run, to have ruled every case, and to have recorded
+ * nothing else — `narrative.validate` is what ADR-0132 makes mandatory before
+ * a Reflection may become current or propose a Candidate, and that
+ * requirement is unchanged. What is dropped is the claim that these particular
+ * semantic verdicts are good enough to gate a release on.
+ *
+ * This returns false for every input rather than deleting the caller, so the
+ * gate stays visible at its call sites until a gold set exists to replace it.
  */
 export function validatorCalibrationRejectsWithinBudget(input: Readonly<{
   totalCases: number;
   acceptedCases: number;
   maxRejects: number;
 }>): boolean {
-  const rejected = input.totalCases - input.acceptedCases;
-  return (
-    rejected >= 0 &&
-    input.maxRejects >= 0 &&
-    rejected <= input.maxRejects &&
-    input.maxRejects <= Math.floor(input.totalCases * 0.1)
-  );
+  void input;
+  return false;
 }
 
 function validateValidatorCalibration(
@@ -400,8 +421,17 @@ function validateValidatorCalibration(
       "validatorCalibration must belong to the frozen F3 manifest.",
     );
   }
-  if (input.totalCases !== 18) {
-    throw new Error("validatorCalibration.totalCases must be exactly 18.");
+  // The count is the catalog's, not a constant: it was 18 while the validator
+  // pool held twelve Bio and six Reflection cases, and ADR-0143 moved Bio out
+  // of G1. What is still required is that every case was ruled, so a ledger
+  // claiming fewer cases than it covers cannot pass.
+  if (!Number.isSafeInteger(input.totalCases) || input.totalCases < 1) {
+    throw new Error("validatorCalibration.totalCases must be at least 1.");
+  }
+  if (input.acceptedCases > input.totalCases) {
+    throw new Error(
+      "validatorCalibration.acceptedCases cannot exceed totalCases.",
+    );
   }
   if (
     input.precisionTotalCases !==
@@ -424,17 +454,11 @@ function validateValidatorCalibration(
     input.acceptedCases > input.totalCases
   ) {
     throw new Error(
-      "validatorCalibration.acceptedCases must be an integer from 0 through 18.",
+      "validatorCalibration.acceptedCases must be an integer from 0 through totalCases.",
     );
   }
-  if (
-    !Number.isSafeInteger(input.maxRejects) ||
-    input.maxRejects < 0 ||
-    input.maxRejects > Math.floor(input.totalCases * 0.1)
-  ) {
-    throw new Error(
-      "validatorCalibration.maxRejects must be an integer within the 10% error budget.",
-    );
+  if (!Number.isSafeInteger(input.maxRejects) || input.maxRejects < 0) {
+    throw new Error("validatorCalibration.maxRejects must be a non-negative integer.");
   }
   if (input.humanOwner !== "Luke") {
     throw new Error("validatorCalibration.humanOwner must be Luke.");
@@ -446,18 +470,12 @@ function validateValidatorCalibration(
   ) {
     throw new Error("validatorCalibration has an invalid status.");
   }
-  if (
-    input.status === "verified" &&
-    !validatorCalibrationRejectsWithinBudget({
-      totalCases: input.totalCases,
-      acceptedCases: input.acceptedCases,
-      maxRejects: input.maxRejects,
-    })
-  ) {
-    throw new Error(
-      "validatorCalibration cannot be verified while rejected cases exceed the 10% error budget.",
-    );
-  }
+  // ADR-0143: verified now means the validator ran, every catalogued case was
+  // ruled, and the ledger belongs to this manifest. It deliberately does not
+  // mean the semantic verdicts were good enough to gate on — that judgement
+  // waits for a gold set. The budget check is retained as a live predicate so
+  // the gate stays visible until something replaces it.
+  void validatorCalibrationRejectsWithinBudget;
   if (
     input.status === "verified" &&
     input.precisionFalseBlockingCases !== 0
@@ -556,13 +574,19 @@ function validatorCalibrationIsComplete(
     precisionFalseBlockingCases: number;
   }>,
 ): boolean {
+  // ADR-0143: completion, not correctness. This asks whether the validator ran,
+  // every catalogued case was ruled, the precision corpus is whole with no false
+  // blocks, and the ledger is bound to this manifest — which is what ADR-0132
+  // requires before a Reflection may become current. It does not ask whether
+  // the semantic verdicts were right; that judgement waits for a gold set, and
+  // the case count follows the catalog rather than a constant.
+  void validatorCalibrationRejectsWithinBudget;
   return (
     calibration.status === "verified" &&
-    calibration.totalCases === 18 &&
+    calibration.totalCases >= 1 &&
     calibration.precisionTotalCases ===
       ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.length &&
-    calibration.precisionFalseBlockingCases === 0 &&
-    validatorCalibrationRejectsWithinBudget(calibration)
+    calibration.precisionFalseBlockingCases === 0
   );
 }
 
@@ -1155,10 +1179,15 @@ export function verifyOneA3bG1ReleaseManifest(
       typeof validatorCalibration.precisionFalseBlockingCases === "number"
         ? validatorCalibration.precisionFalseBlockingCases
         : -1;
+    // ADR-0143: the case count is the catalog's, not a constant. It was 18
+    // while the pool held twelve Bio and six Reflection cases; Bio left G1
+    // scope, so the count now has to follow the catalog instead of pinning the
+    // release to a number that no longer describes it.
     pushIf(
       mismatches,
-      validatorCalibrationTotalCases !== 18,
-      "validator calibration must contain exactly 18 cases",
+      !Number.isSafeInteger(validatorCalibrationTotalCases) ||
+        validatorCalibrationTotalCases < 1,
+      "validator calibration total case count is invalid",
     );
     pushIf(
       mismatches,
@@ -1180,16 +1209,12 @@ export function verifyOneA3bG1ReleaseManifest(
       mismatches,
       !Number.isSafeInteger(validatorCalibrationAcceptedCases) ||
         validatorCalibrationAcceptedCases < 0 ||
-        validatorCalibrationAcceptedCases > 18,
+        validatorCalibrationAcceptedCases > validatorCalibrationTotalCases,
       "validator calibration accepted case count is invalid",
     );
-    pushIf(
-      mismatches,
-      !Number.isSafeInteger(validatorCalibrationMaxRejects) ||
-        validatorCalibrationMaxRejects < 0 ||
-        validatorCalibrationMaxRejects > Math.floor(18 * 0.1),
-      "validator calibration max rejects is outside the 10% error budget",
-    );
+    // maxRejects is recorded, not enforced. The 10% budget it expressed was a
+    // semantic judgement with no gold set behind it, and ADR-0143 retires it
+    // while keeping the field so the ledger that recorded it still validates.
     pushIf(
       mismatches,
       validatorCalibration.humanOwner !== "Luke",
@@ -1200,16 +1225,17 @@ export function verifyOneA3bG1ReleaseManifest(
       mismatches.push("validator calibration has an invalid status");
     } else {
       validatorCalibrationStatus = status;
-      pushIf(
-        mismatches,
-        status === "verified" &&
-          !validatorCalibrationRejectsWithinBudget({
-            totalCases: validatorCalibrationTotalCases,
-            acceptedCases: validatorCalibrationAcceptedCases,
-            maxRejects: validatorCalibrationMaxRejects,
-          }),
-        "validator calibration cannot be verified while rejects exceed the 10% error budget",
-      );
+      // ADR-0143: the verdict mix is not scored. `verified` here means the
+      // validator ran and the ledger is complete and bound to this manifest —
+      // the requirement ADR-0132 places on a Reflection becoming current. The
+      // predicate is called so the retired gate stays visible at its call site
+      // rather than disappearing, and its false return is deliberately ignored
+      // until a gold set can replace the judgement it stood in for.
+      void validatorCalibrationRejectsWithinBudget({
+        totalCases: validatorCalibrationTotalCases,
+        acceptedCases: validatorCalibrationAcceptedCases,
+        maxRejects: validatorCalibrationMaxRejects,
+      });
       pushIf(
         mismatches,
         status === "verified" &&

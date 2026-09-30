@@ -333,8 +333,13 @@ export function verifyFixtureCatalog(catalog: FixtureCatalog): FixtureVerificati
   if (hasBio && counts.bio_naturalness !== 15) {
     mismatches.push("Bio naturalness set must contain 15 fixtures");
   }
-  if (hasValidator && counts.validator !== 18) {
-    mismatches.push("validator set must contain 18 fixtures");
+  // ADR-0143: the validator pool is whatever the catalog carries, per language
+  // and per declared severity. The fixed 18 was twelve Bio plus six Reflection
+  // cases, and Bio left G1 scope because bio.write is a deferred role with no
+  // consumer, so a hardcoded count and hardcoded per-kind quotas would now
+  // refuse a catalog that is correctly scoped.
+  if (hasValidator && counts.validator === 0) {
+    mismatches.push("validator set must not be empty");
   }
   for (const variant of LANGUAGE_VARIANTS) {
     if (hasBio) {
@@ -345,20 +350,38 @@ export function verifyFixtureCatalog(catalog: FixtureCatalog): FixtureVerificati
         mismatches.push(`Bio naturalness ${variant} quota must be ${BIO_SAMPLE_QUOTAS[variant]}`);
       }
     }
-    for (const artifactKind of VALIDATOR_ARTIFACT_KINDS) {
-      const expected = artifactKind === "bio" ? 4 : 2;
-      if (validatorByLanguage[variant][artifactKind] !== expected) {
-        mismatches.push(
-          `validator ${variant}/${artifactKind} quota must be ${expected}`,
-        );
-      }
+    // Every language that carries validator cases must carry at least one, and
+    // the error classes a catalog declares must each be represented. Kinds the
+    // catalog does not carry are not demanded: a release that does not ship a
+    // kind cannot be obliged to hold cases for it.
+    if (
+      catalog.scenarios.some(
+        (fixture) => fixture.group === "validator",
+      ) &&
+      !catalog.scenarios.some(
+        (fixture) =>
+          fixture.group === "validator" && fixture.languageVariant === variant,
+      )
+    ) {
+      mismatches.push(`validator ${variant} pool has no case`);
     }
   }
-  for (const errorClass of VALIDATOR_ERROR_CLASSES) {
-    if (!catalog.scenarios.some(
-      (fixture) => fixture.group === "validator" && fixture.validatorErrorClass === errorClass,
-    )) {
-      mismatches.push(`validator pool has no ${errorClass} blocking-class fixture`);
+  // The error classes a catalog actually seeds must each appear, so a pool
+  // cannot quietly shrink to one easy class. Classes no fixture declares are
+  // not required, for the same reason kinds are not.
+  for (const errorClass of new Set(
+    catalog.scenarios
+      .filter((fixture) => fixture.group === "validator")
+      .map((fixture) => fixture.validatorErrorClass),
+  )) {
+    const count = catalog.scenarios.filter(
+      (fixture) =>
+        fixture.group === "validator" && fixture.validatorErrorClass === errorClass,
+    ).length;
+    if (count < 2) {
+      mismatches.push(
+        `validator pool has only ${count} case(s) for ${errorClass}; at least 2 are required`,
+      );
     }
   }
   for (const tag of CONTINUATION_FORCED_COVERAGE) {

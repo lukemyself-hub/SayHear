@@ -189,15 +189,18 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     // Continuation run, so a validator-only holdout could not certify a
     // release even if it verified. Bio is absent, because Bio naturalness
     // certifies bio.write, which the G1-only release does not ship.
+    // ADR-0143: Bio left G1 scope because bio.write is a deferred role, so the
+    // holdout carries Reflection only. The count comes from the catalog rather
+    // than a constant, which is why it is asserted as 6 and not 18.
     expect(verification.counts).toEqual({
       continuation: 18,
       bio_naturalness: 0,
-      validator: 18,
+      validator: 6,
     });
     expect(verification.validatorByLanguage).toEqual({
-      en: { bio: 4, reflection: 2 },
-      zh: { bio: 4, reflection: 2 },
-      code_switch: { bio: 4, reflection: 2 },
+      en: { bio: 0, reflection: 2 },
+      zh: { bio: 0, reflection: 2 },
+      code_switch: { bio: 0, reflection: 2 },
     });
     // The Continuation half must satisfy the same forced coverage and language
     // quotas as the incumbent, or the seeded sample cannot be reproduced.
@@ -268,7 +271,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     expect(scoped.bio).toBeNull();
     expect(scoped.acceptance.evidenceGroups.bioNaturalness).toBeUndefined();
     expect(scoped.continuation.poolCount).toBe(18);
-    expect(scoped.validator.total).toBe(18);
+    expect(scoped.validator.total).toBe(6);
     // The declared list is part of the release identity, so a G1-only release
     // cannot share a fingerprint with a full one.
     expect(scoped.fingerprint).not.toBe(manifest().fingerprint);

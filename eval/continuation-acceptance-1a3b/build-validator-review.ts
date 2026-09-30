@@ -62,8 +62,8 @@ function markdownForBundle(bundle: {
     description: string;
     draftText: string;
     expectedFindingCode: string;
-    expectedOutcome: string;
-    expectedVerdict: string;
+    expectedOutcome: "advisory" | "blocking";
+    expectedVerdict: "accepted" | "blocked";
     fixtureId: string;
     languageVariant: string;
     locale: string;
@@ -229,7 +229,11 @@ async function main(): Promise<void> {
       draftRef: bundle.draftRef,
       expectedFindingCode: findingCodeFor(bundle.validatorErrorClass),
       expectedOutcome: fixture.expectedOutcome,
-      expectedVerdict: bundle.artifactKind === "bio" ? "blocked" : "accepted",
+      // Derived from the case's own declared severity, not from its artifact
+      // kind. Keying this to the kind is what let a Reflection case carry a
+      // blocking-class defect while expecting the validator to wave it through
+      // (ADR-0143).
+      expectedVerdict: fixture.expectedOutcome === "blocking" ? "blocked" : "accepted",
       fixtureId: bundle.fixtureId,
       generatorManifest,
       languageVariant: fixture.languageVariant,

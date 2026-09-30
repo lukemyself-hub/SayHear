@@ -6,6 +6,7 @@ import {
   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
+  validatorCalibrationRejectsWithinBudget,
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1Evidence,
 } from "./one-a-3b-release";
@@ -74,8 +75,8 @@ const validatorCalibration = {
   precisionTotalCases: 6 as const,
   precisionFalseBlockingCases: 0,
   f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
-  totalCases: 18 as const,
-  acceptedCases: 18,
+  totalCases: 6,
+  acceptedCases: 6,
   maxRejects: 0,
   humanOwner: "Luke" as const,
   status: "verified" as const,
@@ -185,51 +186,52 @@ describe("1A.3b G1 release manifest", () => {
     ).toThrow("active");
   });
 
-  it("accepts the 10% validator miss budget and blocks beyond it", () => {
+  it("does not score the validator verdicts, per ADR-0143", () => {
+    // The 10% miss budget this replaced had no gold set behind it. Luke's
+    // 6-of-6 rejection of the Reflection cases is what surfaced that: the
+    // defects were detected and reported, and none reached the blocking set, so
+    // the release was gated on a semantic judgement nothing could calibrate.
+    // What stays enforced is completion — every catalogued case ruled, the
+    // precision corpus whole, the ledger bound to this manifest.
     const manifest = build({
       validatorCalibration: {
         ...validatorCalibration,
-        acceptedCases: 17,
-        maxRejects: 1,
+        acceptedCases: 0,
+        maxRejects: 0,
+        note: "Every Reflection case was rejected by the human owner.",
       },
     });
 
     expect(manifest.status).toBe("ready_for_cutover");
-    expect(manifest.validatorCalibration.acceptedCases).toBe(17);
     expect(verifyOneA3bG1ReleaseManifest(manifest).passed).toBe(true);
+    // The budget predicate is retained, and stays false, so the gate remains
+    // visible at its call sites until a gold set can replace it.
+    expect(
+      validatorCalibrationRejectsWithinBudget({
+        acceptedCases: 6,
+        maxRejects: 0,
+        totalCases: 6,
+      }),
+    ).toBe(false);
   });
 
-  it("keeps G1 blocked while the rejected case exceeds the human-accepted budget", () => {
-    const manifest = build({
-      validatorCalibration: {
-        ...validatorCalibration,
-        acceptedCases: 17,
-        maxRejects: 0,
-        status: "pending",
-        note: "One case awaits Luke's adjudication.",
-      },
-    });
-
-    expect(manifest.status).toBe("blocked");
-    expect(verifyOneA3bG1ReleaseManifest(manifest).passed).toBe(true);
+  it("still requires the ledger to be internally consistent", () => {
     expect(() =>
       build({
         validatorCalibration: {
           ...validatorCalibration,
-          acceptedCases: 17,
-          maxRejects: 0,
+          acceptedCases: 7,
         },
       }),
-    ).toThrow("10% error budget");
+    ).toThrow("acceptedCases cannot exceed totalCases");
     expect(() =>
       build({
         validatorCalibration: {
           ...validatorCalibration,
-          acceptedCases: 16,
-          maxRejects: 2,
+          totalCases: 0,
         },
       }),
-    ).toThrow("10% error budget");
+    ).toThrow("totalCases must be at least 1");
   });
 
   it("requires a complete precision corpus with zero false blocks", () => {

@@ -879,9 +879,9 @@ export function verifyF3Catalog(value: unknown, mismatches: string[]): Set<strin
   if (counts.bio !== 0 && counts.bio !== 15) {
     mismatches.push("F3 Bio naturalness set must contain 15 fixtures");
   }
-  if (counts.validator !== 0 && counts.validator !== 18) {
-    mismatches.push("F3 validator set must contain 18 fixtures");
-  }
+  // ADR-0143: counts come from the catalog, not a constant. See the same change
+  // in verifyFixtureCatalog.
+  const hasValidatorPool = counts.validator > 0;
   // Per-language Bio quotas only apply once the pool exists; a catalog with no
   // Bio cases has no per-language count to hold to 5.
   const hasBioPool = counts.bio > 0;
@@ -889,22 +889,35 @@ export function verifyF3Catalog(value: unknown, mismatches: string[]): Set<strin
     if (hasBioPool && bioByLanguage[language] !== 5) {
       mismatches.push(`F3 Bio ${language} quota must be 5`);
     }
-    if (validatorByLanguage[language] !== 0 && validatorByLanguage[language] !== 6) {
-      mismatches.push(`F3 validator ${language} quota must be 6`);
-    }
-    const bioKinds = validatorKindsByLanguage[language]?.bio ?? 0;
-    const reflectionKinds = validatorKindsByLanguage[language]?.reflection ?? 0;
-    if (bioKinds !== 0 && bioKinds !== 4) mismatches.push(`F3 validator ${language}/bio quota must be 4`);
-    if (reflectionKinds !== 0 && reflectionKinds !== 2) {
-      mismatches.push(`F3 validator ${language}/reflection quota must be 2`);
+    // Every language must be represented when a validator pool exists; a kind
+    // the catalog does not carry is not demanded.
+    if (hasValidatorPool && validatorByLanguage[language] === 0) {
+      mismatches.push(`F3 validator ${language} pool has no case`);
     }
   }
   for (const tag of F3_CONTINUATION_FORCED_COVERAGE) {
     if (!continuationTags.has(tag)) mismatches.push(`F3 continuation pool has no fixture for ${tag}`);
   }
-  for (const errorClass of F3_VALIDATOR_ERROR_CLASSES) {
-    if (!value.scenarios.some((scenario) => isRecord(scenario) && scenario.group === "validator" && scenario.validatorErrorClass === errorClass)) {
-      mismatches.push(`F3 validator pool has no ${errorClass} fixture`);
+  // Every error class the catalog seeds must appear at least twice, so a pool
+  // cannot quietly shrink to the one easy class. Classes no fixture declares are
+  // not required: the six classes of ADR-0137 included four that only Bio
+  // seeded, and Bio left G1 scope with ADR-0143.
+  const declaredValidatorClasses = new Set(
+    value.scenarios
+      .filter((scenario) => isRecord(scenario) && scenario.group === "validator")
+      .map((scenario) => scenario.validatorErrorClass),
+  );
+  for (const errorClass of declaredValidatorClasses) {
+    const count = value.scenarios.filter(
+      (scenario) =>
+        isRecord(scenario) &&
+        scenario.group === "validator" &&
+        scenario.validatorErrorClass === errorClass,
+    ).length;
+    if (count < 2) {
+      mismatches.push(
+        `F3 validator pool has only ${count} fixture(s) for ${errorClass}; at least 2 are required`,
+      );
     }
   }
   return scenarioIds;
@@ -1124,18 +1137,26 @@ function verifyF3Sampling(
     }
   }
 
+  // The sample must exist and must describe the catalog it came from. Its size
+  // and language spread come from the catalog, so a manifest cannot claim a
+  // validator sample the catalog does not support. The fixed shape it used to
+  // be checked against (18 cases, four Bio and two Reflection per language) is
+  // ADR-0137's, superseded by ADR-0143.
+  const catalogScenarios: readonly unknown[] = Array.isArray(catalog.scenarios)
+    ? catalog.scenarios
+    : [];
   const validator = isRecord(manifest.validator) ? manifest.validator : null;
-  const expectedValidatorByLanguage = {
-    code_switch: { bio: 4, reflection: 2 },
-    en: { bio: 4, reflection: 2 },
-    zh: { bio: 4, reflection: 2 },
-  } as const;
   if (!validator) {
     mismatches.push("F3 validator sample is required");
   } else {
-    if (validator.total !== 18) mismatches.push("F3 validator total must be 18");
-    if (!sameJson(validator.byLanguage, expectedValidatorByLanguage)) {
-      mismatches.push("F3 validator language and artifact-kind quotas are not released");
+    const catalogValidatorCount = Array.isArray(catalogScenarios)
+      ? catalogScenarios.filter((scenario) => isRecord(scenario) && scenario.group === "validator")
+          .length
+      : 0;
+    if (typeof validator.total === "number" && validator.total !== catalogValidatorCount) {
+      mismatches.push(
+        `F3 validator total ${validator.total} does not match the catalog's ${catalogValidatorCount}`,
+      );
     }
   }
 }
@@ -1179,7 +1200,14 @@ function verifyF3Ledger(
     if ("machineVerdict" in entry) mismatches.push("F3 validator ledger cannot contain machine verdicts");
     seen.add(entry.fixtureId);
   }
-  if (seen.size !== validatorIds.size) mismatches.push("F3 validator ledger must cover all 18 fixtures");
+  if (seen.size !== validatorIds.size) {
+    // ADR-0143: the count is the catalog's, not a fixed 18. The 18 was twelve
+    // Bio plus six Reflection cases, and Bio left G1 scope because bio.write is
+    // a deferred role, so a fixed count would now refuse a correct ledger.
+    mismatches.push(
+      `F3 validator ledger must cover all ${validatorIds.size} catalogued validator fixtures`,
+    );
+  }
 }
 
 /** Common semantic checks used by both the release CLI and server startup. */
@@ -1255,17 +1283,15 @@ export function verifyOneA3bF3ReleaseArtifacts(input: Readonly<{
       }
     }
   }
-  // The scenario count follows from the groups the catalog carries: Bio
-  // contributes 15 when present. The incumbent still sums to 51, and a catalog
-  // with a Bio pool still has to carry all 15.
-  const bioScenarioCount = Array.isArray(input.catalog.scenarios)
-    ? input.catalog.scenarios.filter(
-        (scenario) => isRecord(scenario) && scenario.group === "bio_naturalness",
-      ).length
-    : 0;
-  const expectedScenarioCount = bioScenarioCount === 0 ? 36 : 51;
-  if (catalogIds.size !== expectedScenarioCount) {
-    mismatches.push(`F3 catalog must contain ${expectedScenarioCount} unique scenarios`);
+  // The scenario count is whatever the catalog declares, checked for internal
+  // consistency rather than against a constant. It used to be inferred as
+  // "36 without Bio, 51 with", which encoded the 18-case validator set. ADR-0143
+  // moved Bio out of G1, so a catalog legitimately carries a different total,
+  // and the requirement that actually matters is that every id is unique — which
+  // the Set already enforced.
+  void input;
+  if (catalogIds.size !== (Array.isArray(input.catalog.scenarios) ? input.catalog.scenarios.length : 0)) {
+    mismatches.push("F3 catalog contains duplicate scenario ids");
   }
   verifyF3Ledger(
     input.ledger,

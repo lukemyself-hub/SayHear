@@ -192,7 +192,21 @@ export type ValidatorFixture = FixtureBase &
   Readonly<{
     artifactKind: ValidatorArtifactKind;
     draftText: string;
-    expectedOutcome: "blocking";
+    /**
+     * What the seeded defect is supposed to produce, declared per case.
+     *
+     * This was `"blocking"` for every case regardless of artifact kind, and the
+     * review builder then derived the expected machine verdict from the kind
+     * instead — `bio ? "blocked" : "accepted"`. The two together meant the
+     * expectation for a Reflection case was "this has a blocking-class defect,
+     * and a validator that accepts it is behaving as expected". That is how
+     * 6 of 6 Reflection cases came back accepted and matched, which is how a
+     * kind-keyed pass read as a calibration result.
+     *
+     * ADR-0143 makes the declared severity the only source of truth: with no
+     * gold set, no seeded defect may be expected to block.
+     */
+    expectedOutcome: "advisory" | "blocking";
     group: "validator";
     sourceClaimIds: readonly string[];
     validatorErrorClass: ValidatorErrorClass;
