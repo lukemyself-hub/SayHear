@@ -871,7 +871,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     ).toThrow(/missing/i);
   });
 
-  it("caps the validator ledger error budget at ten percent", () => {
+  it("records the validator ledger's error budget without enforcing it (ADR-0143)", () => {
     const fixtures = catalog.scenarios.filter((fixture) => fixture.group === "validator");
     const base = {
       adjudicator: "Luke",
@@ -887,8 +887,16 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
     expect(
       validateValidatorLedger({ catalog, ledger: { ...base, entries: oneReject, maxRejects: 1 } }),
     ).toEqual({ accepted: 17, maxRejects: 1, rejected: 1, total: 18 });
-    expect(() =>
+    // The cap this used to enforce was a semantic judgement with no gold set
+    // behind it, and it refused the ledger that reported the finding rather
+    // than the finding. A ledger recording rejects is valid input now; what the
+    // release does with the number is decided elsewhere, and currently is
+    // nothing. What is still refused is a malformed budget.
+    expect(
       validateValidatorLedger({ catalog, ledger: { ...base, entries: oneReject, maxRejects: 2 } }),
-    ).toThrow(/10%/);
+    ).toEqual({ accepted: 17, maxRejects: 2, rejected: 1, total: 18 });
+    expect(() =>
+      validateValidatorLedger({ catalog, ledger: { ...base, entries: oneReject, maxRejects: -1 } }),
+    ).toThrow(/non-negative integer/);
   });
 });
