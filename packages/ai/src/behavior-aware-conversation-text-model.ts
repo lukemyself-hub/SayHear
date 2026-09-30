@@ -183,10 +183,18 @@ export function createBehaviorAwareConversationTextModel(input: {
               signal,
               text: currentMessage?.text ?? "",
             });
+      // The anchor is a separate sentence, so it needs a boundary the responder
+      // cannot take away. Appending it directly to the responder's last chunk
+      // welded the two together whenever that chunk ended in a question or full
+      // stop — "Are you safe right now?If anything feels unsafe, ..." — which
+      // every posture-active turn would show, because the Champion's ordinary
+      // response usually ends by asking. Joining with a blank line makes the
+      // anchor read as its own paragraph whatever the responder emitted.
       const chunks =
         postureActive && selection.kind !== "minimum_high_risk"
           ? [
               ...responderChunks,
+              "\n\n",
               renderSafetyPostureResponseAnchor({ locale: request.locale }),
             ]
           : responderChunks;

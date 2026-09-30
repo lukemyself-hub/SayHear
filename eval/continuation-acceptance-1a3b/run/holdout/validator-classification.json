@@ -1,0 +1,378 @@
+{
+  "version": "1a3b-f3-validator-machine-verdicts:v1",
+  "manifestFingerprint": "sha256:95e4961ada3e96c239e2f32a95bddd24517d5e5378ccb778bb08b2fe6216a149",
+  "capturedAt": "2026-09-29T04:21:21.243Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "modelSnapshot": "deepseek-flash",
+  "configVersion": "narrative.validate:eval-capture:v1",
+  "promptVersion": "narrative-validate:eval:v4",
+  "maxOutputTokens": 10000,
+  "providerCallBudget": 2,
+  "cases": [
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-unsupported-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 480,
+        "outputTokens": 2772,
+        "reasoningTokens": 2643
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "contradiction"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-contradiction-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 479,
+        "outputTokens": 6199,
+        "reasoningTokens": 6122
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "kind_upgrade",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-epistemic_upgrade-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 482,
+        "outputTokens": 4463,
+        "reasoningTokens": 4392
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-material_absence-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 480,
+        "outputTokens": 1431,
+        "reasoningTokens": 1361
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 483,
+        "outputTokens": 1598,
+        "reasoningTokens": 1527
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-ambiguity-en",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 479,
+        "outputTokens": 7990,
+        "reasoningTokens": 7892
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-unsupported-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 483,
+        "outputTokens": 3093,
+        "reasoningTokens": 2962
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "contradiction"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-contradiction-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 478,
+        "outputTokens": 5359,
+        "reasoningTokens": 5252
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-epistemic_upgrade-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 484,
+        "outputTokens": 2694,
+        "reasoningTokens": 2624
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-material_absence-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 476,
+        "outputTokens": 2169,
+        "reasoningTokens": 2104
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 486,
+        "outputTokens": 2219,
+        "reasoningTokens": 2119
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 479,
+        "outputTokens": 8496,
+        "reasoningTokens": 8399
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-unsupported-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 482,
+        "outputTokens": 3022,
+        "reasoningTokens": 2842
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "contradiction"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-contradiction-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 481,
+        "outputTokens": 5647,
+        "reasoningTokens": 5569
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "kind_upgrade",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-epistemic_upgrade-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 485,
+        "outputTokens": 6720,
+        "reasoningTokens": 6621
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-bio-material_absence-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 481,
+        "outputTokens": 3800,
+        "reasoningTokens": 3730
+      },
+      "verdict": "blocked"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 484,
+        "outputTokens": 1301,
+        "reasoningTokens": 1231
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 483,
+        "outputTokens": 6776,
+        "reasoningTokens": 6703
+      },
+      "verdict": "accepted"
+    }
+  ]
+}

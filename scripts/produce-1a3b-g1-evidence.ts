@@ -21,6 +21,8 @@ import {
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 
+import { G1_ACCEPTANCE_HARD_GATE_CONFIG_ID } from "../eval/continuation-acceptance-1a3b/protocol";
+
 import {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   ONE_A_3B_G1_ENABLED_ROLES,
@@ -137,6 +139,8 @@ type RoleCheck = Readonly<{
 
 type HardGateCheck = Readonly<{
   artifactSha256: string | null;
+  /** The arm the report was computed from, or null when the artifact omits it. */
+  configId: string | null;
   failures: readonly string[];
   note: string | null;
   passed: boolean;
@@ -581,6 +585,7 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
   } catch (error) {
     return {
       artifactSha256: null,
+      configId: null,
       failures: [],
       note: error instanceof Error ? error.message : "Invalid hard-gate path.",
       passed: false,
@@ -593,6 +598,7 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
   } catch (error) {
     return {
       artifactSha256: null,
+      configId: null,
       failures: [],
       note: `Hard-gate artifact is unavailable: ${
         error instanceof Error ? error.message : "read failed"
@@ -607,6 +613,7 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
   } catch {
     return {
       artifactSha256: sha256Bytes(bytes),
+      configId: null,
       failures: [],
       note: "Hard-gate artifact is not valid JSON.",
       passed: false,
@@ -616,6 +623,7 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
   if (!isRecord(value)) {
     return {
       artifactSha256: sha256Bytes(bytes),
+      configId: null,
       failures: [],
       note: "Hard-gate artifact must be an object.",
       passed: false,
@@ -626,6 +634,26 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
     ? value.failures.filter((entry): entry is string => typeof entry === "string")
     : [];
   const checkedFixtureCount = objectNumber(value, "checkedFixtureCount");
+  const configId = objectString(value, "configId");
+  // The Continuation pool has two arms answering two different questions. The
+  // incumbent arm runs the real production conversation seam, which is what
+  // G1 ships. The candidate arm turns the G2 Open Loop bundle on through
+  // `open_loop.extract`, and G1 does not ship that bundle — a report about it
+  // says nothing about the release. The artifact arrived as a bare path, so
+  // nothing else would stop the G2 report from certifying G1. An artifact that
+  // names no arm at all is refused too: unattributed is not the same as
+  // attributed-to-us.
+  const armRefusal = hardGateArmRefusal(configId);
+  if (armRefusal !== null) {
+    return {
+      artifactSha256: sha256Bytes(bytes),
+      configId,
+      failures,
+      note: armRefusal,
+      passed: false,
+      path: relativeRepositoryPath(path),
+    };
+  }
   // The 18-fixture count already refuses a report that checked nothing, which
   // is how a non-Continuation comparison used to satisfy AC-X04 vacuously.
   // Requiring `applicable` as well makes that intent explicit at the artifact
@@ -637,6 +665,7 @@ async function hardGateCheck(pathValue: string): Promise<HardGateCheck> {
     checkedFixtureCount === 18;
   return {
     artifactSha256: sha256Bytes(bytes),
+    configId: objectString(value, "configId"),
     failures,
     note: passed
       ? null
@@ -1100,7 +1129,10 @@ async function parseSourceEvidence(
       }
     }
   }
-  if (errors.length > 0 || !criterionValue || !fixtureIdList || !command || !owner || !runId || !sourceValue || !result || !verificationCommand) {
+  // artifactSha256 is already covered by the errors pushed above, but stating
+  // it here is what makes the source type honest: an evidence record carries a
+  // content hash, and the null case has to be rejected before it is recorded.
+  if (errors.length > 0 || !artifactSha256 || !criterionValue || !fixtureIdList || !command || !owner || !runId || !sourceValue || !result || !verificationCommand) {
     return { errors, source: null };
   }
   return {
@@ -1808,3 +1840,29 @@ main().catch((error: unknown) => {
   );
   process.exitCode = 1;
 });
+
+
+/**
+ * Why a hard-gate artifact may not certify a G1 release, or null when it may.
+ *
+ * The Continuation pool has two arms answering two different questions. The
+ * incumbent arm runs the real production conversation seam, which is what G1
+ * ships. The candidate arm turns the G2 Open Loop bundle on through
+ * `open_loop.extract`, and G1 does not ship that bundle, so a report about it
+ * describes a configuration the release does not contain.
+ *
+ * The report arrives as a bare path, so nothing upstream stops the G2 arm's
+ * report from certifying G1 — and nothing stops a report that names no arm at
+ * all from being read as if it had. Unattributed is not attributed-to-us, so
+ * an artifact without an arm is refused too. This was reachable rather than
+ * hypothetical: the incumbent and candidate reports are byte-compatible apart
+ * from this field, and until it existed nothing recorded which arm produced a
+ * given green ledger.
+ */
+export function hardGateArmRefusal(configId: string | null): string | null {
+  if (configId === null) {
+    return "Hard-gate artifact does not name the arm it was computed from.";
+  }
+  if (configId === G1_ACCEPTANCE_HARD_GATE_CONFIG_ID) return null;
+  return `Hard-gate artifact is for arm "${configId}", not the G1 conversation arm.`;
+}

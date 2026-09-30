@@ -92,3 +92,37 @@ posture-active turns, but the Continuation capture drives `open_loop.extract`
 directly and never reaches the Champion text model that appends it. The rendered
 anchor satisfies the new boundary in both locales, so the assertion the gate
 makes is one the product already meets on the real path.
+
+## Amendment: which Continuation arm a G1 release may cite
+
+Recorded after asking why a G1-only release was running an `open_loop.extract`
+capture at all. The answer is that the Continuation pool has two arms answering
+two different questions, and only one of them is G1's.
+
+The incumbent arm runs the real production conversation seam — Context Compiler,
+Conversation Agent Harness, Runtime Provider Egress — so its hard gates describe
+the conversation the product actually has. That is the arm a G1 release certifies,
+and it was in G1's required criteria from the original gate commit. The
+candidate arm turns the G2 Open Loop bundle on through `open_loop.extract` and
+exists to measure whether that bundle degrades ordinary dialogue. G1 does not ship
+that bundle, so this arm is never a G1 acceptance source.
+
+The confusion was reachable rather than theoretical. A hard-gate report reached
+the G1 evidence producer as a bare path, and the report carried no arm identity,
+so the G2 arm's report was byte-compatible with G1's and nothing stopped one
+certifying the other. A report is now attributed to the arm that produced it, and
+the producer refuses anything that is not the incumbent arm — including a report
+that names no arm, because unattributed is not attributed-to-us.
+
+The attribution is stripped before the package reaches a reviewer. The producer
+needs to know which arm it is reading; a reviewer who could read the arm id would
+know which response came from which side, which is the one thing the blind
+comparison exists to prevent. The existing sealed-identity test caught this when
+the field was added.
+
+This also corrects an earlier claim recorded above. The referral failure that
+started this work was blamed on the capture bypassing the Champion anchor. That
+was true of the G2 candidate arm and false of the incumbent arm, which reaches
+the Champion and does get the anchor. Re-running the incumbent arm against a
+corrected high-risk input produces the anchor and passes the boundary with no
+violations, so the incumbent arm was never the thing that was broken.

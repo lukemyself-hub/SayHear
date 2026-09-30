@@ -43,7 +43,14 @@ import {
 } from "./sampling";
 
 export type { SyntheticRun } from "./protocol";
-export type PublicReviewPackage = Omit<ReviewPackage, "sealed">;
+/**
+ * What the reviewer is allowed to see. The sealed arm identities are withheld,
+ * and so is the hard-gate report's attribution: an arm id in the blinded package
+ * would reveal which side produced which response.
+ */
+export type PublicReviewPackage = Omit<ReviewPackage, "sealed" | "hardGateReport"> & {
+  hardGateReport: Omit<ReviewPackage["hardGateReport"], "configId">;
+};
 
 type ResponseFixture = ContinuationFixture | BioNaturalnessFixture;
 
@@ -103,6 +110,16 @@ export type HardGateReport = Readonly<{
    */
   applicable: boolean;
   checkedFixtureCount: number;
+  /**
+   * The arm that produced the run this report was computed from. The two
+   * Continuation arms answer different questions: the incumbent arm runs the
+   * real production conversation seam, while the candidate arm turns the G2
+   * Open Loop bundle on through `open_loop.extract`. An AC-X04 artifact that
+   * does not name its arm cannot be attributed, so a G1 release could be
+   * handed a report about a bundle it does not ship — and a report about the
+   * conversation it does ship could be refused as the wrong one.
+   */
+  configId: string;
   failures: readonly string[];
   passed: boolean;
 }>;
@@ -126,6 +143,7 @@ export function verifySyntheticRunHardGates(
       advisories: [],
       applicable: false,
       checkedFixtureCount: 0,
+      configId: run.configId,
       failures: [],
       passed: false,
     };
@@ -138,6 +156,7 @@ export function verifySyntheticRunHardGates(
       advisories: [],
       applicable: true,
       checkedFixtureCount: 0,
+      configId: run.configId,
       failures: [
         "hard gates require a catalog with a Continuation pool; this catalog has none",
       ],
@@ -231,6 +250,7 @@ export function verifySyntheticRunHardGates(
     advisories,
     applicable: true,
     checkedFixtureCount: fixtures.length,
+    configId: run.configId,
     failures,
     passed: failures.length === 0,
   };
@@ -510,6 +530,11 @@ export function buildReviewPackage(input: BuildReviewPackageInput): ReviewPackag
     ],
     applicable: firstHardGates.applicable && secondHardGates.applicable,
     checkedFixtureCount: firstHardGates.checkedFixtureCount,
+    // This report merges both arms of one comparison, so it is attributed to
+    // both. A G1 release sourcing AC-X04 from here would be certifying a
+    // pairwise bundle comparison, which is why the producer names the single
+    // arm it accepts instead of trusting whatever it is handed.
+    configId: `${firstHardGates.configId}+${secondHardGates.configId}`,
     failures: [...firstHardGates.failures, ...secondHardGates.failures],
     passed: firstHardGates.passed && secondHardGates.passed,
   };
@@ -809,7 +834,13 @@ export function toPublicReviewPackage(
   package_: ReviewPackage,
 ): PublicReviewPackage {
   const { sealed: _sealed, ...publicPackage } = package_;
-  return publicPackage;
+  // The hard-gate report now names the arms it covers, which the G1 evidence
+  // producer needs in order to refuse a report about a bundle it does not
+  // ship. That attribution must not reach the reviewer: an arm id in the
+  // blinded package would say which side produced which response, and the whole
+  // value of the comparison is that nobody reading it knows that.
+  const { configId: _configId, ...hardGateReport } = publicPackage.hardGateReport;
+  return { ...publicPackage, hardGateReport };
 }
 
 /** Reveal a completed human score file and only then calculate arm-level results. */

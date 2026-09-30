@@ -513,6 +513,14 @@ describe("Authenticated Internal Text Conversation System Seam — Safety Postur
     });
     // Clean turn one: still active, anchor present, count at one.
     expect(firstClean.deltas).toContain("988");
+    // The anchor is appended after the responder's own text, and the ordinary
+    // Champion response usually ends by asking a question. Appending directly
+    // welded the two into "Are you safe right now?If anything feels unsafe",
+    // which a user would read as a single garbled sentence on every
+    // posture-active turn. The anchor must start its own paragraph.
+    expect(firstClean.deltas).toMatch(/\?\n\n|。\n\n|\n\n/);
+    expect(firstClean.deltas).not.toMatch(/[?!。]If anything feels unsafe/);
+    expect(firstClean.deltas).not.toMatch(/[?!。]如果任何时候感到不安全/);
     expect((await currentPosture())!.content).toMatchObject({
       cleanTurnCount: 1,
       state: "active",

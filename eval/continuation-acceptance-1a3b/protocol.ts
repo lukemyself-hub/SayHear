@@ -19,6 +19,29 @@ export const F3_LEDGER_VERSION = "1a3b-f3-adjudication:v1" as const;
 export const F3_BIO_INSPECTION_VERSION = "1a3b-f3-bio-inspection:v1" as const;
 export const F3_PAIRWISE_PROTOCOL = BLIND_PAIRWISE_PROTOCOL_V2;
 
+/**
+ * The Continuation pool's two arms, which answer two different questions.
+ *
+ * The incumbent arm runs the real production conversation seam — Context
+ * Compiler, Conversation Agent Harness, Runtime Provider Egress — so its hard
+ * gates describe the conversation the product actually has. That is the arm a
+ * G1 release certifies.
+ *
+ * The candidate arm turns the G2 Open Loop bundle on through `open_loop.extract`
+ * and exists to measure whether that bundle degrades ordinary dialogue. G1 does
+ * not ship the bundle, so this arm is never a G1 acceptance source, and a
+ * release that cites it is citing a comparison about a configuration it does not
+ * contain. Both live here so a capture, a report, and the G1 evidence producer
+ * cannot disagree about which arm is which.
+ */
+export const F3_INCUMBENT_CONFIG_ID = "continuation-incumbent-1a3a" as const;
+export const F3_BUNDLE_CANDIDATE_CONFIG_ID = "continuation-bundle-1a3b-v1" as const;
+
+/**
+ * The only arm a G1 release may cite for AC-X04.
+ */
+export const G1_ACCEPTANCE_HARD_GATE_CONFIG_ID = F3_INCUMBENT_CONFIG_ID;
+
 export const F3_GROUPS = [
   "continuation",
   "bio_naturalness",
@@ -438,6 +461,14 @@ export type ReviewPackage = Readonly<{
      */
     applicable: boolean;
     checkedFixtureCount: number;
+    /**
+     * Which arm, or arms, the report covers. A release must be able to tell an
+     * AC-X04 report about the conversation it ships from one about a bundle it
+     * does not, and the report is otherwise indistinguishable from the other.
+     * Stripped before the package reaches a reviewer, so naming the arm cannot
+     * reveal which response came from which side.
+     */
+    configId: string;
     failures: readonly string[];
     passed: boolean;
   }>;
@@ -450,6 +481,12 @@ export type ReviewPackage = Readonly<{
 }>;
 
 export type ValidatorAdjudicationLedger = Readonly<{
+  /**
+   * Prefill marker written by the review-page builder. While it is present the
+   * ledger is still a blank form, so the G1 evidence producer refuses it rather
+   * than reading unfilled verdicts as a human ruling.
+   */
+  _instructions?: string;
   adjudicator: string;
   decidedAt: string;
   entries: readonly Readonly<{

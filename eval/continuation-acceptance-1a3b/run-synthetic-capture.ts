@@ -84,7 +84,7 @@ import {
   type F3Pins,
   type FrozenSharedInput,
   type SyntheticRun,
-  type SyntheticRunTurn,
+  type SyntheticRunTurn,, F3_INCUMBENT_CONFIG_ID 
 } from "./protocol";
 import { verifySyntheticRunHardGates } from "./review-package";
 
@@ -93,7 +93,7 @@ const DEFAULT_PINS = "eval/continuation-acceptance-1a3b/pins.json";
 const DEFAULT_OUT = "eval/continuation-acceptance-1a3b/run/continuation-incumbent.json";
 const DEFAULT_HARD_GATES_OUT =
   "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json";
-const CONFIG_ID = "continuation-incumbent-1a3a";
+const CONFIG_ID = F3_INCUMBENT_CONFIG_ID;
 const GROUP = "continuation" as const;
 const USER_ID = asUserId(uuidFrom("synthetic-user"));
 

@@ -129,7 +129,7 @@ import {
   type F3Pins,
   type FrozenSharedInput,
   type SyntheticRun,
-  type SyntheticRunTurn,
+  type SyntheticRunTurn,, F3_BUNDLE_CANDIDATE_CONFIG_ID 
 } from "./protocol";
 import { verifySyntheticRunHardGates } from "./review-package";
 
@@ -140,7 +140,7 @@ const DEFAULT_HARD_GATES_OUT =
   "eval/continuation-acceptance-1a3b/run/continuation-candidate-hard-gates.json";
 const DEFAULT_LANES_OUT =
   "eval/continuation-acceptance-1a3b/run/continuation-candidate-lanes.json";
-const CONFIG_ID = "continuation-bundle-1a3b-v1";
+const CONFIG_ID = F3_BUNDLE_CANDIDATE_CONFIG_ID;
 const GROUP = "continuation" as const;
 const USER_ID = asUserId(uuidFrom("synthetic-user"));
 
