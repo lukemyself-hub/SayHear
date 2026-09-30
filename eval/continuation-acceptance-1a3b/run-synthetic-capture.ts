@@ -84,7 +84,8 @@ import {
   type F3Pins,
   type FrozenSharedInput,
   type SyntheticRun,
-  type SyntheticRunTurn,, F3_INCUMBENT_CONFIG_ID 
+  type SyntheticRunTurn,
+  F3_INCUMBENT_CONFIG_ID,
 } from "./protocol";
 import { verifySyntheticRunHardGates } from "./review-package";
 
