@@ -82,7 +82,7 @@ function markdownForBundle(bundle: {
   manifestFingerprint: string;
 }): string {
   const lines = [
-    "# narrative.validate 18-case human review (ADR-0137, AC-X03)",
+    "# narrative.validate human review (ADR-0143, AC-X03)",
     "",
     `Manifest fingerprint: \`${bundle.manifestFingerprint}\``,
     "",
@@ -155,8 +155,16 @@ async function main(): Promise<void> {
   const bundles = buildValidatorRequestBundle(catalog as FixtureCatalog, {
     generatorManifests: {},
   });
-  if (bundles.length !== 18) {
-    throw new Error(`Expected 18 validator fixtures, found ${bundles.length}.`);
+  // The count comes from the catalog: it was 18 while the pool held twelve Bio
+  // and six Reflection cases, and Bio left G1 scope with ADR-0143. A bundle must
+  // exist for every catalogued validator fixture, whatever that number is.
+  const catalogValidatorCount = (catalog as FixtureCatalog).scenarios.filter(
+    (scenario) => scenario.group === "validator",
+  ).length;
+  if (bundles.length !== catalogValidatorCount) {
+    throw new Error(
+      `Expected ${catalogValidatorCount} validator fixtures, found ${bundles.length}.`,
+    );
   }
   const fixtureById = new Map(
     (catalog as FixtureCatalog).scenarios
