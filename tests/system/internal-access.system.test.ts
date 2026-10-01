@@ -73,7 +73,7 @@ const testGenerationPolicy = Object.freeze({
   model: "gpt-5.4",
   modelConfigVersion: "conversation-text-champion:v1",
   modelSnapshot: "gpt-5.4",
-  outputFormatVersion: "conversation-output:v1",
+  outputFormatVersion: "conversation-output:v2",
   canonicalPersonaVersion: "canonical-persona:v1",
   personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
   personaContractInvariantVersion: "persona-contract-invariant:v1",
@@ -1099,7 +1099,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         locale: "en-US",
         policyVersions: {
           localePolicyVersion: ENGLISH_LOCALE_PACK_VERSION,
-          outputFormatVersion: "conversation-output:v1",
+          outputFormatVersion: "conversation-output:v2",
           canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
           personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
           personaContractInvariantVersion: "persona-contract-invariant:v1",
@@ -1155,7 +1155,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
           }),
           expect.objectContaining({
             key: "output_format",
-            reference: "conversation-output:v1",
+            reference: "conversation-output:v2",
             truncatable: false,
           }),
           expect.objectContaining({
