@@ -90,3 +90,5 @@ Luke明确允许仅轮换验收项目CRON_SECRET，已更新Preview并部署干�
 对话decision指令v4明确用户结束时只确认、不邀请换话题，保留v1-v3文本，立即安全要求继续生效。相关resolution/context tests46项通过；必须重新做真实完整硬门禁。OpenCode investigator240秒超时已确认终止，无调查结论，Codex依据实际失败与官方接口记录实施，不能称外部调查成功。
 
 官方依据：https://api-docs.deepseek.com/guides/thinking_mode/ 与 https://api-docs.deepseek.com/api/create-response/ 。
+
+新配置v5的首次冻结捕获被provider_egress_policy_versions FK拒绝，尚未发生角色Provider调用。policy同时绑定model_config_version，不能让v5配置复用v4policy。新增0057前向迁移登记v5策略，旧迁移和v4行保持不变；再次冻结后重跑捕获，不把失败目录改名。c64efee对话/回归捕获继续保留。
