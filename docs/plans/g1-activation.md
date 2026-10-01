@@ -92,3 +92,13 @@ Luke明确允许仅轮换验收项目CRON_SECRET，已更新Preview并部署干�
 官方依据：https://api-docs.deepseek.com/guides/thinking_mode/ 与 https://api-docs.deepseek.com/api/create-response/ 。
 
 新配置v5的首次冻结捕获被provider_egress_policy_versions FK拒绝，尚未发生角色Provider调用。policy同时绑定model_config_version，不能让v5配置复用v4policy。新增0057前向迁移登记v5策略，旧迁移和v4行保持不变；再次冻结后重跑捕获，不把失败目录改名。c64efee对话/回归捕获继续保留。
+
+## 中文逗号输出修复与托管 Journal
+
+629e951 的四角色调用、Validator 6/6、precision 6/6 和全量 1387 测试完成，但 AC-X04 真实对话有一例中文旁半角逗号，失败记录与哈希保留在 run/g1-release-629e951。没有重复抽样覆盖该失败。
+
+新增 conversation-output:v2，在 Provider Egress 发出文本前把中文邻接的半角逗号改成全角。跨分段处理只暂存一个逗号；代码片段和 URL 保持原样。v1 保留原输出和原提示内容，未知版本仍拒绝编译。界面和 Harness 保存同一组处理后的 deltas，校验器不改。
+
+OpenCode 实现任务完成后，Codex 用 Node 24.18.0 / pnpm 11.9.0 独立验证。补测实际复现 Action 选择之后才发出暂存逗号的问题，现改为先发文本再发 Action proposal。独立审查第二轮提出 Stop Signal 同类疑虑；其后文本在现有 Harness 中允许，集成测试证明该分支能提交、保留 proposal，且显示文本与保存文本一致，因此不按该疑虑清空缓冲。最终针对性测试 43 项通过，零失败或跳过；完整冻结版本回归与真实 Provider 捕获仍需重新生成。
+
+629e951 验收部署 dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7 已 Ready，API commit 与部署身份接口一致，测试域名已切换。三个实际 Workflow 完成并通过完整分页/解密读取。正常静默窗口后扫描创建 Journal 任务 wrun_01M3WBC57RM9DN4AX6AE2D9SDA，生成与校验完成，新 current 版本 01a0f8b6-f9e5-7b87-96f0-5198bb21f6fc 在正常 Owner 页面可见。它仍属于 G1-off 基础验收，不是 Episode/Reflection 完成证明。生产未变更，G1仍关闭；12项证据、隔离 G1 功能与生产切换继续待完成。

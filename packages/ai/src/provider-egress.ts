@@ -1,5 +1,6 @@
 import {
   CompiledContextIntegrityError,
+  CONVERSATION_OUTPUT_FORMAT_VERSION,
   isWhitelistedSafetyResourceNumber,
   minimumHighRiskSafetyPostureDetector,
   normalizeCuriosityStopSignalCall,
@@ -14,6 +15,8 @@ import {
   type ProviderEgressRepository,
   type RecoveryGate,
 } from "@sayhear/application";
+
+import { createConversationPunctuationNormalizer } from "./conversation-punctuation";
 
 const NUMBER_LIKE_RUN = /\d(?:[ -]?\d){2,}/g;
 
@@ -85,6 +88,15 @@ export function createProviderEgressPort(dependencies: {
             locale: claim.context.locale,
             text: currentMessage.text,
           }) !== null);
+      // Versioned Conversation Output transform (AC-X04 / conversation-output:v2):
+      // the real champion can emit an ASCII comma next to CJK, so the egress
+      // normalizes the stream at the same seam as the deterministic safety
+      // anchor. v1 stays byte-identical for rollback.
+      const punctuationNormalizer =
+        claim.context.policyVersions.outputFormatVersion ===
+        CONVERSATION_OUTPUT_FORMAT_VERSION
+          ? createConversationPunctuationNormalizer()
+          : null;
       let streamedText = "";
       let anchorCompleted = false;
       for await (const event of dependencies.model.stream({
@@ -116,8 +128,28 @@ export function createProviderEgressPort(dependencies: {
           }
         }
         if (event.type === "delta") {
-          streamedText += event.delta;
-        } else if (event.type === "completed") {
+          if (punctuationNormalizer === null) {
+            streamedText += event.delta;
+            yield event;
+            continue;
+          }
+          const delta = punctuationNormalizer.push(event.delta);
+          if (delta.length === 0) continue;
+          streamedText += delta;
+          yield { delta, type: "delta" };
+          continue;
+        }
+        if (event.type === "completed") {
+          if (punctuationNormalizer !== null) {
+            // Flush only on a successful completion, before the anchor and the
+            // completion event. A provider exception never reaches this point,
+            // so a held comma is dropped exactly as the raw stream was.
+            const tail = punctuationNormalizer.flush();
+            if (tail.length > 0) {
+              streamedText += tail;
+              yield { delta: tail, type: "delta" };
+            }
+          }
           if (
             safetyTurn &&
             !anchorCompleted &&
@@ -145,7 +177,10 @@ export function createProviderEgressPort(dependencies: {
               false,
             );
           }
-        } else if (event.type === "tool_call") {
+          yield event;
+          continue;
+        }
+        if (event.type === "tool_call") {
           if (
             event.rawFunctionName === "curiosity_stop_signal" &&
             input.toolsDisabled !== true &&
@@ -177,6 +212,14 @@ export function createProviderEgressPort(dependencies: {
             });
             if (normalized.type === "invalid") {
               throw new ProviderDispatchError("invalid_response");
+            }
+            // An Action ends the response-text phase. Release a held comma
+            // before its proposal, otherwise the Harness would see a text
+            // delta after Action selection and reject a valid decision.
+            const tail = punctuationNormalizer?.flush() ?? "";
+            if (tail.length > 0) {
+              streamedText += tail;
+              yield { delta: tail, type: "delta" };
             }
             yield { proposal: normalized.proposal, type: "action_proposal" };
           } else {

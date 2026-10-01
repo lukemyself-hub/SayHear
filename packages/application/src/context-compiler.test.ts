@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   CompiledContextIntegrityError,
+  CONVERSATION_OUTPUT_FORMAT_VERSION,
   createContextCompiler,
+  PREVIOUS_CONVERSATION_OUTPUT_FORMAT_VERSION,
   trustActionFencesMemory,
   type ContextCompilerRepository,
   type ContextPolicyVersions,
@@ -1597,4 +1599,135 @@ describe("Context Compiler — memory sections (#117)", () => {
     expect(keys).not.toContain("ai_impression");
     expect(keys).not.toContain("recall_experience");
   });
+});
+
+describe("Context Compiler — conversation output format registry", () => {
+  const userId = asUserId("01984477-59a9-7d20-9d97-e588769566d0");
+  const inputRevisionId = asConversationEventRevisionId(
+    "01984477-59a9-7d20-9d97-e588769566d1",
+  );
+
+  function createCompilerWithOutputFormat(outputFormatVersion: string) {
+    let saved:
+      | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
+      | undefined;
+    const policyVersions: ContextPolicyVersions = {
+      canonicalPersonaVersion: "canonical-persona:v1",
+      localePolicyVersion: "locale-pack-zh:v1",
+      outputFormatVersion,
+      personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
+      personaContractInvariantVersion: "persona-contract-invariant:v1",
+      productPolicyVersion: "product-policy:v1",
+      relationshipPolicyVersion: "relationship-boundary:v1",
+      safetyPolicyVersion: "minimum-high-risk-response:v1",
+      taskInstructionVersion: "task-instruction-decision:v1",
+    };
+    const snapshot: ContextSourceSnapshot = {
+      dailySession: {
+        activityState: "active",
+        closurePolicyVersion: "daily-session-inactivity:v1",
+        continuousExchangeNo: 1,
+        id: asDailySessionId("01984477-59a9-7d20-9d97-e588769566d2"),
+      },
+      dialogueRevision: 1,
+      events: [
+        {
+          actor: "user",
+          locale: "zh-CN",
+          revisionId: inputRevisionId,
+          sequence: 1,
+          text: "我今天有点累。",
+        },
+      ],
+      generationStage: "decision",
+      inputRevisionId,
+      locale: "zh-CN",
+      policyVersions,
+      sourceRevision: 1,
+    };
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-09-01T12:00:00.000Z"),
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "conversation-output-format-secret",
+      rawEventTokenBudget: 4_000,
+      repository: {
+        async loadContextSource() {
+          return snapshot;
+        },
+        async saveCompiledContext(input) {
+          saved = input;
+          return {
+            degradedReason: input.degradedReason,
+            dialogueRevision: input.dialogueRevision,
+            id: asCompiledContextId(
+              "01984477-59a9-7d20-9d97-e588769566d3",
+            ),
+            locale: input.locale,
+            referencedRevisionIds: input.referencedEvents.map(
+              (event) => event.revisionId,
+            ),
+            sourceRevision: input.sourceRevision,
+            statistics: {
+              rawEventBudgetTokens: input.sectionBudgets.committedRawEvents,
+              selectedEventCount: input.referencedEvents.length,
+              totalTokens: input.totalTokens,
+            },
+          };
+        },
+      } satisfies ContextCompilerRepository,
+    });
+    return { compiler, saved: () => saved };
+  }
+
+  it("fails closed on an unregistered output format", async () => {
+    const { compiler } = createCompilerWithOutputFormat("conversation-output:v3");
+    await expect(
+      compiler.compile({
+        generationCommandId: asGenerationCommandId(
+          "01984477-59a9-7d20-9d97-e588769566d4",
+        ),
+        interactionTurnId: asInteractionTurnId(
+          "01984477-59a9-7d20-9d97-e588769566d5",
+        ),
+        userId,
+      }),
+    ).rejects.toBeInstanceOf(CompiledContextIntegrityError);
+  });
+
+  it("states the Chinese-adjacent comma rule only in the v2 contract", async () => {
+    const v1Section = await renderOutputFormatInstructions(
+      PREVIOUS_CONVERSATION_OUTPUT_FORMAT_VERSION,
+    );
+    const v2Section = await renderOutputFormatInstructions(
+      CONVERSATION_OUTPUT_FORMAT_VERSION,
+    );
+    expect(v1Section).toContain("natural-language companion response");
+    expect(v1Section).not.toContain("fullwidth comma");
+    expect(v2Section).toContain("natural-language companion response");
+    expect(v2Section).toContain("fullwidth comma");
+    expect(v2Section).toContain("code spans and URL tokens");
+  });
+
+  async function renderOutputFormatInstructions(
+    outputFormatVersion: string,
+  ): Promise<string> {
+    const { compiler, saved } = createCompilerWithOutputFormat(
+      outputFormatVersion,
+    );
+    await compiler.compile({
+      generationCommandId: asGenerationCommandId(
+        "01984477-59a9-7d20-9d97-e588769566d4",
+      ),
+      interactionTurnId: asInteractionTurnId(
+        "01984477-59a9-7d20-9d97-e588769566d5",
+      ),
+      userId,
+    });
+    const manifest = saved();
+    if (!manifest) throw new Error("The test manifest was not captured.");
+    return compiler.renderPermittedPayload({
+      ...manifest,
+      generationStage: "decision",
+    }).instructions;
+  }
 });

@@ -85,6 +85,15 @@ export type ActionFinalizationReceiptSnapshot = Readonly<{
   trustAction?: ActionFinalizationTrustActionDetail | null;
 }>;
 
+/**
+ * Conversation Output format contract. v2 adds the Chinese-adjacent prose
+ * comma rule that the Provider Egress stream transform enforces (AC-X04); v1
+ * stays registered so a rollback re-pins the exact previous behavior.
+ */
+export const CONVERSATION_OUTPUT_FORMAT_VERSION = "conversation-output:v2";
+export const PREVIOUS_CONVERSATION_OUTPUT_FORMAT_VERSION =
+  "conversation-output:v1";
+
 export type ContextPolicyVersions = Readonly<{
   canonicalPersonaVersion: string;
   localePolicyVersion: string;
@@ -1062,8 +1071,7 @@ function createSections(input: {
     },
     {
       budgetTokens: null,
-      content:
-        "Return only the natural-language companion response, without metadata or formatting wrappers.",
+      content: renderOutputFormatContract(input.policyVersions.outputFormatVersion),
       key: "output_format",
       reference: input.policyVersions.outputFormatVersion,
       truncatable: false,
@@ -1377,6 +1385,23 @@ function renderTrustActionExpressionSection(input: {
   ];
 }
 
+/**
+ * The output_format section stays natural-language-only across versions. v2
+ * additionally states the Chinese-adjacent prose comma rule: an ASCII comma
+ * between a Chinese character and its neighbor becomes the fullwidth comma.
+ * The Provider Egress stream transform enforces it; code spans and URL tokens
+ * are exempt. The rule is content-driven, so it also applies on en / mixed
+ * locale turns that happen to carry CJK.
+ */
+function renderOutputFormatContract(version: string): string {
+  const naturalLanguageOnly =
+    "Return only the natural-language companion response, without metadata or formatting wrappers.";
+  if (version !== CONVERSATION_OUTPUT_FORMAT_VERSION) {
+    return naturalLanguageOnly;
+  }
+  return `${naturalLanguageOnly} In Chinese-adjacent prose, write the fullwidth comma (，) instead of the ASCII comma (,) when either neighbor is a Chinese character; leave code spans and URL tokens unchanged.`;
+}
+
 function renderDialogueState(state: CurrentDialogueState): string {
   const renderField = <T>(field: { confidence: number; sourceRevisionIds: readonly ConversationEventRevisionId[]; value: T }) =>
     `${String(field.value ?? "none")} (confidence=${field.confidence.toFixed(2)}, sources=${field.sourceRevisionIds.join(",") || "none"})`;
@@ -1438,8 +1463,15 @@ function assertSupportedPolicyVersions(
   // The exact-match allowlist covers the static policy layers; the identity
   // layers (persona blocks, locale pack, task instruction) are resolved
   // fail-closed from the versioned prompt-artifact registry instead.
+  if (
+    versions.outputFormatVersion !== CONVERSATION_OUTPUT_FORMAT_VERSION &&
+    versions.outputFormatVersion !== PREVIOUS_CONVERSATION_OUTPUT_FORMAT_VERSION
+  ) {
+    // An unknown output format fails the compile closed; v1 stays accepted so
+    // a rollback re-pins the exact previous behavior.
+    throw new CompiledContextIntegrityError();
+  }
   const supported = {
-    outputFormatVersion: "conversation-output:v1",
     productPolicyVersion: "product-policy:v1",
     relationshipPolicyVersion: "relationship-boundary:v1",
     safetyPolicyVersion: "minimum-high-risk-response:v1",

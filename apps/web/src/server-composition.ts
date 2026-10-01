@@ -630,7 +630,7 @@ export function createServerComposition() {
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
       canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
-      outputFormatVersion: "conversation-output:v1",
+      outputFormatVersion: "conversation-output:v2",
       personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
       personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
       productPolicyVersion: "product-policy:v1",
