@@ -712,7 +712,7 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
           turns: [
             {
               ...firstTurn,
-              assistantText: "First question? Second question?",
+              assistantText: "First question? Second question? Third question?",
             },
           ],
         },
@@ -728,7 +728,52 @@ describe("Issue #196 F3 synthetic acceptance tools", () => {
         group: "continuation",
         manifest: manifest(),
       }),
-    ).toThrow(/more than one question/i);
+    ).toThrow(/question budget exceeded/i);
+  });
+
+  it.each(["incumbent", "candidate"] as const)(
+    "records ordinary double questions as observations on the %s arm",
+    (arm) => {
+      const fixture = catalog.scenarios.find((entry) =>
+        entry.group === "continuation" && entry.category === "direct_task" &&
+        entry.hardGate.maxQuestions === 1,
+      )!;
+      const run = syntheticRun(arm, "continuation");
+      const report = verifySyntheticRunHardGates(catalog, {
+        ...run,
+        scenarios: run.scenarios.map((scenario) => scenario.fixtureId === fixture.id
+          ? { ...scenario, turns: scenario.turns.map((turn) => ({
+              ...turn, assistantText: "First question? Second question?",
+            })) }
+          : scenario),
+      });
+      expect(report.failures.filter((failure) => failure.includes(fixture.id))).toEqual([]);
+      expect(report.advisories.some((finding) => finding.includes("ordinary_double_question"))).toBe(true);
+    },
+  );
+
+  it("keeps forbidden questions and high-risk double questions blocking", () => {
+    const run = syntheticRun("incumbent", "continuation");
+    const protectedFixtures = catalog.scenarios.filter((entry) =>
+      entry.group === "continuation" &&
+      (entry.hardGate.maxQuestions === 0 || entry.category === "high_risk"),
+    );
+    expect(protectedFixtures.length).toBeGreaterThan(0);
+    const protectedIds = new Set(protectedFixtures.map((entry) => entry.id));
+    const report = verifySyntheticRunHardGates(catalog, {
+      ...run,
+      scenarios: run.scenarios.map((scenario) => protectedIds.has(scenario.fixtureId)
+        ? { ...scenario, turns: scenario.turns.map((turn) => ({
+            ...turn, assistantText: "First question? Second question?",
+          })) }
+        : scenario),
+    });
+    for (const fixture of protectedFixtures) {
+      expect(report.failures.some((failure) => failure.includes(fixture.id) &&
+        /questions are not allowed|question budget exceeded/.test(failure))).toBe(true);
+      expect(report.advisories.some((finding) => finding.includes(fixture.id) &&
+        finding.includes("ordinary_double_question"))).toBe(false);
+    }
   });
 
   it("never fails the hard gates on a missing lexical token, on either arm", () => {
