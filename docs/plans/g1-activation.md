@@ -80,3 +80,13 @@ Luke 于2026-10-01明确要求跳过原始 Provider 错误探针并完成生产�
 
 - 独立诊断Preview dpl_E511kz5jE5cxb8r2VRvxHLd1dzLm 上正常Owner新请求已完成受理：decision command 01a0f839-6432-7a50-852d-ef813876a71f succeeded，Action 01a0f839-7e34-7876-820e-2142c6f1dc38 pending。界面明确显示已接受，数据库保留旧canceled Action并新增本次Action。这证明唯一约束修复生效，尚不证明Journal完成；调度等待测试Cron凭据授权。截图位于run/g1-hosted-bootstrap-20261001/fixed-action-accepted.png。
 - 本次限定只读审查通过delegate.py发起，session ses_f07c61025ffe8jBaAEhooPOn80。180秒超时后显式恢复，120秒再次超时，两次abort_confirmed=true，没有最终审查结论。实际模型为opencode-go/muse-spark-1.3-contributor。不能称为审查通过；Codex已检查参数绑定、事务及重复请求路径，并完成本地/真实受理验证。审查原始记录归档到.codex/g1-restoration/action-fix-review。
+
+## 测试调度恢复与新配置试验
+
+Luke明确允许仅轮换验收项目CRON_SECRET，已更新Preview并部署干净5354c873e75f04d6e93336422cbb4b4ddc1ab4ba到dpl_8JuanLjRp9gqVXNy9W7bWqMiysoW。测试别名切换，Recovery Scan HTTP200且派发8个真实任务，production未变更。旧regeneration source revision2对照当前session10被fence取消；正常自动Journal新版本01a0f887-6ebd-78d3-8722-98914cbfbee4已发布，不称为regeneration成功。
+
+5354c87捕获保留两项失败：Validator mixed ambiguity两次output budget耗尽；停止轮模型邀请换个话题。DeepSeek官方Thinking Mode文档说明默认high，Responses max_output_tokens同时计推理和输出。独立low试验只改reasoning.effort，同一失败样本完成，3661output/3560reasoning；这是1/6局部预演，不是正式完成度证据。保留10000上限、现有validator prompt/flags与ADR0143语义advisory规则，新immutable narrative config v5显式low，rollout pins v6，最终冻结后重新运行全部证据。
+
+对话decision指令v4明确用户结束时只确认、不邀请换话题，保留v1-v3文本，立即安全要求继续生效。相关resolution/context tests46项通过；必须重新做真实完整硬门禁。OpenCode investigator240秒超时已确认终止，无调查结论，Codex依据实际失败与官方接口记录实施，不能称外部调查成功。
+
+官方依据：https://api-docs.deepseek.com/guides/thinking_mode/ 与 https://api-docs.deepseek.com/api/create-response/ 。

@@ -8,6 +8,7 @@ import {
   ENGLISH_LOCALE_PACK_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
+  PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   PREVIOUS_CANONICAL_PERSONA_VERSION,
   PREVIOUS_CHINESE_LOCALE_PACK_VERSION,
   PREVIOUS_ENGLISH_LOCALE_PACK_VERSION,
@@ -124,6 +125,17 @@ describe("prompt artifact resolution", () => {
         policyVersions: supportedVersions,
       }),
     ).toThrow(PromptArtifactResolutionError);
+  });
+
+  it("preserves earlier decision instructions while the new version honors a conversation close", () => {
+    const current = resolvePromptArtifacts({ locale: "en-US", policyVersions: supportedVersions });
+    expect(current.taskInstruction).toContain("acknowledge the close briefly and ask no ordinary question");
+    expect(current.taskInstruction).toContain("compiled immediate-safety requirements");
+    for (const version of ["task-instruction-decision:v1", "task-instruction-decision:v2", PREVIOUS_CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION]) {
+      const historical = resolvePromptArtifacts({ locale: "en-US", policyVersions: { ...supportedVersions, taskInstructionVersion: version } });
+      expect(historical.taskInstruction).not.toContain("acknowledge the close");
+      expect(historical.taskInstruction).toContain("Continue the private journal conversation");
+    }
   });
 
   it("fails closed when the task instruction version cannot be resolved", () => {

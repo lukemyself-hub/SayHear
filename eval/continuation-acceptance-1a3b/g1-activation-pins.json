@@ -91,7 +91,10 @@
       "policyVersion": "narrative-validation:v1",
       "parameters": {
         "temperature": 0,
-        "maxOutputTokens": 10000
+        "maxOutputTokens": 10000,
+        "reasoning": {
+          "effort": "low"
+        }
       },
       "maxTechnicalRetries": 1,
       "fallback": "none"
