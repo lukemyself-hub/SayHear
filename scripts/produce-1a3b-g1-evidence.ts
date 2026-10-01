@@ -20,6 +20,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import { G1_ACCEPTANCE_HARD_GATE_CONFIG_ID } from "../eval/continuation-acceptance-1a3b/protocol";
@@ -1193,6 +1194,50 @@ async function parseSourceEvidence(
           );
         }
       }
+      // ADR-0144/0145: the final verifier re-scans the hashed values export and
+      // establishes the complete run set. Here we only check the values export
+      // hash and the run-set syntax/uniqueness at the source boundary; this
+      // regex does not prove completeness, which stays the final verifier's gate.
+      const canaryValuesArtifact = isRecord(result.canaryValuesArtifact)
+        ? result.canaryValuesArtifact
+        : null;
+      const valuesPathValue = canaryValuesArtifact
+        ? objectString(canaryValuesArtifact, "path")
+        : null;
+      const valuesHash = canaryValuesArtifact
+        ? objectString(canaryValuesArtifact, "sha256")
+        : null;
+      if (!valuesPathValue || !valuesHash || !SHA256_PATTERN.test(valuesHash)) {
+        errors.push("AC-W01 canaryValuesArtifact must contain a repository path and SHA-256 hash");
+      } else {
+        try {
+          const valuesPath = repositoryPath(
+            valuesPathValue,
+            "AC-W01 canary values artifact",
+          );
+          const valuesBytes = await readFile(valuesPath);
+          if (sha256Bytes(valuesBytes) !== valuesHash) {
+            errors.push("AC-W01 canaryValuesArtifact hash does not match its file");
+          }
+        } catch (error) {
+          errors.push(
+            `AC-W01 canary values artifact is unavailable: ${
+              error instanceof Error ? error.message : "read failed"
+            }`,
+          );
+        }
+      }
+      const expectedRunIds = result.expectedRunIds;
+      if (
+        !Array.isArray(expectedRunIds) ||
+        expectedRunIds.length === 0 ||
+        expectedRunIds.some(
+          (id) => typeof id !== "string" || !/^wrun_[A-Za-z0-9]+$/.test(id),
+        ) ||
+        new Set(expectedRunIds).size !== expectedRunIds.length
+      ) {
+        errors.push("AC-W01 expectedRunIds must be a non-empty unique Workflow run-id list");
+      }
     }
   }
   // artifactSha256 is already covered by the errors pushed above, but stating
@@ -1534,7 +1579,7 @@ function criterionReports(
   });
 }
 
-function evidenceArtifactValue(input: Readonly<{
+export function evidenceArtifactValue(input: Readonly<{
   evidence: OneA3bG1Evidence;
   f3ManifestFingerprint: string;
   fixtureCatalogSha256: string;
@@ -1913,12 +1958,19 @@ async function main(): Promise<void> {
   console.log(`[g1-evidence] wrote ${evidence.length} evidence artifacts`);
 }
 
-main().catch((error: unknown) => {
-  console.error(
-    `[g1-evidence] ${error instanceof Error ? error.message : "production failed"}`,
-  );
-  process.exitCode = 1;
-});
+// Run the producer only when invoked as the CLI. Importing it (for tests or
+// reuse) must not execute main() or touch process.exitCode.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  main().catch((error: unknown) => {
+    console.error(
+      `[g1-evidence] ${error instanceof Error ? error.message : "production failed"}`,
+    );
+    process.exitCode = 1;
+  });
+}
 
 
 /**

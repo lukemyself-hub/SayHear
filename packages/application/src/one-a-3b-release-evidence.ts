@@ -209,12 +209,25 @@ export const ONE_A_3B_G1_EVIDENCE_CONTRACTS: Readonly<
   "AC-W01": {
     evidenceKind: "hosted-canary-ledger",
     requiredAssertionIds: ["hosted_canary", "workflow_history", "outbox_receipt"],
-    requiredResultKeys: ["hosted", "canaryRunId", "deploymentId", "exportArtifact"],
+    requiredResultKeys: [
+      "hosted",
+      "canaryRunId",
+      "deploymentId",
+      "exportArtifact",
+      // ADR-0144/0145: the final verifier re-scans the linked raw exports at
+      // release time, so assembly must carry both references. Without them the
+      // verifier sees a passed summary with nothing to re-scan and refuses the
+      // artifact ("Hosted canary lacks deployment and complete run-set pins").
+      "canaryValuesArtifact",
+      "expectedRunIds",
+    ],
     resultFieldKinds: {
       hosted: "true",
       canaryRunId: "non-empty-string",
       deploymentId: "non-empty-string",
       exportArtifact: "content-addressed-artifact",
+      canaryValuesArtifact: "content-addressed-artifact",
+      expectedRunIds: "non-empty-string-array",
     },
   },
   "AC-D01": {

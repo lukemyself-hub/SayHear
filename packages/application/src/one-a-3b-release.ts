@@ -265,6 +265,29 @@ function safeSha256Hex(value: unknown): string | null {
   }
 }
 
+/**
+ * The exact fixture pin set the content-addressed fixture fingerprint covers.
+ *
+ * `catalogPath` is optional for the historical no-holdout releases. When it is
+ * present it is part of the identity, so a manifest cannot point the verifier
+ * at a different catalog than the one its fingerprint was frozen over. Builder
+ * and verifier both hash this same shape, which keeps the legacy five-field
+ * fingerprint byte-identical when no path is pinned.
+ */
+function fixtureFingerprintSource(
+  fixture: Record<string, unknown>,
+): Record<string, unknown> {
+  const source: Record<string, unknown> = {
+    f3ManifestPath: fixture.f3ManifestPath,
+    f3ManifestSha256: fixture.f3ManifestSha256,
+    f3ManifestFingerprint: fixture.f3ManifestFingerprint,
+    fixtureSeed: fixture.fixtureSeed,
+    sampleSeed: fixture.sampleSeed,
+  };
+  if (fixture.catalogPath !== undefined) source.catalogPath = fixture.catalogPath;
+  return source;
+}
+
 export function sha256Hex(value: unknown): string {
   return createHash("sha256").update(stableJson(value)).digest("hex");
 }
@@ -342,6 +365,9 @@ function sortedConfigurations(
 }
 
 function validateFixture(input: OneA3bG1ReleaseManifestInput["fixture"]): void {
+  if (input.catalogPath !== undefined) {
+    requireNonEmpty(input.catalogPath, "fixture.catalogPath");
+  }
   requireNonEmpty(input.f3ManifestPath, "fixture.f3ManifestPath");
   requireSha256(input.f3ManifestSha256, "fixture.f3ManifestSha256");
   requireFingerprint(input.f3ManifestFingerprint, "fixture.f3ManifestFingerprint");
@@ -748,7 +774,7 @@ export function buildOneA3bG1ReleaseManifest(
     },
     fixture: {
       ...input.fixture,
-      fingerprint: sha256Hex(input.fixture),
+      fingerprint: sha256Hex(fixtureFingerprintSource({ ...input.fixture })),
     },
     validatorCalibration: { ...input.validatorCalibration },
     commands: [...input.commands],
@@ -1075,13 +1101,14 @@ export function verifyOneA3bG1ReleaseManifest(
     pushIf(mismatches, typeof fixture.sampleSeed !== "number" || !Number.isSafeInteger(fixture.sampleSeed) || fixture.sampleSeed < 0, "sample seed is invalid");
     pushIf(
       mismatches,
-      fixture.fingerprint !== safeSha256Hex({
-        f3ManifestPath: fixture.f3ManifestPath,
-        f3ManifestSha256: fixture.f3ManifestSha256,
-        f3ManifestFingerprint: fixture.f3ManifestFingerprint,
-        fixtureSeed: fixture.fixtureSeed,
-        sampleSeed: fixture.sampleSeed,
-      }),
+      fixture.catalogPath !== undefined &&
+        (typeof fixture.catalogPath !== "string" ||
+          fixture.catalogPath.trim() === ""),
+      "F3 fixture catalog path is invalid",
+    );
+    pushIf(
+      mismatches,
+      fixture.fingerprint !== safeSha256Hex(fixtureFingerprintSource(fixture)),
       "fixture fingerprint does not match its pins",
     );
   }
