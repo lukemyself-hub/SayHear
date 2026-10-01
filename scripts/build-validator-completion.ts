@@ -32,6 +32,18 @@ async function main() {
   if (!verifyManifest(manifest).passed || sha256(catalog) !== manifest.catalog.sha256 || capture.manifestFingerprint !== manifest.fingerprint || !Array.isArray(capture.cases)) {
     throw new Error("Completion capture, catalog and manifest must belong to the same frozen run.");
   }
+  if (
+    typeof capture.gitCommit !== "string" ||
+    !/^[0-9a-f]{40}$/.test(capture.gitCommit) ||
+    capture.gitDirty !== false ||
+    capture.gitCommit !== manifest.gitCommit ||
+    capture.catalogSha256 !== manifest.catalog.sha256 ||
+    capture.pinsFingerprint !== manifest.pins.sha256
+  ) {
+    throw new Error(
+      "Completion capture was not produced by the frozen manifest's clean commit, catalog and pins.",
+    );
+  }
   if (typeof capture.capturedAt !== "string" || Number.isNaN(new Date(capture.capturedAt).getTime())) throw new Error("Completion capture has no valid execution timestamp.");
   const pin = manifest.pinnedConfiguration.roles["narrative.validate"];
   if (!pin || capture.provider !== pin.provider || capture.model !== pin.model || capture.modelSnapshot !== pin.snapshot || capture.promptVersion !== pin.promptVersion || capture.schemaVersion !== pin.schemaVersion || sha256(capture.parameters) !== sha256(pin.parameters) || capture.maxOutputTokens !== pin.parameters.maxOutputTokens) {
@@ -57,7 +69,12 @@ async function main() {
   verifyCompletionCapture({
     ledger,
     catalog,
-    root
+    root,
+    expected: {
+      catalogSha256: manifest.catalog.sha256,
+      gitCommit: manifest.gitCommit,
+      pinsFingerprint: manifest.pins.sha256,
+    },
   });
   validateValidatorLedger({
     ledger,

@@ -21,9 +21,9 @@ The original 15 run artifacts and per-file hashes were archived at `/private/tmp
 ## Current verified progress
 
 - Independent Vercel project `sayhear-g1-acceptance` (`prj_nNj1vzuYjj7oeiwzqfsV3iMb3THs`) uses Next.js and `apps/web`. Preview OAuth secret was configured by Luke; other core Preview variables have been uploaded separately.
-- Fresh acceptance databases named `sayhear_g1_acceptance_20261001_01a0f564` were created on distinct nonproduction business and Purge Marker endpoints after checking isolation from production. Migration and Owner provisioning must finish before deployment use.
-- Existing canary alias still points to the production project's old preview. Move it only after the independent G1-off deployment is Ready; the OAuth callback can stay unchanged.
-- Backup policy verification remains pending. Its configuration fingerprint is explicitly unverified; no backup evidence row has been recorded. Normal private writes must remain closed until actual backup verification passes.
+- Fresh acceptance databases named `sayhear_g1_acceptance_20261001_01a0f564` were created on distinct nonproduction business and Purge Marker endpoints after checking isolation from production. Business and marker migrations, normal GitHub Owner mapping and Self Entity provisioning are complete.
+- The canary alias now points to independent G1-off deployment `dpl_CMdz2r75BdweQuoDmogCpfCpVVPA`, Ready with commit `9db7a9c6dfe6793f173fee4bbdb67eb9de9eaf09`; normal Owner OAuth works. Production alias remains unchanged.
+- Authenticated Neon console verified both independent test projects: six-hour PITR, no snapshots or schedules, endpoints match the prepared configuration. Official Neon recovery API documents seven-day deleted-project recovery. A fresh evidence row was recorded via the existing CLI with a hashed reference; browser gate now reports Open / backup_evidence_current. Evidence: `/private/tmp/sayhear-g1-acceptance-backup-evidence.json`.
 - Production still has four v2 active pins and both G1 switches off; no production mutation has been performed.
 - Typecheck, local build, boundary and Purge inventory checks passed. Full suite against two disposable local PostgreSQL databases passed: 108 files, 1348 tests, zero failures or skips (`/private/tmp/sayhear-g1-local-final-tooling-tests.json`). Remote Neon suite timed out in migration hooks; its failed report is preserved separately.
 - New completion evidence uses `1a3b-f3-completion:v1`, `capture-verifier`, hashed raw capture and real command/attempt IDs. It is distinct from Luke's preserved ledger. Precision capture now uses Reflection with direct Evidence, keeping Bio outside G1.
@@ -32,3 +32,38 @@ The original 15 run artifacts and per-file hashes were archived at `/private/tmp
 - Candidate `g1-activation-pins.json` increases only those three output budgets to 10000, leaving Validator at 10000. The budget preflight completed Episode (4978 output / 4586 reasoning); Daily exhausted 10000; Weekly returned a schema mismatch. It is a dirty preflight, not release acceptance.
 - Reflection's existing prompt omitted mandatory Candidate envelope fields and the nested temporal object. The instruction now states the existing schema explicitly; candidate Daily/Weekly prompt versions are v4. After completing the existing Episode schema instructions as well, all four real Provider calls completed in `run/g1-schema-preflight-2`. These dirty preflights are preserved and must be rerun on the frozen commit; no Reflection semantic validator rule was changed.
 - Hosted exporter drains all Workflow pages with decrypted full data, retains every raw field and verifies execution correlation. Six-category probe planting and native diagnostic collection are still required before hosted acceptance can pass.
+
+## Independent review follow-up
+
+OpenCode code-review session `ses_f0a30a134ffeGsG450euH09Tg1` found six release-tool defects: real CLI pagination envelope loss; missing validator capture code identity; resume pin relabeling; encrypted/expired placeholders accepted; correlation checks absent from consumers; independent project and deployed target identity not enforced. Raw review: `/private/tmp/sayhear-g1-review-9db7a9c/result.txt`. These must be resolved before further freeze/activation. The bounded implementation ran in the independent local clone; Codex integrated and verified its scoped changes. Its wrapper ended with identity-validation failure on a compaction agent message, so it is not counted as successful delivery. The follow-up read-only review was interrupted by a local service restart and has been explicitly resumed.
+
+The holdout manifest core already accepts both catalog versions, but the outer builder incorrectly returned exit 1 for holdout. That redundant check has been removed; direct holdout build exits 0 and all 22 manifest tests pass. This change requires a new frozen commit.
+
+All four Provider calls completed on frozen 9db7a9c with `gitDirty=false` and `preflight=false`; capture hash `d4e5902344262b8d0430d1fd57a3e2353eee50bae703f91b87690e1ca70316b9`. This capture must be archived and replaced after follow-up code fixes, not relabeled as the next commit's evidence. A real synthetic Owner message entered the isolated deployment, and the normal inactivity window plus Recovery Scan produced a published Journal and current version. A normal Owner regenerate-Journal request was accepted; its terminal result still needs verification. Only bootstrap evidence exists; the six-category hosted canary, final manifest and production activation remain incomplete.
+
+## Follow-up verification (2026-10-01)
+
+- Corrected completion-only precision acceptance under ADR-0143; false-block counts remain recorded observations, while exact fixture coverage, schema validity and frozen capture identity remain gates.
+- Validator capture and resume now bind clean HEAD, catalog, pins and parameters. Hosted consumers share pagination, decryption, correlation and deployment checks; a content-free Owner identity endpoint binds actual deployed database targets.
+- Full regression passed 1369/1369 tests, zero failures/skips against two distinct local test databases with maxWorkers=2. Typecheck and production build passed. Boundary check found16 Workflow entries; purge inventory124tables/130indexes. Reports are under /private/tmp/sayhear-g1-review-fix-*.
+- Live locked Workflow SDK export read two actual completed runs from dpl_CMdz2r75BdweQuoDmogCpfCpVVPA, each with1step/6events. This exposed CLI project-name inference overriding an explicit project ID, and the platform rejecting1000-record pages. Exporter now seeds explicit project-name identity and uses100-record pages. Full raw decrypted bootstrap resources are retained, not promoted as complete canary proof.
+- Journal eligibility command01a0f5fc-0621-7989-a984-4b01636f3f13, runwrun_01M3TZR31S4CJT96CNFD091F90 published Journal01a0f5fc-75a5-7425-a123-0399dce9fa82/current01a0f5fc-75a5-7f09-b9a5-213ff7a716ce. Database command status remainscreated despite dispatched outbox; evaluate this separately from actual publication.
+- All follow-up changes require another freeze and new affected release evidence;9db7a9c captures cannot prove the next commit.
+
+- Formal Provider capture must run in a clean frozen clone. Add only its generated run directory to that clone's .git/info/exclude before capture; do not exempt source changes. This preserves the strict dirty check while allowing sequential captures to resume.
+- Follow-up review completed via the explicit original OpenCode session. Remaining findings led to required expected run IDs/deployment bindings, unconditional frozen precision identity, null-expiry compatibility, and live deployment identity retrieval. The identity generator now reads the deployed content-free endpoint with the existing Cron operator credential, never trusts an authored JSON identity file. Owner authentication remains unchanged for private inspection.
+
+- Post-review regression:110files/1371tests passed, no failures or skips. A sandbox-denied attempt is preserved separately; the verified rerun had access only to the two local disposable databases. Normal Journal Action regeneration ended canceled/fenced with genuine pending/running/canceled receipts; this is not successful regeneration evidence.
+
+- Final verifier now re-scans the hash-bound raw hosted export and values, enforces deployment/run-set pins, and rejects a passing summary with leaked or missing source data. Focused raw-consumer tests pass.
+- OpenCode investigation confirms the existing adapter deliberately cancels Provider error bodies; no DB routing lever produces a stable raw-error marker in the same deployment without breaking fixed G1 configurations. A scoped Preview-only, normal Owner-authenticated genuine Provider failure tool has been proposed to Luke; that scope decision is pending. No raw error or sixth probe has been invented.
+- Owner Context Inspector for generation01a0f5dd-7dd8-7a68-8c70-379b7a8e34a2 shows succeeded command/attempt, DeepSeek v4 flash, retrievalCompleted169/200ms with zero candidates/degradations. Synthetic screenshots retained under /private/tmp/sayhear-g1-hosted-*.jpg.
+
+- Final raw-consumer regression passed110files/1372tests, zero failures/skips. Latest verifier CLI replay test passes15cases, including explicit deployment/run-set command success and wrong-run failure. Credential header cleanup removes only the just-created temporary curl config, retaining response captures and old evidence.
+- OpenCode code-review configuration changed during this task: attempt004 reports actual modelopencode-go/muse-spark-1.3-contributor, not the user-described GPT-6.1 Sol. Its findings are retained as reference and checked by Codex, but are not counted as the requested GPT-6.1 review. No service/config/model edits were made by Codex.
+
+## 最新执行决定
+
+Luke 于2026-10-01明确要求跳过原始 Provider 错误探针并完成生产部署/G1开启。执行 ADR-0145 的单项豁免，不新增故障探针入口，不把该项标为通过。其余身份、确定性、隐私扫描及回滚条件继续核验。当前代码仍需冻结；新 commit 的 Provider/Validator、hosted 和功能证据尚未完成。
+
+单项豁免实现后完整回归110files/1384tests通过，零失败/跳过。完整typecheck、build、16项Workflow边界与124表/130索引purge inventory通过。正常Journal步骤增加仅含command/action IDs和固定outcome的诊断记录，供真实平台日志关联。OpenCode实现session超时且已确认终止，Codex检查了改动并独立完成上述验证。报告保留在/private/tmp/sayhear-g1-waiver-*及sayhear-g1-review-fix-tests.json。

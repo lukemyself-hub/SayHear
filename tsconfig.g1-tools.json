@@ -7,6 +7,7 @@
     "scripts/build-1a3b-g1-release-manifest.ts",
     "scripts/verify-1a3b-g1-release-manifest.ts",
     "scripts/export-hosted-workflow-canary.ts",
+    "scripts/hosted-workflow-canary-gate.ts",
     "scripts/verify-hosted-workflow-canary.ts",
     "scripts/produce-1a3b-g1-evidence.ts",
     "scripts/verify-1a3b-g1-evidence.ts",

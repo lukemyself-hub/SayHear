@@ -599,6 +599,10 @@ export {
 } from "./journal-regeneration";
 export {
   assertWorkflowHistoryCanaryClean,
+  isRawProviderErrorWaiver,
+  RAW_PROVIDER_ERROR_WAIVER,
+  RAW_PROVIDER_ERROR_WAIVER_VERSION,
+  type RawProviderErrorWaiver,
   type WorkflowCanaryArtifacts,
   type WorkflowCanaryValues,
 } from "./workflow-history-canary";

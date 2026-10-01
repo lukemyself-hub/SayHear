@@ -11,6 +11,16 @@ export function verifyCompletionCapture(input: {
   catalog: FixtureCatalog;
   root: string;
   configuration?: ModelRoleConfigurationSnapshot | undefined;
+  /**
+   * The frozen release identity the capture must have executed on. When
+   * supplied, a capture produced on another commit, catalog or pins set is
+   * refused instead of being accepted because its own header is consistent.
+   */
+  expected?: Readonly<{
+    catalogSha256: string;
+    gitCommit: string;
+    pinsFingerprint: string;
+  }> | undefined;
 }): void {
   const {
     ledger,
@@ -29,6 +39,23 @@ export function verifyCompletionCapture(input: {
   const capture = JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
   if (capture.manifestFingerprint !== ledger.manifestFingerprint || !Array.isArray(capture.cases)) {
     throw new Error("Completion capture does not belong to the frozen manifest.");
+  }
+  if (
+    typeof capture.gitCommit !== "string" ||
+    !/^[0-9a-f]{40}$/.test(capture.gitCommit) ||
+    capture.gitDirty !== false ||
+    typeof capture.catalogSha256 !== "string" ||
+    typeof capture.pinsFingerprint !== "string"
+  ) {
+    throw new Error("Completion capture does not record a clean frozen code and input identity.");
+  }
+  if (
+    input.expected &&
+    (capture.gitCommit !== input.expected.gitCommit ||
+      capture.catalogSha256 !== input.expected.catalogSha256 ||
+      capture.pinsFingerprint !== input.expected.pinsFingerprint)
+  ) {
+    throw new Error("Completion capture execution identity does not match the frozen release.");
   }
   if (input.configuration && (capture.provider !== input.configuration.provider || capture.model !== input.configuration.model || capture.modelSnapshot !== input.configuration.modelSnapshot || capture.promptVersion !== input.configuration.promptVersion || capture.schemaVersion !== input.configuration.schemaVersion || capture.maxOutputTokens !== input.configuration.parameterSnapshot.maxOutputTokens)) {
     throw new Error("Completion capture does not match the frozen role configuration.");

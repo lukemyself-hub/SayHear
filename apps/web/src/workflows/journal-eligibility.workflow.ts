@@ -38,6 +38,9 @@ async function runEligibilityStep(input: {
   expectedDataEpoch: number;
 }) {
   "use step";
+  console.info("[journal-eligibility] step started", {
+    workflowCommandId: input.workflowCommandId,
+  });
   const { randomUUID } = await import("node:crypto");
   const { runAutomaticJournal, runJournalEligibility } = await import(
     "@sayhear/application"
@@ -71,13 +74,11 @@ async function runEligibilityStep(input: {
         attemptId: evidenceAttemptId,
       });
     } catch (error) {
-      // Runtime log only (never Workflow history): the failure class was
-      // invisible during incident 2026-08-17 because the swallowed error had
-      // no log line. Name/message carry status codes and provider errors —
-      // never conversation text.
+      // Content-free execution identity links runtime diagnostics to the
+      // failed command without logging Provider bodies or arbitrary errors.
       console.error(
         "[journal-eligibility] evidence freeze threw:",
-        error instanceof Error ? `${error.name}: ${error.message}` : error,
+        { workflowCommandId: input.workflowCommandId, category: "evidence_provider_failed" },
       );
       await composition.journalRepository.recordWorkflowOutcome?.({
         dailySessionId: input.subjectId, userId: null, sourceRevision: input.sourceRevision,
@@ -106,7 +107,7 @@ async function runEligibilityStep(input: {
       } catch (error) {
         console.error(
           "[journal-eligibility] journal generation threw:",
-          error instanceof Error ? `${error.name}: ${error.message}` : error,
+          { workflowCommandId: input.workflowCommandId, category: "journal_generation_failed" },
         );
         await composition.journalRepository.recordWorkflowOutcome?.({
           dailySessionId: input.subjectId, userId: evidence.snapshot.userId, sourceRevision: input.sourceRevision,

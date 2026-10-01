@@ -22,6 +22,10 @@ async function runJournalRegenerationStep(input: {
   actionExecutionId: string;
 }) {
   "use step";
+  console.info("[journal-regeneration] step started", {
+    workflowCommandId: input.workflowCommandId,
+    actionExecutionId: input.actionExecutionId,
+  });
   const { runJournalRegenerationWorkflow } = await import(
     "@sayhear/application/journal-regeneration"
   );
@@ -30,11 +34,17 @@ async function runJournalRegenerationStep(input: {
   if (input.policyVersion !== composition.journalGenerationPolicyVersion) {
     throw new Error("Journal regeneration command policy does not match runtime policy.");
   }
-  return runJournalRegenerationWorkflow({
+  const result = await runJournalRegenerationWorkflow({
     actionRepository: composition.actionRepository,
     journalService: composition.journalService,
     workflowCommandId: input.workflowCommandId,
   });
+  console.info("[journal-regeneration] step finished", {
+    workflowCommandId: input.workflowCommandId,
+    actionExecutionId: input.actionExecutionId,
+    outcome: result.outcome,
+  });
+  return result;
 }
 
 export async function rollingSummaryWorkflow(input: {

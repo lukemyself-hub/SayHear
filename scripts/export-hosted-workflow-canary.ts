@@ -1,63 +1,85 @@
-import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
-import { assertWorkflowHistoryCanaryClean, type WorkflowCanaryArtifacts, type WorkflowCanaryValues } from "@sayhear/application";
 import { createPostgresPool } from "@sayhear/data";
-const execFileAsync = promisify(execFile);
+import {
+  assertHostedWorkflowCanaryEvidence,
+  type WorkflowCanaryArtifacts,
+  type WorkflowCanaryValues,
+} from "./hosted-workflow-canary-gate";
+
 type RecordValue = Record<string, unknown>;
 
-/** Native exports need an execution link, not merely the right deployment. */
-export function assertCanaryExportCorrelation(artifacts: WorkflowCanaryArtifacts, runIds: readonly string[]): void {
-  const databaseIds = new Set<string>();
-  const collectIds = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      value.forEach(collectIds);
-      return;
-    }
-    if (!value || typeof value !== "object") return;
-    for (const [key, nested] of Object.entries(value)) {
-      if (/(?:Id|_id)$/.test(key) && typeof nested === "string" && /^[0-9a-f-]{36}$/i.test(nested)) databaseIds.add(nested);else collectIds(nested);
-    }
-  };
-  [...artifacts.outboxPayloads, ...artifacts.receipts].forEach(collectIds);
-  // Owner IDs cannot establish that an export belongs to this execution.
-  for (const record of [...artifacts.outboxPayloads, ...artifacts.receipts]) {
-    if (record && typeof record === "object") {
-      for (const key of ["user_id", "userId", "owner_id", "ownerId"]) {
-        const value = (record as RecordValue)[key];
-        if (typeof value === "string") databaseIds.delete(value);
-      }
-    }
-  }
-  if (!databaseIds.size) throw new Error("Canary database exports have no execution identifiers.");
-  const workflowIds = new Set<string>();
-  for (const record of artifacts.workflowHistory) {
-    const run = record as RecordValue;
-    if (typeof run.runId !== "string" || !runIds.includes(run.runId) || workflowIds.has(run.runId) || ![...databaseIds].some(id => JSON.stringify(run).includes(id))) {
-      throw new Error("Canary Workflow cannot be correlated with its database execution.");
-    }
-    workflowIds.add(run.runId);
-  }
-  if (workflowIds.size !== runIds.length) throw new Error("Canary Workflow export is incomplete.");
-  const identifiers = [...databaseIds, ...runIds];
-  for (const source of ["logs", "traces", "errors"] as const) {
-    if (!artifacts[source].length || artifacts[source].some(record => !identifiers.some(id => JSON.stringify(record).includes(id)))) {
-      throw new Error(`Canary ${source} contains an uncorrelated diagnostic export.`);
-    }
-  }
-}
+/** Backwards-compatible export; the shared gate owns the correlation rule. */
+export {
+  assertCanaryExportCorrelation,
+  assertHostedWorkflowCanaryEvidence,
+  assertPreparedWorkflowPages,
+  assertWorkflowHistoryCanaryResolved,
+  type WorkflowCanaryArtifacts,
+  type WorkflowCanaryValues,
+} from "./hosted-workflow-canary-gate";
 
-/** Drain every platform page; never treat the first page as a complete export. */
-export async function collectWorkflowPages(fetchPage: (cursor?: string) => Promise<unknown>): Promise<readonly unknown[]> {
-  const records: unknown[] = [];
+type WorkflowPage<T> = Readonly<{
+  cursor: string | null;
+  data: readonly T[];
+  hasMore: boolean;
+}>;
+
+type LockedWorkflowWorld = {
+  close?: () => Promise<void>;
+  events: {
+    list: (parameters: RecordValue) => Promise<WorkflowPage<unknown>>;
+  };
+  getEncryptionKeyForRun?: (run: unknown) => Promise<Uint8Array | undefined>;
+  runs: {
+    get: (runId: string, parameters?: RecordValue) => Promise<RecordValue>;
+  };
+  steps: {
+    list: (parameters: RecordValue) => Promise<WorkflowPage<unknown>>;
+  };
+};
+
+type LockedWorkflowTools = Readonly<{
+  hydrateResourceIO: (
+    resource: unknown,
+    keyResolver: ((runId: string) => Promise<Uint8Array | undefined>) | null,
+  ) => Promise<unknown>;
+  setupCliWorld: (
+    flags: Readonly<{
+      authToken: string;
+      backend: string;
+      env: string;
+      json: boolean;
+      project: string;
+      team: string;
+      verbose: boolean;
+    }>,
+    version: string,
+  ) => Promise<LockedWorkflowWorld | null>;
+}>;
+
+const MAX_WORKFLOW_PAGE_LIMIT = 100;
+
+/**
+ * Drain every platform page; never treat the first page as a complete export.
+ * The locked Workflow SDK's list methods return a `{ data, cursor, hasMore }`
+ * envelope; the CLI's `inspect steps/events --json` drops that envelope and
+ * prints a bare array, so the array can never be read as "complete with no
+ * next page" (see tests/hosted-canary-export.test.ts).
+ */
+export async function collectWorkflowPages<T>(
+  fetchPage: (cursor?: string) => Promise<unknown>,
+): Promise<readonly T[]> {
+  const records: T[] = [];
   const seen = new Set<string>();
   let cursor: string | undefined;
   do {
     const page = (await fetchPage(cursor)) as RecordValue;
     if (!page || !Array.isArray(page.data) || typeof page.hasMore !== "boolean") throw new Error("Invalid Workflow export page.");
-    records.push(...page.data);
+    records.push(...(page.data as T[]));
     if (!page.hasMore) return records;
     if (typeof page.cursor !== "string" || !page.cursor || seen.has(page.cursor)) throw new Error("Incomplete or repeated Workflow export cursor.");
     seen.add(page.cursor);
@@ -65,9 +87,92 @@ export async function collectWorkflowPages(fetchPage: (cursor?: string) => Promi
   } while (seen.size < 1000);
   throw new Error("Workflow export exceeds the bounded page limit.");
 }
+
+/**
+ * Resolve the locked `workflow` package and its own `@workflow/cli`
+ * dependency. No new dependency is introduced: the CLI is already the
+ * declared `workflow` package's dependency, and both are resolved from the
+ * web app that pins them. Importing the CLI's world setup and hydration means
+ * pagination comes from the SDK envelope and decryption uses the exact locked
+ * code path the CLI uses, rather than re-implementing either.
+ */
+export async function loadLockedWorkflowTools(root: string): Promise<LockedWorkflowTools & { cliVersion: string }> {
+  const requireFromWeb = createRequire(resolve(root, "apps/web/package.json"));
+  const workflowRuntimePath = requireFromWeb.resolve("workflow/runtime");
+  const requireFromWorkflow = createRequire(workflowRuntimePath);
+  const setupPath = requireFromWorkflow.resolve("@workflow/cli/dist/lib/inspect/setup.js");
+  const hydrationPath = requireFromWorkflow.resolve("@workflow/cli/dist/lib/inspect/hydration.js");
+  const cliPackagePath = requireFromWorkflow.resolve("@workflow/cli/package.json");
+  // The CLI packages are ESM-only, so they must be imported, not required.
+  const setup = (await import(pathToFileURL(setupPath).href)) as RecordValue;
+  const hydration = (await import(pathToFileURL(hydrationPath).href)) as RecordValue;
+  const cliVersion = (JSON.parse(readFileSync(cliPackagePath, "utf8")) as { version?: string }).version;
+  if (typeof cliVersion !== "string" || !cliVersion) throw new Error("Locked Workflow CLI package has no version.");
+  const setupCliWorld = setup.setupCliWorld;
+  const hydrateResourceIO = hydration.hydrateResourceIO;
+  if (typeof setupCliWorld !== "function" || typeof hydrateResourceIO !== "function") {
+    throw new Error("Locked Workflow tooling does not expose the expected world setup and hydration contract.");
+  }
+  return {
+    cliVersion,
+    hydrateResourceIO: hydrateResourceIO as LockedWorkflowTools["hydrateResourceIO"],
+    setupCliWorld: setupCliWorld as LockedWorkflowTools["setupCliWorld"],
+  };
+}
+
+export async function fetchWorkflowRun(
+  world: LockedWorkflowWorld,
+  hydrateResourceIO: LockedWorkflowTools["hydrateResourceIO"],
+  runId: string,
+  expectedDeploymentId: string,
+): Promise<{ events: readonly unknown[]; run: RecordValue; steps: readonly unknown[] }> {
+  const run = await world.runs.get(runId, { resolveData: "all" });
+  if (run.runId !== runId || run.deploymentId !== expectedDeploymentId) {
+    throw new Error("Canary Workflow run does not match its deployment.");
+  }
+  const keyCache = new Map<string, Promise<Uint8Array | undefined>>();
+  const resolveKey = world.getEncryptionKeyForRun
+    ? (keyRunId: string): Promise<Uint8Array | undefined> => {
+        let cached = keyCache.get(keyRunId);
+        if (!cached) {
+          cached = world.runs
+            .get(keyRunId)
+            .then((keyRun) => world.getEncryptionKeyForRun!(keyRun));
+          keyCache.set(keyRunId, cached);
+        }
+        return cached;
+      }
+    : null;
+  const steps = await collectWorkflowPages<unknown>((cursor) =>
+    world.steps.list({
+      pagination: { cursor, limit: MAX_WORKFLOW_PAGE_LIMIT, sortOrder: "asc" },
+      resolveData: "all",
+      runId,
+    }),
+  );
+  const events = await collectWorkflowPages<unknown>((cursor) =>
+    world.events.list({
+      pagination: { cursor, limit: MAX_WORKFLOW_PAGE_LIMIT, sortOrder: "asc" },
+      resolveData: "all",
+      runId,
+    }),
+  );
+  const hydratedSteps = await Promise.all(
+    steps.map((step) => hydrateResourceIO(step, resolveKey)),
+  );
+  const hydratedEvents = await Promise.all(
+    events.map((event) => hydrateResourceIO(event, resolveKey)),
+  );
+  const hydratedRun = await hydrateResourceIO(run, resolveKey);
+  if (!hydratedRun || typeof hydratedRun !== "object" || Array.isArray(hydratedRun)) {
+    throw new Error("Workflow run hydration did not return a complete resource.");
+  }
+  return { events: hydratedEvents, run: hydratedRun as RecordValue, steps: hydratedSteps };
+}
+
 async function main() {
   const args = process.argv.slice(2);
-  const allowed = new Set(["--run-root", "--deployment-id", "--project", "--team", "--environment", "--run-ids", "--outbox-ids", "--receipt-ids", "--logs", "--traces", "--errors", "--values"]);
+  const allowed = new Set(["--run-root", "--deployment-id", "--project", "--team", "--environment", "--auth-token", "--run-ids", "--outbox-ids", "--receipt-ids", "--logs", "--traces", "--errors", "--values"]);
   const options = new Map<string, string>();
   for (let index = 0; index < args.length; index += 2) {
     const key = args[index],
@@ -96,31 +201,48 @@ async function main() {
   const deploymentId = required("--deployment-id");
   const runIds = required("--run-ids").split(",");
   if (runIds.some(id => !/^wrun_[A-Za-z0-9]+$/.test(id)) || new Set(runIds).size !== runIds.length) throw new Error("Canary run IDs must be unique platform run IDs.");
-  const inspect = async (resource: string, id: string, cursor?: string) => {
-    const flags = ["inspect", resource];
-    if (resource === "run") flags.push(id);else flags.push("--runId", id);
-    flags.push("--backend", "vercel", "--env", environment, "--project", required("--project"), "--team", required("--team"), "--json", "--withData", "--decrypt");
-    if (cursor) flags.push("--cursor", cursor);
-    const {
-      stdout
-    } = await execFileAsync(resolve(root, "apps/web/node_modules/.bin/workflow"), flags, {
-      cwd: root,
-      maxBuffer: 20_000_000,
-      timeout: 60_000
-    });
-    return JSON.parse(stdout);
-  };
+  const tools = await loadLockedWorkflowTools(root);
+  const authToken = options.get("--auth-token") ?? process.env.WORKFLOW_VERCEL_AUTH_TOKEN ?? process.env.VERCEL_TOKEN ?? "";
+  // CLI 4.3.6 otherwise infers a project name from .vercel and overwrites
+  // even an explicit project ID with the current checkout's linked project.
+  // An ID is also a valid name fallback in the locked SDK.
+  process.env.WORKFLOW_VERCEL_PROJECT_NAME = required("--project");
+  const world = await tools.setupCliWorld(
+    {
+      authToken,
+      backend: "vercel",
+      env: environment,
+      json: true,
+      project: required("--project"),
+      team: required("--team"),
+      verbose: false,
+    },
+    tools.cliVersion,
+  );
+  if (!world) throw new Error("Locked Workflow world setup did not return a Vercel world.");
+  if (process.env.WORKFLOW_VERCEL_PROJECT !== required("--project")) {
+    await world.close?.();
+    throw new Error("Workflow world resolved a different project.");
+  }
   const workflowHistory: unknown[] = [];
-  for (const runId of runIds) {
-    const run = (await inspect("run", runId)) as RecordValue;
-    if (run.runId !== runId || run.deploymentId !== deploymentId) throw new Error("Canary Workflow run does not match its deployment.");
-    const steps = await collectWorkflowPages(cursor => inspect("steps", runId, cursor));
-    const events = await collectWorkflowPages(cursor => inspect("events", runId, cursor));
-    workflowHistory.push({
-      ...run,
-      steps,
-      events
-    });
+  const completenessRuns: Record<string, { events: number; eventsComplete: true; steps: number; stepsComplete: true }> = {};
+  try {
+    for (const runId of runIds) {
+      const fetched = await fetchWorkflowRun(world, tools.hydrateResourceIO, runId, deploymentId);
+      workflowHistory.push({
+        ...fetched.run,
+        steps: fetched.steps,
+        events: fetched.events
+      });
+      completenessRuns[runId] = {
+        events: fetched.events.length,
+        eventsComplete: true,
+        steps: fetched.steps.length,
+        stepsComplete: true,
+      };
+    }
+  } finally {
+    await world.close?.();
   }
   const pool = createPostgresPool({
     applicationName: "sayhear-canary-export",
@@ -157,6 +279,11 @@ async function main() {
     return raw;
   };
   const artifacts: WorkflowCanaryArtifacts = {
+    completeness: {
+      runs: completenessRuns,
+      version: "1a3b-hosted-canary-completeness:v1",
+      workflowRuns: workflowHistory.length,
+    },
     workflowHistory,
     outboxPayloads,
     receipts,
@@ -165,8 +292,10 @@ async function main() {
     errors: await load("--errors")
   };
   const values = JSON.parse(await readFile(resolve(root, required("--values")), "utf8")) as WorkflowCanaryValues;
-  assertCanaryExportCorrelation(artifacts, runIds);
-  assertWorkflowHistoryCanaryClean(artifacts, values);
+  // One shared gate: unresolved/expired placeholder data, probes, correlation,
+  // page completeness and deployment identity all fail closed before anything
+  // is written to the run root.
+  assertHostedWorkflowCanaryEvidence(artifacts, values, { deploymentId, runIds });
   const output = resolve(runRoot, "hosted-canary");
   await mkdir(output, {
     recursive: true,

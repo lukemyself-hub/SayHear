@@ -9,7 +9,7 @@ import {
   ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
   type OneA3bG1Evidence,
 } from "@sayhear/application";
-import { verifyValidatorPrecisionReportArtifact } from "../scripts/verify-1a3b-g1-evidence";
+import { verifyValidatorPrecisionReport, verifyValidatorPrecisionReportArtifact } from "../scripts/verify-1a3b-g1-evidence";
 import {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   verifyOneA3bF3ReleaseArtifacts,
@@ -26,6 +26,22 @@ function readFixture(path: string): Record<string, any> {
 }
 
 describe("1A.3b G1 evidence lineage", () => {
+  it("rejects precision captures from dirty or different code and missing execution identities", () => {
+    const expectedCapture = { gitCommit: "a".repeat(40), catalogSha256: "catalog", pinsFingerprint: "pins" };
+    const report = {
+      ...expectedCapture, gitDirty: false,
+      version: "1a3b-f3-validator-precision-report:v1", manifestFingerprint: "manifest",
+      cases: ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.map(fixtureId => ({
+        fixtureId, outcome: "completed", verdict: "blocked", blockingFindingCodes: ["unsupported"],
+        generationCommandId: `command-${fixtureId}`, modelRunAttemptId: `attempt-${fixtureId}`,
+      })),
+    };
+    const input = { report, manifestFingerprint: "manifest", expectedCapture };
+    expect(verifyValidatorPrecisionReport(input)).toEqual({ totalCases: 6, falseBlockingCases: 6 });
+    expect(() => verifyValidatorPrecisionReport({ ...input, report: { ...report, gitDirty: true } })).toThrow("frozen code");
+    expect(() => verifyValidatorPrecisionReport({ ...input, report: { ...report, gitCommit: "b".repeat(40) } })).toThrow("frozen code");
+    expect(() => verifyValidatorPrecisionReport({ ...input, report: { ...report, cases: report.cases.map(entry => ({ ...entry, modelRunAttemptId: null })) } })).toThrow("command/attempt");
+  });
   it("binds holdout precision IDs to the supplied frozen catalog without renaming results", () => {
     const manifestFingerprint = `sha256:${"c".repeat(64)}`;
     const expectedFixtureIds = ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.map((id) => `holdout-${id}`);
@@ -38,7 +54,7 @@ describe("1A.3b G1 evidence lineage", () => {
     expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint, expectedFixtureIds: Array(6).fill(expectedFixtureIds[0])})).toThrow("six unique");
   });
 
-  it("requires every frozen precision case exactly once with zero false blocks", () => {
+  it("requires every frozen precision case exactly once and records semantic findings without blocking", () => {
     const manifestFingerprint = `sha256:${"c".repeat(64)}`;
     const report = {
       version: "1a3b-f3-validator-precision-report:v1",
@@ -91,7 +107,7 @@ describe("1A.3b G1 evidence lineage", () => {
         ),
       }),
     );
-    expect(() =>
+    expect(
       verifyValidatorPrecisionReportArtifact({
         bytes: falseBlockBytes,
         expectedSha256: createHash("sha256")
@@ -99,7 +115,7 @@ describe("1A.3b G1 evidence lineage", () => {
           .digest("hex"),
         manifestFingerprint,
       }),
-    ).toThrow("1 false-blocking verdict");
+    ).toEqual({ falseBlockingCases: 1, totalCases: 6 });
   });
 
   it("verifies the checked-in F3 synthetic catalog, pins, and validator ledger shape", () => {

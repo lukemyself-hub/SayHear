@@ -16,6 +16,10 @@ function fixture(verdict = "blocked") {
   roots.push(root);
   const capture = {
     manifestFingerprint: "sha256:test",
+    gitCommit: "a".repeat(40),
+    gitDirty: false,
+    catalogSha256: "sha256:catalog",
+    pinsFingerprint: "sha256:pins",
     cases: [{
       fixtureId: "case-1",
       outcome: "completed",
@@ -99,5 +103,43 @@ describe("G1 completion evidence", () => {
         }]
       }
     })).toThrow("inconsistent");
+  });
+  it("rejects a capture whose recorded execution identity is dirty or incomplete", () => {
+    const input = fixture();
+    const rewrite = (patch: Record<string, unknown>) => {
+      const bytes = Buffer.from(JSON.stringify({ ...input.capture, ...patch }));
+      writeFileSync(join(input.root, "capture.json"), bytes);
+      return {
+        ...input,
+        ledger: {
+          ...input.ledger,
+          captureSha256: createHash("sha256").update(bytes).digest("hex")
+        }
+      };
+    };
+    expect(() => verifyCompletionCapture(rewrite({ gitDirty: true }))).toThrow("clean frozen");
+    expect(() => verifyCompletionCapture(rewrite({ gitCommit: undefined }))).toThrow("clean frozen");
+    expect(() => verifyCompletionCapture(rewrite({ pinsFingerprint: undefined }))).toThrow("clean frozen");
+  });
+  it("refuses a capture produced on another commit, catalog or pins", () => {
+    const input = fixture();
+    const expected = {
+      catalogSha256: "sha256:catalog",
+      gitCommit: "a".repeat(40),
+      pinsFingerprint: "sha256:pins",
+    };
+    expect(() => verifyCompletionCapture({ ...input, expected })).not.toThrow();
+    expect(() =>
+      verifyCompletionCapture({
+        ...input,
+        expected: { ...expected, gitCommit: "b".repeat(40) },
+      }),
+    ).toThrow("does not match the frozen release");
+    expect(() =>
+      verifyCompletionCapture({
+        ...input,
+        expected: { ...expected, pinsFingerprint: "sha256:other" },
+      }),
+    ).toThrow("does not match the frozen release");
   });
 });

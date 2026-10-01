@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -60,9 +61,10 @@ function required(arguments_: readonly string[], index: number, name: string): s
   return value;
 }
 
-function parseArguments(): { catalog: string; continueOnError: boolean; manifest: string; only: string; out: string; pins: string; precision: boolean; resume: boolean } {
+function parseArguments(): { allowDirty: boolean; catalog: string; continueOnError: boolean; manifest: string; only: string; out: string; pins: string; precision: boolean; resume: boolean } {
   const arguments_ = process.argv.slice(2);
   const values = {
+    allowDirty: false,
     catalog: "eval/continuation-acceptance-1a3b/fixtures.json",
     continueOnError: false,
     manifest: "eval/continuation-acceptance-1a3b/run/manifest.json",
@@ -74,7 +76,8 @@ function parseArguments(): { catalog: string; continueOnError: boolean; manifest
   };
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
-    if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
+    if (argument === "--allow-dirty") values.allowDirty = true;
+    else if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
     else if (argument === "--continue-on-error") values.continueOnError = true;
     else if (argument === "--manifest") values.manifest = required(arguments_, ++index, argument);
     else if (argument === "--only") values.only = required(arguments_, ++index, argument);
@@ -171,6 +174,73 @@ export function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsF
   };
 }
 
+type CaptureIdentity = Readonly<{
+  catalogSha256: string;
+  gitCommit: string;
+  gitDirty: boolean;
+  pinsFingerprint: string;
+}>;
+
+const repositoryRoot = resolve(import.meta.dirname, "../..");
+
+/** The exact checkout a formal capture must execute, not merely claim. */
+function gitIdentity(): { gitCommit: string; gitDirty: boolean } {
+  const gitCommit = execFileSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+  const gitDirty =
+    execFileSync("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+      encoding: "utf8",
+    }).trim().length > 0;
+  if (!/^[0-9a-f]{40}$/.test(gitCommit)) {
+    throw new Error("Capture did not resolve a full 40-character git commit.");
+  }
+  return { gitCommit, gitDirty };
+}
+
+/**
+ * A resumed report may only reuse completed cases that were produced by the
+ * same code and the same frozen pins. The report header is the case's
+ * provenance: if any identity field differs, the old cases must not be
+ * carried forward under a rewritten header. This refuses rather than
+ * relabeling, so a cheaper pin set cannot be re-attributed to the release pin.
+ */
+export function assertResumeIdentity(
+  previous: Record<string, unknown>,
+  current: CaptureIdentity &
+    Readonly<{
+      configuration: ModelRoleConfigurationSnapshot;
+      parameters: unknown;
+    }>,
+): void {
+  const expected: Record<string, unknown> = {
+    catalogSha256: current.catalogSha256,
+    configVersion: current.configuration.configVersion,
+    gitCommit: current.gitCommit,
+    gitDirty: false,
+    maxOutputTokens: current.configuration.parameterSnapshot.maxOutputTokens ?? null,
+    model: current.configuration.model,
+    modelSnapshot: current.configuration.modelSnapshot,
+    pinsFingerprint: current.pinsFingerprint,
+    promptVersion: current.configuration.promptVersion,
+    provider: current.configuration.provider,
+    providerCallBudget: current.configuration.maxTechnicalRetries + 1,
+    schemaVersion: current.configuration.schemaVersion,
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (previous[key] !== value) {
+      throw new Error(
+        `Resume report ${key} does not match the current capture identity; refusing to relabel completed cases.`,
+      );
+    }
+  }
+  if (sha256(previous.parameters) !== sha256(current.parameters)) {
+    throw new Error(
+      "Resume report parameters do not match the current capture pin; refusing to relabel completed cases.",
+    );
+  }
+}
+
 async function main(): Promise<void> {
   if (!testDatabaseUrl) throw new Error("TEST_DATABASE_URL is required (isolated capture schema).");
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required (pinned provider is deepseek).");
@@ -189,6 +259,21 @@ async function main(): Promise<void> {
   const narrativeConfiguration = configurations.find(
     (configuration) => configuration.role === "narrative.validate",
   )!;
+  const pinsFingerprint = sha256(pins as unknown as Record<string, unknown>);
+  const catalogSha256 = sha256(catalog as unknown as Record<string, unknown>);
+  const identity = gitIdentity();
+  if (identity.gitDirty && !arguments_.allowDirty) {
+    throw new Error(
+      "Formal validator capture requires a clean checkout at the frozen commit; use --allow-dirty only for non-evidence diagnostics.",
+    );
+  }
+  const captureIdentity = {
+    catalogSha256,
+    gitCommit: identity.gitCommit,
+    gitDirty: identity.gitDirty,
+    parameters: pins.roles["narrative.validate"]!.parameters,
+    pinsFingerprint,
+  };
   const providers = createRuntimeOneA3bRoleProviders({
     adapters: [{ provider: "deepseek", baseUrl, apiKey, timeoutMs: 120_000 }],
     configurations,
@@ -359,13 +444,17 @@ async function main(): Promise<void> {
       try {
         const previous = JSON.parse(
           await readFile(resolve(arguments_.out), "utf8"),
-        ) as {
+        ) as Record<string, unknown> & {
           cases: typeof results;
           manifestFingerprint: string;
         };
         if (previous.manifestFingerprint !== manifest.fingerprint) {
           throw new Error("Previous verdicts do not belong to the supplied manifest.");
         }
+        // The manifest fingerprint is not enough: a previous run with the same
+        // manifest but a different pins/code identity must not be reused under
+        // the current header.
+        assertResumeIdentity(previous, { ...captureIdentity, configuration: narrativeConfiguration });
         for (const entry of previous.cases) {
           // A report resumed from before #252 has no recorded cause; keep the
           // per-case shape uniform so the frozen artifact stays comparable.
@@ -490,6 +579,13 @@ async function main(): Promise<void> {
             ? "1a3b-f3-validator-precision-report:v1"
             : "1a3b-f3-validator-machine-verdicts:v1",
           manifestFingerprint: manifest.fingerprint,
+          // The capture binds the code and frozen inputs it actually ran on, so
+          // a completion builder can refuse a capture whose provenance is not
+          // the frozen manifest's commit/catalog/pins identity.
+          gitCommit: captureIdentity.gitCommit,
+          gitDirty: captureIdentity.gitDirty,
+          catalogSha256,
+          pinsFingerprint,
           capturedAt: new Date().toISOString(),
           provider: narrativeConfiguration.provider,
           model: narrativeConfiguration.model,

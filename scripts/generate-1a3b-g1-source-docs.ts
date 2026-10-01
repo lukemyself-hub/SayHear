@@ -1,33 +1,123 @@
+import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { createPostgresPool } from "@sayhear/data";
 
 import {
+  isRawProviderErrorWaiver,
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
   ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
   ONE_A_3B_ROLE_POLICY_VERSION,
   PURGE_SURFACE_REGISTRY_VERSION,
   sha256Hex,
-  assertWorkflowHistoryCanaryClean,
+} from "@sayhear/application";
+import {
+  assertHostedWorkflowCanaryEvidence,
   type WorkflowCanaryArtifacts,
   type WorkflowCanaryValues,
-} from "@sayhear/application";
+} from "./hosted-workflow-canary-gate";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = resolve(import.meta.dirname, "..");
+
+/**
+ * The independent hosted acceptance environment approved for G1. ADR-0144
+ * requires the reviewed Vercel project and team to be named inputs rather than
+ * an implicit production default, so a Ready Preview inside the production
+ * project cannot be reclassified as isolated acceptance evidence.
+ */
+export const APPROVED_ACCEPTANCE_PROJECT_ID = "prj_nNj1vzuYjj7oeiwzqfsV3iMb3THs";
+export const APPROVED_ACCEPTANCE_TEAM_ID = "team_h4sAgEsoM7MeGcGoLdbuIyH1";
+export const PRODUCTION_PROJECT_ID = "prj_KJD7fJhlIxlOMc4W4goUsIhOaLly";
+export const HOSTED_RELEASE_IDENTITY_VERSION = "1a3b-g1-hosted-release-identity:v1";
+
+/** Vercel's API uses target=null for ordinary Preview deployments. */
+export function deploymentEnvironment(raw: Record<string, unknown>): string {
+  if (raw.target === null && !raw.customEnvironment) return "preview";
+  if (raw.target === "production") return "production";
+  throw new Error("Hosted deployment has no ordinary preview/production target identity.");
+}
+
+/** Normalize a Postgres URL to a credential-free target identity. */
+export function normalizeDatabaseIdentity(value: string): string {
+  const url = new URL(value);
+  return `${url.hostname.replace(/-pooler(?=\.)/, "")}:${url.port || "5432"}${url.pathname}`;
+}
+
+/** Reject any deployment that is not the approved isolated acceptance project. */
+export function assertApprovedAcceptanceDeployment(input: Readonly<{
+  deploymentCommit: unknown;
+  environment: unknown;
+  expectedCommit: unknown;
+  projectId: unknown;
+  teamId?: unknown;
+}>): void {
+  if (input.projectId === PRODUCTION_PROJECT_ID) {
+    throw new Error("Hosted acceptance must not be the production Vercel project.");
+  }
+  if (input.projectId !== APPROVED_ACCEPTANCE_PROJECT_ID) {
+    throw new Error("Hosted acceptance deployment is not in the approved acceptance project.");
+  }
+  if (input.teamId !== APPROVED_ACCEPTANCE_TEAM_ID) {
+    throw new Error("Hosted acceptance deployment is not in the approved acceptance team.");
+  }
+  if (input.environment !== "preview") {
+    throw new Error("Hosted acceptance deployment must be a preview deployment, not production.");
+  }
+  if (input.deploymentCommit !== input.expectedCommit) {
+    throw new Error("Hosted deployment commit does not match the frozen F3 manifest.");
+  }
+}
+
+/**
+ * Verify the content-free release identity the acceptance deployment reports
+ * about itself. This binds the deployment's actual business and purge-marker
+ * targets to the frozen commit, rather than trusting the generator process's
+ * environment variables, which cannot prove what the deployment uses.
+ */
+export function assertDeploymentReleaseIdentity(input: Readonly<{
+  businessTargetHash: string;
+  expectedCommit: string;
+  identity: unknown;
+  purgeMarkerTargetHash: string;
+}>): void {
+  if (!isRecord(input.identity)) {
+    throw new Error("Hosted release identity must be a content-free object.");
+  }
+  const identity = input.identity;
+  if (identity.version !== HOSTED_RELEASE_IDENTITY_VERSION) {
+    throw new Error("Hosted release identity has an unsupported version.");
+  }
+  if (identity.projectId !== APPROVED_ACCEPTANCE_PROJECT_ID) {
+    throw new Error("Hosted release identity is not the approved acceptance project.");
+  }
+  if (identity.teamId !== APPROVED_ACCEPTANCE_TEAM_ID || identity.environment !== "preview") {
+    throw new Error("Hosted release identity is not the approved acceptance team.");
+  }
+  if (identity.commit !== input.expectedCommit) {
+    throw new Error("Hosted release identity commit does not match the frozen F3 manifest.");
+  }
+  if (identity.businessTargetHash !== input.businessTargetHash) {
+    throw new Error("Hosted deployment business database does not match the checked acceptance database.");
+  }
+  if (identity.purgeMarkerTargetHash !== input.purgeMarkerTargetHash) {
+    throw new Error("Hosted deployment purge-marker database does not match the checked acceptance database.");
+  }
+}
+
 export function parseSourceOptions(args: readonly string[]) {
-  const allowed = new Set(["--run-root", "--catalog", "--pins", "--deployment-id"]);
+  const allowed = new Set(["--run-root", "--catalog", "--pins", "--deployment-id", "--release-identity", "--expected-run-ids"]);
   const values = new Map<string, string>();
   for (let index = 0; index < args.length; index += 2) {
     const name = args[index];
     const value = args[index + 1];
     if (!name || !allowed.has(name) || !value || value.startsWith("--") || values.has(name)) {
-      throw new Error("Expected unique --run-root, --catalog, --pins and --deployment-id arguments.");
+      throw new Error("Expected unique --run-root, --catalog, --pins, --deployment-id and --release-identity arguments.");
     }
     values.set(name, value);
   }
@@ -53,6 +143,12 @@ export function parseSourceOptions(args: readonly string[]) {
     catalogPath: localPath("--catalog"),
     pinsPath: localPath("--pins"),
     deploymentId: required("--deployment-id"),
+    releaseIdentityPath: localPath("--release-identity"),
+    expectedRunIds: (() => {
+      const ids = required("--expected-run-ids").split(",");
+      if (ids.some(id => !/^wrun_[A-Za-z0-9]+$/.test(id)) || new Set(ids).size !== ids.length) throw new Error("Expected run IDs must be unique platform IDs.");
+      return ids;
+    })(),
   };
 }
 
@@ -66,6 +162,8 @@ let hostedArtifactPath: string;
 let hostedValuesPath: string;
 let deploymentPath: string;
 let requestedDeploymentId: string;
+let releaseIdentityPath: string;
+let expectedRunIds: readonly string[];
 
 type JsonObject = Record<string, unknown>;
 
@@ -378,6 +476,8 @@ async function migrationPins(directory: string): Promise<readonly JsonObject[]> 
 }
 
 async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonly<{ deployment: JsonObject; reference: ArtifactReference }>> {
+  const frozenCommit = f3Manifest.gitCommit;
+  if (typeof frozenCommit !== "string") throw new Error("Frozen F3 manifest has no git commit.");
   const deploymentId = requestedDeploymentId;
   const { stdout } = await execFileAsync(
     "vercel",
@@ -396,9 +496,16 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
   if (raw.readyState !== "READY" || (metadata.gitDirty !== undefined && String(metadata.gitDirty) !== "0")) {
     throw new Error("Release evidence requires a Ready deployment from a clean checkout.");
   }
-  if (deploymentCommit !== f3Manifest.gitCommit) {
-    throw new Error("Hosted deployment commit does not match the frozen F3 manifest.");
-  }
+  // Bind the reviewed acceptance project/team explicitly and reject the
+  // production project: a Ready Preview inside production is not isolated
+  // acceptance evidence (ADR-0144).
+  assertApprovedAcceptanceDeployment({
+    deploymentCommit,
+    environment: deploymentEnvironment(raw),
+    expectedCommit: frozenCommit,
+    projectId: raw.projectId,
+    teamId: raw.teamId ?? raw.ownerId ?? metadata.teamId,
+  });
   const migrationPinsValue = await migrationPins(
     resolve(repositoryRoot, "packages/data/migrations"),
   );
@@ -407,8 +514,36 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
   const markerUrl = process.env.TEST_PURGE_MARKER_DATABASE_URL;
   const productionUrl = process.env.DATABASE_URL;
   if (!databaseUrl || !markerUrl || !productionUrl) throw new Error("Isolated hosted database targets and production identity are required.");
-  const identity = (value: string) => { const url = new URL(value); return `${url.hostname.replace(/-pooler(?=\.)/, "")}:${url.port || "5432"}${url.pathname}`; };
-  if (new Set([databaseUrl, markerUrl, productionUrl].map(identity)).size !== 3) throw new Error("Hosted schema checks require distinct business, marker and production databases.");
+  const businessDatabaseIdentityFingerprint = sha256Hex(normalizeDatabaseIdentity(databaseUrl));
+  const purgeMarkerDatabaseIdentityFingerprint = sha256Hex(normalizeDatabaseIdentity(markerUrl));
+  if (new Set([databaseUrl, markerUrl, productionUrl].map(normalizeDatabaseIdentity)).size !== 3) throw new Error("Hosted schema checks require distinct business, marker and production databases.");
+  // The CLI process environment only says which database *this* process would
+  // use; it cannot prove what the deployment actually uses. Read the
+  // content-free identity the deployment reports about itself and bind it to
+  // the checked targets.
+  // Fetch from the selected deployment through Vercel's authenticated CLI.
+  // Never accept an operator-authored file as deployed database identity.
+  const operatorSecret = process.env.CRON_SECRET;
+  if (!operatorSecret || /[\r\n"\\]/.test(operatorSecret)) throw new Error("Acceptance CRON_SECRET is required for the content-free deployment witness.");
+  const privateDirectory = await mkdtemp(resolve(tmpdir(), "sayhear-g1-identity-"));
+  const headerPath = resolve(privateDirectory, "curl.conf");
+  await writeFile(headerPath, `header = "Authorization: Bearer ${operatorSecret}"\n`, { mode: 0o600 });
+  const responsePath = resolve(privateDirectory, "identity.json");
+  try {
+    await execFileAsync("vercel", ["curl", "/api/internal/inspection/release-identity", "--deployment", deploymentId, "--", "--config", headerPath, "--silent", "--show-error", "--fail-with-body", "--max-time", "30", "--output", responsePath], { cwd: repositoryRoot, maxBuffer: 100000, timeout: 45000 });
+  } finally {
+    // Only remove the just-created credential transport file. Preserve the
+    // response capture and every pre-existing evidence directory.
+    await unlink(headerPath);
+  }
+  const releaseIdentity = await readJson(responsePath);
+  await writeFile(releaseIdentityPath, `${JSON.stringify({ ...releaseIdentity, fetchedAt: new Date().toISOString(), deploymentId, sourceUrl: `https://${raw.url}/api/internal/inspection/release-identity` }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  assertDeploymentReleaseIdentity({
+    businessTargetHash: businessDatabaseIdentityFingerprint,
+    expectedCommit: frozenCommit,
+    identity: releaseIdentity,
+    purgeMarkerTargetHash: purgeMarkerDatabaseIdentityFingerprint,
+  });
   const inspectSchema = async (connectionString: string, expected: readonly JsonObject[]) => {
     const pool = createPostgresPool({ applicationName: "sayhear-g1-hosted-schema-verifier", connectionString });
     try {
@@ -428,11 +563,14 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
     gitDirty: metadata.gitDirty,
     f3ManifestFingerprint: f3Manifest.fingerprint,
     projectId: raw.projectId,
+    teamId: releaseIdentity.teamId ?? raw.teamId ?? metadata.teamId,
+    environment: deploymentEnvironment(raw),
+    releaseIdentityVersion: releaseIdentity.version,
     readyState: raw.readyState,
     schemaFingerprint,
     purgeMarkerSchemaFingerprint,
-    businessDatabaseIdentityFingerprint: sha256Hex(identity(databaseUrl)),
-    purgeMarkerDatabaseIdentityFingerprint: sha256Hex(identity(markerUrl)),
+    businessDatabaseIdentityFingerprint,
+    purgeMarkerDatabaseIdentityFingerprint,
     target: raw.target,
     url: raw.url,
   } satisfies JsonObject;
@@ -494,6 +632,8 @@ async function main(): Promise<void> {
   const options = parseSourceOptions(process.argv.slice(2));
   ({ runRoot, catalogPath, pinsPath } = options);
   requestedDeploymentId = options.deploymentId;
+  releaseIdentityPath = options.releaseIdentityPath;
+  expectedRunIds = options.expectedRunIds;
   sourceDirectory = resolve(runRoot, "evidence-sources");
   sourceArtifactDirectory = resolve(runRoot, "source-artifacts");
   f3ManifestPath = resolve(runRoot, "manifest.json");
@@ -507,9 +647,13 @@ async function main(): Promise<void> {
   const pins = await readJson(pinsPath);
   const hostedArtifacts = await readJson(hostedArtifactPath);
   const hostedValues = await readJson(hostedValuesPath);
-  assertWorkflowHistoryCanaryClean(
+  // Same shared gate the exporter and verifier run, so a hand-assembled or
+  // truncated artifacts.json cannot be consumed here just because its strings
+  // happen not to match a probe.
+  assertHostedWorkflowCanaryEvidence(
     hostedArtifacts as WorkflowCanaryArtifacts,
     hostedValues as WorkflowCanaryValues,
+    { deploymentId: requestedDeploymentId, runIds: expectedRunIds },
   );
   if (
     !Array.isArray(catalog.scenarios) ||
@@ -572,7 +716,7 @@ async function main(): Promise<void> {
     throw new Error("Hosted canary does not contain workflow, outbox, and attempt IDs.");
   }
 
-  const hostedVerification = `node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts ${repositoryRelative(hostedArtifactPath)} --values ${repositoryRelative(hostedValuesPath)}`;
+  const hostedVerification = `node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts ${repositoryRelative(hostedArtifactPath)} --values ${repositoryRelative(hostedValuesPath)} --deployment-id ${requestedDeploymentId} --expected-run-ids ${expectedRunIds.join(",")}`;
   const providerCommand = `node --import tsx scripts/capture-g1-role-provider-calls.ts --pins ${repositoryRelative(pinsPath)} --manifest ${repositoryRelative(f3ManifestPath)} --catalog ${repositoryRelative(catalogPath)} --out ${repositoryRelative(capturePath)}`;
   const commonVerification = "pnpm exec vitest run --reporter=json";
   const sourceArtifacts: Record<string, ArtifactReference> = {};
@@ -753,6 +897,11 @@ async function main(): Promise<void> {
     verificationCommand: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts",
   });
 
+  // ADR-0145: disclose the one named acceptance gap instead of claiming the
+  // raw Provider error probe passed.
+  const skippedChecks = hostedValues.rawProviderError === null && isRawProviderErrorWaiver(hostedValues.rawProviderErrorWaiver)
+    ? [hostedValues.rawProviderErrorWaiver]
+    : [];
   await add({
     criterion: "AC-W01",
     fixtureIds: continuationFixtureIds,
@@ -761,11 +910,14 @@ async function main(): Promise<void> {
       hosted: true,
       canaryRunId: attemptIds[0],
       exportArtifact: hosted,
+      canaryValuesArtifact: await reference(hostedValuesPath),
+      expectedRunIds,
       deploymentId: workflowHistory[0]?.deploymentId,
+      skippedChecks,
     },
     runId: attemptIds[0]!,
     source: "hosted",
-    references: [hosted],
+    references: [hosted, await reference(hostedValuesPath)],
     verificationCommand: hostedVerification,
   });
 

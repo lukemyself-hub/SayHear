@@ -34,6 +34,7 @@ import {
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
   buildG1ReleaseIdentityFingerprint,
+  isRawProviderErrorWaiver,
   verifyOneA3bF3ReleaseArtifacts,
   verifyOneA3bG1EvidenceArtifact,
   verifyOneA3bG1RoleConfigurationsAgainstF3,
@@ -42,6 +43,7 @@ import {
   type OneA3bG1Evidence,
   type OneA3bG1EvidenceSource,
   type OneA3bG1ValidatorCalibration,
+  type RawProviderErrorWaiver,
 } from "@sayhear/application";
 
 import {
@@ -86,6 +88,8 @@ type Options = Readonly<{
   hardGatePath: string;
   hostedArtifactPath: string;
   hostedValuesPath: string;
+  deploymentId: string;
+  expectedRunIds: readonly string[];
 }>;
 
 type ReadDocument = Readonly<{
@@ -130,6 +134,11 @@ type HostedCanaryCheck = Readonly<{
   note: string | null;
   passed: boolean;
   path: string;
+  /**
+   * ADR-0145 acceptance gaps disclosed by name. Empty when no probe was
+   * skipped; never a claim that a skipped probe passed.
+   */
+  skippedChecks?: readonly RawProviderErrorWaiver[];
 }>;
 
 type SourceEvidence = Readonly<{
@@ -246,6 +255,8 @@ export function parseOptions(arguments_: readonly string[]): Options {
     "--hard-gates",
     "--hosted-artifacts",
     "--hosted-values",
+    "--deployment-id",
+    "--expected-run-ids",
   ]);
   const seenFlags = new Set<string>();
   for (let index = 0; index < arguments_.length; index += 2) {
@@ -262,7 +273,12 @@ export function parseOptions(arguments_: readonly string[]): Options {
   if (runRoot.replace(/\/$/, "") === "eval/continuation-acceptance-1a3b/run") throw new Error("Use an independent run directory; the historical run root is protected.");
   repositoryPath(runRoot, "run root");
   const runPath = (name: string) => `${runRoot}/${name}`;
+  const deploymentId = option(arguments_, "--deployment-id", "");
+  const expectedRunIds = option(arguments_, "--expected-run-ids", "").split(",");
+  if (!deploymentId || expectedRunIds.some(id => !/^wrun_[A-Za-z0-9]+$/.test(id)) || new Set(expectedRunIds).size !== expectedRunIds.length) throw new Error("--deployment-id and unique --expected-run-ids are required.");
   return {
+    deploymentId,
+    expectedRunIds,
     catalogPath,
     f3ManifestPath: option(
       arguments_,
@@ -487,6 +503,11 @@ async function validatorCheck(
   precisionReportDocument: ReadDocument,
   manifestFingerprint: string | null,
   configuration: ModelRoleConfigurationSnapshot | undefined,
+  expectedIdentity: Readonly<{
+    catalogSha256: string;
+    gitCommit: string;
+    pinsFingerprint: string;
+  }> | undefined,
 ): Promise<ValidatorCheck> {
   const ledgerSha256 = ledgerDocument.bytes
     ? sha256Bytes(ledgerDocument.bytes)
@@ -519,7 +540,7 @@ async function validatorCheck(
   const catalog = catalogDocument.value as FixtureCatalog;
   const ledger = ledgerDocument.value as ValidatorAdjudicationLedger;
   try {
-    verifyCompletionCapture({ ledger, catalog, root: repositoryRoot, configuration });
+    verifyCompletionCapture({ ledger, catalog, root: repositoryRoot, configuration, expected: expectedIdentity });
     const summary = validateValidatorLedger({ catalog, ledger });
     const decidedAt = objectString(ledger, "decidedAt");
     if (!decidedAt || Number.isNaN(new Date(decidedAt).getTime())) {
@@ -548,6 +569,8 @@ async function validatorCheck(
       report: precisionReportDocument.value,
       manifestFingerprint,
       expectedFixtureIds: catalog.precisionDrafts?.map((draft) => draft.id),
+      expectedCapture: expectedIdentity,
+      configuration,
     });
     return {
       acceptedCases: summary.accepted,
@@ -702,6 +725,8 @@ function findWorkflowRunId(value: unknown): string | null {
 async function hostedCanaryCheck(
   artifactValue: string,
   valuesValue: string,
+  deploymentId: string,
+  expectedRunIds: readonly string[],
 ): Promise<HostedCanaryCheck> {
   let artifactPath: string;
   let valuesPath: string;
@@ -754,7 +779,6 @@ async function hostedCanaryCheck(
     "actionPayload",
     "contentHmac",
     "privateBody",
-    "rawProviderError",
     "renderedPrompt",
     "secret",
   ];
@@ -762,9 +786,35 @@ async function hostedCanaryCheck(
     return {
       artifactSha256: sha256Bytes(artifactBytes),
       canaryRunId: null,
+      note: "Hosted canary values must contain the five non-skipped non-empty configured values.",
+      passed: false,
+      path: relativeRepositoryPath(artifactPath),
+    };
+  }
+  // ADR-0145: raw_provider_error may be null only under the typed waiver; a
+  // non-null value is always scanned by the shared gate, waiver or not. The
+  // report names the skipped check instead of claiming it passed.
+  const skippedChecks: RawProviderErrorWaiver[] = [];
+  if (values.rawProviderError === null) {
+    if (!isRawProviderErrorWaiver(values.rawProviderErrorWaiver)) {
+      return {
+        artifactSha256: sha256Bytes(artifactBytes),
+        canaryRunId: null,
+        note: "Hosted canary raw Provider error is null without the approved ADR-0145 waiver.",
+        passed: false,
+        path: relativeRepositoryPath(artifactPath),
+        skippedChecks,
+      };
+    }
+    skippedChecks.push(values.rawProviderErrorWaiver);
+  } else if (!nonEmptyString(values.rawProviderError)) {
+    return {
+      artifactSha256: sha256Bytes(artifactBytes),
+      canaryRunId: null,
       note: "Hosted canary values must contain all six non-empty configured values.",
       passed: false,
       path: relativeRepositoryPath(artifactPath),
+      skippedChecks,
     };
   }
   let artifacts: unknown;
@@ -797,6 +847,8 @@ async function hostedCanaryCheck(
         cwd: repositoryRoot,
         env: {
           ...process.env,
+          SAYHEAR_WORKFLOW_CANARY_DEPLOYMENT_ID: deploymentId,
+          SAYHEAR_WORKFLOW_CANARY_RUN_IDS: expectedRunIds.join(","),
           SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE: artifactPath,
           SAYHEAR_WORKFLOW_CANARY_VALUES: JSON.stringify(values),
         },
@@ -812,6 +864,7 @@ async function hostedCanaryCheck(
       note: error instanceof Error ? error.message : "Hosted Workflow canary failed.",
       passed: false,
       path: relativeRepositoryPath(artifactPath),
+      skippedChecks,
     };
   }
 
@@ -823,6 +876,7 @@ async function hostedCanaryCheck(
       note: "Hosted canary passed privacy scanning but has no workflow history run ID.",
       passed: false,
       path: relativeRepositoryPath(artifactPath),
+      skippedChecks,
     };
   }
   return {
@@ -831,6 +885,7 @@ async function hostedCanaryCheck(
     note: null,
     passed: true,
     path: relativeRepositoryPath(artifactPath),
+    skippedChecks,
   };
 }
 
@@ -919,17 +974,35 @@ async function buildPreflight(options: Options): Promise<Preflight> {
     }
   }
 
+  // Bind a completion capture to the frozen commit, catalog and pins so a
+  // capture produced on another checkout cannot become this release's
+  // validator evidence just because its own header is internally consistent.
+  const expectedCaptureIdentity =
+    f3Manifest &&
+    currentCommit &&
+    isRecord(f3Manifest.pins) &&
+    typeof f3Manifest.pins.sha256 === "string" &&
+    isRecord(catalogDocument.value)
+      ? {
+          catalogSha256: sha256(catalogDocument.value),
+          gitCommit: currentCommit,
+          pinsFingerprint: f3Manifest.pins.sha256,
+        }
+      : undefined;
   const validator = await validatorCheck(
     catalogDocument,
     ledgerDocument,
     precisionReportDocument,
     f3Manifest ? f3ManifestFingerprint(f3Manifest) : null,
     roleCheck.configurations.find((configuration) => configuration.role === "narrative.validate"),
+    expectedCaptureIdentity,
   );
   const hardGate = await hardGateCheck(options.hardGatePath);
   const hostedCanary = await hostedCanaryCheck(
     options.hostedArtifactPath,
     options.hostedValuesPath,
+    options.deploymentId,
+    options.expectedRunIds,
   );
   const f3Ready =
     f3Mismatches.length === 0 &&
@@ -1479,6 +1552,15 @@ function evidenceArtifactValue(input: Readonly<{
       continue;
     }
     resultFields[key] = input.source.result[key];
+  }
+  // ADR-0145: carry the named skipped check into the assembled artifact so the
+  // release record discloses the gap instead of implying all six probes ran.
+  if (
+    input.evidence.criterion === "AC-W01" &&
+    Array.isArray(input.source.result.skippedChecks) &&
+    input.source.result.skippedChecks.length > 0
+  ) {
+    resultFields.skippedChecks = input.source.result.skippedChecks;
   }
   const result: JsonObject = {
     ...resultFields,

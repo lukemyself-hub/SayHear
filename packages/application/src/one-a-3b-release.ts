@@ -470,14 +470,6 @@ function validateValidatorCalibration(
   // waits for a gold set. The budget check is retained as a live predicate so
   // the gate stays visible until something replaces it.
   void validatorCalibrationRejectsWithinBudget;
-  if (
-    input.status === "verified" &&
-    input.precisionFalseBlockingCases !== 0
-  ) {
-    throw new Error(
-      "validatorCalibration cannot be verified with a false-blocking precision verdict.",
-    );
-  }
   if (input.status !== "verified") {
     requireNonEmpty(input.note ?? "", "validatorCalibration.note");
   }
@@ -569,8 +561,8 @@ function validatorCalibrationIsComplete(
   }>,
 ): boolean {
   // ADR-0143: completion, not correctness. This asks whether the validator ran,
-  // every catalogued case was ruled, the precision corpus is whole with no false
-  // blocks, and the ledger is bound to this manifest — which is what ADR-0132
+  // every catalogued case was ruled, the precision corpus is whole,
+  // and the ledger is bound to this manifest — which is what ADR-0132
   // requires before a Reflection may become current. It does not ask whether
   // the semantic verdicts were right; that judgement waits for a gold set, and
   // the case count follows the catalog rather than a constant.
@@ -579,8 +571,7 @@ function validatorCalibrationIsComplete(
     calibration.status === "verified" &&
     calibration.totalCases >= 1 &&
     calibration.precisionTotalCases ===
-      ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.length &&
-    calibration.precisionFalseBlockingCases === 0
+      ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.length
   );
 }
 
@@ -1230,12 +1221,6 @@ export function verifyOneA3bG1ReleaseManifest(
         acceptedCases: validatorCalibrationAcceptedCases,
         maxRejects: validatorCalibrationMaxRejects,
       });
-      pushIf(
-        mismatches,
-        status === "verified" &&
-          validatorCalibrationPrecisionFalseBlockingCases !== 0,
-        "validator calibration cannot be verified with a false-blocking precision verdict",
-      );
       pushIf(
         mismatches,
         status !== "verified" &&

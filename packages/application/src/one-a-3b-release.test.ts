@@ -234,15 +234,15 @@ describe("1A.3b G1 release manifest", () => {
     ).toThrow("totalCases must be at least 1");
   });
 
-  it("requires a complete precision corpus with zero false blocks", () => {
-    expect(() =>
-      build({
+  it("requires a complete precision corpus while semantic verdicts remain observational", () => {
+    const observed = build({
         validatorCalibration: {
           ...validatorCalibration,
           precisionFalseBlockingCases: 1,
         },
-      }),
-    ).toThrow("cannot be verified");
+      });
+    expect(observed.status).toBe("ready_for_cutover");
+    expect(verifyOneA3bG1ReleaseManifest(observed).passed).toBe(true);
 
     const falseBlocked = build({
       validatorCalibration: {

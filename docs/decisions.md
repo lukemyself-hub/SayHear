@@ -22,6 +22,7 @@ Accepted
 ### 技术底座、部署与运行时
 
 - [`0144`](adr/0144-g1-hosted-acceptance-isolated-from-production.md)：G1 在隔离 hosted 环境验收，生产以同一发布身份、pins 和实际功能核验完成切换
+- [`0145`](adr/0145-g1-raw-provider-error-probe-waiver.md)：本次 G1 恢复上线仅跳过原始 Provider 错误探针，保留其余安全门禁并披露缺口
 
 - [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md)：TypeScript 模块化单体承载领域内核
 - [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
