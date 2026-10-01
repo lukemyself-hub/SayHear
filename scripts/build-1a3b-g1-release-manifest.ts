@@ -19,10 +19,6 @@ const purgeMarkerMigrationDirectory = resolve(
   repositoryRoot,
   "packages/data/migrations-purge-marker",
 );
-const defaultOutput = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/run/g1-release-manifest.json",
-);
 const generatedEvidenceRoot =
   "eval/continuation-acceptance-1a3b/run/";
 const agentMetadataFiles = new Set([
@@ -94,15 +90,24 @@ async function readInput(path: string): Promise<InputDocument> {
 
 async function main(): Promise<void> {
   const arguments_ = process.argv.slice(2);
+  const knownFlags = new Set(["--input", "--output", "--git-commit"]);
+  const seenFlags = new Set<string>();
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const name = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!name || !knownFlags.has(name) || seenFlags.has(name) || !value || value.startsWith("--")) throw new Error("Expected unique manifest builder options with values.");
+    seenFlags.add(name);
+  }
   const inputPath = option(arguments_, "--input");
-  if (!inputPath) {
+  const requestedOutput = option(arguments_, "--output");
+  if (!inputPath || !requestedOutput) {
     throw new Error(
-      "Usage: pnpm release:g1:build --input <review-input.json> [--output <manifest.json>] [--git-commit <sha>]",
+      "Usage: pnpm release:g1:build --input <review-input.json> --output <manifest.json> [--git-commit <sha>]",
     );
   }
   const outputPath = resolve(
     repositoryRoot,
-    option(arguments_, "--output") ?? defaultOutput,
+    requestedOutput,
   );
   const input = await readInput(inputPath);
   const explicitCommit = option(arguments_, "--git-commit") ?? input.gitCommit;

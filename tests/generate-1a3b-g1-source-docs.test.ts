@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildAcL02DrillResult,
   ids,
+  parseSourceOptions,
   validatedAcM01Result,
 } from "../scripts/generate-1a3b-g1-source-docs";
+import { parseOptions } from "../scripts/produce-1a3b-g1-evidence";
+import { ONE_A_3B_G1_ROLE_CONFIG_VERSIONS, ONE_A_3B_G1_ROLLOUT_PIN_VERSION, ONE_A_3B_ROLE_POLICY_VERSION } from "@sayhear/application";
 
 const report = {
   assertionIds: ["suite relevant assertion", "suite unrelated assertion"],
@@ -16,6 +19,21 @@ const report = {
 };
 
 describe("G1 source document evidence validation", () => {
+  it("protects the historical producer run root and requires an explicit catalog", () => {
+    expect(() => parseOptions([])).toThrow("required");
+    expect(() => parseOptions(["--run-root", "eval/continuation-acceptance-1a3b/run", "--catalog", "fixtures.json"])).toThrow("protected");
+    const options = parseOptions(["--run-root", "eval/continuation-acceptance-1a3b/run/new-run", "--catalog", "eval/continuation-acceptance-1a3b/holdout/fixtures.json"]);
+    expect(options.ledgerPath).toContain("new-run/validator-ledger.json");
+    expect(options.catalogPath).toContain("holdout/fixtures.json");
+  });
+  it("requires explicit release paths and deployment and rejects escapes or duplicate options", () => {
+    const args = ["--run-root", "eval/continuation-acceptance-1a3b/run/new-run", "--catalog", "eval/continuation-acceptance-1a3b/holdout/fixtures.json", "--pins", "eval/continuation-acceptance-1a3b/pins.json", "--deployment-id", "dpl-test"];
+    expect(parseSourceOptions(args).deploymentId).toBe("dpl-test");
+    expect(() => parseSourceOptions(args.slice(0, -2))).toThrow("--deployment-id is required");
+    expect(() => parseSourceOptions([...args, "--pins", "other"])).toThrow("unique");
+    expect(() => parseSourceOptions(["--run-root", "../escape", ...args.slice(2)])).toThrow("inside the repository");
+  });
+
   it("fails when a criterion-specific assertion predicate matches nothing", () => {
     expect(() => ids(report, (id) => id.includes("missing"))).toThrow(
       "No passing assertion in report:123 matched",
@@ -36,6 +54,7 @@ describe("G1 source document evidence validation", () => {
       },
     };
     const call = {
+      generationCommandId: "command-1",
       model: "model-1",
       modelRunAttemptId: "attempt-1",
       modelSnapshot: "snapshot-1",
@@ -43,6 +62,11 @@ describe("G1 source document evidence validation", () => {
       parameters,
       provider: "provider-1",
       role: "episode.build",
+      configVersion: `episode.build:g1-release:${ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["episode.build"]}`,
+      providerPolicyVersion: `provider-1-episode.build-egress:g1-release:${ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["episode.build"]}`,
+      rolloutPin: `episode.build-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
+      rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
+      usage: { inputTokens: 100, outputTokens: 200, reasoningTokens: null },
     };
 
     expect(
@@ -63,6 +87,8 @@ describe("G1 source document evidence validation", () => {
         ["episode.build"],
       ),
     ).toThrow("no successful provider call");
+    expect(() => validatedAcM01Result({ providerCalls: [{ ...call, usage: undefined }] }, pins, ["episode.build"])).toThrow("usage");
+    expect(() => validatedAcM01Result({ providerCalls: [{ ...call, generationCommandId: undefined }] }, pins, ["episode.build"])).toThrow("identity");
   });
 
   it("builds AC-L02 drill results only when every drill phase passed", () => {

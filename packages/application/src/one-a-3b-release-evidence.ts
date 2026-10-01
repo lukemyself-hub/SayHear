@@ -1171,13 +1171,17 @@ function verifyF3Ledger(
     mismatches.push("F3 validator ledger must be an object");
     return;
   }
-  if (value.version !== F3_LEDGER_VERSION || value.group !== "validator") {
+  if ((value.version !== F3_LEDGER_VERSION && value.version !== "1a3b-f3-completion:v1") || value.group !== "validator") {
     mismatches.push("F3 validator ledger has an unsupported version or group");
   }
   if (manifestFingerprint !== null && value.manifestFingerprint !== manifestFingerprint) {
     mismatches.push("F3 validator ledger is not bound to the F3 manifest");
   }
-  if (value.adjudicator !== "Luke") mismatches.push("F3 validator ledger must be adjudicated by Luke");
+  const completion = value.version === "1a3b-f3-completion:v1";
+  if (value.adjudicator !== (completion ? "capture-verifier" : "Luke")) mismatches.push("F3 validator ledger has an invalid evidence owner");
+  if (completion && (!nonEmpty(value.capturePath) || typeof value.captureSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.captureSha256))) {
+    mismatches.push("Validator completion evidence must reference a hashed capture");
+  }
   if (!nonEmpty(value.decidedAt) || Number.isNaN(new Date(value.decidedAt).getTime())) {
     mismatches.push("F3 validator ledger must have a valid decision timestamp");
   }

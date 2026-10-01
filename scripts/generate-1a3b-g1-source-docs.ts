@@ -4,33 +4,68 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { createPostgresPool } from "@sayhear/data";
 
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
+  ONE_A_3B_ROLE_POLICY_VERSION,
   PURGE_SURFACE_REGISTRY_VERSION,
   sha256Hex,
+  assertWorkflowHistoryCanaryClean,
+  type WorkflowCanaryArtifacts,
+  type WorkflowCanaryValues,
 } from "@sayhear/application";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const runRoot = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/run",
-);
-const sourceDirectory = resolve(runRoot, "evidence-sources");
-const sourceArtifactDirectory = resolve(runRoot, "source-artifacts");
-const catalogPath = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/fixtures.json",
-);
-const pinsPath = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/pins.json",
-);
-const f3ManifestPath = resolve(runRoot, "manifest.json");
-const hostedArtifactPath = resolve(runRoot, "hosted-canary/artifacts.json");
-const hostedValuesPath = resolve(runRoot, "hosted-canary/values.env.json");
-const deploymentPath = resolve(runRoot, "hosted-canary/deployment-inspect.json");
+export function parseSourceOptions(args: readonly string[]) {
+  const allowed = new Set(["--run-root", "--catalog", "--pins", "--deployment-id"]);
+  const values = new Map<string, string>();
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (!name || !allowed.has(name) || !value || value.startsWith("--") || values.has(name)) {
+      throw new Error("Expected unique --run-root, --catalog, --pins and --deployment-id arguments.");
+    }
+    values.set(name, value);
+  }
+  const required = (name: string): string => {
+    const value = values.get(name);
+    if (!value) throw new Error(`${name} is required.`);
+    return value;
+  };
+  const localPath = (name: string): string => {
+    const path = resolve(repositoryRoot, required(name));
+    const relativePath = relative(repositoryRoot, path);
+    if (!relativePath || relativePath.startsWith("..") || relativePath.startsWith("/")) {
+      throw new Error(`${name} must stay inside the repository.`);
+    }
+    return path;
+  };
+  return {
+    runRoot: (() => {
+      const path = localPath("--run-root");
+      if (path === resolve(repositoryRoot, "eval/continuation-acceptance-1a3b/run")) throw new Error("The historical run root is protected; use an independent run directory.");
+      return path;
+    })(),
+    catalogPath: localPath("--catalog"),
+    pinsPath: localPath("--pins"),
+    deploymentId: required("--deployment-id"),
+  };
+}
+
+let runRoot: string;
+let catalogPath: string;
+let pinsPath: string;
+let sourceDirectory: string;
+let sourceArtifactDirectory: string;
+let f3ManifestPath: string;
+let hostedArtifactPath: string;
+let hostedValuesPath: string;
+let deploymentPath: string;
+let requestedDeploymentId: string;
 
 type JsonObject = Record<string, unknown>;
 
@@ -175,13 +210,7 @@ function successfulProviderCall(call: JsonObject): boolean {
 }
 
 function callHasIdentity(call: JsonObject): boolean {
-  return [
-    call.providerRequestId,
-    call.modelRunAttemptId,
-    call.attemptId,
-    call.requestId,
-    call.callId,
-  ].some(nonEmptyString);
+  return nonEmptyString(call.generationCommandId) && nonEmptyString(call.modelRunAttemptId);
 }
 
 export function validatedAcM01Result(
@@ -204,6 +233,7 @@ export function validatedAcM01Result(
   );
   const validatedCalls: JsonObject[] = [];
   for (const role of enabledRoles) {
+    const iteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role as keyof typeof ONE_A_3B_G1_ROLE_CONFIG_VERSIONS];
     const pin = isRecord(rolePins[role]) ? rolePins[role] : null;
     if (!pin || !isRecord(pin.parameters)) {
       throw new Error(`AC-M01 pin for ${role} is missing or incomplete.`);
@@ -216,10 +246,19 @@ export function validatedAcM01Result(
       if (!callHasIdentity(call)) {
         throw new Error(`AC-M01 provider call for ${role} has no call identity.`);
       }
+      if (!isRecord(call.usage) || !["inputTokens", "outputTokens", "reasoningTokens"].every((key) => call.usage && isRecord(call.usage) && (call.usage[key] === null || (typeof call.usage[key] === "number" && Number.isSafeInteger(call.usage[key]) && call.usage[key] >= 0)))) {
+        throw new Error(`AC-M01 provider call for ${role} has no valid usage record.`);
+      }
       if (
         call.provider !== pin.provider ||
         call.model !== pin.model ||
         call.modelSnapshot !== pin.snapshot ||
+        call.promptVersion !== pin.promptVersion ||
+        call.schemaVersion !== pin.schemaVersion ||
+        call.configVersion !== `${role}:g1-release:${iteration}` ||
+        call.providerPolicyVersion !== `${pin.provider}-${role}-egress:g1-release:${iteration}` ||
+        call.rolloutPin !== `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}` ||
+        call.rolePolicyVersion !== ONE_A_3B_ROLE_POLICY_VERSION ||
         !isRecord(call.parameters) ||
         sha256Hex(call.parameters) !== sha256Hex(pin.parameters)
       ) {
@@ -339,12 +378,10 @@ async function migrationPins(directory: string): Promise<readonly JsonObject[]> 
 }
 
 async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonly<{ deployment: JsonObject; reference: ArtifactReference }>> {
-  const deploymentId =
-    process.env.SAYHEAR_G1_DEPLOYMENT_ID ??
-    "dpl_7KamMS2m7WAus2HvNidAonVkJTXW";
+  const deploymentId = requestedDeploymentId;
   const { stdout } = await execFileAsync(
-    "pnpm",
-    ["exec", "vercel", "api", `/v13/deployments/${deploymentId}`],
+    "vercel",
+    ["api", `/v13/deployments/${deploymentId}`],
     { cwd: repositoryRoot, maxBuffer: 2_000_000 },
   );
   const raw: unknown = JSON.parse(stdout);
@@ -352,13 +389,38 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
     throw new Error("Vercel deployment response has no metadata.");
   }
   const metadata = raw.meta;
-  const deploymentCommit = metadata.gitCommitSha;
+  const deploymentCommit = metadata.gitCommitSha ?? metadata.githubCommitSha;
   if (typeof deploymentCommit !== "string") {
     throw new Error("Vercel deployment metadata has no git commit.");
+  }
+  if (raw.readyState !== "READY" || (metadata.gitDirty !== undefined && String(metadata.gitDirty) !== "0")) {
+    throw new Error("Release evidence requires a Ready deployment from a clean checkout.");
+  }
+  if (deploymentCommit !== f3Manifest.gitCommit) {
+    throw new Error("Hosted deployment commit does not match the frozen F3 manifest.");
   }
   const migrationPinsValue = await migrationPins(
     resolve(repositoryRoot, "packages/data/migrations"),
   );
+  const purgeMarkerPins = await migrationPins(resolve(repositoryRoot, "packages/data/migrations-purge-marker"));
+  const databaseUrl = process.env.TEST_DATABASE_URL;
+  const markerUrl = process.env.TEST_PURGE_MARKER_DATABASE_URL;
+  const productionUrl = process.env.DATABASE_URL;
+  if (!databaseUrl || !markerUrl || !productionUrl) throw new Error("Isolated hosted database targets and production identity are required.");
+  const identity = (value: string) => { const url = new URL(value); return `${url.hostname.replace(/-pooler(?=\.)/, "")}:${url.port || "5432"}${url.pathname}`; };
+  if (new Set([databaseUrl, markerUrl, productionUrl].map(identity)).size !== 3) throw new Error("Hosted schema checks require distinct business, marker and production databases.");
+  const inspectSchema = async (connectionString: string, expected: readonly JsonObject[]) => {
+    const pool = createPostgresPool({ applicationName: "sayhear-g1-hosted-schema-verifier", connectionString });
+    try {
+      const result = await pool.query<{migration_name: string; migration_sha256: string}>("SELECT migration_name, migration_sha256 FROM schema_migrations ORDER BY migration_name");
+      const observed = result.rows.map((row) => ({ name: row.migration_name, sha256: row.migration_sha256 }));
+      if (sha256Hex(observed) !== sha256Hex(expected)) throw new Error("Hosted database migration fingerprints do not match the frozen code.");
+      return sha256Hex(observed);
+    } finally { await pool.end(); }
+  };
+  const [schemaFingerprint, purgeMarkerSchemaFingerprint] = await Promise.all([
+    inspectSchema(databaseUrl, migrationPinsValue), inspectSchema(markerUrl, purgeMarkerPins),
+  ]);
   const deployment = {
     deploymentId: raw.id,
     deploymentCommit,
@@ -367,7 +429,10 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
     f3ManifestFingerprint: f3Manifest.fingerprint,
     projectId: raw.projectId,
     readyState: raw.readyState,
-    schemaFingerprint: sha256Hex(migrationPinsValue),
+    schemaFingerprint,
+    purgeMarkerSchemaFingerprint,
+    businessDatabaseIdentityFingerprint: sha256Hex(identity(databaseUrl)),
+    purgeMarkerDatabaseIdentityFingerprint: sha256Hex(identity(markerUrl)),
     target: raw.target,
     url: raw.url,
   } satisfies JsonObject;
@@ -426,6 +491,15 @@ async function sourceFrom(input: Readonly<{
 }
 
 async function main(): Promise<void> {
+  const options = parseSourceOptions(process.argv.slice(2));
+  ({ runRoot, catalogPath, pinsPath } = options);
+  requestedDeploymentId = options.deploymentId;
+  sourceDirectory = resolve(runRoot, "evidence-sources");
+  sourceArtifactDirectory = resolve(runRoot, "source-artifacts");
+  f3ManifestPath = resolve(runRoot, "manifest.json");
+  hostedArtifactPath = resolve(runRoot, "hosted-canary/artifacts.json");
+  hostedValuesPath = resolve(runRoot, "hosted-canary/values.env.json");
+  deploymentPath = resolve(runRoot, "hosted-canary/deployment-inspect.json");
   await mkdir(sourceDirectory, { recursive: true });
   await mkdir(sourceArtifactDirectory, { recursive: true });
   const catalog = await readJson(catalogPath);
@@ -433,6 +507,10 @@ async function main(): Promise<void> {
   const pins = await readJson(pinsPath);
   const hostedArtifacts = await readJson(hostedArtifactPath);
   const hostedValues = await readJson(hostedValuesPath);
+  assertWorkflowHistoryCanaryClean(
+    hostedArtifacts as WorkflowCanaryArtifacts,
+    hostedValues as WorkflowCanaryValues,
+  );
   if (
     !Array.isArray(catalog.scenarios) ||
     !Array.isArray(hostedArtifacts.workflowHistory) ||
@@ -458,8 +536,11 @@ async function main(): Promise<void> {
   const purge = await readReport(resolve(runRoot, "test-reports/ac-purge-seam.json"));
   const drill = await readReport(resolve(runRoot, "test-reports/ac-purge-restore-drill.json"));
   const episode = await readReport(resolve(runRoot, "test-reports/ac-episode-admission.json"));
-  const capturePath = resolve(runRoot, "continuation-incumbent.json");
+  const capturePath = resolve(runRoot, "g1-provider-calls.json");
   const captureEvidence = await readJson(capturePath);
+  if (captureEvidence.preflight !== false || captureEvidence.gitDirty !== false || captureEvidence.manifestFingerprint !== f3Manifest.fingerprint || captureEvidence.gitCommit !== f3Manifest.gitCommit || !nonEmptyString(captureEvidence.runId)) {
+    throw new Error("G1 Provider capture must belong to the frozen F3 run and commit.");
+  }
   const capture = await reference(capturePath);
   const hosted = await reference(hostedArtifactPath);
   const pinsReference = await reference(pinsPath);
@@ -478,12 +559,11 @@ async function main(): Promise<void> {
   }
   const workflowReceiptIds = workflowHistory.flatMap((run) => {
     const output = isRecord(run.output) ? run.output : null;
-    return output && typeof output.workflowReceiptId === "string"
-      ? [output.workflowReceiptId]
-      : [];
+    const receiptId = output?.workflowReceiptId ?? run.runId;
+    return typeof receiptId === "string" ? [receiptId] : [];
   });
   const outboxEventIds = outboxPayloads.flatMap((event) =>
-    typeof event.outboxEventId === "string" ? [event.outboxEventId] : [],
+    typeof (event.outboxEventId ?? event.outbox_event_id) === "string" ? [String(event.outboxEventId ?? event.outbox_event_id)] : [],
   );
   const attemptIds = workflowHistory.flatMap((run) =>
     typeof run.runId === "string" ? [run.runId] : [],
@@ -492,6 +572,8 @@ async function main(): Promise<void> {
     throw new Error("Hosted canary does not contain workflow, outbox, and attempt IDs.");
   }
 
+  const hostedVerification = `node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts ${repositoryRelative(hostedArtifactPath)} --values ${repositoryRelative(hostedValuesPath)}`;
+  const providerCommand = `node --import tsx scripts/capture-g1-role-provider-calls.ts --pins ${repositoryRelative(pinsPath)} --manifest ${repositoryRelative(f3ManifestPath)} --catalog ${repositoryRelative(catalogPath)} --out ${repositoryRelative(capturePath)}`;
   const commonVerification = "pnpm exec vitest run --reporter=json";
   const sourceArtifacts: Record<string, ArtifactReference> = {};
   const sources: SourceDocument[] = [];
@@ -534,8 +616,8 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-F01",
-    fixtureIds: ["cont-open-loop-en"],
-    command: "pnpm canary:workflow && pnpm exec tsx scripts/canary-hosted-scan.mjs --since 2026-09-12T23:42:42Z",
+    fixtureIds: continuationFixtureIds,
+    command: hostedVerification,
     result: {
       workflowReceiptIds,
       outboxEventIds,
@@ -543,15 +625,15 @@ async function main(): Promise<void> {
       hostedCanary: hosted,
       systemTestReport: systemMetadata,
     },
-    runId: "hosted-canary-2026-09-12T23:42:42Z",
+    runId: attemptIds[0]!,
     source: "hosted",
     references: [hosted, { path: system.reference.path, sha256: system.reference.sha256 }],
-    verificationCommand: "pnpm canary:workflow && pnpm exec tsx scripts/canary-hosted-scan.mjs --since 2026-09-12T23:42:42Z",
+    verificationCommand: hostedVerification,
   });
 
   await add({
     criterion: "AC-F02",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
     result: {
       purgeOrderIds: ids(purge.summary, (assertionId) => assertionId.includes("opening transaction") || assertionId.includes("duplicate starts")),
@@ -567,7 +649,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-E01",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "CI=true pnpm exec vitest run packages/application/src/episode/admission.test.ts",
     result: {
       episodeIds: ids(episode.summary, (assertionId) => assertionId.includes("continues") || assertionId.includes("creates")),
@@ -583,7 +665,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-R01",
-    fixtureIds: ["cont-memory-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-daily-weekly.system.test.ts",
     result: {
       reflectionIds: reflectionAssertions,
@@ -599,7 +681,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-G01",
-    fixtureIds: ["cont-memory-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/candidate-review-governance.system.test.ts",
     result: {
       registryReleaseIds: ids(governanceAssertions.length > 0 ? { ...system.summary, assertionIds: governanceAssertions } : system.summary, (assertionId) => assertionId.includes("release")),
@@ -615,7 +697,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-I01",
-    fixtureIds: ["cont-memory-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-inspection.system.test.ts",
     result: {
       accessAuditIds: ids(system.summary, (assertionId) => assertionId.includes("Reflection Inspector") || assertionId.includes("access-audit")),
@@ -633,12 +715,12 @@ async function main(): Promise<void> {
   await add({
     criterion: "AC-M01",
     fixtureIds: continuationFixtureIds,
-    command: "source $HOME/.config/sayhear/test-env.sh && pnpm exec tsx eval/continuation-acceptance-1a3b/run-synthetic-capture.ts --continue-on-error",
+    command: providerCommand,
     result: {
       ...providerEvidence,
       captureArtifact: capture,
     },
-    runId: "provider-capture-continuation-incumbent-2026-09-12",
+    runId: String(captureEvidence.runId),
     source: "provider",
     references: [capture, pinsReference],
     verificationCommand: "pnpm exec tsx eval/continuation-acceptance-1a3b/verify-fixtures.ts && pnpm exec vitest run tests/continuation-acceptance-f3.test.ts",
@@ -646,7 +728,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-L01",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
     result: {
       purgeSurfaceRegistryVersion: "purge-surface-registry:v1",
@@ -662,7 +744,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-L02",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts --reporter=json --outputFile=eval/continuation-acceptance-1a3b/run/test-reports/ac-purge-restore-drill.json",
     result: buildAcL02DrillResult({ drill: drill.summary, purge: purge.summary }),
     runId: drill.summary.runId,
@@ -673,23 +755,23 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-W01",
-    fixtureIds: ["cont-open-loop-en"],
-    command: "pnpm canary:workflow",
+    fixtureIds: continuationFixtureIds,
+    command: hostedVerification,
     result: {
       hosted: true,
       canaryRunId: attemptIds[0],
       exportArtifact: hosted,
       deploymentId: workflowHistory[0]?.deploymentId,
     },
-    runId: attemptIds[0] ?? "hosted-canary-2026-09-12",
+    runId: attemptIds[0]!,
     source: "hosted",
     references: [hosted],
-    verificationCommand: "pnpm canary:workflow",
+    verificationCommand: hostedVerification,
   });
 
   await add({
     criterion: "AC-D01",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: `pnpm exec vercel api /v13/deployments/${String(deployment.deployment.deploymentId)}`,
     result: {
       deploymentId,

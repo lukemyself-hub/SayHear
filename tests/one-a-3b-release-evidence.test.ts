@@ -26,6 +26,18 @@ function readFixture(path: string): Record<string, any> {
 }
 
 describe("1A.3b G1 evidence lineage", () => {
+  it("binds holdout precision IDs to the supplied frozen catalog without renaming results", () => {
+    const manifestFingerprint = `sha256:${"c".repeat(64)}`;
+    const expectedFixtureIds = ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.map((id) => `holdout-${id}`);
+    const report = { version: "1a3b-f3-validator-precision-report:v1", manifestFingerprint, cases: expectedFixtureIds.map((fixtureId) => ({fixtureId, outcome: "completed", verdict: "accepted", blockingFindingCodes: []})) };
+    const bytes = Buffer.from(JSON.stringify(report));
+    const expectedSha256 = createHash("sha256").update(bytes).digest("hex");
+    expect(verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint, expectedFixtureIds})).toEqual({falseBlockingCases: 0, totalCases: 6});
+    expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint})).toThrow("unknown or duplicate");
+    expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint: `sha256:${"d".repeat(64)}`, expectedFixtureIds})).toThrow("does not belong");
+    expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint, expectedFixtureIds: Array(6).fill(expectedFixtureIds[0])})).toThrow("six unique");
+  });
+
   it("requires every frozen precision case exactly once with zero false blocks", () => {
     const manifestFingerprint = `sha256:${"c".repeat(64)}`;
     const report = {

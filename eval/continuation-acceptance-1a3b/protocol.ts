@@ -517,7 +517,9 @@ export type ValidatorAdjudicationLedger = Readonly<{
    * budget above floor(10% of total entries).
    */
   maxRejects?: number;
-  version: typeof F3_LEDGER_VERSION;
+  capturePath?: string;
+  captureSha256?: string;
+  version: typeof F3_LEDGER_VERSION | "1a3b-f3-completion:v1";
 }>;
 
 export type BioInspectionLedger = Readonly<{

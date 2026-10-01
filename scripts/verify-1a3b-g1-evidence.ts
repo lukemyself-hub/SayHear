@@ -1,3 +1,4 @@
+import { verifyCompletionCapture } from "./validator-completion";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -102,6 +103,7 @@ function parseJson<T>(bytes: Uint8Array, label: string): T {
 export function verifyValidatorPrecisionReport(input: Readonly<{
   report: unknown;
   manifestFingerprint: string;
+  expectedFixtureIds?: readonly string[] | undefined;
 }>): Readonly<{ falseBlockingCases: number; totalCases: number }> {
   if (input.report === null || typeof input.report !== "object" || Array.isArray(input.report)) {
     throw new Error("Validator precision report must be an object.");
@@ -118,8 +120,11 @@ export function verifyValidatorPrecisionReport(input: Readonly<{
   }
 
   const expectedIds = new Set<string>(
-    ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
+    input.expectedFixtureIds ?? ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
   );
+  if (expectedIds.size !== 6 || (input.expectedFixtureIds && input.expectedFixtureIds.length !== 6)) {
+    throw new Error("Frozen precision catalog must contain six unique fixture IDs.");
+  }
   const seenIds = new Set<string>();
   let falseBlockingCases = 0;
   for (const value of report.cases) {
@@ -167,6 +172,7 @@ export function verifyValidatorPrecisionReportArtifact(input: Readonly<{
   bytes: Uint8Array;
   expectedSha256: string;
   manifestFingerprint: string;
+  expectedFixtureIds?: readonly string[] | undefined;
 }>): Readonly<{ falseBlockingCases: number; totalCases: number }> {
   if (sha256Bytes(input.bytes) !== input.expectedSha256) {
     throw new Error(
@@ -176,6 +182,7 @@ export function verifyValidatorPrecisionReportArtifact(input: Readonly<{
   return verifyValidatorPrecisionReport({
     report: parseJson<unknown>(input.bytes, "validator precision report"),
     manifestFingerprint: input.manifestFingerprint,
+    expectedFixtureIds: input.expectedFixtureIds,
   });
 }
 
@@ -279,7 +286,7 @@ function verifyEvidenceValues(
     throw new Error("Validator calibration ledger does not belong to the F3 manifest.");
   }
   if (
-    ledger.version !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION ||
+    (ledger.version !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION && ledger.version !== "1a3b-f3-completion:v1") ||
     typeof ledger.decidedAt !== "string" ||
     Number.isNaN(new Date(ledger.decidedAt).getTime())
   ) {
@@ -294,6 +301,7 @@ function verifyEvidenceValues(
     bytes: precisionReportBytes,
     expectedSha256: input.validatorCalibration.precisionReportSha256,
     manifestFingerprint: f3Manifest.fingerprint,
+    expectedFixtureIds: catalog.precisionDrafts?.map((draft) => draft.id),
   });
   if (
     input.validatorCalibration.precisionReportVersion !==
@@ -305,6 +313,7 @@ function verifyEvidenceValues(
     throw new Error("Validator precision report summary does not match the G1 calibration pin.");
   }
 
+  verifyCompletionCapture({ ledger, catalog, root, configuration: input.roleConfigurations.find((configuration) => configuration.role === "narrative.validate") });
   const summary = validateValidatorLedger({ catalog, ledger });
   if (
     summary.total !== input.validatorCalibration.totalCases ||
@@ -406,7 +415,7 @@ export async function verifyG1EvidenceFiles(
   );
   const catalogPath = repositoryFile(
     root,
-    "eval/continuation-acceptance-1a3b/fixtures.json",
+    input.fixture.catalogPath ?? "eval/continuation-acceptance-1a3b/fixtures.json",
     "F3 fixture catalog path",
   );
   const [f3ManifestBytes, ledgerBytes, precisionReportBytes] = await Promise.all([
@@ -472,7 +481,7 @@ export function verifyG1EvidenceFilesSync(
   );
   const catalogPath = repositoryFile(
     root,
-    "eval/continuation-acceptance-1a3b/fixtures.json",
+    input.fixture.catalogPath ?? "eval/continuation-acceptance-1a3b/fixtures.json",
     "F3 fixture catalog path",
   );
   const f3ManifestBytes = readFileSync(f3ManifestPath);

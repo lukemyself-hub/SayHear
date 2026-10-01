@@ -23,9 +23,13 @@ function parseJson<T>(value: string, name: string): T {
 }
 
 async function main(): Promise<void> {
-  const artifactFile = requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE");
+  const args = process.argv.slice(2);
+  if (args.length !== 0 && (args.length !== 4 || args[0] !== "--artifacts" || args[2] !== "--values" || !args[1] || !args[3])) {
+    throw new Error("Expected --artifacts and --values file paths.");
+  }
+  const artifactFile = args[1] ?? requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE");
   const values = parseJson<WorkflowCanaryValues>(
-    requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_VALUES"),
+    args[3] ? await readFile(args[3], "utf8") : requiredEnvironment("SAYHEAR_WORKFLOW_CANARY_VALUES"),
     "SAYHEAR_WORKFLOW_CANARY_VALUES",
   );
   const artifacts = parseJson<WorkflowCanaryArtifacts>(

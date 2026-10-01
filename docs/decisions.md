@@ -21,6 +21,8 @@ Accepted
 
 ### 技术底座、部署与运行时
 
+- [`0144`](adr/0144-g1-hosted-acceptance-isolated-from-production.md)：G1 在隔离 hosted 环境验收，生产以同一发布身份、pins 和实际功能核验完成切换
+
 - [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md)：TypeScript 模块化单体承载领域内核
 - [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级

@@ -1,3 +1,4 @@
+import { verifyCompletionCapture } from "./validator-completion";
 /**
  * Assemble the twelve typed G1 evidence artifacts from independently verified
  * source documents. A source document is either one JSON object or an entry in
@@ -59,31 +60,6 @@ import { verifyValidatorPrecisionReport } from "./verify-1a3b-g1-evidence";
 const execFileAsync = promisify(execFile);
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const defaultCatalogPath =
-  "eval/continuation-acceptance-1a3b/fixtures.json";
-const defaultF3ManifestPath =
-  "eval/continuation-acceptance-1a3b/run/manifest.json";
-const defaultLedgerPath =
-  "eval/continuation-acceptance-1a3b/run/validator-ledger.json";
-const defaultPrecisionReportPath =
-  "eval/continuation-acceptance-1a3b/run/validator-precision-report.json";
-const defaultSourceBundlePath =
-  "eval/continuation-acceptance-1a3b/run/g1-evidence-sources.json";
-const defaultSourceDirectory =
-  "eval/continuation-acceptance-1a3b/run/evidence-sources";
-const defaultEvidenceDirectory =
-  "eval/continuation-acceptance-1a3b/run/evidence";
-const defaultManifestInputPath =
-  "eval/continuation-acceptance-1a3b/run/g1-release-manifest-input.json";
-const defaultReportPath =
-  "eval/continuation-acceptance-1a3b/run/g1-evidence-production-report.json";
-const defaultHardGatePath =
-  "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json";
-const defaultHostedArtifactPath =
-  "eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json";
-const defaultHostedValuesPath =
-  "eval/continuation-acceptance-1a3b/run/hosted-canary/values.env.json";
-
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const FINGERPRINT_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const GIT_COMMIT_PATTERN = /^[a-f0-9]{40}$/;
@@ -122,6 +98,7 @@ type ReadDocument = Readonly<{
 type ValidatorCheck = Readonly<{
   acceptedCases: number | null;
   ledgerSha256: string | null;
+  ledgerVersion?: "1a3b-f3-adjudication:v1" | "1a3b-f3-completion:v1";
   maxRejects: number | null;
   note: string | null;
   rejectedCases: number | null;
@@ -254,8 +231,9 @@ function option(
   return value;
 }
 
-function parseOptions(arguments_: readonly string[]): Options {
+export function parseOptions(arguments_: readonly string[]): Options {
   const knownFlags = new Set([
+    "--run-root",
     "--catalog",
     "--manifest",
     "--ledger",
@@ -269,59 +247,69 @@ function parseOptions(arguments_: readonly string[]): Options {
     "--hosted-artifacts",
     "--hosted-values",
   ]);
-  for (const argument of arguments_) {
-    if (argument.startsWith("--") && !knownFlags.has(argument)) {
-      throw new Error(`Unknown argument: ${argument}`);
+  const seenFlags = new Set<string>();
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const argument = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!argument || !knownFlags.has(argument) || seenFlags.has(argument) || !value || value.startsWith("--")) {
+      throw new Error("Expected unique known producer options with values.");
     }
+    seenFlags.add(argument);
   }
+  const runRoot = option(arguments_, "--run-root", "");
+  const catalogPath = option(arguments_, "--catalog", "");
+  if (!runRoot || !catalogPath) throw new Error("--run-root and --catalog are required.");
+  if (runRoot.replace(/\/$/, "") === "eval/continuation-acceptance-1a3b/run") throw new Error("Use an independent run directory; the historical run root is protected.");
+  repositoryPath(runRoot, "run root");
+  const runPath = (name: string) => `${runRoot}/${name}`;
   return {
-    catalogPath: option(arguments_, "--catalog", defaultCatalogPath),
+    catalogPath,
     f3ManifestPath: option(
       arguments_,
       "--manifest",
-      defaultF3ManifestPath,
+      runPath("manifest.json"),
     ),
-    ledgerPath: option(arguments_, "--ledger", defaultLedgerPath),
+    ledgerPath: option(arguments_, "--ledger", runPath("validator-ledger.json")),
     precisionReportPath: option(
       arguments_,
       "--precision-report",
-      defaultPrecisionReportPath,
+      runPath("validator-precision.json"),
     ),
     sourceBundlePath: option(
       arguments_,
       "--sources",
-      defaultSourceBundlePath,
+      runPath("g1-evidence-sources.json"),
     ),
     sourceDirectory: option(
       arguments_,
       "--source-dir",
-      defaultSourceDirectory,
+      runPath("evidence-sources"),
     ),
     evidenceDirectory: option(
       arguments_,
       "--evidence-dir",
-      defaultEvidenceDirectory,
+      runPath("evidence"),
     ),
     manifestInputPath: option(
       arguments_,
       "--manifest-input",
-      defaultManifestInputPath,
+      runPath("g1-release-manifest-input.json"),
     ),
-    reportPath: option(arguments_, "--report", defaultReportPath),
+    reportPath: option(arguments_, "--report", runPath("g1-evidence-production-report.json")),
     hardGatePath: option(
       arguments_,
       "--hard-gates",
-      defaultHardGatePath,
+      runPath("continuation-hard-gates.json"),
     ),
     hostedArtifactPath: option(
       arguments_,
       "--hosted-artifacts",
-      defaultHostedArtifactPath,
+      runPath("hosted-canary/artifacts.json"),
     ),
     hostedValuesPath: option(
       arguments_,
       "--hosted-values",
-      defaultHostedValuesPath,
+      runPath("hosted-canary/values.env.json"),
     ),
   };
 }
@@ -498,6 +486,7 @@ async function validatorCheck(
   ledgerDocument: ReadDocument,
   precisionReportDocument: ReadDocument,
   manifestFingerprint: string | null,
+  configuration: ModelRoleConfigurationSnapshot | undefined,
 ): Promise<ValidatorCheck> {
   const ledgerSha256 = ledgerDocument.bytes
     ? sha256Bytes(ledgerDocument.bytes)
@@ -530,6 +519,7 @@ async function validatorCheck(
   const catalog = catalogDocument.value as FixtureCatalog;
   const ledger = ledgerDocument.value as ValidatorAdjudicationLedger;
   try {
+    verifyCompletionCapture({ ledger, catalog, root: repositoryRoot, configuration });
     const summary = validateValidatorLedger({ catalog, ledger });
     const decidedAt = objectString(ledger, "decidedAt");
     if (!decidedAt || Number.isNaN(new Date(decidedAt).getTime())) {
@@ -557,10 +547,12 @@ async function validatorCheck(
     const precisionSummary = verifyValidatorPrecisionReport({
       report: precisionReportDocument.value,
       manifestFingerprint,
+      expectedFixtureIds: catalog.precisionDrafts?.map((draft) => draft.id),
     });
     return {
       acceptedCases: summary.accepted,
       ledgerSha256,
+      ledgerVersion: ledger.version,
       maxRejects: summary.maxRejects,
       note: null,
       precisionFalseBlockingCases: precisionSummary.falseBlockingCases,
@@ -932,6 +924,7 @@ async function buildPreflight(options: Options): Promise<Preflight> {
     ledgerDocument,
     precisionReportDocument,
     f3Manifest ? f3ManifestFingerprint(f3Manifest) : null,
+    roleCheck.configurations.find((configuration) => configuration.role === "narrative.validate"),
   );
   const hardGate = await hardGateCheck(options.hardGatePath);
   const hostedCanary = await hostedCanaryCheck(
@@ -1296,6 +1289,7 @@ function sourceSpecificErrors(
   criterion: OneA3bG1AcceptanceCriterion,
   preflight: Preflight,
   releaseIdentity: string | null,
+  evidenceDirectory: string,
 ): readonly string[] {
   if (!source) return [];
   const errors: string[] = [];
@@ -1376,7 +1370,7 @@ function sourceSpecificErrors(
       fixtureIds: source.fixtureIds,
       command: source.command,
       artifactSha256: "0".repeat(64),
-      artifactPath: `${defaultEvidenceDirectory}/${criterion.toLowerCase()}.json`,
+      artifactPath: `${evidenceDirectory}/${criterion.toLowerCase()}.json`,
       owner: source.owner,
       source: source.source,
       status: "verified",
@@ -1410,6 +1404,7 @@ function criterionNote(
   source: SourceEvidence | undefined,
   preflight: Preflight,
   sourceErrors: readonly string[],
+  sourceDirectory: string,
 ): string {
   const blockers: string[] = [];
   if (!preflight.f3Ready) {
@@ -1424,7 +1419,7 @@ function criterionNote(
   }
   if (!source) {
     blockers.push(
-      `no verified evidence source; add one under ${defaultSourceDirectory}`,
+      `no verified evidence source; add one under ${sourceDirectory}`,
     );
   }
   if (sourceErrors.length > 0) blockers.push(...sourceErrors);
@@ -1446,10 +1441,11 @@ function criterionReports(
   sources: SourceCollection,
   preflight: Preflight,
   releaseIdentity: string | null,
+  options: Options,
 ): readonly CriterionReport[] {
   return ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA.map((criterion) => {
     const source = sources.sources.get(criterion);
-    const errors = sourceSpecificErrors(source, criterion, preflight, releaseIdentity);
+    const errors = sourceSpecificErrors(source, criterion, preflight, releaseIdentity, options.evidenceDirectory);
     const sourceReady = source !== undefined && errors.length === 0;
     const verified =
       preflight.f3Ready &&
@@ -1458,7 +1454,7 @@ function criterionReports(
     return {
       criterion,
       fixtureIds: source?.fixtureIds ?? [],
-      note: criterionNote(criterion, source, preflight, errors),
+      note: criterionNote(criterion, source, preflight, errors, options.sourceDirectory),
       sourceArtifactPath: source?.artifactPath ?? null,
       status: verified ? "verified" : "blocked",
     };
@@ -1631,7 +1627,7 @@ function validatorCalibration(
       repositoryPath(options.ledgerPath, "validator ledger"),
     ),
     ledgerSha256: preflight.validator.ledgerSha256,
-    ledgerVersion: "1a3b-f3-adjudication:v1",
+    ledgerVersion: preflight.validator.ledgerVersion ?? "1a3b-f3-adjudication:v1",
     precisionReportPath: relativeRepositoryPath(
       repositoryPath(options.precisionReportPath, "validator precision report"),
     ),
@@ -1641,10 +1637,10 @@ function validatorCalibration(
     precisionFalseBlockingCases:
       preflight.validator.precisionFalseBlockingCases,
     f3ManifestFingerprint: preflight.f3ManifestFingerprint,
-    totalCases: 18,
+    totalCases: preflight.validator.totalCases,
     acceptedCases: preflight.validator.acceptedCases,
     maxRejects: preflight.validator.maxRejects,
-    humanOwner: "Luke",
+    humanOwner: preflight.validator.ledgerVersion === "1a3b-f3-completion:v1" ? "capture-verifier" : "Luke",
     status: "verified",
   };
 }
@@ -1670,6 +1666,7 @@ async function writeManifestInput(input: Readonly<{
     gitCommit: input.preflight.currentCommit,
     roleConfigurations: input.preflight.roleCheck.configurations,
     fixture: {
+      catalogPath: relativeRepositoryPath(repositoryPath(input.options.catalogPath, "F3 fixture catalog")),
       f3ManifestPath: relativeRepositoryPath(
         repositoryPath(input.options.f3ManifestPath, "F3 manifest"),
       ),
@@ -1774,7 +1771,7 @@ async function main(): Promise<void> {
   const preflight = await buildPreflight(options);
   const sources = await collectSources(options, preflight.fixtureIds);
   const releaseIdentity = await buildReleaseIdentity(preflight);
-  const criteria = criterionReports(sources, preflight, releaseIdentity);
+  const criteria = criterionReports(sources, preflight, releaseIdentity, options);
   let evidence: readonly OneA3bG1Evidence[] = [];
   let manifestInputWritten = false;
   let evidenceWritten: readonly string[] = [];

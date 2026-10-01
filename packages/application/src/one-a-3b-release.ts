@@ -27,23 +27,15 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
 /**
  * G1 model-configuration iteration per role.
  *
- * Production is live at `v2` on all four roles. Only `narrative.validate`
- * needs a new configuration, because #252 raised only its output budget. The
- * first raise, 4000 to 8000, was not enough: the sealed #252 holdout run
- * recorded 17 of 18 cases at or below 65.8% of the cap, with one case spending
- * all 8000 on reasoning and emitting an empty body. So the budget goes to
- * 10000, which lands as `v4` because configuration rows are immutable. The
- * other three keep `v2` so their configurations, and therefore their rollback
- * targets, are left exactly as they are.
- *
- * A configuration row is immutable, so re-declaring a version with different
- * parameters is refused at activation. That is why the budget change cannot
- * reuse `v2`.
+ * Existing production rows use v2. Episode and Reflection now require v3
+ * for their measured 10000-token budgets and complete output-schema prompts.
+ * narrative.validate keeps the previously selected v4 / 10000-token policy.
+ * Configuration rows are immutable; old versions remain rollback history.
  */
 export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
-  "episode.build": "v2",
-  "reflection.daily": "v2",
-  "reflection.weekly": "v2",
+  "episode.build": "v3",
+  "reflection.daily": "v3",
+  "reflection.weekly": "v3",
   "narrative.validate": "v4",
 } as const satisfies Readonly<
   Record<(typeof ONE_A_3B_G1_ENABLED_ROLES)[number], string>
@@ -59,7 +51,7 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * version: its foreign key is (role, config_version, provider_policy_version),
  * so a `v3` pin may point at an unchanged `v2` configuration.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v4" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v5" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =
@@ -125,7 +117,7 @@ export type OneA3bG1Evidence = Readonly<{
 export type OneA3bG1ValidatorCalibration = Readonly<{
   ledgerPath: string;
   ledgerSha256: string;
-  ledgerVersion: typeof ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION;
+  ledgerVersion: typeof ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION | "1a3b-f3-completion:v1";
   precisionReportPath: string;
   precisionReportSha256: string;
   precisionReportVersion: typeof ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION;
@@ -145,7 +137,7 @@ export type OneA3bG1ValidatorCalibration = Readonly<{
    * verdict mix is a semantic judgement with no gold set behind it.
    */
   maxRejects: number;
-  humanOwner: "Luke";
+  humanOwner: "Luke" | "capture-verifier";
   status: OneA3bG1EvidenceStatus;
   note?: string;
 }>;
@@ -186,6 +178,7 @@ export type OneA3bG1ReleaseManifest = Readonly<{
     configurationFingerprint: string;
   }>;
   fixture: Readonly<{
+    catalogPath?: string;
     f3ManifestPath: string;
     f3ManifestSha256: string;
     f3ManifestFingerprint: string;
@@ -207,6 +200,7 @@ export type OneA3bG1ReleaseManifestInput = Readonly<{
   purgeMarkerMigrations: readonly OneA3bG1MigrationPin[];
   roleConfigurations: readonly ModelRoleConfigurationSnapshot[];
   fixture: Readonly<{
+    catalogPath?: string;
     f3ManifestPath: string;
     f3ManifestSha256: string;
     f3ManifestFingerprint: string;
@@ -403,7 +397,7 @@ function validateValidatorCalibration(
     input.f3ManifestFingerprint,
     "validatorCalibration.f3ManifestFingerprint",
   );
-  if (input.ledgerVersion !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION) {
+  if (input.ledgerVersion !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION && input.ledgerVersion !== "1a3b-f3-completion:v1") {
     throw new Error(
       `validatorCalibration.ledgerVersion must be ${ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION}.`,
     );
@@ -460,7 +454,7 @@ function validateValidatorCalibration(
   if (!Number.isSafeInteger(input.maxRejects) || input.maxRejects < 0) {
     throw new Error("validatorCalibration.maxRejects must be a non-negative integer.");
   }
-  if (input.humanOwner !== "Luke") {
+  if (input.humanOwner !== (input.ledgerVersion === "1a3b-f3-completion:v1" ? "capture-verifier" : "Luke")) {
     throw new Error("validatorCalibration.humanOwner must be Luke.");
   }
   if (
@@ -1139,7 +1133,7 @@ export function verifyOneA3bG1ReleaseManifest(
     pushIf(
       mismatches,
       validatorCalibration.ledgerVersion !==
-        ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+        ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION && validatorCalibration.ledgerVersion !== "1a3b-f3-completion:v1",
       "validator calibration ledger version is not the released version",
     );
     pushIf(
@@ -1217,7 +1211,7 @@ export function verifyOneA3bG1ReleaseManifest(
     // while keeping the field so the ledger that recorded it still validates.
     pushIf(
       mismatches,
-      validatorCalibration.humanOwner !== "Luke",
+      validatorCalibration.humanOwner !== (validatorCalibration.ledgerVersion === "1a3b-f3-completion:v1" ? "capture-verifier" : "Luke"),
       "validator calibration human owner is not Luke",
     );
     const status = validatorCalibration.status;

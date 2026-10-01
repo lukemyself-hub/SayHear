@@ -419,6 +419,8 @@ export function createRuntimeOneA3bRoleProviders(input: {
   adapter?: ResponsesApiAdapter;
   adapters?: readonly ResponsesApiAdapter[];
   configurations: readonly ModelRoleConfigurationSnapshot[];
+  /** Content-free accounting for synthetic acceptance capture. */
+  onUsage?: (role: ModelRoleConfigurationSnapshot["role"], usage: ModelRoleCallUsage) => void;
 }): OneA3bRuntimeRoleProviders {
   assertRuntimeProviderEgressIntegration("provider-egress.responses-api");
   const adapters = input.adapters ?? (input.adapter ? [input.adapter] : []);
@@ -480,11 +482,13 @@ export function createRuntimeOneA3bRoleProviders(input: {
     // leaves its spend on record; the failure itself carries the same counts.
     // Narrowed explicitly so the callback receives exactly its declared type
     // rather than the wider internal record.
-    onUsage?.({
+    const accounting = {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       reasoningTokens: usage.reasoningTokens,
-    });
+    };
+    onUsage?.(accounting);
+    input.onUsage?.(configuration.role, accounting);
     try {
       return read(parsed, configuration.role);
     } catch (error) {
@@ -545,7 +549,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
       return askTypedJson(
         episodeConfiguration,
         request,
-        "Given the frozen Evidence and active Episode records, return a JSON array of typed proposals. Each proposal must contain proposedKind, label, temporalAnchor, phase, kindFields, citedEvidenceItemIds, realWorldOccurrence, and may contain entityAnchorIds, explicitContinuity, or explicitNewOccurrence. proposedKind must come from the supplied kind catalog. phase must be one of planned, ongoing, completed, unknown. temporalAnchor start/end precision must be one of exact, month, year, approximate, unknown. Cite only supplied Evidence IDs and never invent IDs or facts.",
+        "Given the frozen Evidence and active Episode records, return a JSON array of typed proposals. Each proposal must contain proposedKind, label, temporalAnchor, phase, kindFields, citedEvidenceItemIds, realWorldOccurrence, and may contain entityAnchorIds, explicitContinuity, or explicitNewOccurrence. proposedKind must come from the supplied kind catalog. proposedKind and label must be strings. kindFields must be an object whose values are strings. citedEvidenceItemIds and optional entityAnchorIds must be arrays of strings. realWorldOccurrence and optional explicitNewOccurrence must be booleans. temporalAnchor must contain a start object and may contain an end object; each boundary must have precision and may have a date string. Omit unknown optional fields rather than returning null. Optional explicitContinuity must contain evidenceItemId and span strings. phase must be one of planned, ongoing, completed, unknown. temporalAnchor start/end precision must be one of exact, month, year, approximate, unknown. Cite only supplied Evidence IDs and never invent IDs or facts.",
         request.evidence[0]?.locale ?? "en-US",
         asEpisodeProposals,
       );
@@ -562,7 +566,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
       return askTypedJson(
         configuration,
         request,
-        "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.",
+        "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Each candidate must contain candidateKind, basis, predicateId, proposedConcept, typedValue, scopeKey, temporal, and evidenceItemIds. predicateId and proposedConcept must each be a string or null; typedValue must be a string or an array of strings; scopeKey must be a string; evidenceItemIds must be an array of supplied Evidence IDs. temporal must be an object containing temporalStatus, validFrom, validFromPrecision, validTo, and validToPrecision. validFrom and validTo must each be a date string or null. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.",
         request.locale || "en-US",
         asReflectionOutput,
       );

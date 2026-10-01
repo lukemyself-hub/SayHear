@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -7,11 +8,13 @@ import {
   createModelRoleRegistry,
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
   readNarrativeValidationOutcome,
   runNarrativeValidation,
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
-  NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+  NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
   type ModelRoleCallUsage,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
@@ -90,7 +93,7 @@ function parseArguments(): { catalog: string; continueOnError: boolean; manifest
 }
 
 /**
- * Clean-draft precision probe: fully source-faithful Bio drafts (no planted
+ * Clean-draft precision probe: fully source-faithful Reflection drafts (no planted
  * error) with a correct writer manifest. A clean draft must complete with
  * zero blocking findings; any blocking finding is a false positive.
  *
@@ -107,7 +110,7 @@ const BUILT_IN_PRECISION_DRAFTS = [
   { id: "precision-clean-mix-2", locale: "zh-CN", inputRef: "validator-mix", claimId: "syn-claim-validator-mix", draftText: "虚构用户会 repair radios。" },
 ] as const;
 
-type PinsFile = {
+export type PinsFile = {
   roles: Record<
     string,
     {
@@ -124,7 +127,7 @@ type PinsFile = {
   >;
 };
 
-function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): ModelRoleConfigurationSnapshot {
+export function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): ModelRoleConfigurationSnapshot {
   const pin = pins.roles[role];
   if (!pin) throw new Error(`Pins file has no ${role} role.`);
   if (pin.provider !== "deepseek") {
@@ -140,6 +143,7 @@ function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): M
   // the registry rejects anything else. A pins/policy disagreement fails
   // loudly here instead of silently running an unevaluated configuration.
   const policy = ONE_A_3B_ROLE_POLICIES[role];
+  const iteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role];
   if (pin.maxTechnicalRetries !== policy.maxTechnicalRetries) {
     throw new Error(
       `Pins disagree with the frozen role policy for ${role}: pins maxTechnicalRetries ${pin.maxTechnicalRetries}, policy ${policy.maxTechnicalRetries}.`,
@@ -147,22 +151,20 @@ function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): M
   }
   return {
     role,
-    configVersion: `${role}:eval-capture:v1`,
+    configVersion: `${role}:g1-release:${iteration}`,
     provider: pin.provider,
     model: pin.model,
     modelSnapshot: pin.snapshot,
     promptVersion: pin.promptVersion,
     schemaVersion: pin.schemaVersion,
     rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-    providerPolicyVersion: `deepseek-${role}-egress:capture:v1`,
-    rolloutPin: `${role}-capture-pin:v1`,
+    providerPolicyVersion: `deepseek-${role}-egress:g1-release:${iteration}`,
+    rolloutPin: `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
     freshnessPolicy: policy.freshnessPolicy,
     fallbackMode: "disabled",
     maxTechnicalRetries: policy.maxTechnicalRetries,
     maxSemanticRepairs: policy.maxSemanticRepairs,
     parameterSnapshot: {
-      budgetPolicyVersion: "eval-capture-budget:v1",
-      providerCallBudget: 2,
       temperature: pin.parameters.temperature,
       maxOutputTokens: pin.parameters.maxOutputTokens,
     },
@@ -200,18 +202,7 @@ async function main(): Promise<void> {
        VALUES ($1, 'active', 1, $2, $2)`,
       [userId, baseTime],
     );
-    await database.pool.query(
-      `INSERT INTO provider_egress_policy_versions (
-         policy_version, provider, role, model_config_version, status, created_at
-       ) VALUES ($1, $2, $3, $4, 'active', $5)`,
-      [
-        narrativeConfiguration.providerPolicyVersion,
-        narrativeConfiguration.provider,
-        narrativeConfiguration.role,
-        narrativeConfiguration.configVersion,
-        baseTime,
-      ],
-    );
+    // Migrations register the exact release egress policies before capture.
     await database.pool.query(
       `INSERT INTO model_role_configurations (
          role, config_version, provider, model, model_snapshot, prompt_version,
@@ -302,6 +293,8 @@ async function main(): Promise<void> {
         const sharedInput = typedCatalog.sharedInputs[draft.inputRef];
         const claim = sharedInput?.memory.find((candidate) => candidate.id === draft.claimId);
         if (!claim) throw new Error(`Precision draft ${draft.id} cites unknown claim ${draft.claimId}.`);
+        const event = sharedInput?.events.find((entry) => claim.evidenceIds.includes(entry.id));
+        if (!event) throw new Error(`Precision draft ${draft.id} has no direct Evidence source.`);
         const manifest = [
           {
             statementKey: `${draft.id}:statement:1`,
@@ -312,7 +305,7 @@ async function main(): Promise<void> {
                 normalizedProposition: draft.draftText,
                 propositionKind: "fact" as const,
                 epistemicRendering: "confirmed" as const,
-                supportKeys: [claim.id],
+                supportKeys: [event.id],
               },
             ],
           },
@@ -323,23 +316,23 @@ async function main(): Promise<void> {
           validatorErrorClass: "clean",
           request: {
             userId: bundles[0]!.request.userId,
-            artifactKind: "bio" as const,
+            artifactKind: "reflection" as const,
             draftRef: `validator-precision:${draft.id}`,
             draftLocale: draft.locale,
             draftText: draft.draftText,
             generatorManifest: [],
             sourceEntries: [
               {
-                sourceKey: claim.id,
-                sourceKind: "memory_claim_version" as const,
-                text: claim.text,
+                sourceKey: event.id,
+                sourceKind: "evidence_item" as const,
+                text: event.text,
                 epistemicKind:
                   claim.kind === "objective_memory" ? ("objective_memory" as const) : null,
               },
             ],
-            plannedCoverageKeys: [claim.id],
+            plannedCoverageKeys: [event.id],
             validationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
-            promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+            promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
             schemaVersion: NARRATIVE_FINDINGS_SCHEMA_VERSION,
           },
         };
@@ -350,6 +343,8 @@ async function main(): Promise<void> {
       blockingFindingCodes: readonly string[];
       errorCode: string | null;
       fixtureId: string;
+      generationCommandId: string | null;
+      modelRunAttemptId: string | null;
       model: string;
       outcome: string;
       provider: string;
@@ -451,6 +446,8 @@ async function main(): Promise<void> {
         blockingFindingCodes,
         errorCode: result.outcome === "completed" ? null : (result.errorCode ?? null),
         fixtureId: bundle.fixtureId,
+        generationCommandId: result.generationCommandId,
+        modelRunAttemptId: result.modelRunAttemptId,
         model: narrativeConfiguration.model,
         outcome: result.outcome,
         provider: narrativeConfiguration.provider,
@@ -499,13 +496,15 @@ async function main(): Promise<void> {
           modelSnapshot: narrativeConfiguration.modelSnapshot,
           configVersion: narrativeConfiguration.configVersion,
           promptVersion: narrativeConfiguration.promptVersion,
+          schemaVersion: narrativeConfiguration.schemaVersion,
+          parameters: pins.roles["narrative.validate"]!.parameters,
           // The frozen budget is recorded beside the causes so the next
           // versioned configuration is chosen against measured spend, not
           // against a guess (issue #252).
           maxOutputTokens:
             narrativeConfiguration.parameterSnapshot.maxOutputTokens ?? null,
           providerCallBudget:
-            narrativeConfiguration.parameterSnapshot.providerCallBudget ?? null,
+            narrativeConfiguration.maxTechnicalRetries + 1,
           cases: results,
         },
         null,
@@ -525,7 +524,7 @@ async function main(): Promise<void> {
   }
 }
 
-const invokedDirectly = process.argv[1] === resolve(process.argv[1]);
+const invokedDirectly = !!process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 
 if (invokedDirectly) {
   main().catch((error: unknown) => {

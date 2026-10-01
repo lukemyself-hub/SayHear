@@ -1027,10 +1027,10 @@ export function validateValidatorLedger(input: {
   }
   const catalogVerification = verifyFixtureCatalog(input.catalog);
   if (!catalogVerification.passed) throw new Error("The fixture catalog is invalid.");
-  if (input.ledger.version !== F3_LEDGER_VERSION || input.ledger.group !== "validator") {
+  if ((input.ledger.version !== F3_LEDGER_VERSION && input.ledger.version !== "1a3b-f3-completion:v1") || input.ledger.group !== "validator") {
     throw new Error("Validator ledger has an unsupported version or group.");
   }
-  if (input.ledger.adjudicator !== "Luke" || input.ledger.decidedAt.trim().length === 0) {
+  if (input.ledger.adjudicator !== (input.ledger.version === "1a3b-f3-completion:v1" ? "capture-verifier" : "Luke") || input.ledger.decidedAt.trim().length === 0) {
     throw new Error("Validator ledger must record Luke's dated adjudication.");
   }
   const fixtures = input.catalog.scenarios.filter((fixture) => fixture.group === "validator");

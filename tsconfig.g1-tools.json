@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "composite": false },
+  "include": [
+    "scripts/capture-g1-role-provider-calls.ts",
+    "scripts/build-validator-completion.ts",
+    "scripts/build-1a3b-g1-release-manifest.ts",
+    "scripts/verify-1a3b-g1-release-manifest.ts",
+    "scripts/export-hosted-workflow-canary.ts",
+    "scripts/verify-hosted-workflow-canary.ts",
+    "scripts/produce-1a3b-g1-evidence.ts",
+    "scripts/verify-1a3b-g1-evidence.ts",
+    "scripts/generate-1a3b-g1-source-docs.ts",
+    "eval/continuation-acceptance-1a3b/run-validator-capture.ts"
+  ]
+}
