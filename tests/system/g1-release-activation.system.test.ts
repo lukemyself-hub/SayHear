@@ -137,7 +137,7 @@ systemDescribe("G1 release activation persistence", () => {
       })).sort((left, right) => left.role.localeCompare(right.role)),
     );
     // All four prior configurations remain, alongside the four new versions.
-    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["narrative.validate"]).toBe("v4");
+    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["narrative.validate"]).toBe("v5");
     const counts = await database!.pool.query<{ count: number }>(
       `SELECT count(*)::int AS count FROM model_role_configurations
        WHERE role = ANY($1::text[])`,
