@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ModelRoleConfigurationSnapshot } from "@sayhear/application";
+import {
+  asUserId,
+  type ModelRoleConfigurationSnapshot,
+  type NarrativeValidatorModelRequest,
+} from "@sayhear/application";
+import { createRuntimeOneA3bRoleProviders } from "@sayhear/ai";
 
-import { assertResumeIdentity } from "../eval/continuation-acceptance-1a3b/run-validator-capture";
+import g1ActivationPins from "../eval/continuation-acceptance-1a3b/g1-activation-pins.json";
+import {
+  assertResumeIdentity,
+  snapshotFor,
+  type PinsFile,
+} from "../eval/continuation-acceptance-1a3b/run-validator-capture";
 
 const configuration: ModelRoleConfigurationSnapshot = {
   role: "narrative.validate",
@@ -82,5 +92,136 @@ describe("validator capture resume identity", () => {
     expect(() =>
       assertResumeIdentity({ ...previousHeader, gitCommit: undefined }, current),
     ).toThrow("gitCommit");
+  });
+});
+
+const REAL_G1_PINS = g1ActivationPins as unknown as PinsFile;
+
+const CAPTURE_ROLES = [
+  "episode.build",
+  "reflection.daily",
+  "reflection.weekly",
+  "narrative.validate",
+] as const;
+
+describe("snapshotFor carries the complete frozen pin parameters", () => {
+  it("deep-equals the narrative.validate pin, keeping reasoning.effort low", () => {
+    const snapshot = snapshotFor("narrative.validate", REAL_G1_PINS);
+
+    expect(snapshot.parameterSnapshot).toEqual(
+      REAL_G1_PINS.roles["narrative.validate"]!.parameters,
+    );
+    expect(snapshot.parameterSnapshot).toEqual({
+      temperature: 0,
+      maxOutputTokens: 10000,
+      reasoning: { effort: "low" },
+    });
+  });
+
+  it("does not add fields to roles whose pins carry only temperature and budget", () => {
+    for (const role of ["episode.build", "reflection.daily", "reflection.weekly"] as const) {
+      const snapshot = snapshotFor(role, REAL_G1_PINS);
+      expect(snapshot.parameterSnapshot).toEqual(REAL_G1_PINS.roles[role]!.parameters);
+      expect(Object.keys(snapshot.parameterSnapshot).sort()).toEqual([
+        "maxOutputTokens",
+        "temperature",
+      ]);
+    }
+  });
+});
+
+const VALIDATOR_WIRE_REQUEST: NarrativeValidatorModelRequest = {
+  userId: asUserId("01984477-59a9-7d20-9d97-e588769566a0"),
+  artifactKind: "reflection",
+  draftRef: "reflection-daily:01984477-59a9-7d20-9d97-e588769566a1",
+  draftLocale: "en-US",
+  draftText: "the user repaired a radio.",
+  sourceEntries: [
+    {
+      sourceKey: "syn-claim-1",
+      sourceKind: "memory_claim_version",
+      text: "the user repairs radios.",
+      epistemicKind: "objective_memory",
+    },
+  ],
+};
+
+const VALIDATOR_WIRE_OUTPUT = {
+  coverageKeys: ["syn-claim-1"],
+  propositions: [
+    {
+      ambiguous: false,
+      contradicted: false,
+      epistemicRendering: "confirmed",
+      propositionKey: "p1",
+      propositionKind: "fact",
+      supportKeys: ["syn-claim-1"],
+      text: "the user repaired a radio.",
+      unsupported: false,
+    },
+  ],
+};
+
+function validatorSse(): string {
+  return (
+    `event: response.output_text.delta\r\ndata: ${JSON.stringify({
+      delta: JSON.stringify(VALIDATOR_WIRE_OUTPUT),
+      type: "response.output_text.delta",
+    })}\r\n\r\n` +
+    `event: response.completed\r\ndata: ${JSON.stringify({
+      response: {
+        id: "resp_synthetic",
+        model: "deepseek-flash",
+        usage: { input_tokens: 900, output_tokens: 120 },
+      },
+      type: "response.completed",
+    })}\r\n\r\n`
+  );
+}
+
+describe("snapshotFor parameters reach the real Responses API request body", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("sends the pinned reasoning.effort and max_output_tokens from the real g1 pins", async () => {
+    let capturedBody: Record<string, unknown> | null = null;
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(validatorSse(), {
+        headers: { "content-type": "text/event-stream" },
+        status: 200,
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const configurations = CAPTURE_ROLES.map((role) => snapshotFor(role, REAL_G1_PINS));
+    const providers = createRuntimeOneA3bRoleProviders({
+      adapters: [
+        {
+          apiKey: "synthetic-server-key",
+          baseUrl: "https://api.deepseek.com",
+          provider: "deepseek",
+          timeoutMs: 5_000,
+        },
+      ],
+      configurations,
+    });
+
+    await providers.narrativeValidationProvider.validateNarrative(
+      VALIDATOR_WIRE_REQUEST,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(capturedBody).not.toBeNull();
+    expect(capturedBody).toMatchObject({
+      model: "deepseek-v4-flash",
+      max_output_tokens: 10000,
+      reasoning: { effort: "low" },
+      temperature: 0,
+    });
+    // The wire uses the snake_case alias, never the camelCase ledger key.
+    expect(capturedBody).not.toHaveProperty("maxOutputTokens");
   });
 });

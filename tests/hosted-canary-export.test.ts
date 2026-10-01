@@ -148,6 +148,26 @@ describe("hosted canary platform export", () => {
     expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).toThrow("expired");
   });
 
+  it("accepts future run retention metadata but still rejects nested expired-data stubs", () => {
+    const artifacts = completeArtifacts();
+    const future = new Date(Date.now() + 60_000).toISOString();
+    artifacts.workflowHistory[0]!.expiredAt = future;
+    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).not.toThrow();
+    artifacts.workflowHistory[0]!.input = [{ expiredAt: future }];
+    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).toThrow("expired");
+  });
+
+  it("rejects invalid retention metadata and scans data despite a future deadline", () => {
+    const artifacts = completeArtifacts();
+    artifacts.workflowHistory[0]!.expiredAt = "invalid-date";
+    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).toThrow("expired");
+    artifacts.workflowHistory[0]!.expiredAt = new Date(Date.now() + 60_000).toISOString();
+    artifacts.workflowHistory[0]!.output = "🔒 Encrypted";
+    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).toThrow("unresolved");
+    artifacts.workflowHistory[0]!.output = values.privateBody;
+    expect(() => assertHostedWorkflowCanaryEvidence(asArtifacts(artifacts), values)).toThrow("private_body");
+  });
+
   it("refuses the locked hydration placeholder's exported JSON representation", () => {
     const artifacts = completeArtifacts();
     artifacts.workflowHistory[0]!.input = { toJSON: () => "🔒 Encrypted" };

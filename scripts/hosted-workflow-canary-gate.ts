@@ -57,7 +57,7 @@ const unresolvedDataTokens = [
   "__workflow_stream_ref__",
 ] as const;
 
-const unresolvedDataKeys = ["expiredAt", "__workflow_stream_ref__"] as const;
+const unresolvedDataKeys = ["__workflow_stream_ref__"] as const;
 
 function collectUnresolvedDataFindings(
   value: unknown,
@@ -78,6 +78,18 @@ function collectUnresolvedDataFindings(
   }
   if (!value || typeof value !== "object") return;
   for (const [key, nested] of Object.entries(value)) {
+    if (key === "expiredAt" && nested !== null && nested !== undefined) {
+      // The SDK also uses expiredAt on the run envelope for its retention
+      // deadline. A future deadline does not hide data. Nested expiredAt
+      // objects are serialized expired-data stubs and remain unresolved,
+      // even if their timestamp is future or malformed.
+      const isRunMetadata = /^workflowHistory\[\d+\]$/.test(path) &&
+        typeof (value as RecordValue).runId === "string";
+      const expiry = typeof nested === "string" ? Date.parse(nested) : NaN;
+      if (!isRunMetadata || !Number.isFinite(expiry) || expiry <= Date.now()) {
+        findings.push(`${path}.${key}`);
+      }
+    }
     if ((unresolvedDataKeys as readonly string[]).includes(key) && nested !== null && nested !== undefined) {
       findings.push(`${path}.${key}`);
     }

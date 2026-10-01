@@ -113,6 +113,18 @@ const BUILT_IN_PRECISION_DRAFTS = [
   { id: "precision-clean-mix-2", locale: "zh-CN", inputRef: "validator-mix", claimId: "syn-claim-validator-mix", draftText: "虚构用户会 repair radios。" },
 ] as const;
 
+/**
+ * Frozen provider parameters as pinned. `temperature` and `maxOutputTokens`
+ * are always present; any additional frozen field (for example
+ * `narrative.validate`'s `reasoning.effort`) is an allowed extension and must
+ * be carried to the wire unchanged rather than dropped by the capture.
+ */
+export type PinsRoleParameters = Readonly<{
+  maxOutputTokens: number;
+  temperature: number;
+  [parameter: string]: unknown;
+}>;
+
 export type PinsFile = {
   roles: Record<
     string,
@@ -120,7 +132,7 @@ export type PinsFile = {
       fallback: string;
       maxTechnicalRetries: number;
       model: string;
-      parameters: { maxOutputTokens: number; temperature: number };
+      parameters: PinsRoleParameters;
       policyVersion: string;
       promptVersion: string;
       provider: string;
@@ -167,10 +179,11 @@ export function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsF
     fallbackMode: "disabled",
     maxTechnicalRetries: policy.maxTechnicalRetries,
     maxSemanticRepairs: policy.maxSemanticRepairs,
-    parameterSnapshot: {
-      temperature: pin.parameters.temperature,
-      maxOutputTokens: pin.parameters.maxOutputTokens,
-    },
+    // The frozen pin is the source of truth for provider parameters: copy it
+    // in full so extensions such as `reasoning.effort` reach the wire. Copying
+    // only temperature/maxOutputTokens silently dropped them and burned the
+    // default (high) reasoning budget.
+    parameterSnapshot: { ...pin.parameters },
   };
 }
 
