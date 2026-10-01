@@ -175,6 +175,11 @@ export function createConversationAgentHarness(dependencies: {
   actionGateway?: ConversationActionGateway;
   egressPort: ProviderEgressPort;
   jitter?: () => number;
+  onUnexpectedFailure?: (failure: Readonly<{
+    generationCommandId: string;
+    stage: "provider" | "action_admission" | "action_commit" | "response_commit";
+    databaseErrorCode: string | null;
+  }>) => void;
   contextCompiler?: Pick<ContextCompiler, "compile">;
   repository: ConversationAgentHarnessRepository;
 }): ConversationAgentHarness {
@@ -192,6 +197,7 @@ export function createConversationAgentHarness(dependencies: {
     let completeText = "";
     let completion: CompleteResponseMetadata | null = null;
     let pendingActionProposal: ConversationActionProposal | null = null;
+    let stage: "provider" | "action_admission" | "action_commit" | "response_commit" = "provider";
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
     try {
@@ -285,6 +291,7 @@ export function createConversationAgentHarness(dependencies: {
         }
       }
       if (pendingActionProposal) {
+        stage = "action_admission";
         const receipt = await dependencies.actionGateway!.admit({
           catalog: command.catalog,
           context: {
@@ -296,6 +303,7 @@ export function createConversationAgentHarness(dependencies: {
           proposal: pendingActionProposal,
         });
         if (receipt.admission === "accepted") {
+          stage = "action_commit";
           await dependencies.repository.commitActionDecision?.({
             completedAt: dependencies.clock(),
             generationCommandId: command.generationCommandId,
@@ -310,6 +318,7 @@ export function createConversationAgentHarness(dependencies: {
         throw new ProviderDispatchError("invalid_response");
       }
 
+      stage = "response_commit";
       const committed = await dependencies.repository.commitCompleteResponse({
         completedAt: dependencies.clock(),
         generationCommandId: command.generationCommandId,
@@ -330,6 +339,17 @@ export function createConversationAgentHarness(dependencies: {
         type: "decision_committed",
       };
     } catch (error) {
+      if (!(error instanceof ProviderDispatchError)) {
+        const code = error && typeof error === "object" && "code" in error ? error.code : null;
+        // SQLSTATE is a fixed five-character code. Arbitrary messages, names,
+        // details and Provider bodies never enter the diagnostic callback.
+        const databaseErrorCode = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : null;
+        try {
+          dependencies.onUnexpectedFailure?.({ generationCommandId: command.generationCommandId, stage, databaseErrorCode });
+        } catch {
+          // Observability cannot prevent the existing failure settlement.
+        }
+      }
       if (error instanceof ProviderDispatchError && !error.settlesAttempt) {
         // Another owner already finalized this attempt; surface whatever it
         // committed without settling again.

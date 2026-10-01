@@ -832,6 +832,9 @@ export function createServerComposition() {
     clock: configuration.clock,
     egressPort,
     contextCompiler,
+    onUnexpectedFailure: (failure) => {
+      console.error("conversation_decision_unexpected_failure", failure);
+    },
     repository: responseRepository,
   });
   return {

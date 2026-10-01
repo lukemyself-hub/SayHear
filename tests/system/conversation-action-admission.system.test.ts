@@ -599,5 +599,47 @@ describe("Journal regeneration Action admission system seam", () => {
       guidance_ciphertext: null,
       guidance_content_purged_at: expect.any(Date),
     });
+
+    // A new user request may regenerate the same source revision after the
+    // previous Action is terminal. It must not collide with that Action's
+    // retained Workflow command; replay of the new request still admits once.
+    const nextTurn = await conversationService.submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "action-event-2", clientTurnId: "action-turn-2",
+      locale: "en-US", text: "Please regenerate the Journal again.",
+      timezone: "America/Los_Angeles",
+    });
+    await responseRepository.claimResponseExecution({
+      generationCommandId: nextTurn.generation.commandId,
+      modelRunAttemptId: nextTurn.generation.attemptId,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    const nextContext = await createContextCompiler({
+      clock: () => now, compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "action-test-secret", rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    }).compile({
+      generationCommandId: nextTurn.generation.commandId,
+      interactionTurnId: nextTurn.turn.id, userId: fixedInternalOwnerPrincipal.userId,
+    });
+    const nextRequest = {
+      catalog: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
+      context: {
+        compiledContextId: nextContext.id, decisionCommandId: nextTurn.generation.commandId,
+        requestEventRevisionId: nextTurn.message.revisionId, userId: fixedInternalOwnerPrincipal.userId,
+      },
+      proposal: {
+        ...request, requestEventRevisionId: nextTurn.message.revisionId,
+        arguments: { guidance: "Keep the same facts.", journalHandle: nextContext.actionReferenceHandles![0]!.handle },
+      },
+    };
+    const nextReceipt = await gateway.admit(nextRequest);
+    expect(nextReceipt).toMatchObject({ admission: "accepted", execution: "pending" });
+    expect(nextReceipt.actionExecutionId).not.toBe(first.actionExecutionId);
+    expect(await gateway.admit(nextRequest)).toEqual(nextReceipt);
+    const commands = (await database.pool.query<{ intent_key: string }>(
+      "SELECT intent_key FROM workflow_commands WHERE command_type = 'journal_regeneration'",
+    )).rows;
+    expect(commands).toHaveLength(2);
+    expect(new Set(commands.map(command => command.intent_key)).size).toBe(2);
   });
 });

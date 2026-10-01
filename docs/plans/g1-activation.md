@@ -67,3 +67,16 @@ All four Provider calls completed on frozen 9db7a9c with `gitDirty=false` and `p
 Luke 于2026-10-01明确要求跳过原始 Provider 错误探针并完成生产部署/G1开启。执行 ADR-0145 的单项豁免，不新增故障探针入口，不把该项标为通过。其余身份、确定性、隐私扫描及回滚条件继续核验。当前代码仍需冻结；新 commit 的 Provider/Validator、hosted 和功能证据尚未完成。
 
 单项豁免实现后完整回归110files/1384tests通过，零失败/跳过。完整typecheck、build、16项Workflow边界与124表/130索引purge inventory通过。正常Journal步骤增加仅含command/action IDs和固定outcome的诊断记录，供真实平台日志关联。OpenCode实现session超时且已确认终止，Codex检查了改动并独立完成上述验证。报告保留在/private/tmp/sayhear-g1-waiver-*及sayhear-g1-review-fix-tests.json。
+
+## 接续与真实功能故障
+
+- 临时目录在接续时已丢失。同一7e68331768c83e29be1a443b98c690664682b94a版本在项目忽略的.codex/g1-restoration/frozen-7e68331重建了独立checkout和锁定依赖，重新生成证据并归档到run/g1-release-7e68331。四角色完成、Validator与precision各6/6、18个真实对话样本硬门禁通过；失败的首次捕获也保留。59项系统seams、15项purge、19项admission、4项restore及1384项全量回归通过。不得将这些报告改名为后续commit证据。
+- 测试域名已切到7e68331独立部署dpl_EL63wfwtop9a5P3EVMGH3n8MRvSV，正常GitHub Owner登录成功。真实请求随后暴露已终止Journal regeneration再次受理时的命令身份缺陷。诊断Preview仅记录command ID、阶段与SQLSTATE，不能作为冻结发布证据。
+- 实际SQLSTATE23505发生在action_admission；只读数据库比对发现保留的旧Workflowcommand使用同一identity。系统测试准确复现workflow_commands_revision_coverage_key冲突；修复后还暴露outbox_events_one_per_aggregate_event_idx同样冲突。两者都漏填现有intent_key，现按ActionExecution ID填写。新User Event可创建新Action，同一请求仍重放同一Receipt，旧命令/审计不删除，schema不变。
+- 修复版本完整回归110files/1386tests通过，零失败/跳过；完整typecheck/build通过。下一次冻结需重新生成所有受影响证据。
+- 生产只读检查仍为四个v2pins、0055及两个marker迁移，无待处理outbox。备份记录当前verified_at为2026-10-01T10:55:13Z，valid_until为2026-10-31T10:55:13Z；这只是当前数据库事实，不推断续期来源。生产G1仍关闭。
+- 验收站CRON_SECRET为不可读的Vercel sensitive变量，原临时凭据丢失。轮换被自动审批拒绝，原因是原授权未明确包含凭据变更；已经单独向Luke询问，不绕过拒绝，也未修改生产凭据。
+- 一次Preview命令从错误的根目录启动，随后审计正式项目最新部署未发现新部署，生产别名未变。改回独立验收checkout执行诊断部署，原日志保留。
+
+- 独立诊断Preview dpl_E511kz5jE5cxb8r2VRvxHLd1dzLm 上正常Owner新请求已完成受理：decision command 01a0f839-6432-7a50-852d-ef813876a71f succeeded，Action 01a0f839-7e34-7876-820e-2142c6f1dc38 pending。界面明确显示已接受，数据库保留旧canceled Action并新增本次Action。这证明唯一约束修复生效，尚不证明Journal完成；调度等待测试Cron凭据授权。截图位于run/g1-hosted-bootstrap-20261001/fixed-action-accepted.png。
+- 本次限定只读审查通过delegate.py发起，session ses_f07c61025ffe8jBaAEhooPOn80。180秒超时后显式恢复，120秒再次超时，两次abort_confirmed=true，没有最终审查结论。实际模型为opencode-go/muse-spark-1.3-contributor。不能称为审查通过；Codex已检查参数绑定、事务及重复请求路径，并完成本地/真实受理验证。审查原始记录归档到.codex/g1-restoration/action-fix-review。
