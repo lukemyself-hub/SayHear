@@ -1,7 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { asGenerationCommandId, asModelRunAttemptId } from "@sayhear/domain";
 
 import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
@@ -22,6 +25,7 @@ import {
   type NarrativeValidationEntrypointDependencies,
   type NarrativeValidationModelProvider,
   type NarrativeValidationRequest,
+  type NarrativeValidationResult,
   type NarrativeValidatorModelOutput,
   type NarrativeValidatorModelRequest,
   type RecoveryGate,
@@ -75,16 +79,17 @@ const configuration: ModelRoleConfigurationSnapshot = {
 
 async function seedConfigQueries(
   database: IsolatedPostgresSchema,
+  config: ModelRoleConfigurationSnapshot,
 ): Promise<void> {
   await database.pool.query(
     `INSERT INTO provider_egress_policy_versions (
        policy_version, provider, role, model_config_version, status, created_at
      ) VALUES ($1, $2, $3, $4, 'active', $5)`,
     [
-      configuration.providerPolicyVersion,
-      configuration.provider,
-      configuration.role,
-      configuration.configVersion,
+      config.providerPolicyVersion,
+      config.provider,
+      config.role,
+      config.configVersion,
       baseTime,
     ],
   );
@@ -96,26 +101,26 @@ async function seedConfigQueries(
        max_semantic_repairs, parameter_snapshot, created_at
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15)`,
     [
-      configuration.role,
-      configuration.configVersion,
-      configuration.provider,
-      configuration.model,
-      configuration.modelSnapshot,
-      configuration.promptVersion,
-      configuration.schemaVersion,
-      configuration.rolePolicyVersion,
-      configuration.providerPolicyVersion,
-      configuration.freshnessPolicy,
-      configuration.fallbackMode,
-      configuration.maxTechnicalRetries,
-      configuration.maxSemanticRepairs,
-      JSON.stringify(configuration.parameterSnapshot),
+      config.role,
+      config.configVersion,
+      config.provider,
+      config.model,
+      config.modelSnapshot,
+      config.promptVersion,
+      config.schemaVersion,
+      config.rolePolicyVersion,
+      config.providerPolicyVersion,
+      config.freshnessPolicy,
+      config.fallbackMode,
+      config.maxTechnicalRetries,
+      config.maxSemanticRepairs,
+      JSON.stringify(config.parameterSnapshot),
       baseTime,
     ],
   );
   await database.pool.query(
     "UPDATE model_role_definitions SET enabled = TRUE WHERE role = $1",
-    [configuration.role],
+    [config.role],
   );
   await database.pool.query(
     `INSERT INTO model_role_rollout_pins (
@@ -123,10 +128,10 @@ async function seedConfigQueries(
        release_fingerprint, status, activated_at
      ) VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
     [
-      configuration.role,
-      configuration.rolloutPin,
-      configuration.configVersion,
-      configuration.providerPolicyVersion,
+      config.role,
+      config.rolloutPin,
+      config.configVersion,
+      config.providerPolicyVersion,
       G1_FINGERPRINT,
       baseTime,
     ],
@@ -315,7 +320,7 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
        VALUES ($1, 'active', 1, $2, $2)`,
       [userId, baseTime],
     );
-    await seedConfigQueries(seededDatabase);
+    await seedConfigQueries(seededDatabase, configuration);
     commandService = createModelRoleCommandService({
       registry: createModelRoleRegistry([configuration]),
       repository: new PostgresModelRoleCommandRepository(
@@ -329,6 +334,70 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
   afterAll(async () => {
     await database?.dispose();
   });
+
+  /**
+   * Seeds a running narrative.validate command/attempt frozen to one pin.
+   * commitResult only needs the durable command/attempt rows and their frozen
+   * pin fields, so this is the narrow seam for a late-callback regression.
+   */
+  let idSequence = 0;
+  function v7Id(): string {
+    idSequence += 1;
+    return `01990000-0000-7000-8000-${String(idSequence).padStart(12, "0")}`;
+  }
+  async function seedNarrativeGeneration(input: {
+    rolloutPin: string;
+    configVersion: string;
+    providerPolicyVersion: string;
+  }): Promise<{ generationCommandId: string; modelRunAttemptId: string }> {
+    const generationCommandId = v7Id();
+    const modelRunAttemptId = v7Id();
+    await database!.pool.query(
+      `INSERT INTO generation_commands (
+         generation_command_id, user_id, operation_type, intent_key,
+         subject_type, subject_id, model_role, schema_version, prompt_version,
+         product_policy_version, safety_policy_version,
+         relationship_policy_version, locale_policy_version, locale, provider,
+         model, model_snapshot, model_config_version, freshness_policy,
+         output_format_version, harness_policy_version,
+         conversation_action_catalog_version, role_policy_version, rollout_pin,
+         provider_policy_version, source_revision, parameter_snapshot,
+         fallback_mode, expected_data_epoch, status, created_at
+       ) VALUES ($1, $2, 'narrative.validate', $3, 'bio_version',
+         $4, 'narrative.validate', $5, $6,
+         'product-policy:v1', 'minimum-high-risk-response:v1',
+         'relationship-boundary:v1', 'locale-policy:v1', 'en', 'system-test',
+         'synthetic-model', 'synthetic-model@fixture', $7,
+         'exact_head:v1', 'reflection-output:v1',
+         'conversation-harness:v1', 'memory-trust-actions-catalog:v1',
+         '1a3b-model-role-policy:v1', $8,
+         $9, 1, '{}'::jsonb, 'disabled', 1,
+         'running', $10)`,
+      [
+        generationCommandId,
+        userId,
+        `narrative-draft:${randomUUID()}`,
+        randomUUID(),
+        NARRATIVE_FINDINGS_SCHEMA_VERSION,
+        NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+        input.configVersion,
+        input.rolloutPin,
+        input.providerPolicyVersion,
+        baseTime,
+      ],
+    );
+    await database!.pool.query(
+      `INSERT INTO model_run_attempts (
+         model_run_attempt_id, user_id, generation_command_id, attempt_no,
+         operation_type, provider, model, model_snapshot, prompt_version,
+         attempt_kind, status, created_at
+       ) VALUES ($1, $2, $3, 1, 'narrative.validate', 'system-test',
+         'synthetic-model', 'synthetic-model@fixture',
+         'narrative-validate:system-test:v1', 'initial', 'running', $4)`,
+      [modelRunAttemptId, userId, generationCommandId, baseTime],
+    );
+    return { generationCommandId, modelRunAttemptId };
+  }
 
   it("runs all 18 calibration fixtures through the production validation entry", async () => {
     const bundles = buildValidatorRequestBundle(loadValidatorCatalog(
@@ -965,5 +1034,74 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
         now: baseTime,
       }),
     ).toMatchObject({ outcome: "ok" });
+  });
+
+  it("fences a late narrative.validate commit after its pin is revoked and re-bound", async () => {
+    const repository = new PostgresNarrativeValidationRepository(database!.pool);
+    const draftRef = "bio-version:01984477-1f9a-7b25-a5cc-000000000020";
+    const submitted = await repository.submitRequest({
+      userId,
+      request: cleanRequest(draftRef),
+      requestFingerprint: `sha256:${"b".repeat(64)}`,
+      expectedDataEpoch: 1,
+      now: baseTime,
+    });
+    if (submitted.outcome !== "created") return expect.unreachable();
+    // The late callback froze under the v1 pin before rollback.
+    const stale = await seedNarrativeGeneration({
+      rolloutPin: configuration.rolloutPin,
+      configVersion: configuration.configVersion,
+      providerPolicyVersion: configuration.providerPolicyVersion,
+    });
+    // Rollback revokes v1 and binds a new v2 pin for the same role.
+    await database!.pool.query(
+      "UPDATE model_role_rollout_pins SET status = 'revoked', revoked_at = $1 WHERE role = 'narrative.validate' AND status = 'active'",
+      [baseTime],
+    );
+    const configurationV2: ModelRoleConfigurationSnapshot = {
+      ...configuration,
+      configVersion: "system-narrative-validate:v2",
+      providerPolicyVersion: "system-narrative-validate-egress:v2",
+      rolloutPin: "system-narrative-validate-pin:v2",
+    };
+    await seedConfigQueries(database!, configurationV2);
+    const result: NarrativeValidationResult = {
+      outcome: "accepted",
+      artifactKind: "bio",
+      blockingFindings: [],
+      advisoryFindings: [],
+      coverage: { coveredKeys: [], uncoveredPlannedKeys: [] },
+      validationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
+      schemaVersion: NARRATIVE_FINDINGS_SCHEMA_VERSION,
+      promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+    };
+    expect(await repository.commitResult({
+      narrativeValidatorRequestId: submitted.request.narrativeValidatorRequestId,
+      userId,
+      generationCommandId: asGenerationCommandId(stale.generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(stale.modelRunAttemptId),
+      result,
+    })).toEqual({ outcome: "fenced", reason: "attempt_settled" });
+    expect((await database!.pool.query(
+      "SELECT count(*)::int AS count FROM narrative_validator_results WHERE narrative_validator_request_id = $1",
+      [submitted.request.narrativeValidatorRequestId],
+    )).rows[0].count).toBe(0);
+    // A fresh attempt frozen under the newly active pin commits.
+    const fresh = await seedNarrativeGeneration({
+      rolloutPin: configurationV2.rolloutPin,
+      configVersion: configurationV2.configVersion,
+      providerPolicyVersion: configurationV2.providerPolicyVersion,
+    });
+    expect(await repository.commitResult({
+      narrativeValidatorRequestId: submitted.request.narrativeValidatorRequestId,
+      userId,
+      generationCommandId: asGenerationCommandId(fresh.generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(fresh.modelRunAttemptId),
+      result,
+    })).toMatchObject({ outcome: "committed" });
+    expect((await database!.pool.query(
+      "SELECT verdict FROM narrative_validator_results WHERE narrative_validator_request_id = $1",
+      [submitted.request.narrativeValidatorRequestId],
+    )).rows).toEqual([{ verdict: "accepted" }]);
   });
 });

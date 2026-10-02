@@ -21,7 +21,10 @@
       "policyVersion": "episode-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 10000
+        "maxOutputTokens": 10000,
+        "reasoning": {
+          "effort": "low"
+        }
       },
       "maxTechnicalRetries": 1,
       "fallback": "none"
@@ -49,7 +52,10 @@
       "policyVersion": "reflection-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 10000
+        "maxOutputTokens": 10000,
+        "reasoning": {
+          "effort": "low"
+        }
       },
       "maxTechnicalRetries": 1,
       "fallback": "none"
@@ -63,7 +69,10 @@
       "policyVersion": "reflection-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 10000
+        "maxOutputTokens": 10000,
+        "reasoning": {
+          "effort": "low"
+        }
       },
       "maxTechnicalRetries": 1,
       "fallback": "none"

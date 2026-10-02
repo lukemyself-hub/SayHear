@@ -107,6 +107,7 @@ type InsertVersionInput = Readonly<{
   episodeId: string;
   userId: UserId;
   revision: number;
+  supersedesVersionId: string | null;
   sourceRevision: number;
   kind: string;
   content: {
@@ -885,6 +886,7 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             episodeId,
             userId: input.userId,
             revision: 1,
+            supersedesVersionId: null,
             sourceRevision: input.sourceRevision,
             kind: plan.content.kind,
             content: plan.content,
@@ -933,6 +935,7 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
           episodeId: plan.episodeId,
           userId: input.userId,
           revision: currentVersion.currentRevision + 1,
+          supersedesVersionId: currentVersion.currentVersionId,
           sourceRevision: input.sourceRevision,
           kind: plan.content.kind,
           content: plan.content,
@@ -1470,10 +1473,10 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
          model_run_attempt_id, dedupe_fingerprint,
          dedupe_fingerprint_key_version, disposition_reason_code,
          disposition_policy_version, decided_at, terminal_effective_at,
-         terminal_content_expires_at, created_at
+         terminal_content_expires_at, reproposal_policy, created_at
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14,
-         $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+         $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
        )`,
       [
         input.candidateId,
@@ -1499,6 +1502,7 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
         terminal ? (input.decidedAt ?? null) : null,
         terminal ? (input.decidedAt ?? null) : null,
         terminal ? (input.terminalContentExpiresAt ?? null) : null,
+        terminal ? "material_change_allowed" : null,
         input.decidedAt ?? new Date(),
       ],
     );
@@ -1542,7 +1546,7 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
         input.policyVersion,
         input.generationCommandId,
         input.modelRunAttemptId,
-        input.revision === 1 ? null : null,
+        input.supersedesVersionId,
         input.now,
       ],
     );
@@ -1573,7 +1577,8 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
     }
     const evidence = await client.query<RawEvidenceRow>(
       `SELECT item.evidence_item_id, item.locator_type, item.locator_key,
-              item.source_status, revision.conversation_event_revision_id,
+              item.source_status,
+              revision.conversation_event_revision_id AS revision_id,
               revision.canonical_text, revision.locale
        FROM evidence_items item
        INNER JOIN conversation_event_revisions revision

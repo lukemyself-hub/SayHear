@@ -118,14 +118,15 @@ describe("snapshotFor carries the complete frozen pin parameters", () => {
     });
   });
 
-  it("does not add fields to roles whose pins carry only temperature and budget", () => {
+  it("preserves the complete low-reasoning generation pins", () => {
     for (const role of ["episode.build", "reflection.daily", "reflection.weekly"] as const) {
       const snapshot = snapshotFor(role, REAL_G1_PINS);
       expect(snapshot.parameterSnapshot).toEqual(REAL_G1_PINS.roles[role]!.parameters);
-      expect(Object.keys(snapshot.parameterSnapshot).sort()).toEqual([
-        "maxOutputTokens",
-        "temperature",
-      ]);
+      expect(snapshot.parameterSnapshot).toEqual({
+        temperature: 0.2,
+        maxOutputTokens: 10000,
+        reasoning: { effort: "low" },
+      });
     }
   });
 });
