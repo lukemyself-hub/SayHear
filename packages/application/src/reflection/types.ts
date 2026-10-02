@@ -34,7 +34,7 @@ export const REFLECTION_OUTPUT_POLICY_VERSION = "reflection-output:v1";
 export const REFLECTION_OUTPUT_SCHEMA_VERSION = "reflection-output-schema:v1";
 
 /** One frozen Prompt per artifact kind (ADR-0121 discipline for producers). */
-export const REFLECTION_DAILY_PROMPT_VERSION = "reflection-daily:v1";
+export const REFLECTION_DAILY_PROMPT_VERSION = "reflection-daily:v2";
 export const REFLECTION_WEEKLY_PROMPT_VERSION = "reflection-weekly:v1";
 
 /**

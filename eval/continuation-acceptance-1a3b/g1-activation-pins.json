@@ -16,7 +16,7 @@
       "provider": "deepseek",
       "model": "deepseek-v4-flash",
       "snapshot": "deepseek-flash",
-      "promptVersion": "episode-build:eval:v3",
+      "promptVersion": "episode-build:eval:v4",
       "schemaVersion": "episode-proposal:v1",
       "policyVersion": "episode-admission:v1",
       "parameters": {
@@ -47,7 +47,7 @@
       "provider": "deepseek",
       "model": "deepseek-v4-flash",
       "snapshot": "deepseek-flash",
-      "promptVersion": "reflection-daily:eval:v4",
+      "promptVersion": "reflection-daily:eval:v5",
       "schemaVersion": "reflection-proposal:v1",
       "policyVersion": "reflection-admission:v1",
       "parameters": {

@@ -27,16 +27,18 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
 /**
  * G1 model-configuration iteration per role.
  *
- * Existing production rows use v2. Episode and Reflection require v4
- * for their 10000-token budgets, complete schemas, and low reasoning effort.
- * Default reasoning exhausted the budget on real hosted daily input.
- * narrative.validate v5 keeps the 10000-token cap and pins low reasoning
- * effort after default high effort exhausted the cap before typed output.
- * Configuration rows are immutable; old versions remain rollback history.
+ * Existing production rows use v2. Weekly stays at v4 for its 10000-token
+ * budget and low reasoning effort; narrative.validate v5 keeps the
+ * 10000-token cap and pins low reasoning effort. Episode and Daily require v5
+ * because their prompts now state the typed contracts admission already
+ * enforces (kindFields allowlist, boundary date format, Evidence and
+ * entity-anchor rules; Daily day_observation-only scope); a prompt change
+ * needs a new immutable configuration version. Configuration rows are
+ * immutable; old versions remain rollback history.
  */
 export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
-  "episode.build": "v4",
-  "reflection.daily": "v4",
+  "episode.build": "v5",
+  "reflection.daily": "v5",
   "reflection.weekly": "v4",
   "narrative.validate": "v5",
 } as const satisfies Readonly<
@@ -53,7 +55,7 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * version: its foreign key is (role, config_version, provider_policy_version),
  * so a `v3` pin may point at an unchanged `v2` configuration.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v8" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v9" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =
