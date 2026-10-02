@@ -81,3 +81,13 @@ export {
 } from "./postgres-memory-claim-repository";
 export { PostgresReflectionRepository } from "./postgres-reflection-repository";
 export { PostgresReflectionInspectionRepository } from "./postgres-reflection-inspection-repository";
+export {
+  CONVERSATION_CONTENT_CAPABILITY,
+  EVIDENCE_STEP_UP_MAX_AGE_MS,
+  INTERNAL_OWNER_GITHUB_ISSUER,
+  PostgresEvidenceStepUpRepository,
+  REFLECTION_INSPECTION_CAPABILITY,
+  type EvidenceStepUpCompletionResult,
+  type EvidenceStepUpDenialReason,
+  type EvidenceStepUpIssuerContext,
+} from "./postgres-evidence-step-up-repository";

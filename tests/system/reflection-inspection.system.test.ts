@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 
@@ -19,6 +21,8 @@ import {
   type ReflectionInspectionService,
 } from "@sayhear/application";
 import {
+  businessMigrationsDirectory,
+  createPostgresAuthAdapter,
   PostgresReflectionInspectionRepository,
   runMigrations,
 } from "@sayhear/data";
@@ -139,19 +143,21 @@ systemDescribe("Reflection Inspector — 1A.3b A4 (issue #202)", () => {
        ) VALUES (1, 'system-test', 'reflection-inspector', $1, TRUE, $2)`,
       [OWNER, NOW],
     );
-    await database.pool.query(
-      `INSERT INTO auth_sessions (
-         session_token_hash, user_id, expires_at, created_at, updated_at
-       ) VALUES ($1, $2, $3, $4, $4)`,
-      [SESSION_HASH, OWNER, new Date("2099-01-01T00:00:00.000Z"), NOW],
-    );
+    // A normal Internal Owner login provisions the owner-scoped Reflection
+    // prose capability itself (ADR-0129), so this fixture must not seed it by
+    // hand. Only the source-content step-up capability used by the Evidence
+    // expansion case is seeded explicitly.
+    await createPostgresAuthAdapter(database.pool).createSession({
+      expires: new Date("2099-01-01T00:00:00.000Z"),
+      sessionToken: SESSION_TOKEN,
+      userId: OWNER,
+    });
     await database.pool.query(
       `INSERT INTO internal_diagnostic_access_grants (
          session_token_hash, capability, status, step_up_authenticated_at,
          updated_at
-       ) VALUES
-         ($1, 'reflection_inspection:read', 'active', NULL, $2),
-         ($1, 'conversation_content:read', 'active', $2, $2)`,
+       ) VALUES ($1, 'conversation_content:read', 'active', $2, $2)
+       ON CONFLICT (session_token_hash, capability) DO NOTHING`,
       [SESSION_HASH, NOW],
     );
     await database.pool.query(
@@ -690,5 +696,93 @@ systemDescribe("Reflection Inspector — 1A.3b A4 (issue #202)", () => {
 
     const noBio = await service.listBioImpacts(OWNER, unknownClaimVersionId);
     expect(noBio).toMatchObject({ outcome: "ok", items: [] });
+  });
+
+  it("backfills only active unexpired Owner Reflection prose without reviving revoked grants", async () => {
+    const backfillDatabase = await createIsolatedPostgresSchema(testDatabaseUrl!);
+    const tokenHash = (token: string) =>
+      createHash("sha256").update(token, "utf8").digest("hex");
+    const activeSessionHash = tokenHash("backfill-active-owner");
+    const expiredSessionHash = tokenHash("backfill-expired-owner");
+    const revokedSessionHash = tokenHash("backfill-revoked-owner");
+    const strangerSessionHash = tokenHash("backfill-non-owner");
+    const strangerId = "01984500-0000-7000-8000-0000000000aa";
+    try {
+      await runMigrations(backfillDatabase.pool);
+      await backfillDatabase.pool.query(
+        `INSERT INTO app_users (user_id, status, data_epoch) VALUES
+           ($1, 'active', 1), ($2, 'active', 1)`,
+        [OWNER, strangerId],
+      );
+      await backfillDatabase.pool.query(
+        `INSERT INTO internal_owner_identities (
+           owner_slot, issuer, subject, user_id, active
+         ) VALUES (1, 'system-test', 'backfill-owner', $1, TRUE)`,
+        [OWNER],
+      );
+      await backfillDatabase.pool.query(
+        `INSERT INTO auth_sessions (session_token_hash, user_id, expires_at) VALUES
+           (decode($1, 'hex'), $2, CURRENT_TIMESTAMP + INTERVAL '1 day'),
+           (decode($3, 'hex'), $2, CURRENT_TIMESTAMP - INTERVAL '1 day'),
+           (decode($4, 'hex'), $2, CURRENT_TIMESTAMP + INTERVAL '1 day'),
+           (decode($5, 'hex'), $6, CURRENT_TIMESTAMP + INTERVAL '1 day')`,
+        [
+          activeSessionHash,
+          OWNER,
+          expiredSessionHash,
+          revokedSessionHash,
+          strangerSessionHash,
+          strangerId,
+        ],
+      );
+      await backfillDatabase.pool.query(
+        `INSERT INTO internal_diagnostic_access_grants (
+           session_token_hash, capability, status, step_up_authenticated_at,
+           updated_at
+         ) VALUES (
+           decode($1, 'hex'), 'reflection_inspection:read', 'revoked', NULL,
+           CURRENT_TIMESTAMP
+         )`,
+        [revokedSessionHash],
+      );
+
+      const migrationSql = await readFile(
+        join(
+          businessMigrationsDirectory,
+          "0060_owner_reflection_inspection_default_grant.sql",
+        ),
+        "utf8",
+      );
+      await backfillDatabase.pool.query(migrationSql);
+      // A second run must not duplicate or reactivate anything.
+      await backfillDatabase.pool.query(migrationSql);
+
+      const grants = await backfillDatabase.pool.query<{
+        session: string;
+        status: string;
+        step_up_authenticated_at: Date | null;
+      }>(
+        `SELECT encode(session_token_hash, 'hex') AS session,
+                status, step_up_authenticated_at
+         FROM internal_diagnostic_access_grants
+         ORDER BY session`,
+      );
+      // Only the active unexpired Owner session is newly granted; the expired
+      // Owner, the non-owner, and the explicitly revoked grant are untouched.
+      expect(grants.rows).toEqual([
+        {
+          session: activeSessionHash,
+          status: "active",
+          step_up_authenticated_at: null,
+        },
+        {
+          session: revokedSessionHash,
+          status: "revoked",
+          step_up_authenticated_at: null,
+        },
+      ]);
+    } finally {
+      await backfillDatabase.dispose();
+    }
   });
 });

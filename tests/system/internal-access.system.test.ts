@@ -5047,6 +5047,264 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     await adapter.deleteSession("synthetic-session-token");
     expect(await getSessionAndUser("synthetic-session-token")).toBeNull();
   });
+
+  it("provisions Reflection prose on a new Owner session without source or step-up capability", async () => {
+    const adapter = createPostgresAuthAdapter(database.pool, {
+      clock: fixedResponseClock,
+    });
+    const ownerProseToken = "owner-prose-capability-session";
+    await adapter.createSession({
+      expires: new Date("2099-01-01T00:00:00.000Z"),
+      sessionToken: ownerProseToken,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+
+    const grants = await database.pool.query<{
+      capability: string;
+      status: string;
+      step_up_authenticated_at: Date | null;
+    }>(
+      `
+        SELECT capability, status, step_up_authenticated_at
+        FROM internal_diagnostic_access_grants
+        WHERE session_token_hash = $1
+        ORDER BY capability
+      `,
+      [authSessionTokenHash(ownerProseToken)],
+    );
+    // Exactly the owner-scoped Reflection prose capability: no
+    // conversation_content:read, no candidate_review, and no faked step-up.
+    expect(grants.rows).toEqual([
+      {
+        capability: "reflection_inspection:read",
+        status: "active",
+        step_up_authenticated_at: null,
+      },
+    ]);
+
+    const authorize = await database.pool.query(
+      `
+        SELECT 1
+        FROM auth_sessions session
+        INNER JOIN active_internal_owner owner
+          ON owner.user_id = session.user_id
+        INNER JOIN internal_diagnostic_access_grants diagnostic_grant
+          ON diagnostic_grant.session_token_hash = session.session_token_hash
+         AND diagnostic_grant.capability = 'reflection_inspection:read'
+        WHERE session.session_token_hash = $1
+          AND session.expires_at > CURRENT_TIMESTAMP
+          AND diagnostic_grant.status = 'active'
+      `,
+      [authSessionTokenHash(ownerProseToken)],
+    );
+    expect(authorize.rowCount).toBe(1);
+  });
+
+  it("fails closed and writes no session or grant for a non-Owner identity", async () => {
+    const strangerId = "01984477-0000-7000-8000-0000000000aa";
+    await database.pool.query(
+      "INSERT INTO app_users (user_id, status, data_epoch) VALUES ($1, 'active', 1)",
+      [strangerId],
+    );
+    const adapter = createPostgresAuthAdapter(database.pool);
+    const strangerToken = "stranger-session-token";
+    try {
+      await expect(
+        adapter.createSession({
+          expires: new Date("2099-01-01T00:00:00.000Z"),
+          sessionToken: strangerToken,
+          userId: strangerId,
+        }),
+      ).rejects.toThrow("pre-provisioned");
+
+      const sessions = await database.pool.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM auth_sessions WHERE session_token_hash = $1",
+        [authSessionTokenHash(strangerToken)],
+      );
+      expect(sessions.rows[0]?.count).toBe("0");
+      const grants = await database.pool.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM internal_diagnostic_access_grants WHERE session_token_hash = $1",
+        [authSessionTokenHash(strangerToken)],
+      );
+      expect(grants.rows[0]?.count).toBe("0");
+    } finally {
+      await database.pool.query("DELETE FROM app_users WHERE user_id = $1", [
+        strangerId,
+      ]);
+    }
+  });
+
+  it("fails closed when the Owner identity is not active", async () => {
+    await database.pool.query(
+      "UPDATE app_users SET status = 'deleting', updated_at = CURRENT_TIMESTAMP WHERE user_id = $1",
+      [fixedInternalOwnerPrincipal.userId],
+    );
+    const adapter = createPostgresAuthAdapter(database.pool);
+    const deletingToken = "deleting-owner-session-token";
+
+    await expect(
+      adapter.createSession({
+        expires: new Date("2099-01-01T00:00:00.000Z"),
+        sessionToken: deletingToken,
+        userId: fixedInternalOwnerPrincipal.userId,
+      }),
+    ).rejects.toThrow("pre-provisioned");
+
+    const sessions = await database.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM auth_sessions WHERE session_token_hash = $1",
+      [authSessionTokenHash(deletingToken)],
+    );
+    expect(sessions.rows[0]?.count).toBe("0");
+    const grants = await database.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM internal_diagnostic_access_grants WHERE session_token_hash = $1",
+      [authSessionTokenHash(deletingToken)],
+    );
+    expect(grants.rows[0]?.count).toBe("0");
+  });
+
+  it("does not accept an expired conflicting session or grant a capability", async () => {
+    const expiredToken = "expired-conflicting-owner-session";
+    await database.pool.query(
+      `
+        INSERT INTO auth_sessions (session_token_hash, user_id, expires_at)
+        VALUES ($1, $2, $3)
+      `,
+      [
+        authSessionTokenHash(expiredToken),
+        fixedInternalOwnerPrincipal.userId,
+        new Date("2020-01-01T00:00:00.000Z"),
+      ],
+    );
+    const adapter = createPostgresAuthAdapter(database.pool);
+
+    await expect(
+      adapter.createSession({
+        expires: new Date("2099-01-01T00:00:00.000Z"),
+        sessionToken: expiredToken,
+        userId: fixedInternalOwnerPrincipal.userId,
+      }),
+    ).rejects.toThrow("pre-provisioned");
+
+    const grants = await database.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM internal_diagnostic_access_grants WHERE session_token_hash = $1",
+      [authSessionTokenHash(expiredToken)],
+    );
+    expect(grants.rows[0]?.count).toBe("0");
+  });
+
+  it("keeps an explicitly revoked Reflection capability revoked across a re-login", async () => {
+    const adapter = createPostgresAuthAdapter(database.pool);
+    const revokedToken = "revoked-reflection-capability-session";
+    await adapter.createSession({
+      expires: new Date("2099-01-01T00:00:00.000Z"),
+      sessionToken: revokedToken,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    await database.pool.query(
+      `
+        UPDATE internal_diagnostic_access_grants
+        SET status = 'revoked', updated_at = CURRENT_TIMESTAMP
+        WHERE session_token_hash = $1
+          AND capability = 'reflection_inspection:read'
+      `,
+      [authSessionTokenHash(revokedToken)],
+    );
+
+    await adapter.createSession({
+      expires: new Date("2099-01-01T00:00:00.000Z"),
+      sessionToken: revokedToken,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+
+    const grants = await database.pool.query<{
+      capability: string;
+      status: string;
+    }>(
+      `
+        SELECT capability, status
+        FROM internal_diagnostic_access_grants
+        WHERE session_token_hash = $1
+        ORDER BY capability
+      `,
+      [authSessionTokenHash(revokedToken)],
+    );
+    expect(grants.rows).toEqual([
+      { capability: "reflection_inspection:read", status: "revoked" },
+    ]);
+  });
+
+  it("cascades the Owner Reflection capability when the session is deleted", async () => {
+    const adapter = createPostgresAuthAdapter(database.pool);
+    const cascadeToken = "owner-reflection-cascade-session";
+    await adapter.createSession({
+      expires: new Date("2099-01-01T00:00:00.000Z"),
+      sessionToken: cascadeToken,
+      userId: fixedInternalOwnerPrincipal.userId,
+    });
+    const beforeDelete = await database.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM internal_diagnostic_access_grants WHERE session_token_hash = $1",
+      [authSessionTokenHash(cascadeToken)],
+    );
+    expect(beforeDelete.rows[0]?.count).toBe("1");
+
+    await adapter.deleteSession(cascadeToken);
+
+    const sessions = await database.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM auth_sessions WHERE session_token_hash = $1",
+      [authSessionTokenHash(cascadeToken)],
+    );
+    expect(sessions.rows[0]?.count).toBe("0");
+    const grants = await database.pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM internal_diagnostic_access_grants WHERE session_token_hash = $1",
+      [authSessionTokenHash(cascadeToken)],
+    );
+    expect(grants.rows[0]?.count).toBe("0");
+  });
+
+  it("serializes a new Owner login behind an in-flight purge and fails closed", async () => {
+    const purgeClient = await database.pool.connect();
+    const adapter = createPostgresAuthAdapter(database.pool);
+    const serializedToken = "purge-serialized-session";
+    try {
+      await purgeClient.query("BEGIN");
+      await purgeClient.query(
+        "SELECT status FROM app_users WHERE user_id = $1 FOR UPDATE",
+        [fixedInternalOwnerPrincipal.userId],
+      );
+      const pending = adapter.createSession({
+        expires: new Date("2099-01-01T00:00:00.000Z"),
+        sessionToken: serializedToken,
+        userId: fixedInternalOwnerPrincipal.userId,
+      });
+      // The login must wait on the Owner row lock rather than mint a session.
+      pending.catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await purgeClient.query(
+        "UPDATE app_users SET status = 'deleting', updated_at = CURRENT_TIMESTAMP WHERE user_id = $1",
+        [fixedInternalOwnerPrincipal.userId],
+      );
+      await purgeClient.query("COMMIT");
+
+      await expect(pending).rejects.toThrow("pre-provisioned");
+      const sessions = await database.pool.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM auth_sessions WHERE session_token_hash = $1",
+        [authSessionTokenHash(serializedToken)],
+      );
+      expect(sessions.rows[0]?.count).toBe("0");
+      const grants = await database.pool.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM internal_diagnostic_access_grants WHERE session_token_hash = $1",
+        [authSessionTokenHash(serializedToken)],
+      );
+      expect(grants.rows[0]?.count).toBe("0");
+    } finally {
+      await purgeClient.query("ROLLBACK").catch(() => {});
+      purgeClient.release();
+      await database.pool.query(
+        "UPDATE app_users SET status = 'active', updated_at = CURRENT_TIMESTAMP WHERE user_id = $1",
+        [fixedInternalOwnerPrincipal.userId],
+      );
+    }
+  });
 });
 
 type RunningNextServer = Readonly<{

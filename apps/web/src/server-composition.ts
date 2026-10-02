@@ -108,6 +108,7 @@ import {
   PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
   PostgresReflectionInspectionRepository,
+  PostgresEvidenceStepUpRepository,
   PostgresMemoryClaimRepository,
   PostgresCandidateReviewRepository,
   insertCandidateRemapCommandWithin,
@@ -471,6 +472,7 @@ export function createServerComposition() {
       configuration.clock,
     ),
   });
+  const evidenceStepUpRepository = new PostgresEvidenceStepUpRepository(pool);
   const candidateReviewRepository = new PostgresCandidateReviewRepository(
     pool,
     configuration.contextHmacSecret,
@@ -893,6 +895,7 @@ export function createServerComposition() {
     modelRoleCommandService,
     bioInspectionService,
     reflectionInspectionService,
+    evidenceStepUpRepository,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
       policyVersion: "sensitive-inspection:v1",

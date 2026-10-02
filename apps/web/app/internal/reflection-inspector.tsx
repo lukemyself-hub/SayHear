@@ -1,5 +1,6 @@
 "use client";
 
+import { signIn } from "next-auth/react";
 import { useEffect, useState, type FormEvent } from "react";
 
 type ReflectionItem = Readonly<{
@@ -165,6 +166,10 @@ type ReflectionReadOutcome = Readonly<{
 }>;
 
 const API = "/api/internal/inspection/reflection";
+const STEP_UP_API = "/api/internal/inspection/evidence-step-up";
+const STEP_UP_CALLBACK_URL = "/internal/reflection-inspector";
+
+type StepUpStatus = "idle" | "requesting" | "not-permitted" | "unavailable";
 
 async function getJson<T>(params: Record<string, string>): Promise<T> {
   const query = new URLSearchParams(params);
@@ -178,7 +183,7 @@ async function getJson<T>(params: Record<string, string>): Promise<T> {
       body.error === "reflection_capability_required"
         ? "This session does not have reflection_inspection:read."
         : body.error === "recent_step_up_required"
-          ? "Evidence expansion requires a fresh step-up reauthentication."
+          ? "Opening the original words needs a recent verification. Use the verification button above, then try again."
           : `The inspection could not be loaded (${response.status}).`,
     );
   }
@@ -237,6 +242,7 @@ export function ReflectionInspector(props: { initialReflectionId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [stepUpStatus, setStepUpStatus] = useState<StepUpStatus>("idle");
 
   async function loadReflections(cursor: string | null = null, append = false) {
     setLoading(true);
@@ -490,6 +496,31 @@ export function ReflectionInspector(props: { initialReflectionId: string }) {
     }
   }
 
+  async function requestEvidenceStepUp() {
+    setStepUpStatus("requesting");
+    setError(null);
+    try {
+      const response = await fetch(STEP_UP_API, {
+        cache: "no-store",
+        method: "POST",
+      });
+      if (!response.ok) {
+        setStepUpStatus(
+          response.status === 403 ? "not-permitted" : "unavailable",
+        );
+        return;
+      }
+      await signIn(
+        "github",
+        { callbackUrl: STEP_UP_CALLBACK_URL },
+        { prompt: "select_account" },
+      );
+      setStepUpStatus("unavailable");
+    } catch {
+      setStepUpStatus("unavailable");
+    }
+  }
+
   async function loadClaims(
     candidate: CandidateItem,
     cursor: string | null = null,
@@ -641,6 +672,37 @@ export function ReflectionInspector(props: { initialReflectionId: string }) {
         propositions, exact Evidence links, Candidate disposition, Claim
         eligibility, and Bio impact. Each expansion is a separate typed query.
       </p>
+      <section className="inspectorCard">
+        <div className="inspectorHeading">
+          <div>
+            <h2>Exact Evidence access</h2>
+            <p>
+              Opening the user&apos;s original words needs a recent
+              verification, separate from Reflection prose.
+            </p>
+          </div>
+          <button
+            className="inspectorSmallButton"
+            disabled={stepUpStatus === "requesting"}
+            onClick={() => void requestEvidenceStepUp()}
+            type="button"
+          >
+            {stepUpStatus === "requesting"
+              ? "Opening GitHub…"
+              : "Verify again to view original Evidence"}
+          </button>
+        </div>
+        {stepUpStatus === "not-permitted" ? (
+          <p className="inspectorError" role="alert">
+            This session cannot start Evidence verification.
+          </p>
+        ) : null}
+        {stepUpStatus === "unavailable" ? (
+          <p className="inspectorError" role="alert">
+            Verification is unavailable right now. Please try again later.
+          </p>
+        ) : null}
+      </section>
       <form className="inspectorLookup" onSubmit={submit}>
         <label htmlFor="reflection-id">Reflection ID (optional)</label>
         <div className="inspectorLookupRow">

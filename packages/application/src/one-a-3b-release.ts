@@ -55,7 +55,7 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * version: its foreign key is (role, config_version, provider_policy_version),
  * so a `v3` pin may point at an unchanged `v2` configuration.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v9" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v10" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =
