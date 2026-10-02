@@ -293,10 +293,15 @@ async function insertWorkflowCommand(
   return commandRow;
 }
 
+type CandidateProposalLedgerOutcome =
+  | "created"
+  | "blocked_terminal"
+  | "skipped";
+
 type CandidateProposalLedgerInput = Readonly<{
   reflectionVersionId: string;
   userId: string;
-  outcome: string;
+  outcome: CandidateProposalLedgerOutcome;
   reasonCode: string | null;
   memoryCandidateId: string | null;
   fingerprint: string | null;
@@ -2417,12 +2422,18 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           evidenceItemIds: [...proposal.evidenceItemIds],
           now,
         });
-        const createdOutcome =
-          proposal.resolution.status === "mapped" ? "created" : "created_needs_predicate_review";
+        // The lineage ledger stores the coarse outcome union allowed by schema
+        // 0047. The needs_predicate_review distinction is carried by the
+        // Candidate's actual status and the rich returned outcome below, so
+        // every successful creation persists `created` here.
+        const richOutcome =
+          proposal.resolution.status === "mapped"
+            ? "created"
+            : "created_needs_predicate_review";
         await recordCandidateProposal(client, {
           reflectionVersionId: input.reflectionVersionId,
           userId: input.userId,
-          outcome: createdOutcome,
+          outcome: "created",
           reasonCode: null,
           memoryCandidateId: insertedCandidateId,
           fingerprint: planned.candidate.dedupeFingerprint,
@@ -2430,7 +2441,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         });
         candidateOutcomes.push({
           proposalIndex,
-          outcome: createdOutcome,
+          outcome: richOutcome,
           reasonCode: null,
           memoryCandidateId: insertedCandidateId,
         });

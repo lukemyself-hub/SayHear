@@ -535,10 +535,17 @@ async function executeReflectionAttempt(input: Readonly<{
   const { role, promptVersion } = roleForScope(input.scope);
   const generationCommandId = asGenerationCommandId(input.generationCommandId);
   const modelRunAttemptId = asModelRunAttemptId(input.modelRunAttemptId);
-  const sourceRevision =
+  // Daily carries the exact Session head for both the model-role command and
+  // the domain rows. Weekly uses the immutable positive dateOrdinal as the
+  // command/settlement revision, while the Reflection domain stores the
+  // composite source_digest identity and pins source_revision to 0 (schema
+  // 0047: date_range scope). The two must never be conflated.
+  const commandSourceRevision =
     input.frozen.scopeType === "daily_session"
       ? (input.frozen.days[0]?.sourceRevision ?? 0)
       : dateOrdinal(input.frozen.windowStartDate ?? "");
+  const sourceRevision =
+    input.frozen.scopeType === "daily_session" ? commandSourceRevision : 0;
   const subjectId = input.frozen.dailySessionId ?? input.userId;
   const locale = input.frozen.dominantLocale ?? "en";
   const settleAttempt = (
@@ -555,7 +562,7 @@ async function executeReflectionAttempt(input: Readonly<{
       semanticRepairsUsed: 0,
       outcome,
       ...(failureCode ? { failureCode } : {}),
-      currentSourceRevision: sourceRevision,
+      currentSourceRevision: commandSourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
     });
@@ -624,7 +631,7 @@ async function executeReflectionAttempt(input: Readonly<{
           technicalRetriesUsed: input.technicalRetriesUsed,
           semanticRepairsUsed: 0,
           outcome: "succeeded",
-          currentSourceRevision: sourceRevision,
+          currentSourceRevision: commandSourceRevision,
           expectedDataEpoch: input.expectedDataEpoch,
           now: input.dependencies.clock(),
         });
@@ -647,14 +654,14 @@ async function executeReflectionAttempt(input: Readonly<{
           attemptNo: input.attemptNo,
           attemptKind: input.attemptKind,
           rolloutPin: input.rolloutPin,
-          currentSourceRevision: sourceRevision,
+          currentSourceRevision: commandSourceRevision,
           expectedDataEpoch: input.expectedDataEpoch,
           now: input.dependencies.clock(),
           sourceIsCurrent: async () => {
             if (input.scope === "daily") {
               const current = await repository.readDailySnapshot({
                 dailySessionId: input.frozen.dailySessionId!,
-                sourceRevision,
+                sourceRevision: commandSourceRevision,
                 claimBaselineDigest: input.frozen.claimBaselineDigest,
                 policyVersion: input.sourcePolicyVersion,
               });
@@ -706,7 +713,7 @@ async function executeReflectionAttempt(input: Readonly<{
       semanticRepairsUsed: 0,
       outcome: "failed",
       failureCode,
-      currentSourceRevision: sourceRevision,
+      currentSourceRevision: commandSourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
     });
