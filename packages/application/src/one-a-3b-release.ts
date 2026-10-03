@@ -27,10 +27,12 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
 /**
  * G1 model-configuration iteration per role.
  *
- * Existing production rows use v2. Weekly stays at v4 for its 10000-token
- * budget and low reasoning effort; narrative.validate v5 keeps the
- * 10000-token cap and pins low reasoning effort. Episode and Daily require v5
- * because their prompts now state the typed contracts admission already
+ * Existing production rows use v2. Weekly requires v5 for its raised
+ * 20000-token output budget while keeping its low reasoning effort and its
+ * unchanged `reflection-weekly:eval:v4` prompt; a frozen parameter change
+ * lands as a new immutable configuration version. narrative.validate v5 keeps
+ * the 10000-token cap and pins low reasoning effort. Episode and Daily require
+ * v5 because their prompts now state the typed contracts admission already
  * enforces (kindFields allowlist, boundary date format, Evidence and
  * entity-anchor rules; Daily day_observation-only scope); a prompt change
  * needs a new immutable configuration version. Configuration rows are
@@ -39,7 +41,7 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
 export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
   "episode.build": "v5",
   "reflection.daily": "v5",
-  "reflection.weekly": "v4",
+  "reflection.weekly": "v5",
   "narrative.validate": "v5",
 } as const satisfies Readonly<
   Record<(typeof ONE_A_3B_G1_ENABLED_ROLES)[number], string>
@@ -53,9 +55,11 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * release. So a new release needs new pins even for the three roles whose
  * configuration is unchanged. A pin's name need not match its configuration
  * version: its foreign key is (role, config_version, provider_policy_version),
- * so a `v3` pin may point at an unchanged `v2` configuration.
+ * so a `v3` pin may point at an unchanged `v2` configuration. v11 is the
+ * Weekly output-budget release, in which only Weekly moves to configuration
+ * v5; the other three roles reuse their v5 configurations.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v10" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v11" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =

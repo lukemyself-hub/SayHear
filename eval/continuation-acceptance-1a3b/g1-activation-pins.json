@@ -69,7 +69,7 @@
       "policyVersion": "reflection-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 10000,
+        "maxOutputTokens": 20000,
         "reasoning": {
           "effort": "low"
         }

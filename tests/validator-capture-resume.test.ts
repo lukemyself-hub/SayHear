@@ -119,7 +119,7 @@ describe("snapshotFor carries the complete frozen pin parameters", () => {
   });
 
   it("preserves the complete low-reasoning generation pins", () => {
-    for (const role of ["episode.build", "reflection.daily", "reflection.weekly"] as const) {
+    for (const role of ["episode.build", "reflection.daily"] as const) {
       const snapshot = snapshotFor(role, REAL_G1_PINS);
       expect(snapshot.parameterSnapshot).toEqual(REAL_G1_PINS.roles[role]!.parameters);
       expect(snapshot.parameterSnapshot).toEqual({
@@ -128,6 +128,18 @@ describe("snapshotFor carries the complete frozen pin parameters", () => {
         reasoning: { effort: "low" },
       });
     }
+
+    // The authorized Weekly-only release raises its output budget to 20000 and
+    // leaves its prompt and low reasoning effort frozen.
+    const weekly = snapshotFor("reflection.weekly", REAL_G1_PINS);
+    expect(weekly.parameterSnapshot).toEqual(
+      REAL_G1_PINS.roles["reflection.weekly"]!.parameters,
+    );
+    expect(weekly.parameterSnapshot).toEqual({
+      temperature: 0.2,
+      maxOutputTokens: 20000,
+      reasoning: { effort: "low" },
+    });
   });
 });
 
