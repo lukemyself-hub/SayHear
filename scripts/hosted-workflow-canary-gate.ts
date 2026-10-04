@@ -79,14 +79,18 @@ function collectUnresolvedDataFindings(
   if (!value || typeof value !== "object") return;
   for (const [key, nested] of Object.entries(value)) {
     if (key === "expiredAt" && nested !== null && nested !== undefined) {
-      // The SDK also uses expiredAt on the run envelope for its retention
-      // deadline. A future deadline does not hide data. Nested expiredAt
-      // objects are serialized expired-data stubs and remain unresolved,
-      // even if their timestamp is future or malformed.
+      // The SDK writes a retention deadline on the run envelope. Once that
+      // deadline elapses the CLI can still return the fully hydrated record,
+      // so wall-clock elapsed time alone does not prove the bytes were
+      // dropped. What actually proves the export is complete is the
+      // exporter's full resolved data plus the shared gate's page
+      // completeness, correlation and probe scans. Accept any parseable root
+      // retention timestamp; a malformed root date and every nested
+      // expiredAt stub stay unresolved.
       const isRunMetadata = /^workflowHistory\[\d+\]$/.test(path) &&
         typeof (value as RecordValue).runId === "string";
       const expiry = typeof nested === "string" ? Date.parse(nested) : NaN;
-      if (!isRunMetadata || !Number.isFinite(expiry) || expiry <= Date.now()) {
+      if (!isRunMetadata || !Number.isFinite(expiry)) {
         findings.push(`${path}.${key}`);
       }
     }

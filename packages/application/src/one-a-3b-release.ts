@@ -55,11 +55,11 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * release. So a new release needs new pins even for the three roles whose
  * configuration is unchanged. A pin's name need not match its configuration
  * version: its foreign key is (role, config_version, provider_policy_version),
- * so a `v3` pin may point at an unchanged `v2` configuration. v11 is the
- * Weekly output-budget release, in which only Weekly moves to configuration
- * v5; the other three roles reuse their v5 configurations.
+ * so a `v3` pin may point at an unchanged `v2` configuration. v12 binds the
+ * Weekly scheduling and hosted evidence retention fixes to a new release.
+ * All four roles retain their v5 configurations and Provider budgets.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v11" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v12" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =

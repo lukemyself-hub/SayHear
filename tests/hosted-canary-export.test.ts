@@ -140,21 +140,56 @@ describe("hosted canary platform export", () => {
     expect(hydrated).toHaveLength(3);
   });
 
-  it("accepts the real SDK's null expiry while rejecting an actual expired timestamp", () => {
+  it("accepts the real SDK's null or elapsed root retention deadline on a fully resolved run", () => {
     const artifacts = completeArtifacts();
     artifacts.workflowHistory[0]!.expiredAt = null;
     expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).not.toThrow();
+    // ADR-0144: a reached retention deadline on the run envelope is not, by
+    // itself, missing bytes. The archived Oct 3 export was fully hydrated and
+    // hash-matched even after its Oct 4 deadline passed, so it must resolve.
     artifacts.workflowHistory[0]!.expiredAt = "2026-10-01T00:00:00Z";
+    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).not.toThrow();
+  });
+
+  it("accepts past or future run retention metadata but still rejects nested expired-data stubs", () => {
+    const artifacts = completeArtifacts();
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const future = new Date(Date.now() + 60_000).toISOString();
+    for (const expiry of [past, future]) {
+      artifacts.workflowHistory[0]!.expiredAt = expiry;
+      expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).not.toThrow();
+    }
+    artifacts.workflowHistory[0]!.expiredAt = past;
+    artifacts.workflowHistory[0]!.input = [{ expiredAt: future }];
     expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).toThrow("expired");
   });
 
-  it("accepts future run retention metadata but still rejects nested expired-data stubs", () => {
-    const artifacts = completeArtifacts();
-    const future = new Date(Date.now() + 60_000).toISOString();
-    artifacts.workflowHistory[0]!.expiredAt = future;
-    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).not.toThrow();
-    artifacts.workflowHistory[0]!.input = [{ expiredAt: future }];
-    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(artifacts))).toThrow("expired");
+  it("accepts a past root retention deadline but still fails on a nested stub or leaked probe", () => {
+    const past = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const resolved = completeArtifacts();
+    resolved.workflowHistory[0]!.expiredAt = past;
+    expect(() =>
+      assertHostedWorkflowCanaryEvidence(asArtifacts(resolved), values, {
+        deploymentId: "dpl_acceptance",
+        runIds: [runId],
+      }),
+    ).not.toThrow();
+    // A nested expired-data stub is still unresolved under an elapsed root
+    // retention deadline.
+    const nested = completeArtifacts();
+    nested.workflowHistory[0]!.expiredAt = past;
+    nested.workflowHistory[0]!.output = [{ expiredAt: past }];
+    expect(() => assertWorkflowHistoryCanaryResolved(asArtifacts(nested))).toThrow("expired");
+    // A leaked probe cannot hide behind an elapsed retention deadline either.
+    const leaked = completeArtifacts();
+    leaked.workflowHistory[0]!.expiredAt = past;
+    leaked.logs = [{ runId, message: values.privateBody }];
+    expect(() =>
+      assertHostedWorkflowCanaryEvidence(asArtifacts(leaked), values, {
+        deploymentId: "dpl_acceptance",
+        runIds: [runId],
+      }),
+    ).toThrow("private data");
   });
 
   it("rejects invalid retention metadata and scans data despite a future deadline", () => {

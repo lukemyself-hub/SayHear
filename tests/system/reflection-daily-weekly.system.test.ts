@@ -9,6 +9,7 @@ import {
   dateOrdinal,
   runReflectionDailyBuild,
   runReflectionWeeklyBuild,
+  weekWindowId,
   type ModelRoleCommandService,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
@@ -293,6 +294,8 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     narrativeScript = undefined;
     await database!.pool.query(`
       TRUNCATE TABLE
+        outbox_events,
+        workflow_commands,
         conversation_event_generation_command_links,
         proactive_followup_dispositions,
         proactive_followup_uses,
@@ -487,6 +490,90 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         new Date(BASE_TIME + journalOutcomeTick),
       ],
     );
+  }
+
+  /**
+   * Seeds a Weekly run ledger row with the generation command that owns its
+   * lifecycle. The scheduler's anti-duplication read joins these two tables,
+   * so the regression must exercise the real rows, not a stub.
+   */
+  async function seedWeeklyRun(input: {
+    weekIdentifier: string;
+    windowStartDate: string;
+    windowEndDate: string;
+    sourceDigest: string;
+    runStatus: "ready" | "built";
+    commandStatus: "running" | "failed" | "succeeded";
+  }): Promise<{ generationCommandId: string; reflectionRunId: string }> {
+    const generationCommandId = seedId();
+    await database!.pool.query(
+      `INSERT INTO generation_commands (
+         generation_command_id, user_id, operation_type, intent_key,
+         subject_type, subject_id, model_role, schema_version, prompt_version,
+         product_policy_version, safety_policy_version,
+         relationship_policy_version, locale_policy_version, locale, provider,
+         model, model_snapshot, model_config_version, freshness_policy,
+         output_format_version, harness_policy_version,
+         conversation_action_catalog_version, role_policy_version, rollout_pin,
+         provider_policy_version, source_revision, parameter_snapshot,
+         fallback_mode, expected_data_epoch, status, created_at
+       ) VALUES ($1, $2, 'reflection.weekly', $3, 'app_user',
+         $2, 'reflection.weekly', 'reflection-output-schema:v1',
+         'reflection-weekly:system-test:v1', 'product-policy:v1',
+         'minimum-high-risk-response:v1', 'relationship-boundary:v1',
+         'locale-policy:v1', 'en', 'system-test', 'synthetic-model',
+         'synthetic-model@fixture', 'system-reflection-weekly:v1',
+         'exact_head:v1', 'reflection-output:v1',
+         'conversation-harness:v1', 'memory-trust-actions-catalog:v1',
+         '1a3b-model-role-policy:v1', 'system-reflection-weekly-pin:v1',
+         'system-reflection-weekly-egress:v1', 0, '{}'::jsonb, 'disabled', 1,
+         $4, $5)`,
+      [
+        generationCommandId,
+        OWNER,
+        `seed-weekly:${generationCommandId}`,
+        input.commandStatus,
+        new Date(BASE_TIME),
+      ],
+    );
+    const reflectionRunId = seedId();
+    await database!.pool.query(
+      `INSERT INTO reflection_runs (
+         reflection_run_id, user_id, scope_type, week_window_id,
+         window_start_date, window_end_date, source_revision, source_digest,
+         claim_baseline_digest, policy_version, expected_data_epoch,
+         generation_command_id, status, created_at, updated_at
+       ) VALUES ($1, $2, 'date_range', $3, $4, $5, 0, $6, $7, $8, 1,
+         $9, $10, $11, $11)`,
+      [
+        reflectionRunId,
+        OWNER,
+        weekWindowId(OWNER, input.weekIdentifier),
+        input.windowStartDate,
+        input.windowEndDate,
+        input.sourceDigest,
+        `baseline:${input.sourceDigest}`,
+        READINESS_POLICY,
+        generationCommandId,
+        input.runStatus,
+        new Date(BASE_TIME),
+      ],
+    );
+    return { generationCommandId, reflectionRunId };
+  }
+
+  async function seedWeekActivity(logicalDates: readonly string[]): Promise<void> {
+    for (const logicalDate of logicalDates) {
+      const session = await seedSession({ logicalDate });
+      await seedDateOutcome({
+        dailySessionId: session.dailySessionId,
+        outcome: "journal_available",
+      });
+      await seedJournalOutcome({
+        dailySessionId: session.dailySessionId,
+        outcome: "published",
+      });
+    }
   }
 
   it("Q2: a journal-published day becomes due only after the Episode interval", async () => {
@@ -1422,6 +1509,146 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       policyVersion: READINESS_POLICY,
     });
     expect(duplicate.outcome).toBe("already_queued");
+  });
+
+  it("re-admits only a new Weekly source after a terminal-failed ready run", async () => {
+    await seedWeekActivity(["2026-09-07", "2026-09-08"]);
+    const windowNow = new Date(Date.parse("2026-09-14T06:00:00.000Z"));
+    const first = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(first).toHaveLength(1);
+    const stale = first[0]!;
+    const { reflectionRunId } = await seedWeeklyRun({
+      weekIdentifier: stale.weekIdentifier,
+      windowStartDate: stale.windowStartDate,
+      windowEndDate: stale.windowEndDate,
+      sourceDigest: stale.sourceDigest,
+      runStatus: "ready",
+      commandStatus: "failed",
+    });
+
+    // Same frozen source: a failed attempt is a non-retry, so the scheduler
+    // does not re-admit it.
+    const sameSource = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(sameSource).toHaveLength(0);
+
+    // A genuinely new, still-current source (a third activity day) gets its
+    // own request through the ordinary admission path.
+    await seedWeekActivity(["2026-09-09"]);
+    const changed = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(changed).toHaveLength(1);
+    expect(changed[0]!.sourceDigest).not.toBe(stale.sourceDigest);
+    const queued = await reflectionRepository!.queueWeeklyReflection({
+      userId: OWNER as never,
+      weekIdentifier: changed[0]!.weekIdentifier,
+      windowStartDate: changed[0]!.windowStartDate,
+      windowEndDate: changed[0]!.windowEndDate,
+      sourceDigest: changed[0]!.sourceDigest,
+      policyVersion: READINESS_POLICY,
+    });
+    expect(queued.outcome).toBe("queued");
+    const countCommands = async (): Promise<number> => {
+      const result = await database!.pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM workflow_commands WHERE command_type = 'reflection_weekly'",
+      );
+      return Number(result.rows[0]!.count);
+    };
+    expect(await countCommands()).toBe(1);
+    const duplicate = await reflectionRepository!.queueWeeklyReflection({
+      userId: OWNER as never,
+      weekIdentifier: changed[0]!.weekIdentifier,
+      windowStartDate: changed[0]!.windowStartDate,
+      windowEndDate: changed[0]!.windowEndDate,
+      sourceDigest: changed[0]!.sourceDigest,
+      policyVersion: READINESS_POLICY,
+    });
+    expect(duplicate.outcome).toBe("already_queued");
+    expect(await countCommands()).toBe(1);
+
+    // The frozen old attempt is preserved exactly, never rewritten in place.
+    const frozen = await database!.pool.query<{
+      status: string;
+      source_digest: string;
+    }>(
+      "SELECT status, source_digest FROM reflection_runs WHERE reflection_run_id = $1",
+      [reflectionRunId],
+    );
+    expect(frozen.rows[0]).toEqual({
+      status: "ready",
+      source_digest: stale.sourceDigest,
+    });
+  });
+
+  it("keeps a live Weekly command from being re-admitted", async () => {
+    await seedWeekActivity(["2026-09-07", "2026-09-08"]);
+    const windowNow = new Date(Date.parse("2026-09-14T06:00:00.000Z"));
+    const first = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(first).toHaveLength(1);
+    await seedWeeklyRun({
+      weekIdentifier: first[0]!.weekIdentifier,
+      windowStartDate: first[0]!.windowStartDate,
+      windowEndDate: first[0]!.windowEndDate,
+      sourceDigest: first[0]!.sourceDigest,
+      runStatus: "ready",
+      commandStatus: "running",
+    });
+    const live = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(live).toHaveLength(0);
+  });
+
+  it("preserves the built Weekly history instead of replacing it", async () => {
+    await seedWeekActivity(["2026-09-07", "2026-09-08"]);
+    const windowNow = new Date(Date.parse("2026-09-14T06:00:00.000Z"));
+    const first = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(first).toHaveLength(1);
+    const { reflectionRunId } = await seedWeeklyRun({
+      weekIdentifier: first[0]!.weekIdentifier,
+      windowStartDate: first[0]!.windowStartDate,
+      windowEndDate: first[0]!.windowEndDate,
+      sourceDigest: first[0]!.sourceDigest,
+      runStatus: "built",
+      commandStatus: "succeeded",
+    });
+    const afterBuilt = await reflectionRepository!.listDueWeekWindows({
+      now: windowNow,
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(afterBuilt).toHaveLength(0);
+    const builtRun = await database!.pool.query<{
+      status: string;
+      source_digest: string;
+    }>(
+      "SELECT status, source_digest FROM reflection_runs WHERE reflection_run_id = $1",
+      [reflectionRunId],
+    );
+    expect(builtRun.rows[0]).toEqual({
+      status: "built",
+      source_digest: first[0]!.sourceDigest,
+    });
   });
 
   it("weekly build stores domain source_revision 0 while the model-role command keeps the positive dateOrdinal revision", async () => {
