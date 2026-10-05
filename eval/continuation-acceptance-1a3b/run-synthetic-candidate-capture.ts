@@ -105,6 +105,7 @@ import {
 import {
   createRuntimeProviderEgressPort,
   createRuntimeOneA3bRoleProviders,
+  type OneA3bProviderAdapter,
 } from "@sayhear/ai";
 import {
   asCompiledContextId,
@@ -120,6 +121,7 @@ import {
 } from "@sayhear/domain";
 
 import { buildChampionAssembly, loadDotEnv } from "../memory-pairwise-126/shared";
+import type { TwinConversationAdapter } from "../memory-pairwise-126/twin-harness";
 import {
   F3_RUN_VERSION,
   configurationFingerprint,
@@ -597,6 +599,7 @@ function createSeam(input: {
         timeoutMs: number;
         type: "responses-api";
       }>
+    | Readonly<{ apiKey: string; timeoutMs: number; type: "opencode-go" }>
     | Readonly<{ chunks: readonly string[]; type: "deterministic" }>;
   champion: ConversationTextChampion;
   commandService: ModelRoleCommandService;
@@ -1078,6 +1081,33 @@ function deterministicRoleProviders(): {
   };
 }
 
+/**
+ * Map the champion's conversation adapter onto the seam's provider-adapter
+ * config. OpenCode Go carries no caller-selectable baseUrl, so it is passed
+ * through as its own transport instead of being assumed to be a responses-api
+ * adapter.
+ */
+function seamAdapterFor(
+  adapter: TwinConversationAdapter,
+): Parameters<typeof createSeam>[0]["adapter"] {
+  if (adapter.type === "opencode-go") {
+    return {
+      apiKey: adapter.apiKey,
+      timeoutMs: adapter.timeoutMs,
+      type: "opencode-go",
+    };
+  }
+  if (adapter.type === "responses-api") {
+    return {
+      apiKey: adapter.apiKey,
+      baseUrl: adapter.baseUrl,
+      timeoutMs: adapter.timeoutMs,
+      type: "responses-api",
+    };
+  }
+  return { chunks: adapter.chunks ?? ["好的。"], type: "deterministic" };
+}
+
 async function captureFixture(input: {
   champion: ConversationTextChampion;
   continueOnError: boolean;
@@ -1086,11 +1116,7 @@ async function captureFixture(input: {
   fixture: ContinuationFixture;
   laneLogs: LaneSidecarFixture[];
   providerErrors: ProviderErrorReport[];
-  responsesApiAdapter: Readonly<{
-    apiKey: string;
-    baseUrl: string;
-    timeoutMs: number;
-  }>;
+  conversationAdapter: TwinConversationAdapter;
   roleProviders:
     | { extract: OpenLoopExtractModelProvider; proactive: ProactiveFollowupModelProvider }
     | undefined;
@@ -1101,12 +1127,7 @@ async function captureFixture(input: {
   const seam = createSeam({
     adapter: input.deterministic
       ? { chunks: ["好的。"], type: "deterministic" }
-      : {
-          apiKey: input.responsesApiAdapter.apiKey,
-          baseUrl: input.responsesApiAdapter.baseUrl,
-          timeoutMs: input.responsesApiAdapter.timeoutMs,
-          type: "responses-api",
-        },
+      : seamAdapterFor(input.conversationAdapter),
     champion: input.champion,
     commandService: input.commandService,
     openLoopExtractProvider: input.roleProviders?.extract,
@@ -1344,8 +1365,8 @@ async function main(): Promise<void> {
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
   const { champion, conversationAdapter } = buildChampionAssembly(environment);
-  if (conversationAdapter.type !== "responses-api") {
-    throw new Error("The champion assembly did not return a responses-api adapter.");
+  if (conversationAdapter.type === "deterministic") {
+    throw new Error("The champion assembly did not return a live provider adapter.");
   }
   if (!arguments_.deterministic && !conversationAdapter.apiKey) {
     throw new Error("A provider API key is required for the real capture.");
@@ -1355,16 +1376,45 @@ async function main(): Promise<void> {
   const roleProviders = arguments_.deterministic
     ? deterministicRoleProviders()
     : (() => {
-        const providers = createRuntimeOneA3bRoleProviders({
-          adapters: [
-            {
+        // Provision one adapter per provider the role pins actually select,
+        // before any Provider call, so a missing credential fails fast rather
+        // than after the champion already spent a turn.
+        const roleConfigurations = [extractConfiguration, proactiveConfiguration];
+        const providersPresent = new Set(
+          roleConfigurations.map((configuration) => configuration.provider),
+        );
+        const adapters: OneA3bProviderAdapter[] = [];
+        for (const provider of providersPresent) {
+          if (provider === "deepseek") {
+            const apiKey = process.env.DEEPSEEK_API_KEY;
+            if (!apiKey) {
+              throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
+            }
+            adapters.push({
               provider: "deepseek",
-              baseUrl: conversationAdapter.baseUrl,
-              apiKey: conversationAdapter.apiKey,
-              timeoutMs: conversationAdapter.timeoutMs,
-            },
-          ],
-          configurations: [extractConfiguration, proactiveConfiguration],
+              apiKey,
+              baseUrl:
+                process.env.SAYHEAR_DEEPSEEK_BASE_URL ??
+                process.env.DEEPSEEK_BASE_URL ??
+                "https://api.deepseek.com",
+              timeoutMs: 120_000,
+            });
+          } else if (provider === "opencode-go") {
+            const apiKey = process.env.OPENCODE_GO_API_KEY;
+            if (!apiKey) {
+              throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
+            }
+            adapters.push({ provider: "opencode-go", apiKey, timeoutMs: 120_000 });
+          } else {
+            throw new Error(`Capture does not support the pinned provider ${provider}.`);
+          }
+        }
+        if (adapters.length !== providersPresent.size) {
+          throw new Error("Capture could not provision every configured provider.");
+        }
+        const providers = createRuntimeOneA3bRoleProviders({
+          adapters,
+          configurations: roleConfigurations,
         });
         if (!providers.openLoopExtractProvider || !providers.proactiveFollowupProvider) {
           throw new Error("The bundle provider assembly is missing a bundle role.");
@@ -1413,11 +1463,7 @@ async function main(): Promise<void> {
         fixture,
         laneLogs,
         providerErrors,
-        responsesApiAdapter: {
-          apiKey: conversationAdapter.apiKey,
-          baseUrl: conversationAdapter.baseUrl,
-          timeoutMs: conversationAdapter.timeoutMs,
-        },
+        conversationAdapter,
         roleProviders,
         commandService,
         roleEgress,

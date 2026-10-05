@@ -160,21 +160,33 @@ export type TwinConversationAdapter =
       baseUrl: string;
       timeoutMs: number;
     }>
+  | Readonly<{ type: "opencode-go"; apiKey: string; timeoutMs: number }>
   | Readonly<{ type: "deterministic"; chunks?: readonly string[] }>;
 
 /** The deterministic egress adapter needs at least one reply chunk. */
 export function toProviderAdapterConfig(adapter: TwinConversationAdapter) {
-  return adapter.type === "deterministic"
-    ? {
-        chunks: adapter.chunks ?? ["(deterministic twin reply)"],
-        type: "deterministic" as const,
-      }
-    : {
-        apiKey: adapter.apiKey,
-        baseUrl: adapter.baseUrl,
-        timeoutMs: adapter.timeoutMs,
-        type: "responses-api" as const,
-      };
+  if (adapter.type === "deterministic") {
+    return {
+      chunks: adapter.chunks ?? ["(deterministic twin reply)"],
+      type: "deterministic" as const,
+    };
+  }
+  // OpenCode Go has no caller-selectable baseUrl — the Go endpoint is fixed
+  // inside the transport — so its adapter is passed through unchanged rather
+  // than wrapped as a responses-api adapter (ADR-0147).
+  if (adapter.type === "opencode-go") {
+    return {
+      apiKey: adapter.apiKey,
+      timeoutMs: adapter.timeoutMs,
+      type: "opencode-go" as const,
+    };
+  }
+  return {
+    apiKey: adapter.apiKey,
+    baseUrl: adapter.baseUrl,
+    timeoutMs: adapter.timeoutMs,
+    type: "responses-api" as const,
+  };
 }
 
 export type TwinChampionConfig = Readonly<{
@@ -1286,7 +1298,12 @@ export async function runTwinCapture(input: {
               timeoutMs: conversationAdapter.timeoutMs,
               type: "responses-api",
             }
-          : { type: "deterministic" },
+          : conversationAdapter.type === "opencode-go"
+            ? {
+                timeoutMs: conversationAdapter.timeoutMs,
+                type: "opencode-go",
+              }
+            : { type: "deterministic" },
     },
   };
   return {

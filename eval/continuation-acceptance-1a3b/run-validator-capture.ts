@@ -32,7 +32,10 @@ import {
   createIsolatedPostgresSchema,
   fixedInternalOwnerPrincipal,
 } from "@sayhear/test-support";
-import { createRuntimeOneA3bRoleProviders } from "@sayhear/ai";
+import {
+  createRuntimeOneA3bRoleProviders,
+  type OneA3bProviderAdapter,
+} from "@sayhear/ai";
 
 import {
   buildValidatorRequestBundle,
@@ -42,8 +45,6 @@ import { verifyManifest, type AcceptanceManifest } from "./manifest";
 import { sha256, type FixtureCatalog } from "./protocol";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
-const baseUrl = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
 
 const userId = fixedInternalOwnerPrincipal.userId;
 const baseTime = new Date("2026-09-09T08:00:00.000Z");
@@ -256,7 +257,6 @@ export function assertResumeIdentity(
 
 async function main(): Promise<void> {
   if (!testDatabaseUrl) throw new Error("TEST_DATABASE_URL is required (isolated capture schema).");
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required (pinned provider is deepseek).");
   const arguments_ = parseArguments();
   const catalog = loadValidatorCatalog(resolve(arguments_.catalog));
   const manifest = JSON.parse(await readFile(resolve(arguments_.manifest), "utf8")) as AcceptanceManifest;
@@ -269,6 +269,42 @@ async function main(): Promise<void> {
   }
   const pins = JSON.parse(await readFile(resolve(arguments_.pins), "utf8")) as PinsFile;
   const configurations = G1_CAPTURE_ROLES.map((role) => snapshotFor(role, pins));
+  // provision every provider the pins actually select before any database
+  // connection or Provider call, so a missing credential fails fast instead of
+  // after a partial capture. The G1 release pins select opencode-go, but the
+  // adapter set follows the pins rather than a hardcoded provider.
+  const providersPresent = new Set(
+    configurations.map((configuration) => configuration.provider),
+  );
+  const adapters: OneA3bProviderAdapter[] = [];
+  for (const provider of providersPresent) {
+    if (provider === "deepseek") {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) {
+        throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
+      }
+      adapters.push({
+        provider: "deepseek",
+        apiKey,
+        baseUrl:
+          process.env.SAYHEAR_DEEPSEEK_BASE_URL ??
+          process.env.DEEPSEEK_BASE_URL ??
+          "https://api.deepseek.com",
+        timeoutMs: 120_000,
+      });
+    } else if (provider === "opencode-go") {
+      const apiKey = process.env.OPENCODE_GO_API_KEY;
+      if (!apiKey) {
+        throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
+      }
+      adapters.push({ provider: "opencode-go", apiKey, timeoutMs: 120_000 });
+    } else {
+      throw new Error(`Capture does not support the pinned provider ${provider}.`);
+    }
+  }
+  if (adapters.length !== providersPresent.size) {
+    throw new Error("Capture could not provision every configured provider.");
+  }
   const narrativeConfiguration = configurations.find(
     (configuration) => configuration.role === "narrative.validate",
   )!;
@@ -288,7 +324,7 @@ async function main(): Promise<void> {
     pinsFingerprint,
   };
   const providers = createRuntimeOneA3bRoleProviders({
-    adapters: [{ provider: "deepseek", baseUrl, apiKey, timeoutMs: 120_000 }],
+    adapters,
     configurations,
   });
 
