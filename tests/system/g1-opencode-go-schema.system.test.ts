@@ -37,20 +37,26 @@ systemDescribe("OpenCode Go G1 schema contract", () => {
     expect(def).toContain("'opencode-go'");
   });
 
-  it("registers both opencode-go G1 egress policies per role and keeps the old rows", async () => {
+  it("registers the opencode-go conversation and both G1 egress policies per role", async () => {
     const result = await database!.pool.query<{
+      consent_policy_version: string | null;
       model_config_version: string;
       policy_version: string;
       provider: string;
       role: string;
       status: string;
     }>(
-      `SELECT provider, role, policy_version, model_config_version, status
+      `SELECT provider, role, policy_version, model_config_version, status,
+              consent_policy_version
        FROM provider_egress_policy_versions
        WHERE provider = 'opencode-go'
        ORDER BY role, policy_version`,
     );
+    // A non-NULL consent policy would make claimDispatch and the commit path
+    // look up provider_egress_consents and fail closed as policy_blocked.
+    expect(result.rows.every((row) => row.consent_policy_version === null)).toBe(true);
     expect(result.rows.map((row) => row.role)).toEqual([
+      "conversation.text",
       "episode.build",
       "episode.build",
       "narrative.validate",
@@ -62,43 +68,66 @@ systemDescribe("OpenCode Go G1 schema contract", () => {
     ]);
     expect(result.rows).toEqual([
       expect.objectContaining({
+        model_config_version: "conversation-text-champion:v1",
+        policy_version: "opencode-go-conversation-text:v1",
+        provider: "opencode-go",
+        role: "conversation.text",
+        status: "active",
+      }),
+      expect.objectContaining({
         model_config_version: "episode.build:g1-release:v6",
         policy_version: "opencode-go-episode.build-egress:g1-release:v6",
+        provider: "opencode-go",
+        role: "episode.build",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "episode.build:g1-release:v7",
         policy_version: "opencode-go-episode.build-egress:g1-release:v7",
+        provider: "opencode-go",
+        role: "episode.build",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "narrative.validate:g1-release:v6",
         policy_version: "opencode-go-narrative.validate-egress:g1-release:v6",
+        provider: "opencode-go",
+        role: "narrative.validate",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "narrative.validate:g1-release:v7",
         policy_version: "opencode-go-narrative.validate-egress:g1-release:v7",
+        provider: "opencode-go",
+        role: "narrative.validate",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "reflection.daily:g1-release:v8",
         policy_version: "opencode-go-reflection.daily-egress:g1-release:v8",
+        provider: "opencode-go",
+        role: "reflection.daily",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "reflection.daily:g1-release:v9",
         policy_version: "opencode-go-reflection.daily-egress:g1-release:v9",
+        provider: "opencode-go",
+        role: "reflection.daily",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "reflection.weekly:g1-release:v7",
         policy_version: "opencode-go-reflection.weekly-egress:g1-release:v7",
+        provider: "opencode-go",
+        role: "reflection.weekly",
         status: "active",
       }),
       expect.objectContaining({
         model_config_version: "reflection.weekly:g1-release:v8",
         policy_version: "opencode-go-reflection.weekly-egress:g1-release:v8",
+        provider: "opencode-go",
+        role: "reflection.weekly",
         status: "active",
       }),
     ]);
