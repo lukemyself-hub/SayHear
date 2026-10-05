@@ -9,6 +9,7 @@ import type {
 
 import {
   ProviderDispatchError,
+  type ModelRoleCallUsage,
   type ProviderDispatchErrorCategory,
 } from "./conversation-model";
 import {
@@ -398,6 +399,12 @@ export type PersistModelRoleAttemptResult = Readonly<{
   now: Date;
   configuration: ModelRoleConfigurationSnapshot;
   recovery: ModelRoleRecoveryPlan;
+  /**
+   * Content-free token accounting for this attempt's Provider call. Optional:
+   * paths that never crossed the Provider boundary (deduplicated settlement,
+   * conversation/Journal) omit it and must not overwrite existing fields.
+   */
+  usage?: ModelRoleCallUsage | null;
 }>;
 
 export type ModelRoleAttemptReadiness = Readonly<{

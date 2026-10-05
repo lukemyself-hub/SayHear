@@ -437,7 +437,7 @@ function verifyRolePin(pin: unknown, expectedRole: string, mismatches: string[])
       mismatches.push(`${expectedRole} pin is missing ${field}`);
     }
   }
-  if (!["deepseek", "openai", "deterministic"].includes(String(pin.provider))) {
+  if (!["deepseek", "openai", "opencode-go", "deterministic"].includes(String(pin.provider))) {
     mismatches.push(`${expectedRole} pin has an unsupported provider`);
   }
   if (!isRecord(pin.parameters)) {

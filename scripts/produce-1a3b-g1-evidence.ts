@@ -1434,10 +1434,12 @@ function sourceSpecificErrors(
       !Array.isArray(providerCalls) ||
       providerCalls.length === 0 ||
       providerCalls.some(
-        (entry) => !isRecord(entry) || entry.provider !== "deepseek",
+        (entry) =>
+          !isRecord(entry) ||
+          (entry.provider !== "deepseek" && entry.provider !== "opencode-go"),
       )
     ) {
-      errors.push("AC-M01 source must contain real DeepSeek provider calls");
+      errors.push("AC-M01 source must contain real DeepSeek or OpenCode Go provider calls");
     }
   }
   if (criterion === "AC-W01") {

@@ -113,31 +113,44 @@ describe("snapshotFor carries the complete frozen pin parameters", () => {
     );
     expect(snapshot.parameterSnapshot).toEqual({
       temperature: 0,
-      maxOutputTokens: 10000,
+      maxOutputTokens: 48000,
       reasoning: { effort: "low" },
     });
   });
 
   it("preserves the complete low-reasoning generation pins", () => {
-    for (const role of ["episode.build", "reflection.daily"] as const) {
-      const snapshot = snapshotFor(role, REAL_G1_PINS);
-      expect(snapshot.parameterSnapshot).toEqual(REAL_G1_PINS.roles[role]!.parameters);
-      expect(snapshot.parameterSnapshot).toEqual({
-        temperature: 0.2,
-        maxOutputTokens: 10000,
-        reasoning: { effort: "low" },
-      });
-    }
+    // Episode now runs at its raised 32000-token cap with low reasoning effort.
+    const episode = snapshotFor("episode.build", REAL_G1_PINS);
+    expect(episode.parameterSnapshot).toEqual(
+      REAL_G1_PINS.roles["episode.build"]!.parameters,
+    );
+    expect(episode.parameterSnapshot).toEqual({
+      temperature: 0.2,
+      maxOutputTokens: 32000,
+      reasoning: { effort: "low" },
+    });
 
-    // The authorized Weekly-only release raises its output budget to 20000 and
-    // leaves its prompt and low reasoning effort frozen.
+    // The 2026-10-04 output-budget release raises Daily to 32000 and leaves
+    // its prompt and low reasoning effort frozen.
+    const daily = snapshotFor("reflection.daily", REAL_G1_PINS);
+    expect(daily.parameterSnapshot).toEqual(
+      REAL_G1_PINS.roles["reflection.daily"]!.parameters,
+    );
+    expect(daily.parameterSnapshot).toEqual({
+      temperature: 0.2,
+      maxOutputTokens: 32000,
+      reasoning: { effort: "low" },
+    });
+
+    // The 2026-10-04 output-budget release raises Weekly to 48000 and leaves
+    // its prompt and low reasoning effort frozen.
     const weekly = snapshotFor("reflection.weekly", REAL_G1_PINS);
     expect(weekly.parameterSnapshot).toEqual(
       REAL_G1_PINS.roles["reflection.weekly"]!.parameters,
     );
     expect(weekly.parameterSnapshot).toEqual({
       temperature: 0.2,
-      maxOutputTokens: 20000,
+      maxOutputTokens: 48000,
       reasoning: { effort: "low" },
     });
   });
@@ -176,29 +189,41 @@ const VALIDATOR_WIRE_OUTPUT = {
 };
 
 function validatorSse(): string {
+  // OpenCode Go Chat Completions stream. The visible content is the JSON
+  // output; usage arrives on the terminal chunk before `[DONE]`.
   return (
-    `event: response.output_text.delta\r\ndata: ${JSON.stringify({
-      delta: JSON.stringify(VALIDATOR_WIRE_OUTPUT),
-      type: "response.output_text.delta",
-    })}\r\n\r\n` +
-    `event: response.completed\r\ndata: ${JSON.stringify({
-      response: {
-        id: "resp_synthetic",
-        model: "deepseek-flash",
-        usage: { input_tokens: 900, output_tokens: 120 },
+    `data: ${JSON.stringify({
+      choices: [
+        {
+          delta: { content: JSON.stringify(VALIDATOR_WIRE_OUTPUT) },
+          finish_reason: null,
+          index: 0,
+        },
+      ],
+      id: "chatcmpl_synthetic",
+      model: "deepseek-v4.1-flash",
+    })}\n\n` +
+    `data: ${JSON.stringify({
+      choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+      id: "chatcmpl_synthetic",
+      model: "deepseek-v4.1-flash",
+      usage: {
+        completion_tokens: 120,
+        prompt_tokens: 900,
+        total_tokens: 1020,
       },
-      type: "response.completed",
-    })}\r\n\r\n`
+    })}\n\n` +
+    `data: [DONE]\n\n`
   );
 }
 
-describe("snapshotFor parameters reach the real Responses API request body", () => {
+describe("snapshotFor parameters reach the real OpenCode Go request body", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it("sends the pinned reasoning.effort and max_output_tokens from the real g1 pins", async () => {
+  it("sends the pinned reasoning_effort and max_tokens from the real g1 pins", async () => {
     let capturedBody: Record<string, unknown> | null = null;
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
@@ -213,9 +238,8 @@ describe("snapshotFor parameters reach the real Responses API request body", () 
     const providers = createRuntimeOneA3bRoleProviders({
       adapters: [
         {
-          apiKey: "synthetic-server-key",
-          baseUrl: "https://api.deepseek.com",
-          provider: "deepseek",
+          apiKey: "synthetic-go-key",
+          provider: "opencode-go",
           timeoutMs: 5_000,
         },
       ],
@@ -229,12 +253,15 @@ describe("snapshotFor parameters reach the real Responses API request body", () 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(capturedBody).not.toBeNull();
     expect(capturedBody).toMatchObject({
-      model: "deepseek-v4-flash",
-      max_output_tokens: 10000,
-      reasoning: { effort: "low" },
+      model: "deepseek-v4.1-flash",
+      max_tokens: 48000,
+      reasoning_effort: "low",
       temperature: 0,
+      thinking: { type: "enabled" },
     });
-    // The wire uses the snake_case alias, never the camelCase ledger key.
+    // The wire uses the snake_case alias, never the camelCase ledger key, and
+    // never the Responses-only max_output_tokens field.
     expect(capturedBody).not.toHaveProperty("maxOutputTokens");
+    expect(capturedBody).not.toHaveProperty("max_output_tokens");
   });
 });

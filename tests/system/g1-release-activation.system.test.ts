@@ -29,13 +29,13 @@ const configurations: readonly ModelRoleConfigurationSnapshot[] =
     return {
       role,
       configVersion: `${role}:g1-release:${configIteration}`,
-      provider: "deepseek",
-      model: "deepseek-chat",
-      modelSnapshot: "deepseek-chat@2026-09-12",
+      provider: "opencode-go",
+      model: "deepseek-v4.1-flash",
+      modelSnapshot: "deepseek-v4.1-flash",
       promptVersion: `${role}-prompt:v1`,
       schemaVersion: `${role}-schema:v1`,
       rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-      providerPolicyVersion: `deepseek-${role}-egress:g1-release:${configIteration}`,
+      providerPolicyVersion: `opencode-go-${role}-egress:g1-release:${configIteration}`,
       rolloutPin: `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
       freshnessPolicy: policy.freshnessPolicy,
       fallbackMode: "disabled",
@@ -137,7 +137,17 @@ systemDescribe("G1 release activation persistence", () => {
       })).sort((left, right) => left.role.localeCompare(right.role)),
     );
     // All four prior configurations remain, alongside the four new versions.
-    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["narrative.validate"]).toBe("v5");
+    // Literal anchors so an accidental re-bump of the shared constants cannot
+    // stay self-consistent: the rollout pin and all four config versions are
+    // pinned here, not only derived from the same constants used to build the
+    // expectations above.
+    expect(ONE_A_3B_G1_ROLLOUT_PIN_VERSION).toBe("v16");
+    expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS).toEqual({
+      "episode.build": "v7",
+      "reflection.daily": "v9",
+      "reflection.weekly": "v8",
+      "narrative.validate": "v7",
+    });
     const counts = await database!.pool.query<{ count: number }>(
       `SELECT count(*)::int AS count FROM model_role_configurations
        WHERE role = ANY($1::text[])`,

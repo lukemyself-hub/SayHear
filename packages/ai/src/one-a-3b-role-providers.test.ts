@@ -82,9 +82,11 @@ function stubResponsesApi(events: readonly string[]): void {
 }
 
 function completedEvent(options: {
+  cachedTokens?: number;
   outputTokens: number;
   reasoningTokens?: number;
   text?: string;
+  totalTokens?: number;
 }): string {
   const deltas = options.text
     ? `event: response.output_text.delta\r\ndata: ${JSON.stringify({
@@ -99,6 +101,13 @@ function completedEvent(options: {
       usage: {
         input_tokens: 900,
         output_tokens: options.outputTokens,
+        ...(options.cachedTokens === undefined
+          ? {}
+          : {
+              input_tokens_details: {
+                cached_tokens: options.cachedTokens,
+              },
+            }),
         ...(options.reasoningTokens === undefined
           ? {}
           : {
@@ -106,6 +115,9 @@ function completedEvent(options: {
                 reasoning_tokens: options.reasoningTokens,
               },
             }),
+        ...(options.totalTokens === undefined
+          ? {}
+          : { total_tokens: options.totalTokens }),
       },
     },
     type: "response.completed",
@@ -340,9 +352,83 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
 
     expect(seen).toEqual([
       {
+        cachedTokens: null,
         inputTokens: 900,
         outputTokens: 3931,
         reasoningTokens: 3600,
+        totalTokens: null,
+      },
+    ]);
+  });
+
+  it("reports provider cached input and total tokens without deriving them", async () => {
+    // The #252 profile wire reported cache 2304 and total 146917; total already
+    // includes reasoning, so it is passed through as-is and never recomputed.
+    stubResponsesApi([
+      completedEvent({
+        cachedTokens: 2304,
+        outputTokens: 3931,
+        reasoningTokens: 3600,
+        text: JSON.stringify(VALIDATOR_OUTPUT),
+        totalTokens: 146917,
+      }),
+    ]);
+
+    const seen: unknown[] = [];
+    await providers().narrativeValidationProvider.validateNarrative(
+      VALIDATOR_REQUEST,
+      (usage) => seen.push(usage),
+    );
+
+    expect(seen).toEqual([
+      {
+        cachedTokens: 2304,
+        inputTokens: 900,
+        outputTokens: 3931,
+        reasoningTokens: 3600,
+        totalTokens: 146917,
+      },
+    ]);
+  });
+
+  it("reports episode.build usage to the request-scoped callback", async () => {
+    stubResponsesApi([
+      completedEvent({ outputTokens: 40, text: "[]" }),
+    ]);
+    const seen: unknown[] = [];
+    await providers().episodeBuildProvider.buildProposals(episodeRequest(), (usage) =>
+      seen.push(usage),
+    );
+    expect(seen).toEqual([
+      {
+        cachedTokens: null,
+        inputTokens: 900,
+        outputTokens: 40,
+        reasoningTokens: null,
+        totalTokens: null,
+      },
+    ]);
+  });
+
+  it("reports reflection.generate usage to the request-scoped callback", async () => {
+    stubResponsesApi([
+      completedEvent({
+        outputTokens: 40,
+        text: JSON.stringify({ statements: [], candidateProposals: [] }),
+      }),
+    ]);
+    const seen: unknown[] = [];
+    await providers().reflectionProvider.generate(
+      reflectionRequest("reflection.daily"),
+      (usage) => seen.push(usage),
+    );
+    expect(seen).toEqual([
+      {
+        cachedTokens: null,
+        inputTokens: 900,
+        outputTokens: 40,
+        reasoningTokens: null,
+        totalTokens: null,
       },
     ]);
   });
@@ -360,7 +446,13 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
       .catch(() => undefined);
 
     expect(seen).toEqual([
-      { inputTokens: 900, outputTokens: 30, reasoningTokens: 10 },
+      {
+        cachedTokens: null,
+        inputTokens: 900,
+        outputTokens: 30,
+        reasoningTokens: 10,
+        totalTokens: null,
+      },
     ]);
   });
   it("keeps every classified failure free of draft and source text", async () => {
@@ -370,12 +462,14 @@ describe("G1 runtime role providers (issue #252 response diagnosis)", () => {
     const serialized = `${error.message}|${JSON.stringify(error.failure)}`;
     expect(serialized).not.toMatch(/PRIVATE_DRAFT_CANARY|PRIVATE_SOURCE_CANARY/);
     expect(Object.keys(error.failure ?? {}).sort()).toEqual([
+      "cachedTokens",
       "inputTokens",
       "kind",
       "outputLength",
       "outputTokens",
       "providerReason",
       "reasoningTokens",
+      "totalTokens",
     ]);
   });
 });
@@ -681,7 +775,7 @@ describe("G1 typed generation contract instructions", () => {
     ).toMatchObject({ action: "persist_draft" });
   });
 
-  it("keeps the Weekly instruction unchanged and does not add the Daily-only clause", async () => {
+  it("keeps the Weekly instruction free of the Daily-only clause", async () => {
     const output: ReflectionGenerationModelOutput = {
       statements: [],
       candidateProposals: [],
@@ -737,5 +831,170 @@ describe("G1 typed generation contract instructions", () => {
       action: "fail_version",
       rejectionCode: "daily_scope_kind_invalid",
     });
+  });
+});
+
+const BASELINE_CLAIM_ID = "01990000-0000-7000-8000-0000000000aa";
+const BASELINE_CLAIM_VERSION_ID = "01990000-0000-7000-8000-0000000000bb";
+const BASELINE_EPISODE_ID = "01990000-0000-7000-8000-0000000000cc";
+
+function baselineEntry() {
+  return {
+    claimId: BASELINE_CLAIM_ID,
+    claimVersionId: BASELINE_CLAIM_VERSION_ID,
+    kind: "objective" as const,
+    predicateId: "sh.memory.hobby",
+    scopeKey: "",
+    typedValue: '"sailing"',
+    temporalStatus: "current" as const,
+    validFrom: null,
+    validFromPrecision: "unknown" as const,
+    validTo: null,
+    validToPrecision: "unknown" as const,
+    epistemicStatus: "confirmed" as const,
+    lastObservedAt: "2026-09-15T00:00:00.000Z",
+  };
+}
+
+function reflectionRequestWithBaseline(
+  role: "reflection.daily" | "reflection.weekly",
+): ReflectionGenerationModelRequest {
+  return { ...reflectionRequest(role), baseline: [baselineEntry()] };
+}
+
+function dailyFrozenWithBaseline(): ReflectionFrozenInput {
+  return { ...dailyFrozenInput(), baseline: [baselineEntry()] };
+}
+
+function baselineProposition(baselineClaimIds: readonly string[]) {
+  return {
+    propositionKey: "proposition:1",
+    normalizedProposition: "user sails",
+    propositionKind: "fact" as const,
+    epistemicRendering: "confirmed" as const,
+    supportEvidenceItemIds: [REFLECTION_EVIDENCE_ID],
+    baselineClaimIds,
+  };
+}
+
+describe("G1 Reflection baseline reference protocol", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("states the frozen deterministic reference clauses the Tier-1 gate enforces", async () => {
+    const captured: CapturedRequest[] = [];
+    stubResponsesApiCapturing(
+      [
+        completedEvent({
+          outputTokens: 20,
+          text: JSON.stringify({ statements: [], candidateProposals: [] }),
+        }),
+      ],
+      captured,
+    );
+
+    await providers().reflectionProvider.generate(
+      reflectionRequestWithBaseline("reflection.weekly"),
+    );
+
+    const instructions = captured[0]!.instructions;
+    expect(instructions).toContain(
+      "Every proposition must cite at least one supplied Evidence ID in supportEvidenceItemIds and only supplied Evidence IDs",
+    );
+    expect(instructions).toContain(
+      "baselineClaimIds must copy verbatim only supplied baseline claimId values",
+    );
+    expect(instructions).toContain("never cite a claimVersionId");
+    expect(instructions).toContain(
+      "A change_observation proposition must list at least one supplied baseline claimId",
+    );
+    expect(instructions).toContain(
+      "cross_day_theme and change_observation statements must draw support from at least two distinct supplied Daily Session IDs",
+    );
+  });
+
+  it("drops only the internal claimVersionId from the outgoing payload and leaves the frozen request unchanged", async () => {
+    const request = reflectionRequestWithBaseline("reflection.daily");
+    const before = JSON.stringify(request);
+    const captured: CapturedRequest[] = [];
+    stubResponsesApiCapturing(
+      [
+        completedEvent({
+          outputTokens: 20,
+          text: JSON.stringify({ statements: [], candidateProposals: [] }),
+        }),
+      ],
+      captured,
+    );
+
+    await providers().reflectionProvider.generate(request);
+
+    const outgoing =
+      outgoingPayload<ReflectionGenerationModelRequest>(captured[0]!);
+    expect(outgoing.baseline).toHaveLength(1);
+    expect(outgoing.baseline[0]!.claimId).toBe(BASELINE_CLAIM_ID);
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        outgoing.baseline[0],
+        "claimVersionId",
+      ),
+    ).toBe(false);
+    // Every needed Evidence ID and session identity survives the projection.
+    expect(outgoing.evidence).toEqual(request.evidence);
+    expect(outgoing.summaries).toEqual(request.summaries);
+    expect(outgoing.sessionCount).toBe(request.sessionCount);
+    // The frozen request object is never mutated: the internal lineage field
+    // and every other field stay exactly as the domain froze them.
+    expect(JSON.stringify(request)).toBe(before);
+    expect(request.baseline[0]!.claimVersionId).toBe(BASELINE_CLAIM_VERSION_ID);
+    expect(request.baseline[0]!.claimId).toBe(BASELINE_CLAIM_ID);
+  });
+
+  it("persists a draft when a proposition cites a real supplied baseline claim ID", () => {
+    const output = {
+      statements: [
+        {
+          statementKey: "statement:1",
+          text: "The fictional owner sails.",
+          statementKind: "day_observation" as const,
+          propositions: [baselineProposition([BASELINE_CLAIM_ID])],
+        },
+      ],
+      candidateProposals: [],
+    };
+
+    expect(
+      planReflectionVersion({ frozen: dailyFrozenWithBaseline(), output }),
+    ).toMatchObject({ action: "persist_draft" });
+  });
+
+  it("rejects a claim version, Evidence, Episode, or unknown ID cited as a baseline claim", () => {
+    for (const wrongId of [
+      BASELINE_CLAIM_VERSION_ID,
+      REFLECTION_EVIDENCE_ID,
+      BASELINE_EPISODE_ID,
+      "invented-baseline-claim",
+    ]) {
+      const output = {
+        statements: [
+          {
+            statementKey: "statement:1",
+            text: "The fictional owner sails.",
+            statementKind: "day_observation" as const,
+            propositions: [baselineProposition([wrongId])],
+          },
+        ],
+        candidateProposals: [],
+      };
+
+      expect(
+        planReflectionVersion({ frozen: dailyFrozenWithBaseline(), output }),
+      ).toMatchObject({
+        action: "fail_version",
+        rejectionCode: "baseline_claim_out_of_bounds",
+      });
+    }
   });
 });

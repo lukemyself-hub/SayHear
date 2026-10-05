@@ -17,6 +17,7 @@ import {
 } from "@sayhear/application";
 
 import { createConversationPunctuationNormalizer } from "./conversation-punctuation";
+import { providerSessionIdFor } from "./provider-session-identity";
 
 const NUMBER_LIKE_RUN = /\d(?:[ -]?\d){2,}/g;
 
@@ -104,6 +105,23 @@ export function createProviderEgressPort(dependencies: {
         locale: claim.context.locale,
         messages: payload.messages,
         model: claim.model,
+        // Opaque, stable transport identity derived from the trusted logical
+        // scope — the owner plus the Daily Session, so every turn of one
+        // conversation shares one Go session while a different owner or day
+        // does not. It never enters the model payload. The Responses and
+        // deterministic adapters ignore it; the OpenCode Go transport requires
+        // it and fails closed before any network call when it is absent.
+        // A missing Daily Session is never replaced with the per-command
+        // GenerationCommand: doing so would silently make every command a new
+        // Provider session and hide the missing trusted scope.
+        ...(claim.dailySessionId === undefined
+          ? {}
+          : {
+              providerSessionId: providerSessionIdFor({
+                ownerId: input.userId,
+                scopeId: claim.dailySessionId,
+              }),
+            }),
         ...(input.functions && input.functions.length > 0
           ? { functions: input.functions }
           : {}),

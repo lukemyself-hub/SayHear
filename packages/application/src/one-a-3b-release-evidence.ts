@@ -615,7 +615,7 @@ function verifyF3RolePin(
   ]) {
     if (!nonEmpty(value[field])) mismatches.push(`${role} F3 pin is missing ${field}`);
   }
-  if (!["deepseek", "openai", "deterministic"].includes(String(value.provider))) {
+  if (!["deepseek", "openai", "opencode-go", "deterministic"].includes(String(value.provider))) {
     mismatches.push(`${role} F3 pin has an unsupported provider`);
   }
   if (!isRecord(value.parameters)) {

@@ -122,7 +122,7 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
 }
 
 export type MemoryRoleSpec = Readonly<{
-  provider: "deepseek" | "openai" | "deterministic";
+  provider: "deepseek" | "openai" | "opencode-go" | "deterministic";
   model: string;
   championConfigVersion: string;
 }>;

@@ -231,8 +231,8 @@ function snapshotFor(
 ): ModelRoleConfigurationSnapshot {
   const pin = pins.roles[role];
   if (!pin) throw new Error(`Pins file has no ${role} role.`);
-  if (pin.provider !== "deepseek") {
-    throw new Error(`Capture supports the pinned deepseek provider, found ${pin.provider} for ${role}.`);
+  if (pin.provider !== "deepseek" && pin.provider !== "opencode-go") {
+    throw new Error(`Capture supports the pinned deepseek or opencode-go provider, found ${pin.provider} for ${role}.`);
   }
   if (pin.fallback !== "none") {
     throw new Error(`Capture requires fallback none, found ${pin.fallback} for ${role}.`);
@@ -257,7 +257,7 @@ function snapshotFor(
     promptVersion: pin.promptVersion,
     schemaVersion: pin.schemaVersion,
     rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-    providerPolicyVersion: `deepseek-${role}-egress:candidate:v1`,
+    providerPolicyVersion: `${pin.provider}-${role}-egress:candidate:v1`,
     rolloutPin: `${role}-candidate-pin:v1`,
     freshnessPolicy: policy.freshnessPolicy,
     fallbackMode: "disabled",

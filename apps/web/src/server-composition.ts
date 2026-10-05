@@ -205,7 +205,9 @@ export function createServerComposition() {
   const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
     adapter: configuration.provider.adapter === "deterministic"
       ? { type: "deterministic" }
-      : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
+      : configuration.provider.adapter === "opencode-go"
+        ? { apiKey: configuration.provider.apiKey!, timeoutMs: configuration.provider.timeoutMs, type: "opencode-go" }
+        : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
     roles,
   });
   const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
@@ -413,6 +415,9 @@ export function createServerComposition() {
                 : []),
               ...(configuration.provider.roleAdapters.deepseek
                 ? [configuration.provider.roleAdapters.deepseek]
+                : []),
+              ...(configuration.provider.roleAdapters["opencode-go"]
+                ? [configuration.provider.roleAdapters["opencode-go"]]
                 : []),
             ],
             configurations:
@@ -686,12 +691,18 @@ export function createServerComposition() {
                     configuration.provider.failAfterChunks,
                 }),
           }
-        : {
-            apiKey: configuration.provider.apiKey!,
-            baseUrl: configuration.provider.baseUrl!,
-            timeoutMs: configuration.provider.timeoutMs,
-            type: "responses-api",
-          },
+        : configuration.provider.adapter === "opencode-go"
+          ? {
+              apiKey: configuration.provider.apiKey!,
+              timeoutMs: configuration.provider.timeoutMs,
+              type: "opencode-go",
+            }
+          : {
+              apiKey: configuration.provider.apiKey!,
+              baseUrl: configuration.provider.baseUrl!,
+              timeoutMs: configuration.provider.timeoutMs,
+              type: "responses-api",
+            },
     champion: configuration.provider.champion,
     clock: configuration.clock,
     contextCompiler,

@@ -11,6 +11,7 @@ import type {
   WorkflowCommandId,
 } from "@sayhear/domain";
 import type { MemoryCandidateProposal } from "../memory-claim/types";
+import type { ModelRoleCallUsage } from "../conversation-model";
 
 /**
  * 1A.3b A3 (issue #199, SPEC 5). Daily / Weekly Reflection is a non-authoritative,
@@ -34,8 +35,8 @@ export const REFLECTION_OUTPUT_POLICY_VERSION = "reflection-output:v1";
 export const REFLECTION_OUTPUT_SCHEMA_VERSION = "reflection-output-schema:v1";
 
 /** One frozen Prompt per artifact kind (ADR-0121 discipline for producers). */
-export const REFLECTION_DAILY_PROMPT_VERSION = "reflection-daily:v2";
-export const REFLECTION_WEEKLY_PROMPT_VERSION = "reflection-weekly:v1";
+export const REFLECTION_DAILY_PROMPT_VERSION = "reflection-daily:v3";
+export const REFLECTION_WEEKLY_PROMPT_VERSION = "reflection-weekly:v2";
 
 /**
  * Q2 (Luke, accepted): the Episode Builder runs first and Reflection waits a
@@ -227,8 +228,15 @@ export type ReflectionGenerationModelOutput = Readonly<{
 
 export type ReflectionGenerationModelProvider = Readonly<{
   role: "reflection.daily" | "reflection.weekly";
+  /**
+   * `onUsage` receives the content-free token accounting for the call whether
+   * it produced typed output or not. It is request-scoped because one provider
+   * instance serves concurrent commands. A Provider that cannot report usage
+   * simply never calls it.
+   */
   generate(
     request: ReflectionGenerationModelRequest,
+    onUsage?: (usage: ModelRoleCallUsage) => void,
   ): Promise<ReflectionGenerationModelOutput>;
 }>;
 

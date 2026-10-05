@@ -123,6 +123,7 @@ type DispatchRow = Readonly<{
   context_sections: CompiledContextSection[];
   context_source_revision: string;
   context_total_tokens: string;
+  daily_session_id: string;
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
@@ -1228,6 +1229,7 @@ export class PostgresConversationResponseRepository
             ) AS consent_active,
             command.status,
             attempt.status AS attempt_status,
+            session.daily_session_id AS daily_session_id,
             session.dialogue_revision AS session_dialogue_revision,
             session.source_revision AS session_source_revision,
             (
@@ -1459,6 +1461,7 @@ export class PostgresConversationResponseRepository
           sections: row.context_sections,
           totalTokens: Number(row.context_total_tokens),
         },
+        dailySessionId: row.daily_session_id,
         model: row.model,
         outcome: "permitted",
       };

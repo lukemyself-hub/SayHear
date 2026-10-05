@@ -10,11 +10,14 @@ import {
   type NarrativeValidatorModelOutput,
   type NarrativeValidationModelProvider,
   type ProviderResponseFailure,
+  type ReflectionBaselineEntry,
   type ReflectionGenerationModelOutput,
   type ReflectionGenerationModelProvider,
   type ReflectionGenerationModelRequest,
 } from "@sayhear/application";
 
+import { createOpenCodeGoConversationTextModel } from "./opencode-go-conversation-text-model";
+import { providerSessionIdFor } from "./provider-session-identity";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 import { assertRuntimeProviderEgressIntegration } from "./runtime-provider-egress";
 
@@ -24,6 +27,18 @@ export type ResponsesApiAdapter = Readonly<{
   provider: "openai" | "deepseek";
   timeoutMs: number;
 }>;
+
+/**
+ * The OpenCode Go Chat Completions adapter carries no baseUrl: the Go endpoint
+ * is fixed inside the transport so no caller can retarget it at another host.
+ */
+export type OpenCodeGoAdapter = Readonly<{
+  apiKey: string;
+  provider: "opencode-go";
+  timeoutMs: number;
+}>;
+
+export type OneA3bProviderAdapter = ResponsesApiAdapter | OpenCodeGoAdapter;
 
 export type OneA3bRuntimeRoleProviders = Readonly<{
   episodeBuildProvider: EpisodeBuildModelProvider;
@@ -120,10 +135,10 @@ function requiredConfiguration(
   return configuration;
 }
 
-function isResponsesApiProvider(
+function isSupportedProvider(
   value: string,
-): value is ResponsesApiAdapter["provider"] {
-  return value === "openai" || value === "deepseek";
+): value is OneA3bProviderAdapter["provider"] {
+  return value === "openai" || value === "deepseek" || value === "opencode-go";
 }
 
 function asObject(value: unknown, role: string): Record<string, unknown> {
@@ -279,24 +294,48 @@ function jsonInstructions(
   ].join(" ");
 }
 
-function createJsonCaller(adapter: ResponsesApiAdapter) {
-  const model = createResponsesApiConversationTextModel({
-    apiKey: adapter.apiKey,
-    baseUrl: adapter.baseUrl,
-    timeoutMs: adapter.timeoutMs,
-  });
+function createJsonCaller(adapter: OneA3bProviderAdapter) {
+  const model =
+    adapter.provider === "opencode-go"
+      ? createOpenCodeGoConversationTextModel({
+          apiKey: adapter.apiKey,
+          timeoutMs: adapter.timeoutMs,
+        })
+      : createResponsesApiConversationTextModel({
+          apiKey: adapter.apiKey,
+          baseUrl: adapter.baseUrl,
+          timeoutMs: adapter.timeoutMs,
+        });
 
   return async function askJson(
     configuration: ModelRoleConfigurationSnapshot,
     payload: unknown,
     instructions: string,
     locale: string,
+    /** Opaque, owner-and-task-scoped transport identity for the Go adapter. */
+    providerSessionId: string,
+    /** Content-free accounting, reported before any throw so a terminal
+     * usage-bearing failure is never lost to a snapshot mismatch. */
+    reportUsage?: (usage: ModelRoleCallUsage) => void,
   ): Promise<{ parsed: unknown; usage: JsonCallUsage }> {
     let output = "";
     let modelSnapshot: string | null = null;
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
     let reasoningTokens: number | null = null;
+    let cachedTokens: number | null = null;
+    let totalTokens: number | null = null;
+    // The adapter reports normalized usage once per logical call through this
+    // callback — including on a terminal failure after the Provider already
+    // spent the tokens. The completed event is used only as a fallback for
+    // adapters that do not invoke the callback (the legacy Responses path), so
+    // a callback-bearing call is never reported twice.
+    let usageReportedByAdapter = false;
+    const reportUsageOnce = (usage: ModelRoleCallUsage): void => {
+      if (usageReportedByAdapter) return;
+      usageReportedByAdapter = true;
+      reportUsage?.(usage);
+    };
     for await (const event of model.stream({
       instructions: jsonInstructions(configuration, instructions),
       locale,
@@ -308,7 +347,9 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
         },
       ],
       model: configuration.model,
+      onUsage: reportUsageOnce,
       parameters: configuration.parameterSnapshot,
+      providerSessionId,
       toolsDisabled: true,
     })) {
       if (event.type === "delta") output += event.delta;
@@ -317,20 +358,36 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
         inputTokens = event.inputTokens;
         outputTokens = event.outputTokens;
         reasoningTokens = event.reasoningTokens ?? null;
+        cachedTokens = event.cachedTokens ?? null;
+        totalTokens = event.totalTokens ?? null;
       }
     }
+    const usage: JsonCallUsage = {
+      cachedTokens,
+      inputTokens,
+      outputLength: output.length,
+      outputTokens,
+      reasoningTokens,
+      totalTokens,
+    };
+    // Report before the snapshot check and before any typed read so a terminal
+    // call that carries usage still leaves its spend on record even when the
+    // business error is a snapshot mismatch. This changes no classification.
+    // Guarded so an adapter callback that already reported the same logical
+    // call does not double-count it.
+    reportUsageOnce({
+      cachedTokens: usage.cachedTokens,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      reasoningTokens: usage.reasoningTokens,
+      totalTokens: usage.totalTokens,
+    });
     if (modelSnapshot !== configuration.modelSnapshot) {
       throw new ProviderDispatchError(
         "invalid_response",
         `${configuration.role} returned model snapshot ${modelSnapshot ?? "<missing>"}, expected ${configuration.modelSnapshot}.`,
       );
     }
-    const usage: JsonCallUsage = {
-      inputTokens,
-      outputLength: output.length,
-      outputTokens,
-      reasoningTokens,
-    };
     if (output.length === 0) {
       throw untypedOutputError(configuration, usage);
     }
@@ -352,10 +409,12 @@ function createJsonCaller(adapter: ResponsesApiAdapter) {
 
 /** Counts and lengths only; never the response text. */
 type JsonCallUsage = Readonly<{
+  cachedTokens: number | null;
   inputTokens: number | null;
   outputLength: number;
   outputTokens: number | null;
   reasoningTokens: number | null;
+  totalTokens: number | null;
 }>;
 
 /**
@@ -463,18 +522,48 @@ function episodeBuildInstructions(
 
 /**
  * The frozen Reflection output instruction, shared byte-for-byte by both
- * scopes. Daily appends its single-scope statement-kind clause below; Weekly
- * keeps this exact string so its behavior does not change.
+ * scopes. It states the deterministic reference protocol the Tier-1 gate
+ * enforces: Evidence-only support, `baseline[].claimId`-only baseline
+ * citations, a baseline subset for `change_observation`, and two distinct
+ * Daily Sessions for `cross_day_theme` / `change_observation`. Daily appends
+ * its single-scope statement-kind clause below.
  */
 const REFLECTION_OUTPUT_INSTRUCTIONS =
-  "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Each candidate must contain candidateKind, basis, predicateId, proposedConcept, typedValue, scopeKey, temporal, and evidenceItemIds. predicateId and proposedConcept must each be a string or null; typedValue must be a string or an array of strings; scopeKey must be a string; evidenceItemIds must be an array of supplied Evidence IDs. temporal must be an object containing temporalStatus, validFrom, validFromPrecision, validTo, and validToPrecision. validFrom and validTo must each be a date string or null. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.";
+  "Return an object with statements and candidateProposals arrays. Each statement must contain statementKey, text, statementKind, and propositions. Each proposition must contain propositionKey, normalizedProposition, propositionKind, epistemicRendering, supportEvidenceItemIds, and baselineClaimIds. statementKind must be one of day_observation, cross_day_theme, change_observation. Every proposition must cite at least one supplied Evidence ID in supportEvidenceItemIds and only supplied Evidence IDs. baselineClaimIds must copy verbatim only supplied baseline claimId values; never cite a claimVersionId, an Evidence, Episode, Session, or Summary ID, and never invent an ID. A change_observation proposition must list at least one supplied baseline claimId. cross_day_theme and change_observation statements must draw support from at least two distinct supplied Daily Session IDs. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Each normalizedProposition must be an exact verbatim quote (a contiguous substring) of the statement text it belongs to; never paraphrase or normalize its wording. Candidate proposals must be propose_new-only and cite supplied Evidence IDs. Each candidate must contain candidateKind, basis, predicateId, proposedConcept, typedValue, scopeKey, temporal, and evidenceItemIds. predicateId and proposedConcept must each be a string or null; typedValue must be a string or an array of strings; scopeKey must be a string; evidenceItemIds must be an array of supplied Evidence IDs. temporal must be an object containing temporalStatus, validFrom, validFromPrecision, validTo, and validToPrecision. validFrom and validTo must each be a date string or null. Candidate candidateKind must be one of objective, impression; basis must be one of directly_stated, inferred; temporalStatus must be one of current, ended, unknown; validFromPrecision and validToPrecision must be one of exact, month, year, approximate, unknown.";
+
+/**
+ * The Provider-facing Reflection payload. `claimVersionId` is internal Claim
+ * version lineage used only to freeze the comparison digest; the
+ * deterministic Tier-1 gate accepts only `baseline[].claimId` values, so
+ * sending the version ID invites the model to cite the wrong ID namespace.
+ * Only that one unused model-output field is dropped: the frozen request
+ * object, its Evidence, Episode, Summary, baseline claim IDs and
+ * claim-baseline digest are all preserved, and Episode / narrative.validate
+ * payloads are never projected.
+ */
+type ReflectionBaselineModelEntry = Omit<ReflectionBaselineEntry, "claimVersionId">;
+type ReflectionModelPayload = Omit<ReflectionGenerationModelRequest, "baseline"> &
+  Readonly<{ baseline: readonly ReflectionBaselineModelEntry[] }>;
+
+function reflectionModelPayload(
+  request: ReflectionGenerationModelRequest,
+): ReflectionModelPayload {
+  return {
+    ...request,
+    baseline: request.baseline.map((entry) => {
+      const { claimVersionId: _claimVersionId, ...modelEntry } = entry;
+      void _claimVersionId;
+      return modelEntry;
+    }),
+  };
+}
 
 /**
  * Reflection's Tier-1 gate fails the whole version with
  * `daily_scope_kind_invalid` when a Daily statement is not `day_observation`.
  * The shared instruction lists all three statement kinds, so Daily must state
- * its narrower contract explicitly. Weekly is unchanged (ADR-0121 keeps one
- * frozen prompt per artifact kind).
+ * its narrower contract explicitly (ADR-0121 keeps one frozen prompt per
+ * artifact kind).
  */
 function reflectionInstructions(
   request: ReflectionGenerationModelRequest,
@@ -491,8 +580,8 @@ function reflectionInstructions(
  * supplies transport credentials and refuses cross-provider configuration.
  */
 export function createRuntimeOneA3bRoleProviders(input: {
-  adapter?: ResponsesApiAdapter;
-  adapters?: readonly ResponsesApiAdapter[];
+  adapter?: OneA3bProviderAdapter;
+  adapters?: readonly OneA3bProviderAdapter[];
   configurations: readonly ModelRoleConfigurationSnapshot[];
   /** Content-free accounting for synthetic acceptance capture. */
   onUsage?: (role: ModelRoleConfigurationSnapshot["role"], usage: ModelRoleCallUsage) => void;
@@ -503,7 +592,7 @@ export function createRuntimeOneA3bRoleProviders(input: {
     throw new Error("G1 runtime providers require at least one provider adapter.");
   }
   const jsonCallers = new Map<
-    ResponsesApiAdapter["provider"],
+    OneA3bProviderAdapter["provider"],
     ReturnType<typeof createJsonCaller>
   >();
   for (const adapter of adapters) {
@@ -517,8 +606,10 @@ export function createRuntimeOneA3bRoleProviders(input: {
     payload: unknown,
     instructions: string,
     locale: string,
+    providerSessionId: string,
+    reportUsage?: (usage: ModelRoleCallUsage) => void,
   ) => {
-    if (!isResponsesApiProvider(configuration.provider)) {
+    if (!isSupportedProvider(configuration.provider)) {
       throw new Error(
         `G1 runtime cannot dispatch unsupported provider ${configuration.provider} for ${configuration.role}.`,
       );
@@ -529,7 +620,14 @@ export function createRuntimeOneA3bRoleProviders(input: {
         `G1 runtime has no credentials for the configured ${configuration.provider} provider of ${configuration.role}.`,
       );
     }
-    return caller(configuration, payload, instructions, locale);
+    return caller(
+      configuration,
+      payload,
+      instructions,
+      locale,
+      providerSessionId,
+      reportUsage,
+    );
   };
   /**
    * Issue #252: a parseable body that fails the frozen output schema is a
@@ -544,26 +642,27 @@ export function createRuntimeOneA3bRoleProviders(input: {
     payload: unknown,
     instructions: string,
     locale: string,
+    providerSessionId: string,
     read: (parsed: unknown, role: string) => Output,
     onUsage?: (usage: ModelRoleCallUsage) => void,
   ): Promise<Output> => {
+    // Reported by askJson before any throw so a call that fails the schema,
+    // the snapshot check, or the parse still leaves its spend on record; the
+    // failure itself carries the same counts. Narrowed explicitly so the
+    // callback receives exactly its declared type rather than the wider
+    // internal record.
+    const reportUsage = (usage: ModelRoleCallUsage) => {
+      onUsage?.(usage);
+      input.onUsage?.(configuration.role, usage);
+    };
     const { parsed, usage } = await askJson(
       configuration,
       payload,
       instructions,
       locale,
+      providerSessionId,
+      reportUsage,
     );
-    // Reported before the typed read so a call that fails the schema still
-    // leaves its spend on record; the failure itself carries the same counts.
-    // Narrowed explicitly so the callback receives exactly its declared type
-    // rather than the wider internal record.
-    const accounting = {
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      reasoningTokens: usage.reasoningTokens,
-    };
-    onUsage?.(accounting);
-    input.onUsage?.(configuration.role, accounting);
     try {
       return read(parsed, configuration.role);
     } catch (error) {
@@ -606,9 +705,9 @@ export function createRuntimeOneA3bRoleProviders(input: {
     weeklyConfiguration,
     narrativeConfiguration,
   ]) {
-    if (!isResponsesApiProvider(configuration.provider)) {
+    if (!isSupportedProvider(configuration.provider)) {
       throw new Error(
-        `G1 role ${configuration.role} has no supported Responses API provider.`,
+        `G1 role ${configuration.role} has no supported Provider.`,
       );
     }
     if (!jsonCallers.has(configuration.provider)) {
@@ -620,30 +719,85 @@ export function createRuntimeOneA3bRoleProviders(input: {
 
   const episodeBuildProvider: EpisodeBuildModelProvider = {
     role: "episode.build",
-    async buildProposals(request) {
+    async buildProposals(request, onUsage) {
       return askTypedJson(
         episodeConfiguration,
         request,
         episodeBuildInstructions(request),
         request.evidence[0]?.locale ?? "en-US",
+        providerSessionIdFor({ ownerId: request.userId, scopeId: `episode.build:${request.dailySessionId}` }),
         asEpisodeProposals,
+        onUsage,
       );
     },
   };
 
   const reflectionProvider: ReflectionGenerationModelProvider = {
     role: "reflection.daily",
-    async generate(request) {
+    async generate(request, onUsage) {
       const configuration =
         request.role === "reflection.weekly"
           ? weeklyConfiguration
           : dailyConfiguration;
+      // Weekly is scoped by its week identifier; Daily by its single session.
+      // Evidence is required by the frozen contract, so a scope exists. The Go
+      // adapter is stricter: each role must carry its own non-blank trusted
+      // scope and is never allowed to borrow the other role's field, so a
+      // missing weekly/day identity fails closed before any dispatch instead
+      // of silently opening a session under the wrong scope. Legacy
+      // Responses/deterministic behavior (including the cross-field fallback)
+      // is unchanged.
+      let scope: string | undefined;
+      if (configuration.provider === "opencode-go") {
+        if (request.role === "reflection.weekly") {
+          const weekIdentifier = request.weekIdentifier;
+          if (
+            typeof weekIdentifier !== "string" ||
+            weekIdentifier.trim() === ""
+          ) {
+            throw new ProviderDispatchError(
+              "configuration",
+              "reflection.weekly requires a non-empty week identifier for a Provider session identity.",
+            );
+          }
+          scope = weekIdentifier;
+        } else {
+          const dailySessionId = request.evidence[0]?.dailySessionId;
+          if (
+            typeof dailySessionId !== "string" ||
+            dailySessionId.trim() === ""
+          ) {
+            throw new ProviderDispatchError(
+              "configuration",
+              `${request.role} requires a non-empty evidence Daily Session for a Provider session identity.`,
+            );
+          }
+          scope = dailySessionId;
+        }
+      } else {
+        scope =
+          request.role === "reflection.weekly"
+            ? (request.weekIdentifier ??
+              request.evidence[0]?.dailySessionId ??
+              undefined)
+            : (request.evidence[0]?.dailySessionId ??
+              request.weekIdentifier ??
+              undefined);
+      }
+      if (!scope) {
+        throw new ProviderDispatchError(
+          "configuration",
+          `${request.role} has no logical scope to derive a Provider session identity.`,
+        );
+      }
       return askTypedJson(
         configuration,
-        request,
+        reflectionModelPayload(request),
         reflectionInstructions(request),
         request.locale || "en-US",
+        providerSessionIdFor({ ownerId: request.userId, scopeId: `${request.role}:${scope}` }),
         asReflectionOutput,
+        onUsage,
       );
     },
   };
@@ -651,11 +805,27 @@ export function createRuntimeOneA3bRoleProviders(input: {
   const narrativeValidationProvider: NarrativeValidationModelProvider = {
     role: "narrative.validate",
     async validateNarrative(request, onUsage) {
+      // The Go adapter derives its session identity from the draft reference.
+      // A blank reference would make the scope prefix "narrative.validate:"
+      // mask a missing identity, so it is rejected before any dispatch. The
+      // outer production caller already validates the draft; legacy
+      // Responses/deterministic callers keep their existing contract.
+      if (
+        narrativeConfiguration.provider === "opencode-go" &&
+        (typeof request.draftRef !== "string" ||
+          request.draftRef.trim() === "")
+      ) {
+        throw new ProviderDispatchError(
+          "configuration",
+          "narrative.validate requires a non-empty draft reference for a Provider session identity.",
+        );
+      }
       return askTypedJson(
         narrativeConfiguration,
         request,
         "Independently decompose the draft into propositions and report source coverage. Return an object with propositions and coverageKeys arrays. Each proposition must contain propositionKey, text, propositionKind, epistemicRendering, supportKeys, unsupported, contradicted, and ambiguous. propositionKind must be one of fact, impression, synthesis. epistemicRendering must be one of confirmed, inferred. Use only supplied source keys. Each proposition text must be an exact verbatim quote (a contiguous substring) of the draft text; never paraphrase, normalize, reorder, or translate its wording. Flag semantics. Mark unsupported true only when no supplied source states or directly entails the proposition; paraphrase that preserves meaning counts as supported. Mark contradicted true only when a supplied source states the opposite of the proposition; absence of support is unsupported, never contradicted. Mark ambiguous true only when a reference in the proposition cannot be resolved from the draft itself (for example an entity, quantity, or comparison with no identifiable antecedent) so that source linkage is impossible; inelegant wording or anything resolvable from context is not ambiguous. When uncertain about any flag, leave it false.",
         request.draftLocale ?? "en-US",
+        providerSessionIdFor({ ownerId: request.userId, scopeId: `narrative.validate:${request.draftRef}` }),
         asNarrativeOutput,
         onUsage,
       );

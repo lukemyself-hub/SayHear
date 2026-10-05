@@ -6,7 +6,22 @@ export type EvidenceLocatorType = "whole_revision" | "segment" | "text_span" | "
 export type EvidenceRole = "factual_support" | "subjective_report";
 export type EvidenceExtractionProvider = Readonly<{
   role: "evidence.extract";
-  extract(input: { locale: string; sourceText: string }): Promise<ReadonlyArray<Readonly<{
+  extract(input: {
+    locale: string;
+    sourceText: string;
+    /**
+     * Trusted transport scope threaded from the freeze transaction (owner +
+     * Daily Session). A transport that needs an opaque Provider session
+     * identity derives one from this; it is deliberately separate from
+     * `locale`/`sourceText` so the owner and Daily Session id never enter the
+     * model-visible payload. Optional for deterministic and Responses-API
+     * extractors that have no such concept.
+     */
+    transport?: Readonly<{
+      dailySessionId: string;
+      userId: string;
+    }>;
+  }): Promise<ReadonlyArray<Readonly<{
     locatorType: EvidenceLocatorType;
     locatorKey: string;
     role: EvidenceRole;
@@ -15,7 +30,7 @@ export type EvidenceExtractionProvider = Readonly<{
 export type EvidenceChampion = Readonly<{
   configVersion: string;
   model: string;
-  provider: "openai" | "deepseek";
+  provider: "openai" | "deepseek" | "opencode-go";
   providerPolicyVersion: string;
   snapshot: string;
 }>;

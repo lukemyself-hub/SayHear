@@ -20,8 +20,11 @@ import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
  * version, and bloodline this generation belongs to), not a transport selector —
  * Providers that share a wire-compatible Responses API are configurations of one
  * protocol client. ADR-0102 widened this from the single 1A.1 Provider ("openai").
+ * ADR-0147 adds `opencode-go`, which is an honest Provider identity of its own:
+ * it is reached through the OpenCode Go Chat Completions transport, not the
+ * Responses API, so a Champion cannot silently relabel a Go lineage as DeepSeek.
  */
-export type ConversationTextProvider = "openai" | "deepseek";
+export type ConversationTextProvider = "openai" | "deepseek" | "opencode-go";
 
 export type ConversationTextChampion = Readonly<{
   configVersion: string;
@@ -50,8 +53,23 @@ export type ConversationTextModelRequest = Readonly<{
   locale: string;
   messages: readonly ConversationTextMessage[];
   model: string;
+  /**
+   * Optional per-call content-free accounting. An adapter invokes it at most
+   * once with the normalized Provider usage when the Provider reported any, on
+   * a normal terminal or on a terminal failure (including a late protocol,
+   * EOF, or abort failure after usage was seen). It never carries request or
+   * response text, and a call with no observed usage does not invoke it — an
+   * absent invocation is never a fabricated zero.
+   */
+  onUsage?: (usage: ModelRoleCallUsage) => void;
   /** Provider request parameters frozen by the owning release configuration. */
   parameters?: Readonly<Record<string, unknown>>;
+  /**
+   * Opaque, caller-owned session identity for Providers that require a stable
+   * session header. Callers pass a hashed logical conversation / task identity,
+   * never raw user data. Adapters that have no such concept ignore it.
+   */
+  providerSessionId?: string;
   signal?: AbortSignal;
   toolsDisabled?: boolean;
 }>;
@@ -61,6 +79,11 @@ export type ConversationTextModelStreamEvent =
   | Readonly<{
       costMicros: number | null;
       finishReason: string;
+      /**
+       * Present only when the Provider reports cached input tokens, so an
+       * adapter without the concept never fabricates a zero.
+       */
+      cachedTokens?: number | null;
       inputTokens: number | null;
       modelSnapshot: string;
       outputTokens: number | null;
@@ -70,6 +93,11 @@ export type ConversationTextModelStreamEvent =
        * keeps adapters that have no such concept from fabricating a zero.
        */
       reasoningTokens?: number | null;
+      /**
+       * Present only when the Provider reports a total that includes the
+       * reasoning spend; absent stays unknown rather than being summed.
+       */
+      totalTokens?: number | null;
       type: "completed";
     }>
   | Readonly<{
@@ -151,7 +179,45 @@ export type ModelRoleCallUsage = Readonly<{
   inputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
+  /**
+   * Provider-reported cached input tokens (`input_tokens_details.cached_tokens`).
+   * Absent/unknown is `null`, never an invented zero or a derived sum.
+   */
+  cachedTokens: number | null;
+  /**
+   * Provider-reported `total_tokens`, which already includes reasoning. It is
+   * reported as-is and never recomputed from the other counters.
+   */
+  totalTokens: number | null;
 }>;
+
+/**
+ * Normalize a Provider usage record to content-free safe integers. Every
+ * counter is finite, non-negative, and a safe integer or it becomes `null`
+ * (unknown). This is the single place a token count can enter the durable
+ * ledger, so no NaN/Infinity/fractional/negative value can be stored as a
+ * `0` or a fabricated total.
+ */
+export function normalizeModelRoleCallUsage(
+  usage: ModelRoleCallUsage | null | undefined,
+): ModelRoleCallUsage | null {
+  if (!usage) return null;
+  return {
+    cachedTokens: normalizeTokenCount(usage.cachedTokens),
+    inputTokens: normalizeTokenCount(usage.inputTokens),
+    outputTokens: normalizeTokenCount(usage.outputTokens),
+    reasoningTokens: normalizeTokenCount(usage.reasoningTokens),
+    totalTokens: normalizeTokenCount(usage.totalTokens),
+  };
+}
+
+function normalizeTokenCount(value: unknown): number | null {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+    ? value
+    : null;
+}
 
 /**
  * Content-free reason a Provider response could not be turned into a typed
@@ -177,9 +243,10 @@ export type ProviderResponseFailure = ModelRoleCallUsage &
      * Set only when the Provider itself reported the truncation, which is what
      * separates a proven budget exhaustion from an inferred one. A literal
      * union, not a free string, so no Provider-supplied text can reach release
-     * evidence through this field.
+     * evidence through this field. Responses APIs report `max_output_tokens`;
+     * Chat Completions reports the equivalent `length` finish reason.
      */
-    providerReason: "max_output_tokens" | null;
+    providerReason: "max_output_tokens" | "length" | null;
   }>;
 
 export class ProviderDispatchError extends Error {
@@ -198,6 +265,13 @@ export class ProviderDispatchError extends Error {
 export type ProviderEgressClaim =
   | Readonly<{
       context: CompiledContextRenderSource;
+      /**
+       * The Daily Session this conversation command belongs to, read from the
+       * existing `interaction_turns.daily_session_id` join. It is the trusted
+       * logical scope for an opaque transport session identity (ADR-0147) and
+       * is never persisted as a new column or sent to the Provider as payload.
+       */
+      dailySessionId?: string;
       model: string;
       outcome: "permitted";
     }>

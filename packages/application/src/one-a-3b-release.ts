@@ -27,22 +27,28 @@ export const ONE_A_3B_G1_RELEASE_MANIFEST_VERSION =
 /**
  * G1 model-configuration iteration per role.
  *
- * Existing production rows use v2. Weekly requires v5 for its raised
- * 20000-token output budget while keeping its low reasoning effort and its
- * unchanged `reflection-weekly:eval:v4` prompt; a frozen parameter change
- * lands as a new immutable configuration version. narrative.validate v5 keeps
- * the 10000-token cap and pins low reasoning effort. Episode and Daily require
- * v5 because their prompts now state the typed contracts admission already
- * enforces (kindFields allowlist, boundary date format, Evidence and
- * entity-anchor rules; Daily day_observation-only scope); a prompt change
- * needs a new immutable configuration version. Configuration rows are
- * immutable; old versions remain rollback history.
+ * ADR-0147 moved the four G1 roles from the DeepSeek Responses API to the
+ * OpenCode Go Chat Completions transport while keeping the same logical
+ * DeepSeek V4.1 Flash model. The prompt versions are unchanged from the
+ * Reflection reference-contract release (episode-build:eval:v4,
+ * reflection-daily:eval:v6, reflection-weekly:eval:v5,
+ * narrative-validate:eval:v4).
+ *
+ * The 2026-10-04 output-budget release (docs/tasks/g1-output-budget-20261004.md)
+ * raises the four permanent output caps: E32000/D32000/W48000/V48000. Two full
+ * Go profiling runs showed the previous budgets truncating real work, so
+ * Episode v6 -> v7 (10000 -> 32000), Daily v8 -> v9 (20000 -> 32000), Weekly
+ * v7 -> v8 (20000 -> 48000), and narrative.validate v6 -> v7 (10000 -> 48000)
+ * each land as a new immutable configuration. Only the output cap moves: model,
+ * prompt, schema, temperature, `reasoning.effort: low`, retries and
+ * `fallback: none` all stay frozen. Configuration rows are immutable; old
+ * versions remain rollback history.
  */
 export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
-  "episode.build": "v5",
-  "reflection.daily": "v5",
-  "reflection.weekly": "v5",
-  "narrative.validate": "v5",
+  "episode.build": "v7",
+  "reflection.daily": "v9",
+  "reflection.weekly": "v8",
+  "narrative.validate": "v7",
 } as const satisfies Readonly<
   Record<(typeof ONE_A_3B_G1_ENABLED_ROLES)[number], string>
 >;
@@ -52,14 +58,15 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  *
  * A rollout pin is bound to exactly one manifest fingerprint and
  * `bindActiveG1Release` refuses to re-point an existing pin at a different
- * release. So a new release needs new pins even for the three roles whose
- * configuration is unchanged. A pin's name need not match its configuration
+ * release. So a new release needs new pins even for a role whose configuration
+ * did not otherwise change. A pin's name need not match its configuration
  * version: its foreign key is (role, config_version, provider_policy_version),
- * so a `v3` pin may point at an unchanged `v2` configuration. v12 binds the
- * Weekly scheduling and hosted evidence retention fixes to a new release.
- * All four roles retain their v5 configurations and Provider budgets.
+ * so a `v3` pin may point at an unchanged `v2` configuration. v16 binds the
+ * 2026-10-04 output-budget release, in which all four roles move to their new
+ * `:g1-release:v7/v9/v8/v7` configurations and `opencode-go-*` egress
+ * policies at the raised E32000/D32000/W48000/V48000 caps.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v12" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v16" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =

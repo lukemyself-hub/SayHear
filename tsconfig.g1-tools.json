@@ -12,6 +12,7 @@
     "scripts/produce-1a3b-g1-evidence.ts",
     "scripts/verify-1a3b-g1-evidence.ts",
     "scripts/generate-1a3b-g1-source-docs.ts",
+    "scripts/g1-token-usage.ts",
     "eval/continuation-acceptance-1a3b/run-validator-capture.ts"
   ]
 }

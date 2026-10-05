@@ -432,6 +432,7 @@ export {
 } from "./conversation-response";
 export {
   ProviderDispatchError,
+  normalizeModelRoleCallUsage,
   type ConversationTextChampion,
   type ConversationTextMessage,
   type ConversationTextProvider,

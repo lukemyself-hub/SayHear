@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createRuntimeOneA3bRoleProviders } from "@sayhear/ai";
+import { createRuntimeOneA3bRoleProviders, type OneA3bProviderAdapter } from "@sayhear/ai";
 import { createModelRoleRegistry, createModelRoleCommandService, createModelRoleProviderEgress, EPISODE_KIND_CATALOG_V1, ProviderDispatchError, type RecoveryGate, type ModelRoleCallUsage } from "@sayhear/application";
 import { asDailySessionId, asEvidenceItemId } from "@sayhear/domain";
 import { runMigrations, PostgresModelRoleCommandRepository } from "@sayhear/data";
@@ -42,9 +42,8 @@ async function main() {
     if (relative(root, p).startsWith("..")) throw new Error("Capture paths must stay inside the repository.");
     return p;
   };
-  const connectionString = process.env.TEST_DATABASE_URL,
-    apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!connectionString || !apiKey) throw new Error("Isolated test database and Provider credentials are required.");
+  const connectionString = process.env.TEST_DATABASE_URL;
+  if (!connectionString) throw new Error("An isolated test database is required.");
   if (process.env.DATABASE_URL) {
     const identity = (value: string) => {
       const u = new URL(value);
@@ -59,15 +58,28 @@ async function main() {
   if (manifest.gitCommit !== checkoutCommit) throw new Error("Provider capture commit does not match the checkout.");
   const roles = ["episode.build", "reflection.daily", "reflection.weekly", "narrative.validate"] as const;
   const configurations = roles.map(role => snapshotFor(role, pins));
+  const providersPresent = new Set(configurations.map(configuration => configuration.provider));
+  const adapters: OneA3bProviderAdapter[] = [];
+  if (providersPresent.has("deepseek")) {
+    const key = process.env.DEEPSEEK_API_KEY;
+    if (!key) throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
+    adapters.push({ provider: "deepseek", apiKey: key, baseUrl: process.env.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com", timeoutMs: 120000 });
+  }
+  if (providersPresent.has("openai")) {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) throw new Error("OPENAI_API_KEY is required for the selected openai provider.");
+    adapters.push({ provider: "openai", apiKey: key, baseUrl: "https://api.openai.com/v1", timeoutMs: 120000 });
+  }
+  if (providersPresent.has("opencode-go")) {
+    const key = process.env.OPENCODE_GO_API_KEY;
+    if (!key) throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
+    adapters.push({ provider: "opencode-go", apiKey: key, timeoutMs: 120000 });
+  }
+  if (adapters.length !== providersPresent.size) throw new Error("Provider capture could not provision every configured provider.");
   console.log("[g1-provider-capture] frozen inputs verified");
   const usage = new Map<string, ModelRoleCallUsage>();
   const providers = createRuntimeOneA3bRoleProviders({
-    adapters: [{
-      provider: "deepseek",
-      apiKey,
-      baseUrl: process.env.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
-      timeoutMs: 120000
-    }],
+    adapters,
     configurations,
     onUsage: (role, value) => usage.set(role, value)
   });

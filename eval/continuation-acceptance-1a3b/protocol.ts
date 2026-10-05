@@ -290,7 +290,7 @@ export type RolePin = Readonly<{
   parameters: Readonly<Record<string, boolean | number | string>>;
   policyVersion: string;
   promptVersion: string;
-  provider: "deepseek" | "openai" | "deterministic";
+  provider: "deepseek" | "openai" | "opencode-go" | "deterministic";
   schemaVersion: string;
   snapshot: string;
 }>;

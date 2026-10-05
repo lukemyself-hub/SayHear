@@ -211,6 +211,31 @@ function explicitSwitch(environment: Environment, name: string): boolean {
   throw new Error(`${name} must be true or false.`);
 }
 
+const KNOWN_PROVIDER_ADAPTERS = [
+  "openai",
+  "deepseek",
+  "deterministic",
+  "opencode-go",
+] as const;
+type ProviderAdapter = (typeof KNOWN_PROVIDER_ADAPTERS)[number];
+
+/**
+ * Resolve the selected Provider adapter. An unset value keeps the historical
+ * `openai` default; any explicit value must be one of the known adapters, so a
+ * typo or empty string fails at configuration load instead of silently
+ * selecting a different Provider than the deployment asked for. The invalid
+ * value is never echoed into the error.
+ */
+function resolveProviderAdapter(value: string | undefined): ProviderAdapter {
+  if (value === undefined) return "openai";
+  if ((KNOWN_PROVIDER_ADAPTERS as readonly string[]).includes(value)) {
+    return value as ProviderAdapter;
+  }
+  throw new Error(
+    `SAYHEAR_PROVIDER_ADAPTER must be one of ${KNOWN_PROVIDER_ADAPTERS.join(", ")}.`,
+  );
+}
+
 export function loadRuntimeConfiguration(environment: Environment) {
   const deployment = assertSafeRuntimeConfiguration(environment);
   const oneA3bG1ReleaseManifest = resolveOneA3bG1ReleaseManifest(environment);
@@ -221,12 +246,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
     throw new Error("SAYHEAR_TEST_NOW must be a valid ISO timestamp.");
   }
 
-  const adapter =
-    environment.SAYHEAR_PROVIDER_ADAPTER === "deterministic"
-      ? "deterministic"
-      : environment.SAYHEAR_PROVIDER_ADAPTER === "deepseek"
-        ? "deepseek"
-        : "openai";
+  const adapter = resolveProviderAdapter(environment.SAYHEAR_PROVIDER_ADAPTER);
   const deterministicChunks =
     adapter === "deterministic"
       ? parseDeterministicChunks(
@@ -266,7 +286,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
     throw new Error("SAYHEAR_DEEPSEEK_BASE_URL must be a non-empty URL.");
   }
   // The deterministic test adapter keeps the OpenAI Champion metadata (it never
-  // calls a Provider), so only a real deepseek adapter switches the lineage label.
+  // calls a Provider), so only a real adapter switches the lineage label.
   const providerProfile =
     adapter === "deepseek"
       ? ({
@@ -274,14 +294,22 @@ export function loadRuntimeConfiguration(environment: Environment) {
           provider: "deepseek",
           providerPolicyVersion: "deepseek-conversation-text:v1",
         } as const)
-      : ({
-          defaultModel: "gpt-5.4",
-          provider: "openai",
-          providerPolicyVersion: "openai-conversation-text:v1",
-        } as const);
+      : adapter === "opencode-go"
+        ? ({
+            defaultModel: "deepseek-v4.1-flash",
+            provider: "opencode-go",
+            providerPolicyVersion: "opencode-go-conversation-text:v1",
+          } as const)
+        : ({
+            defaultModel: "gpt-5.4",
+            provider: "openai",
+            providerPolicyVersion: "openai-conversation-text:v1",
+          } as const);
   // Live Provider credentials + transport base URL. The deterministic adapter
-  // owns no credentials; both real Providers carry their baseUrl here so the
-  // transport layer never hardcodes a Provider endpoint.
+  // owns no credentials; the Responses Providers carry their baseUrl here so
+  // the transport layer never hardcodes an endpoint. OpenCode Go has no
+  // caller-selectable baseUrl — its endpoint is fixed inside the transport —
+  // so its credential is an API key only.
   const liveProviderCredentials =
     adapter === "openai"
       ? {
@@ -290,7 +318,9 @@ export function loadRuntimeConfiguration(environment: Environment) {
         }
       : adapter === "deepseek"
         ? { apiKey: required(environment, "DEEPSEEK_API_KEY"), baseUrl: deepseekBaseUrl }
-        : null;
+        : adapter === "opencode-go"
+          ? { apiKey: required(environment, "OPENCODE_GO_API_KEY") }
+          : null;
   const roleProviderAdapters = Object.freeze({
     deepseek:
       !environment.DEEPSEEK_API_KEY
@@ -310,6 +340,15 @@ export function loadRuntimeConfiguration(environment: Environment) {
             provider: "openai" as const,
             timeoutMs,
           }),
+    // OpenCode Go: fixed endpoint, no caller-supplied baseUrl. The four G1
+    // roles and the Conversation Champion select it by provider identity.
+    "opencode-go": !environment.OPENCODE_GO_API_KEY
+      ? null
+      : Object.freeze({
+          apiKey: environment.OPENCODE_GO_API_KEY,
+          provider: "opencode-go" as const,
+          timeoutMs,
+        }),
   });
   const inactivityTimeoutMs = Number(
     environment.SAYHEAR_INACTIVITY_TIMEOUT_MS ?? "1800000",
@@ -460,14 +499,18 @@ export function loadRuntimeConfiguration(environment: Environment) {
       apiKey: liveProviderCredentials?.apiKey ?? null,
       timeoutMs,
       roleAdapters: roleProviderAdapters,
-      ...(liveProviderCredentials
+      ...(liveProviderCredentials && "baseUrl" in liveProviderCredentials
         ? { baseUrl: liveProviderCredentials.baseUrl }
         : {}),
       champion: Object.freeze({
         configVersion: "conversation-text-champion:v1",
         consentPolicyVersion: null,
         contextLimit: 1_000_000,
-        dataRegion: "provider-configured",
+        // OpenCode Go does not publish a direct-provider data region; the
+        // honest label is that the Provider manages processing. The dated
+        // zero-data-retention contract is recorded in ADR-0147.
+        dataRegion:
+          adapter === "opencode-go" ? "provider-managed" : "provider-configured",
         model:
           environment.SAYHEAR_CONVERSATION_TEXT_MODEL ??
           providerProfile.defaultModel,

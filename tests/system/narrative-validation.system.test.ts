@@ -813,12 +813,14 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
           "The Provider reported that it stopped at the pinned output budget.",
           true,
           {
+            cachedTokens: null,
             kind: "output_budget_exhausted",
             inputTokens: 940,
             outputLength: 0,
             outputTokens: 4000,
             providerReason: "max_output_tokens",
             reasoningTokens: 4000,
+            totalTokens: null,
           },
         );
       }),
@@ -833,12 +835,14 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
     expect(result.outcome).toBe("failed");
     expect(result.errorCode).toBe("schema_incompatible");
     expect(result.responseFailure).toEqual({
+      cachedTokens: null,
       kind: "output_budget_exhausted",
       inputTokens: 940,
       outputLength: 0,
       outputTokens: 4000,
       providerReason: "max_output_tokens",
       reasoningTokens: 4000,
+      totalTokens: null,
     });
   });
 
@@ -878,9 +882,11 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
       "bio-version:01984477-1f9a-7b25-a5cc-000000000019",
     );
     const reported: ModelRoleCallUsage = {
+      cachedTokens: null,
       inputTokens: 470,
       outputTokens: 3931,
       reasoningTokens: 3600,
+      totalTokens: null,
     };
     const loud = dependencies(providerFor(() => acceptedOutput(), reported));
     const result = await runNarrativeValidation({

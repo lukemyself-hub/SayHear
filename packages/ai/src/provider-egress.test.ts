@@ -20,6 +20,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { createProviderEgressPort } from "./provider-egress";
+import { providerSessionIdFor } from "./provider-session-identity";
 
 const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
 
@@ -148,6 +149,11 @@ describe("Provider Egress", () => {
       ],
       model: "gpt-5.4",
     });
+    // A claim without a Daily Session carries no Provider session identity:
+    // the per-command fallback is gone, so the Go transport fails closed
+    // before any network call rather than silently opening a session per
+    // command.
+    expect(modelRequest).not.toHaveProperty("providerSessionId");
   });
 
   it("forwards a provider-native tool_call without recording a completion", async () => {
@@ -622,8 +628,8 @@ function baseRepository(
           sections: [],
           totalTokens: 0,
         },
-        model: "gpt-5.4",
-        outcome: "permitted" as const,
+          model: "gpt-5.4",
+          outcome: "permitted" as const,
       };
     },
     async recordFirstToken() {
@@ -634,4 +640,121 @@ function baseRepository(
     },
   };
 }
+
+async function captureSessionId(input: {
+  dailySessionId: string;
+  generationCommandId: string;
+  owner: string;
+}): Promise<string | undefined> {
+  let providerSessionId: string | undefined;
+  const model = {
+    async *stream(request: Parameters<ConversationTextModel["stream"]>[0]) {
+      providerSessionId = request.providerSessionId;
+      yield {
+        costMicros: 0,
+        finishReason: "completed",
+        inputTokens: 1,
+        modelSnapshot: "gpt-5.4",
+        outputTokens: 1,
+        providerRequestId: "synthetic",
+        type: "completed" as const,
+      };
+    },
+  } satisfies ConversationTextModel;
+  const repository = baseRepository();
+  const withSession: ProviderEgressRepository = {
+    ...repository,
+    async claimDispatch() {
+      const claim = await repository.claimDispatch({
+        champion: undefined as never,
+        compiledContextId: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c1"),
+        generationCommandId: asGenerationCommandId(input.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId("01984477-59a9-7d20-9d97-e588769566c3"),
+        now: new Date("2026-07-29T12:00:00.000Z"),
+      });
+      return { ...claim, dailySessionId: input.dailySessionId };
+    },
+  };
+  const port = createProviderEgressPort({
+    champion: {
+      configVersion: "conversation-text-champion:v1",
+      consentPolicyVersion: null,
+      contextLimit: 100_000,
+      dataRegion: "test",
+      model: "gpt-5.4",
+      provider: "openai",
+      providerPolicyVersion: "openai-conversation-text:v1",
+      retentionMode: "store-disabled",
+      snapshot: "gpt-5.4",
+      streaming: true,
+      supportedLocales: ["en", "zh"],
+      trainingPolicy: "test",
+    },
+    clock: () => new Date("2026-07-29T12:00:00.000Z"),
+    contextCompiler: {
+      renderPermittedPayload: () => ({
+        instructions: "Synthetic.",
+        messages: [
+          {
+            revisionId: asConversationEventRevisionId(
+              "01984477-59a9-7d20-9d97-e588769566c0",
+            ),
+            role: "user",
+            text: "Synthetic.",
+          },
+        ],
+      }),
+    } as unknown as ContextCompiler,
+    model,
+    repository: withSession,
+  });
+  for await (const _event of port.stream({
+    compiledContextId: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c1"),
+    generationCommandId: asGenerationCommandId(input.generationCommandId),
+    modelRunAttemptId: asModelRunAttemptId("01984477-59a9-7d20-9d97-e588769566c3"),
+    userId: asUserId(input.owner),
+  })) {
+    // Drain.
+  }
+  return providerSessionId;
+}
+
+describe("Provider Egress OpenCode Go session identity", () => {
+  it("keeps one Daily Session stable across different GenerationCommands", async () => {
+    const dailySessionId = "01984477-59a9-7d20-9d97-e588769566a1";
+    const first = await captureSessionId({
+      dailySessionId,
+      generationCommandId: "01984477-59a9-7d20-9d97-e588769566c2",
+      owner: "01984477-59a9-7d20-9d97-e588769566a0",
+    });
+    const laterTurn = await captureSessionId({
+      dailySessionId,
+      generationCommandId: "01984477-59a9-7d20-9d97-e588769566c9",
+      owner: "01984477-59a9-7d20-9d97-e588769566a0",
+    });
+    expect(first).toBe(laterTurn);
+    expect(first).toBe(
+      providerSessionIdFor({
+        ownerId: "01984477-59a9-7d20-9d97-e588769566a0",
+        scopeId: dailySessionId,
+      }),
+    );
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("separates a different owner and a different Daily Session", async () => {
+    const common = {
+      dailySessionId: "01984477-59a9-7d20-9d97-e588769566a1",
+      generationCommandId: "01984477-59a9-7d20-9d97-e588769566c2",
+    };
+    const a = await captureSessionId({ ...common, owner: "01984477-59a9-7d20-9d97-e588769566a0" });
+    const b = await captureSessionId({ ...common, owner: "01984477-59a9-7d20-9d97-e588769566a2" });
+    const c = await captureSessionId({
+      ...common,
+      dailySessionId: "01984477-59a9-7d20-9d97-e588769566ff",
+      owner: "01984477-59a9-7d20-9d97-e588769566a0",
+    });
+    expect(new Set([a, b, c]).size).toBe(3);
+  });
+});
 

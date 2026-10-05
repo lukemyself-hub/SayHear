@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EPISODE_ADMISSION_POLICY_VERSION, episodeDedupeFingerprint, type EpisodeProposal, type ModelRoleConfigurationSnapshot } from "@sayhear/application";
 import { asDailySessionId, asEvidenceItemId, asGenerationCommandId, asModelRunAttemptId } from "@sayhear/domain";
-import { PostgresEpisodeRepository, runMigrations } from "@sayhear/data";
+import { PostgresEpisodeRepository, PostgresReflectionRepository, runMigrations } from "@sayhear/data";
 import { createIsolatedPostgresSchema, fixedInternalOwnerPrincipal, type IsolatedPostgresSchema } from "@sayhear/test-support";
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const systemDescribe = testDatabaseUrl ? describe : describe.skip;
@@ -223,6 +223,157 @@ systemDescribe("Episode admission transaction", () => {
     return { evidenceItemId: asEvidenceItemId(evidenceItemId), revisionId };
   }
 
+  /**
+   * Appends a second user ConversationEvent (a later turn) to an existing
+   * quiescent session and attaches its Evidence item to the same immutable
+   * snapshot. This lets one frozen build input carry two Evidence items whose
+   * source revisions differ, so two proposals can cite genuinely different
+   * Evidence sets within a single batch.
+   */
+  async function seedSecondSessionEvidence(input: {
+    dailySessionId: ReturnType<typeof asDailySessionId>;
+    sourceRevision: number;
+    sequenceNo: number;
+    canonicalText: string;
+  }): Promise<{
+    evidenceItemId: ReturnType<typeof asEvidenceItemId>;
+    revisionId: string;
+    conversationEventId: string;
+  }> {
+    const interactionTurnId = seedId();
+    const conversationEventId = seedId();
+    const revisionId = seedId();
+    const evidenceItemId = seedId();
+    const now = new Date(BASE_TIME);
+    await database!.pool.query(
+      `INSERT INTO interaction_turns (
+         interaction_turn_id, user_id, daily_session_id, client_turn_id,
+         turn_sequence_no, continuous_exchange_no, status, started_at,
+         settled_at, created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, 1, 'settled', $6, $6, $6, $6)`,
+      [
+        interactionTurnId,
+        OWNER,
+        input.dailySessionId,
+        `turn:${interactionTurnId}`,
+        input.sequenceNo,
+        now,
+      ],
+    );
+    await database!.pool.query(
+      `INSERT INTO conversation_events (
+         conversation_event_id, user_id, daily_session_id, interaction_turn_id,
+         sequence_no, client_event_id, actor, channel, event_type,
+         lifecycle_status, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, 'user', 'text', 'message',
+         'active', $7)`,
+      [
+        conversationEventId,
+        OWNER,
+        input.dailySessionId,
+        interactionTurnId,
+        input.sequenceNo,
+        `event:${conversationEventId}`,
+        now,
+      ],
+    );
+    await database!.pool.query(
+      `INSERT INTO conversation_event_revisions (
+         conversation_event_revision_id, user_id, conversation_event_id,
+         revision, canonical_text, locale, transcript_status, created_by, created_at
+       ) VALUES ($1, $2, $3, 1, $4, 'en-US', 'final', 'client', $5)`,
+      [revisionId, OWNER, conversationEventId, input.canonicalText, now],
+    );
+    await database!.pool.query(
+      "UPDATE conversation_events SET current_revision_id = $2 WHERE conversation_event_id = $1",
+      [conversationEventId, revisionId],
+    );
+    await database!.pool.query(
+      `INSERT INTO evidence_items (
+         evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id,
+         source_revision_id, source_actor, source_status, locator_type,
+         locator_key, extraction_policy_version, evidence_role, created_at
+       ) VALUES (
+         $1, $2,
+         (SELECT evidence_source_snapshot_id FROM evidence_source_snapshots
+          WHERE daily_session_id = $3 AND source_revision = $4
+          ORDER BY created_at DESC, evidence_source_snapshot_id LIMIT 1),
+         $5, $6, 'user', 'final', 'whole_revision', '1:0',
+         'evidence-extraction:v2', 'factual_support', $7)`,
+      [
+        evidenceItemId,
+        OWNER,
+        input.dailySessionId,
+        input.sourceRevision,
+        conversationEventId,
+        revisionId,
+        now,
+      ],
+    );
+    return {
+      evidenceItemId: asEvidenceItemId(evidenceItemId),
+      revisionId,
+      conversationEventId,
+    };
+  }
+
+  /** Marks a seeded session journal-published so Reflection readiness passes. */
+  async function seedJournalReadiness(dailySessionId: string): Promise<void> {
+    await database!.pool.query(
+      `INSERT INTO daily_session_date_outcomes (
+         daily_session_id, user_id, logical_date, outcome,
+         eligibility_policy_version, source_revision, workflow_receipt_id,
+         computed_at
+       ) VALUES (
+         $1, $2,
+         (SELECT logical_date FROM daily_sessions WHERE daily_session_id = $1),
+         'journal_available', 'journal-eligibility:v1', 1, 'seed', $3)`,
+      [dailySessionId, OWNER, new Date(BASE_TIME)],
+    );
+    await database!.pool.query(
+      `INSERT INTO journal_workflow_outcomes (
+         workflow_command_id, user_id, daily_session_id, source_revision,
+         expected_data_epoch, outcome, reason, created_at
+       ) VALUES ($1, $2, $3, 1, 1, 'published', NULL, $4)`,
+      [seedId(), OWNER, dailySessionId, new Date(BASE_TIME)],
+    );
+  }
+
+  /** Seeds an owner Entity with a current version so it is anchor-resolvable. */
+  async function seedResolvableEntity(): Promise<string> {
+    const entityId = seedId();
+    const entityVersionId = seedId();
+    await database!.pool.query(
+      "INSERT INTO entities (entity_id, user_id, created_at) VALUES ($1, $2, $3)",
+      [entityId, OWNER, new Date(BASE_TIME)],
+    );
+    await database!.pool.query(
+      `INSERT INTO entity_versions (
+         entity_version_id, entity_id, user_id, revision, entity_kind_id,
+         status, created_at
+       ) VALUES ($1, $2, $3, 1, 'person', 'active', $4)`,
+      [entityVersionId, entityId, OWNER, new Date(BASE_TIME)],
+    );
+    await database!.pool.query(
+      "UPDATE entities SET current_version_id = $2 WHERE entity_id = $1 AND user_id = $3",
+      [entityId, entityVersionId, OWNER],
+    );
+    return entityId;
+  }
+
+  /** Resolves the Episode that owns a version linked to one Evidence item. */
+  async function episodeIdForEvidence(evidenceItemId: string): Promise<string | null> {
+    const result = await database!.pool.query<{ episode_id: string }>(
+      `SELECT DISTINCT v.episode_id
+       FROM episode_versions v
+       INNER JOIN episode_evidence_links l
+         ON l.episode_version_id = v.episode_version_id
+       WHERE l.evidence_item_id = $1`,
+      [evidenceItemId],
+    );
+    return result.rows[0]?.episode_id ?? null;
+  }
+
   /** Seeds a running episode.build command and its first running attempt. */
   async function seedRunningGeneration(input: {
     dailySessionId: ReturnType<typeof asDailySessionId>;
@@ -319,6 +470,9 @@ systemDescribe("Episode admission transaction", () => {
     expect((await database!.pool.query("SELECT status FROM episode_versions")).rows).toEqual([{ status: "current" }]);
     expect(await repository.commitEpisodeAdmission(input)).toMatchObject({ outcome: "already_built" });
     expect((await database!.pool.query("SELECT count(*)::int AS count FROM episode_candidates")).rows[0].count).toBe(2);
+    // Idempotent replay must not duplicate links: only the accepted create
+    // candidate cites Evidence; the rejected proposal cites nothing.
+    expect((await database!.pool.query("SELECT count(*)::int AS count FROM episode_candidate_evidence_links")).rows[0].count).toBe(1);
     expect(await repository.commitEpisodeAdmission({ ...input, expectedDataEpoch: 2 })).toEqual({ outcome: "fenced", reason: "data_epoch" });
     const continued = await advanceSourceRevision({
       dailySessionId: session.dailySessionId,
@@ -347,6 +501,32 @@ systemDescribe("Episode admission transaction", () => {
     expect(versions.rows[0]).toMatchObject({ revision: 1, status: "superseded", supersedes_version_id: null });
     expect(versions.rows[1]).toMatchObject({ revision: 2, status: "current", supersedes_version_id: versions.rows[0].episode_version_id });
 
+    // Each immutable version owns exactly its admitted Evidence link. The
+    // predecessor's revision was corrected, so it is no longer valid and the
+    // successor carries only its newly admitted citation (never a stale copy).
+    const versionLinks = await database!.pool.query(
+      `SELECT v.revision, l.evidence_item_id
+       FROM episode_evidence_links l
+       INNER JOIN episode_versions v ON v.episode_version_id = l.episode_version_id
+       ORDER BY v.revision, l.evidence_item_id`,
+    );
+    expect(versionLinks.rows).toEqual([
+      { revision: 1, evidence_item_id: session.evidenceItemId },
+      { revision: 2, evidence_item_id: continued.evidenceItemId },
+    ]);
+    const candidateLinkCounts = await database!.pool.query(
+      `SELECT c.status, count(l.episode_candidate_evidence_link_id)::int AS links
+       FROM episode_candidates c
+       LEFT JOIN episode_candidate_evidence_links l
+         ON l.episode_candidate_id = c.episode_candidate_id
+       GROUP BY c.episode_candidate_id, c.status ORDER BY c.status, c.source_revision`,
+    );
+    expect(candidateLinkCounts.rows).toEqual([
+      { status: "accepted", links: 1 },
+      { status: "accepted", links: 1 },
+      { status: "rejected", links: 0 },
+    ]);
+
     // Committing the continuation must not disturb the earlier rejection's
     // terminal envelope: retention survives later successful builds.
     const retainedRejection = await database!.pool.query("SELECT status, reproposal_policy, terminal_effective_at, terminal_content_expires_at, decided_at FROM episode_candidates WHERE status = 'rejected'");
@@ -368,6 +548,630 @@ systemDescribe("Episode admission transaction", () => {
     }));
   });
 
+  it("persists owner Entity anchors on both the candidate and the created version", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-12" });
+    const entityId = await seedResolvableEntity();
+    const { generationCommandId, modelRunAttemptId } = await seedRunningGeneration({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId,
+      modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [{
+        proposedKind: "sh.episode.trip",
+        label: "Entity anchored trip",
+        temporalAnchor: { start: { date: "2026-09-12", precision: "exact" } },
+        phase: "planned",
+        kindFields: { destination: "Kyoto" },
+        citedEvidenceItemIds: [session.evidenceItemId],
+        entityAnchorIds: [entityId],
+        realWorldOccurrence: true,
+        explicitNewOccurrence: true,
+      }],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 1 });
+
+    const episodeId = await episodeIdForEvidence(session.evidenceItemId);
+    expect(episodeId).not.toBeNull();
+    expect((await database!.pool.query(
+      `SELECT l.entity_id
+       FROM episode_version_entity_links l
+       INNER JOIN episode_versions v ON v.episode_version_id = l.episode_version_id
+       WHERE v.episode_id = $1`,
+      [episodeId],
+    )).rows).toEqual([{ entity_id: entityId }]);
+    expect((await database!.pool.query(
+      `SELECT l.entity_id
+       FROM episode_candidate_entity_links l
+       INNER JOIN episode_candidates c ON c.episode_candidate_id = l.episode_candidate_id
+       WHERE c.daily_session_id = $1`,
+      [session.dailySessionId],
+    )).rows).toEqual([{ entity_id: entityId }]);
+  });
+
+  it("never links unknown or cross-owner refs while still linking a rejected candidate's valid citations", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-13" });
+    const foreignOwner = seedId();
+    await database!.pool.query(
+      `INSERT INTO app_users (user_id, status, data_epoch, created_at, updated_at)
+       VALUES ($1, 'active', 1, $2, $2)`,
+      [foreignOwner, new Date(BASE_TIME)],
+    );
+    const foreignEntityId = seedId();
+    await database!.pool.query(
+      "INSERT INTO entities (entity_id, user_id, created_at) VALUES ($1, $2, $3)",
+      [foreignEntityId, foreignOwner, new Date(BASE_TIME)],
+    );
+    const unknownEvidenceId = seedId();
+    const { generationCommandId, modelRunAttemptId } = await seedRunningGeneration({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    const committed = await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId,
+      modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [
+        {
+          proposedKind: "sh.episode.trip",
+          label: "Unknown evidence",
+          temporalAnchor: { start: { date: "2026-09-13", precision: "exact" } },
+          phase: "planned",
+          kindFields: { destination: "Osaka" },
+          citedEvidenceItemIds: [asEvidenceItemId(unknownEvidenceId)],
+          realWorldOccurrence: true,
+        },
+        {
+          proposedKind: "sh.episode.trip",
+          label: "Cross-owner entity",
+          temporalAnchor: { start: { date: "2026-09-13", precision: "exact" } },
+          phase: "planned",
+          kindFields: { destination: "Nara" },
+          citedEvidenceItemIds: [session.evidenceItemId],
+          entityAnchorIds: [foreignEntityId],
+          realWorldOccurrence: true,
+          explicitNewOccurrence: true,
+        },
+      ],
+    });
+    expect(committed).toMatchObject({
+      outcome: "committed",
+      acceptedCount: 0,
+      rejectedCount: 2,
+    });
+    // The valid owner citation on the second rejected candidate is linked; the
+    // unknown Evidence and the cross-owner Entity are never linked.
+    expect((await database!.pool.query(
+      `SELECT l.evidence_item_id
+       FROM episode_candidate_evidence_links l
+       INNER JOIN episode_candidates c ON c.episode_candidate_id = l.episode_candidate_id
+       WHERE c.daily_session_id = $1`,
+      [session.dailySessionId],
+    )).rows).toEqual([{ evidence_item_id: session.evidenceItemId }]);
+    expect((await database!.pool.query(
+      `SELECT count(*)::int AS count
+       FROM episode_candidate_entity_links l
+       INNER JOIN episode_candidates c ON c.episode_candidate_id = l.episode_candidate_id
+       WHERE c.daily_session_id = $1`,
+      [session.dailySessionId],
+    )).rows[0].count).toBe(0);
+    // No Episode/version may be created for a build that accepted nothing.
+    expect(await episodeIdForEvidence(session.evidenceItemId)).toBeNull();
+  });
+
+  it("carries still-valid predecessor Evidence and Entity links into the successor version", async () => {
+    const first = await seedSession({ logicalDate: "2026-09-20" });
+    const entityId = await seedResolvableEntity();
+    const firstGeneration = await seedRunningGeneration({
+      dailySessionId: first.dailySessionId,
+      sourceRevision: 1,
+    });
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    // A distinct kind keeps admission's same-kind uniqueness test scoped to
+    // this Episode even though the shared test schema accumulates other trips.
+    const createProposal: EpisodeProposal = {
+      proposedKind: "sh.episode.project_phase",
+      label: "Radio restoration",
+      temporalAnchor: { start: { date: "2026-09-20", precision: "exact" } },
+      phase: "planned",
+      kindFields: { project: "Radio restoration" },
+      citedEvidenceItemIds: [first.evidenceItemId],
+      entityAnchorIds: [entityId],
+      realWorldOccurrence: true,
+      explicitNewOccurrence: true,
+    };
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: first.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId: firstGeneration.generationCommandId,
+      modelRunAttemptId: firstGeneration.modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [createProposal],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 1 });
+
+    // A later day's session continues the Episode with new Evidence. The first
+    // Evidence stays valid, so it must be carried forward; the Entity anchor is
+    // carried even though the continuation proposal omits it.
+    const second = await seedSession({ logicalDate: "2026-09-21" });
+    const secondGeneration = await seedRunningGeneration({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+    });
+    const continuationInput = {
+      userId: OWNER,
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId: secondGeneration.generationCommandId,
+      modelRunAttemptId: secondGeneration.modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [{
+        ...createProposal,
+        phase: "ongoing" as const,
+        temporalAnchor: { start: { date: "2026-09-21", precision: "exact" as const } },
+        citedEvidenceItemIds: [second.evidenceItemId],
+        entityAnchorIds: [],
+        explicitNewOccurrence: false,
+      }],
+    };
+    expect(await repository.commitEpisodeAdmission(continuationInput)).toMatchObject({
+      outcome: "committed",
+      acceptedCount: 1,
+    });
+
+    const episodeId = await episodeIdForEvidence(first.evidenceItemId);
+    expect(episodeId).not.toBeNull();
+    const versions = await database!.pool.query(
+      "SELECT episode_version_id, revision FROM episode_versions WHERE episode_id = $1 ORDER BY revision",
+      [episodeId],
+    );
+    expect(versions.rows).toHaveLength(2);
+    const successorVersionId = versions.rows[1]!.episode_version_id;
+    const successorEvidence = await database!.pool.query(
+      `SELECT evidence_item_id FROM episode_evidence_links
+       WHERE episode_version_id = $1 ORDER BY evidence_item_id`,
+      [successorVersionId],
+    );
+    expect(new Set(successorEvidence.rows.map((row) => row.evidence_item_id)))
+      .toEqual(new Set([first.evidenceItemId, second.evidenceItemId]));
+    expect((await database!.pool.query(
+      "SELECT entity_id FROM episode_version_entity_links WHERE episode_version_id = $1",
+      [successorVersionId],
+    )).rows).toEqual([{ entity_id: entityId }]);
+
+    // Replaying the continuation is idempotent and adds no duplicate links.
+    expect(await repository.commitEpisodeAdmission(continuationInput)).toMatchObject({
+      outcome: "already_built",
+    });
+    expect((await database!.pool.query(
+      `SELECT count(*)::int AS count
+       FROM episode_evidence_links l
+       INNER JOIN episode_versions v ON v.episode_version_id = l.episode_version_id
+       WHERE v.episode_id = $1`,
+      [episodeId],
+    )).rows[0].count).toBe(3);
+  });
+
+  it("chains two same-batch continuations of one Episode without a revision conflict", async () => {
+    const first = await seedSession({ logicalDate: "2026-09-22" });
+    const entityId = await seedResolvableEntity();
+    const firstGeneration = await seedRunningGeneration({
+      dailySessionId: first.dailySessionId,
+      sourceRevision: 1,
+    });
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    // A distinct kind keeps admission's same-kind uniqueness test scoped to
+    // this Episode even though the shared test schema accumulates other
+    // episodes from earlier tests.
+    const createProposal: EpisodeProposal = {
+      proposedKind: "sh.episode.project_phase",
+      label: "Radio restoration",
+      temporalAnchor: { start: { date: "2026-09-22", precision: "exact" } },
+      phase: "planned",
+      kindFields: { project: "Radio restoration" },
+      citedEvidenceItemIds: [first.evidenceItemId],
+      entityAnchorIds: [entityId],
+      realWorldOccurrence: true,
+      explicitNewOccurrence: true,
+    };
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: first.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId: firstGeneration.generationCommandId,
+      modelRunAttemptId: firstGeneration.modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [createProposal],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 1 });
+
+    const episodeId = await episodeIdForEvidence(first.evidenceItemId);
+    expect(episodeId).not.toBeNull();
+    const revisionOne = (await database!.pool.query<{ episode_version_id: string; revision: number }>(
+      "SELECT episode_version_id, revision FROM episode_versions WHERE episode_id = $1 ORDER BY revision",
+      [episodeId],
+    )).rows[0]!;
+    expect(revisionOne.revision).toBe(1);
+
+    // The batch session freezes two distinct Evidence items (each with its
+    // own revision id), so the two continuation proposals cite genuinely
+    // different Evidence sets and therefore carry different dedupe
+    // fingerprints.
+    const second = await seedSession({ logicalDate: "2026-09-23" });
+    const secondEvidence = await seedSecondSessionEvidence({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      sequenceNo: 2,
+      canonicalText: "I am still restoring the radio and just replaced the dial.",
+    });
+    const secondGeneration = await seedRunningGeneration({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+    });
+    const continuationBase: EpisodeProposal = {
+      proposedKind: "sh.episode.project_phase",
+      label: "Radio restoration",
+      temporalAnchor: { start: { date: "2026-09-23", precision: "exact" } },
+      phase: "ongoing",
+      kindFields: { project: "Radio restoration" },
+      entityAnchorIds: [entityId],
+      realWorldOccurrence: true,
+      explicitNewOccurrence: false,
+      citedEvidenceItemIds: [second.evidenceItemId],
+    };
+    const secondContinuation: EpisodeProposal = {
+      ...continuationBase,
+      citedEvidenceItemIds: [secondEvidence.evidenceItemId],
+    };
+
+    // Two proposals in ONE batch both deterministically plan
+    // continue_episode for E. The second must chain onto the first's
+    // successor instead of colliding on (episode_id, revision).
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId: secondGeneration.generationCommandId,
+      modelRunAttemptId: secondGeneration.modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [continuationBase, secondContinuation],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 2 });
+
+    const versions = await database!.pool.query<{
+      episode_version_id: string;
+      revision: number;
+      status: string;
+      supersedes_version_id: string | null;
+    }>(
+      `SELECT episode_version_id, revision, status, supersedes_version_id
+       FROM episode_versions WHERE episode_id = $1 ORDER BY revision`,
+      [episodeId],
+    );
+    expect(versions.rows).toHaveLength(3);
+    expect(versions.rows[0]).toMatchObject({
+      revision: 1,
+      status: "superseded",
+      supersedes_version_id: null,
+    });
+    expect(versions.rows[1]).toMatchObject({
+      revision: 2,
+      status: "superseded",
+      supersedes_version_id: versions.rows[0]!.episode_version_id,
+    });
+    expect(versions.rows[2]).toMatchObject({
+      revision: 3,
+      status: "current",
+      supersedes_version_id: versions.rows[1]!.episode_version_id,
+    });
+    const revisionThreeId = versions.rows[2]!.episode_version_id;
+    expect((await database!.pool.query<{ current_version_id: string }>(
+      "SELECT current_version_id FROM episodes WHERE episode_id = $1",
+      [episodeId],
+    )).rows[0]!.current_version_id).toBe(revisionThreeId);
+
+    const accepted = await database!.pool.query<{ proposed_existing_episode_id: string | null }>(
+      `SELECT proposed_existing_episode_id FROM episode_candidates
+       WHERE daily_session_id = $1 AND status = 'accepted'`,
+      [second.dailySessionId],
+    );
+    expect(accepted.rows).toHaveLength(2);
+    expect(accepted.rows.every((row) => row.proposed_existing_episode_id === episodeId)).toBe(true);
+
+    // Revision 3's links are revision 1's links unioned with both proposals'
+    // citations, deduped within the frozen owner refs.
+    const revisionThreeEvidence = await database!.pool.query<{ evidence_item_id: string }>(
+      `SELECT evidence_item_id FROM episode_evidence_links
+       WHERE episode_version_id = $1 ORDER BY evidence_item_id`,
+      [revisionThreeId],
+    );
+    expect(new Set(revisionThreeEvidence.rows.map((row) => row.evidence_item_id)))
+      .toEqual(new Set([
+        first.evidenceItemId,
+        second.evidenceItemId,
+        secondEvidence.evidenceItemId,
+      ]));
+    expect(new Set((await database!.pool.query<{ evidence_item_id: string }>(
+      `SELECT evidence_item_id FROM episode_evidence_links
+       WHERE episode_version_id = $1`,
+      [versions.rows[1]!.episode_version_id],
+    )).rows.map((row) => row.evidence_item_id)))
+      .toEqual(new Set([first.evidenceItemId, second.evidenceItemId]));
+    expect((await database!.pool.query(
+      "SELECT entity_id FROM episode_version_entity_links WHERE episode_version_id = $1",
+      [revisionThreeId],
+    )).rows).toEqual([{ entity_id: entityId }]);
+
+    // The batch run row records the real counters for both continuations.
+    expect((await database!.pool.query<{
+      candidate_count: number;
+      accepted_count: number;
+    }>(
+      `SELECT candidate_count, accepted_count FROM episode_build_runs
+       WHERE daily_session_id = $1`,
+      [second.dailySessionId],
+    )).rows[0]).toMatchObject({ candidate_count: 2, accepted_count: 2 });
+
+    // Each successor stores its own content: the create is planned, both
+    // continuations are ongoing.
+    expect((await database!.pool.query<{ phase: string; temporal_date: string }>(
+      `SELECT content ->> 'phase' AS phase,
+              content #>> '{temporalAnchor,start,date}' AS temporal_date
+       FROM episode_versions WHERE episode_id = $1 ORDER BY revision`,
+      [episodeId],
+    )).rows).toEqual([
+      { phase: "planned", temporal_date: "2026-09-22" },
+      { phase: "ongoing", temporal_date: "2026-09-23" },
+      { phase: "ongoing", temporal_date: "2026-09-23" },
+    ]);
+  });
+
+  it("chains three same-batch continuations onto strictly increasing revisions", async () => {
+    const first = await seedSession({ logicalDate: "2026-09-24" });
+    const entityId = await seedResolvableEntity();
+    const firstGeneration = await seedRunningGeneration({
+      dailySessionId: first.dailySessionId,
+      sourceRevision: 1,
+    });
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    const createProposal: EpisodeProposal = {
+      proposedKind: "sh.episode.project_phase",
+      label: "Kiln restoration",
+      temporalAnchor: { start: { date: "2026-09-24", precision: "exact" } },
+      phase: "planned",
+      kindFields: { project: "Kiln restoration" },
+      citedEvidenceItemIds: [first.evidenceItemId],
+      entityAnchorIds: [entityId],
+      realWorldOccurrence: true,
+      explicitNewOccurrence: true,
+    };
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: first.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId: firstGeneration.generationCommandId,
+      modelRunAttemptId: firstGeneration.modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [createProposal],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 1 });
+
+    const episodeId = await episodeIdForEvidence(first.evidenceItemId);
+    expect(episodeId).not.toBeNull();
+
+    // One later batch carries three continuations of the same Episode, each
+    // citing a different Evidence item so every proposal has its own dedupe
+    // fingerprint. The second and third must chain onto the in-batch
+    // successor: revisions 2 → 3 → 4 with no unique-constraint collision.
+    const second = await seedSession({ logicalDate: "2026-09-25" });
+    const evidenceA = await seedSecondSessionEvidence({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      sequenceNo: 2,
+      canonicalText: "The kiln brickwork is going back in today.",
+    });
+    const evidenceB = await seedSecondSessionEvidence({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      sequenceNo: 3,
+      canonicalText: "We fired the kiln for a first test batch.",
+    });
+    const evidenceC = await seedSecondSessionEvidence({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      sequenceNo: 4,
+      canonicalText: "The kiln door latch needed one more adjustment.",
+    });
+    const secondGeneration = await seedRunningGeneration({
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+    });
+    const continuationBase: EpisodeProposal = {
+      proposedKind: "sh.episode.project_phase",
+      label: "Kiln restoration",
+      temporalAnchor: { start: { date: "2026-09-25", precision: "exact" } },
+      phase: "ongoing",
+      kindFields: { project: "Kiln restoration" },
+      entityAnchorIds: [entityId],
+      realWorldOccurrence: true,
+      explicitNewOccurrence: false,
+      citedEvidenceItemIds: [evidenceA.evidenceItemId],
+    };
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: second.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId: secondGeneration.generationCommandId,
+      modelRunAttemptId: secondGeneration.modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [
+        continuationBase,
+        { ...continuationBase, citedEvidenceItemIds: [evidenceB.evidenceItemId] },
+        { ...continuationBase, citedEvidenceItemIds: [evidenceC.evidenceItemId] },
+      ],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 3 });
+
+    const versions = await database!.pool.query<{
+      episode_version_id: string;
+      revision: number;
+      status: string;
+      supersedes_version_id: string | null;
+    }>(
+      `SELECT episode_version_id, revision, status, supersedes_version_id
+       FROM episode_versions WHERE episode_id = $1 ORDER BY revision`,
+      [episodeId],
+    );
+    expect(versions.rows).toHaveLength(4);
+    expect(versions.rows.map((row) => row.revision)).toEqual([1, 2, 3, 4]);
+    expect(versions.rows.map((row) => row.status)).toEqual([
+      "superseded",
+      "superseded",
+      "superseded",
+      "current",
+    ]);
+    expect(versions.rows.map((row) => row.supersedes_version_id)).toEqual([
+      null,
+      versions.rows[0]!.episode_version_id,
+      versions.rows[1]!.episode_version_id,
+      versions.rows[2]!.episode_version_id,
+    ]);
+    expect((await database!.pool.query<{ current_version_id: string }>(
+      "SELECT current_version_id FROM episodes WHERE episode_id = $1",
+      [episodeId],
+    )).rows[0]!.current_version_id).toBe(versions.rows[3]!.episode_version_id);
+
+    // Links grow monotonically along the chain: revision 2 gets the create
+    // Evidence plus A, revision 3 adds B, revision 4 adds C.
+    async function evidenceIdsFor(episodeVersionId: string): Promise<Set<string>> {
+      const rows = await database!.pool.query<{ evidence_item_id: string }>(
+        `SELECT evidence_item_id FROM episode_evidence_links
+         WHERE episode_version_id = $1`,
+        [episodeVersionId],
+      );
+      return new Set(rows.rows.map((row) => row.evidence_item_id));
+    }
+    expect(await evidenceIdsFor(versions.rows[1]!.episode_version_id))
+      .toEqual(new Set([first.evidenceItemId, evidenceA.evidenceItemId]));
+    expect(await evidenceIdsFor(versions.rows[2]!.episode_version_id))
+      .toEqual(new Set([
+        first.evidenceItemId,
+        evidenceA.evidenceItemId,
+        evidenceB.evidenceItemId,
+      ]));
+    expect(await evidenceIdsFor(versions.rows[3]!.episode_version_id))
+      .toEqual(new Set([
+        first.evidenceItemId,
+        evidenceA.evidenceItemId,
+        evidenceB.evidenceItemId,
+        evidenceC.evidenceItemId,
+      ]));
+    expect((await database!.pool.query(
+      "SELECT entity_id FROM episode_version_entity_links WHERE episode_version_id = $1",
+      [versions.rows[3]!.episode_version_id],
+    )).rows).toEqual([{ entity_id: entityId }]);
+
+    const accepted = await database!.pool.query<{ proposed_existing_episode_id: string | null }>(
+      `SELECT proposed_existing_episode_id FROM episode_candidates
+       WHERE daily_session_id = $1 AND status = 'accepted'`,
+      [second.dailySessionId],
+    );
+    expect(accepted.rows).toHaveLength(3);
+    expect(accepted.rows.every((row) => row.proposed_existing_episode_id === episodeId)).toBe(true);
+
+    expect((await database!.pool.query<{
+      candidate_count: number;
+      accepted_count: number;
+    }>(
+      `SELECT candidate_count, accepted_count FROM episode_build_runs
+       WHERE daily_session_id = $1`,
+      [second.dailySessionId],
+    )).rows[0]).toMatchObject({ candidate_count: 3, accepted_count: 3 });
+  });
+
+  it("lets Reflection read the newly built Episode through the real repository", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-14" });
+    await seedJournalReadiness(session.dailySessionId);
+    const { generationCommandId, modelRunAttemptId } = await seedRunningGeneration({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    expect(await repository.commitEpisodeAdmission({
+      userId: OWNER,
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      expectedDataEpoch: 1,
+      generationCommandId,
+      modelRunAttemptId,
+      policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+      dedupeFingerprintSecret: "synthetic-episode-secret",
+      proposals: [{
+        proposedKind: "sh.episode.trip",
+        label: "Reflection visible trip",
+        temporalAnchor: { start: { date: "2026-09-14", precision: "exact" } },
+        phase: "planned",
+        kindFields: { destination: "Sapporo" },
+        citedEvidenceItemIds: [session.evidenceItemId],
+        realWorldOccurrence: true,
+        explicitNewOccurrence: true,
+      }],
+    })).toMatchObject({ outcome: "committed", acceptedCount: 1 });
+    const episodeId = await episodeIdForEvidence(session.evidenceItemId);
+    expect(episodeId).not.toBeNull();
+    // Backdate the built run so the 30-minute Episode interval has elapsed;
+    // Reflection must read the freshly persisted links, not a manual seed.
+    await database!.pool.query(
+      "UPDATE episode_build_runs SET created_at = $1, updated_at = $1 WHERE daily_session_id = $2",
+      [new Date(BASE_TIME), session.dailySessionId],
+    );
+
+    const reflection = new PostgresReflectionRepository(database!.pool, {
+      entryFor: () => null,
+      registryVersion: () => 1,
+    });
+    const digest = await reflection.readDailyBaselineDigest({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    expect(digest).not.toBeNull();
+    const snapshot = await reflection.readDailySnapshot({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      claimBaselineDigest: digest!,
+      policyVersion: "reflection-readiness:v1",
+    });
+    expect(snapshot.outcome).toBe("evaluated");
+    if (snapshot.outcome !== "evaluated") {
+      throw new Error(`unexpected reflection snapshot outcome: ${snapshot.outcome}`);
+    }
+    expect(snapshot.frozen.episodes.map((item) => item.episodeId))
+      .toEqual([episodeId]);
+  });
+
+  // Runs last: it revokes the shared v1 pin and binds v2, so any test that
+  // needs the original pin must be declared before it.
   it("fences a late episode.build attempt after its pin is revoked and re-bound", async () => {
     const session = await seedSession({ logicalDate: "2026-09-10" });
     const proposal: EpisodeProposal = {

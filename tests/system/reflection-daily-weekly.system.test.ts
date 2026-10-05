@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import {
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+  REFLECTION_DAILY_PROMPT_VERSION,
   createModelRoleCommandService,
   createModelRoleProviderEgress,
   createModelRoleRegistry,
@@ -574,6 +575,51 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         outcome: "published",
       });
     }
+  }
+
+  /**
+   * One admitted baseline Claim owned by this owner only, so the frozen Daily
+   * baseline is nonempty and carries a real claimId plus its internal
+   * claimVersionId. The subject Entity is the shared Self Entity seeded in
+   * beforeEach; the query stays scoped to this exact claim row.
+   */
+  async function seedBaselineClaim(): Promise<{
+    claimId: string;
+    claimVersionId: string;
+  }> {
+    const claimId = seedId();
+    const claimVersionId = seedId();
+    await database!.pool.query(
+      `INSERT INTO memory_claims (
+         memory_claim_id, user_id, canonical_key, subject_entity_id,
+         predicate_id, scope_key, created_at
+       ) VALUES ($1, $2, 'v1|sh.memory.hobby|self||radio', $3,
+         'sh.memory.hobby', '', $4)`,
+      [claimId, OWNER, SELF_ENTITY_ID, new Date(BASE_TIME)],
+    );
+    await database!.pool.query(
+      `INSERT INTO memory_claim_versions (
+         memory_claim_version_id, memory_claim_id, user_id, revision, kind,
+         epistemic_status, status, subject_entity_version_id, typed_value,
+         temporal_status, valid_from_precision, valid_to_precision,
+         last_observed_at, created_by, predicate_registry_version, created_at
+       ) VALUES ($1, $2, $3, 1, 'objective', 'confirmed', 'active',
+         $4, '"radio repair"', 'current', 'unknown', 'unknown', $5,
+         'admission', 1, $6)`,
+      [
+        claimVersionId,
+        claimId,
+        OWNER,
+        SELF_ENTITY_VERSION_ID,
+        new Date(BASE_TIME),
+        new Date(BASE_TIME),
+      ],
+    );
+    await database!.pool.query(
+      "UPDATE memory_claims SET current_version_id = $2 WHERE memory_claim_id = $1 AND user_id = $3",
+      [claimId, claimVersionId, OWNER],
+    );
+    return { claimId, claimVersionId };
   }
 
   it("Q2: a journal-published day becomes due only after the Episode interval", async () => {
@@ -1880,5 +1926,244 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       [committedVersion.reflection_version_id, OWNER, monday.evidenceItemId],
     );
     expect(Number(lineage.rows[0]!.count)).toBe(1);
+  });
+
+  it("rejects a claimVersionId cited as a baseline claim before any draft, current, candidate, or validator call", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-09" });
+    await seedDateOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "journal_available",
+    });
+    await seedJournalOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "published",
+    });
+    // A real, nonempty frozen baseline: the model must cite `claimId`, not the
+    // internal `claimVersionId` lineage field.
+    const { claimId, claimVersionId } = await seedBaselineClaim();
+    expect(claimId).not.toBe(claimVersionId);
+    const digest = await reflectionRepository!.readDailyBaselineDigest({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    expect(digest).not.toBeNull();
+    const queued = await reflectionRepository!.queueDailyReflection({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      claimBaselineDigest: digest!,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") {
+      throw new Error("unreachable");
+    }
+    const queuedCommand = queued;
+
+    const result = await runReflectionDailyBuild({
+      dependencies: reflectionDependencies(async () => ({
+        statements: [
+          {
+            statementKey: "statement:1",
+            text: "You have been fixing radios this week.",
+            statementKind: "day_observation",
+            propositions: [
+              {
+                propositionKey: "proposition:1",
+                normalizedProposition: "user fixes radios",
+                propositionKind: "fact",
+                epistemicRendering: "confirmed",
+                supportEvidenceItemIds: [session.evidenceItemId],
+                baselineClaimIds: [claimVersionId],
+              },
+            ],
+          },
+        ],
+        candidateProposals: [],
+      })),
+      command: {
+        workflowCommandId: queuedCommand.workflowCommandId,
+        subjectId: session.dailySessionId,
+        sourceRevision: 1,
+        claimBaselineDigest: digest!,
+        policyVersion: READINESS_POLICY,
+        expectedDataEpoch: queuedCommand.expectedDataEpoch,
+        scope: "daily",
+        weekIdentifier: null,
+        windowStartDate: null,
+        windowEndDate: null,
+        sourceDigest: null,
+      },
+    });
+
+    // The deterministic Tier-1 gate fails the version before the draft is
+    // persisted and before narrative.validate is dispatched.
+    expect(result.outcome).toBe("rejected");
+    expect(result.rejectionCode).toBe("baseline_claim_out_of_bounds");
+
+    const versions = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM reflection_versions WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(Number(versions.rows[0]!.count)).toBe(0);
+    const current = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM reflections WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(Number(current.rows[0]!.count)).toBe(0);
+    const candidates = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM memory_candidates WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(Number(candidates.rows[0]!.count)).toBe(0);
+    const validatorRequests = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM narrative_validator_requests WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(Number(validatorRequests.rows[0]!.count)).toBe(0);
+
+    // The run ledger records the honest deterministic rejection, scoped to
+    // this exact owner and session.
+    const run = await database!.pool.query<{ status: string; error_code: string | null }>(
+      `SELECT status, error_code FROM reflection_runs
+       WHERE user_id = $1 AND daily_session_id = $2`,
+      [OWNER, session.dailySessionId],
+    );
+    expect(run.rows).toHaveLength(1);
+    expect(run.rows[0]!.status).toBe("failed");
+    expect(run.rows[0]!.error_code).toBe("tier1:baseline_claim_out_of_bounds");
+  });
+
+  it("commits a valid current and disposition when a proposition cites the real baseline claimId", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-09" });
+    await seedDateOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "journal_available",
+    });
+    await seedJournalOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "published",
+    });
+    const { claimId } = await seedBaselineClaim();
+    const digest = await reflectionRepository!.readDailyBaselineDigest({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    expect(digest).not.toBeNull();
+    const queued = await reflectionRepository!.queueDailyReflection({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      claimBaselineDigest: digest!,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") {
+      throw new Error("unreachable");
+    }
+    const queuedCommand = queued;
+    narrativeScript = () => ({
+      propositions: [
+        {
+          propositionKey: "independent:1",
+          text: "You have been fixing radios this week.",
+          propositionKind: "fact",
+          epistemicRendering: "confirmed",
+          supportKeys: [session.evidenceItemId],
+          unsupported: false,
+          contradicted: false,
+          ambiguous: false,
+        },
+      ],
+      coverageKeys: [],
+    });
+
+    const result = await runReflectionDailyBuild({
+      dependencies: reflectionDependencies(async () => ({
+        statements: [
+          {
+            statementKey: "statement:1",
+            text: "You have been fixing radios this week.",
+            statementKind: "day_observation",
+            propositions: [
+              {
+                propositionKey: "proposition:1",
+                normalizedProposition: "user fixes radios",
+                propositionKind: "fact",
+                epistemicRendering: "confirmed",
+                supportEvidenceItemIds: [session.evidenceItemId],
+                baselineClaimIds: [claimId],
+              },
+            ],
+          },
+        ],
+        candidateProposals: [
+          {
+            candidateKind: "objective",
+            basis: "directly_stated",
+            predicateId: "sh.memory.hobby",
+            proposedConcept: null,
+            typedValue: "radio repair",
+            scopeKey: "",
+            temporal: {
+              temporalStatus: "current",
+              validFrom: null,
+              validFromPrecision: "unknown",
+              validTo: null,
+              validToPrecision: "unknown",
+            },
+            evidenceItemIds: [session.evidenceItemId],
+          },
+        ],
+      })),
+      command: {
+        workflowCommandId: queuedCommand.workflowCommandId,
+        subjectId: session.dailySessionId,
+        sourceRevision: 1,
+        claimBaselineDigest: digest!,
+        policyVersion: READINESS_POLICY,
+        expectedDataEpoch: queuedCommand.expectedDataEpoch,
+        scope: "daily",
+        weekIdentifier: null,
+        windowStartDate: null,
+        windowEndDate: null,
+        sourceDigest: null,
+      },
+    });
+
+    expect(result.outcome).toBe("built");
+    expect(result.statementCount).toBe(1);
+    expect(result.candidateCount).toBe(1);
+
+    // The committed current carries the honest new Daily prompt lineage, and
+    // the accepted proposition records the real baseline claim ID.
+    const current = await database!.pool.query<{
+      reflection_version_id: string;
+      status: string;
+      prompt_version: string;
+      baseline_claim_ids: string;
+    }>(
+      `SELECT v.reflection_version_id, v.status, v.prompt_version,
+              p.baseline_claim_ids::text AS baseline_claim_ids
+       FROM reflections r
+       INNER JOIN reflection_versions v
+         ON v.reflection_version_id = r.current_version_id
+       INNER JOIN reflection_statements st
+         ON st.reflection_version_id = v.reflection_version_id
+       INNER JOIN reflection_atomic_propositions p
+         ON p.reflection_statement_id = st.reflection_statement_id
+       WHERE r.user_id = $1 AND r.daily_session_id = $2`,
+      [OWNER, session.dailySessionId],
+    );
+    expect(current.rows).toHaveLength(1);
+    expect(current.rows[0]!.status).toBe("committed");
+    expect(current.rows[0]!.prompt_version).toBe(REFLECTION_DAILY_PROMPT_VERSION);
+    expect(JSON.parse(current.rows[0]!.baseline_claim_ids)).toEqual([claimId]);
+
+    // The Candidate handoff keeps its coarse ledger disposition, scoped to
+    // this exact owner and current version.
+    const disposition = await database!.pool.query<{ outcome: string }>(
+      `SELECT outcome FROM reflection_candidate_proposals
+       WHERE user_id = $1 AND reflection_version_id = $2`,
+      [OWNER, current.rows[0]!.reflection_version_id],
+    );
+    expect(disposition.rows).toHaveLength(1);
+    expect(disposition.rows[0]!.outcome).toBe("created");
   });
 });

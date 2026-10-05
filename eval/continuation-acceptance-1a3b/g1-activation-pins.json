@@ -13,15 +13,15 @@
   },
   "roles": {
     "episode.build": {
-      "provider": "deepseek",
-      "model": "deepseek-v4-flash",
-      "snapshot": "deepseek-flash",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "snapshot": "deepseek-v4.1-flash",
       "promptVersion": "episode-build:eval:v4",
       "schemaVersion": "episode-proposal:v1",
       "policyVersion": "episode-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 10000,
+        "maxOutputTokens": 32000,
         "reasoning": {
           "effort": "low"
         }
@@ -44,15 +44,15 @@
       "fallback": "none"
     },
     "reflection.daily": {
-      "provider": "deepseek",
-      "model": "deepseek-v4-flash",
-      "snapshot": "deepseek-flash",
-      "promptVersion": "reflection-daily:eval:v5",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "snapshot": "deepseek-v4.1-flash",
+      "promptVersion": "reflection-daily:eval:v6",
       "schemaVersion": "reflection-proposal:v1",
       "policyVersion": "reflection-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 10000,
+        "maxOutputTokens": 32000,
         "reasoning": {
           "effort": "low"
         }
@@ -61,15 +61,15 @@
       "fallback": "none"
     },
     "reflection.weekly": {
-      "provider": "deepseek",
-      "model": "deepseek-v4-flash",
-      "snapshot": "deepseek-flash",
-      "promptVersion": "reflection-weekly:eval:v4",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "snapshot": "deepseek-v4.1-flash",
+      "promptVersion": "reflection-weekly:eval:v5",
       "schemaVersion": "reflection-proposal:v1",
       "policyVersion": "reflection-admission:v1",
       "parameters": {
         "temperature": 0.2,
-        "maxOutputTokens": 20000,
+        "maxOutputTokens": 48000,
         "reasoning": {
           "effort": "low"
         }
@@ -92,15 +92,15 @@
       "fallback": "none"
     },
     "narrative.validate": {
-      "provider": "deepseek",
-      "model": "deepseek-v4-flash",
-      "snapshot": "deepseek-flash",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "snapshot": "deepseek-v4.1-flash",
       "promptVersion": "narrative-validate:eval:v4",
       "schemaVersion": "narrative-findings:v1",
       "policyVersion": "narrative-validation:v1",
       "parameters": {
         "temperature": 0,
-        "maxOutputTokens": 10000,
+        "maxOutputTokens": 48000,
         "reasoning": {
           "effort": "low"
         }
@@ -229,9 +229,9 @@
   },
   "validator": {
     "configuration": {
-      "provider": "deepseek",
-      "model": "deepseek-v4-flash",
-      "snapshot": "deepseek-flash",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "snapshot": "deepseek-v4.1-flash",
       "promptVersion": "narrative-validate:eval:v4",
       "schemaVersion": "narrative-findings:v1",
       "policyVersion": "narrative-validation:v1",

@@ -23,6 +23,8 @@ import {
   ProviderDispatchError,
 } from "@sayhear/application";
 import { assertRuntimeProviderEgressIntegration } from "./runtime-provider-egress";
+import { createOpenCodeGoConversationTextModel } from "./opencode-go-conversation-text-model";
+import { providerSessionIdFor } from "./provider-session-identity";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 
 export type JournalModelRole =
@@ -36,7 +38,7 @@ export type JournalModelRole =
   | "memory.consolidate";
 export type JournalRoleConfiguration = Readonly<{
   role: JournalModelRole;
-  provider: "openai" | "deepseek" | "deterministic";
+  provider: "openai" | "deepseek" | "opencode-go" | "deterministic";
   model: string;
   configVersion: string;
   policyVersion: string;
@@ -45,6 +47,7 @@ export type JournalRoleConfiguration = Readonly<{
 type Adapter = Readonly<
   | { type: "deterministic" }
   | { type: "responses-api"; apiKey: string; baseUrl: string; timeoutMs: number }
+  | { type: "opencode-go"; apiKey: string; timeoutMs: number }
 >;
 export type JournalRoleProviderRegistry = Readonly<{
   evidenceExtractor: EvidenceExtractionProvider;
@@ -206,9 +209,81 @@ function normalizeExtractBatch(
   });
 }
 
+/**
+ * Stable id fields a frozen Journal payload may carry. Only these opaque
+ * identifiers feed the transport session scope — never free text, a body hash,
+ * or a shared sentinel.
+ */
+const JOURNAL_SESSION_SCOPE_KEYS = new Set([
+  "candidateId",
+  "claimId",
+  "dailySessionId",
+  "draftRef",
+  "entityId",
+  "evidenceItemId",
+  "evidenceSourceSnapshotId",
+  "id",
+  "revisionId",
+  "sourceSnapshotId",
+  "userId",
+  "versionId",
+]);
+
+function collectJournalScopeIds(value: unknown, out: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) collectJournalScopeIds(item, out);
+    return;
+  }
+  if (value === null || typeof value !== "object") return;
+  for (const [key, entry] of Object.entries(value)) {
+    if (
+      typeof entry === "string" &&
+      entry.length > 0 &&
+      JOURNAL_SESSION_SCOPE_KEYS.has(key)
+    ) {
+      out.add(`${key}=${entry}`);
+    } else {
+      collectJournalScopeIds(entry, out);
+    }
+  }
+}
+
+/**
+ * Fail-closed default session scope for the OpenCode Go adapter: the sorted
+ * stable ids already present in the frozen request. A payload with no trusted
+ * id cannot produce an honest session and is rejected rather than given a
+ * shared or random value.
+ */
+export function defaultJournalProviderSessionId(
+  role: JournalModelRole,
+  payload: unknown,
+): string {
+  const ids = new Set<string>();
+  collectJournalScopeIds(payload, ids);
+  if (ids.size === 0) {
+    throw new ProviderDispatchError(
+      "configuration",
+      `${role} has no trusted logical scope for a Provider session identity.`,
+    );
+  }
+  return providerSessionIdFor({
+    scopeId: `${role}:${[...ids].sort().join(",")}`,
+  });
+}
+
 export function createRuntimeJournalRoleProviderRegistry(input: {
   adapter: Adapter;
   roles: readonly JournalRoleConfiguration[];
+  /**
+   * Optional explicit trusted scope for the OpenCode Go session header. The
+   * default derives it from the stable id fields already present in the frozen
+   * payload (owner / Daily Session / Event revision / Evidence / draft ids),
+   * never from free text; a payload with no stable id fails closed.
+   */
+  providerSessionIdFor?: (input: {
+    role: JournalModelRole;
+    payload: unknown;
+  }) => string;
 }): JournalRoleProviderRegistry {
   const configurations = new Map(input.roles.map((role) => [role.role, role]));
   for (const role of ["evidence.extract", "journal.draft", "journal.validate", "dialogue.state", "summary.compress", "memory.extract", "entity.resolve", "memory.consolidate"] as const) {
@@ -234,12 +309,26 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
 
   const adapter = input.adapter;
   assertRuntimeProviderEgressIntegration("provider-egress.responses-api");
-  const model = createResponsesApiConversationTextModel(adapter);
+  const model =
+    adapter.type === "opencode-go"
+      ? createOpenCodeGoConversationTextModel({
+          apiKey: adapter.apiKey,
+          timeoutMs: adapter.timeoutMs,
+        })
+      : createResponsesApiConversationTextModel(adapter);
+  // Non-secret, content-free transport identity for incident logs. The Go
+  // adapter has no baseUrl by construction; naming the fixed endpoint keeps the
+  // log honest without implying a caller-selectable host.
+  const adapterDescription =
+    adapter.type === "opencode-go"
+      ? `type=opencode-go timeoutMs=${adapter.timeoutMs}`
+      : `baseUrl=${adapter.baseUrl} timeoutMs=${adapter.timeoutMs}`;
   const askJson = async (
     role: JournalModelRole,
     instructions: string,
     payload: unknown,
     invocation?: MemoryRoleInvocationConfiguration,
+    providerScopeId?: string,
   ): Promise<unknown> => {
     let output = "";
     const promptVersion =
@@ -249,6 +338,13 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
       promptVersion === MEMORY_EXTRACT_PROMPT_VERSION
         ? `${instructions} ${MEMORY_EXTRACT_TEMPORAL_PRECISION_INSTRUCTIONS}`
         : instructions;
+    const providerSessionId =
+      adapter.type === "opencode-go"
+        ? providerScopeId !== undefined
+          ? providerSessionIdFor({ scopeId: providerScopeId })
+          : (input.providerSessionIdFor?.({ payload, role }) ??
+            defaultJournalProviderSessionId(role, payload))
+        : undefined;
     try {
       for await (const event of model.stream({
         instructions: effectiveInstructions,
@@ -259,6 +355,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
           role: "user",
           text: JSON.stringify(payload),
         }],
+        ...(providerSessionId ? { providerSessionId } : {}),
       })) if (event.type === "delta") output += event.delta;
     } catch (error) {
       if (error instanceof ProviderDispatchError) {
@@ -270,7 +367,7 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
         // environment value is misconfigured.
         throw new ProviderDispatchError(
           error.category,
-          `${role} (model=${configuration(role).model}) dispatch failed with category ${error.category} (baseUrl=${adapter.baseUrl} timeoutMs=${adapter.timeoutMs}): ${error.message}`,
+          `${role} (model=${configuration(role).model}) dispatch failed with category ${error.category} (${adapterDescription}): ${error.message}`,
           error.settlesAttempt,
         );
       }
@@ -291,7 +388,20 @@ export function createRuntimeJournalRoleProviderRegistry(input: {
     evidenceExtractor: {
       role: "evidence.extract",
       async extract(request) {
-        const parsed = await askJson("evidence.extract", "You are SayHear evidence.extract. Return only JSON array of source-grounded spans: [{locatorType:'text_span',locatorKey:'start:end',role:'factual_support'|'subjective_report'}]. Cover each independently meaningful user claim. Never invent text.", request);
+        // The model sees only the text it must locate; the owner + Daily
+        // Session travel as a separate transport scope so they can never leak
+        // into the Provider payload.
+        const transportScope =
+          request.transport === undefined
+            ? undefined
+            : `evidence.extract:${request.transport.dailySessionId},${request.transport.userId}`;
+        const parsed = await askJson(
+          "evidence.extract",
+          "You are SayHear evidence.extract. Return only JSON array of source-grounded spans: [{locatorType:'text_span',locatorKey:'start:end',role:'factual_support'|'subjective_report'}]. Cover each independently meaningful user claim. Never invent text.",
+          { locale: request.locale, sourceText: request.sourceText },
+          undefined,
+          transportScope,
+        );
         if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("evidence.extract returned no spans.");
         // Provider models do not compute character offsets reliably (observed
         // with DeepSeek: out-of-range and inverted ranges on real transcripts).

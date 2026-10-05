@@ -50,7 +50,11 @@ import {
   REFLECTION_WEEKLY_PROMPT_VERSION,
 } from "./types";
 import { assertWorkflowSafe } from "../journal-eligibility";
-import { ProviderDispatchError } from "../conversation-model";
+import {
+  ProviderDispatchError,
+  normalizeModelRoleCallUsage,
+  type ModelRoleCallUsage,
+} from "../conversation-model";
 import { planReflectionVersion } from "./engine";
 import { dateOrdinal } from "./readiness";
 
@@ -114,6 +118,20 @@ function classifyReflectionProviderError(error: unknown): ModelRoleFailureCode {
     default:
       return "result_unknown";
   }
+}
+
+/**
+ * The content-free usage for one attempt. A Provider failure that proves a
+ * specific response cause is authoritative for the same call; the request
+ * callback is the fallback. Never reads any other call's record.
+ */
+function attemptUsage(
+  error: unknown,
+  callUsage: ModelRoleCallUsage | null,
+): ModelRoleCallUsage | null {
+  const failure =
+    error instanceof ProviderDispatchError ? (error.failure ?? null) : null;
+  return normalizeModelRoleCallUsage(failure ?? callUsage);
 }
 
 function roleForScope(scope: "daily" | "weekly") {
@@ -548,6 +566,11 @@ async function executeReflectionAttempt(input: Readonly<{
     input.frozen.scopeType === "daily_session" ? commandSourceRevision : 0;
   const subjectId = input.frozen.dailySessionId ?? input.userId;
   const locale = input.frozen.dominantLocale ?? "en";
+  // Request-scoped so concurrent attempts cannot interleave usage records.
+  let callUsage: ModelRoleCallUsage | null = null;
+  const onUsage = (usage: ModelRoleCallUsage) => {
+    callUsage = normalizeModelRoleCallUsage(usage);
+  };
   const settleAttempt = (
     outcome: "succeeded" | "failed",
     failureCode?: ModelRoleFailureCode,
@@ -565,6 +588,7 @@ async function executeReflectionAttempt(input: Readonly<{
       currentSourceRevision: commandSourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
+      usage: normalizeModelRoleCallUsage(callUsage),
     });
 
   type PreparedGeneration =
@@ -639,7 +663,10 @@ async function executeReflectionAttempt(input: Readonly<{
     }
     return {
       outcome: "generated",
-      output: await input.dependencies.reflectionProvider.generate(request),
+      output: await input.dependencies.reflectionProvider.generate(
+        request,
+        onUsage,
+      ),
     };
   };
 
@@ -716,6 +743,7 @@ async function executeReflectionAttempt(input: Readonly<{
       currentSourceRevision: commandSourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
+      usage: attemptUsage(error, callUsage),
     });
     const outcome =
       recorded.outcome === "discarded"
