@@ -1213,3 +1213,174 @@ h1 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* === #265 journal date browsing === */
+
+.journalView {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 8px 0 32px;
+  width: 100%;
+}
+
+.journalViewTitle {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+.journalHeading {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.journalHeadingMeta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.journalState {
+  border: 1px solid #e2e3dc;
+  border-radius: 999px;
+  color: #686a63;
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.journalState-current {
+  background: #fff;
+  color: #242522;
+}
+
+.journalState-updating {
+  background: #f2f0eb;
+}
+
+.journalState-outdated {
+  border-color: #d8c79a;
+  color: #7a5c12;
+}
+
+.journalChatLink {
+  color: #242522;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.journalStatements {
+  display: grid;
+  gap: 20px;
+}
+
+.journalRawDiagnostics {
+  border-top: 1px solid #e2e3dc;
+  color: #686a63;
+  font-size: 0.85rem;
+  padding-top: 12px;
+}
+
+.journalRawDiagnostics summary {
+  cursor: pointer;
+}
+
+.journalRawDiagnostics ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.journalRawDiagnostics li {
+  display: grid;
+  gap: 4px;
+}
+
+.journalRawStatement {
+  color: #242522;
+}
+
+.journalRawDiagnostics code {
+  color: #686a63;
+  font-size: 0.78rem;
+}
+
+.journalDateEntry {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.journalDateLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journalDateState {
+  color: #686a63;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.journalStateDot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 8px;
+  width: 8px;
+}
+
+.journalStateDot-current {
+  background: #242522;
+}
+
+.journalStateDot-updating {
+  background: #b7b3a6;
+}
+
+.journalStateDot-outdated {
+  background: #c79a2a;
+}
+
+.moduleListNote {
+  color: #686a63;
+  font-size: 0.82rem;
+  margin: 0;
+  padding: 0 8px;
+}
+
+.moduleListRetry {
+  background: transparent;
+  border: 0;
+  color: #242522;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 0 4px;
+  text-decoration: underline;
+}
+
+.moduleListMore {
+  background: transparent;
+  border: 1px solid #e2e3dc;
+  border-radius: 10px;
+  color: #242522;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  margin: 4px 8px 0;
+  padding: 6px 10px;
+}
+
+.moduleListMore:disabled {
+  color: #686a63;
+  cursor: default;
+}

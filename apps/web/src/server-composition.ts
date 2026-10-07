@@ -366,6 +366,7 @@ export function createServerComposition() {
   const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
   const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
   const journalService = createJournalService({
+    cursorSecret: configuration.contextHmacSecret,
     journalPolicyVersion: draftConfiguration.policyVersion,
     validatorVersion: validationConfiguration.policyVersion,
     evidenceExtractionPolicyVersion: evidenceConfiguration.policyVersion,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   createContext,
+  Suspense,
   useContext,
   useEffect,
   useMemo,
@@ -12,6 +13,8 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+
+import { JournalDateList } from "./journal-date-list";
 
 type WriteGate = Readonly<{ allowed: boolean; reason: string }>;
 
@@ -298,21 +301,16 @@ function ModuleList({
   }
   if (module === "journal") {
     return (
-      <div className="moduleList">
-        <p className="moduleListHeading">日记</p>
-        <ul>
-          <li>
-            <Link
-              aria-current="page"
-              className="moduleListEntry"
-              href="/internal/journals"
-              onClick={onNavigate}
-            >
-              最新日记
-            </Link>
-          </li>
-        </ul>
-      </div>
+      <Suspense
+        fallback={
+          <div className="moduleList">
+            <p className="moduleListHeading">日记</p>
+            <p className="moduleListNote">正在读取日记日期…</p>
+          </div>
+        }
+      >
+        <JournalDateList onNavigate={onNavigate} />
+      </Suspense>
     );
   }
   return (
