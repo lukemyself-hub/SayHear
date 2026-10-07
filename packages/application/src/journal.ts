@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
 import { asDailySessionId, type UserId } from "@sayhear/domain";
 
 import type { RecoveryGate } from "./recovery-gate";
@@ -124,6 +126,140 @@ export type CurrentJournal = Readonly<{
   version: CurrentJournalVersion;
 }>;
 
+/** Server-side fixed cap for one Journal date page; clients cannot raise it. */
+export const JOURNAL_DATE_PAGE_LIMIT = 30;
+
+export type JournalDateState = "current" | "outdated" | "updating";
+
+export type JournalDateEntry = Readonly<{
+  dailySessionId: string;
+  logicalDate: string;
+  state: JournalDateState;
+}>;
+
+export type JournalDatePage = Readonly<{
+  entries: readonly JournalDateEntry[];
+  nextCursor: string | null;
+}>;
+
+export type JournalDateCursor = Readonly<{
+  dailySessionId: string;
+  logicalDate: string;
+}>;
+
+const JOURNAL_DATE_SORT = "logical_date_desc";
+
+type JournalDateCursorPayload = Readonly<{
+  after: readonly [string, string];
+  owner: string;
+  sort: typeof JOURNAL_DATE_SORT;
+  version: 1;
+}>;
+
+export class JournalDateCursorError extends Error {
+  public constructor() {
+    super(
+      "The Journal date cursor is invalid or no longer matches the query.",
+    );
+    this.name = "JournalDateCursorError";
+  }
+}
+
+export class InvalidJournalDateError extends Error {
+  public constructor() {
+    super("logicalDate must be an existing local date in YYYY-MM-DD form.");
+    this.name = "InvalidJournalDateError";
+  }
+}
+
+export function validateJournalLogicalDate(value: string): string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new InvalidJournalDateError();
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    throw new InvalidJournalDateError();
+  }
+  return value;
+}
+
+function journalDateCursorMac(encodedPayload: string, secret: string): string {
+  return createHmac("sha256", secret).update(encodedPayload).digest("base64url");
+}
+
+export function encodeJournalDateCursor(
+  payload: JournalDateCursorPayload,
+  secret: string,
+): string {
+  if (!secret) throw new Error("Journal date cursor secret is required.");
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64url",
+  );
+  return `${encodedPayload}.${journalDateCursorMac(encodedPayload, secret)}`;
+}
+
+export function decodeJournalDateCursor(
+  token: string,
+  secret: string,
+): JournalDateCursorPayload | null {
+  if (!token || !secret) return null;
+  const separator = token.lastIndexOf(".");
+  if (separator <= 0 || separator === token.length - 1) return null;
+  const encodedPayload = token.slice(0, separator);
+  const suppliedMac = token.slice(separator + 1);
+  const expectedMac = journalDateCursorMac(encodedPayload, secret);
+  const supplied = Buffer.from(suppliedMac, "base64url");
+  const expected = Buffer.from(expectedMac, "base64url");
+  if (
+    supplied.length !== expected.length ||
+    !timingSafeEqual(supplied, expected)
+  ) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(encodedPayload, "base64url").toString("utf8"),
+    ) as Partial<JournalDateCursorPayload>;
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.owner !== "string" ||
+      parsed.sort !== JOURNAL_DATE_SORT ||
+      !Array.isArray(parsed.after) ||
+      parsed.after.length !== 2 ||
+      !parsed.after.every((value) => typeof value === "string")
+    ) {
+      return null;
+    }
+    return {
+      after: [parsed.after[0] as string, parsed.after[1] as string],
+      owner: parsed.owner,
+      sort: JOURNAL_DATE_SORT,
+      version: 1,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function journalDateCursorAfter(
+  cursor: string | null | undefined,
+  owner: string,
+  secret: string | undefined,
+): JournalDateCursor | null {
+  if (!cursor) return null;
+  const decoded = secret ? decodeJournalDateCursor(cursor, secret) : null;
+  if (!decoded || decoded.owner !== owner) {
+    throw new JournalDateCursorError();
+  }
+  return {
+    dailySessionId: decoded.after[1],
+    logicalDate: decoded.after[0],
+  };
+}
+
 export type JournalRepository = Readonly<{
   readSource(input: { dailySessionId: string; sourceRevision: number; expectedDataEpoch: number; extractionPolicyVersion: string }): Promise<JournalSourceSnapshot | null>;
   startGeneration(input: {
@@ -197,8 +333,14 @@ export type JournalRepository = Readonly<{
     actionExecutionId?: string;
   }): Promise<void>;
   readCurrent?(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
+  readCurrentJournalForDate?(input: { userId: string; logicalDate: string }): Promise<CurrentJournal | null>;
   readLatestCurrent(input: { userId: string }): Promise<CurrentJournal | null>;
   readLatestGenerationNotice?(input: { userId: string }): Promise<JournalGenerationNotice | null>;
+  listCurrentJournalDates?(input: {
+    userId: string;
+    limit: number;
+    cursor: JournalDateCursor | null;
+  }): Promise<readonly JournalDateEntry[]>;
 }>;
 
 export type JournalModel = Readonly<{
@@ -235,6 +377,14 @@ export type JournalService = Readonly<{
     reason?: string;
   }>;
   inspect(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
+  listJournalDates(input: {
+    userId: string;
+    cursor?: string | null;
+  }): Promise<JournalDatePage>;
+  readByDate(input: {
+    userId: string;
+    logicalDate: string;
+  }): Promise<CurrentJournal | null>;
   readLatest(input: { userId: string }): Promise<CurrentJournal | null>;
   readLatestGenerationNotice(input: { userId: string }): Promise<JournalGenerationNotice | null>;
 }>;
@@ -248,6 +398,7 @@ export type AutomaticJournalCommand = Readonly<{
 }>;
 
 export function createJournalService(dependencies: {
+  cursorSecret?: string;
   journalPolicyVersion: string;
   validatorVersion: string;
   evidenceExtractionPolicyVersion: string;
@@ -388,6 +539,48 @@ export function createJournalService(dependencies: {
       let dailySessionId: string;
       try { dailySessionId = asDailySessionId(input.dailySessionId); } catch { return null; }
       return dependencies.repository.readCurrent?.({ dailySessionId, userId: input.userId }) ?? null;
+    },
+    async listJournalDates(input) {
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
+      if (!dependencies.repository.listCurrentJournalDates) {
+        return { entries: [], nextCursor: null };
+      }
+      const cursor = journalDateCursorAfter(
+        input.cursor ?? null,
+        input.userId,
+        dependencies.cursorSecret,
+      );
+      const rows = await dependencies.repository.listCurrentJournalDates({
+        cursor,
+        limit: JOURNAL_DATE_PAGE_LIMIT + 1,
+        userId: input.userId,
+      });
+      const hasMore = rows.length > JOURNAL_DATE_PAGE_LIMIT;
+      const entries = hasMore ? rows.slice(0, JOURNAL_DATE_PAGE_LIMIT) : rows;
+      const last = entries[entries.length - 1];
+      const nextCursor =
+        hasMore && last && dependencies.cursorSecret
+          ? encodeJournalDateCursor(
+              {
+                after: [last.logicalDate, last.dailySessionId],
+                owner: input.userId,
+                sort: JOURNAL_DATE_SORT,
+                version: 1,
+              },
+              dependencies.cursorSecret,
+            )
+          : null;
+      return { entries: [...entries], nextCursor };
+    },
+    async readByDate(input) {
+      await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
+      const logicalDate = validateJournalLogicalDate(input.logicalDate);
+      return (
+        dependencies.repository.readCurrentJournalForDate?.({
+          logicalDate,
+          userId: input.userId,
+        }) ?? null
+      );
     },
     async readLatest(input) {
       await dependencies.recoveryGate?.requireOpen(input.userId as UserId);

@@ -1,4 +1,7 @@
 import type {
+  CurrentJournal,
+  JournalDateEntry,
+  JournalDateState,
   JournalDiagnosticCode,
   JournalDiagnosticDetailCode,
   JournalEvidenceReference,
@@ -585,9 +588,110 @@ export class PostgresJournalRepository implements JournalRepository {
       ? {
           dailySessionId: row.daily_session_id,
           logicalDate: row.logical_date,
-          state: Number(row.source_revision) === Number(row.journal_source_revision)
-            ? "current"
-            : row.activity_state === "quiescent" ? "updating" : "outdated",
+          state: currentJournalState(row),
+          version: {
+            locale: journal.locale,
+            statements: journal.statements,
+            diagnosticStatus: journal.diagnosticStatus ?? "available",
+          },
+        }
+      : null;
+  }
+
+  public async listCurrentJournalDates(input: {
+    userId: string;
+    limit: number;
+    cursor: { dailySessionId: string; logicalDate: string } | null;
+  }): Promise<readonly JournalDateEntry[]> {
+    const result = await this.pool.query<{
+      activity_state: "active" | "quiescent" | "finalized";
+      daily_session_id: string;
+      journal_source_revision: string;
+      logical_date: string;
+      source_revision: string;
+    }>(
+      `SELECT journal.daily_session_id, daily_session.logical_date::text,
+          daily_session.activity_state, daily_session.source_revision::text,
+          version.source_revision::text AS journal_source_revision
+       FROM journals journal
+       INNER JOIN daily_sessions daily_session
+         ON daily_session.daily_session_id = journal.daily_session_id
+         AND daily_session.user_id = journal.user_id
+       INNER JOIN journal_versions version ON version.journal_version_id = journal.current_version_id
+       INNER JOIN app_users owner ON owner.user_id = journal.user_id
+       WHERE journal.user_id = $1
+         AND journal.current_version_id IS NOT NULL
+         AND journal.deleted_at IS NULL
+         AND owner.status = 'active'
+         AND ($2::date IS NULL OR daily_session.logical_date < $2::date
+           OR (daily_session.logical_date = $2::date AND journal.daily_session_id < $3::uuid))
+         AND NOT EXISTS (
+           SELECT 1
+           FROM journal_statements version_statement
+           INNER JOIN journal_statement_evidence_links version_link
+             ON version_link.journal_statement_id = version_statement.journal_statement_id
+           INNER JOIN evidence_items version_evidence
+             ON version_evidence.evidence_item_id = version_link.evidence_item_id
+           INNER JOIN conversation_event_revisions version_source
+             ON version_source.conversation_event_revision_id = version_evidence.source_revision_id
+           WHERE version_statement.journal_version_id = version.journal_version_id
+             AND (version_evidence.status <> 'active' OR version_source.content_purged_at IS NOT NULL)
+         )
+       ORDER BY daily_session.logical_date DESC, journal.daily_session_id DESC
+       LIMIT $4`,
+      [
+        input.userId,
+        input.cursor?.logicalDate ?? null,
+        input.cursor?.dailySessionId ?? null,
+        input.limit,
+      ],
+    );
+    return result.rows.map((row) => ({
+      dailySessionId: row.daily_session_id,
+      logicalDate: row.logical_date,
+      state: currentJournalState(row),
+    }));
+  }
+
+  public async readCurrentJournalForDate(input: {
+    userId: string;
+    logicalDate: string;
+  }): Promise<CurrentJournal | null> {
+    const session = await this.pool.query<{
+      activity_state: "active" | "quiescent" | "finalized";
+      daily_session_id: string;
+      journal_source_revision: string;
+      logical_date: string;
+      source_revision: string;
+    }>(
+      `SELECT journal.daily_session_id, daily_session.logical_date::text,
+          daily_session.activity_state, daily_session.source_revision::text,
+          version.source_revision::text AS journal_source_revision
+       FROM journals journal
+       INNER JOIN daily_sessions daily_session
+         ON daily_session.daily_session_id = journal.daily_session_id
+         AND daily_session.user_id = journal.user_id
+       INNER JOIN journal_versions version ON version.journal_version_id = journal.current_version_id
+       INNER JOIN app_users owner ON owner.user_id = journal.user_id
+       WHERE journal.user_id = $1
+         AND daily_session.logical_date = $2::date
+         AND journal.current_version_id IS NOT NULL
+         AND journal.deleted_at IS NULL
+         AND owner.status = 'active'
+       LIMIT 1`,
+      [input.userId, input.logicalDate],
+    );
+    const row = session.rows[0];
+    if (!row) return null;
+    const journal = await this.readCurrent({
+      dailySessionId: row.daily_session_id,
+      userId: input.userId,
+    });
+    return journal
+      ? {
+          dailySessionId: row.daily_session_id,
+          logicalDate: row.logical_date,
+          state: currentJournalState(row),
           version: {
             locale: journal.locale,
             statements: journal.statements,
@@ -613,6 +717,18 @@ export class PostgresJournalRepository implements JournalRepository {
       ? { logicalDate: row.logical_date, failureCode: row.failure_code }
       : null;
   }
+}
+
+function currentJournalState(row: {
+  activity_state: "active" | "quiescent" | "finalized";
+  journal_source_revision: string;
+  source_revision: string;
+}): JournalDateState {
+  return Number(row.source_revision) === Number(row.journal_source_revision)
+    ? "current"
+    : row.activity_state === "quiescent"
+      ? "updating"
+      : "outdated";
 }
 
 function textAtLocator(sourceText: string, locatorType: JournalEvidenceReference["locatorType"], locatorKey: string): string | null {
