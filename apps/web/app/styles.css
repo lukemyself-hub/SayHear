@@ -335,11 +335,20 @@ h1 {
 }
 
 .conversation {
-  border-top: 1px solid #d7d0c4;
-  display: grid;
-  gap: 1.5rem;
-  margin-top: 2rem;
-  padding-top: 2rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  margin: 0 auto;
+  min-height: 0;
+  width: min(800px, 100%);
+}
+
+.conversationStatus {
+  color: #686a63;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 14px 0 8px;
 }
 
 .journalCard {
@@ -368,56 +377,63 @@ h1 {
 .journalActions button { background: transparent; border: 1px solid #83745e; border-radius: 999px; color: #22211f; cursor: pointer; font: inherit; padding: .5rem .8rem; }
 
 .messageList {
-  display: grid;
-  gap: 0.9rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 16px;
 }
 
 .emptyConversation {
-  color: #625d54;
+  color: #686a63;
   margin: 0;
 }
 
 .userMessage {
-  background: #ece7dc;
-  border-radius: 1rem 1rem 0.25rem 1rem;
-  justify-self: end;
-  max-width: min(36rem, 90%);
-  padding: 0.85rem 1rem;
+  align-self: flex-end;
+  background: #f0eee8;
+  border-radius: 22px;
+  max-width: min(34rem, 88%);
+  min-width: 0;
+  padding: 10px 14px;
 }
 
 .assistantMessage {
-  background: #fffdf9;
-  border: 1px solid #d7d0c4;
-  border-radius: 1rem 1rem 1rem 0.25rem;
-  justify-self: start;
-  max-width: min(36rem, 90%);
-  padding: 0.85rem 1rem;
-}
-
-.userMessage span,
-.assistantMessage span,
-.assistantMessage em {
-  color: #625d54;
-  display: block;
-  font-size: 0.75rem;
-  margin-bottom: 0.35rem;
-}
-
-.userMessage p,
-.assistantMessage p {
-  line-height: 1.5;
-  margin: 0;
-  white-space: pre-wrap;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  max-width: min(42rem, 100%);
+  min-width: 0;
+  padding: 0;
 }
 
 .assistantMessage em {
   color: #8f2d20;
+  display: block;
   font-style: normal;
-  margin-top: 0.5rem;
+  margin-top: 6px;
 }
 
 .interruptedMessage {
-  border-color: #d1a08e;
+  border: 1px solid #d1a08e;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.userMessage p,
+.assistantMessage p {
+  line-height: 1.7;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistantMessage .inspectionLink {
+  display: inline-block;
+  margin-top: 6px;
 }
 
 .retryResponse {
@@ -439,47 +455,55 @@ h1 {
 }
 
 .composer {
-  display: grid;
-  gap: 0.7rem;
+  background: #faf9f6;
+  border-top: 1px solid #e2e3dc;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
 }
 
 .composer label {
-  font-size: 0.85rem;
-  font-weight: 650;
+  color: #686a63;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .composer textarea {
-  background: #fffdf9;
-  border: 1px solid #cfc7b9;
-  border-radius: 0.8rem;
-  color: #22211f;
+  background: #f0eee8;
+  border: 1px solid transparent;
+  border-radius: 22px;
+  color: #242522;
   font: inherit;
   line-height: 1.5;
-  padding: 0.8rem;
-  resize: vertical;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 12px 16px;
+  resize: none;
 }
 
 .composer textarea:focus {
-  border-color: #83745e;
-  outline: 2px solid rgba(131, 116, 94, 0.2);
+  border-color: #242522;
+  outline: 2px solid rgba(36, 37, 34, 0.14);
 }
 
 .composerActions {
   align-items: center;
   display: flex;
-  gap: 1rem;
+  gap: 12px;
   justify-content: space-between;
 }
 
 .composer button {
-  background: #22211f;
+  background: #242522;
   border: 0;
   border-radius: 999px;
-  color: #fffdf9;
+  color: #faf9f6;
   cursor: pointer;
   font: inherit;
   font-weight: 650;
-  padding: 0.65rem 1rem;
+  padding: 10px 16px;
 }
 
 .composer button:disabled {
@@ -487,8 +511,265 @@ h1 {
   opacity: 0.45;
 }
 
+.composerBlocked {
+  background: #f7e9e3;
+  border: 1px solid #d1a08e;
+  border-radius: 12px;
+  color: #8f2d20;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 12px;
+}
+
 .submissionError {
   color: #8f2d20;
   font-size: 0.85rem;
   margin: 0;
+}
+
+/* ---- Internal Portal responsive shell (SPEC #260 / ticket #261) ---- */
+
+.portalShell {
+  background: #faf9f6;
+  color: #242522;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.portalHeader {
+  align-items: center;
+  background: #faf9f6;
+  border-bottom: 1px solid #e2e3dc;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 12px;
+}
+
+.portalHamburger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: #242522;
+  cursor: pointer;
+  display: flex;
+  font-size: 1.25rem;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.portalHamburger:hover {
+  background: #efede7;
+}
+
+.portalBrand {
+  color: #242522;
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.portalBody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.portalContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.portalNav {
+  background: #f2f0eb;
+  border-right: 1px solid #e2e3dc;
+  display: flex;
+}
+
+.moduleRail {
+  border-right: 1px solid #e2e3dc;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 8px 6px;
+  width: 56px;
+}
+
+.moduleRailLink {
+  align-items: center;
+  border-radius: 10px;
+  color: #686a63;
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.moduleRailLink:hover {
+  background: #e7e5de;
+  color: #242522;
+}
+
+.moduleRailLink.isActive {
+  background: #e2e0d8;
+  color: #242522;
+}
+
+.moduleList {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 12px 10px;
+}
+
+.moduleListHeading {
+  color: #686a63;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0;
+  padding: 0 8px;
+}
+
+.moduleList ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.moduleListEntry {
+  border-radius: 10px;
+  color: #242522;
+  display: block;
+  font-size: 0.95rem;
+  overflow: hidden;
+  padding: 8px 10px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moduleListEntry:hover {
+  background: #e7e5de;
+}
+
+.moduleListEntry[aria-current="page"] {
+  background: #e2e0d8;
+  font-weight: 600;
+}
+
+.portalFooter {
+  border-top: 1px solid #e2e3dc;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+}
+
+.portalFooterOwner {
+  color: #686a63;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.portalFooterState {
+  color: #242522;
+  font-size: 0.82rem;
+}
+
+.portalPage {
+  margin: 0 auto;
+  max-width: 800px;
+  padding: 24px 0 64px;
+  width: 100%;
+}
+
+.inspectorPage {
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 24px 0 64px;
+  width: 100%;
+}
+
+@media (max-width: 1023.98px) {
+  .portalNav {
+    bottom: 0;
+    box-shadow: 8px 0 24px rgba(36, 37, 34, 0.12);
+    left: 0;
+    max-width: 320px;
+    position: fixed;
+    top: 56px;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease;
+    visibility: hidden;
+    width: 86vw;
+    z-index: 30;
+  }
+
+  .portalShell[data-nav-open="true"] .portalNav {
+    transform: none;
+    visibility: visible;
+  }
+
+  .portalOverlay {
+    background: rgba(36, 37, 34, 0.35);
+    border: 0;
+    bottom: 0;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: 56px;
+    z-index: 20;
+  }
+}
+
+@media (min-width: 1024px) {
+  .portalNav {
+    flex-shrink: 0;
+    width: min(320px, 26vw);
+  }
+
+  .portalShell[data-nav-open="false"] .portalNav {
+    display: none;
+  }
+
+  .portalOverlay {
+    display: none;
+  }
+}
+
+.portalShell a:focus-visible,
+.portalShell button:focus-visible,
+.portalShell textarea:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portalNav {
+    transition: none;
+  }
 }

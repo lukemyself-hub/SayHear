@@ -5,7 +5,7 @@ import { asUserId } from "@sayhear/application";
 
 import { createServerComposition } from "../../src/server-composition";
 import { TextConversation } from "./text-conversation";
-import { JournalCard } from "./journal-card";
+import { conversationStatusLine } from "./portal-conversation";
 
 export const dynamic = "force-dynamic";
 
@@ -17,45 +17,38 @@ export default async function InternalPage() {
   }
 
   const userId = asUserId(session.user.id);
-  const [access, interruptedResponses, messages, currentJournal, latestJournalNotice] = await Promise.all([
+  // The identity read is authoritative and never creates a Daily Session.
+  const [access, identity] = await Promise.all([
     composition.accessService.getAccess(userId),
-    composition.conversationService.listInterruptedResponses(userId),
-    composition.conversationService.listMessages(userId),
-    composition.journalService.readLatest({ userId }),
-    composition.journalService.readLatestGenerationNotice({ userId }),
+    composition.conversationService.readCurrentConversation(userId),
   ]);
-  const state = access.privateWrites.allowed ? "Open" : "Blocked";
+  const [messages, interruptedResponses] = identity
+    ? await Promise.all([
+        composition.conversationService.listRecentMessages(userId, {
+          dailySessionId: identity.dailySessionId,
+        }),
+        composition.conversationService.listInterruptedResponsesForSession(
+          userId,
+          identity.dailySessionId,
+        ),
+      ])
+    : [[], []];
 
   return (
-    <main className="shell">
-      <section className="eyebrow">SayHear Internal Core</section>
-      <h1>Private-write boundary</h1>
-      <p className="lede">
-        Signed in as the pre-provisioned Internal Owner. This surface exposes only
-        the current write-gate state.
-      </p>
-      <section
-        aria-live="polite"
-        className={`gate ${access.privateWrites.allowed ? "gateOpen" : "gateBlocked"}`}
-      >
-        <span className="gateLabel">Real private writes</span>
-        <strong>{state}</strong>
-        <code>{access.privateWrites.reason}</code>
-      </section>
-      <p className="note">
-        The gate opens only when the configured backup policy has current,
-        verified retention evidence.
-      </p>
-      <nav className="internalNav" aria-label="Internal tools">
-        <a href="/internal/context-inspector">Open Context Inspector →</a>
-        <a href="/internal/reflection-inspector">Open Reflection Inspector →</a>
-        <a href="/internal/candidate-review">Open Candidate Review →</a>
-      </nav>
-      <JournalCard currentJournal={currentJournal} latestNotice={latestJournalNotice} />
-      <TextConversation
-        initialInterruptedResponses={interruptedResponses}
-        initialMessages={messages}
-      />
-    </main>
+    <TextConversation
+      draftKey={identity?.logicalDate ?? "no-active-session"}
+      initialInterruptedResponses={[...interruptedResponses]}
+      initialMessages={[...messages]}
+      statusLine={
+        identity
+          ? conversationStatusLine({
+              logicalDate: identity.logicalDate,
+              now: composition.clock(),
+              timezone: identity.timezoneAtStart,
+            })
+          : null
+      }
+      writeGate={access.privateWrites}
+    />
   );
 }
