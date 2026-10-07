@@ -773,3 +773,137 @@ h1 {
     transition: none;
   }
 }
+
+/* === #267 Reflection Inspector hierarchy & sensitive Evidence reads === */
+
+.reflectionSensitiveCard {
+  margin-top: 1.5rem;
+}
+
+.reflectionScopeSwitch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reflectionScopeSwitch button {
+  background: #f4f2ed;
+  border: 1px solid #cfc7b9;
+  border-radius: 999px;
+  color: #22211f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.reflectionScopeSwitch button[aria-pressed="true"] {
+  background: #242522;
+  border-color: #242522;
+  color: #faf9f6;
+}
+
+.reflectionSection {
+  border-top: 1px solid #e5dfd5;
+  padding-top: 0.25rem;
+}
+
+.reflectionSectionHeading {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.reflectionSectionToggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #242522;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-weight: 650;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  text-align: left;
+  width: 100%;
+}
+
+.reflectionSectionToggle:hover {
+  color: #000;
+}
+
+.reflectionSectionTitle {
+  min-width: 0;
+}
+
+.reflectionSectionSummary {
+  color: #756f63;
+  font-size: 0.8rem;
+  font-weight: 400;
+  margin-left: auto;
+  text-align: right;
+}
+
+.reflectionSectionChevron {
+  color: #756f63;
+  flex-shrink: 0;
+  font-size: 1rem;
+  width: 1rem;
+}
+
+.reflectionSectionBody {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.35rem 0 0.85rem;
+}
+
+.reflectionStatement {
+  border-left: 2px solid #d7d0c4;
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 0.8rem;
+}
+
+.reflectionStatementMeta {
+  color: #756f63;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.reflectionStatementText {
+  font-size: 1rem;
+  line-height: 1.75;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.reflectionEvidenceText {
+  background: #f7f4ee;
+  border: 1px solid #d7d0c4;
+  border-radius: 12px;
+  line-height: 1.6;
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+  padding: 0.6rem 0.75rem;
+  white-space: pre-wrap;
+}
+
+.reflectionClaimGroup {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.reflectionVersionMeta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+  .reflectionSectionSummary {
+    display: none;
+  }
+
+  .reflectionVersionMeta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
