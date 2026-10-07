@@ -1,11 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 
 import {
   candidateReviewOutcomeCopy,
   candidateReviewStageCopy,
 } from "../../src/candidate-review-copy";
+import {
+  candidateDeadlineField,
+  candidateLowFrequencyFields,
+  candidateReviewAuthFailure,
+  candidateReviewOutcomeTone,
+  formatCandidateTimestamp,
+  shortCandidateId,
+} from "./candidate-review-presentation";
 
 type PortalEntry = Readonly<{
   candidateId: string;
@@ -43,6 +57,16 @@ type PortalViews = Readonly<{
 
 type ViewKey = "needsReview" | "awaitingRelease" | "terminalGrace" | "successor";
 
+type EvidenceExcerpt = Readonly<{ revisionId: string; text: string }>;
+
+type DraftValues = Readonly<{
+  label: string;
+  definition: string;
+  rationale: string;
+}>;
+
+const EMPTY_DRAFT: DraftValues = { label: "", definition: "", rationale: "" };
+
 const VIEW_KEYS: readonly ViewKey[] = [
   "needsReview",
   "awaitingRelease",
@@ -57,25 +81,26 @@ const VIEW_STAGE: Readonly<Record<ViewKey, string>> = {
   successor: "successor",
 };
 
-function formatRemaining(ms: number | null): string {
-  if (ms === null) return "—";
-  if (ms < 0) return "已过期";
-  const days = Math.floor(ms / 86_400_000);
-  const hours = Math.floor((ms % 86_400_000) / 3_600_000);
-  return `${days} 日 ${hours} 小时`;
-}
-
-function formatDate(iso: string | null): string {
-  return iso ?? "—";
-}
+const REASON_CODES: readonly string[] = [
+  "insufficient_evidence",
+  "entity_scope_unresolved",
+  "sensitive_inference_violation",
+  "value_schema_mismatch",
+  "duplicate_concept",
+  "concept_no_product_value",
+];
 
 export function CandidateReview() {
   const [views, setViews] = useState<PortalViews | null>(null);
   const [activeView, setActiveView] = useState<ViewKey>("needsReview");
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [outcomeTone, setOutcomeTone] = useState<
+    "success" | "failure" | null
+  >(null);
   const [evidence, setEvidence] = useState<
-    Readonly<Record<string, readonly { revisionId: string; text: string }[]>>
+    Readonly<Record<string, readonly EvidenceExcerpt[]>>
   >({});
   const [predicateInput, setPredicateInput] = useState<
     Readonly<Record<string, string>>
@@ -84,13 +109,12 @@ export function CandidateReview() {
     Readonly<Record<string, string>>
   >({});
   const [draftInput, setDraftInput] = useState<
-    Readonly<
-      Record<string, { label: string; definition: string; rationale: string }>
-    >
+    Readonly<Record<string, DraftValues>>
   >({});
   const [proposalInput, setProposalInput] = useState<
     Readonly<Record<string, string>>
   >({});
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   function draftFor(candidateId: string): {
     proposedPredicateIdentity: string;
@@ -101,11 +125,7 @@ export function CandidateReview() {
     rationale: string;
     attestation: boolean;
   } {
-    const draft = draftInput[candidateId] ?? {
-      label: "",
-      definition: "",
-      rationale: "",
-    };
+    const draft = draftInput[candidateId] ?? EMPTY_DRAFT;
     const predicateIdentity = (proposalInput[candidateId] ?? "").trim();
     return {
       proposedPredicateIdentity:
@@ -120,9 +140,22 @@ export function CandidateReview() {
     };
   }
 
-  const refresh = useCallback(async () => {
+  const reportOutcome = useCallback((outcome: string) => {
+    setNotice(candidateReviewOutcomeCopy(outcome));
+    setOutcomeTone(candidateReviewOutcomeTone(outcome));
+    if (candidateReviewAuthFailure(outcome)) {
+      // A lost capability or a closed gate clears the protected display.
+      setEvidence({});
+    }
+  }, []);
+
+  const refresh = useCallback(async (options?: { clearNotice?: boolean }) => {
+    const clearNotice = options?.clearNotice ?? true;
     setLoading(true);
-    setNotice(null);
+    if (clearNotice) {
+      setNotice(null);
+      setOutcomeTone(null);
+    }
     try {
       const response = await fetch("/api/internal/review/queue", {
         cache: "no-store",
@@ -135,20 +168,20 @@ export function CandidateReview() {
       };
       if (!response.ok || !payload.views) {
         // Fixed copy only; never render model or raw error text.
-        setNotice(
-          candidateReviewOutcomeCopy(payload.outcome ?? "unauthorized"),
-        );
+        reportOutcome(payload.outcome ?? "unauthorized");
         setViews(null);
+        setEvidence({});
         return;
       }
       setViews(payload.views);
     } catch {
-      setNotice(candidateReviewOutcomeCopy("unauthorized"));
+      reportOutcome("unauthorized");
       setViews(null);
+      setEvidence({});
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [reportOutcome]);
 
   useEffect(() => {
     void refresh();
@@ -156,6 +189,8 @@ export function CandidateReview() {
 
   async function expandEvidence(candidateId: string) {
     setNotice(null);
+    setOutcomeTone(null);
+    setBusy(true);
     try {
       const response = await fetch(
         `/api/internal/review/candidates/${encodeURIComponent(candidateId)}/evidence`,
@@ -164,16 +199,21 @@ export function CandidateReview() {
       const payload = (await response.json()) as {
         outcome?: string;
         message?: string;
-        excerpts?: readonly { revisionId: string; text: string }[];
+        excerpts?: readonly EvidenceExcerpt[];
       };
       if (!response.ok || !payload.excerpts) {
-        setNotice(candidateReviewOutcomeCopy(payload.outcome ?? "unauthorized"));
+        reportOutcome(payload.outcome ?? "unauthorized");
         return;
       }
-      setEvidence((current) => ({ ...current, [candidateId]: payload.excerpts ?? [] }));
-      setNotice(candidateReviewOutcomeCopy("applied"));
+      setEvidence((current) => ({
+        ...current,
+        [candidateId]: payload.excerpts ?? [],
+      }));
+      reportOutcome("applied");
     } catch {
-      setNotice(candidateReviewOutcomeCopy("unauthorized"));
+      reportOutcome("unauthorized");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -182,6 +222,8 @@ export function CandidateReview() {
     action: "cancel" | "reconsider",
   ) {
     setNotice(null);
+    setOutcomeTone(null);
+    setBusy(true);
     try {
       const response = await fetch(
         `/api/internal/review/proposals/${encodeURIComponent(proposalId)}/${action}`,
@@ -196,10 +238,14 @@ export function CandidateReview() {
         },
       );
       const payload = (await response.json()) as { outcome?: string };
-      setNotice(candidateReviewOutcomeCopy(payload.outcome ?? "unauthorized"));
-      await refresh();
+      reportOutcome(payload.outcome ?? "unauthorized");
+      // Preserve the command result across the redraw; a failed refresh sets
+      // its own auth/gate notice instead.
+      await refresh({ clearNotice: false });
     } catch {
-      setNotice(candidateReviewOutcomeCopy("unauthorized"));
+      reportOutcome("unauthorized");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -208,12 +254,14 @@ export function CandidateReview() {
     action: "map" | "reject" | "approve",
   ) {
     setNotice(null);
+    setOutcomeTone(null);
+    setBusy(true);
     try {
       let response: Response;
       if (action === "map") {
         const predicateId = (predicateInput[candidateId] ?? "").trim();
         if (!predicateId) {
-          setNotice(candidateReviewOutcomeCopy("predicate_not_active"));
+          reportOutcome("predicate_not_active");
           return;
         }
         response = await fetch(
@@ -260,286 +308,475 @@ export function CandidateReview() {
       // Redraw strictly by (outcome, after-state); never claim success from
       // prompt text. Concurrency losers, disposed, expired and invalid inputs
       // surface their fixed codes.
-      setNotice(candidateReviewOutcomeCopy(payload.outcome ?? "unauthorized"));
-      await refresh();
+      reportOutcome(payload.outcome ?? "unauthorized");
+      // Preserve the command result across the redraw; a failed refresh sets
+      // its own auth/gate notice instead.
+      await refresh({ clearNotice: false });
     } catch {
-      setNotice(candidateReviewOutcomeCopy("unauthorized"));
+      reportOutcome("unauthorized");
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function moveTabFocus(event: ReactKeyboardEvent<HTMLDivElement>): void {
+    const currentIndex = VIEW_KEYS.indexOf(activeView);
+    let nextIndex: number;
+    switch (event.key) {
+      case "ArrowRight":
+        nextIndex = (currentIndex + 1) % VIEW_KEYS.length;
+        break;
+      case "ArrowLeft":
+        nextIndex = (currentIndex - 1 + VIEW_KEYS.length) % VIEW_KEYS.length;
+        break;
+      case "Home":
+        nextIndex = 0;
+        break;
+      case "End":
+        nextIndex = VIEW_KEYS.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    setActiveView(VIEW_KEYS[nextIndex]!);
+    tabRefs.current[nextIndex]?.focus();
   }
 
   const entries = views ? views[activeView] : [];
 
   return (
-    <section aria-label="Candidate review queue">
-      <div role="tablist" aria-label="Review lifecycle views">
-        {VIEW_KEYS.map((key) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={activeView === key}
-            onClick={() => setActiveView(key)}
-            type="button"
-          >
-            {candidateReviewStageCopy(VIEW_STAGE[key])}（
-            {views ? views[key].length : 0}）
-          </button>
-        ))}
-        <button onClick={() => void refresh()} type="button" disabled={loading}>
+    <section aria-label="Candidate review queue" className="candidateReview">
+      <div className="reviewToolbar">
+        <div
+          aria-label="Review lifecycle views"
+          className="reviewTabs"
+          onKeyDown={moveTabFocus}
+          role="tablist"
+        >
+          {VIEW_KEYS.map((key, index) => {
+            const selected = activeView === key;
+            return (
+              <button
+                aria-controls={`review-panel-${key}`}
+                aria-selected={selected}
+                className="reviewTab"
+                id={`review-tab-${key}`}
+                key={key}
+                onClick={() => setActiveView(key)}
+                ref={(node) => {
+                  tabRefs.current[index] = node;
+                }}
+                role="tab"
+                tabIndex={selected ? 0 : -1}
+                type="button"
+              >
+                <span className="reviewTabLabel">
+                  {candidateReviewStageCopy(VIEW_STAGE[key])}
+                </span>
+                <span className="reviewTabCount">
+                  {views ? views[key].length : 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <button
+          className="reviewRefresh"
+          disabled={loading}
+          onClick={() => void refresh()}
+          type="button"
+        >
           {loading ? "加载中…" : "刷新队列"}
         </button>
       </div>
+
       {notice ? (
-        <p role="status" aria-live="polite">
+        <p
+          aria-live="polite"
+          className={`reviewNotice is-${outcomeTone ?? "failure"}`}
+          role="status"
+        >
           {notice}
         </p>
       ) : null}
+
       {views ? (
-        <p>
+        <p className="reviewSummary">
           共 {views.total} 项 · 快照 {views.fetchedAt} · 按 deadline
           压力稳定排序（最早到期在前，ID 打破平手）。
         </p>
       ) : (
-        <p>队列尚未加载。</p>
+        <p className="reviewSummary">队列尚未加载。</p>
       )}
-      <ul>
-        {entries.map((entry) => (
-          <li key={entry.candidateId}>
-            <article>
-              <h2>{entry.candidateId.slice(0, 8)}…</h2>
-              <dl>
-                <div>
-                  <dt>阶段</dt>
-                  <dd>{candidateReviewStageCopy(entry.stage)}</dd>
-                </div>
-                <div>
-                  <dt>状态</dt>
-                  <dd>{entry.status}</dd>
-                </div>
-                <div>
-                  <dt>30/90/7 日剩余</dt>
-                  <dd>
-                    {entry.deadlineKind ?? "—"} ·{" "}
-                    {formatRemaining(entry.deadlineRemainingMs)}
-                  </dd>
-                </div>
-                <div>
-                  <dt>review 到期</dt>
-                  <dd>{formatDate(entry.reviewDueAt)}</dd>
-                </div>
-                <div>
-                  <dt>release 到期</dt>
-                  <dd>{formatDate(entry.registryReleaseDueAt)}</dd>
-                </div>
-                <div>
-                  <dt>终态内容到期</dt>
-                  <dd>{formatDate(entry.terminalContentExpiresAt)}</dd>
-                </div>
-                <div>
-                  <dt>predecessor</dt>
-                  <dd>{entry.predecessorCandidateId ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt>disposition</dt>
-                  <dd>{entry.dispositionReasonCode ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt>trigger</dt>
-                  <dd>
-                    {entry.successorTrigger ?? "—"}
-                    {entry.materialChangeReasonCodes
-                      ? `（${entry.materialChangeReasonCodes.join(",")}）`
-                      : ""}
-                  </dd>
-                </div>
-                <div>
-                  <dt>关联 Proposal</dt>
-                  <dd>
-                    {entry.linkedProposalId ?? "—"}
-                    {entry.linkedProposalStatus
-                      ? `（${entry.linkedProposalStatus}）`
-                      : ""}
-                    {entry.governanceBlocked ? " · 治理阻断中" : ""}
-                  </dd>
-                </div>
-                <div>
-                  <dt>概念</dt>
-                  <dd>{entry.proposedConcept ?? entry.predicateId ?? "—"}</dd>
-                </div>
-              </dl>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => void expandEvidence(entry.candidateId)}
-                >
-                  展开 Evidence（需 step-up）
-                </button>
-                {evidence[entry.candidateId] ? (
-                  <ul aria-label="Evidence excerpts">
-                    {evidence[entry.candidateId]!.map((excerpt) => (
-                      <li key={excerpt.revisionId}>
-                        <code>{excerpt.revisionId.slice(0, 8)}…</code>
-                        <p>{excerpt.text}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+
+      <div
+        aria-labelledby={`review-tab-${activeView}`}
+        aria-busy={busy}
+        className="reviewPanel"
+        id={`review-panel-${activeView}`}
+        role="tabpanel"
+        tabIndex={0}
+      >
+        {views && entries.length === 0 ? (
+          <p className="reviewEmpty">该视图当前没有条目。</p>
+        ) : null}
+        <ul className="reviewList">
+          {entries.map((entry) => (
+            <CandidateCard
+              busy={busy}
+              draft={draftInput[entry.candidateId] ?? EMPTY_DRAFT}
+              entry={entry}
+              evidence={evidence[entry.candidateId]}
+              key={entry.candidateId}
+              onDraftChange={(next) =>
+                setDraftInput((current) => ({
+                  ...current,
+                  [entry.candidateId]: next,
+                }))
+              }
+              onEvidence={() => void expandEvidence(entry.candidateId)}
+              onOperate={(action) => void operate(entry.candidateId, action)}
+              onPredicateChange={(value) =>
+                setPredicateInput((current) => ({
+                  ...current,
+                  [entry.candidateId]: value,
+                }))
+              }
+              onProposalIdentityChange={(value) =>
+                setProposalInput((current) => ({
+                  ...current,
+                  [entry.candidateId]: value,
+                }))
+              }
+              onProposalOperate={(action) => {
+                if (entry.linkedProposalId) {
+                  void operateProposal(entry.linkedProposalId, action);
+                }
+              }}
+              onReasonChange={(value) =>
+                setReasonInput((current) => ({
+                  ...current,
+                  [entry.candidateId]: value,
+                }))
+              }
+              predicate={predicateInput[entry.candidateId] ?? ""}
+              proposalIdentity={proposalInput[entry.candidateId] ?? ""}
+              reason={reasonInput[entry.candidateId] ?? "insufficient_evidence"}
+            />
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+type CandidateCardProps = Readonly<{
+  busy: boolean;
+  draft: DraftValues;
+  entry: PortalEntry;
+  evidence: readonly EvidenceExcerpt[] | undefined;
+  predicate: string;
+  proposalIdentity: string;
+  reason: string;
+  onDraftChange(next: DraftValues): void;
+  onEvidence(): void;
+  onOperate(action: "approve" | "map" | "reject"): void;
+  onPredicateChange(value: string): void;
+  onProposalIdentityChange(value: string): void;
+  onProposalOperate(action: "cancel" | "reconsider"): void;
+  onReasonChange(value: string): void;
+}>;
+
+function CandidateCard({
+  busy,
+  draft,
+  entry,
+  evidence,
+  predicate,
+  proposalIdentity,
+  reason,
+  onDraftChange,
+  onEvidence,
+  onOperate,
+  onPredicateChange,
+  onProposalIdentityChange,
+  onProposalOperate,
+  onReasonChange,
+}: CandidateCardProps) {
+  const deadline = candidateDeadlineField(entry);
+  const lowFrequency = candidateLowFrequencyFields({
+    basis: entry.basis,
+    candidateId: entry.candidateId,
+    candidateKind: entry.candidateKind,
+    decidedAt: entry.decidedAt,
+    proposedObjectValue: entry.proposedObjectValue,
+    proposedScopeKey: entry.proposedScopeKey,
+  });
+
+  return (
+    <li className="reviewItem">
+      <article
+        aria-labelledby={`review-card-${entry.candidateId}`}
+        className="reviewCard"
+      >
+        <header className="reviewCardHeader">
+          <h2
+            className="reviewCardTitle"
+            id={`review-card-${entry.candidateId}`}
+            title={entry.candidateId}
+          >
+            {shortCandidateId(entry.candidateId)}
+          </h2>
+          <span className="reviewCardStage">
+            {candidateReviewStageCopy(entry.stage)}
+          </span>
+          <span className="reviewCardStatus">{entry.status}</span>
+        </header>
+
+        <p
+          className={`reviewCardDeadline${
+            deadline.overdue ? " isOverdue" : ""
+          }`}
+        >
+          <span className="reviewCardDeadlineLabel">期限压力</span>
+          <span>{deadline.label}</span>
+          {deadline.overdue ? (
+            <span className="reviewCardDeadlineFlag">
+              已过期 · 命令将 fail closed
+            </span>
+          ) : null}
+        </p>
+
+        <dl className="inspectorFacts reviewFacts">
+          <div className="inspectorFact">
+            <dt>阶段</dt>
+            <dd>{candidateReviewStageCopy(entry.stage)}</dd>
+          </div>
+          <div className="inspectorFact">
+            <dt>状态</dt>
+            <dd>{entry.status}</dd>
+          </div>
+          <div className="inspectorFact">
+            <dt>disposition</dt>
+            <dd>{entry.dispositionReasonCode ?? "—"}</dd>
+          </div>
+          <div className="inspectorFact">
+            <dt>概念</dt>
+            <dd>{entry.proposedConcept ?? entry.predicateId ?? "—"}</dd>
+          </div>
+          <div className="inspectorFact">
+            <dt>review 到期</dt>
+            <dd>{formatCandidateTimestamp(entry.reviewDueAt)}</dd>
+          </div>
+          <div className="inspectorFact">
+            <dt>release 到期</dt>
+            <dd>{formatCandidateTimestamp(entry.registryReleaseDueAt)}</dd>
+          </div>
+          <div className="inspectorFact">
+            <dt>终态内容到期</dt>
+            <dd>{formatCandidateTimestamp(entry.terminalContentExpiresAt)}</dd>
+          </div>
+        </dl>
+
+        <div className="reviewActions">
+          <div className="reviewField">
+            <label htmlFor={`map-${entry.candidateId}`}>
+              映射到 Predicate
+            </label>
+            <input
+              disabled={busy}
+              id={`map-${entry.candidateId}`}
+              onChange={(event) => onPredicateChange(event.target.value)}
+              placeholder="sh.domain.concept"
+              value={predicate}
+            />
+            <button
+              disabled={busy}
+              onClick={() => onOperate("map")}
+              type="button"
+            >
+              map_existing
+            </button>
+          </div>
+          <div className="reviewField">
+            <label htmlFor={`reject-${entry.candidateId}`}>拒绝理由</label>
+            <select
+              disabled={busy}
+              id={`reject-${entry.candidateId}`}
+              onChange={(event) => onReasonChange(event.target.value)}
+              value={reason}
+            >
+              {REASON_CODES.map((code) => (
+                <option key={code} value={code}>
+                  {code === "concept_no_product_value"
+                    ? `${code}（需治理草案）`
+                    : code}
+                </option>
+              ))}
+            </select>
+            <button
+              disabled={busy}
+              onClick={() => onOperate("reject")}
+              type="button"
+            >
+              reject
+            </button>
+          </div>
+        </div>
+
+        <details className="reviewDetails">
+          <summary>来源与后继</summary>
+          <dl className="reviewDetailFacts">
+            <div className="inspectorFact">
+              <dt>predecessor</dt>
+              <dd>{entry.predecessorCandidateId ?? "—"}</dd>
+            </div>
+            <div className="inspectorFact">
+              <dt>trigger</dt>
+              <dd>
+                {entry.successorTrigger ?? "—"}
+                {entry.materialChangeReasonCodes
+                  ? `（${entry.materialChangeReasonCodes.join(",")}）`
+                  : ""}
+              </dd>
+            </div>
+          </dl>
+        </details>
+
+        <details className="reviewDetails">
+          <summary>Evidence（需 step-up）</summary>
+          <div className="reviewEvidence">
+            <button
+              className="inspectorSmallButton"
+              disabled={busy}
+              onClick={onEvidence}
+              type="button"
+            >
+              展开 Evidence（需 step-up）
+            </button>
+            {evidence ? (
+              <ul aria-label="Evidence excerpts" className="reviewEvidenceList">
+                {evidence.map((excerpt) => (
+                  <li key={excerpt.revisionId}>
+                    <code>{shortCandidateId(excerpt.revisionId)}</code>
+                    <p>{excerpt.text}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </details>
+
+        <details className="reviewDetails">
+          <summary>Proposal 与治理</summary>
+          <div className="reviewProposal">
+            <dl className="reviewDetailFacts">
+              <div className="inspectorFact">
+                <dt>关联 Proposal</dt>
+                <dd>
+                  {entry.linkedProposalId ?? "—"}
+                  {entry.linkedProposalStatus
+                    ? `（${entry.linkedProposalStatus}）`
+                    : ""}
+                  {entry.governanceBlocked ? " · 治理阻断中" : ""}
+                </dd>
               </div>
-              <div>
-                <label>
-                  映射到 Predicate
-                  <input
-                    value={predicateInput[entry.candidateId] ?? ""}
-                    onChange={(event) =>
-                      setPredicateInput((current) => ({
-                        ...current,
-                        [entry.candidateId]: event.target.value,
-                      }))
-                    }
-                    placeholder="sh.domain.concept"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void operate(entry.candidateId, "map")}
-                >
-                  map_existing
-                </button>
-              </div>
-              <div>
-                <label>
-                  拒绝理由
-                  <select
-                    value={reasonInput[entry.candidateId] ?? "insufficient_evidence"}
-                    onChange={(event) =>
-                      setReasonInput((current) => ({
-                        ...current,
-                        [entry.candidateId]: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="insufficient_evidence">insufficient_evidence</option>
-                    <option value="entity_scope_unresolved">
-                      entity_scope_unresolved
-                    </option>
-                    <option value="sensitive_inference_violation">
-                      sensitive_inference_violation
-                    </option>
-                    <option value="value_schema_mismatch">
-                      value_schema_mismatch
-                    </option>
-                    <option value="duplicate_concept">duplicate_concept</option>
-                    <option value="concept_no_product_value">
-                      concept_no_product_value（需治理草案）
-                    </option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void operate(entry.candidateId, "reject")}
-                >
-                  reject
-                </button>
-              </div>
-              <div>
-                <fieldset>
-                  <legend>治理草案（approve / 产品价值拒绝 / reconsider 共用）</legend>
-                  <label>
-                    Predicate 身份
-                    <input
-                      value={proposalInput[entry.candidateId] ?? ""}
-                      onChange={(event) =>
-                        setProposalInput((current) => ({
-                          ...current,
-                          [entry.candidateId]: event.target.value,
-                        }))
-                      }
-                      placeholder="sh.domain.concept"
-                    />
-                  </label>
-                  <label>
-                    通用标签（重写，勿复制模型概念）
-                    <input
-                      value={draftInput[entry.candidateId]?.label ?? ""}
-                      onChange={(event) =>
-                        setDraftInput((current) => ({
-                          ...current,
-                          [entry.candidateId]: {
-                            label: event.target.value,
-                            definition:
-                              current[entry.candidateId]?.definition ?? "",
-                            rationale:
-                              current[entry.candidateId]?.rationale ?? "",
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    定义
-                    <input
-                      value={draftInput[entry.candidateId]?.definition ?? ""}
-                      onChange={(event) =>
-                        setDraftInput((current) => ({
-                          ...current,
-                          [entry.candidateId]: {
-                            label: current[entry.candidateId]?.label ?? "",
-                            definition: event.target.value,
-                            rationale:
-                              current[entry.candidateId]?.rationale ?? "",
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    治理理由
-                    <input
-                      value={draftInput[entry.candidateId]?.rationale ?? ""}
-                      onChange={(event) =>
-                        setDraftInput((current) => ({
-                          ...current,
-                          [entry.candidateId]: {
-                            label: current[entry.candidateId]?.label ?? "",
-                            definition:
-                              current[entry.candidateId]?.definition ?? "",
-                            rationale: event.target.value,
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                </fieldset>
-                <button
-                  type="button"
-                  onClick={() => void operate(entry.candidateId, "approve")}
-                >
-                  approve_for_registry_change
-                </button>
-              </div>
+            </dl>
+            <fieldset className="reviewDraft">
+              <legend>
+                治理草案（approve / 产品价值拒绝 / reconsider 共用）
+              </legend>
+              <label htmlFor={`proposal-${entry.candidateId}`}>
+                Predicate 身份
+                <input
+                  disabled={busy}
+                  id={`proposal-${entry.candidateId}`}
+                  onChange={(event) =>
+                    onProposalIdentityChange(event.target.value)
+                  }
+                  placeholder="sh.domain.concept"
+                  value={proposalIdentity}
+                />
+              </label>
+              <label htmlFor={`label-${entry.candidateId}`}>
+                通用标签（重写，勿复制模型概念）
+                <input
+                  disabled={busy}
+                  id={`label-${entry.candidateId}`}
+                  onChange={(event) =>
+                    onDraftChange({ ...draft, label: event.target.value })
+                  }
+                  value={draft.label}
+                />
+              </label>
+              <label htmlFor={`definition-${entry.candidateId}`}>
+                定义
+                <input
+                  disabled={busy}
+                  id={`definition-${entry.candidateId}`}
+                  onChange={(event) =>
+                    onDraftChange({ ...draft, definition: event.target.value })
+                  }
+                  value={draft.definition}
+                />
+              </label>
+              <label htmlFor={`rationale-${entry.candidateId}`}>
+                治理理由
+                <input
+                  disabled={busy}
+                  id={`rationale-${entry.candidateId}`}
+                  onChange={(event) =>
+                    onDraftChange({ ...draft, rationale: event.target.value })
+                  }
+                  value={draft.rationale}
+                />
+              </label>
+            </fieldset>
+            <div className="reviewProposalActions">
+              <button
+                disabled={busy}
+                onClick={() => onOperate("approve")}
+                type="button"
+              >
+                approve_for_registry_change
+              </button>
               {entry.linkedProposalId ? (
-                <div>
+                <>
                   <button
+                    disabled={busy}
+                    onClick={() => onProposalOperate("cancel")}
                     type="button"
-                    onClick={() =>
-                      void operateProposal(entry.linkedProposalId!, "cancel")
-                    }
                   >
                     cancel Proposal
                   </button>
                   <button
+                    disabled={busy}
+                    onClick={() => onProposalOperate("reconsider")}
                     type="button"
-                    onClick={() =>
-                      void operateProposal(entry.linkedProposalId!, "reconsider")
-                    }
                   >
                     reconsider Proposal
                   </button>
-                </div>
+                </>
               ) : null}
-            </article>
-          </li>
-        ))}
-      </ul>
-    </section>
+            </div>
+          </div>
+        </details>
+
+        <details className="reviewDetails">
+          <summary>低频标识与原始 JSON</summary>
+          <dl className="reviewDetailFacts">
+            {lowFrequency.map((field) => (
+              <div className="inspectorFact" key={field.label}>
+                <dt>{field.label}</dt>
+                <dd>
+                  <code>{field.value}</code>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      </article>
+    </li>
   );
 }

@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { createServerComposition } from "../../../src/server-composition";
@@ -14,7 +15,10 @@ export default async function CandidateReviewPage() {
   }
 
   return (
-    <div className="inspectorPage">
+    <div className="inspectorPage reviewPage">
+      <Link className="reviewBackLink" href="/internal">
+        ← 返回聊天
+      </Link>
       <h1>Candidate Review</h1>
       <p className="lede">
         Internal Owner 审查队列：来源与后继关系可见，处置经 B1 受限命令完成。
