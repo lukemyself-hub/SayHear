@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { MessageSurface } from "./message-time";
+import { interruptedHistoryGuidance } from "./portal-integration";
 
 type HistoryMessage = Readonly<{
   actor: "user" | "assistant";
@@ -190,6 +191,9 @@ export function HistoryConversation(props: {
                       ? "重试中"
                       : "Response interrupted"}
                 </em>
+                <InterruptedHistoryAction
+                  logicalDate={item.response.logicalDate}
+                />
               </article>
             ),
           )
@@ -201,6 +205,24 @@ export function HistoryConversation(props: {
         </Link>
       </footer>
     </section>
+  );
+}
+
+/**
+ * Explicit, non-automatic entry from a read-only interrupted item into the
+ * current writable conversation. It states the source date and never retries on
+ * mount: the existing Retry contract appends to the original turn's Daily
+ * Session, so this page must not invoke it against a historical session.
+ */
+function InterruptedHistoryAction(props: { logicalDate: string }) {
+  const guidance = interruptedHistoryGuidance(props.logicalDate);
+  return (
+    <div className="interruptedAction">
+      <p className="interruptedSource">{guidance.message}</p>
+      <Link className="interruptedProceed" href="/internal">
+        {guidance.actionLabel}
+      </Link>
+    </div>
   );
 }
 

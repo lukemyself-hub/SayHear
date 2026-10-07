@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   createContext,
   Suspense,
@@ -11,11 +11,21 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 
 import { ChatModuleList, type ChatNav } from "./chat-module-list";
 import { JournalDateList } from "./journal-date-list";
+import {
+  createToolNavigationMemory,
+  DEFAULT_TOOL_HREF,
+  isLogicalDateValue,
+  journalRailHref,
+  resolveToolEntryHref,
+  resolveToolsRailHref,
+  toToolLocation,
+} from "./portal-integration";
 
 type WriteGate = Readonly<{ allowed: boolean; reason: string }>;
 
@@ -88,6 +98,7 @@ export function PortalShell({
   children: ReactNode;
 }) {
   const pathname = usePathname() ?? "/internal";
+  const router = useRouter();
   const searchParams = useSearchParams();
   const activeDate = searchParams.get("date");
   const moduleKey = moduleForPathname(pathname);
@@ -101,6 +112,23 @@ export function PortalShell({
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
   const [writeGate, setWriteGate] = useState<WriteGate | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // In-memory only (never localStorage/sessionStorage): the last tool entry the
+  // reader opened, so the tools rail can restore a selected entry (AC-19). It
+  // starts empty on every page load.
+  const toolNavRef = useRef(createToolNavigationMemory());
+  // The last Journal date the reader opened in this page session, so the
+  // Journal rail returns to it instead of resetting to the latest Journal.
+  const [lastJournalDate, setLastJournalDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/internal/journals")) {
+      return;
+    }
+    const date = searchParams.get("date");
+    if (isLogicalDateValue(date)) {
+      setLastJournalDate((current) => (current === date ? current : date));
+    }
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     let active = true;
@@ -176,6 +204,75 @@ export function PortalShell({
     }
   }
 
+  /**
+   * Records the tool entry the reader is leaving, reading the live address so
+   * the Context Inspector's `history.pushState` query survives even though the
+   * router has not re-rendered. A no-op outside a tool route.
+   */
+  function rememberCurrentTool(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    toolNavRef.current.remember(
+      toToolLocation(window.location.pathname, window.location.search),
+    );
+  }
+
+  function handleNavigate(): void {
+    rememberCurrentTool();
+    closeNavigation();
+  }
+
+  /**
+   * The tools rail keeps the reader inside the tool they are viewing (with its
+   * selected entry), or reopens the last tool entry from this page session.
+   * Everything else falls through to the committed bare tool route.
+   */
+  function handleToolsRailClick(
+    event: ReactMouseEvent<HTMLAnchorElement>,
+  ): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const target = resolveToolsRailHref({
+      current: toToolLocation(
+        window.location.pathname,
+        window.location.search,
+      ),
+      lastActive: toolNavRef.current.lastActive(),
+    });
+    rememberCurrentTool();
+    if (target !== DEFAULT_TOOL_HREF) {
+      event.preventDefault();
+      closeNavigation();
+      router.push(target);
+    }
+  }
+
+  function handleToolEntryClick(
+    base: string,
+    event: ReactMouseEvent<HTMLAnchorElement>,
+  ): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const current = toToolLocation(
+      window.location.pathname,
+      window.location.search,
+    );
+    const target = resolveToolEntryHref({
+      base,
+      current,
+      remembered: toolNavRef.current.rememberedFor(base),
+    });
+    rememberCurrentTool();
+    closeNavigation();
+    if (target !== base) {
+      event.preventDefault();
+      router.push(target);
+    }
+  }
+
   return (
     <PortalShellContext.Provider value={contextValue}>
       <div className="portalShell" data-nav-open={navOpen ? "true" : "false"}>
@@ -191,7 +288,11 @@ export function PortalShell({
           >
             <span aria-hidden="true">{navOpen ? "×" : "☰"}</span>
           </button>
-          <Link className="portalBrand" href="/internal">
+          <Link
+            className="portalBrand"
+            href="/internal"
+            onClick={rememberCurrentTool}
+          >
             SayHear
           </Link>
         </header>
@@ -212,13 +313,19 @@ export function PortalShell({
             className="portalNav"
             id="portal-navigation"
           >
-            <ModuleRail active={moduleKey} />
+            <ModuleRail
+              active={moduleKey}
+              journalHref={journalRailHref(lastJournalDate)}
+              onRememberTool={rememberCurrentTool}
+              onToolsClick={handleToolsRailClick}
+            />
             <ModuleList
               activeDate={activeDate}
               activeToolPath={pathname}
               chatNav={chatNav}
               module={moduleKey}
-              onNavigate={closeNavigation}
+              onNavigate={handleNavigate}
+              onToolEntryClick={handleToolEntryClick}
             />
             <div className="portalFooter">
               <span className="portalFooterOwner">Internal Owner</span>
@@ -238,7 +345,17 @@ export function PortalShell({
   );
 }
 
-function ModuleRail({ active }: { active: ModuleKey }) {
+function ModuleRail({
+  active,
+  journalHref,
+  onRememberTool,
+  onToolsClick,
+}: {
+  active: ModuleKey;
+  journalHref: string;
+  onRememberTool: () => void;
+  onToolsClick: (event: ReactMouseEvent<HTMLAnchorElement>) => void;
+}) {
   return (
     <div className="moduleRail">
       <Link
@@ -246,6 +363,7 @@ function ModuleRail({ active }: { active: ModuleKey }) {
         aria-label="聊天"
         className={`moduleRailLink${active === "chat" ? " isActive" : ""}`}
         href="/internal"
+        onClick={onRememberTool}
         title="聊天"
       >
         <ChatIcon />
@@ -254,7 +372,8 @@ function ModuleRail({ active }: { active: ModuleKey }) {
         aria-current={active === "journal" ? "page" : undefined}
         aria-label="日记"
         className={`moduleRailLink${active === "journal" ? " isActive" : ""}`}
-        href="/internal/journals"
+        href={journalHref}
+        onClick={onRememberTool}
         title="日记"
       >
         <NotebookIcon />
@@ -263,7 +382,8 @@ function ModuleRail({ active }: { active: ModuleKey }) {
         aria-current={active === "tools" ? "page" : undefined}
         aria-label="检查工具"
         className={`moduleRailLink${active === "tools" ? " isActive" : ""}`}
-        href="/internal/context-inspector"
+        href={DEFAULT_TOOL_HREF}
+        onClick={onToolsClick}
         title="检查工具"
       >
         <WrenchIcon />
@@ -284,12 +404,17 @@ function ModuleList({
   chatNav,
   module,
   onNavigate,
+  onToolEntryClick,
 }: {
   activeDate: string | null;
   activeToolPath: string;
   chatNav: ChatNav | null;
   module: ModuleKey;
   onNavigate: () => void;
+  onToolEntryClick: (
+    base: string,
+    event: ReactMouseEvent<HTMLAnchorElement>,
+  ) => void;
 }) {
   if (module === "tools") {
     return (
@@ -304,7 +429,7 @@ function ModuleList({
                 }
                 className="moduleListEntry"
                 href={tool.href}
-                onClick={onNavigate}
+                onClick={(event) => onToolEntryClick(tool.href, event)}
               >
                 {tool.label}
               </Link>

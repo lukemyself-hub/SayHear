@@ -2062,4 +2062,43 @@ h1 {
   opacity: 1;
 }
 
+/* === #269 cross-module integration === */
+
+/* Read-only history: an interrupted item explains where it came from and offers
+   an explicit, non-automatic link into the current writable conversation. The
+   long source-date sentence wraps instead of widening the message column. */
+.interruptedAction {
+  margin-top: 6px;
+}
+
+.interruptedSource {
+  color: #686a63;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.interruptedProceed {
+  border: 1px solid #242522;
+  border-radius: 999px;
+  color: #242522;
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 7px 14px;
+  text-decoration: none;
+}
+
+.interruptedProceed:hover {
+  background: #242522;
+  color: #faf9f6;
+}
+
+.interruptedProceed:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
 
