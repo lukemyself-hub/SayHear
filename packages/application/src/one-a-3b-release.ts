@@ -61,12 +61,11 @@ export const ONE_A_3B_G1_ROLE_CONFIG_VERSIONS = {
  * release. So a new release needs new pins even for a role whose configuration
  * did not otherwise change. A pin's name need not match its configuration
  * version: its foreign key is (role, config_version, provider_policy_version),
- * so a `v3` pin may point at an unchanged `v2` configuration. v16 binds the
- * 2026-10-04 output-budget release, in which all four roles move to their new
- * `:g1-release:v7/v9/v8/v7` configurations and `opencode-go-*` egress
- * policies at the raised E32000/D32000/W48000/V48000 caps.
+ * so a `v3` pin may point at an unchanged `v2` configuration. v17 binds the
+ * Portal release without changing the four model configurations, egress
+ * policies, or output budgets already published with v16.
  */
-export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v16" as const;
+export const ONE_A_3B_G1_ROLLOUT_PIN_VERSION = "v17" as const;
 export const ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION =
   "1a3b-f3-adjudication:v1" as const;
 export const ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION =
