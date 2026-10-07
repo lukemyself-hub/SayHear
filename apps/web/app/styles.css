@@ -773,3 +773,309 @@ h1 {
     transition: none;
   }
 }
+
+/* === #266 context inspector hierarchy === */
+
+/* Scoped to the Context Inspector so the shared `.inspector*` rules used by
+   Reflection Inspector and Candidate Review are untouched. */
+
+.contextInspector .inspectorPage {
+  max-width: 1100px;
+}
+
+.contextInspectorHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.contextInspectorHeader h1 {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 8px 0 12px;
+}
+
+.contextBackLink {
+  color: #686a63;
+  font-size: 0.9rem;
+  padding-top: 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.contextBackLink:hover {
+  color: #242522;
+  text-decoration: underline;
+}
+
+.contextInspector .inspectorLookup input {
+  background: #fff;
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  color: #242522;
+}
+
+.contextInspector .inspectorLookup input:focus-visible {
+  border-color: #242522;
+  outline: 2px solid rgba(36, 37, 34, 0.14);
+}
+
+.contextInspector .inspectorLookup button {
+  background: #242522;
+  border-radius: 12px;
+  color: #faf9f6;
+}
+
+.contextInspector .inspectorError {
+  background: #fbf3ee;
+  border: 1px solid #d8b4a4;
+  border-radius: 12px;
+  color: #8f2d20;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+}
+
+.inspectorEmpty {
+  color: #686a63;
+  line-height: 1.5;
+}
+
+.contextInspector .inspectorSummary,
+.contextInspector .inspectorCard {
+  background: #fff;
+  border: 1px solid #e2e3dc;
+  border-radius: 16px;
+}
+
+.contextInspector .inspectorSummary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.contextCommandId {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.contextCommandId code {
+  overflow-wrap: anywhere;
+}
+
+.contextPosture[data-posture-state="released"],
+.contextPosture[data-posture-state="default"] {
+  color: #686a63;
+}
+
+.contextPosture[data-posture-state="active"] {
+  color: #8f2d20;
+}
+
+.contextWarnings {
+  border-color: #d8b4a4;
+}
+
+.contextWarningLine {
+  color: #8f2d20;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.contextWarningLine code {
+  color: inherit;
+}
+
+.contextExclusionList {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.contextExclusionList li {
+  color: #242522;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.contextExclusionCount {
+  color: #686a63;
+}
+
+.contextExclusionList code {
+  color: #686a63;
+  font-size: 0.8rem;
+}
+
+.contextDisclosure {
+  display: block;
+  padding: 0;
+}
+
+.contextDisclosure > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  padding: 16px 18px;
+}
+
+.contextDisclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.contextDisclosure > summary::marker {
+  content: "";
+}
+
+.contextDisclosureSummary:focus-visible {
+  border-radius: 16px;
+  outline: 2px solid #242522;
+  outline-offset: -2px;
+}
+
+.contextDisclosureTitle {
+  color: #242522;
+  font-size: 1.05rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.contextDisclosureSubtitle {
+  color: #686a63;
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.contextDisclosureStatus {
+  color: #686a63;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.contextDisclosureChevron {
+  color: #686a63;
+  transition: transform 0.15s ease;
+}
+
+.contextDisclosure[open] .contextDisclosureChevron {
+  transform: rotate(180deg);
+}
+
+.contextDisclosureBody {
+  border-top: 1px solid #e2e3dc;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.contextDisclosureBody h3 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.contextDisclosureBody .inspectorHeading p,
+.contextDisclosureBody .inspectorCard p {
+  color: #686a63;
+}
+
+.contextRetrieval {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.contextVerbatim {
+  margin: 8px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.contextRaw {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.contextRawActions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.contextRawActions p {
+  margin: 0;
+}
+
+.contextJson {
+  background: #f7f6f2;
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  color: #242522;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 420px;
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  white-space: pre;
+}
+
+.contextJson:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .contextInspector .inspectorSummary,
+  .contextInspector .inspectorFacts,
+  .contextInspector .inspectorVersionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .contextInspectorHeader {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .contextBackLink {
+    padding-top: 0;
+  }
+
+  .contextInspector .inspectorSummary,
+  .contextInspector .inspectorFacts,
+  .contextInspector .inspectorVersionGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contextDisclosure > summary {
+    flex-wrap: wrap;
+  }
+
+  .contextDisclosureSubtitle {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contextDisclosureChevron {
+    transition: none;
+  }
+}
