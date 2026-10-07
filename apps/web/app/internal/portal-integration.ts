@@ -2,12 +2,14 @@
  * Pure, DOM-free integration helpers for the Internal Portal (SPEC #260
  * ticket #269).
  *
- * Two concerns live here:
+ * Concerns live here:
  * 1. The tools rail must not drop the entry the reader already selected
  *    (AC-19). Restoring it is in-memory only, for one page session; nothing is
  *    written to `localStorage`/`sessionStorage`.
  * 2. The read-only history page explains where an interrupted response came
  *    from before sending the reader into the current writable conversation.
+ * 3. The document-level Escape shortcut is scoped to the narrow navigation
+ *    drawer so it cannot steal focus or collapse the desktop layout.
  *
  * Product safety notes:
  * - A fresh page session starts with empty memory, so a direct navigation to a
@@ -135,6 +137,19 @@ export function isLogicalDateValue(
   value: string | null | undefined,
 ): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/**
+ * Whether the document-level Escape shortcut should collapse the navigation.
+ * The shortcut belongs to the narrow drawer only: on desktop the navigation is
+ * always visible, so Escape must not change the layout or steal focus away from
+ * the composer or a message surface.
+ */
+export function shouldCollapseNavigationOnEscape(input: {
+  isDesktop: boolean;
+  navOpen: boolean;
+}): boolean {
+  return !input.isDesktop && input.navOpen;
 }
 
 /**

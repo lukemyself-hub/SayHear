@@ -10,6 +10,7 @@ import {
   journalRailHref,
   resolveToolEntryHref,
   resolveToolsRailHref,
+  shouldCollapseNavigationOnEscape,
   toToolLocation,
   toolLocationHref,
 } from "../apps/web/app/internal/portal-integration";
@@ -172,6 +173,26 @@ describe("portal-integration interrupted history guidance", () => {
   it("passes a malformed date through unchanged", () => {
     expect(formatPortalDate("not-a-date")).toBe("not-a-date");
     expect(formatPortalDate("2026-10-06")).toBe("2026年10月6日");
+  });
+});
+
+describe("portal-integration Escape guard", () => {
+  it("collapses the navigation only for the open narrow drawer", () => {
+    expect(
+      shouldCollapseNavigationOnEscape({ isDesktop: false, navOpen: true }),
+    ).toBe(true);
+    expect(
+      shouldCollapseNavigationOnEscape({ isDesktop: false, navOpen: false }),
+    ).toBe(false);
+  });
+
+  it("never collapses on desktop, where the navigation is always visible", () => {
+    expect(
+      shouldCollapseNavigationOnEscape({ isDesktop: true, navOpen: true }),
+    ).toBe(false);
+    expect(
+      shouldCollapseNavigationOnEscape({ isDesktop: true, navOpen: false }),
+    ).toBe(false);
   });
 });
 

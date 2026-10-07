@@ -4,11 +4,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-type JournalDateEntry = Readonly<{
-  dailySessionId: string;
-  logicalDate: string;
-  state: "current" | "outdated" | "updating";
-}>;
+import {
+  mergeJournalDateEntries,
+  type JournalDateEntry,
+} from "./journal-date-list-state";
 
 const STATE_LABEL: Readonly<Record<JournalDateEntry["state"], string>> = {
   current: "最新",
@@ -83,7 +82,9 @@ export function JournalDateList({ onNavigate }: { onNavigate: () => void }) {
       );
       if (!response.ok) throw new Error("journal_dates_unavailable");
       const payload = (await response.json()) as Payload;
-      setEntries((current) => [...current, ...readEntries(payload)]);
+      setEntries((current) =>
+        mergeJournalDateEntries(current, readEntries(payload)),
+      );
       setNextCursor(
         typeof payload.nextCursor === "string" ? payload.nextCursor : null,
       );

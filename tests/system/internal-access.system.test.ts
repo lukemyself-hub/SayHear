@@ -2295,6 +2295,19 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     });
     expect(retryEvents[0]?.turnId).not.toBe(originalTurnId);
     expect(retryEvents[1]?.delta).toBe("A new, complete answer.");
+    // The retried reply's streamed commit event carries the same persisted
+    // assistant instant the read contract returns, so the live-returned message
+    // can render a real time instead of nothing.
+    const retryAssistantEvent = await database.pool.query<{ createdAt: Date }>(
+      `SELECT created_at AS "createdAt"
+       FROM conversation_events
+       WHERE actor = 'assistant' AND interaction_turn_id = $1`,
+      [retryEvents[0]?.turnId],
+    );
+    expect(retryAssistantEvent.rows).toHaveLength(1);
+    expect(retryEvents[2]?.createdAt).toBe(
+      retryAssistantEvent.rows[0]?.createdAt.toISOString(),
+    );
     expect(successfulProviderCalls).toBe(2);
     expect(
       await conversationService.listInterruptedResponses(
@@ -2323,6 +2336,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       "assistant_committed",
     ]);
     expect(replayEvents[0]?.turnId).toBe(retryEvents[0]?.turnId);
+    expect(replayEvents[2]?.createdAt).toBe(retryEvents[2]?.createdAt);
     expect(successfulProviderCalls).toBe(2);
 
     const state = await database.pool.query<{

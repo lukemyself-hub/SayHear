@@ -24,6 +24,7 @@ import {
   journalRailHref,
   resolveToolEntryHref,
   resolveToolsRailHref,
+  shouldCollapseNavigationOnEscape,
   toToolLocation,
 } from "./portal-integration";
 
@@ -166,7 +167,7 @@ export function PortalShell({
   }, []);
 
   useEffect(() => {
-    if (!navOpen) {
+    if (!shouldCollapseNavigationOnEscape({ isDesktop, navOpen })) {
       return;
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -177,7 +178,7 @@ export function PortalShell({
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [navOpen]);
+  }, [isDesktop, navOpen]);
 
   const contextValue = useMemo<PortalShellContextValue>(
     () => ({

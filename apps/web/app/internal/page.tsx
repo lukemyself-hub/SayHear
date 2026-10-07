@@ -68,6 +68,7 @@ export default async function InternalPage(props: InternalPageProps) {
     return (
       <HistoryConversation
         dailySessionId={conversation.dailySessionId}
+        key={conversation.dailySessionId}
         initialHasOlder={
           messages.length >= RECENT_CONVERSATION_MESSAGE_LIMIT
         }
@@ -95,6 +96,7 @@ export default async function InternalPage(props: InternalPageProps) {
   return (
     <TextConversation
       draftKey={identity?.logicalDate ?? "no-active-session"}
+      key={identity?.logicalDate ?? "no-active-session"}
       initialInterruptedResponses={[...interruptedResponses]}
       initialMessages={[...messages]}
       statusLine={

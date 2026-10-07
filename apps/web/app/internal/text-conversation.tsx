@@ -465,6 +465,7 @@ export function TextConversation(props: {
         } else if (result.type === "assistant_committed") {
           responseCommitted = true;
           const committed = result as {
+            createdAt?: unknown;
             eventId: string;
             revisionId: string;
           };
@@ -474,6 +475,7 @@ export function TextConversation(props: {
               kind: "message",
               message: {
                 actor: "assistant",
+                createdAt: eventMessageCreatedAt(committed.createdAt),
                 eventId: committed.eventId,
                 generationCommandId: retryGenerationCommandId,
                 locale: navigator.language,
@@ -747,16 +749,19 @@ function appendActionStatus(
         : locale.toLowerCase().startsWith("zh")
           ? "这项 Journal 操作没有执行。"
           : "The Journal action was not executed.";
+  const actionStatusId = String(
+    receipt.actionExecutionId ?? crypto.randomUUID(),
+  );
   setTimeline((current) => [
     ...current,
     {
       kind: "message",
       message: {
         actor: "assistant",
-        eventId: `action-status:${String(receipt.actionExecutionId ?? crypto.randomUUID())}`,
+        eventId: `action-status:${actionStatusId}`,
         generationCommandId: null,
         locale,
-        revisionId: `action-status:${String(receipt.actionExecutionId ?? crypto.randomUUID())}`,
+        revisionId: `action-status:${actionStatusId}`,
         sequence: nextVisibleSequence(current),
         text,
       },
