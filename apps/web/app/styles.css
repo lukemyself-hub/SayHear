@@ -1854,3 +1854,111 @@ h1 {
   color: #faf9f6;
 }
 
+/* === #263 composer and streaming === */
+
+/* Wraps the scrollable message list so "回到最新" can float above it without
+   adding a separate background board behind the composer. */
+.conversationStream {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.conversationStream .messageList {
+  flex: 1;
+}
+
+/* Single-line composer is a pill; wrapped/newline content becomes a large
+   rounded rectangle, capped so the textarea scrolls internally. */
+.composer textarea.composerInput {
+  border-radius: 28px;
+  max-height: 200px;
+}
+
+.composer textarea.composerInput.isMultiline {
+  border-radius: 22px;
+}
+
+.waitingMessage {
+  align-items: center;
+  display: flex;
+  min-height: 1.7em;
+}
+
+.waitingDots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.waitingDot {
+  animation: waitingDotPulse 1.2s ease-in-out infinite;
+  background: #686a63;
+  border-radius: 50%;
+  display: inline-block;
+  height: 7px;
+  opacity: 0.3;
+  width: 7px;
+}
+
+.waitingDot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.waitingDot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes waitingDotPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waitingDot {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.visuallyHidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.jumpToLatest {
+  background: #242522;
+  border: 0;
+  border-radius: 999px;
+  bottom: 12px;
+  box-shadow: 0 2px 10px rgba(36, 37, 34, 0.2);
+  color: #faf9f6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  left: 50%;
+  padding: 8px 14px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.submissionError:focus-visible {
+  outline: 2px solid #8f2d20;
+  outline-offset: 2px;
+}
+
