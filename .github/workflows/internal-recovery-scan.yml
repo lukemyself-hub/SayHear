@@ -1,14 +1,15 @@
 name: Internal Recovery Scan
 
 on:
-  schedule:
-    - cron: "13 * * * *"
   workflow_dispatch:
     inputs:
       url:
-        description: "Recovery scan endpoint URL (empty = use RECOVERY_SCAN_URL variable)"
-        required: false
-        default: ""
+        description: "Explicit production endpoint for scoped deployment verification"
+        required: true
+      mode:
+        description: "identity or recovery"
+        required: true
+        default: "identity"
 
 permissions: {}
 
@@ -21,26 +22,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Call recovery scan endpoint
+      - name: Verify production through existing operator authentication
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          CONFIGURED_URL: ${{ vars.RECOVERY_SCAN_URL }}
-          OVERRIDE_URL: ${{ inputs.url }}
+          ENDPOINT: ${{ inputs.url }}
+          MODE: ${{ inputs.mode }}
         run: |
-          set -euo pipefail
-          url="${OVERRIDE_URL:-$CONFIGURED_URL}"
-          if [ -z "$url" ]; then
-            echo "::error::RECOVERY_SCAN_URL variable is not configured and no url input was provided"
-            exit 1
-          fi
-          start=$(date -u +%s)
-          status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
-            --max-time 120 \
-            --header "Authorization: Bearer ${CRON_SECRET}" \
-            "$url")
-          end=$(date -u +%s)
-          echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ) status=${status} duration_seconds=$((end-start))"
-          if [ "$status" != "200" ]; then
-            echo "::error::recovery scan returned HTTP ${status}"
-            exit 1
-          fi
+          node <<'JS'
+          const url = new URL(process.env.ENDPOINT);
+          const mode = process.env.MODE;
+          const route = mode === 'identity'
+            ? '/api/internal/inspection/release-identity'
+            : mode === 'recovery' ? '/api/internal/recovery/scan' : null;
+          if (!route || url.protocol !== 'https:' || url.pathname !== route || url.search ||
+              !/^(say-hear-web|say-hear-[a-z0-9]+-lukemyself)\.vercel\.app$/.test(url.hostname)) {
+            throw new Error('Only the scoped production verification endpoint is allowed');
+          }
+          const response = await fetch(url, {
+            headers: { Authorization: 'Bearer ' + process.env.CRON_SECRET },
+            signal: AbortSignal.timeout(120000), redirect: 'error',
+          });
+          if (response.status !== 200) throw new Error('Operator request failed HTTP ' + response.status);
+          const body = await response.json();
+          if (mode === 'identity') {
+            const allowed = ['version','commit','environment','projectId','teamId','businessTargetHash','purgeMarkerTargetHash'];
+            if (Object.keys(body).length !== allowed.length || allowed.some(k => typeof body[k] !== 'string') ||
+                body.projectId !== 'prj_KJD7fJhlIxlOMc4W4goUsIhOaLly' || body.environment !== 'production' ||
+                !/^[a-f0-9]{40}$/.test(body.commit) ||
+                !/^[a-f0-9]{64}$/.test(body.businessTargetHash) || !/^[a-f0-9]{64}$/.test(body.purgeMarkerTargetHash)) {
+              throw new Error('Unexpected content-free production identity');
+            }
+            console.log('RELEASE_IDENTITY ' + JSON.stringify(body));
+          } else {
+            const counters = {};
+            for (const [group, values] of Object.entries(body)) {
+              if (!/^[A-Za-z]+$/.test(group) || !values || typeof values !== 'object') throw new Error('Unexpected scan group');
+              counters[group] = {};
+              for (const [key, value] of Object.entries(values)) {
+                if (!/^[A-Za-z]+$/.test(key) || !Number.isSafeInteger(value) || value < 0) throw new Error('Unexpected scan counter');
+                counters[group][key] = value;
+              }
+            }
+            console.log('RECOVERY_SCAN ' + JSON.stringify(counters));
+          }
+          console.log('time=' + new Date().toISOString() + ' status=200');
+          JS
