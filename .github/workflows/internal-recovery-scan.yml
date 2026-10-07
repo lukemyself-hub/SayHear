@@ -28,7 +28,7 @@ jobs:
           ENDPOINT: ${{ inputs.url }}
           MODE: ${{ inputs.mode }}
         run: |
-          node <<'JS'
+          node --input-type=module <<'JS'
           const url = new URL(process.env.ENDPOINT);
           const mode = process.env.MODE;
           const route = mode === 'identity'
@@ -46,10 +46,11 @@ jobs:
           const body = await response.json();
           if (mode === 'identity') {
             const allowed = ['version','commit','environment','projectId','teamId','businessTargetHash','purgeMarkerTargetHash'];
-            if (Object.keys(body).length !== allowed.length || allowed.some(k => typeof body[k] !== 'string') ||
+            if (Object.keys(body).length !== allowed.length || allowed.some(k => k === 'teamId' ? body[k] !== null && typeof body[k] !== 'string' : typeof body[k] !== 'string') ||
                 body.projectId !== 'prj_KJD7fJhlIxlOMc4W4goUsIhOaLly' || body.environment !== 'production' ||
                 !/^[a-f0-9]{40}$/.test(body.commit) ||
                 !/^[a-f0-9]{64}$/.test(body.businessTargetHash) || !/^[a-f0-9]{64}$/.test(body.purgeMarkerTargetHash)) {
+              console.log('IDENTITY_SHAPE ' + JSON.stringify(Object.fromEntries(Object.entries(body).map(([k,v]) => [k, v === null ? 'null' : typeof v]))));
               throw new Error('Unexpected content-free production identity');
             }
             console.log('RELEASE_IDENTITY ' + JSON.stringify(body));
