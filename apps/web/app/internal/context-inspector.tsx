@@ -80,11 +80,7 @@ export function ContextInspector(props: {
   }
 
   return (
-    <main className="shell inspectorShell">
-      <nav className="internalNav" aria-label="Internal tools">
-        <a href="/internal">← Back to Internal Core</a>
-      </nav>
-      <section className="eyebrow">SayHear Internal Core</section>
+    <div className="inspectorPage">
       <h1>Context Inspector</h1>
       <p className="lede">
         Read-only evidence for one compiled Context. This page performs only a
@@ -108,7 +104,7 @@ export function ContextInspector(props: {
       </form>
       {error ? <p className="inspectorError" role="alert">{error}</p> : null}
       {inspection ? <InspectionReport inspection={inspection} /> : null}
-    </main>
+    </div>
   );
 }
 

@@ -165,6 +165,24 @@ export type InterruptedConversationResponse = Readonly<{
   turnId: InteractionTurnId;
 }>;
 
+/**
+ * The owner's single currently writable Daily Session, read directly from the
+ * authoritative `activity_state`. A read never creates a session.
+ */
+export type CurrentConversationIdentity = Readonly<{
+  activityState: "active";
+  dailySessionId: DailySessionId;
+  logicalDate: string;
+  startedAt: Date;
+  timezoneAtStart: string;
+}>;
+
+/**
+ * Server-side fixed cap for the portal's first recent-message read. The client
+ * cannot raise it; pagination beyond this batch belongs to a later ticket.
+ */
+export const RECENT_CONVERSATION_MESSAGE_LIMIT = 50;
+
 export type RecordUserTextTurnRepositoryResult =
   | Readonly<{ outcome: "recorded"; turn: UserTextTurn }>
   | Readonly<{ outcome: "idempotency_conflict" }>
@@ -197,9 +215,21 @@ export type UserTextConversationRepository = Readonly<{
       }>
     | Readonly<{ outcome: "not_found" }>
   >;
+  findCurrentWritableConversation(
+    userId: UserId,
+  ): Promise<CurrentConversationIdentity | null>;
   listInterruptedResponses(
     userId: UserId,
   ): Promise<readonly InterruptedConversationResponse[]>;
+  listInterruptedResponsesForSession(input: {
+    dailySessionId: DailySessionId;
+    userId: UserId;
+  }): Promise<readonly InterruptedConversationResponse[]>;
+  listRecentUserTextMessages(input: {
+    dailySessionId: DailySessionId;
+    limit: number;
+    userId: UserId;
+  }): Promise<readonly UserTextMessage[]>;
   listUserTextMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
   recordConversationRetry(
     input: RecordConversationRetryInput,
@@ -218,7 +248,18 @@ export type UserTextConversationService = Readonly<{
   listInterruptedResponses(
     userId: UserId,
   ): Promise<readonly InterruptedConversationResponse[]>;
+  listInterruptedResponsesForSession(
+    userId: UserId,
+    dailySessionId: string,
+  ): Promise<readonly InterruptedConversationResponse[]>;
   listMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
+  listRecentMessages(
+    userId: UserId,
+    input: { dailySessionId: string },
+  ): Promise<readonly UserTextMessage[]>;
+  readCurrentConversation(
+    userId: UserId,
+  ): Promise<CurrentConversationIdentity | null>;
   retry(
     userId: UserId,
     input: {
@@ -343,9 +384,30 @@ export function createUserTextConversationService(dependencies: {
       await dependencies.recoveryGate?.requireOpen(userId);
       return dependencies.repository.listInterruptedResponses(userId);
     },
+    async listInterruptedResponsesForSession(userId, rawDailySessionId) {
+      await dependencies.recoveryGate?.requireOpen(userId);
+      const dailySessionId = validateDailySessionId(rawDailySessionId);
+      return dependencies.repository.listInterruptedResponsesForSession({
+        dailySessionId,
+        userId,
+      });
+    },
     async listMessages(userId) {
       await dependencies.recoveryGate?.requireOpen(userId);
       return dependencies.repository.listUserTextMessages(userId);
+    },
+    async listRecentMessages(userId, rawInput) {
+      await dependencies.recoveryGate?.requireOpen(userId);
+      const dailySessionId = validateDailySessionId(rawInput.dailySessionId);
+      return dependencies.repository.listRecentUserTextMessages({
+        dailySessionId,
+        limit: RECENT_CONVERSATION_MESSAGE_LIMIT,
+        userId,
+      });
+    },
+    async readCurrentConversation(userId) {
+      await dependencies.recoveryGate?.requireOpen(userId);
+      return dependencies.repository.findCurrentWritableConversation(userId);
     },
     async retry(userId, rawInput) {
       await dependencies.recoveryGate?.requireOpen(userId);
@@ -471,6 +533,16 @@ function validateUserTextInput(input: {
     text: input.text,
     timezone: input.timezone,
   };
+}
+
+function validateDailySessionId(value: string): DailySessionId {
+  try {
+    return asDailySessionId(value);
+  } catch {
+    throw new InvalidUserTextTurnError(
+      "dailySessionId must be an opaque Daily Session UUIDv7.",
+    );
+  }
 }
 
 function validateKey<Key extends string>(value: string, name: string): Key {

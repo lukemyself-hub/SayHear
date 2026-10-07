@@ -35,7 +35,7 @@ export function JournalCard({ currentJournal, latestNotice }: { currentJournal: 
     URL.revokeObjectURL(url);
   }
   return <section className="journalCard" aria-label="Current Journal">
-    <div className="journalHeading"><div><p className="eyebrow">Current Journal</p><h2>{journal.logicalDate}</h2></div><a href={`#conversation-${journal.logicalDate}`}>View that day’s Conversation</a></div>
+    <div className="journalHeading"><div><p className="eyebrow">Current Journal</p><h2>{journal.logicalDate}</h2></div><a href={`/internal#conversation-${journal.logicalDate}`}>View that day’s Conversation</a></div>
     {latestNotice ? <p className="diagnosticNotice">{describeJournalGenerationNotice(latestNotice)}</p> : null}
     {journal.version.diagnosticStatus === "unavailable" ? <p className="diagnosticNotice">This Journal was published, but its semantic diagnostics are temporarily unavailable.</p> : null}
     {journal.state === "outdated" ? <p className="note">This Journal is out of date. It will refresh after the current exchange closes.</p> : null}

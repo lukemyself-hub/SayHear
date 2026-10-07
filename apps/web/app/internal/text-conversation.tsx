@@ -8,6 +8,8 @@ import {
   type SetStateAction,
 } from "react";
 
+import { usePortalShell } from "./portal-shell";
+
 type VisibleUserMessage = Readonly<{
   actor: "user" | "assistant";
   eventId: string;
@@ -44,6 +46,7 @@ type TimelineItem =
     }>;
 
 export function TextConversation(props: {
+  draftKey: string;
   initialInterruptedResponses: readonly {
     logicalDate: string;
     retryStatus: "available" | "retried" | "retrying";
@@ -51,7 +54,10 @@ export function TextConversation(props: {
     turnId: string;
   }[];
   initialMessages: readonly VisibleUserMessage[];
+  statusLine: string | null;
+  writeGate: Readonly<{ allowed: boolean; reason: string }>;
 }) {
+  const shell = usePortalShell();
   const [timeline, setTimeline] = useState<readonly TimelineItem[]>(() =>
     [
       ...props.initialMessages.map(
@@ -68,7 +74,7 @@ export function TextConversation(props: {
       ),
     ].sort(compareTimelineItems),
   );
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => shell?.draftFor(props.draftKey) ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pendingAssistant, setPendingAssistant] = useState<{
     text: string;
@@ -210,6 +216,7 @@ export function TextConversation(props: {
       }
       pending.current = null;
       setText("");
+      shell?.clearDraft(props.draftKey);
     } catch (submissionError) {
       const disconnectedTurnId =
         !responseCommitted &&
@@ -228,6 +235,7 @@ export function TextConversation(props: {
       if (userCommitted) {
         pending.current = null;
         setText("");
+        shell?.clearDraft(props.draftKey);
       }
       setError(
         disconnectedTurnId
@@ -377,6 +385,9 @@ export function TextConversation(props: {
 
   return (
     <section className="conversation" aria-label="Text conversation">
+      {props.statusLine ? (
+        <p className="conversationStatus">{props.statusLine}</p>
+      ) : null}
       <div className="messageList" aria-live="polite">
         {timeline.length === 0 && pendingAssistant === null ? (
           <p className="emptyConversation">No Text messages recorded yet.</p>
@@ -392,9 +403,6 @@ export function TextConversation(props: {
                 id={isFirstItemForDate(timeline, index, item.message.logicalDate) ? `conversation-${item.message.logicalDate}` : undefined}
                 key={item.message.eventId}
               >
-                <span>
-                  {item.message.actor === "user" ? "You" : "SayHear"}
-                </span>
                 <p>{item.message.text}</p>
                 {item.message.actor === "assistant" &&
                 item.message.generationCommandId ? (
@@ -411,7 +419,6 @@ export function TextConversation(props: {
                 className="assistantMessage interruptedMessage"
                 key={`interrupted/${item.response.turnId}`}
               >
-                <span>SayHear</span>
                 <p>{item.response.text}</p>
                 <em>Response interrupted</em>
                 <button
@@ -436,19 +443,25 @@ export function TextConversation(props: {
         )}
         {pendingAssistant ? (
           <article className="assistantMessage">
-            <span>SayHear</span>
             <p>{pendingAssistant.text}</p>
           </article>
         ) : null}
       </div>
       <form className="composer" onSubmit={submit}>
+        {!props.writeGate.allowed ? (
+          <p className="composerBlocked" role="status">
+            当前无法写入真实内容：{props.writeGate.reason}。查看历史与 Journal
+            仍遵循各自已有的读取权限。
+          </p>
+        ) : null}
         <label htmlFor="user-text">Tell SayHear what is on your mind</label>
         <textarea
-          disabled={submitting}
+          disabled={submitting || !props.writeGate.allowed}
           id="user-text"
           onChange={(event) => {
             pending.current = null;
             setText(event.target.value);
+            shell?.setDraft(props.draftKey, event.target.value);
           }}
           placeholder="Write naturally…"
           rows={4}
@@ -456,7 +469,14 @@ export function TextConversation(props: {
         />
         <div className="composerActions">
           {error ? <p className="submissionError">{error}</p> : <span />}
-          <button disabled={submitting || text.trim().length === 0} type="submit">
+          <button
+            disabled={
+              submitting ||
+              !props.writeGate.allowed ||
+              text.trim().length === 0
+            }
+            type="submit"
+          >
             {submitting
               ? "Recording…"
               : error && pending.current

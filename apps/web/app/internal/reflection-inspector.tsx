@@ -660,12 +660,7 @@ export function ReflectionInspector(props: { initialReflectionId: string }) {
   }
 
   return (
-    <main className="shell inspectorShell">
-      <nav className="internalNav" aria-label="Internal tools">
-        <a href="/internal">← Back to Internal Core</a>
-        <a href="/internal/context-inspector">Context Inspector →</a>
-      </nav>
-      <section className="eyebrow">SayHear Internal Core</section>
+    <div className="inspectorPage">
       <h1>Reflection Inspector</h1>
       <p className="lede">
         Read-only trace from the current Daily or Weekly Reflection through its
@@ -807,7 +802,7 @@ export function ReflectionInspector(props: { initialReflectionId: string }) {
           </div>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 
   async function loadMoreVersions(reflection: ReflectionItem, cursor: string) {
