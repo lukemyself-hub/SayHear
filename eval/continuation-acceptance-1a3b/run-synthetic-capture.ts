@@ -369,10 +369,16 @@ function createSeam(input: {
     ConversationAgentHarnessRepository = {
     claimDispatch: async (claimInput): Promise<ProviderEgressClaim> => {
       const context = renderSources.get(String(claimInput.compiledContextId));
-      if (!context) {
+      const snapshot = snapshots.get(String(claimInput.generationCommandId));
+      if (!context || !snapshot) {
         return { category: "configuration", outcome: "blocked" };
       }
-      return { context, model: input.champion.model, outcome: "permitted" };
+      return {
+        context,
+        dailySessionId: snapshot.dailySession.id,
+        model: input.champion.model,
+        outcome: "permitted",
+      };
     },
     claimResponseExecution: async () => "owner",
     claimStaleResponseExecution: async () => ({ outcome: "terminal" }),
