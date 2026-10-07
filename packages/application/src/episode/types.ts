@@ -50,7 +50,7 @@ export function isEpisodeKind(value: string): value is EpisodeKind {
 
 /**
  * Time-bound precision is preserved exactly as the Evidence states it
- * (CONTEXT.md "Episode Temporal Anchor"); the system never completes a
+ * (GLOSSARY.md "Episode Temporal Anchor"); the system never completes a
  * coarse boundary into an exact date.
  */
 export type EpisodeBoundaryPrecision =

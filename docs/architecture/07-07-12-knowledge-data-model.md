@@ -2187,4 +2187,4 @@ sent_at
 
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)
 - [Memory 与 Entity 产品规则](../product/14-memory-and-entities.md)
-- [产品与领域术语](../../CONTEXT.md)
+- [产品与领域术语](../../GLOSSARY.md)

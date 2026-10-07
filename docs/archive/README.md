@@ -24,7 +24,7 @@ Archived
 | [`product/AI_Life_Journal_Product_Document_v0.1.md`](product/AI_Life_Journal_Product_Document_v0.1.md) | 1,541 行产品总稿 | `product/` 的按主题当前文档 |
 | [`architecture/sayhear-core-agent-architecture-v0.1.md`](architecture/sayhear-core-agent-architecture-v0.1.md) | 5,003 行核心架构总稿 | `architecture/` 的按主题当前文档 |
 | [`research/openclaw-tolan-architecture-research.md`](research/openclaw-tolan-architecture-research.md) | OpenClaw / Tolan 研究、建议与早期确认记录 | 当前产品与架构文档 |
-| [`terminology/CONTEXT.md`](terminology/CONTEXT.md) | 重组前的根目录领域术语表快照 | [`../../CONTEXT.md`](../../CONTEXT.md) |
+| [`terminology/CONTEXT.md`](terminology/CONTEXT.md) | 重组前的根目录领域术语表快照 | [`../../GLOSSARY.md`](../../GLOSSARY.md) |
 
 原产品文档第 27–28 节只保留在快照中，并重复当前产品结论。原架构第 30 节仍以旧
 `ADR-001`–`ADR-058` 编号保留作历史证据；其每条结论到当前正式 ADR 的迁移结果见

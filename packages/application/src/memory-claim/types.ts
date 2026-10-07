@@ -16,7 +16,7 @@ import type {
 
 /**
  * Memory Claim domain types (SPEC #107 "Claims and admission", architecture
- * §7.10, grilling decisions #93–#99). Vocabulary follows CONTEXT.md: Memory
+ * §7.10, grilling decisions #93–#99). Vocabulary follows GLOSSARY.md: Memory
  * Claim, MemoryClaimVersion, MemoryCandidate, Contested Memory Claim, Dormant
  * AI Impression, Rejected Memory Candidate, Successor Memory Candidate,
  * Materially New Evidence, Terminal Candidate Audit Envelope.

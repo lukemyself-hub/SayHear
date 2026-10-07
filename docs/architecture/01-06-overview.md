@@ -714,4 +714,4 @@ flowchart LR
 
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)
 - [产品概览](../product/01-04-overview.md)
-- [产品与领域术语](../../CONTEXT.md)
+- [产品与领域术语](../../GLOSSARY.md)

@@ -1,6 +1,6 @@
 /**
  * The session-scoped Curiosity Stop Signal projection (issue #74, ADR-0111,
- * architecture 08-10 §9.1, CONTEXT.md "Curiosity Stop Signal").
+ * architecture 08-10 §9.1, GLOSSARY.md "Curiosity Stop Signal").
  *
  * The projection records question directions the user has stopped for the rest
  * of the day's Daily Session. The Conversation Text Champion may PROPOSE a
@@ -11,7 +11,7 @@
  * semantic claim, and the evidence envelope (which committed Event revisions
  * ground it) is attached and validated deterministically at commit time.
  *
- * Scope rules (CONTEXT.md): a single-direction suppression persists across
+ * Scope rules (GLOSSARY.md): a single-direction suppression persists across
  * Continuous Exchange boundaries within the day's session and releases only
  * when the user re-opens the topic, supplies new substantive content, or
  * explicitly re-invites questioning — never by time, turn count, or model
@@ -52,7 +52,7 @@ export const CURIOSITY_STOP_SIGNAL_KINDS = Object.freeze([
 ] as const) satisfies readonly CuriosityStopSignalKind[];
 
 /**
- * The only release paths (CONTEXT.md): the user re-opens the topic, supplies
+ * The only release paths (GLOSSARY.md): the user re-opens the topic, supplies
  * new substantive content, or explicitly re-invites questioning. Time, turn
  * count, and model confidence are deliberately absent.
  */
