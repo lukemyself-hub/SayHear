@@ -47,3 +47,18 @@ export function conversationStatusLine(input: {
   const note = isCurrentLocalDate(input) ? "今天" : "继续交流";
   return `${formatLogicalDate(input.logicalDate)} · ${note}`;
 }
+
+/**
+ * The module list's "current conversation" entry. It is only "今天" when the
+ * authoritative active session is on the owner's current local date; an open
+ * cross-midnight exchange keeps its actual owning date.
+ */
+export function currentConversationEntryLabel(input: {
+  logicalDate: string;
+  now: Date;
+  timezone: string;
+}): string {
+  return isCurrentLocalDate(input)
+    ? "今天"
+    : `${formatLogicalDate(input.logicalDate)} · 继续交流`;
+}

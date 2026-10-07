@@ -773,3 +773,98 @@ h1 {
     transition: none;
   }
 }
+
+/* === #262 chat history and stable pagination === */
+
+.moduleListMore {
+  background: transparent;
+  border: 1px dashed #c7c8bf;
+  border-radius: 999px;
+  color: #686a63;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  margin: 4px 8px 0;
+  padding: 7px 10px;
+  text-align: center;
+}
+
+.moduleListMore:hover:not(:disabled) {
+  background: #e7e5de;
+  color: #242522;
+}
+
+.moduleListMore:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.moduleListError {
+  color: #8a5a00;
+  font-size: 0.78rem;
+  margin: 4px 8px 0;
+}
+
+/* Constrain the history column so its own message list scrolls and the
+   viewport anchor stays measurable while older pages are prepended. */
+.historyConversation {
+  overflow: hidden;
+}
+
+.historyLoadOlder {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 4px 0 12px;
+}
+
+.historyLoadOlderButton {
+  background: transparent;
+  border: 1px solid #c7c8bf;
+  border-radius: 999px;
+  color: #242522;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+.historyLoadOlderButton:hover:not(:disabled) {
+  background: #efede7;
+}
+
+.historyLoadOlderButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.historyLoadError {
+  color: #8a5a00;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.historyFooter {
+  border-top: 1px solid #e2e3dc;
+  flex-shrink: 0;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+}
+
+.historyReturn {
+  border: 1px solid #242522;
+  border-radius: 999px;
+  color: #242522;
+  display: inline-block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 9px 16px;
+  text-decoration: none;
+}
+
+.historyReturn:hover {
+  background: #242522;
+  color: #faf9f6;
+}
+

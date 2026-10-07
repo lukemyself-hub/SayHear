@@ -166,6 +166,38 @@ export type InterruptedConversationResponse = Readonly<{
 }>;
 
 /**
+ * A Daily Session resolved by an owner-scoped date read. It never exposes any
+ * other owner's session and never creates one.
+ */
+export type ConversationSessionRef = Readonly<{
+  dailySessionId: DailySessionId;
+  logicalDate: string;
+}>;
+
+export type ConversationDateEntry = Readonly<{
+  dailySessionId: DailySessionId;
+  logicalDate: string;
+}>;
+
+/**
+ * One page of Daily Session dates, newest first. `nextCursor` is an opaque
+ * server token bound to this query; `null` means there is no earlier page.
+ */
+export type ConversationDatePage = Readonly<{
+  entries: readonly ConversationDateEntry[];
+  nextCursor: string | null;
+}>;
+
+/**
+ * One page of messages within a single Daily Session, ascending by the
+ * persisted `sequence_no`. `nextCursor` continues towards older messages.
+ */
+export type ConversationMessagePage = Readonly<{
+  messages: readonly UserTextMessage[];
+  nextCursor: string | null;
+}>;
+
+/**
  * The owner's single currently writable Daily Session, read directly from the
  * authoritative `activity_state`. A read never creates a session.
  */
@@ -182,6 +214,27 @@ export type CurrentConversationIdentity = Readonly<{
  * cannot raise it; pagination beyond this batch belongs to a later ticket.
  */
 export const RECENT_CONVERSATION_MESSAGE_LIMIT = 50;
+
+/**
+ * Server-side fixed caps for the portal's history reads. The client cannot
+ * raise them, and the cursor carries no limit the caller can influence.
+ */
+export const CONVERSATION_DATE_PAGE_LIMIT = 30;
+export const OLDER_CONVERSATION_MESSAGE_LIMIT = 50;
+
+export class ConversationSessionNotFoundError extends Error {
+  public constructor() {
+    super("The Daily Session was not found for this owner.");
+    this.name = "ConversationSessionNotFoundError";
+  }
+}
+
+export class InvalidConversationCursorError extends Error {
+  public constructor() {
+    super("The conversation cursor is invalid for this query.");
+    this.name = "InvalidConversationCursorError";
+  }
+}
 
 export type RecordUserTextTurnRepositoryResult =
   | Readonly<{ outcome: "recorded"; turn: UserTextTurn }>
@@ -218,6 +271,25 @@ export type UserTextConversationRepository = Readonly<{
   findCurrentWritableConversation(
     userId: UserId,
   ): Promise<CurrentConversationIdentity | null>;
+  findConversationSessionByDate(input: {
+    logicalDate: string;
+    userId: UserId;
+  }): Promise<ConversationSessionRef | null>;
+  findConversationSessionById(input: {
+    dailySessionId: DailySessionId;
+    userId: UserId;
+  }): Promise<ConversationSessionRef | null>;
+  listConversationDates(input: {
+    beforeDailySessionId: DailySessionId | null;
+    beforeLogicalDate: string | null;
+    limit: number;
+    userId: UserId;
+  }): Promise<
+    Readonly<{
+      entries: readonly ConversationDateEntry[];
+      hasMore: boolean;
+    }>
+  >;
   listInterruptedResponses(
     userId: UserId,
   ): Promise<readonly InterruptedConversationResponse[]>;
@@ -225,6 +297,17 @@ export type UserTextConversationRepository = Readonly<{
     dailySessionId: DailySessionId;
     userId: UserId;
   }): Promise<readonly InterruptedConversationResponse[]>;
+  listOlderUserTextMessages(input: {
+    beforeSequence: number;
+    dailySessionId: DailySessionId;
+    limit: number;
+    userId: UserId;
+  }): Promise<
+    Readonly<{
+      hasMore: boolean;
+      messages: readonly UserTextMessage[];
+    }>
+  >;
   listRecentUserTextMessages(input: {
     dailySessionId: DailySessionId;
     limit: number;
@@ -253,10 +336,26 @@ export type UserTextConversationService = Readonly<{
     dailySessionId: string,
   ): Promise<readonly InterruptedConversationResponse[]>;
   listMessages(userId: UserId): Promise<readonly UserTextMessage[]>;
+  listConversationDates(
+    userId: UserId,
+    input: { cursor: string | null },
+  ): Promise<ConversationDatePage>;
+  listOlderMessages(
+    userId: UserId,
+    input: {
+      beforeSequence?: number | null;
+      cursor?: string | null;
+      dailySessionId: string;
+    },
+  ): Promise<ConversationMessagePage>;
   listRecentMessages(
     userId: UserId,
     input: { dailySessionId: string },
   ): Promise<readonly UserTextMessage[]>;
+  readConversationByDate(
+    userId: UserId,
+    logicalDate: string,
+  ): Promise<ConversationSessionRef | null>;
   readCurrentConversation(
     userId: UserId,
   ): Promise<CurrentConversationIdentity | null>;
@@ -396,12 +495,114 @@ export function createUserTextConversationService(dependencies: {
       await dependencies.recoveryGate?.requireOpen(userId);
       return dependencies.repository.listUserTextMessages(userId);
     },
+    async listConversationDates(userId, input) {
+      await dependencies.recoveryGate?.requireOpen(userId);
+      const cursor = decodeConversationCursor(input.cursor);
+      if (input.cursor !== null && cursor === null) {
+        throw new InvalidConversationCursorError();
+      }
+      if (cursor !== null) {
+        if (cursor.kind !== "conversation-dates" || cursor.owner !== userId) {
+          throw new InvalidConversationCursorError();
+        }
+      }
+      const result = await dependencies.repository.listConversationDates({
+        beforeDailySessionId:
+          cursor !== null && cursor.kind === "conversation-dates"
+            ? cursor.beforeDailySessionId
+            : null,
+        beforeLogicalDate:
+          cursor !== null && cursor.kind === "conversation-dates"
+            ? cursor.beforeLogicalDate
+            : null,
+        limit: CONVERSATION_DATE_PAGE_LIMIT,
+        userId,
+      });
+      const last = result.entries.at(-1);
+      return {
+        entries: result.entries,
+        nextCursor:
+          result.hasMore && last !== undefined
+            ? encodeConversationCursor({
+                beforeDailySessionId: last.dailySessionId,
+                beforeLogicalDate: last.logicalDate,
+                kind: "conversation-dates",
+                owner: userId,
+                version: 1,
+              })
+            : null,
+      };
+    },
+    async listOlderMessages(userId, input) {
+      await dependencies.recoveryGate?.requireOpen(userId);
+      const dailySessionId = validateDailySessionId(input.dailySessionId);
+      const cursor = decodeConversationCursor(input.cursor ?? null);
+      if ((input.cursor ?? null) !== null && cursor === null) {
+        throw new InvalidConversationCursorError();
+      }
+      let beforeSequence: number;
+      if (cursor !== null) {
+        if (
+          cursor.kind !== "conversation-messages" ||
+          cursor.owner !== userId ||
+          cursor.dailySessionId !== dailySessionId
+        ) {
+          throw new InvalidConversationCursorError();
+        }
+        beforeSequence = cursor.beforeSequence;
+      } else if (
+        typeof input.beforeSequence === "number" &&
+        Number.isInteger(input.beforeSequence) &&
+        input.beforeSequence > 0
+      ) {
+        beforeSequence = input.beforeSequence;
+      } else {
+        throw new InvalidConversationCursorError();
+      }
+      const session = await dependencies.repository.findConversationSessionById({
+        dailySessionId,
+        userId,
+      });
+      if (session === null) {
+        throw new ConversationSessionNotFoundError();
+      }
+      const result = await dependencies.repository.listOlderUserTextMessages({
+        beforeSequence,
+        dailySessionId,
+        limit: OLDER_CONVERSATION_MESSAGE_LIMIT,
+        userId,
+      });
+      const oldest = result.messages[0];
+      return {
+        messages: result.messages,
+        nextCursor:
+          result.hasMore && oldest !== undefined
+            ? encodeConversationCursor({
+                beforeSequence: oldest.sequence,
+                dailySessionId,
+                kind: "conversation-messages",
+                owner: userId,
+                version: 1,
+              })
+            : null,
+      };
+    },
     async listRecentMessages(userId, rawInput) {
       await dependencies.recoveryGate?.requireOpen(userId);
       const dailySessionId = validateDailySessionId(rawInput.dailySessionId);
       return dependencies.repository.listRecentUserTextMessages({
         dailySessionId,
         limit: RECENT_CONVERSATION_MESSAGE_LIMIT,
+        userId,
+      });
+    },
+    async readConversationByDate(userId, logicalDate) {
+      await dependencies.recoveryGate?.requireOpen(userId);
+      if (!isLogicalDate(logicalDate)) {
+        return null;
+      }
+      return dependencies.repository.findConversationSessionByDate({
+        logicalDate,
         userId,
       });
     },
@@ -568,4 +769,100 @@ export function localDateAt(now: Date, timezone: string): string {
   }).formatToParts(now);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function isLogicalDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+type ConversationDateCursor = Readonly<{
+  beforeDailySessionId: DailySessionId;
+  beforeLogicalDate: string;
+  kind: "conversation-dates";
+  owner: UserId;
+  version: 1;
+}>;
+
+type ConversationMessageCursor = Readonly<{
+  beforeSequence: number;
+  dailySessionId: DailySessionId;
+  kind: "conversation-messages";
+  owner: UserId;
+  version: 1;
+}>;
+
+type ConversationCursor = ConversationDateCursor | ConversationMessageCursor;
+
+/**
+ * Cursors are opaque to the client. They are bound to the authenticated owner
+ * and to the exact query (date list vs. one Daily Session's messages), so a
+ * forged or cross-query token fails validation instead of silently paginating.
+ */
+function encodeConversationCursor(cursor: ConversationCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeConversationCursor(token: string | null): ConversationCursor | null {
+  if (typeof token !== "string" || token.length === 0 || token.length > 4096) {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return null;
+  }
+  const record = parsed as Record<string, unknown>;
+  if (record.version !== 1 || typeof record.owner !== "string") {
+    return null;
+  }
+  if (record.kind === "conversation-dates") {
+    if (
+      typeof record.beforeLogicalDate !== "string" ||
+      !isLogicalDate(record.beforeLogicalDate) ||
+      typeof record.beforeDailySessionId !== "string"
+    ) {
+      return null;
+    }
+    try {
+      return {
+        beforeDailySessionId: asDailySessionId(record.beforeDailySessionId),
+        beforeLogicalDate: record.beforeLogicalDate,
+        kind: "conversation-dates",
+        owner: record.owner as UserId,
+        version: 1,
+      };
+    } catch {
+      return null;
+    }
+  }
+  if (record.kind === "conversation-messages") {
+    if (
+      typeof record.beforeSequence !== "number" ||
+      !Number.isInteger(record.beforeSequence) ||
+      record.beforeSequence <= 0 ||
+      typeof record.dailySessionId !== "string"
+    ) {
+      return null;
+    }
+    try {
+      return {
+        beforeSequence: record.beforeSequence,
+        dailySessionId: asDailySessionId(record.dailySessionId),
+        kind: "conversation-messages",
+        owner: record.owner as UserId,
+        version: 1,
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
