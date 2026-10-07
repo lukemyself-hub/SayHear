@@ -3,7 +3,7 @@
 ## TL;DR
 
 - 行为契约是 Persona 契约（#67 / ADR-0108 / ADR-0112）的可观察投影：每回合判据与
-  轨迹判据两层，逐条锚定 `CONTEXT.md` 既有术语，不另立人格真源。
+  轨迹判据两层，逐条锚定 `GLOSSARY.md` 既有术语，不另立人格真源。
 - 六个味觉维度仍是共同语言，但当前盲评默认使用低负担的三选一 pairwise：每回合
   只选 A 更好 / 持平 / B 更好；历史 v1 的 1–5 结果仍可复算。绝对门槛全部由契约
   判据与硬门禁承担。
@@ -66,7 +66,7 @@ Accepted（2026-08-22，issue #63 grilling 定案）
 
 ## 二、味觉维度与相对判断
 
-六个维度（`CONTEXT.md` 行为评测章节为唯一命名来源）仍用于描述分歧，但不要求
+六个维度（`GLOSSARY.md` 行为评测章节为唯一命名来源）仍用于描述分歧，但不要求
 Internal Owner 在每个回合为两边各打 1–5 分：
 
 | 维度 | 低分含义 | 1 分锚点 | 3 分锚点 | 5 分锚点 |
@@ -225,7 +225,7 @@ candidate 必须为零已确认确定性硬失败；若既有失败仍复现，�
 
 ## References
 
-- 术语：[`../../CONTEXT.md`](../../CONTEXT.md) 行为评测章节
+- 术语：[`../../GLOSSARY.md`](../../GLOSSARY.md) 行为评测章节
 - 行为规则：[`../product/15-conversation-behavior.md`](../product/15-conversation-behavior.md)
 - ADR：[0061](../adr/0061-model-promotion-is-developer-judged.md) ·
   [0072](../adr/0072-internal-core-validates-bilingual-and-code-switched-use.md) ·

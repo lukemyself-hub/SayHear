@@ -56,7 +56,7 @@ Reflection 和叙事 Profile，并验证结果。
 - Reflection 是版本化、非权威派生观察。每个 ReflectionStatement 必须通过 typed
   link 回到 final / corrected User Event Revision；Reflection 文本不能成为 Claim 的
   primary evidence，也不能成为自身或后续 Reflection 的自证来源
-  （[CONTEXT.md](../../CONTEXT.md)、
+  （[GLOSSARY.md](../../GLOSSARY.md)、
   [知识数据模型 §7.9](../architecture/07-07-12-knowledge-data-model.md)、
   [ADR-0087](../adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md)）。
 - Bio 是从全部 eligible ClaimVersion 生成的可重建叙事，不是 Memory

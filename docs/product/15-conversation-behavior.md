@@ -142,7 +142,7 @@ SayHear 的 Text 回应应当情感完整，但始终让用户感觉是在自然
 ## References
 
 - [原始 产品文档 v0.1 快照](../archive/product/AI_Life_Journal_Product_Document_v0.1.md)
-- [术语表](../../CONTEXT.md)
+- [术语表](../../GLOSSARY.md)
 - [产品体验与定位](07-11-experience-and-positioning.md)
 - [ADR-0108：Canonical Persona 区分慈悲陪伴与关系身份](../adr/0108-canonical-persona-separates-compassionate-presence-from-relationship-identity.md)
 - [ADR-0111：Persona 与对话状态输入是编译的版本化契约](../adr/0111-persona-and-conversation-state-inputs-are-compiled-versioned-contracts.md)

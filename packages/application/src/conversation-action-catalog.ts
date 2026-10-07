@@ -193,7 +193,7 @@ export type ConversationActionGatewayContext = Readonly<{
  * The version identity of the Harness execution policy frozen on each Decision
  * Command. It bounds the Decision / Finalization model stages, the number of
  * state-changing Actions, tool round-trips, time and token budget, and when user
- * visible output is permitted (CONTEXT.md "Conversation Harness Policy"). The
+ * visible output is permitted (GLOSSARY.md "Conversation Harness Policy"). The
  * Framework or Provider cannot widen these limits.
  *
  * The initial policy permits exactly one logical model stage for an ordinary
