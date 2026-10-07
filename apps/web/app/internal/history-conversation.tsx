@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { MessageSurface } from "./message-time";
+
 type HistoryMessage = Readonly<{
   actor: "user" | "assistant";
+  createdAt?: string | undefined;
   eventId: string;
   generationCommandId: string | null;
   locale: string;
@@ -166,25 +169,14 @@ export function HistoryConversation(props: {
         ) : (
           timeline.map((item) =>
             item.kind === "message" ? (
-              <article
-                className={
-                  item.message.actor === "user"
-                    ? "userMessage"
-                    : "assistantMessage"
-                }
+              <MessageSurface
+                actor={item.message.actor}
+                createdAt={item.message.createdAt}
+                generationCommandId={item.message.generationCommandId}
                 key={item.message.eventId}
               >
                 <p>{item.message.text}</p>
-                {item.message.actor === "assistant" &&
-                item.message.generationCommandId ? (
-                  <a
-                    className="inspectionLink"
-                    href={`/internal/context-inspector?generation_command_id=${encodeURIComponent(item.message.generationCommandId)}`}
-                  >
-                    Inspect compiled Context
-                  </a>
-                ) : null}
-              </article>
+              </MessageSurface>
             ) : (
               <article
                 className="assistantMessage interruptedMessage"
@@ -255,6 +247,8 @@ function normalizeMessages(value: unknown): HistoryMessage[] {
     ) {
       messages.push({
         actor: record.actor,
+        createdAt:
+          typeof record.createdAt === "string" ? record.createdAt : undefined,
         eventId: record.eventId,
         generationCommandId:
           typeof record.generationCommandId === "string"

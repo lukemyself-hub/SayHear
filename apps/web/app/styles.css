@@ -1962,3 +1962,104 @@ h1 {
   outline-offset: 2px;
 }
 
+/* === #264 message time and context icon === */
+
+/* The secondary row is always laid out when present, so revealing the
+   persisted time never moves the message or the scroll position. */
+.messageMeta {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: flex-start;
+  min-height: 1.35em;
+}
+
+.userMessage .messageMeta {
+  justify-content: flex-end;
+}
+
+/* Hidden by default; only the metadata text fades, the row keeps its space. */
+.messageMeta .messageTime {
+  color: #686a63;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+/* Desktop: hover the message to reveal, move away to hide. Hover is scoped so
+   a sticky touch hover cannot defeat the second tap on mobile. */
+@media (hover: hover) {
+  .userMessage:hover .messageTime,
+  .assistantMessage:hover .messageTime {
+    opacity: 1;
+  }
+}
+
+/* Keyboard focus (the message itself or the Context icon inside it) and the
+   explicit touch/keyboard toggle. */
+.userMessage:focus-within .messageTime,
+.assistantMessage:focus-within .messageTime,
+.userMessage.timeRevealed .messageTime,
+.assistantMessage.timeRevealed .messageTime {
+  opacity: 1;
+}
+
+.userMessage:focus-visible,
+.assistantMessage:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+/* Lightweight Context entry point: an icon, not a text link, immediately left
+   of the time on the same row. Keeps the generation_command_id deep link. */
+.contextInspectIcon {
+  align-items: center;
+  color: #686a63;
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 1;
+  position: relative;
+  text-decoration: none;
+}
+
+.contextInspectIcon:hover {
+  color: #242522;
+}
+
+.contextInspectIcon:focus-visible {
+  color: #242522;
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+/* Keyboard focus and pointer hover both surface the same short description of
+   the icon; touch users follow the link directly. */
+.contextInspectIcon::after {
+  background: #242522;
+  border-radius: 6px;
+  color: #faf9f6;
+  content: attr(data-tooltip);
+  font-size: 0.72rem;
+  left: 50%;
+  line-height: 1.4;
+  opacity: 0;
+  padding: 4px 8px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+.contextInspectIcon:hover::after,
+.contextInspectIcon:focus-visible::after {
+  opacity: 1;
+}
+
+

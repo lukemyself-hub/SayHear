@@ -49,6 +49,12 @@ export type ConversationResponseStreamEvent =
     }>
   | Readonly<{ delta: string; type: "assistant_delta" }>
   | Readonly<{
+      /**
+       * The authoritative server commit instant of the Assistant Event
+       * (`conversation_events.created_at`, ISO 8601 UTC); the same value the
+       * portal read contract returns.
+       */
+      createdAt: string;
       eventId: ConversationEventId;
       revisionId: ConversationEventRevisionId;
       type: "assistant_committed";
@@ -73,6 +79,7 @@ export type CompleteResponseMetadata = Readonly<{
 
 type ExistingConversationResponse =
   | Readonly<{
+      createdAt: string;
       eventId: ConversationEventId;
       outcome: "committed";
       revisionId: ConversationEventRevisionId;
@@ -145,6 +152,7 @@ export type ConversationResponseRepository = Readonly<{
     userId: UserId;
   }): Promise<
     | Readonly<{
+        createdAt: string;
         eventId: ConversationEventId;
         outcome: "committed";
         revisionId: ConversationEventRevisionId;
@@ -307,6 +315,7 @@ export function createConversationResponseService(dependencies: {
         } else if (event.type === "decision_committed") {
           settled = true;
           yield {
+            createdAt: event.assistantCreatedAt,
             eventId: event.assistantEventId,
             revisionId: event.assistantEventRevisionId,
             type: "assistant_committed",
@@ -366,6 +375,7 @@ export function createConversationResponseService(dependencies: {
               } else if (finalizationEvent.type === "decision_committed") {
                 settled = true;
                 yield {
+                  createdAt: finalizationEvent.assistantCreatedAt,
                   eventId: finalizationEvent.assistantEventId,
                   revisionId: finalizationEvent.assistantEventRevisionId,
                   type: "assistant_committed",
@@ -580,6 +590,7 @@ async function* streamExistingResponse(
   if (response.outcome === "committed") {
     yield { delta: response.text, type: "assistant_delta" };
     yield {
+      createdAt: response.createdAt,
       eventId: response.eventId,
       revisionId: response.revisionId,
       type: "assistant_committed",

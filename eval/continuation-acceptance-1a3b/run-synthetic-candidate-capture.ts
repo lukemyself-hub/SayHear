@@ -713,7 +713,12 @@ function createSeam(input: {
           recorded: false,
         });
       }
-      return { eventId, outcome: "committed", revisionId };
+      return {
+        createdAt: commitInput.completedAt.toISOString(),
+        eventId,
+        outcome: "committed",
+        revisionId,
+      };
     },
     loadContextSource: async (loadInput) => {
       const snapshot = snapshots.get(String(loadInput.generationCommandId));

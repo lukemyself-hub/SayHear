@@ -158,6 +158,7 @@ describe("Conversation Agent Harness Action boundary", () => {
         ...repository(),
         async commitCompleteResponse() {
           return {
+            createdAt: "2026-08-14T00:00:00.000Z",
             eventId: asConversationEventId("01984477-1f9a-7d25-9d97-e588769566c7"),
             outcome: "committed" as const,
             revisionId: asConversationEventRevisionId("01984477-1f9a-7d25-9d97-e588769566c8"),

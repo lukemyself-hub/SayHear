@@ -131,4 +131,33 @@ describe("conversation history BFF handlers", () => {
       dailySessionId: "abc",
     });
   });
+
+  it("passes the persisted message time through the BFF payload", async () => {
+    const listOlderMessages = vi.fn().mockResolvedValueOnce({
+      messages: [
+        {
+          actor: "assistant",
+          createdAt: "2026-10-06T16:30:00.000Z",
+          eventId: "01984477-31e1-7595-92c6-06889cb0fdde",
+          generationCommandId: null,
+          locale: "en-US",
+          logicalDate: "2026-10-06",
+          revisionId: "01984477-31e1-7595-92c6-06889cb0fddf",
+          sequence: 7,
+          text: "A committed reply.",
+        },
+      ],
+      nextCursor: null,
+    });
+    const handler = messagesHandler({ listOlderMessages });
+    const response = await handler(
+      new Request(
+        "http://localhost/api/internal/conversation/messages?dailySessionId=abc&beforeSequence=8",
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      messages: [{ createdAt: "2026-10-06T16:30:00.000Z" }],
+    });
+  });
 });

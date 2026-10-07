@@ -26,6 +26,7 @@ const now = new Date("2026-10-06T18:00:00.000Z");
 function message(sequence: number): UserTextMessage {
   return {
     actor: "user",
+    createdAt: "2026-10-06T18:00:00.000Z",
     eventId: asConversationEventId(`01984477-31e1-7595-92c6-06889cb0000${sequence}`),
     generationCommandId: null,
     locale: "en-US",

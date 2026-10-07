@@ -408,6 +408,7 @@ function createSeam(input: {
         }
       }
       return {
+        createdAt: commitInput.completedAt.toISOString(),
         eventId: asConversationEventId(uuidFrom(`${commitInput.generationCommandId}:event`)),
         outcome: "committed",
         revisionId: asConversationEventRevisionId(

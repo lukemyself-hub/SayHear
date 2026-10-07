@@ -970,6 +970,119 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(completedAudit.rows[0]?.status).toBe("completed");
   });
 
+  it("carries the authoritative commit instant on streamed commit events, matching the read", async () => {
+    await openPrivateWrites();
+    const userTime = new Date("2026-07-27T16:00:00.000Z");
+    const assistantTime = new Date("2026-07-27T16:05:00.000Z");
+    let now = userTime;
+    const clock = () => now;
+    const responseRepository = new PostgresConversationResponseRepository(
+      database.pool,
+    );
+    const conversationService = createUserTextConversationService({
+      clock,
+      expectedBackupPolicyVersion: "neon-production-v1",
+      expectedConfigurationFingerprint: "sha256:expected",
+      generationPolicy: testGenerationPolicy,
+      repository: new PostgresUserTextConversationRepository(database.pool),
+    });
+    const contextCompiler = createContextCompiler({
+      clock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      repository: responseRepository,
+    });
+    const deterministicModel = createDeterministicConversationTextModel({
+      chunks: ["That sounds like a lot to carry."],
+    });
+    const model: ConversationTextModel = {
+      async *stream(request) {
+        // The Assistant Event commits after the User Event; advancing the
+        // server clock here makes the two authoritative instants distinct, so
+        // the assertions prove the streamed value is the persisted commit time
+        // rather than the submit or response-transport time.
+        now = assistantTime;
+        yield* deterministicModel.stream(request);
+      },
+    };
+    const service = createConversationResponseService({
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
+      clock,
+      contextCompiler,
+      conversationService,
+      harness: createTestHarness({
+        clock,
+        egressPort: createProviderEgressPort({
+          champion: testChampion,
+          clock,
+          contextCompiler,
+          model,
+          repository: responseRepository,
+        }),
+        repository: responseRepository,
+      }),
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
+      repository: responseRepository,
+    });
+    const response = await createConversationResponseHandler({
+      authenticate: async () => fixedInternalOwnerPrincipal,
+      service,
+    })(
+      new Request("http://localhost/api/internal/conversation/responses", {
+        body: JSON.stringify({
+          clientEventId: "stream-time-event-0001",
+          clientTurnId: "stream-time-turn-0001",
+          locale: "en-US",
+          text: "Please keep the recorded time honest.",
+          timezone: "America/Los_Angeles",
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }),
+    );
+    const events = await readNdjson(response);
+    expect(events.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "assistant_committed",
+    ]);
+
+    const current = await conversationService.readCurrentConversation(
+      fixedInternalOwnerPrincipal.userId,
+    );
+    if (current === null) {
+      throw new Error("The current conversation was not found.");
+    }
+    const read = await conversationService.listRecentMessages(
+      fixedInternalOwnerPrincipal.userId,
+      { dailySessionId: current.dailySessionId },
+    );
+    expect(read).toHaveLength(2);
+
+    const streamedUser = events[0]?.message as { createdAt?: string };
+    const streamedAssistant = events[2];
+    expect(streamedUser.createdAt).toBe(userTime.toISOString());
+    expect(streamedAssistant?.createdAt).toBe(assistantTime.toISOString());
+    // The streamed instants are exactly the values the read contract returns.
+    expect(streamedUser.createdAt).toBe(read[0]?.createdAt);
+    expect(streamedAssistant?.createdAt).toBe(read[1]?.createdAt);
+
+    const persisted = await database.pool.query<{
+      actor: "user" | "assistant";
+      created_at: Date;
+    }>(
+      `SELECT actor, created_at FROM conversation_events
+       WHERE user_id = $1
+       ORDER BY sequence_no`,
+      [fixedInternalOwnerPrincipal.userId],
+    );
+    expect(persisted.rows.map((row) => row.created_at.toISOString())).toEqual([
+      userTime.toISOString(),
+      assistantTime.toISOString(),
+    ]);
+  });
+
   it("activates the versioned Minimum High-Risk Response through the real Web/BFF path", async () => {
     if (!nextServer) {
       throw new Error("The Next test server is not running.");

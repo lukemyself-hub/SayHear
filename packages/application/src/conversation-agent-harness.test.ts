@@ -124,6 +124,7 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       async commitCompleteResponse() {
         commitCalls += 1;
         return {
+          createdAt: fixedClock().toISOString(),
           eventId: assistantEventId,
           outcome: "committed",
           revisionId: assistantRevisionId,
@@ -150,6 +151,7 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
     expect(events).toEqual([
       { delta: "I hear you.", type: "decision_delta" },
       {
+        assistantCreatedAt: fixedClock().toISOString(),
         assistantEventId,
         assistantEventRevisionId: assistantRevisionId,
         type: "decision_committed",
@@ -231,6 +233,7 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       },
       async commitCompleteResponse() {
         return {
+          createdAt: fixedClock().toISOString(),
           eventId: assistantEventId,
           outcome: "committed",
           revisionId: assistantRevisionId,

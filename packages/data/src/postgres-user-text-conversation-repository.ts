@@ -35,6 +35,7 @@ const retryableTransactionCodes = new Set(["40001", "40P01", "55P03"]);
 const maximumTransactionAttempts = 3;
 
 type ExistingTurnRow = Readonly<{
+  created_at: Date;
   generation_command_id: string | null;
   model_run_attempt_id: string | null;
   client_event_id: string;
@@ -373,6 +374,7 @@ export class PostgresUserTextConversationRepository
     const result = await this.pool.query<{
       actor: "user" | "assistant";
       conversation_event_id: string;
+      created_at: Date;
       generation_command_id: string | null;
       locale: string;
       logical_date: string;
@@ -384,6 +386,7 @@ export class PostgresUserTextConversationRepository
         SELECT
           event.actor,
           event.conversation_event_id,
+          event.created_at,
           event.generation_command_id,
           revision.locale,
           session.logical_date::text,
@@ -410,6 +413,7 @@ export class PostgresUserTextConversationRepository
 
     return result.rows.map((row) => ({
       actor: row.actor,
+      createdAt: row.created_at.toISOString(),
       eventId: asConversationEventId(row.conversation_event_id),
       generationCommandId: row.generation_command_id
         ? asGenerationCommandId(row.generation_command_id)
@@ -531,6 +535,7 @@ export class PostgresUserTextConversationRepository
     const result = await this.pool.query<{
       actor: "user" | "assistant";
       conversation_event_id: string;
+      created_at: Date;
       generation_command_id: string | null;
       locale: string;
       logical_date: string;
@@ -542,6 +547,7 @@ export class PostgresUserTextConversationRepository
         SELECT
           recent.actor,
           recent.conversation_event_id,
+          recent.created_at,
           recent.generation_command_id,
           recent.locale,
           recent.logical_date,
@@ -552,6 +558,7 @@ export class PostgresUserTextConversationRepository
           SELECT
             event.actor,
             event.conversation_event_id,
+            event.created_at,
             event.generation_command_id,
             revision.locale,
             session.logical_date::text AS logical_date,
@@ -583,6 +590,7 @@ export class PostgresUserTextConversationRepository
 
     return result.rows.map((row) => ({
       actor: row.actor,
+      createdAt: row.created_at.toISOString(),
       eventId: asConversationEventId(row.conversation_event_id),
       generationCommandId: row.generation_command_id
         ? asGenerationCommandId(row.generation_command_id)
@@ -714,6 +722,7 @@ export class PostgresUserTextConversationRepository
     const result = await this.pool.query<{
       actor: "user" | "assistant";
       conversation_event_id: string;
+      created_at: Date;
       generation_command_id: string | null;
       locale: string;
       logical_date: string;
@@ -725,6 +734,7 @@ export class PostgresUserTextConversationRepository
         SELECT
           recent.actor,
           recent.conversation_event_id,
+          recent.created_at,
           recent.generation_command_id,
           recent.locale,
           recent.logical_date,
@@ -735,6 +745,7 @@ export class PostgresUserTextConversationRepository
           SELECT
             event.actor,
             event.conversation_event_id,
+            event.created_at,
             event.generation_command_id,
             revision.locale,
             session.logical_date::text AS logical_date,
@@ -778,6 +789,7 @@ export class PostgresUserTextConversationRepository
       hasMore,
       messages: kept.map((row) => ({
         actor: row.actor,
+        createdAt: row.created_at.toISOString(),
         eventId: asConversationEventId(row.conversation_event_id),
         generationCommandId: row.generation_command_id
           ? asGenerationCommandId(row.generation_command_id)
@@ -1639,6 +1651,9 @@ export class PostgresUserTextConversationRepository
           timezoneAtStart: currentSession.timezone_at_start,
         },
         message: {
+          // `conversation_events.created_at` for this User Event was written
+          // from the same `input.now`, so this is the read contract's instant.
+          createdAt: input.now.toISOString(),
           id: asConversationEventId(conversationEventId),
           locale: input.locale,
           revisionId: asConversationEventRevisionId(revisionId),
@@ -1681,6 +1696,7 @@ async function findExistingTurns(
         attempt.model_run_attempt_id,
         event.conversation_event_id,
         event.client_event_id,
+        event.created_at,
         event.sequence_no,
         revision.conversation_event_revision_id AS revision_id,
         revision.locale,
@@ -1727,6 +1743,7 @@ function mapTurn(row: ExistingTurnRow, replayed: boolean): UserTextTurn {
       timezoneAtStart: row.timezone_at_start,
     },
     message: {
+      createdAt: row.created_at.toISOString(),
       id: asConversationEventId(row.conversation_event_id),
       locale: row.locale,
       revisionId: asConversationEventRevisionId(row.revision_id),

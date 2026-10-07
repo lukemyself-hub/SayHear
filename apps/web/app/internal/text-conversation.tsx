@@ -10,6 +10,8 @@ import {
   type SetStateAction,
 } from "react";
 
+import { MessageSurface } from "./message-time";
+import { eventMessageCreatedAt } from "./message-time-presentation";
 import { usePortalShell } from "./portal-shell";
 import {
   decideSend,
@@ -28,6 +30,7 @@ import {
 
 type VisibleUserMessage = Readonly<{
   actor: "user" | "assistant";
+  createdAt?: string | undefined;
   eventId: string;
   generationCommandId: string | null;
   locale: string;
@@ -276,6 +279,7 @@ export function TextConversation(props: {
           currentGenerationCommandId = committed.generationCommandId;
           const message = {
             actor: "user" as const,
+            createdAt: eventMessageCreatedAt(committed.message.createdAt),
             eventId: committed.message.id,
             generationCommandId: null,
             locale: committed.message.locale,
@@ -308,6 +312,7 @@ export function TextConversation(props: {
           responseCommitted = true;
           terminalEvent = "assistant_committed";
           const committed = result as {
+            createdAt?: unknown;
             eventId: string;
             revisionId: string;
           };
@@ -324,6 +329,7 @@ export function TextConversation(props: {
                     kind: "message",
                     message: {
                       actor: "assistant",
+                      createdAt: eventMessageCreatedAt(committed.createdAt),
                       eventId: committed.eventId,
                       generationCommandId: currentGenerationCommandId,
                       locale: submission.locale,
@@ -561,12 +567,10 @@ export function TextConversation(props: {
           ) : (
             timeline.map((item, index) =>
               item.kind === "message" ? (
-                <article
-                  className={
-                    item.message.actor === "user"
-                      ? "userMessage"
-                      : "assistantMessage"
-                  }
+                <MessageSurface
+                  actor={item.message.actor}
+                  createdAt={item.message.createdAt}
+                  generationCommandId={item.message.generationCommandId}
                   id={
                     isFirstItemForDate(
                       timeline,
@@ -579,16 +583,7 @@ export function TextConversation(props: {
                   key={item.message.eventId}
                 >
                   <p>{item.message.text}</p>
-                  {item.message.actor === "assistant" &&
-                  item.message.generationCommandId ? (
-                    <a
-                      className="inspectionLink"
-                      href={`/internal/context-inspector?generation_command_id=${encodeURIComponent(item.message.generationCommandId)}`}
-                    >
-                      Inspect compiled Context
-                    </a>
-                  ) : null}
-                </article>
+                </MessageSurface>
               ) : (
                 <article
                   className="assistantMessage interruptedMessage"

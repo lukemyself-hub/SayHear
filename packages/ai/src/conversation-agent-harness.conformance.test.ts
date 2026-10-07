@@ -157,6 +157,7 @@ function createHarnessRepository(options: {
         return { outcome: "fence_rejected" };
       }
       return {
+        createdAt: fixedClock().toISOString(),
         eventId: assistantEventId,
         outcome: "committed",
         revisionId: assistantRevisionId,
@@ -245,6 +246,7 @@ for (const adapter of adapters) {
         async commitCompleteResponse() {
           commitCalls += 1;
           return {
+            createdAt: fixedClock().toISOString(),
             eventId: assistantEventId,
             outcome: "committed" as const,
             revisionId: assistantRevisionId,
@@ -257,6 +259,7 @@ for (const adapter of adapters) {
       expect(events).toEqual([
         { delta: "I hear you.", type: "decision_delta" },
         {
+          assistantCreatedAt: fixedClock().toISOString(),
           assistantEventId,
           assistantEventRevisionId: assistantRevisionId,
           type: "decision_committed",

@@ -106,6 +106,13 @@ export type UserTextTurn = Readonly<{
     timezoneAtStart: string;
   }>;
   message: Readonly<{
+    /**
+     * The authoritative server commit instant of the User Event
+     * (`conversation_events.created_at`, ISO 8601 UTC). It is the same value the
+     * portal read contract returns for that message, never a receive/render
+     * time.
+     */
+    createdAt: string;
     id: ConversationEventId;
     locale: string;
     revisionId: ConversationEventRevisionId;
@@ -149,6 +156,14 @@ export type ExplicitContinuousExchangeEnd = Readonly<{
 
 export type UserTextMessage = Readonly<{
   actor: "user" | "assistant";
+  /**
+   * The server-persisted commit instant of the message
+   * (`conversation_events.created_at`, ISO 8601 UTC). For a user event this is
+   * the moment the User Turn was recorded; for an assistant event it is the
+   * formal commit `completedAt`. It is never a delta-receive, render or refresh
+   * time.
+   */
+  createdAt: string;
   eventId: ConversationEventId;
   generationCommandId: GenerationCommandId | null;
   locale: string;

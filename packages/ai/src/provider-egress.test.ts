@@ -460,6 +460,7 @@ describe("Provider Egress", () => {
           committedText = input.text;
           committedProposals = input.stopSignalProposals;
           return {
+            createdAt: input.completedAt.toISOString(),
             outcome: "committed",
             eventId: asConversationEventId("01984477-59a9-7d20-9d97-e588769566c5"),
             revisionId: asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566c6"),

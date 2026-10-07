@@ -89,6 +89,7 @@ export type ConversationAgentHarnessRepository = Pick<
  */
 type ExistingConversationResponse =
   | Readonly<{
+      createdAt: string;
       eventId: ConversationEventId;
       outcome: "committed";
       revisionId: ConversationEventRevisionId;
@@ -128,6 +129,13 @@ export type ConversationDecisionCommand = Readonly<{
 export type ConversationHarnessEvent =
   | Readonly<{ delta: string; type: "decision_delta" }>
   | Readonly<{
+      /**
+       * The authoritative commit instant of the Assistant Event
+       * (`conversation_events.created_at`, ISO 8601 UTC), surfaced from the
+       * repository commit so the response stream can carry it without a new
+       * clock read.
+       */
+      assistantCreatedAt: string;
       assistantEventId: ConversationEventId;
       assistantEventRevisionId: ConversationEventRevisionId;
       type: "decision_committed";
@@ -334,6 +342,7 @@ export function createConversationAgentHarness(dependencies: {
         throw new ProviderDispatchError("policy_blocked");
       }
       yield {
+        assistantCreatedAt: committed.createdAt,
         assistantEventId: committed.eventId,
         assistantEventRevisionId: committed.revisionId,
         type: "decision_committed",
@@ -538,6 +547,7 @@ async function* streamExistingDecision(
   if (response.outcome === "committed") {
     yield { delta: response.text, type: "decision_delta" };
     yield {
+      assistantCreatedAt: response.createdAt,
       assistantEventId: response.eventId,
       assistantEventRevisionId: response.revisionId,
       type: "decision_committed",
