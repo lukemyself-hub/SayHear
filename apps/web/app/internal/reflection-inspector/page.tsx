@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
@@ -25,5 +26,11 @@ export default async function ReflectionInspectorPage(
   const initialReflectionId = Array.isArray(requestedId)
     ? requestedId[0] ?? ""
     : requestedId ?? "";
-  return <ReflectionInspector initialReflectionId={initialReflectionId} />;
+  return (
+    // The client component reads the current `reflection_id` from the URL with
+    // `useSearchParams`, which Next.js requires behind a Suspense boundary.
+    <Suspense fallback={null}>
+      <ReflectionInspector initialReflectionId={initialReflectionId} />
+    </Suspense>
+  );
 }
