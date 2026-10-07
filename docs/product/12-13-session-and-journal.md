@@ -138,5 +138,5 @@ guidance 执行。
 ## References
 
 - [原始 产品文档 v0.1 快照](../archive/product/AI_Life_Journal_Product_Document_v0.1.md)
-- [术语表](../../CONTEXT.md)
+- [术语表](../../GLOSSARY.md)
 - [Journal 与 Memory 工作流](../architecture/11-12-journal-memory-workflows.md)

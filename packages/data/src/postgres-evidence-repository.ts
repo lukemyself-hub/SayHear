@@ -13,7 +13,7 @@ type SnapshotRow = {
   command_id: string;
   attempt_id: string;
   champion_config_version: string;
-  champion_provider: "openai" | "deepseek";
+  champion_provider: "openai" | "deepseek" | "opencode-go";
   champion_model: string;
   champion_snapshot: string;
   champion_provider_policy_version: string;
@@ -88,7 +88,16 @@ export class PostgresEvidenceRepository implements EvidenceRepository {
       // that hits the provider deadline must not fail the whole freeze: each
       // source settles independently and the successful extractions are kept.
       const extractedChunks = await Promise.allSettled(
-        sources.map((source) => this.extractor.extract({ locale: source.locale, sourceText: source.canonical_text })),
+        sources.map((source) =>
+          this.extractor.extract({
+            locale: source.locale,
+            sourceText: source.canonical_text,
+            transport: {
+              dailySessionId: input.dailySessionId,
+              userId: source.user_id,
+            },
+          }),
+        ),
       );
       let insertedSources = 0;
       for (let i = 0; i < sources.length; i++) {

@@ -209,12 +209,25 @@ export const ONE_A_3B_G1_EVIDENCE_CONTRACTS: Readonly<
   "AC-W01": {
     evidenceKind: "hosted-canary-ledger",
     requiredAssertionIds: ["hosted_canary", "workflow_history", "outbox_receipt"],
-    requiredResultKeys: ["hosted", "canaryRunId", "deploymentId", "exportArtifact"],
+    requiredResultKeys: [
+      "hosted",
+      "canaryRunId",
+      "deploymentId",
+      "exportArtifact",
+      // ADR-0144/0145: the final verifier re-scans the linked raw exports at
+      // release time, so assembly must carry both references. Without them the
+      // verifier sees a passed summary with nothing to re-scan and refuses the
+      // artifact ("Hosted canary lacks deployment and complete run-set pins").
+      "canaryValuesArtifact",
+      "expectedRunIds",
+    ],
     resultFieldKinds: {
       hosted: "true",
       canaryRunId: "non-empty-string",
       deploymentId: "non-empty-string",
       exportArtifact: "content-addressed-artifact",
+      canaryValuesArtifact: "content-addressed-artifact",
+      expectedRunIds: "non-empty-string-array",
     },
   },
   "AC-D01": {
@@ -602,7 +615,7 @@ function verifyF3RolePin(
   ]) {
     if (!nonEmpty(value[field])) mismatches.push(`${role} F3 pin is missing ${field}`);
   }
-  if (!["deepseek", "openai", "deterministic"].includes(String(value.provider))) {
+  if (!["deepseek", "openai", "opencode-go", "deterministic"].includes(String(value.provider))) {
     mismatches.push(`${role} F3 pin has an unsupported provider`);
   }
   if (!isRecord(value.parameters)) {
@@ -1171,13 +1184,17 @@ function verifyF3Ledger(
     mismatches.push("F3 validator ledger must be an object");
     return;
   }
-  if (value.version !== F3_LEDGER_VERSION || value.group !== "validator") {
+  if ((value.version !== F3_LEDGER_VERSION && value.version !== "1a3b-f3-completion:v1") || value.group !== "validator") {
     mismatches.push("F3 validator ledger has an unsupported version or group");
   }
   if (manifestFingerprint !== null && value.manifestFingerprint !== manifestFingerprint) {
     mismatches.push("F3 validator ledger is not bound to the F3 manifest");
   }
-  if (value.adjudicator !== "Luke") mismatches.push("F3 validator ledger must be adjudicated by Luke");
+  const completion = value.version === "1a3b-f3-completion:v1";
+  if (value.adjudicator !== (completion ? "capture-verifier" : "Luke")) mismatches.push("F3 validator ledger has an invalid evidence owner");
+  if (completion && (!nonEmpty(value.capturePath) || typeof value.captureSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.captureSha256))) {
+    mismatches.push("Validator completion evidence must reference a hashed capture");
+  }
   if (!nonEmpty(value.decidedAt) || Number.isNaN(new Date(value.decidedAt).getTime())) {
     mismatches.push("F3 validator ledger must have a valid decision timestamp");
   }

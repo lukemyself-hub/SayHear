@@ -293,10 +293,15 @@ async function insertWorkflowCommand(
   return commandRow;
 }
 
+type CandidateProposalLedgerOutcome =
+  | "created"
+  | "blocked_terminal"
+  | "skipped";
+
 type CandidateProposalLedgerInput = Readonly<{
   reflectionVersionId: string;
   userId: string;
-  outcome: string;
+  outcome: CandidateProposalLedgerOutcome;
   reasonCode: string | null;
   memoryCandidateId: string | null;
   fingerprint: string | null;
@@ -862,13 +867,45 @@ export class PostgresReflectionRepository implements ReflectionRepository {
       const client = await this.pool.connect();
       try {
         await client.query("BEGIN");
-        const existingRun = await client.query<{ count: string }>(
-          `SELECT count(*)::text AS count FROM reflection_runs
-           WHERE user_id = $1
-             AND week_window_id = $2
-             AND scope_type = 'date_range'
-             AND status IN ('ready', 'built')`,
+        const existingRuns = await client.query<{
+          status: string;
+          source_digest: string | null;
+          command_status: string | null;
+        }>(
+          `SELECT run.status, run.source_digest,
+                  command.status AS command_status
+           FROM reflection_runs run
+           LEFT JOIN generation_commands command
+             ON command.generation_command_id = run.generation_command_id
+           WHERE run.user_id = $1
+             AND run.week_window_id = $2
+             AND run.scope_type = 'date_range'
+             AND run.status IN ('ready', 'built')`,
           [candidate.userId, computeWeekWindowId(candidate.userId, weekIdentifier)],
+        );
+        // A `built` run or a `ready` run whose generation command has not
+        // terminally failed still owns the window: it is either the current
+        // history or a live/recoverable attempt, and re-admission would
+        // duplicate it. A `ready` run whose command is terminally `failed`
+        // (the Oct 4 W38 incident: `reflection_runs.status = ready` beside a
+        // failed `generation_command`) is a frozen historical attempt. Its
+        // bytes stay untouched, but it must not suppress a genuinely new,
+        // still-current source digest forever.
+        const liveRun = existingRuns.rows.some(
+          (row) =>
+            row.status === "built" ||
+            (row.status === "ready" && row.command_status !== "failed"),
+        );
+        // Same-source dedup: only a digest that differs from an existing
+        // terminally failed attempt is a new source. A matching failed digest
+        // stays a non-retry, exactly like a normal completed window.
+        const failedDigests = new Set(
+          existingRuns.rows
+            .filter(
+              (row) => row.status === "ready" && row.command_status === "failed",
+            )
+            .map((row) => row.source_digest)
+            .filter((digest): digest is string => digest !== null),
         );
         const dayRows = await this.readWindowDaysWithin(client, candidate.userId, {
           startDate: candidate.weekMonday,
@@ -877,7 +914,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         });
         const settled = await this.assertDaysSettledWithin(client, dayRows);
         const digest =
-          Number(existingRun.rows[0]?.count ?? 0) === 0 && settled
+          !liveRun && settled
             ? await this.weeklyWindowDigestWithin(client, candidate.userId, {
                 weekIdentifier,
                 windowStartDate: candidate.weekMonday,
@@ -885,7 +922,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
               })
             : null;
         await client.query("COMMIT");
-        if (digest) {
+        if (digest && !failedDigests.has(digest)) {
           due.push({
             userId: asUserId(candidate.userId),
             weekIdentifier,
@@ -2417,12 +2454,18 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           evidenceItemIds: [...proposal.evidenceItemIds],
           now,
         });
-        const createdOutcome =
-          proposal.resolution.status === "mapped" ? "created" : "created_needs_predicate_review";
+        // The lineage ledger stores the coarse outcome union allowed by schema
+        // 0047. The needs_predicate_review distinction is carried by the
+        // Candidate's actual status and the rich returned outcome below, so
+        // every successful creation persists `created` here.
+        const richOutcome =
+          proposal.resolution.status === "mapped"
+            ? "created"
+            : "created_needs_predicate_review";
         await recordCandidateProposal(client, {
           reflectionVersionId: input.reflectionVersionId,
           userId: input.userId,
-          outcome: createdOutcome,
+          outcome: "created",
           reasonCode: null,
           memoryCandidateId: insertedCandidateId,
           fingerprint: planned.candidate.dedupeFingerprint,
@@ -2430,7 +2473,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         });
         candidateOutcomes.push({
           proposalIndex,
-          outcome: createdOutcome,
+          outcome: richOutcome,
           reasonCode: null,
           memoryCandidateId: insertedCandidateId,
         });

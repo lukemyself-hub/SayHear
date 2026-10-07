@@ -11,10 +11,11 @@ import {
   RecoveryGateClosedError,
   type RecoveryGate,
 } from "../recovery-gate";
-import { ProviderDispatchError } from "../conversation-model";
-import type {
-  ModelRoleCallUsage,
-  ProviderResponseFailure,
+import {
+  ProviderDispatchError,
+  normalizeModelRoleCallUsage,
+  type ModelRoleCallUsage,
+  type ProviderResponseFailure,
 } from "../conversation-model";
 import type {
   ModelRoleAttemptKind,
@@ -370,6 +371,9 @@ async function executeNarrativeAttempt(input: Readonly<{
       currentSourceRevision: 0,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
+      // A proven response failure is authoritative for this same call; the
+      // request callback is the fallback when no failure carries usage.
+      usage: normalizeModelRoleCallUsage(responseFailureOf(error) ?? callUsage),
     });
     const outcome: NarrativeValidationEntrypointResult["outcome"] =
       recorded.outcome === "discarded"
@@ -427,6 +431,7 @@ async function executeNarrativeAttempt(input: Readonly<{
       currentSourceRevision: 0,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.dependencies.clock(),
+      usage: normalizeModelRoleCallUsage(callUsage),
     });
     return entrypointResult(
       request.draftRef,
@@ -451,6 +456,7 @@ async function executeNarrativeAttempt(input: Readonly<{
     currentSourceRevision: 0,
     expectedDataEpoch: input.expectedDataEpoch,
     now: input.dependencies.clock(),
+    usage: normalizeModelRoleCallUsage(callUsage),
   });
   if (recorded.outcome === "discarded") {
     return entrypointResult(

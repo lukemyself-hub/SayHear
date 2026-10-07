@@ -1,36 +1,169 @@
+import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { createPostgresPool } from "@sayhear/data";
 
 import {
+  isRawProviderErrorWaiver,
   ONE_A_3B_G1_ENABLED_ROLES,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
+  ONE_A_3B_ROLE_POLICY_VERSION,
   PURGE_SURFACE_REGISTRY_VERSION,
   sha256Hex,
 } from "@sayhear/application";
+import {
+  assertHostedWorkflowCanaryEvidence,
+  type WorkflowCanaryArtifacts,
+  type WorkflowCanaryValues,
+} from "./hosted-workflow-canary-gate";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const runRoot = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/run",
-);
-const sourceDirectory = resolve(runRoot, "evidence-sources");
-const sourceArtifactDirectory = resolve(runRoot, "source-artifacts");
-const catalogPath = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/fixtures.json",
-);
-const pinsPath = resolve(
-  repositoryRoot,
-  "eval/continuation-acceptance-1a3b/pins.json",
-);
-const f3ManifestPath = resolve(runRoot, "manifest.json");
-const hostedArtifactPath = resolve(runRoot, "hosted-canary/artifacts.json");
-const hostedValuesPath = resolve(runRoot, "hosted-canary/values.env.json");
-const deploymentPath = resolve(runRoot, "hosted-canary/deployment-inspect.json");
+
+/**
+ * The independent hosted acceptance environment approved for G1. ADR-0144
+ * requires the reviewed Vercel project and team to be named inputs rather than
+ * an implicit production default, so a Ready Preview inside the production
+ * project cannot be reclassified as isolated acceptance evidence.
+ */
+export const APPROVED_ACCEPTANCE_PROJECT_ID = "prj_nNj1vzuYjj7oeiwzqfsV3iMb3THs";
+export const APPROVED_ACCEPTANCE_TEAM_ID = "team_h4sAgEsoM7MeGcGoLdbuIyH1";
+export const PRODUCTION_PROJECT_ID = "prj_KJD7fJhlIxlOMc4W4goUsIhOaLly";
+export const HOSTED_RELEASE_IDENTITY_VERSION = "1a3b-g1-hosted-release-identity:v1";
+
+/** Vercel's API uses target=null for ordinary Preview deployments. */
+export function deploymentEnvironment(raw: Record<string, unknown>): string {
+  if (raw.target === null && !raw.customEnvironment) return "preview";
+  if (raw.target === "production") return "production";
+  throw new Error("Hosted deployment has no ordinary preview/production target identity.");
+}
+
+/** Normalize a Postgres URL to a credential-free target identity. */
+export function normalizeDatabaseIdentity(value: string): string {
+  const url = new URL(value);
+  return `${url.hostname.replace(/-pooler(?=\.)/, "")}:${url.port || "5432"}${url.pathname}`;
+}
+
+/** Reject any deployment that is not the approved isolated acceptance project. */
+export function assertApprovedAcceptanceDeployment(input: Readonly<{
+  deploymentCommit: unknown;
+  environment: unknown;
+  expectedCommit: unknown;
+  projectId: unknown;
+  teamId?: unknown;
+}>): void {
+  if (input.projectId === PRODUCTION_PROJECT_ID) {
+    throw new Error("Hosted acceptance must not be the production Vercel project.");
+  }
+  if (input.projectId !== APPROVED_ACCEPTANCE_PROJECT_ID) {
+    throw new Error("Hosted acceptance deployment is not in the approved acceptance project.");
+  }
+  if (input.teamId !== APPROVED_ACCEPTANCE_TEAM_ID) {
+    throw new Error("Hosted acceptance deployment is not in the approved acceptance team.");
+  }
+  if (input.environment !== "preview") {
+    throw new Error("Hosted acceptance deployment must be a preview deployment, not production.");
+  }
+  if (input.deploymentCommit !== input.expectedCommit) {
+    throw new Error("Hosted deployment commit does not match the frozen F3 manifest.");
+  }
+}
+
+/**
+ * Verify the content-free release identity the acceptance deployment reports
+ * about itself. This binds the deployment's actual business and purge-marker
+ * targets to the frozen commit, rather than trusting the generator process's
+ * environment variables, which cannot prove what the deployment uses.
+ */
+export function assertDeploymentReleaseIdentity(input: Readonly<{
+  businessTargetHash: string;
+  expectedCommit: string;
+  identity: unknown;
+  purgeMarkerTargetHash: string;
+}>): void {
+  if (!isRecord(input.identity)) {
+    throw new Error("Hosted release identity must be a content-free object.");
+  }
+  const identity = input.identity;
+  if (identity.version !== HOSTED_RELEASE_IDENTITY_VERSION) {
+    throw new Error("Hosted release identity has an unsupported version.");
+  }
+  if (identity.projectId !== APPROVED_ACCEPTANCE_PROJECT_ID) {
+    throw new Error("Hosted release identity is not the approved acceptance project.");
+  }
+  if (identity.teamId !== APPROVED_ACCEPTANCE_TEAM_ID || identity.environment !== "preview") {
+    throw new Error("Hosted release identity is not the approved acceptance team.");
+  }
+  if (identity.commit !== input.expectedCommit) {
+    throw new Error("Hosted release identity commit does not match the frozen F3 manifest.");
+  }
+  if (identity.businessTargetHash !== input.businessTargetHash) {
+    throw new Error("Hosted deployment business database does not match the checked acceptance database.");
+  }
+  if (identity.purgeMarkerTargetHash !== input.purgeMarkerTargetHash) {
+    throw new Error("Hosted deployment purge-marker database does not match the checked acceptance database.");
+  }
+}
+
+export function parseSourceOptions(args: readonly string[]) {
+  const allowed = new Set(["--run-root", "--catalog", "--pins", "--deployment-id", "--release-identity", "--expected-run-ids"]);
+  const values = new Map<string, string>();
+  for (let index = 0; index < args.length; index += 2) {
+    const name = args[index];
+    const value = args[index + 1];
+    if (!name || !allowed.has(name) || !value || value.startsWith("--") || values.has(name)) {
+      throw new Error("Expected unique --run-root, --catalog, --pins, --deployment-id and --release-identity arguments.");
+    }
+    values.set(name, value);
+  }
+  const required = (name: string): string => {
+    const value = values.get(name);
+    if (!value) throw new Error(`${name} is required.`);
+    return value;
+  };
+  const localPath = (name: string): string => {
+    const path = resolve(repositoryRoot, required(name));
+    const relativePath = relative(repositoryRoot, path);
+    if (!relativePath || relativePath.startsWith("..") || relativePath.startsWith("/")) {
+      throw new Error(`${name} must stay inside the repository.`);
+    }
+    return path;
+  };
+  return {
+    runRoot: (() => {
+      const path = localPath("--run-root");
+      if (path === resolve(repositoryRoot, "eval/continuation-acceptance-1a3b/run")) throw new Error("The historical run root is protected; use an independent run directory.");
+      return path;
+    })(),
+    catalogPath: localPath("--catalog"),
+    pinsPath: localPath("--pins"),
+    deploymentId: required("--deployment-id"),
+    releaseIdentityPath: localPath("--release-identity"),
+    expectedRunIds: (() => {
+      const ids = required("--expected-run-ids").split(",");
+      if (ids.some(id => !/^wrun_[A-Za-z0-9]+$/.test(id)) || new Set(ids).size !== ids.length) throw new Error("Expected run IDs must be unique platform IDs.");
+      return ids;
+    })(),
+  };
+}
+
+let runRoot: string;
+let catalogPath: string;
+let pinsPath: string;
+let sourceDirectory: string;
+let sourceArtifactDirectory: string;
+let f3ManifestPath: string;
+let hostedArtifactPath: string;
+let hostedValuesPath: string;
+let deploymentPath: string;
+let requestedDeploymentId: string;
+let releaseIdentityPath: string;
+let expectedRunIds: readonly string[];
 
 type JsonObject = Record<string, unknown>;
 
@@ -175,13 +308,7 @@ function successfulProviderCall(call: JsonObject): boolean {
 }
 
 function callHasIdentity(call: JsonObject): boolean {
-  return [
-    call.providerRequestId,
-    call.modelRunAttemptId,
-    call.attemptId,
-    call.requestId,
-    call.callId,
-  ].some(nonEmptyString);
+  return nonEmptyString(call.generationCommandId) && nonEmptyString(call.modelRunAttemptId);
 }
 
 export function validatedAcM01Result(
@@ -204,6 +331,7 @@ export function validatedAcM01Result(
   );
   const validatedCalls: JsonObject[] = [];
   for (const role of enabledRoles) {
+    const iteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role as keyof typeof ONE_A_3B_G1_ROLE_CONFIG_VERSIONS];
     const pin = isRecord(rolePins[role]) ? rolePins[role] : null;
     if (!pin || !isRecord(pin.parameters)) {
       throw new Error(`AC-M01 pin for ${role} is missing or incomplete.`);
@@ -216,10 +344,19 @@ export function validatedAcM01Result(
       if (!callHasIdentity(call)) {
         throw new Error(`AC-M01 provider call for ${role} has no call identity.`);
       }
+      if (!isRecord(call.usage) || !["inputTokens", "outputTokens", "reasoningTokens"].every((key) => call.usage && isRecord(call.usage) && (call.usage[key] === null || (typeof call.usage[key] === "number" && Number.isSafeInteger(call.usage[key]) && call.usage[key] >= 0)))) {
+        throw new Error(`AC-M01 provider call for ${role} has no valid usage record.`);
+      }
       if (
         call.provider !== pin.provider ||
         call.model !== pin.model ||
         call.modelSnapshot !== pin.snapshot ||
+        call.promptVersion !== pin.promptVersion ||
+        call.schemaVersion !== pin.schemaVersion ||
+        call.configVersion !== `${role}:g1-release:${iteration}` ||
+        call.providerPolicyVersion !== `${pin.provider}-${role}-egress:g1-release:${iteration}` ||
+        call.rolloutPin !== `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}` ||
+        call.rolePolicyVersion !== ONE_A_3B_ROLE_POLICY_VERSION ||
         !isRecord(call.parameters) ||
         sha256Hex(call.parameters) !== sha256Hex(pin.parameters)
       ) {
@@ -339,12 +476,12 @@ async function migrationPins(directory: string): Promise<readonly JsonObject[]> 
 }
 
 async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonly<{ deployment: JsonObject; reference: ArtifactReference }>> {
-  const deploymentId =
-    process.env.SAYHEAR_G1_DEPLOYMENT_ID ??
-    "dpl_7KamMS2m7WAus2HvNidAonVkJTXW";
+  const frozenCommit = f3Manifest.gitCommit;
+  if (typeof frozenCommit !== "string") throw new Error("Frozen F3 manifest has no git commit.");
+  const deploymentId = requestedDeploymentId;
   const { stdout } = await execFileAsync(
-    "pnpm",
-    ["exec", "vercel", "api", `/v13/deployments/${deploymentId}`],
+    "vercel",
+    ["api", `/v13/deployments/${deploymentId}`],
     { cwd: repositoryRoot, maxBuffer: 2_000_000 },
   );
   const raw: unknown = JSON.parse(stdout);
@@ -352,13 +489,73 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
     throw new Error("Vercel deployment response has no metadata.");
   }
   const metadata = raw.meta;
-  const deploymentCommit = metadata.gitCommitSha;
+  const deploymentCommit = metadata.gitCommitSha ?? metadata.githubCommitSha;
   if (typeof deploymentCommit !== "string") {
     throw new Error("Vercel deployment metadata has no git commit.");
   }
+  if (raw.readyState !== "READY" || (metadata.gitDirty !== undefined && String(metadata.gitDirty) !== "0")) {
+    throw new Error("Release evidence requires a Ready deployment from a clean checkout.");
+  }
+  // Bind the reviewed acceptance project/team explicitly and reject the
+  // production project: a Ready Preview inside production is not isolated
+  // acceptance evidence (ADR-0144).
+  assertApprovedAcceptanceDeployment({
+    deploymentCommit,
+    environment: deploymentEnvironment(raw),
+    expectedCommit: frozenCommit,
+    projectId: raw.projectId,
+    teamId: raw.teamId ?? raw.ownerId ?? metadata.teamId,
+  });
   const migrationPinsValue = await migrationPins(
     resolve(repositoryRoot, "packages/data/migrations"),
   );
+  const purgeMarkerPins = await migrationPins(resolve(repositoryRoot, "packages/data/migrations-purge-marker"));
+  const databaseUrl = process.env.TEST_DATABASE_URL;
+  const markerUrl = process.env.TEST_PURGE_MARKER_DATABASE_URL;
+  const productionUrl = process.env.DATABASE_URL;
+  if (!databaseUrl || !markerUrl || !productionUrl) throw new Error("Isolated hosted database targets and production identity are required.");
+  const businessDatabaseIdentityFingerprint = sha256Hex(normalizeDatabaseIdentity(databaseUrl));
+  const purgeMarkerDatabaseIdentityFingerprint = sha256Hex(normalizeDatabaseIdentity(markerUrl));
+  if (new Set([databaseUrl, markerUrl, productionUrl].map(normalizeDatabaseIdentity)).size !== 3) throw new Error("Hosted schema checks require distinct business, marker and production databases.");
+  // The CLI process environment only says which database *this* process would
+  // use; it cannot prove what the deployment actually uses. Read the
+  // content-free identity the deployment reports about itself and bind it to
+  // the checked targets.
+  // Fetch from the selected deployment through Vercel's authenticated CLI.
+  // Never accept an operator-authored file as deployed database identity.
+  const operatorSecret = process.env.CRON_SECRET;
+  if (!operatorSecret || /[\r\n"\\]/.test(operatorSecret)) throw new Error("Acceptance CRON_SECRET is required for the content-free deployment witness.");
+  const privateDirectory = await mkdtemp(resolve(tmpdir(), "sayhear-g1-identity-"));
+  const headerPath = resolve(privateDirectory, "curl.conf");
+  await writeFile(headerPath, `header = "Authorization: Bearer ${operatorSecret}"\n`, { mode: 0o600 });
+  const responsePath = resolve(privateDirectory, "identity.json");
+  try {
+    await execFileAsync("vercel", ["curl", "/api/internal/inspection/release-identity", "--deployment", deploymentId, "--", "--config", headerPath, "--silent", "--show-error", "--fail-with-body", "--max-time", "30", "--output", responsePath], { cwd: repositoryRoot, maxBuffer: 100000, timeout: 45000 });
+  } finally {
+    // Only remove the just-created credential transport file. Preserve the
+    // response capture and every pre-existing evidence directory.
+    await unlink(headerPath);
+  }
+  const releaseIdentity = await readJson(responsePath);
+  await writeFile(releaseIdentityPath, `${JSON.stringify({ ...releaseIdentity, fetchedAt: new Date().toISOString(), deploymentId, sourceUrl: `https://${raw.url}/api/internal/inspection/release-identity` }, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+  assertDeploymentReleaseIdentity({
+    businessTargetHash: businessDatabaseIdentityFingerprint,
+    expectedCommit: frozenCommit,
+    identity: releaseIdentity,
+    purgeMarkerTargetHash: purgeMarkerDatabaseIdentityFingerprint,
+  });
+  const inspectSchema = async (connectionString: string, expected: readonly JsonObject[]) => {
+    const pool = createPostgresPool({ applicationName: "sayhear-g1-hosted-schema-verifier", connectionString });
+    try {
+      const result = await pool.query<{migration_name: string; migration_sha256: string}>("SELECT migration_name, migration_sha256 FROM schema_migrations ORDER BY migration_name");
+      const observed = result.rows.map((row) => ({ name: row.migration_name, sha256: row.migration_sha256 }));
+      if (sha256Hex(observed) !== sha256Hex(expected)) throw new Error("Hosted database migration fingerprints do not match the frozen code.");
+      return sha256Hex(observed);
+    } finally { await pool.end(); }
+  };
+  const [schemaFingerprint, purgeMarkerSchemaFingerprint] = await Promise.all([
+    inspectSchema(databaseUrl, migrationPinsValue), inspectSchema(markerUrl, purgeMarkerPins),
+  ]);
   const deployment = {
     deploymentId: raw.id,
     deploymentCommit,
@@ -366,8 +563,14 @@ async function createDeploymentArtifact(f3Manifest: JsonObject): Promise<Readonl
     gitDirty: metadata.gitDirty,
     f3ManifestFingerprint: f3Manifest.fingerprint,
     projectId: raw.projectId,
+    teamId: releaseIdentity.teamId ?? raw.teamId ?? metadata.teamId,
+    environment: deploymentEnvironment(raw),
+    releaseIdentityVersion: releaseIdentity.version,
     readyState: raw.readyState,
-    schemaFingerprint: sha256Hex(migrationPinsValue),
+    schemaFingerprint,
+    purgeMarkerSchemaFingerprint,
+    businessDatabaseIdentityFingerprint,
+    purgeMarkerDatabaseIdentityFingerprint,
     target: raw.target,
     url: raw.url,
   } satisfies JsonObject;
@@ -426,6 +629,17 @@ async function sourceFrom(input: Readonly<{
 }
 
 async function main(): Promise<void> {
+  const options = parseSourceOptions(process.argv.slice(2));
+  ({ runRoot, catalogPath, pinsPath } = options);
+  requestedDeploymentId = options.deploymentId;
+  releaseIdentityPath = options.releaseIdentityPath;
+  expectedRunIds = options.expectedRunIds;
+  sourceDirectory = resolve(runRoot, "evidence-sources");
+  sourceArtifactDirectory = resolve(runRoot, "source-artifacts");
+  f3ManifestPath = resolve(runRoot, "manifest.json");
+  hostedArtifactPath = resolve(runRoot, "hosted-canary/artifacts.json");
+  hostedValuesPath = resolve(runRoot, "hosted-canary/values.env.json");
+  deploymentPath = resolve(runRoot, "hosted-canary/deployment-inspect.json");
   await mkdir(sourceDirectory, { recursive: true });
   await mkdir(sourceArtifactDirectory, { recursive: true });
   const catalog = await readJson(catalogPath);
@@ -433,6 +647,14 @@ async function main(): Promise<void> {
   const pins = await readJson(pinsPath);
   const hostedArtifacts = await readJson(hostedArtifactPath);
   const hostedValues = await readJson(hostedValuesPath);
+  // Same shared gate the exporter and verifier run, so a hand-assembled or
+  // truncated artifacts.json cannot be consumed here just because its strings
+  // happen not to match a probe.
+  assertHostedWorkflowCanaryEvidence(
+    hostedArtifacts as WorkflowCanaryArtifacts,
+    hostedValues as WorkflowCanaryValues,
+    { deploymentId: requestedDeploymentId, runIds: expectedRunIds },
+  );
   if (
     !Array.isArray(catalog.scenarios) ||
     !Array.isArray(hostedArtifacts.workflowHistory) ||
@@ -458,8 +680,11 @@ async function main(): Promise<void> {
   const purge = await readReport(resolve(runRoot, "test-reports/ac-purge-seam.json"));
   const drill = await readReport(resolve(runRoot, "test-reports/ac-purge-restore-drill.json"));
   const episode = await readReport(resolve(runRoot, "test-reports/ac-episode-admission.json"));
-  const capturePath = resolve(runRoot, "continuation-incumbent.json");
+  const capturePath = resolve(runRoot, "g1-provider-calls.json");
   const captureEvidence = await readJson(capturePath);
+  if (captureEvidence.preflight !== false || captureEvidence.gitDirty !== false || captureEvidence.manifestFingerprint !== f3Manifest.fingerprint || captureEvidence.gitCommit !== f3Manifest.gitCommit || !nonEmptyString(captureEvidence.runId)) {
+    throw new Error("G1 Provider capture must belong to the frozen F3 run and commit.");
+  }
   const capture = await reference(capturePath);
   const hosted = await reference(hostedArtifactPath);
   const pinsReference = await reference(pinsPath);
@@ -478,12 +703,11 @@ async function main(): Promise<void> {
   }
   const workflowReceiptIds = workflowHistory.flatMap((run) => {
     const output = isRecord(run.output) ? run.output : null;
-    return output && typeof output.workflowReceiptId === "string"
-      ? [output.workflowReceiptId]
-      : [];
+    const receiptId = output?.workflowReceiptId ?? run.runId;
+    return typeof receiptId === "string" ? [receiptId] : [];
   });
   const outboxEventIds = outboxPayloads.flatMap((event) =>
-    typeof event.outboxEventId === "string" ? [event.outboxEventId] : [],
+    typeof (event.outboxEventId ?? event.outbox_event_id) === "string" ? [String(event.outboxEventId ?? event.outbox_event_id)] : [],
   );
   const attemptIds = workflowHistory.flatMap((run) =>
     typeof run.runId === "string" ? [run.runId] : [],
@@ -492,6 +716,8 @@ async function main(): Promise<void> {
     throw new Error("Hosted canary does not contain workflow, outbox, and attempt IDs.");
   }
 
+  const hostedVerification = `node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts ${repositoryRelative(hostedArtifactPath)} --values ${repositoryRelative(hostedValuesPath)} --deployment-id ${requestedDeploymentId} --expected-run-ids ${expectedRunIds.join(",")}`;
+  const providerCommand = `node --import tsx scripts/capture-g1-role-provider-calls.ts --pins ${repositoryRelative(pinsPath)} --manifest ${repositoryRelative(f3ManifestPath)} --catalog ${repositoryRelative(catalogPath)} --out ${repositoryRelative(capturePath)}`;
   const commonVerification = "pnpm exec vitest run --reporter=json";
   const sourceArtifacts: Record<string, ArtifactReference> = {};
   const sources: SourceDocument[] = [];
@@ -534,8 +760,8 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-F01",
-    fixtureIds: ["cont-open-loop-en"],
-    command: "pnpm canary:workflow && pnpm exec tsx scripts/canary-hosted-scan.mjs --since 2026-09-12T23:42:42Z",
+    fixtureIds: continuationFixtureIds,
+    command: hostedVerification,
     result: {
       workflowReceiptIds,
       outboxEventIds,
@@ -543,15 +769,15 @@ async function main(): Promise<void> {
       hostedCanary: hosted,
       systemTestReport: systemMetadata,
     },
-    runId: "hosted-canary-2026-09-12T23:42:42Z",
+    runId: attemptIds[0]!,
     source: "hosted",
     references: [hosted, { path: system.reference.path, sha256: system.reference.sha256 }],
-    verificationCommand: "pnpm canary:workflow && pnpm exec tsx scripts/canary-hosted-scan.mjs --since 2026-09-12T23:42:42Z",
+    verificationCommand: hostedVerification,
   });
 
   await add({
     criterion: "AC-F02",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
     result: {
       purgeOrderIds: ids(purge.summary, (assertionId) => assertionId.includes("opening transaction") || assertionId.includes("duplicate starts")),
@@ -567,7 +793,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-E01",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "CI=true pnpm exec vitest run packages/application/src/episode/admission.test.ts",
     result: {
       episodeIds: ids(episode.summary, (assertionId) => assertionId.includes("continues") || assertionId.includes("creates")),
@@ -583,7 +809,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-R01",
-    fixtureIds: ["cont-memory-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-daily-weekly.system.test.ts",
     result: {
       reflectionIds: reflectionAssertions,
@@ -599,7 +825,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-G01",
-    fixtureIds: ["cont-memory-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/candidate-review-governance.system.test.ts",
     result: {
       registryReleaseIds: ids(governanceAssertions.length > 0 ? { ...system.summary, assertionIds: governanceAssertions } : system.summary, (assertionId) => assertionId.includes("release")),
@@ -615,7 +841,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-I01",
-    fixtureIds: ["cont-memory-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-inspection.system.test.ts",
     result: {
       accessAuditIds: ids(system.summary, (assertionId) => assertionId.includes("Reflection Inspector") || assertionId.includes("access-audit")),
@@ -633,12 +859,12 @@ async function main(): Promise<void> {
   await add({
     criterion: "AC-M01",
     fixtureIds: continuationFixtureIds,
-    command: "source $HOME/.config/sayhear/test-env.sh && pnpm exec tsx eval/continuation-acceptance-1a3b/run-synthetic-capture.ts --continue-on-error",
+    command: providerCommand,
     result: {
       ...providerEvidence,
       captureArtifact: capture,
     },
-    runId: "provider-capture-continuation-incumbent-2026-09-12",
+    runId: String(captureEvidence.runId),
     source: "provider",
     references: [capture, pinsReference],
     verificationCommand: "pnpm exec tsx eval/continuation-acceptance-1a3b/verify-fixtures.ts && pnpm exec vitest run tests/continuation-acceptance-f3.test.ts",
@@ -646,7 +872,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-L01",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
     result: {
       purgeSurfaceRegistryVersion: "purge-surface-registry:v1",
@@ -662,7 +888,7 @@ async function main(): Promise<void> {
 
   await add({
     criterion: "AC-L02",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts --reporter=json --outputFile=eval/continuation-acceptance-1a3b/run/test-reports/ac-purge-restore-drill.json",
     result: buildAcL02DrillResult({ drill: drill.summary, purge: purge.summary }),
     runId: drill.summary.runId,
@@ -671,25 +897,33 @@ async function main(): Promise<void> {
     verificationCommand: "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts",
   });
 
+  // ADR-0145: disclose the one named acceptance gap instead of claiming the
+  // raw Provider error probe passed.
+  const skippedChecks = hostedValues.rawProviderError === null && isRawProviderErrorWaiver(hostedValues.rawProviderErrorWaiver)
+    ? [hostedValues.rawProviderErrorWaiver]
+    : [];
   await add({
     criterion: "AC-W01",
-    fixtureIds: ["cont-open-loop-en"],
-    command: "pnpm canary:workflow",
+    fixtureIds: continuationFixtureIds,
+    command: hostedVerification,
     result: {
       hosted: true,
       canaryRunId: attemptIds[0],
       exportArtifact: hosted,
+      canaryValuesArtifact: await reference(hostedValuesPath),
+      expectedRunIds,
       deploymentId: workflowHistory[0]?.deploymentId,
+      skippedChecks,
     },
-    runId: attemptIds[0] ?? "hosted-canary-2026-09-12",
+    runId: attemptIds[0]!,
     source: "hosted",
-    references: [hosted],
-    verificationCommand: "pnpm canary:workflow",
+    references: [hosted, await reference(hostedValuesPath)],
+    verificationCommand: hostedVerification,
   });
 
   await add({
     criterion: "AC-D01",
-    fixtureIds: ["cont-open-loop-en"],
+    fixtureIds: continuationFixtureIds,
     command: `pnpm exec vercel api /v13/deployments/${String(deployment.deployment.deploymentId)}`,
     result: {
       deploymentId,

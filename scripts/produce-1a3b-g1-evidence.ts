@@ -1,3 +1,4 @@
+import { verifyCompletionCapture } from "./validator-completion";
 /**
  * Assemble the twelve typed G1 evidence artifacts from independently verified
  * source documents. A source document is either one JSON object or an entry in
@@ -19,6 +20,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import { G1_ACCEPTANCE_HARD_GATE_CONFIG_ID } from "../eval/continuation-acceptance-1a3b/protocol";
@@ -33,6 +35,7 @@ import {
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
   buildG1ReleaseIdentityFingerprint,
+  isRawProviderErrorWaiver,
   verifyOneA3bF3ReleaseArtifacts,
   verifyOneA3bG1EvidenceArtifact,
   verifyOneA3bG1RoleConfigurationsAgainstF3,
@@ -41,6 +44,7 @@ import {
   type OneA3bG1Evidence,
   type OneA3bG1EvidenceSource,
   type OneA3bG1ValidatorCalibration,
+  type RawProviderErrorWaiver,
 } from "@sayhear/application";
 
 import {
@@ -59,31 +63,6 @@ import { verifyValidatorPrecisionReport } from "./verify-1a3b-g1-evidence";
 const execFileAsync = promisify(execFile);
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const defaultCatalogPath =
-  "eval/continuation-acceptance-1a3b/fixtures.json";
-const defaultF3ManifestPath =
-  "eval/continuation-acceptance-1a3b/run/manifest.json";
-const defaultLedgerPath =
-  "eval/continuation-acceptance-1a3b/run/validator-ledger.json";
-const defaultPrecisionReportPath =
-  "eval/continuation-acceptance-1a3b/run/validator-precision-report.json";
-const defaultSourceBundlePath =
-  "eval/continuation-acceptance-1a3b/run/g1-evidence-sources.json";
-const defaultSourceDirectory =
-  "eval/continuation-acceptance-1a3b/run/evidence-sources";
-const defaultEvidenceDirectory =
-  "eval/continuation-acceptance-1a3b/run/evidence";
-const defaultManifestInputPath =
-  "eval/continuation-acceptance-1a3b/run/g1-release-manifest-input.json";
-const defaultReportPath =
-  "eval/continuation-acceptance-1a3b/run/g1-evidence-production-report.json";
-const defaultHardGatePath =
-  "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json";
-const defaultHostedArtifactPath =
-  "eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json";
-const defaultHostedValuesPath =
-  "eval/continuation-acceptance-1a3b/run/hosted-canary/values.env.json";
-
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const FINGERPRINT_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const GIT_COMMIT_PATTERN = /^[a-f0-9]{40}$/;
@@ -110,6 +89,8 @@ type Options = Readonly<{
   hardGatePath: string;
   hostedArtifactPath: string;
   hostedValuesPath: string;
+  deploymentId: string;
+  expectedRunIds: readonly string[];
 }>;
 
 type ReadDocument = Readonly<{
@@ -122,6 +103,7 @@ type ReadDocument = Readonly<{
 type ValidatorCheck = Readonly<{
   acceptedCases: number | null;
   ledgerSha256: string | null;
+  ledgerVersion?: "1a3b-f3-adjudication:v1" | "1a3b-f3-completion:v1";
   maxRejects: number | null;
   note: string | null;
   rejectedCases: number | null;
@@ -153,6 +135,11 @@ type HostedCanaryCheck = Readonly<{
   note: string | null;
   passed: boolean;
   path: string;
+  /**
+   * ADR-0145 acceptance gaps disclosed by name. Empty when no probe was
+   * skipped; never a claim that a skipped probe passed.
+   */
+  skippedChecks?: readonly RawProviderErrorWaiver[];
 }>;
 
 type SourceEvidence = Readonly<{
@@ -254,8 +241,9 @@ function option(
   return value;
 }
 
-function parseOptions(arguments_: readonly string[]): Options {
+export function parseOptions(arguments_: readonly string[]): Options {
   const knownFlags = new Set([
+    "--run-root",
     "--catalog",
     "--manifest",
     "--ledger",
@@ -268,60 +256,77 @@ function parseOptions(arguments_: readonly string[]): Options {
     "--hard-gates",
     "--hosted-artifacts",
     "--hosted-values",
+    "--deployment-id",
+    "--expected-run-ids",
   ]);
-  for (const argument of arguments_) {
-    if (argument.startsWith("--") && !knownFlags.has(argument)) {
-      throw new Error(`Unknown argument: ${argument}`);
+  const seenFlags = new Set<string>();
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const argument = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!argument || !knownFlags.has(argument) || seenFlags.has(argument) || !value || value.startsWith("--")) {
+      throw new Error("Expected unique known producer options with values.");
     }
+    seenFlags.add(argument);
   }
+  const runRoot = option(arguments_, "--run-root", "");
+  const catalogPath = option(arguments_, "--catalog", "");
+  if (!runRoot || !catalogPath) throw new Error("--run-root and --catalog are required.");
+  if (runRoot.replace(/\/$/, "") === "eval/continuation-acceptance-1a3b/run") throw new Error("Use an independent run directory; the historical run root is protected.");
+  repositoryPath(runRoot, "run root");
+  const runPath = (name: string) => `${runRoot}/${name}`;
+  const deploymentId = option(arguments_, "--deployment-id", "");
+  const expectedRunIds = option(arguments_, "--expected-run-ids", "").split(",");
+  if (!deploymentId || expectedRunIds.some(id => !/^wrun_[A-Za-z0-9]+$/.test(id)) || new Set(expectedRunIds).size !== expectedRunIds.length) throw new Error("--deployment-id and unique --expected-run-ids are required.");
   return {
-    catalogPath: option(arguments_, "--catalog", defaultCatalogPath),
+    deploymentId,
+    expectedRunIds,
+    catalogPath,
     f3ManifestPath: option(
       arguments_,
       "--manifest",
-      defaultF3ManifestPath,
+      runPath("manifest.json"),
     ),
-    ledgerPath: option(arguments_, "--ledger", defaultLedgerPath),
+    ledgerPath: option(arguments_, "--ledger", runPath("validator-ledger.json")),
     precisionReportPath: option(
       arguments_,
       "--precision-report",
-      defaultPrecisionReportPath,
+      runPath("validator-precision.json"),
     ),
     sourceBundlePath: option(
       arguments_,
       "--sources",
-      defaultSourceBundlePath,
+      runPath("g1-evidence-sources.json"),
     ),
     sourceDirectory: option(
       arguments_,
       "--source-dir",
-      defaultSourceDirectory,
+      runPath("evidence-sources"),
     ),
     evidenceDirectory: option(
       arguments_,
       "--evidence-dir",
-      defaultEvidenceDirectory,
+      runPath("evidence"),
     ),
     manifestInputPath: option(
       arguments_,
       "--manifest-input",
-      defaultManifestInputPath,
+      runPath("g1-release-manifest-input.json"),
     ),
-    reportPath: option(arguments_, "--report", defaultReportPath),
+    reportPath: option(arguments_, "--report", runPath("g1-evidence-production-report.json")),
     hardGatePath: option(
       arguments_,
       "--hard-gates",
-      defaultHardGatePath,
+      runPath("continuation-hard-gates.json"),
     ),
     hostedArtifactPath: option(
       arguments_,
       "--hosted-artifacts",
-      defaultHostedArtifactPath,
+      runPath("hosted-canary/artifacts.json"),
     ),
     hostedValuesPath: option(
       arguments_,
       "--hosted-values",
-      defaultHostedValuesPath,
+      runPath("hosted-canary/values.env.json"),
     ),
   };
 }
@@ -498,6 +503,12 @@ async function validatorCheck(
   ledgerDocument: ReadDocument,
   precisionReportDocument: ReadDocument,
   manifestFingerprint: string | null,
+  configuration: ModelRoleConfigurationSnapshot | undefined,
+  expectedIdentity: Readonly<{
+    catalogSha256: string;
+    gitCommit: string;
+    pinsFingerprint: string;
+  }> | undefined,
 ): Promise<ValidatorCheck> {
   const ledgerSha256 = ledgerDocument.bytes
     ? sha256Bytes(ledgerDocument.bytes)
@@ -530,6 +541,7 @@ async function validatorCheck(
   const catalog = catalogDocument.value as FixtureCatalog;
   const ledger = ledgerDocument.value as ValidatorAdjudicationLedger;
   try {
+    verifyCompletionCapture({ ledger, catalog, root: repositoryRoot, configuration, expected: expectedIdentity });
     const summary = validateValidatorLedger({ catalog, ledger });
     const decidedAt = objectString(ledger, "decidedAt");
     if (!decidedAt || Number.isNaN(new Date(decidedAt).getTime())) {
@@ -557,10 +569,14 @@ async function validatorCheck(
     const precisionSummary = verifyValidatorPrecisionReport({
       report: precisionReportDocument.value,
       manifestFingerprint,
+      expectedFixtureIds: catalog.precisionDrafts?.map((draft) => draft.id),
+      expectedCapture: expectedIdentity,
+      configuration,
     });
     return {
       acceptedCases: summary.accepted,
       ledgerSha256,
+      ledgerVersion: ledger.version,
       maxRejects: summary.maxRejects,
       note: null,
       precisionFalseBlockingCases: precisionSummary.falseBlockingCases,
@@ -710,6 +726,8 @@ function findWorkflowRunId(value: unknown): string | null {
 async function hostedCanaryCheck(
   artifactValue: string,
   valuesValue: string,
+  deploymentId: string,
+  expectedRunIds: readonly string[],
 ): Promise<HostedCanaryCheck> {
   let artifactPath: string;
   let valuesPath: string;
@@ -762,7 +780,6 @@ async function hostedCanaryCheck(
     "actionPayload",
     "contentHmac",
     "privateBody",
-    "rawProviderError",
     "renderedPrompt",
     "secret",
   ];
@@ -770,9 +787,35 @@ async function hostedCanaryCheck(
     return {
       artifactSha256: sha256Bytes(artifactBytes),
       canaryRunId: null,
+      note: "Hosted canary values must contain the five non-skipped non-empty configured values.",
+      passed: false,
+      path: relativeRepositoryPath(artifactPath),
+    };
+  }
+  // ADR-0145: raw_provider_error may be null only under the typed waiver; a
+  // non-null value is always scanned by the shared gate, waiver or not. The
+  // report names the skipped check instead of claiming it passed.
+  const skippedChecks: RawProviderErrorWaiver[] = [];
+  if (values.rawProviderError === null) {
+    if (!isRawProviderErrorWaiver(values.rawProviderErrorWaiver)) {
+      return {
+        artifactSha256: sha256Bytes(artifactBytes),
+        canaryRunId: null,
+        note: "Hosted canary raw Provider error is null without the approved ADR-0145 waiver.",
+        passed: false,
+        path: relativeRepositoryPath(artifactPath),
+        skippedChecks,
+      };
+    }
+    skippedChecks.push(values.rawProviderErrorWaiver);
+  } else if (!nonEmptyString(values.rawProviderError)) {
+    return {
+      artifactSha256: sha256Bytes(artifactBytes),
+      canaryRunId: null,
       note: "Hosted canary values must contain all six non-empty configured values.",
       passed: false,
       path: relativeRepositoryPath(artifactPath),
+      skippedChecks,
     };
   }
   let artifacts: unknown;
@@ -805,6 +848,8 @@ async function hostedCanaryCheck(
         cwd: repositoryRoot,
         env: {
           ...process.env,
+          SAYHEAR_WORKFLOW_CANARY_DEPLOYMENT_ID: deploymentId,
+          SAYHEAR_WORKFLOW_CANARY_RUN_IDS: expectedRunIds.join(","),
           SAYHEAR_WORKFLOW_CANARY_ARTIFACTS_FILE: artifactPath,
           SAYHEAR_WORKFLOW_CANARY_VALUES: JSON.stringify(values),
         },
@@ -820,6 +865,7 @@ async function hostedCanaryCheck(
       note: error instanceof Error ? error.message : "Hosted Workflow canary failed.",
       passed: false,
       path: relativeRepositoryPath(artifactPath),
+      skippedChecks,
     };
   }
 
@@ -831,6 +877,7 @@ async function hostedCanaryCheck(
       note: "Hosted canary passed privacy scanning but has no workflow history run ID.",
       passed: false,
       path: relativeRepositoryPath(artifactPath),
+      skippedChecks,
     };
   }
   return {
@@ -839,6 +886,7 @@ async function hostedCanaryCheck(
     note: null,
     passed: true,
     path: relativeRepositoryPath(artifactPath),
+    skippedChecks,
   };
 }
 
@@ -927,16 +975,35 @@ async function buildPreflight(options: Options): Promise<Preflight> {
     }
   }
 
+  // Bind a completion capture to the frozen commit, catalog and pins so a
+  // capture produced on another checkout cannot become this release's
+  // validator evidence just because its own header is internally consistent.
+  const expectedCaptureIdentity =
+    f3Manifest &&
+    currentCommit &&
+    isRecord(f3Manifest.pins) &&
+    typeof f3Manifest.pins.sha256 === "string" &&
+    isRecord(catalogDocument.value)
+      ? {
+          catalogSha256: sha256(catalogDocument.value),
+          gitCommit: currentCommit,
+          pinsFingerprint: f3Manifest.pins.sha256,
+        }
+      : undefined;
   const validator = await validatorCheck(
     catalogDocument,
     ledgerDocument,
     precisionReportDocument,
     f3Manifest ? f3ManifestFingerprint(f3Manifest) : null,
+    roleCheck.configurations.find((configuration) => configuration.role === "narrative.validate"),
+    expectedCaptureIdentity,
   );
   const hardGate = await hardGateCheck(options.hardGatePath);
   const hostedCanary = await hostedCanaryCheck(
     options.hostedArtifactPath,
     options.hostedValuesPath,
+    options.deploymentId,
+    options.expectedRunIds,
   );
   const f3Ready =
     f3Mismatches.length === 0 &&
@@ -1127,6 +1194,50 @@ async function parseSourceEvidence(
           );
         }
       }
+      // ADR-0144/0145: the final verifier re-scans the hashed values export and
+      // establishes the complete run set. Here we only check the values export
+      // hash and the run-set syntax/uniqueness at the source boundary; this
+      // regex does not prove completeness, which stays the final verifier's gate.
+      const canaryValuesArtifact = isRecord(result.canaryValuesArtifact)
+        ? result.canaryValuesArtifact
+        : null;
+      const valuesPathValue = canaryValuesArtifact
+        ? objectString(canaryValuesArtifact, "path")
+        : null;
+      const valuesHash = canaryValuesArtifact
+        ? objectString(canaryValuesArtifact, "sha256")
+        : null;
+      if (!valuesPathValue || !valuesHash || !SHA256_PATTERN.test(valuesHash)) {
+        errors.push("AC-W01 canaryValuesArtifact must contain a repository path and SHA-256 hash");
+      } else {
+        try {
+          const valuesPath = repositoryPath(
+            valuesPathValue,
+            "AC-W01 canary values artifact",
+          );
+          const valuesBytes = await readFile(valuesPath);
+          if (sha256Bytes(valuesBytes) !== valuesHash) {
+            errors.push("AC-W01 canaryValuesArtifact hash does not match its file");
+          }
+        } catch (error) {
+          errors.push(
+            `AC-W01 canary values artifact is unavailable: ${
+              error instanceof Error ? error.message : "read failed"
+            }`,
+          );
+        }
+      }
+      const expectedRunIds = result.expectedRunIds;
+      if (
+        !Array.isArray(expectedRunIds) ||
+        expectedRunIds.length === 0 ||
+        expectedRunIds.some(
+          (id) => typeof id !== "string" || !/^wrun_[A-Za-z0-9]+$/.test(id),
+        ) ||
+        new Set(expectedRunIds).size !== expectedRunIds.length
+      ) {
+        errors.push("AC-W01 expectedRunIds must be a non-empty unique Workflow run-id list");
+      }
     }
   }
   // artifactSha256 is already covered by the errors pushed above, but stating
@@ -1296,6 +1407,7 @@ function sourceSpecificErrors(
   criterion: OneA3bG1AcceptanceCriterion,
   preflight: Preflight,
   releaseIdentity: string | null,
+  evidenceDirectory: string,
 ): readonly string[] {
   if (!source) return [];
   const errors: string[] = [];
@@ -1322,10 +1434,12 @@ function sourceSpecificErrors(
       !Array.isArray(providerCalls) ||
       providerCalls.length === 0 ||
       providerCalls.some(
-        (entry) => !isRecord(entry) || entry.provider !== "deepseek",
+        (entry) =>
+          !isRecord(entry) ||
+          (entry.provider !== "deepseek" && entry.provider !== "opencode-go"),
       )
     ) {
-      errors.push("AC-M01 source must contain real DeepSeek provider calls");
+      errors.push("AC-M01 source must contain real DeepSeek or OpenCode Go provider calls");
     }
   }
   if (criterion === "AC-W01") {
@@ -1376,7 +1490,7 @@ function sourceSpecificErrors(
       fixtureIds: source.fixtureIds,
       command: source.command,
       artifactSha256: "0".repeat(64),
-      artifactPath: `${defaultEvidenceDirectory}/${criterion.toLowerCase()}.json`,
+      artifactPath: `${evidenceDirectory}/${criterion.toLowerCase()}.json`,
       owner: source.owner,
       source: source.source,
       status: "verified",
@@ -1410,6 +1524,7 @@ function criterionNote(
   source: SourceEvidence | undefined,
   preflight: Preflight,
   sourceErrors: readonly string[],
+  sourceDirectory: string,
 ): string {
   const blockers: string[] = [];
   if (!preflight.f3Ready) {
@@ -1424,7 +1539,7 @@ function criterionNote(
   }
   if (!source) {
     blockers.push(
-      `no verified evidence source; add one under ${defaultSourceDirectory}`,
+      `no verified evidence source; add one under ${sourceDirectory}`,
     );
   }
   if (sourceErrors.length > 0) blockers.push(...sourceErrors);
@@ -1446,10 +1561,11 @@ function criterionReports(
   sources: SourceCollection,
   preflight: Preflight,
   releaseIdentity: string | null,
+  options: Options,
 ): readonly CriterionReport[] {
   return ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA.map((criterion) => {
     const source = sources.sources.get(criterion);
-    const errors = sourceSpecificErrors(source, criterion, preflight, releaseIdentity);
+    const errors = sourceSpecificErrors(source, criterion, preflight, releaseIdentity, options.evidenceDirectory);
     const sourceReady = source !== undefined && errors.length === 0;
     const verified =
       preflight.f3Ready &&
@@ -1458,14 +1574,14 @@ function criterionReports(
     return {
       criterion,
       fixtureIds: source?.fixtureIds ?? [],
-      note: criterionNote(criterion, source, preflight, errors),
+      note: criterionNote(criterion, source, preflight, errors, options.sourceDirectory),
       sourceArtifactPath: source?.artifactPath ?? null,
       status: verified ? "verified" : "blocked",
     };
   });
 }
 
-function evidenceArtifactValue(input: Readonly<{
+export function evidenceArtifactValue(input: Readonly<{
   evidence: OneA3bG1Evidence;
   f3ManifestFingerprint: string;
   fixtureCatalogSha256: string;
@@ -1483,6 +1599,15 @@ function evidenceArtifactValue(input: Readonly<{
       continue;
     }
     resultFields[key] = input.source.result[key];
+  }
+  // ADR-0145: carry the named skipped check into the assembled artifact so the
+  // release record discloses the gap instead of implying all six probes ran.
+  if (
+    input.evidence.criterion === "AC-W01" &&
+    Array.isArray(input.source.result.skippedChecks) &&
+    input.source.result.skippedChecks.length > 0
+  ) {
+    resultFields.skippedChecks = input.source.result.skippedChecks;
   }
   const result: JsonObject = {
     ...resultFields,
@@ -1631,7 +1756,7 @@ function validatorCalibration(
       repositoryPath(options.ledgerPath, "validator ledger"),
     ),
     ledgerSha256: preflight.validator.ledgerSha256,
-    ledgerVersion: "1a3b-f3-adjudication:v1",
+    ledgerVersion: preflight.validator.ledgerVersion ?? "1a3b-f3-adjudication:v1",
     precisionReportPath: relativeRepositoryPath(
       repositoryPath(options.precisionReportPath, "validator precision report"),
     ),
@@ -1641,10 +1766,10 @@ function validatorCalibration(
     precisionFalseBlockingCases:
       preflight.validator.precisionFalseBlockingCases,
     f3ManifestFingerprint: preflight.f3ManifestFingerprint,
-    totalCases: 18,
+    totalCases: preflight.validator.totalCases,
     acceptedCases: preflight.validator.acceptedCases,
     maxRejects: preflight.validator.maxRejects,
-    humanOwner: "Luke",
+    humanOwner: preflight.validator.ledgerVersion === "1a3b-f3-completion:v1" ? "capture-verifier" : "Luke",
     status: "verified",
   };
 }
@@ -1670,6 +1795,7 @@ async function writeManifestInput(input: Readonly<{
     gitCommit: input.preflight.currentCommit,
     roleConfigurations: input.preflight.roleCheck.configurations,
     fixture: {
+      catalogPath: relativeRepositoryPath(repositoryPath(input.options.catalogPath, "F3 fixture catalog")),
       f3ManifestPath: relativeRepositoryPath(
         repositoryPath(input.options.f3ManifestPath, "F3 manifest"),
       ),
@@ -1774,7 +1900,7 @@ async function main(): Promise<void> {
   const preflight = await buildPreflight(options);
   const sources = await collectSources(options, preflight.fixtureIds);
   const releaseIdentity = await buildReleaseIdentity(preflight);
-  const criteria = criterionReports(sources, preflight, releaseIdentity);
+  const criteria = criterionReports(sources, preflight, releaseIdentity, options);
   let evidence: readonly OneA3bG1Evidence[] = [];
   let manifestInputWritten = false;
   let evidenceWritten: readonly string[] = [];
@@ -1834,12 +1960,19 @@ async function main(): Promise<void> {
   console.log(`[g1-evidence] wrote ${evidence.length} evidence artifacts`);
 }
 
-main().catch((error: unknown) => {
-  console.error(
-    `[g1-evidence] ${error instanceof Error ? error.message : "production failed"}`,
-  );
-  process.exitCode = 1;
-});
+// Run the producer only when invoked as the CLI. Importing it (for tests or
+// reuse) must not execute main() or touch process.exitCode.
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  main().catch((error: unknown) => {
+    console.error(
+      `[g1-evidence] ${error instanceof Error ? error.message : "production failed"}`,
+    );
+    process.exitCode = 1;
+  });
+}
 
 
 /**

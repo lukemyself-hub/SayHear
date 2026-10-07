@@ -98,6 +98,14 @@ type InsertCandidateInput = Readonly<{
   generationCommandId: GenerationCommandId;
   modelRunAttemptId: ModelRunAttemptId;
   fingerprint: string;
+  /**
+   * Owner-verified citations to persist on `episode_candidate_evidence_links`.
+   * Callers must pre-filter to frozen owner Evidence; unknown / cross-owner
+   * IDs are never linked (ADR-0087).
+   */
+  evidenceItemIds: readonly string[];
+  /** Owner-resolvable Entity anchors for `episode_candidate_entity_links`. */
+  entityAnchorIds: readonly string[];
   dispositionReasonCode?: string;
   decidedAt?: Date;
   terminalContentExpiresAt?: Date;
@@ -107,6 +115,7 @@ type InsertVersionInput = Readonly<{
   episodeId: string;
   userId: UserId;
   revision: number;
+  supersedesVersionId: string | null;
   sourceRevision: number;
   kind: string;
   content: {
@@ -119,6 +128,14 @@ type InsertVersionInput = Readonly<{
   policyVersion: string;
   generationCommandId: GenerationCommandId;
   modelRunAttemptId: ModelRunAttemptId;
+  /**
+   * Owner-verified citations to persist on `episode_evidence_links` for this
+   * immutable version. Continuations pass predecessor links merged with the
+   * newly admitted refs.
+   */
+  evidenceItemIds: readonly string[];
+  /** Owner-resolvable Entity anchors for `episode_version_entity_links`. */
+  entityAnchorIds: readonly string[];
   now: Date;
 }>;
 
@@ -776,6 +793,24 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
       let unresolvedCount = 0;
       let rejectedCount = 0;
 
+      // Only frozen owner Evidence and owner-resolvable Entities may ever be
+      // linked. The plan gate already rejects unknown refs, but rejected and
+      // unresolved proposals are persisted too, so the intersection is
+      // enforced here for every candidate (ADR-0087).
+      const frozenEvidenceIds = new Set<string>(
+        frozen.evidence.map((item) => item.evidenceItemId),
+      );
+      const frozenEntityIds = new Set<string>(frozen.resolvableEntityIds);
+
+      // A single admission batch may contain more than one continuation of the
+      // same Episode. Each continuation must chain onto the most recent
+      // in-batch successor rather than the frozen snapshot, or two inserts
+      // collide on the (episode_id, revision) unique constraint.
+      const inBatchEpisodeSuccessors = new Map<
+        string,
+        Readonly<{ versionId: string; revision: number }>
+      >();
+
       for (const proposal of input.proposals) {
         const plan = planEpisodeAdmission({
           proposal,
@@ -822,6 +857,20 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
 
         candidateCount += 1;
         const candidateId = createUuidV7(now);
+        const citedEvidenceIds = [
+          ...new Set(
+            proposal.citedEvidenceItemIds.filter((id) =>
+              frozenEvidenceIds.has(id),
+            ),
+          ),
+        ];
+        const admittedEntityIds = [
+          ...new Set(
+            (proposal.entityAnchorIds ?? []).filter((id) =>
+              frozenEntityIds.has(id),
+            ),
+          ),
+        ];
 
         if (plan.action === "reject") {
           await this.insertCandidateWithin(client, {
@@ -841,6 +890,8 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             generationCommandId: input.generationCommandId,
             modelRunAttemptId: input.modelRunAttemptId,
             fingerprint,
+            evidenceItemIds: citedEvidenceIds,
+            entityAnchorIds: admittedEntityIds,
             dispositionReasonCode: plan.rejectionCode,
             decidedAt: now,
             terminalContentExpiresAt: addDays(now, TERMINAL_CONTENT_EXPIRY_DAYS),
@@ -867,6 +918,8 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             generationCommandId: input.generationCommandId,
             modelRunAttemptId: input.modelRunAttemptId,
             fingerprint,
+            evidenceItemIds: citedEvidenceIds,
+            entityAnchorIds: admittedEntityIds,
           });
           unresolvedCount += 1;
           continue;
@@ -885,12 +938,15 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             episodeId,
             userId: input.userId,
             revision: 1,
+            supersedesVersionId: null,
             sourceRevision: input.sourceRevision,
             kind: plan.content.kind,
             content: plan.content,
             policyVersion: input.policyVersion,
             generationCommandId: input.generationCommandId,
             modelRunAttemptId: input.modelRunAttemptId,
+            evidenceItemIds: citedEvidenceIds,
+            entityAnchorIds: admittedEntityIds,
             now,
           });
           await client.query(
@@ -915,6 +971,8 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             generationCommandId: input.generationCommandId,
             modelRunAttemptId: input.modelRunAttemptId,
             fingerprint,
+            evidenceItemIds: citedEvidenceIds,
+            entityAnchorIds: admittedEntityIds,
           });
           acceptedCount += 1;
           continue;
@@ -922,29 +980,58 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
 
         // continue_episode: append the immutable successor version and only
         // advance the pointer when it still sits on the superseded version.
-        const currentVersion = frozen.activeEpisodes.find(
+        const frozenCurrentVersion = frozen.activeEpisodes.find(
           (episode) => episode.episodeId === plan.episodeId,
         );
-        if (!currentVersion) {
+        if (!frozenCurrentVersion) {
           await client.query("ROLLBACK");
           return { outcome: "fenced", reason: "episode_missing" };
         }
+        // Base the successor on the most recent version of this Episode in the
+        // current batch, or the frozen current version for the first
+        // continuation. Chaining onto the in-batch successor keeps revisions
+        // strictly increasing and always supersedes the live predecessor
+        // instead of a stale snapshot version.
+        const base = inBatchEpisodeSuccessors.get(plan.episodeId) ?? {
+          versionId: frozenCurrentVersion.currentVersionId,
+          revision: frozenCurrentVersion.currentRevision,
+        };
+        // A continuation carries forward the predecessor's still-valid links
+        // and adds the newly admitted refs, deduped. It never invents links
+        // the predecessor did not have, and never copies refs that are no
+        // longer valid or owner-scoped (ADR-0037 / ADR-0089).
+        const carriedLinks = await this.loadCarryForwardVersionLinksWithin(
+          client,
+          {
+            userId: input.userId,
+            episodeVersionId: base.versionId,
+          },
+        );
+        const successorEvidenceIds = [
+          ...new Set([...carriedLinks.evidenceItemIds, ...citedEvidenceIds]),
+        ];
+        const successorEntityIds = [
+          ...new Set([...carriedLinks.entityIds, ...admittedEntityIds]),
+        ];
         const successorId = await this.insertVersionWithin(client, {
           episodeId: plan.episodeId,
           userId: input.userId,
-          revision: currentVersion.currentRevision + 1,
+          revision: base.revision + 1,
+          supersedesVersionId: base.versionId,
           sourceRevision: input.sourceRevision,
           kind: plan.content.kind,
           content: plan.content,
           policyVersion: input.policyVersion,
           generationCommandId: input.generationCommandId,
           modelRunAttemptId: input.modelRunAttemptId,
+          evidenceItemIds: successorEvidenceIds,
+          entityAnchorIds: successorEntityIds,
           now,
         });
         await client.query(
           `UPDATE episode_versions SET status = 'superseded'
            WHERE episode_version_id = $1 AND status = 'current'`,
-          [currentVersion.currentVersionId],
+          [base.versionId],
         );
         await client.query(
           `UPDATE episodes SET current_version_id = $3
@@ -954,9 +1041,13 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             plan.episodeId,
             input.userId,
             successorId,
-            currentVersion.currentVersionId,
+            base.versionId,
           ],
         );
+        inBatchEpisodeSuccessors.set(plan.episodeId, {
+          versionId: successorId,
+          revision: base.revision + 1,
+        });
         await this.insertCandidateWithin(client, {
           candidateId,
           userId: input.userId,
@@ -974,6 +1065,8 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
           generationCommandId: input.generationCommandId,
           modelRunAttemptId: input.modelRunAttemptId,
           fingerprint,
+          evidenceItemIds: citedEvidenceIds,
+          entityAnchorIds: admittedEntityIds,
         });
         acceptedCount += 1;
       }
@@ -1470,10 +1563,10 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
          model_run_attempt_id, dedupe_fingerprint,
          dedupe_fingerprint_key_version, disposition_reason_code,
          disposition_policy_version, decided_at, terminal_effective_at,
-         terminal_content_expires_at, created_at
+         terminal_content_expires_at, reproposal_policy, created_at
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14,
-         $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+         $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
        )`,
       [
         input.candidateId,
@@ -1499,15 +1592,30 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
         terminal ? (input.decidedAt ?? null) : null,
         terminal ? (input.decidedAt ?? null) : null,
         terminal ? (input.terminalContentExpiresAt ?? null) : null,
+        terminal ? "material_change_allowed" : null,
         input.decidedAt ?? new Date(),
       ],
     );
-    const candidateLinks = await client.query<{ evidence_item_id: string }>(
-      `SELECT evidence_item_id FROM episode_candidate_evidence_links
-       WHERE episode_candidate_id = $1`,
-      [input.candidateId],
+    await this.insertEvidenceLinkRowsWithin(
+      client,
+      "episode_candidate_evidence_links",
+      "episode_candidate_evidence_link_id",
+      "episode_candidate_id",
+      input.candidateId,
+      input.userId,
+      input.evidenceItemIds,
+      input.decidedAt ?? new Date(),
     );
-    void candidateLinks;
+    await this.insertEntityLinkRowsWithin(
+      client,
+      "episode_candidate_entity_links",
+      "episode_candidate_entity_link_id",
+      "episode_candidate_id",
+      input.candidateId,
+      input.userId,
+      input.entityAnchorIds,
+      input.decidedAt ?? new Date(),
+    );
   }
 
   private async insertVersionWithin(
@@ -1542,11 +1650,123 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
         input.policyVersion,
         input.generationCommandId,
         input.modelRunAttemptId,
-        input.revision === 1 ? null : null,
+        input.supersedesVersionId,
         input.now,
       ],
     );
-    return inserted.rows[0]!.episode_version_id;
+    const episodeVersionId = inserted.rows[0]!.episode_version_id;
+    await this.insertEvidenceLinkRowsWithin(
+      client,
+      "episode_evidence_links",
+      "episode_evidence_link_id",
+      "episode_version_id",
+      episodeVersionId,
+      input.userId,
+      input.evidenceItemIds,
+      input.now,
+    );
+    await this.insertEntityLinkRowsWithin(
+      client,
+      "episode_version_entity_links",
+      "episode_version_entity_link_id",
+      "episode_version_id",
+      episodeVersionId,
+      input.userId,
+      input.entityAnchorIds,
+      input.now,
+    );
+    return episodeVersionId;
+  }
+
+  private async insertEvidenceLinkRowsWithin(
+    client: PoolClient,
+    table:
+      | "episode_candidate_evidence_links"
+      | "episode_evidence_links",
+    idColumn: string,
+    foreignKeyColumn: "episode_candidate_id" | "episode_version_id",
+    foreignId: string,
+    userId: UserId,
+    evidenceItemIds: readonly string[],
+    now: Date,
+  ): Promise<void> {
+    for (const evidenceItemId of evidenceItemIds) {
+      await client.query(
+        `INSERT INTO ${table} (
+           ${idColumn}, ${foreignKeyColumn}, user_id, evidence_item_id, created_at
+         ) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (${foreignKeyColumn}, evidence_item_id) DO NOTHING`,
+        [createUuidV7(now), foreignId, userId, evidenceItemId, now],
+      );
+    }
+  }
+
+  private async insertEntityLinkRowsWithin(
+    client: PoolClient,
+    table:
+      | "episode_candidate_entity_links"
+      | "episode_version_entity_links",
+    idColumn: string,
+    foreignKeyColumn: "episode_candidate_id" | "episode_version_id",
+    foreignId: string,
+    userId: UserId,
+    entityIds: readonly string[],
+    now: Date,
+  ): Promise<void> {
+    for (const entityId of entityIds) {
+      await client.query(
+        `INSERT INTO ${table} (
+           ${idColumn}, ${foreignKeyColumn}, user_id, entity_id, created_at
+         ) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (${foreignKeyColumn}, entity_id) DO NOTHING`,
+        [createUuidV7(now), foreignId, userId, entityId, now],
+      );
+    }
+  }
+
+  /**
+   * Predecessor immutable links that remain valid for the owner right now:
+   * active owner Evidence on its current final/corrected revision, and
+   * non-deleted owner Entities. A continuation carries these forward so the
+   * successor's current version stays a real, still-supported basis; invalid
+   * or forgotten refs are never copied (ADR-0037 / ADR-0087 / ADR-0089).
+   */
+  private async loadCarryForwardVersionLinksWithin(
+    client: PoolClient,
+    input: { userId: UserId; episodeVersionId: string },
+  ): Promise<{ evidenceItemIds: readonly string[]; entityIds: readonly string[] }> {
+    const evidence = await client.query<{ evidence_item_id: string }>(
+      `SELECT l.evidence_item_id
+       FROM episode_evidence_links l
+       INNER JOIN evidence_items item
+         ON item.evidence_item_id = l.evidence_item_id
+       INNER JOIN conversation_events ev
+         ON ev.conversation_event_id = item.source_event_id
+       INNER JOIN conversation_event_revisions rev
+         ON rev.conversation_event_revision_id = item.source_revision_id
+       WHERE l.episode_version_id = $1 AND l.user_id = $2
+         AND item.user_id = $2 AND item.status = 'active'
+         AND ev.lifecycle_status = 'active'
+         AND ev.current_revision_id = rev.conversation_event_revision_id
+         AND rev.transcript_status IN ('final', 'corrected')
+         AND rev.content_purged_at IS NULL
+       ORDER BY l.evidence_item_id`,
+      [input.episodeVersionId, input.userId],
+    );
+    const entities = await client.query<{ entity_id: string }>(
+      `SELECT l.entity_id
+       FROM episode_version_entity_links l
+       INNER JOIN entities e
+         ON e.entity_id = l.entity_id AND e.user_id = $2
+       WHERE l.episode_version_id = $1 AND l.user_id = $2
+         AND e.deleted_at IS NULL AND e.current_version_id IS NOT NULL
+       ORDER BY l.entity_id`,
+      [input.episodeVersionId, input.userId],
+    );
+    return {
+      evidenceItemIds: evidence.rows.map((row) => row.evidence_item_id),
+      entityIds: entities.rows.map((row) => row.entity_id),
+    };
   }
 
   private async loadFrozenBuildInputWithin(
@@ -1573,7 +1793,8 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
     }
     const evidence = await client.query<RawEvidenceRow>(
       `SELECT item.evidence_item_id, item.locator_type, item.locator_key,
-              item.source_status, revision.conversation_event_revision_id,
+              item.source_status,
+              revision.conversation_event_revision_id AS revision_id,
               revision.canonical_text, revision.locale
        FROM evidence_items item
        INNER JOIN conversation_event_revisions revision

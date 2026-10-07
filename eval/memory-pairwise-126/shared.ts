@@ -76,7 +76,11 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
   conversationAdapter: TwinConversationAdapter;
 } {
   const adapter =
-    environment.SAYHEAR_PROVIDER_ADAPTER === "openai" ? "openai" : "deepseek";
+    environment.SAYHEAR_PROVIDER_ADAPTER === "openai"
+      ? "openai"
+      : environment.SAYHEAR_PROVIDER_ADAPTER === "opencode-go"
+        ? "opencode-go"
+        : "deepseek";
   const profile =
     adapter === "deepseek"
       ? {
@@ -87,20 +91,31 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
           provider: "deepseek" as const,
           providerPolicyVersion: "deepseek-conversation-text:v1",
         }
-      : {
-          apiKey: requiredEnvironment("OPENAI_API_KEY"),
-          baseUrl: "https://api.openai.com/v1",
-          defaultModel: "gpt-5.4",
-          provider: "openai" as const,
-          providerPolicyVersion: "openai-conversation-text:v1",
-        };
+      : adapter === "opencode-go"
+        ? {
+            apiKey: requiredEnvironment("OPENCODE_GO_API_KEY"),
+            defaultModel: "deepseek-v4.1-flash",
+            provider: "opencode-go" as const,
+            providerPolicyVersion: "opencode-go-conversation-text:v1",
+          }
+        : {
+            apiKey: requiredEnvironment("OPENAI_API_KEY"),
+            baseUrl: "https://api.openai.com/v1",
+            defaultModel: "gpt-5.4",
+            provider: "openai" as const,
+            providerPolicyVersion: "openai-conversation-text:v1",
+          };
   const model =
     environment.SAYHEAR_CONVERSATION_TEXT_MODEL ?? profile.defaultModel;
+  const timeoutMs = Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000");
   const champion: ConversationTextChampion = Object.freeze({
     configVersion: "conversation-text-champion:v1",
     consentPolicyVersion: null,
     contextLimit: 1_000_000,
-    dataRegion: "provider-configured",
+    // OpenCode Go has no direct-provider data region (ADR-0147); the label
+    // matches runtime-config.ts and the baseline capture.
+    dataRegion:
+      adapter === "opencode-go" ? "provider-managed" : "provider-configured",
     model,
     provider: profile.provider,
     providerPolicyVersion: profile.providerPolicyVersion,
@@ -112,20 +127,55 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
   });
   return {
     champion,
-    conversationAdapter: {
-      apiKey: profile.apiKey,
-      baseUrl: profile.baseUrl,
-      timeoutMs: Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000"),
-      type: "responses-api",
-    },
+    conversationAdapter:
+      profile.provider === "opencode-go"
+        ? { apiKey: profile.apiKey, timeoutMs, type: "opencode-go" }
+        : {
+            apiKey: profile.apiKey,
+            baseUrl: profile.baseUrl,
+            timeoutMs,
+            type: "responses-api",
+          },
   };
 }
 
 export type MemoryRoleSpec = Readonly<{
-  provider: "deepseek" | "openai" | "deterministic";
+  provider: "deepseek" | "openai" | "opencode-go" | "deterministic";
   model: string;
   championConfigVersion: string;
 }>;
+
+/**
+ * Map the champion's conversation adapter onto the journal role registry's
+ * provider-adapter config. Every provider keeps its own transport identity:
+ * OpenCode Go's endpoint is fixed inside the transport and must not carry a
+ * caller-selectable baseUrl (ADR-0147), and an unknown adapter type fails
+ * closed instead of silently degrading to the deterministic stub — otherwise
+ * a "deterministic" capture could be recorded under a live provider's name.
+ */
+export function toJournalRegistryAdapter(adapter: TwinConversationAdapter) {
+  if (adapter.type === "responses-api") {
+    return {
+      apiKey: adapter.apiKey,
+      baseUrl: adapter.baseUrl,
+      timeoutMs: adapter.timeoutMs,
+      type: "responses-api" as const,
+    };
+  }
+  if (adapter.type === "opencode-go") {
+    return {
+      apiKey: adapter.apiKey,
+      timeoutMs: adapter.timeoutMs,
+      type: "opencode-go" as const,
+    };
+  }
+  if (adapter.type === "deterministic") {
+    return { type: "deterministic" as const };
+  }
+  throw new Error(
+    `Unsupported journal role adapter type: ${(adapter as { type: string }).type}`,
+  );
+}
 
 /**
  * The memory role cluster (issue #113 / #114): each role carries its own
@@ -138,15 +188,7 @@ export function buildMemoryRoleRegistry(
   spec: MemoryRoleSpec,
 ): TwinRoleRegistry {
   return createRuntimeJournalRoleProviderRegistry({
-    adapter:
-      conversationAdapter.type === "responses-api"
-        ? {
-            apiKey: conversationAdapter.apiKey,
-            baseUrl: conversationAdapter.baseUrl,
-            timeoutMs: conversationAdapter.timeoutMs,
-            type: "responses-api",
-          }
-        : { type: "deterministic" },
+    adapter: toJournalRegistryAdapter(conversationAdapter),
     roles: [
       {
         role: "memory.extract",

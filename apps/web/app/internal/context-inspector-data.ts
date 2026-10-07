@@ -257,6 +257,153 @@ export function sectionVersionLabel(
   }
 }
 
+export type ContextInspectorRetrievalState = "none" | "completed" | "degraded";
+
+export type ContextInspectorRetrievalSummary = Readonly<{
+  degradedReasonCodes: readonly string[];
+  portraitDegradedReasonCodes: readonly string[];
+  state: ContextInspectorRetrievalState;
+}>;
+
+/**
+ * #266: one deterministic, presentation-only reading of the recorded retrieval
+ * manifest for the always-visible summary. It never re-derives a selection; it
+ * only classifies the persisted degradation codes.
+ */
+export function retrievalSummary(
+  inspection: Pick<ContextInspectorPayload, "compiledContext">,
+): ContextInspectorRetrievalSummary {
+  const manifest = inspection.compiledContext.retrievalManifest;
+  if (manifest === null) {
+    return {
+      degradedReasonCodes: [],
+      portraitDegradedReasonCodes: [],
+      state: "none",
+    };
+  }
+  return {
+    degradedReasonCodes: manifest.degraded_reason_codes,
+    portraitDegradedReasonCodes: manifest.portrait_degraded_reason_codes,
+    state:
+      manifest.degraded_reason_codes.length > 0 ? "degraded" : "completed",
+  };
+}
+
+export function safetyPostureLabel(
+  state: ContextInspectorSafetyPosture["state"],
+): string {
+  switch (state) {
+    case "released":
+      return "Cleared";
+    case "active":
+      return "Active";
+    case "default":
+      return "Default";
+  }
+}
+
+/** #266: count of memory items actually injected across present memory sections. */
+export function injectedMemoryItemCount(
+  sections: readonly ContextInspectorSection[],
+): number {
+  return memorySectionItemsFromSections(sections).reduce(
+    (total, section) => total + section.items.length,
+    0,
+  );
+}
+
+export type RetrievalRejectionSummaryEntry = Readonly<{
+  code: string;
+  count: number;
+}>;
+
+/**
+ * #266: groups the per-candidate rejection reasons recorded on the run ledger
+ * for the summary's natural-language exclusion list. Selection reasons and the
+ * full per-candidate rows stay untouched in the detail funnel.
+ */
+export function retrievalRejectionSummary(
+  candidates: readonly RetrievalCandidateInspection[],
+): Readonly<{
+  entries: readonly RetrievalRejectionSummaryEntry[];
+  uncodedCount: number;
+}> {
+  const counts = new Map<string, number>();
+  let uncodedCount = 0;
+  for (const candidate of candidates) {
+    if (candidate.selectedSection !== null) continue;
+    if (candidate.rejectionReasonCodes.length === 0) {
+      uncodedCount += 1;
+      continue;
+    }
+    for (const code of candidate.rejectionReasonCodes) {
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+  }
+  const entries = [...counts.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.code.localeCompare(right.code),
+    );
+  return { entries, uncodedCount };
+}
+
+/**
+ * #266: presentation labels for the recorded diagnostic / selection / rejection
+ * reason codes. Unknown codes fall through unchanged, so the summary never
+ * invents a meaning the ledger did not record; the raw codes remain visible in
+ * the detail sections.
+ */
+const DIAGNOSTIC_CODE_LABELS: Readonly<Record<string, string>> = {
+  budget_retrieval_ceiling: "Excluded by the retrieval budget ceiling.",
+  budget_retrieval_impression_ceiling:
+    "Excluded by the impression budget ceiling.",
+  memory_retrieval_failed:
+    "Memory retrieval failed, so this Context compiled without memory.",
+  portrait_load_failed:
+    "The Person Portrait could not be loaded and was omitted this turn.",
+  relevance_cutoff_broad_term_only:
+    "Excluded because only a broad term matched.",
+  relevance_cutoff_canonical_key_exact:
+    "Selected on an exact canonical-key match.",
+  relevance_cutoff_canonical_key_object_elided:
+    "Selected on a canonical-key match with the object elided.",
+  relevance_cutoff_entity_anchored:
+    "Selected because the entity anchored the match.",
+  relevance_cutoff_entity_predicate_joint:
+    "Selected because the entity and predicate matched together.",
+  relevance_cutoff_impression_per_run_limit:
+    "Excluded by the per-run impression limit.",
+  relevance_cutoff_impression_single_signal:
+    "Excluded because the impression had only one signal.",
+  relevance_cutoff_impression_two_signals:
+    "Selected because the impression had two or more signals.",
+  relevance_cutoff_insufficient_signals:
+    "Excluded because too few signals matched.",
+  relevance_cutoff_lexical_two_terms:
+    "Selected because two lexical terms matched.",
+  relevance_cutoff_single_term:
+    "Excluded because only a single weak term matched.",
+  retrieval_candidate_hydration_failed:
+    "Selected retrieval candidates could not be loaded.",
+  retrieval_deadline_exceeded: "The retrieval round exceeded its deadline.",
+  retrieval_lane_failed:
+    "A retrieval lane failed; the round degraded and injected no memory.",
+  retrieval_policy_unavailable: "The retrieval policy was unavailable.",
+  retrieval_query_construction_failed:
+    "The retrieval query could not be constructed.",
+  retrieval_run_recording_failed: "The retrieval run could not be recorded.",
+  section_dedupe_portrait_priority:
+    "De-duplicated: the Person Portrait already carried this item.",
+  selected_person_portrait: "Selected into the Person Portrait.",
+  selected_query_retrieval: "Selected by query retrieval.",
+};
+
+export function humanizeDiagnosticCode(code: string): string {
+  return DIAGNOSTIC_CODE_LABELS[code] ?? code;
+}
+
 function renderedPolicyVersion(reference: string): string | null {
   return reference.match(/policy ([A-Za-z0-9._-]+:[A-Za-z0-9._-]+)/)?.[1] ?? null;
 }

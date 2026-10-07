@@ -10,6 +10,8 @@ import type {
   WorkflowCommandId,
 } from "@sayhear/domain";
 
+import type { ModelRoleCallUsage } from "../conversation-model";
+
 /**
  * 1A.3b A1 (issue #197). Episode identity, resolution and lifecycle follow
  * ADR-0037 / ADR-0120 / ADR-0122 lineage: the model only proposes typed
@@ -48,7 +50,7 @@ export function isEpisodeKind(value: string): value is EpisodeKind {
 
 /**
  * Time-bound precision is preserved exactly as the Evidence states it
- * (CONTEXT.md "Episode Temporal Anchor"); the system never completes a
+ * (GLOSSARY.md "Episode Temporal Anchor"); the system never completes a
  * coarse boundary into an exact date.
  */
 export type EpisodeBoundaryPrecision =
@@ -294,8 +296,15 @@ export type EpisodeBuildEpisodeInput = Readonly<{
  */
 export type EpisodeBuildModelProvider = Readonly<{
   role: "episode.build";
+  /**
+   * `onUsage` receives the content-free token accounting for the call whether
+   * it produced typed output or not. It is request-scoped because one provider
+   * instance serves concurrent commands. A Provider that cannot report usage
+   * simply never calls it.
+   */
   buildProposals(
     request: EpisodeBuildModelRequest,
+    onUsage?: (usage: ModelRoleCallUsage) => void,
   ): Promise<readonly EpisodeProposal[]>;
 }>;
 

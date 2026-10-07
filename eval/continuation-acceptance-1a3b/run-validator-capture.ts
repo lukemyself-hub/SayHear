@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -7,11 +9,13 @@ import {
   createModelRoleRegistry,
   ONE_A_3B_ROLE_POLICIES,
   ONE_A_3B_ROLE_POLICY_VERSION,
+  ONE_A_3B_G1_ROLE_CONFIG_VERSIONS,
+  ONE_A_3B_G1_ROLLOUT_PIN_VERSION,
   readNarrativeValidationOutcome,
   runNarrativeValidation,
   NARRATIVE_FINDINGS_SCHEMA_VERSION,
   NARRATIVE_VALIDATION_POLICY_VERSION,
-  NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+  NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
   type ModelRoleCallUsage,
   type ModelRoleConfigurationSnapshot,
   type NarrativeValidationEntrypointDependencies,
@@ -28,7 +32,10 @@ import {
   createIsolatedPostgresSchema,
   fixedInternalOwnerPrincipal,
 } from "@sayhear/test-support";
-import { createRuntimeOneA3bRoleProviders } from "@sayhear/ai";
+import {
+  createRuntimeOneA3bRoleProviders,
+  type OneA3bProviderAdapter,
+} from "@sayhear/ai";
 
 import {
   buildValidatorRequestBundle,
@@ -38,8 +45,6 @@ import { verifyManifest, type AcceptanceManifest } from "./manifest";
 import { sha256, type FixtureCatalog } from "./protocol";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-const apiKey = process.env.DEEPSEEK_API_KEY;
-const baseUrl = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
 
 const userId = fixedInternalOwnerPrincipal.userId;
 const baseTime = new Date("2026-09-09T08:00:00.000Z");
@@ -57,9 +62,10 @@ function required(arguments_: readonly string[], index: number, name: string): s
   return value;
 }
 
-function parseArguments(): { catalog: string; continueOnError: boolean; manifest: string; only: string; out: string; pins: string; precision: boolean; resume: boolean } {
+function parseArguments(): { allowDirty: boolean; catalog: string; continueOnError: boolean; manifest: string; only: string; out: string; pins: string; precision: boolean; resume: boolean } {
   const arguments_ = process.argv.slice(2);
   const values = {
+    allowDirty: false,
     catalog: "eval/continuation-acceptance-1a3b/fixtures.json",
     continueOnError: false,
     manifest: "eval/continuation-acceptance-1a3b/run/manifest.json",
@@ -71,7 +77,8 @@ function parseArguments(): { catalog: string; continueOnError: boolean; manifest
   };
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
-    if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
+    if (argument === "--allow-dirty") values.allowDirty = true;
+    else if (argument === "--catalog") values.catalog = required(arguments_, ++index, argument);
     else if (argument === "--continue-on-error") values.continueOnError = true;
     else if (argument === "--manifest") values.manifest = required(arguments_, ++index, argument);
     else if (argument === "--only") values.only = required(arguments_, ++index, argument);
@@ -90,7 +97,7 @@ function parseArguments(): { catalog: string; continueOnError: boolean; manifest
 }
 
 /**
- * Clean-draft precision probe: fully source-faithful Bio drafts (no planted
+ * Clean-draft precision probe: fully source-faithful Reflection drafts (no planted
  * error) with a correct writer manifest. A clean draft must complete with
  * zero blocking findings; any blocking finding is a false positive.
  *
@@ -107,14 +114,26 @@ const BUILT_IN_PRECISION_DRAFTS = [
   { id: "precision-clean-mix-2", locale: "zh-CN", inputRef: "validator-mix", claimId: "syn-claim-validator-mix", draftText: "虚构用户会 repair radios。" },
 ] as const;
 
-type PinsFile = {
+/**
+ * Frozen provider parameters as pinned. `temperature` and `maxOutputTokens`
+ * are always present; any additional frozen field (for example
+ * `narrative.validate`'s `reasoning.effort`) is an allowed extension and must
+ * be carried to the wire unchanged rather than dropped by the capture.
+ */
+export type PinsRoleParameters = Readonly<{
+  maxOutputTokens: number;
+  temperature: number;
+  [parameter: string]: unknown;
+}>;
+
+export type PinsFile = {
   roles: Record<
     string,
     {
       fallback: string;
       maxTechnicalRetries: number;
       model: string;
-      parameters: { maxOutputTokens: number; temperature: number };
+      parameters: PinsRoleParameters;
       policyVersion: string;
       promptVersion: string;
       provider: string;
@@ -124,11 +143,11 @@ type PinsFile = {
   >;
 };
 
-function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): ModelRoleConfigurationSnapshot {
+export function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): ModelRoleConfigurationSnapshot {
   const pin = pins.roles[role];
   if (!pin) throw new Error(`Pins file has no ${role} role.`);
-  if (pin.provider !== "deepseek") {
-    throw new Error(`Capture supports the pinned deepseek provider, found ${pin.provider} for ${role}.`);
+  if (pin.provider !== "deepseek" && pin.provider !== "opencode-go") {
+    throw new Error(`Capture supports the pinned deepseek or opencode-go provider, found ${pin.provider} for ${role}.`);
   }
   if (pin.fallback !== "none") {
     throw new Error(`Capture requires fallback none, found ${pin.fallback} for ${role}.`);
@@ -140,6 +159,7 @@ function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): M
   // the registry rejects anything else. A pins/policy disagreement fails
   // loudly here instead of silently running an unevaluated configuration.
   const policy = ONE_A_3B_ROLE_POLICIES[role];
+  const iteration = ONE_A_3B_G1_ROLE_CONFIG_VERSIONS[role];
   if (pin.maxTechnicalRetries !== policy.maxTechnicalRetries) {
     throw new Error(
       `Pins disagree with the frozen role policy for ${role}: pins maxTechnicalRetries ${pin.maxTechnicalRetries}, policy ${policy.maxTechnicalRetries}.`,
@@ -147,31 +167,96 @@ function snapshotFor(role: (typeof G1_CAPTURE_ROLES)[number], pins: PinsFile): M
   }
   return {
     role,
-    configVersion: `${role}:eval-capture:v1`,
+    configVersion: `${role}:g1-release:${iteration}`,
     provider: pin.provider,
     model: pin.model,
     modelSnapshot: pin.snapshot,
     promptVersion: pin.promptVersion,
     schemaVersion: pin.schemaVersion,
     rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
-    providerPolicyVersion: `deepseek-${role}-egress:capture:v1`,
-    rolloutPin: `${role}-capture-pin:v1`,
+    providerPolicyVersion: `${pin.provider}-${role}-egress:g1-release:${iteration}`,
+    rolloutPin: `${role}-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
     freshnessPolicy: policy.freshnessPolicy,
     fallbackMode: "disabled",
     maxTechnicalRetries: policy.maxTechnicalRetries,
     maxSemanticRepairs: policy.maxSemanticRepairs,
-    parameterSnapshot: {
-      budgetPolicyVersion: "eval-capture-budget:v1",
-      providerCallBudget: 2,
-      temperature: pin.parameters.temperature,
-      maxOutputTokens: pin.parameters.maxOutputTokens,
-    },
+    // The frozen pin is the source of truth for provider parameters: copy it
+    // in full so extensions such as `reasoning.effort` reach the wire. Copying
+    // only temperature/maxOutputTokens silently dropped them and burned the
+    // default (high) reasoning budget.
+    parameterSnapshot: { ...pin.parameters },
   };
+}
+
+type CaptureIdentity = Readonly<{
+  catalogSha256: string;
+  gitCommit: string;
+  gitDirty: boolean;
+  pinsFingerprint: string;
+}>;
+
+const repositoryRoot = resolve(import.meta.dirname, "../..");
+
+/** The exact checkout a formal capture must execute, not merely claim. */
+function gitIdentity(): { gitCommit: string; gitDirty: boolean } {
+  const gitCommit = execFileSync("git", ["-C", repositoryRoot, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+  const gitDirty =
+    execFileSync("git", ["-C", repositoryRoot, "status", "--porcelain"], {
+      encoding: "utf8",
+    }).trim().length > 0;
+  if (!/^[0-9a-f]{40}$/.test(gitCommit)) {
+    throw new Error("Capture did not resolve a full 40-character git commit.");
+  }
+  return { gitCommit, gitDirty };
+}
+
+/**
+ * A resumed report may only reuse completed cases that were produced by the
+ * same code and the same frozen pins. The report header is the case's
+ * provenance: if any identity field differs, the old cases must not be
+ * carried forward under a rewritten header. This refuses rather than
+ * relabeling, so a cheaper pin set cannot be re-attributed to the release pin.
+ */
+export function assertResumeIdentity(
+  previous: Record<string, unknown>,
+  current: CaptureIdentity &
+    Readonly<{
+      configuration: ModelRoleConfigurationSnapshot;
+      parameters: unknown;
+    }>,
+): void {
+  const expected: Record<string, unknown> = {
+    catalogSha256: current.catalogSha256,
+    configVersion: current.configuration.configVersion,
+    gitCommit: current.gitCommit,
+    gitDirty: false,
+    maxOutputTokens: current.configuration.parameterSnapshot.maxOutputTokens ?? null,
+    model: current.configuration.model,
+    modelSnapshot: current.configuration.modelSnapshot,
+    pinsFingerprint: current.pinsFingerprint,
+    promptVersion: current.configuration.promptVersion,
+    provider: current.configuration.provider,
+    providerCallBudget: current.configuration.maxTechnicalRetries + 1,
+    schemaVersion: current.configuration.schemaVersion,
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (previous[key] !== value) {
+      throw new Error(
+        `Resume report ${key} does not match the current capture identity; refusing to relabel completed cases.`,
+      );
+    }
+  }
+  if (sha256(previous.parameters) !== sha256(current.parameters)) {
+    throw new Error(
+      "Resume report parameters do not match the current capture pin; refusing to relabel completed cases.",
+    );
+  }
 }
 
 async function main(): Promise<void> {
   if (!testDatabaseUrl) throw new Error("TEST_DATABASE_URL is required (isolated capture schema).");
-  if (!apiKey) throw new Error("DEEPSEEK_API_KEY is required (pinned provider is deepseek).");
   const arguments_ = parseArguments();
   const catalog = loadValidatorCatalog(resolve(arguments_.catalog));
   const manifest = JSON.parse(await readFile(resolve(arguments_.manifest), "utf8")) as AcceptanceManifest;
@@ -184,11 +269,62 @@ async function main(): Promise<void> {
   }
   const pins = JSON.parse(await readFile(resolve(arguments_.pins), "utf8")) as PinsFile;
   const configurations = G1_CAPTURE_ROLES.map((role) => snapshotFor(role, pins));
+  // provision every provider the pins actually select before any database
+  // connection or Provider call, so a missing credential fails fast instead of
+  // after a partial capture. The G1 release pins select opencode-go, but the
+  // adapter set follows the pins rather than a hardcoded provider.
+  const providersPresent = new Set(
+    configurations.map((configuration) => configuration.provider),
+  );
+  const adapters: OneA3bProviderAdapter[] = [];
+  for (const provider of providersPresent) {
+    if (provider === "deepseek") {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) {
+        throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
+      }
+      adapters.push({
+        provider: "deepseek",
+        apiKey,
+        baseUrl:
+          process.env.SAYHEAR_DEEPSEEK_BASE_URL ??
+          process.env.DEEPSEEK_BASE_URL ??
+          "https://api.deepseek.com",
+        timeoutMs: 120_000,
+      });
+    } else if (provider === "opencode-go") {
+      const apiKey = process.env.OPENCODE_GO_API_KEY;
+      if (!apiKey) {
+        throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
+      }
+      adapters.push({ provider: "opencode-go", apiKey, timeoutMs: 120_000 });
+    } else {
+      throw new Error(`Capture does not support the pinned provider ${provider}.`);
+    }
+  }
+  if (adapters.length !== providersPresent.size) {
+    throw new Error("Capture could not provision every configured provider.");
+  }
   const narrativeConfiguration = configurations.find(
     (configuration) => configuration.role === "narrative.validate",
   )!;
+  const pinsFingerprint = sha256(pins as unknown as Record<string, unknown>);
+  const catalogSha256 = sha256(catalog as unknown as Record<string, unknown>);
+  const identity = gitIdentity();
+  if (identity.gitDirty && !arguments_.allowDirty) {
+    throw new Error(
+      "Formal validator capture requires a clean checkout at the frozen commit; use --allow-dirty only for non-evidence diagnostics.",
+    );
+  }
+  const captureIdentity = {
+    catalogSha256,
+    gitCommit: identity.gitCommit,
+    gitDirty: identity.gitDirty,
+    parameters: pins.roles["narrative.validate"]!.parameters,
+    pinsFingerprint,
+  };
   const providers = createRuntimeOneA3bRoleProviders({
-    adapters: [{ provider: "deepseek", baseUrl, apiKey, timeoutMs: 120_000 }],
+    adapters,
     configurations,
   });
 
@@ -200,18 +336,7 @@ async function main(): Promise<void> {
        VALUES ($1, 'active', 1, $2, $2)`,
       [userId, baseTime],
     );
-    await database.pool.query(
-      `INSERT INTO provider_egress_policy_versions (
-         policy_version, provider, role, model_config_version, status, created_at
-       ) VALUES ($1, $2, $3, $4, 'active', $5)`,
-      [
-        narrativeConfiguration.providerPolicyVersion,
-        narrativeConfiguration.provider,
-        narrativeConfiguration.role,
-        narrativeConfiguration.configVersion,
-        baseTime,
-      ],
-    );
+    // Migrations register the exact release egress policies before capture.
     await database.pool.query(
       `INSERT INTO model_role_configurations (
          role, config_version, provider, model, model_snapshot, prompt_version,
@@ -302,6 +427,8 @@ async function main(): Promise<void> {
         const sharedInput = typedCatalog.sharedInputs[draft.inputRef];
         const claim = sharedInput?.memory.find((candidate) => candidate.id === draft.claimId);
         if (!claim) throw new Error(`Precision draft ${draft.id} cites unknown claim ${draft.claimId}.`);
+        const event = sharedInput?.events.find((entry) => claim.evidenceIds.includes(entry.id));
+        if (!event) throw new Error(`Precision draft ${draft.id} has no direct Evidence source.`);
         const manifest = [
           {
             statementKey: `${draft.id}:statement:1`,
@@ -312,7 +439,7 @@ async function main(): Promise<void> {
                 normalizedProposition: draft.draftText,
                 propositionKind: "fact" as const,
                 epistemicRendering: "confirmed" as const,
-                supportKeys: [claim.id],
+                supportKeys: [event.id],
               },
             ],
           },
@@ -323,23 +450,23 @@ async function main(): Promise<void> {
           validatorErrorClass: "clean",
           request: {
             userId: bundles[0]!.request.userId,
-            artifactKind: "bio" as const,
+            artifactKind: "reflection" as const,
             draftRef: `validator-precision:${draft.id}`,
             draftLocale: draft.locale,
             draftText: draft.draftText,
             generatorManifest: [],
             sourceEntries: [
               {
-                sourceKey: claim.id,
-                sourceKind: "memory_claim_version" as const,
-                text: claim.text,
+                sourceKey: event.id,
+                sourceKind: "evidence_item" as const,
+                text: event.text,
                 epistemicKind:
                   claim.kind === "objective_memory" ? ("objective_memory" as const) : null,
               },
             ],
-            plannedCoverageKeys: [claim.id],
+            plannedCoverageKeys: [event.id],
             validationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
-            promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_BIO,
+            promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
             schemaVersion: NARRATIVE_FINDINGS_SCHEMA_VERSION,
           },
         };
@@ -350,6 +477,8 @@ async function main(): Promise<void> {
       blockingFindingCodes: readonly string[];
       errorCode: string | null;
       fixtureId: string;
+      generationCommandId: string | null;
+      modelRunAttemptId: string | null;
       model: string;
       outcome: string;
       provider: string;
@@ -364,13 +493,17 @@ async function main(): Promise<void> {
       try {
         const previous = JSON.parse(
           await readFile(resolve(arguments_.out), "utf8"),
-        ) as {
+        ) as Record<string, unknown> & {
           cases: typeof results;
           manifestFingerprint: string;
         };
         if (previous.manifestFingerprint !== manifest.fingerprint) {
           throw new Error("Previous verdicts do not belong to the supplied manifest.");
         }
+        // The manifest fingerprint is not enough: a previous run with the same
+        // manifest but a different pins/code identity must not be reused under
+        // the current header.
+        assertResumeIdentity(previous, { ...captureIdentity, configuration: narrativeConfiguration });
         for (const entry of previous.cases) {
           // A report resumed from before #252 has no recorded cause; keep the
           // per-case shape uniform so the frozen artifact stays comparable.
@@ -451,6 +584,8 @@ async function main(): Promise<void> {
         blockingFindingCodes,
         errorCode: result.outcome === "completed" ? null : (result.errorCode ?? null),
         fixtureId: bundle.fixtureId,
+        generationCommandId: result.generationCommandId,
+        modelRunAttemptId: result.modelRunAttemptId,
         model: narrativeConfiguration.model,
         outcome: result.outcome,
         provider: narrativeConfiguration.provider,
@@ -493,19 +628,28 @@ async function main(): Promise<void> {
             ? "1a3b-f3-validator-precision-report:v1"
             : "1a3b-f3-validator-machine-verdicts:v1",
           manifestFingerprint: manifest.fingerprint,
+          // The capture binds the code and frozen inputs it actually ran on, so
+          // a completion builder can refuse a capture whose provenance is not
+          // the frozen manifest's commit/catalog/pins identity.
+          gitCommit: captureIdentity.gitCommit,
+          gitDirty: captureIdentity.gitDirty,
+          catalogSha256,
+          pinsFingerprint,
           capturedAt: new Date().toISOString(),
           provider: narrativeConfiguration.provider,
           model: narrativeConfiguration.model,
           modelSnapshot: narrativeConfiguration.modelSnapshot,
           configVersion: narrativeConfiguration.configVersion,
           promptVersion: narrativeConfiguration.promptVersion,
+          schemaVersion: narrativeConfiguration.schemaVersion,
+          parameters: pins.roles["narrative.validate"]!.parameters,
           // The frozen budget is recorded beside the causes so the next
           // versioned configuration is chosen against measured spend, not
           // against a guess (issue #252).
           maxOutputTokens:
             narrativeConfiguration.parameterSnapshot.maxOutputTokens ?? null,
           providerCallBudget:
-            narrativeConfiguration.parameterSnapshot.providerCallBudget ?? null,
+            narrativeConfiguration.maxTechnicalRetries + 1,
           cases: results,
         },
         null,
@@ -525,7 +669,7 @@ async function main(): Promise<void> {
   }
 }
 
-const invokedDirectly = process.argv[1] === resolve(process.argv[1]);
+const invokedDirectly = !!process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 
 if (invokedDirectly) {
   main().catch((error: unknown) => {

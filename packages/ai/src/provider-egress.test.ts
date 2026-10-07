@@ -1,4 +1,10 @@
 import {
+  EMPTY_CONVERSATION_ACTION_CATALOG,
+  INITIAL_CONVERSATION_HARNESS_POLICY,
+  createConversationAgentHarness,
+  asInteractionTurnId,
+  asConversationEventId,
+  JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   asCompiledContextId,
   asConversationEventRevisionId,
   asGenerationCommandId,
@@ -7,12 +13,14 @@ import {
   type ContextCompiler,
   type ConversationTextChampion,
   type ProviderEgressClaim,
+  type ProviderEgressStreamEvent,
   type ConversationTextModel,
   type ProviderEgressRepository,
 } from "@sayhear/application";
 import { describe, expect, it } from "vitest";
 
 import { createProviderEgressPort } from "./provider-egress";
+import { providerSessionIdFor } from "./provider-session-identity";
 
 const userId = asUserId("01984477-59a9-7d20-9d97-e588769566c0");
 
@@ -141,6 +149,11 @@ describe("Provider Egress", () => {
       ],
       model: "gpt-5.4",
     });
+    // A claim without a Daily Session carries no Provider session identity:
+    // the per-command fallback is gone, so the Go transport fails closed
+    // before any network call rather than silently opening a session per
+    // command.
+    expect(modelRequest).not.toHaveProperty("providerSessionId");
   });
 
   it("forwards a provider-native tool_call without recording a completion", async () => {
@@ -255,7 +268,7 @@ describe("Provider Egress", () => {
     expect(recordedCompletions).toBe(0);
   });
 
-  it("completes a missing real-world support anchor on a posture-active turn", async () => {
+  it.each(["conversation-output:v1", "conversation-output:v2"])("completes a missing real-world support anchor on a posture-active turn (%s)", async (outputFormatVersion) => {
     // The real champion occasionally drops the anchor on a posture-active
     // turn even with the compiled posture section present (observed on the
     // #79 evidence run). Egress makes the anchor deterministic: when the
@@ -278,7 +291,7 @@ describe("Provider Egress", () => {
     } satisfies ContextCompiler;
     const model = {
       async *stream() {
-        yield { delta: "Glad you slept a little.", type: "delta" as const };
+        yield { delta: "Glad you slept a little,", type: "delta" as const };
         yield {
           costMicros: 0,
           finishReason: "completed",
@@ -290,7 +303,7 @@ describe("Provider Egress", () => {
         };
       },
     } satisfies ConversationTextModel;
-    const repository = baseRepository();
+    const repository = baseRepository(outputFormatVersion);
     const port = createProviderEgressPort({
       champion: testChampion(),
       clock: () => new Date("2026-07-29T12:00:00.000Z"),
@@ -316,13 +329,14 @@ describe("Provider Egress", () => {
     }
 
     const deltas = events.filter((event) => event.type === "delta");
-    expect(deltas).toHaveLength(2);
-    expect(deltas[1]?.delta).toContain("988");
+    expect(deltas).toHaveLength(outputFormatVersion === "conversation-output:v1" ? 2 : 3);
+    expect(deltas.at(-1)?.delta).toContain("988");
+    expect(deltas.slice(0, -1).map((event) => event.delta).join("")).toBe("Glad you slept a little,");
     const completedIndex = events.findIndex((event) => event.type === "completed");
     expect(completedIndex).toBe(events.length - 1);
   });
 
-  it("does not append the anchor when the response already carries a whitelisted number", async () => {
+  it.each(["conversation-output:v1", "conversation-output:v2"])("does not append the anchor when the response already carries a whitelisted number (%s)", async (outputFormatVersion) => {
     const contextCompiler = {
       async compile() {
         throw new Error("Compilation does not run inside Egress.");
@@ -355,7 +369,7 @@ describe("Provider Egress", () => {
       clock: () => new Date("2026-07-29T12:00:00.000Z"),
       contextCompiler,
       model,
-      repository: baseRepository(),
+      repository: baseRepository(outputFormatVersion),
     });
 
     const events = [];
@@ -378,7 +392,7 @@ describe("Provider Egress", () => {
     expect(deltas).toHaveLength(1);
   });
 
-  it("never appends an anchor when no posture is active", async () => {
+  it.each(["conversation-output:v1", "conversation-output:v2"])("never appends an anchor when no posture is active (%s)", async (outputFormatVersion) => {
     const contextCompiler = {
       async compile() {
         throw new Error("Compilation does not run inside Egress.");
@@ -406,7 +420,7 @@ describe("Provider Egress", () => {
       clock: () => new Date("2026-07-29T12:00:00.000Z"),
       contextCompiler,
       model,
-      repository: baseRepository(),
+      repository: baseRepository(outputFormatVersion),
     });
 
     const events = [];
@@ -427,7 +441,146 @@ describe("Provider Egress", () => {
 
     expect(events.filter((event) => event.type === "delta")).toHaveLength(1);
   });
+
+  it("allows stop-signal proposals between text deltas and commits the same formatted text", async () => {
+    const { events, joined } = await streamPunctuationFixture("conversation-output:v2", false, true);
+    expect(joined).toBe("我是 AI，不是人。这个我接不住，也不能");
+    expect(events.some((event) => event.type === "stop_signal_proposal")).toBe(true);
+    let committedText = "";
+    let committedProposals: unknown;
+    const harness = createConversationAgentHarness({
+      clock: () => new Date("2026-07-29T12:00:00.000Z"),
+      egressPort: { async *stream() { yield* events; } },
+      repository: {
+        async claimResponseExecution() { return "owner"; },
+        async claimStaleResponseExecution() { throw new Error("Unexpected retry"); },
+        async loadResponse() { throw new Error("Unexpected replay"); },
+        async settleResponseFailure() { throw new Error("Unexpected failure"); },
+        async commitCompleteResponse(input) {
+          committedText = input.text;
+          committedProposals = input.stopSignalProposals;
+          return {
+            createdAt: input.completedAt.toISOString(),
+            outcome: "committed",
+            eventId: asConversationEventId("01984477-59a9-7d20-9d97-e588769566c5"),
+            revisionId: asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566c6"),
+          };
+        },
+      },
+    });
+    const output = [];
+    for await (const event of harness.runDecision({
+      userId,
+      compiledContextId: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c1"),
+      generationCommandId: asGenerationCommandId("01984477-59a9-7d20-9d97-e588769566c2"),
+      modelRunAttemptId: asModelRunAttemptId("01984477-59a9-7d20-9d97-e588769566c3"),
+      requestEventRevisionId: asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566c4"),
+      interactionTurnId: asInteractionTurnId("01984477-59a9-7d20-9d97-e588769566c7"),
+      catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
+      catalogVersion: EMPTY_CONVERSATION_ACTION_CATALOG.version,
+      harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
+    })) output.push(event);
+    expect(output.at(-1)?.type).toBe("decision_committed");
+    expect(committedText).toBe(joined);
+    expect(output.filter((event) => event.type === "decision_delta").map((event) => event.delta).join("")).toBe(joined);
+    expect(committedProposals).toEqual([{ kind: "suppress_all_questions" }]);
+  });
+
+  it("flushes held response text before an Action selection", async () => {
+    const { events, joined } = await streamPunctuationFixture("conversation-output:v2", true);
+    expect(events.map((event) => event.type)).toEqual(["delta", "delta", "action_proposal", "completed"]);
+    expect(joined).toBe("我是 AI,");
+    expect(events.find((event) => event.type === "action_proposal")).toMatchObject({
+      proposal: { arguments: { journalHandle: "shh-handle-test" } },
+    });
+  });
+
+  it("keeps conversation-output:v1 delta stream byte-identical", async () => {
+    const { joined, events } = await streamPunctuationFixture(
+      "conversation-output:v1",
+    );
+    expect(joined).toBe("我是 AI,不是人。这个我接不住,也不能");
+    expect(events.filter((event) => event.type === "completed")).toHaveLength(1);
+  });
+
+  it("normalizes CJK-adjacent commas for conversation-output:v2 and preserves completion", async () => {
+    const { joined, events } = await streamPunctuationFixture(
+      "conversation-output:v2",
+    );
+    expect(joined).toBe("我是 AI，不是人。这个我接不住，也不能");
+    expect(events.filter((event) => event.type === "completed")).toHaveLength(1);
+    expect(events.at(-1)).toEqual(PUNCTUATION_COMPLETION);
+  });
 });
+
+const PUNCTUATION_COMPLETION = {
+  costMicros: 0,
+  finishReason: "completed",
+  inputTokens: 8,
+  modelSnapshot: "gpt-5.4",
+  outputTokens: 4,
+  providerRequestId: "synthetic-provider-request",
+  type: "completed" as const,
+};
+
+async function streamPunctuationFixture(
+  outputFormatVersion: string,
+  action = false,
+  stopSignal = false,
+): Promise<{ events: ProviderEgressStreamEvent[]; joined: string }> {
+  const contextCompiler = {
+    async compile() {
+      throw new Error("Compilation does not run inside Egress.");
+    },
+    renderPermittedPayload() {
+      return { instructions: "Ordinary instructions.", locale: "zh-CN", messages: [] };
+    },
+  } satisfies ContextCompiler;
+  const model = {
+    async *stream() {
+      yield { delta: "我是 AI,", type: "delta" as const };
+      if (stopSignal) {
+        yield { type: "tool_call" as const, rawFunctionName: "curiosity_stop_signal", rawArguments: '{"proposals":[{"kind":"suppress_all_questions"}]}' };
+      }
+      if (action) {
+        yield { type: "tool_call" as const, rawFunctionName: "regenerate_journal", rawArguments: '{"journalHandle":"shh-handle-test"}' };
+      } else {
+        yield { delta: "不是人。这个我接不住,", type: "delta" as const };
+        yield { delta: "也不能", type: "delta" as const };
+      }
+      yield PUNCTUATION_COMPLETION;
+    },
+  } satisfies ConversationTextModel;
+  const port = createProviderEgressPort({
+    champion: testChampion(),
+    clock: () => new Date("2026-07-29T12:00:00.000Z"),
+    contextCompiler,
+    model,
+    repository: baseRepository(outputFormatVersion),
+  });
+  const events: ProviderEgressStreamEvent[] = [];
+  let joined = "";
+  for await (const event of port.stream({
+    ...((action || stopSignal) ? {
+      definitions: JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG.definitions,
+      requestEventRevisionId: asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566c4"),
+    } : {}),
+    userId,
+    compiledContextId: asCompiledContextId(
+      "01984477-59a9-7d20-9d97-e588769566c1",
+    ),
+    generationCommandId: asGenerationCommandId(
+      "01984477-59a9-7d20-9d97-e588769566c2",
+    ),
+    modelRunAttemptId: asModelRunAttemptId(
+      "01984477-59a9-7d20-9d97-e588769566c3",
+    ),
+  })) {
+    if (event.type === "delta") joined += event.delta;
+    events.push(event);
+  }
+  return { events, joined };
+}
 
 function testChampion(): ConversationTextChampion {
   return {
@@ -446,7 +599,9 @@ function testChampion(): ConversationTextChampion {
   };
 }
 
-function baseRepository(): ProviderEgressRepository {
+function baseRepository(
+  outputFormatVersion = "conversation-output:v1",
+): ProviderEgressRepository {
   return {
     async claimDispatch() {
       return {
@@ -462,7 +617,7 @@ function baseRepository(): ProviderEgressRepository {
           policyVersions: {
             canonicalPersonaVersion: "canonical-persona:v1",
             localePolicyVersion: "locale-pack-en:v1",
-            outputFormatVersion: "conversation-output:v1",
+            outputFormatVersion,
             personaBehaviorAnchorsVersion: "persona-behavior-anchors:v1",
             personaContractInvariantVersion: "persona-contract-invariant:v1",
             productPolicyVersion: "product-policy:v1",
@@ -474,8 +629,8 @@ function baseRepository(): ProviderEgressRepository {
           sections: [],
           totalTokens: 0,
         },
-        model: "gpt-5.4",
-        outcome: "permitted" as const,
+          model: "gpt-5.4",
+          outcome: "permitted" as const,
       };
     },
     async recordFirstToken() {
@@ -486,4 +641,121 @@ function baseRepository(): ProviderEgressRepository {
     },
   };
 }
+
+async function captureSessionId(input: {
+  dailySessionId: string;
+  generationCommandId: string;
+  owner: string;
+}): Promise<string | undefined> {
+  let providerSessionId: string | undefined;
+  const model = {
+    async *stream(request: Parameters<ConversationTextModel["stream"]>[0]) {
+      providerSessionId = request.providerSessionId;
+      yield {
+        costMicros: 0,
+        finishReason: "completed",
+        inputTokens: 1,
+        modelSnapshot: "gpt-5.4",
+        outputTokens: 1,
+        providerRequestId: "synthetic",
+        type: "completed" as const,
+      };
+    },
+  } satisfies ConversationTextModel;
+  const repository = baseRepository();
+  const withSession: ProviderEgressRepository = {
+    ...repository,
+    async claimDispatch() {
+      const claim = await repository.claimDispatch({
+        champion: undefined as never,
+        compiledContextId: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c1"),
+        generationCommandId: asGenerationCommandId(input.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId("01984477-59a9-7d20-9d97-e588769566c3"),
+        now: new Date("2026-07-29T12:00:00.000Z"),
+      });
+      return { ...claim, dailySessionId: input.dailySessionId };
+    },
+  };
+  const port = createProviderEgressPort({
+    champion: {
+      configVersion: "conversation-text-champion:v1",
+      consentPolicyVersion: null,
+      contextLimit: 100_000,
+      dataRegion: "test",
+      model: "gpt-5.4",
+      provider: "openai",
+      providerPolicyVersion: "openai-conversation-text:v1",
+      retentionMode: "store-disabled",
+      snapshot: "gpt-5.4",
+      streaming: true,
+      supportedLocales: ["en", "zh"],
+      trainingPolicy: "test",
+    },
+    clock: () => new Date("2026-07-29T12:00:00.000Z"),
+    contextCompiler: {
+      renderPermittedPayload: () => ({
+        instructions: "Synthetic.",
+        messages: [
+          {
+            revisionId: asConversationEventRevisionId(
+              "01984477-59a9-7d20-9d97-e588769566c0",
+            ),
+            role: "user",
+            text: "Synthetic.",
+          },
+        ],
+      }),
+    } as unknown as ContextCompiler,
+    model,
+    repository: withSession,
+  });
+  for await (const _event of port.stream({
+    compiledContextId: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c1"),
+    generationCommandId: asGenerationCommandId(input.generationCommandId),
+    modelRunAttemptId: asModelRunAttemptId("01984477-59a9-7d20-9d97-e588769566c3"),
+    userId: asUserId(input.owner),
+  })) {
+    // Drain.
+  }
+  return providerSessionId;
+}
+
+describe("Provider Egress OpenCode Go session identity", () => {
+  it("keeps one Daily Session stable across different GenerationCommands", async () => {
+    const dailySessionId = "01984477-59a9-7d20-9d97-e588769566a1";
+    const first = await captureSessionId({
+      dailySessionId,
+      generationCommandId: "01984477-59a9-7d20-9d97-e588769566c2",
+      owner: "01984477-59a9-7d20-9d97-e588769566a0",
+    });
+    const laterTurn = await captureSessionId({
+      dailySessionId,
+      generationCommandId: "01984477-59a9-7d20-9d97-e588769566c9",
+      owner: "01984477-59a9-7d20-9d97-e588769566a0",
+    });
+    expect(first).toBe(laterTurn);
+    expect(first).toBe(
+      providerSessionIdFor({
+        ownerId: "01984477-59a9-7d20-9d97-e588769566a0",
+        scopeId: dailySessionId,
+      }),
+    );
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("separates a different owner and a different Daily Session", async () => {
+    const common = {
+      dailySessionId: "01984477-59a9-7d20-9d97-e588769566a1",
+      generationCommandId: "01984477-59a9-7d20-9d97-e588769566c2",
+    };
+    const a = await captureSessionId({ ...common, owner: "01984477-59a9-7d20-9d97-e588769566a0" });
+    const b = await captureSessionId({ ...common, owner: "01984477-59a9-7d20-9d97-e588769566a2" });
+    const c = await captureSessionId({
+      ...common,
+      dailySessionId: "01984477-59a9-7d20-9d97-e588769566ff",
+      owner: "01984477-59a9-7d20-9d97-e588769566a0",
+    });
+    expect(new Set([a, b, c]).size).toBe(3);
+  });
+});
 

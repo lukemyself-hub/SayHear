@@ -44,7 +44,7 @@ GitHub Issue 中维护；不要在本目录创建第二份正文。
 5. `/to-tickets` 从该 Issue 拆分实现 ticket，并让每张 ticket 链接回源 SPEC。
 
 SPEC 内容变化时直接更新 GitHub Issue。若变化同时改变产品规则、领域词汇、架构不变量
-或重要决定，必须分别更新对应的 `product/`、`CONTEXT.md`、`architecture/` 或 ADR；
+或重要决定，必须分别更新对应的 `product/`、`GLOSSARY.md`、`architecture/` 或 ADR；
 不能只修改 Issue 来静默覆盖这些权威来源。
 
 ## SPEC requirements

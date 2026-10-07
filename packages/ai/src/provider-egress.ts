@@ -1,5 +1,6 @@
 import {
   CompiledContextIntegrityError,
+  CONVERSATION_OUTPUT_FORMAT_VERSION,
   isWhitelistedSafetyResourceNumber,
   minimumHighRiskSafetyPostureDetector,
   normalizeCuriosityStopSignalCall,
@@ -14,6 +15,9 @@ import {
   type ProviderEgressRepository,
   type RecoveryGate,
 } from "@sayhear/application";
+
+import { createConversationPunctuationNormalizer } from "./conversation-punctuation";
+import { providerSessionIdFor } from "./provider-session-identity";
 
 const NUMBER_LIKE_RUN = /\d(?:[ -]?\d){2,}/g;
 
@@ -85,6 +89,15 @@ export function createProviderEgressPort(dependencies: {
             locale: claim.context.locale,
             text: currentMessage.text,
           }) !== null);
+      // Versioned Conversation Output transform (AC-X04 / conversation-output:v2):
+      // the real champion can emit an ASCII comma next to CJK, so the egress
+      // normalizes the stream at the same seam as the deterministic safety
+      // anchor. v1 stays byte-identical for rollback.
+      const punctuationNormalizer =
+        claim.context.policyVersions.outputFormatVersion ===
+        CONVERSATION_OUTPUT_FORMAT_VERSION
+          ? createConversationPunctuationNormalizer()
+          : null;
       let streamedText = "";
       let anchorCompleted = false;
       for await (const event of dependencies.model.stream({
@@ -92,6 +105,23 @@ export function createProviderEgressPort(dependencies: {
         locale: claim.context.locale,
         messages: payload.messages,
         model: claim.model,
+        // Opaque, stable transport identity derived from the trusted logical
+        // scope — the owner plus the Daily Session, so every turn of one
+        // conversation shares one Go session while a different owner or day
+        // does not. It never enters the model payload. The Responses and
+        // deterministic adapters ignore it; the OpenCode Go transport requires
+        // it and fails closed before any network call when it is absent.
+        // A missing Daily Session is never replaced with the per-command
+        // GenerationCommand: doing so would silently make every command a new
+        // Provider session and hide the missing trusted scope.
+        ...(claim.dailySessionId === undefined
+          ? {}
+          : {
+              providerSessionId: providerSessionIdFor({
+                ownerId: input.userId,
+                scopeId: claim.dailySessionId,
+              }),
+            }),
         ...(input.functions && input.functions.length > 0
           ? { functions: input.functions }
           : {}),
@@ -116,8 +146,28 @@ export function createProviderEgressPort(dependencies: {
           }
         }
         if (event.type === "delta") {
-          streamedText += event.delta;
-        } else if (event.type === "completed") {
+          if (punctuationNormalizer === null) {
+            streamedText += event.delta;
+            yield event;
+            continue;
+          }
+          const delta = punctuationNormalizer.push(event.delta);
+          if (delta.length === 0) continue;
+          streamedText += delta;
+          yield { delta, type: "delta" };
+          continue;
+        }
+        if (event.type === "completed") {
+          if (punctuationNormalizer !== null) {
+            // Flush only on a successful completion, before the anchor and the
+            // completion event. A provider exception never reaches this point,
+            // so a held comma is dropped exactly as the raw stream was.
+            const tail = punctuationNormalizer.flush();
+            if (tail.length > 0) {
+              streamedText += tail;
+              yield { delta: tail, type: "delta" };
+            }
+          }
           if (
             safetyTurn &&
             !anchorCompleted &&
@@ -145,7 +195,10 @@ export function createProviderEgressPort(dependencies: {
               false,
             );
           }
-        } else if (event.type === "tool_call") {
+          yield event;
+          continue;
+        }
+        if (event.type === "tool_call") {
           if (
             event.rawFunctionName === "curiosity_stop_signal" &&
             input.toolsDisabled !== true &&
@@ -177,6 +230,14 @@ export function createProviderEgressPort(dependencies: {
             });
             if (normalized.type === "invalid") {
               throw new ProviderDispatchError("invalid_response");
+            }
+            // An Action ends the response-text phase. Release a held comma
+            // before its proposal, otherwise the Harness would see a text
+            // delta after Action selection and reject a valid decision.
+            const tail = punctuationNormalizer?.flush() ?? "";
+            if (tail.length > 0) {
+              streamedText += tail;
+              yield { delta: tail, type: "delta" };
             }
             yield { proposal: normalized.proposal, type: "action_proposal" };
           } else {

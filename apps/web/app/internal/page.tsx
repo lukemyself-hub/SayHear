@@ -1,15 +1,27 @@
 import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
-import { asUserId } from "@sayhear/application";
+import {
+  asUserId,
+  RECENT_CONVERSATION_MESSAGE_LIMIT,
+} from "@sayhear/application";
 
 import { createServerComposition } from "../../src/server-composition";
+import { HistoryConversation } from "./history-conversation";
 import { TextConversation } from "./text-conversation";
-import { JournalCard } from "./journal-card";
+import {
+  conversationStatusLine,
+  formatLogicalDate,
+  isCurrentLocalDate,
+} from "./portal-conversation";
 
 export const dynamic = "force-dynamic";
 
-export default async function InternalPage() {
+type InternalPageProps = Readonly<{
+  searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;
+}>;
+
+export default async function InternalPage(props: InternalPageProps) {
   const composition = createServerComposition();
   const session = await getServerSession(composition.authOptions);
   if (!session?.user?.id) {
@@ -17,45 +29,86 @@ export default async function InternalPage() {
   }
 
   const userId = asUserId(session.user.id);
-  const [access, interruptedResponses, messages, currentJournal, latestJournalNotice] = await Promise.all([
+  const searchParams = await props.searchParams;
+  const rawDate = searchParams.date;
+  const requestedDate = Array.isArray(rawDate) ? (rawDate[0] ?? "") : (rawDate ?? "");
+
+  // The identity read is authoritative and never creates a Daily Session.
+  const [access, identity] = await Promise.all([
     composition.accessService.getAccess(userId),
-    composition.conversationService.listInterruptedResponses(userId),
-    composition.conversationService.listMessages(userId),
-    composition.journalService.readLatest({ userId }),
-    composition.journalService.readLatestGenerationNotice({ userId }),
+    composition.conversationService.readCurrentConversation(userId),
   ]);
-  const state = access.privateWrites.allowed ? "Open" : "Blocked";
+
+  if (requestedDate.length > 0) {
+    const conversation = await composition.conversationService.readConversationByDate(
+      userId,
+      requestedDate,
+    );
+    // A missing, malformed, or another owner's date fails explicitly.
+    if (conversation === null) {
+      notFound();
+    }
+    const [messages, interruptedResponses] = await Promise.all([
+      composition.conversationService.listRecentMessages(userId, {
+        dailySessionId: conversation.dailySessionId,
+      }),
+      composition.conversationService.listInterruptedResponsesForSession(
+        userId,
+        conversation.dailySessionId,
+      ),
+    ]);
+    const now = composition.clock();
+    const crossMidnight =
+      identity !== null &&
+      !isCurrentLocalDate({
+        logicalDate: identity.logicalDate,
+        now,
+        timezone: identity.timezoneAtStart,
+      });
+    return (
+      <HistoryConversation
+        dailySessionId={conversation.dailySessionId}
+        key={conversation.dailySessionId}
+        initialHasOlder={
+          messages.length >= RECENT_CONVERSATION_MESSAGE_LIMIT
+        }
+        initialInterruptedResponses={[...interruptedResponses]}
+        initialMessages={[...messages]}
+        returnHref="/internal"
+        returnLabel={crossMidnight ? "返回交流" : "返回今天"}
+        statusLine={`${formatLogicalDate(conversation.logicalDate)} · 历史记录`}
+      />
+    );
+  }
+
+  const [messages, interruptedResponses] = identity
+    ? await Promise.all([
+        composition.conversationService.listRecentMessages(userId, {
+          dailySessionId: identity.dailySessionId,
+        }),
+        composition.conversationService.listInterruptedResponsesForSession(
+          userId,
+          identity.dailySessionId,
+        ),
+      ])
+    : [[], []];
 
   return (
-    <main className="shell">
-      <section className="eyebrow">SayHear Internal Core</section>
-      <h1>Private-write boundary</h1>
-      <p className="lede">
-        Signed in as the pre-provisioned Internal Owner. This surface exposes only
-        the current write-gate state.
-      </p>
-      <section
-        aria-live="polite"
-        className={`gate ${access.privateWrites.allowed ? "gateOpen" : "gateBlocked"}`}
-      >
-        <span className="gateLabel">Real private writes</span>
-        <strong>{state}</strong>
-        <code>{access.privateWrites.reason}</code>
-      </section>
-      <p className="note">
-        The gate opens only when the configured backup policy has current,
-        verified retention evidence.
-      </p>
-      <nav className="internalNav" aria-label="Internal tools">
-        <a href="/internal/context-inspector">Open Context Inspector →</a>
-        <a href="/internal/reflection-inspector">Open Reflection Inspector →</a>
-        <a href="/internal/candidate-review">Open Candidate Review →</a>
-      </nav>
-      <JournalCard currentJournal={currentJournal} latestNotice={latestJournalNotice} />
-      <TextConversation
-        initialInterruptedResponses={interruptedResponses}
-        initialMessages={messages}
-      />
-    </main>
+    <TextConversation
+      draftKey={identity?.logicalDate ?? "no-active-session"}
+      key={identity?.logicalDate ?? "no-active-session"}
+      initialInterruptedResponses={[...interruptedResponses]}
+      initialMessages={[...messages]}
+      statusLine={
+        identity
+          ? conversationStatusLine({
+              logicalDate: identity.logicalDate,
+              now: composition.clock(),
+              timezone: identity.timezoneAtStart,
+            })
+          : null
+      }
+      writeGate={access.privateWrites}
+    />
   );
 }

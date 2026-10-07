@@ -75,7 +75,8 @@ ground truth 就没有阈值可校准；把 synthetic fixture 上观察到的行
 - AC-D01 发布身份指纹绑定（`bindActiveG1Release` 拒绝把 pin 指向不同 manifest）
 - AC-L01 / AC-L02 清理面与 purge-before-backup 恢复演练
 - AC-M01 角色 pin 与真实 Provider 调用证据
-- AC-X04 的确定性对话门禁（问句数、号码白名单、标点、高风险转介边界）
+- AC-X04 的确定性对话门禁（问句数、号码白名单、标点、高风险转介边界）；
+  普通回复双问句的观察例外由 [ADR-0146](0146-f3-ordinary-double-questions-are-observations.md) 明确
 - 激活围栏与阶段级回滚
 
 同样保留：`tokenGates` 的降级（`31c54d4`）、AC-X04 的臂归属（`a421f19`）、

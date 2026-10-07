@@ -75,6 +75,7 @@ import {
 } from "@sayhear/domain";
 
 import { buildChampionAssembly, loadDotEnv } from "../memory-pairwise-126/shared";
+import type { TwinConversationAdapter } from "../memory-pairwise-126/twin-harness";
 import {
   F3_RUN_VERSION,
   configurationFingerprint,
@@ -345,6 +346,7 @@ function createSeam(input: {
         timeoutMs: number;
         type: "responses-api";
       }>
+    | Readonly<{ apiKey: string; timeoutMs: number; type: "opencode-go" }>
     | Readonly<{ chunks: readonly string[]; type: "deterministic" }>;
   champion: ConversationTextChampion;
 }): Seam {
@@ -406,6 +408,7 @@ function createSeam(input: {
         }
       }
       return {
+        createdAt: commitInput.completedAt.toISOString(),
         eventId: asConversationEventId(uuidFrom(`${commitInput.generationCommandId}:event`)),
         outcome: "committed",
         revisionId: asConversationEventRevisionId(
@@ -549,7 +552,7 @@ function policyVersionsFor(sharedInput: FrozenSharedInput): ContextPolicyVersion
   return {
     canonicalPersonaVersion: sharedInput.config.persona || CANONICAL_PERSONA_VERSION,
     localePolicyVersion,
-    outputFormatVersion: "conversation-output:v1",
+    outputFormatVersion: "conversation-output:v2",
     personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
     personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
     productPolicyVersion: "product-policy:v1",
@@ -566,28 +569,46 @@ function createHarnessPolicy(): ConversationHarnessPolicy {
   };
 }
 
+/**
+ * Map the champion's conversation adapter onto the seam's provider-adapter
+ * config. OpenCode Go carries no caller-selectable baseUrl, so it is passed
+ * through as its own transport instead of being assumed to be a responses-api
+ * adapter.
+ */
+function seamAdapterFor(
+  adapter: TwinConversationAdapter,
+): Parameters<typeof createSeam>[0]["adapter"] {
+  if (adapter.type === "opencode-go") {
+    return {
+      apiKey: adapter.apiKey,
+      timeoutMs: adapter.timeoutMs,
+      type: "opencode-go",
+    };
+  }
+  if (adapter.type === "responses-api") {
+    return {
+      apiKey: adapter.apiKey,
+      baseUrl: adapter.baseUrl,
+      timeoutMs: adapter.timeoutMs,
+      type: "responses-api",
+    };
+  }
+  return { chunks: adapter.chunks ?? ["好的。"], type: "deterministic" };
+}
+
 async function captureFixture(input: {
   champion: ConversationTextChampion;
   continueOnError: boolean;
   deterministic: boolean;
   fixture: ContinuationFixture;
   providerErrors: ProviderErrorReport[];
-  responsesApiAdapter: Readonly<{
-    apiKey: string;
-    baseUrl: string;
-    timeoutMs: number;
-  }>;
+  conversationAdapter: TwinConversationAdapter;
   sharedInput: FrozenSharedInput;
 }): Promise<ScenarioCapture> {
   const seam = createSeam({
     adapter: input.deterministic
       ? { chunks: ["好的。"], type: "deterministic" }
-      : {
-          apiKey: input.responsesApiAdapter.apiKey,
-          baseUrl: input.responsesApiAdapter.baseUrl,
-          timeoutMs: input.responsesApiAdapter.timeoutMs,
-          type: "responses-api",
-        },
+      : seamAdapterFor(input.conversationAdapter),
     champion: input.champion,
   });
   const harnessPolicy = createHarnessPolicy();
@@ -735,8 +756,8 @@ async function main(): Promise<void> {
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
   const { champion, conversationAdapter } = buildChampionAssembly(environment);
-  if (conversationAdapter.type !== "responses-api") {
-    throw new Error("The champion assembly did not return a responses-api adapter.");
+  if (conversationAdapter.type === "deterministic") {
+    throw new Error("The champion assembly did not return a live provider adapter.");
   }
   if (!arguments_.deterministic && !conversationAdapter.apiKey) {
     throw new Error("A provider API key is required for the real capture.");
@@ -770,11 +791,7 @@ async function main(): Promise<void> {
         deterministic: arguments_.deterministic,
         fixture,
         providerErrors,
-        responsesApiAdapter: {
-          apiKey: conversationAdapter.apiKey,
-          baseUrl: conversationAdapter.baseUrl,
-          timeoutMs: conversationAdapter.timeoutMs,
-        },
+        conversationAdapter,
         sharedInput,
       });
       scenarios.push({

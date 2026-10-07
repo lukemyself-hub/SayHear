@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  APPROVED_ACCEPTANCE_PROJECT_ID,
+  APPROVED_ACCEPTANCE_TEAM_ID,
+  PRODUCTION_PROJECT_ID,
+  assertApprovedAcceptanceDeployment,
+  assertDeploymentReleaseIdentity,
   buildAcL02DrillResult,
+  deploymentEnvironment,
   ids,
+  parseSourceOptions,
   validatedAcM01Result,
 } from "../scripts/generate-1a3b-g1-source-docs";
+import { parseOptions } from "../scripts/produce-1a3b-g1-evidence";
+import { ONE_A_3B_G1_ROLE_CONFIG_VERSIONS, ONE_A_3B_G1_ROLLOUT_PIN_VERSION, ONE_A_3B_ROLE_POLICY_VERSION } from "@sayhear/application";
 
 const report = {
   assertionIds: ["suite relevant assertion", "suite unrelated assertion"],
@@ -16,6 +25,99 @@ const report = {
 };
 
 describe("G1 source document evidence validation", () => {
+  it("recognizes Vercel's actual Preview target and refuses missing/custom target identity", () => {
+    expect(deploymentEnvironment({ target: null })).toBe("preview");
+    expect(deploymentEnvironment({ target: "production" })).toBe("production");
+    expect(() => deploymentEnvironment({})).toThrow("target identity");
+    expect(() => deploymentEnvironment({ target: null, customEnvironment: { id: "env_other" } })).toThrow("target identity");
+  });
+  it("protects the historical producer run root and requires an explicit catalog", () => {
+    expect(() => parseOptions([])).toThrow("required");
+    expect(() => parseOptions(["--run-root", "eval/continuation-acceptance-1a3b/run", "--catalog", "fixtures.json"])).toThrow("protected");
+    const options = parseOptions(["--run-root", "eval/continuation-acceptance-1a3b/run/new-run", "--catalog", "eval/continuation-acceptance-1a3b/holdout/fixtures.json", "--deployment-id", "dpl_acceptance", "--expected-run-ids", "wrun_A"]);
+    expect(options.ledgerPath).toContain("new-run/validator-ledger.json");
+    expect(options.catalogPath).toContain("holdout/fixtures.json");
+  });
+  it("requires explicit release paths and deployment and rejects escapes or duplicate options", () => {
+    const base = ["--run-root", "eval/continuation-acceptance-1a3b/run/new-run", "--catalog", "eval/continuation-acceptance-1a3b/holdout/fixtures.json", "--pins", "eval/continuation-acceptance-1a3b/pins.json", "--release-identity", "eval/continuation-acceptance-1a3b/release-identity.json", "--expected-run-ids", "wrun_A"];
+    const args = [...base, "--deployment-id", "dpl-test"];
+    expect(parseSourceOptions(args).deploymentId).toBe("dpl-test");
+    expect(parseSourceOptions(args).releaseIdentityPath).toContain("release-identity.json");
+    expect(() => parseSourceOptions(base)).toThrow("--deployment-id is required");
+    expect(() => parseSourceOptions([...base.slice(0, 6), "--deployment-id", "dpl-test"])).toThrow("--release-identity is required");
+    expect(() => parseSourceOptions([...args, "--pins", "other"])).toThrow("unique");
+    expect(() => parseSourceOptions(["--run-root", "../escape", ...args.slice(2)])).toThrow("inside the repository");
+  });
+
+  it("accepts only the approved isolated acceptance project and never production", () => {
+    const deployment = {
+      deploymentCommit: "a".repeat(40),
+      environment: "preview",
+      expectedCommit: "a".repeat(40),
+      projectId: APPROVED_ACCEPTANCE_PROJECT_ID,
+      teamId: APPROVED_ACCEPTANCE_TEAM_ID,
+    };
+    expect(() => assertApprovedAcceptanceDeployment(deployment)).not.toThrow();
+    expect(() =>
+      assertApprovedAcceptanceDeployment({ ...deployment, projectId: PRODUCTION_PROJECT_ID }),
+    ).toThrow("production Vercel project");
+    expect(() =>
+      assertApprovedAcceptanceDeployment({ ...deployment, projectId: "prj_other" }),
+    ).toThrow("approved acceptance project");
+    expect(() =>
+      assertApprovedAcceptanceDeployment({ ...deployment, teamId: "team_other" }),
+    ).toThrow("approved acceptance team");
+    expect(() =>
+      assertApprovedAcceptanceDeployment({ ...deployment, environment: "production" }),
+    ).toThrow("preview deployment");
+    expect(() =>
+      assertApprovedAcceptanceDeployment({ ...deployment, deploymentCommit: "b".repeat(40) }),
+    ).toThrow("frozen F3 manifest");
+  });
+
+  it("binds the deployment's own release identity to the checked targets", () => {
+    const identity = {
+      environment: "preview",
+      businessTargetHash: "business-hash",
+      commit: "a".repeat(40),
+      projectId: APPROVED_ACCEPTANCE_PROJECT_ID,
+      purgeMarkerTargetHash: "marker-hash",
+      teamId: APPROVED_ACCEPTANCE_TEAM_ID,
+      version: "1a3b-g1-hosted-release-identity:v1",
+    };
+    const input = {
+      businessTargetHash: "business-hash",
+      expectedCommit: "a".repeat(40),
+      identity,
+      purgeMarkerTargetHash: "marker-hash",
+    };
+    expect(() => assertDeploymentReleaseIdentity(input)).not.toThrow();
+    expect(() =>
+      assertDeploymentReleaseIdentity({ ...input, identity: { ...identity, commit: "b".repeat(40) } }),
+    ).toThrow("commit does not match");
+    expect(() =>
+      assertDeploymentReleaseIdentity({
+        ...input,
+        identity: { ...identity, projectId: PRODUCTION_PROJECT_ID },
+      }),
+    ).toThrow("approved acceptance project");
+    expect(() =>
+      assertDeploymentReleaseIdentity({
+        ...input,
+        identity: { ...identity, businessTargetHash: "other" },
+      }),
+    ).toThrow("business database");
+    expect(() =>
+      assertDeploymentReleaseIdentity({
+        ...input,
+        identity: { ...identity, purgeMarkerTargetHash: "other" },
+      }),
+    ).toThrow("purge-marker database");
+    expect(() =>
+      assertDeploymentReleaseIdentity({ ...input, identity: { ...identity, version: "v2" } }),
+    ).toThrow("unsupported version");
+  });
+
   it("fails when a criterion-specific assertion predicate matches nothing", () => {
     expect(() => ids(report, (id) => id.includes("missing"))).toThrow(
       "No passing assertion in report:123 matched",
@@ -36,6 +138,7 @@ describe("G1 source document evidence validation", () => {
       },
     };
     const call = {
+      generationCommandId: "command-1",
       model: "model-1",
       modelRunAttemptId: "attempt-1",
       modelSnapshot: "snapshot-1",
@@ -43,6 +146,11 @@ describe("G1 source document evidence validation", () => {
       parameters,
       provider: "provider-1",
       role: "episode.build",
+      configVersion: `episode.build:g1-release:${ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["episode.build"]}`,
+      providerPolicyVersion: `provider-1-episode.build-egress:g1-release:${ONE_A_3B_G1_ROLE_CONFIG_VERSIONS["episode.build"]}`,
+      rolloutPin: `episode.build-g1-release-pin:${ONE_A_3B_G1_ROLLOUT_PIN_VERSION}`,
+      rolePolicyVersion: ONE_A_3B_ROLE_POLICY_VERSION,
+      usage: { inputTokens: 100, outputTokens: 200, reasoningTokens: null },
     };
 
     expect(
@@ -63,6 +171,8 @@ describe("G1 source document evidence validation", () => {
         ["episode.build"],
       ),
     ).toThrow("no successful provider call");
+    expect(() => validatedAcM01Result({ providerCalls: [{ ...call, usage: undefined }] }, pins, ["episode.build"])).toThrow("usage");
+    expect(() => validatedAcM01Result({ providerCalls: [{ ...call, generationCommandId: undefined }] }, pins, ["episode.build"])).toThrow("identity");
   });
 
   it("builds AC-L02 drill results only when every drill phase passed", () => {

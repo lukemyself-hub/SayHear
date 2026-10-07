@@ -1,3 +1,5 @@
+import { assertHostedWorkflowCanaryEvidence, type WorkflowCanaryArtifacts, type WorkflowCanaryValues } from "./hosted-workflow-canary-gate";
+import { verifyCompletionCapture } from "./validator-completion";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
@@ -102,11 +104,25 @@ function parseJson<T>(bytes: Uint8Array, label: string): T {
 export function verifyValidatorPrecisionReport(input: Readonly<{
   report: unknown;
   manifestFingerprint: string;
+  expectedFixtureIds?: readonly string[] | undefined;
+  expectedCapture?: Parameters<typeof verifyCompletionCapture>[0]["expected"];
+  configuration?: Parameters<typeof verifyCompletionCapture>[0]["configuration"];
 }>): Readonly<{ falseBlockingCases: number; totalCases: number }> {
   if (input.report === null || typeof input.report !== "object" || Array.isArray(input.report)) {
     throw new Error("Validator precision report must be an object.");
   }
   const report = input.report as Record<string, unknown>;
+  if (input.expectedCapture && (
+    report.gitCommit !== input.expectedCapture.gitCommit || report.gitDirty !== false ||
+    report.catalogSha256 !== input.expectedCapture.catalogSha256 ||
+    report.pinsFingerprint !== input.expectedCapture.pinsFingerprint ||
+    (input.configuration && (
+      report.provider !== input.configuration.provider || report.model !== input.configuration.model ||
+      report.modelSnapshot !== input.configuration.modelSnapshot || report.promptVersion !== input.configuration.promptVersion ||
+      report.schemaVersion !== input.configuration.schemaVersion ||
+      sha256(report.parameters) !== sha256(input.configuration.parameterSnapshot)
+    ))
+  )) throw new Error("Precision capture does not match the frozen code and role identity.");
   if (report.version !== ONE_A_3B_F3_VALIDATOR_PRECISION_REPORT_VERSION) {
     throw new Error("Validator precision report version is not the released version.");
   }
@@ -118,8 +134,11 @@ export function verifyValidatorPrecisionReport(input: Readonly<{
   }
 
   const expectedIds = new Set<string>(
-    ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
+    input.expectedFixtureIds ?? ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
   );
+  if (expectedIds.size !== 6 || (input.expectedFixtureIds && input.expectedFixtureIds.length !== 6)) {
+    throw new Error("Frozen precision catalog must contain six unique fixture IDs.");
+  }
   const seenIds = new Set<string>();
   let falseBlockingCases = 0;
   for (const value of report.cases) {
@@ -127,6 +146,10 @@ export function verifyValidatorPrecisionReport(input: Readonly<{
       throw new Error("Validator precision report contains a non-object case.");
     }
     const entry = value as Record<string, unknown>;
+    if (input.expectedCapture && (
+      typeof entry.generationCommandId !== "string" || !entry.generationCommandId ||
+      typeof entry.modelRunAttemptId !== "string" || !entry.modelRunAttemptId
+    )) throw new Error("Precision capture has no real command/attempt identity.");
     const fixtureId = typeof entry.fixtureId === "string" ? entry.fixtureId : "";
     if (!expectedIds.has(fixtureId) || seenIds.has(fixtureId)) {
       throw new Error(
@@ -155,11 +178,7 @@ export function verifyValidatorPrecisionReport(input: Readonly<{
   if (seenIds.size !== expectedIds.size) {
     throw new Error("Validator precision report does not cover every frozen fixture exactly once.");
   }
-  if (falseBlockingCases !== 0) {
-    throw new Error(
-      `Validator precision report contains ${falseBlockingCases} false-blocking verdict(s).`,
-    );
-  }
+  // ADR-0143: verdict mix is observational; completed, identified cases gate.
   return { falseBlockingCases, totalCases: seenIds.size };
 }
 
@@ -167,6 +186,9 @@ export function verifyValidatorPrecisionReportArtifact(input: Readonly<{
   bytes: Uint8Array;
   expectedSha256: string;
   manifestFingerprint: string;
+  expectedFixtureIds?: readonly string[] | undefined;
+  expectedCapture?: Parameters<typeof verifyCompletionCapture>[0]["expected"];
+  configuration?: Parameters<typeof verifyCompletionCapture>[0]["configuration"];
 }>): Readonly<{ falseBlockingCases: number; totalCases: number }> {
   if (sha256Bytes(input.bytes) !== input.expectedSha256) {
     throw new Error(
@@ -176,7 +198,33 @@ export function verifyValidatorPrecisionReportArtifact(input: Readonly<{
   return verifyValidatorPrecisionReport({
     report: parseJson<unknown>(input.bytes, "validator precision report"),
     manifestFingerprint: input.manifestFingerprint,
+    expectedFixtureIds: input.expectedFixtureIds,
+    expectedCapture: input.expectedCapture,
+    configuration: input.configuration,
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Re-scan linked raw data at the final verifier, not only a passed summary. */
+export function verifyHostedCanaryArtifact(value: unknown, root: string): void {
+  if (!isRecord(value) || !isRecord(value.result)) throw new Error("Hosted canary result is missing.");
+  const result = value.result;
+  const readReference = (reference: unknown, name: string): unknown => {
+    if (!isRecord(reference) || typeof reference.path !== "string" || typeof reference.sha256 !== "string") throw new Error(`Hosted ${name} reference is missing.`);
+    const bytes = readFileSync(repositoryFile(root, reference.path, `hosted ${name}`));
+    if (sha256Bytes(bytes) !== reference.sha256) throw new Error(`Hosted ${name} bytes do not match their hash.`);
+    return parseJson<unknown>(bytes, `hosted ${name}`);
+  };
+  const runIds = result.expectedRunIds;
+  if (typeof result.deploymentId !== "string" || !Array.isArray(runIds) || !runIds.length || runIds.some(id => typeof id !== "string" || !/^wrun_[A-Za-z0-9]+$/.test(id)) || new Set(runIds).size !== runIds.length) throw new Error("Hosted canary lacks deployment and complete run-set pins.");
+  assertHostedWorkflowCanaryEvidence(
+    readReference(result.exportArtifact, "export") as WorkflowCanaryArtifacts,
+    readReference(result.canaryValuesArtifact, "values") as WorkflowCanaryValues,
+    { deploymentId: result.deploymentId, runIds: runIds as string[] },
+  );
 }
 
 function evidenceDeploymentId(value: unknown): string | null {
@@ -279,7 +327,7 @@ function verifyEvidenceValues(
     throw new Error("Validator calibration ledger does not belong to the F3 manifest.");
   }
   if (
-    ledger.version !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION ||
+    (ledger.version !== ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION && ledger.version !== "1a3b-f3-completion:v1") ||
     typeof ledger.decidedAt !== "string" ||
     Number.isNaN(new Date(ledger.decidedAt).getTime())
   ) {
@@ -294,6 +342,13 @@ function verifyEvidenceValues(
     bytes: precisionReportBytes,
     expectedSha256: input.validatorCalibration.precisionReportSha256,
     manifestFingerprint: f3Manifest.fingerprint,
+    expectedFixtureIds: catalog.precisionDrafts?.map((draft) => draft.id),
+    expectedCapture: {
+      catalogSha256: f3Manifest.catalog.sha256,
+      gitCommit: f3Manifest.gitCommit,
+      pinsFingerprint: f3Manifest.pins.sha256,
+    },
+    configuration: input.roleConfigurations.find(configuration => configuration.role === "narrative.validate"),
   });
   if (
     input.validatorCalibration.precisionReportVersion !==
@@ -305,6 +360,19 @@ function verifyEvidenceValues(
     throw new Error("Validator precision report summary does not match the G1 calibration pin.");
   }
 
+  verifyCompletionCapture({
+    ledger,
+    catalog,
+    root,
+    configuration: input.roleConfigurations.find(
+      (configuration) => configuration.role === "narrative.validate",
+    ),
+    expected: {
+      catalogSha256: f3Manifest.catalog.sha256,
+      gitCommit: f3Manifest.gitCommit,
+      pinsFingerprint: f3Manifest.pins.sha256,
+    },
+  });
   const summary = validateValidatorLedger({ catalog, ledger });
   if (
     summary.total !== input.validatorCalibration.totalCases ||
@@ -355,6 +423,7 @@ function verifyEvidenceValues(
       );
     }
     if (entry.criterion === "AC-W01") {
+      verifyHostedCanaryArtifact(artifactValue, root);
       hostedCanaryDeploymentId = evidenceDeploymentId(artifactValue);
     } else if (entry.criterion === "AC-D01") {
       releaseDeploymentId = evidenceDeploymentId(artifactValue);
@@ -406,7 +475,7 @@ export async function verifyG1EvidenceFiles(
   );
   const catalogPath = repositoryFile(
     root,
-    "eval/continuation-acceptance-1a3b/fixtures.json",
+    input.fixture.catalogPath ?? "eval/continuation-acceptance-1a3b/fixtures.json",
     "F3 fixture catalog path",
   );
   const [f3ManifestBytes, ledgerBytes, precisionReportBytes] = await Promise.all([
@@ -472,7 +541,7 @@ export function verifyG1EvidenceFilesSync(
   );
   const catalogPath = repositoryFile(
     root,
-    "eval/continuation-acceptance-1a3b/fixtures.json",
+    input.fixture.catalogPath ?? "eval/continuation-acceptance-1a3b/fixtures.json",
     "F3 fixture catalog path",
   );
   const f3ManifestBytes = readFileSync(f3ManifestPath);

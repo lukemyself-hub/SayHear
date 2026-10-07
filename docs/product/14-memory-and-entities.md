@@ -811,5 +811,5 @@ Episode 是可选的生活事件组织层，用来持续承接“一次旅行、
 ## References
 
 - [原始 产品文档 v0.1 快照](../archive/product/AI_Life_Journal_Product_Document_v0.1.md)
-- [术语表](../../CONTEXT.md)
+- [术语表](../../GLOSSARY.md)
 - [Knowledge 数据模型](../architecture/07-07-12-knowledge-data-model.md)

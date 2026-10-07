@@ -2,6 +2,7 @@ import type {
   AdmittedModelRoleCommand,
   ModelRoleCommandRepository,
   ModelRoleConfigurationSnapshot,
+  ModelRoleCallUsage,
   ModelRoleAttemptReadiness,
   ModelRoleAttemptRecovery,
   PersistModelRoleAdmission,
@@ -17,6 +18,7 @@ import type {
 } from "@sayhear/application";
 import {
   isModelRoleAttemptKind,
+  normalizeModelRoleCallUsage,
   ONE_A_3B_G1_ENABLED_ROLES,
 } from "@sayhear/application";
 import {
@@ -507,13 +509,25 @@ async function discardAttemptRows(
     userId: UserId;
     reason: PersistModelRoleAttemptDiscard["reason"];
     now: Date;
+    /**
+     * Content-free usage already proven for this same attempt (the Provider
+     * completed before a fence discarded the result). COALESCE keeps a
+     * no-usage discard from erasing anything recorded earlier.
+     */
+    usage?: ModelRoleCallUsage | null;
   }>,
 ): Promise<void> {
+  const usage = normalizeModelRoleCallUsage(input.usage);
   await client.query(
     `UPDATE model_run_attempts
      SET status = 'discarded', error_code = $1,
          completed_at = $2, provider_completed_at = $2,
-         recovery_status = 'terminal'
+         recovery_status = 'terminal',
+         input_tokens = COALESCE($6, input_tokens),
+         output_tokens = COALESCE($7, output_tokens),
+         reasoning_tokens = COALESCE($8, reasoning_tokens),
+         cached_tokens = COALESCE($9, cached_tokens),
+         total_tokens = COALESCE($10, total_tokens)
      WHERE model_run_attempt_id = $3
        AND generation_command_id = $4
        AND user_id = $5
@@ -524,6 +538,11 @@ async function discardAttemptRows(
       input.modelRunAttemptId,
       input.generationCommandId,
       input.userId,
+      usage?.inputTokens ?? null,
+      usage?.outputTokens ?? null,
+      usage?.reasoningTokens ?? null,
+      usage?.cachedTokens ?? null,
+      usage?.totalTokens ?? null,
     ],
   );
   await client.query(
@@ -1643,6 +1662,10 @@ export class PostgresModelRoleCommandRepository
           : input.failureCode === "result_unknown"
             ? "result_unknown"
             : "failed";
+      // COALESCE so a settlement without a usage record (deduplicated replay,
+      // conversation/Journal paths) never overwrites a count already recorded
+      // on this same attempt.
+      const callUsage = normalizeModelRoleCallUsage(input.usage);
       await client.query(
         `UPDATE model_run_attempts
          SET status = $1,
@@ -1650,7 +1673,12 @@ export class PostgresModelRoleCommandRepository
              error_category = $3,
              completed_at = $4,
              provider_completed_at = $4,
-             recovery_status = $5
+             recovery_status = $5,
+             input_tokens = COALESCE($8, input_tokens),
+             output_tokens = COALESCE($9, output_tokens),
+             reasoning_tokens = COALESCE($10, reasoning_tokens),
+             cached_tokens = COALESCE($11, cached_tokens),
+             total_tokens = COALESCE($12, total_tokens)
          WHERE model_run_attempt_id = $6
            AND user_id = $7`,
         [
@@ -1665,6 +1693,11 @@ export class PostgresModelRoleCommandRepository
               : "terminal",
           input.modelRunAttemptId,
           input.userId,
+          callUsage?.inputTokens ?? null,
+          callUsage?.outputTokens ?? null,
+          callUsage?.reasoningTokens ?? null,
+          callUsage?.cachedTokens ?? null,
+          callUsage?.totalTokens ?? null,
         ],
       );
       await client.query(
@@ -1789,6 +1822,7 @@ export class PostgresModelRoleCommandRepository
       userId: input.userId,
       reason,
       now: input.now,
+      usage: input.usage ?? null,
     });
   }
 }

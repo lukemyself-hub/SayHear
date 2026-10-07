@@ -585,9 +585,9 @@ export class PostgresJournalRegenerationActionRepository
             INSERT INTO workflow_commands (
               workflow_command_id, command_type, subject_type, subject_id,
               source_revision, policy_version, expected_data_epoch, action_execution_id,
-              status, created_at
+              status, created_at, intent_key
             )
-            VALUES ($1, 'journal_regeneration', 'daily_session', $2, $3, $4, $5, $6, 'created', $7)
+            VALUES ($1, 'journal_regeneration', 'daily_session', $2, $3, $4, $5, $6, 'created', $7, $8)
           `,
           [
             workflowCommandId,
@@ -597,6 +597,7 @@ export class PostgresJournalRegenerationActionRepository
             prepared.expectedDataEpoch,
             actionExecutionId,
             now,
+            actionExecutionId,
           ],
         );
         await client.query(
@@ -627,10 +628,10 @@ export class PostgresJournalRegenerationActionRepository
             INSERT INTO outbox_events (
               outbox_event_id, workflow_command_id, aggregate_type, aggregate_id,
               aggregate_revision, event_type, status, next_attempt_at,
-              attempt_count, payload, created_at
+              attempt_count, payload, created_at, intent_key
             )
             VALUES ($1, $2, 'daily_session', $3, $4,
-              'journal_regeneration_requested', 'pending', $5, 0, $6::jsonb, $5)
+              'journal_regeneration_requested', 'pending', $5, 0, $6::jsonb, $5, $7)
           `,
           [
             createUuidV7(now),
@@ -648,6 +649,7 @@ export class PostgresJournalRegenerationActionRepository
               subjectId: prepared.dailySessionId,
               workflowCommandId,
             }),
+            actionExecutionId,
           ],
         );
         if (guidanceCiphertext) {

@@ -21,6 +21,10 @@ Accepted
 
 ### 技术底座、部署与运行时
 
+- [`0144`](adr/0144-g1-hosted-acceptance-isolated-from-production.md)：G1 在隔离 hosted 环境验收，生产以同一发布身份、pins 和实际功能核验完成切换
+- [`0145`](adr/0145-g1-raw-provider-error-probe-waiver.md)：本次 G1 恢复上线仅跳过原始 Provider 错误探针，保留其余安全门禁并披露缺口
+- [`0147`](adr/0147-g1-opencode-go-provider.md)：G1 对话、Journal 与四个角色改由 OpenCode Go 承载 DeepSeek V4.1 Flash；新增诚实 `opencode-go` 身份与 Chat Completions transport，取代 0102 的 Responses-only 传输限制，保留完整 pin、快照比对与日期化 ZDR 边界
+
 - [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md)：TypeScript 模块化单体承载领域内核
 - [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级
@@ -94,6 +98,7 @@ Accepted
 - [`0113`](adr/0113-persona-and-safety-precedes-memory-recall.md)：1A.2P Persona & Safety 先于 Memory & Recall 交付，原 1A.3 拆为 1A.3a / 1A.3b，后续编号不变
 - [`0141`](adr/0141-g1-only-release-after-g2-retirement.md)：当前只重发 G1；G2 退出、G3 暂停，历史三阶段上线不再适用
 - [`0142`](adr/0142-high-risk-gate-requires-referral-not-a-crisis-number.md)：高风险硬门禁要求把用户引向真实帮助，不要求报出危机热线；号码准确性由白名单另行把关
+- [`0146`](adr/0146-f3-ordinary-double-questions-are-observations.md)：F3 普通回复偶尔两个问句只记录观察；禁止问题、安全姿态及三个以上问题仍阻断
 - [`0134`](adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)：1A.3b 分三阶段直接切换，已确认的正确性失败立即回滚受影响阶段
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语

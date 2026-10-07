@@ -6,6 +6,7 @@ import {
   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
+  sha256Hex,
   validatorCalibrationRejectsWithinBudget,
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1Evidence,
@@ -234,15 +235,15 @@ describe("1A.3b G1 release manifest", () => {
     ).toThrow("totalCases must be at least 1");
   });
 
-  it("requires a complete precision corpus with zero false blocks", () => {
-    expect(() =>
-      build({
+  it("requires a complete precision corpus while semantic verdicts remain observational", () => {
+    const observed = build({
         validatorCalibration: {
           ...validatorCalibration,
           precisionFalseBlockingCases: 1,
         },
-      }),
-    ).toThrow("cannot be verified");
+      });
+    expect(observed.status).toBe("ready_for_cutover");
+    expect(verifyOneA3bG1ReleaseManifest(observed).passed).toBe(true);
 
     const falseBlocked = build({
       validatorCalibration: {
@@ -315,6 +316,57 @@ describe("1A.3b G1 release manifest", () => {
 
     expect(verifyOneA3bG1ReleaseManifest(drifted).mismatches).toContain(
       "schema fingerprint does not match its migration hashes",
+    );
+  });
+
+  it("binds an explicitly pinned catalog path into the fixture fingerprint", () => {
+    const legacyFixture = {
+      f3ManifestPath: "eval/continuation-acceptance-1a3b/run/manifest.json",
+      f3ManifestSha256: "d".repeat(64),
+      f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
+      fixtureSeed: 196,
+      sampleSeed: 1960,
+    };
+    const catalogPath = "eval/continuation-acceptance-1a3b/holdout/fixtures.json";
+
+    // Legacy releases pin no catalog path and must keep verifying with the
+    // exact five-field fingerprint they were frozen with.
+    const legacy = build({ fixture: legacyFixture });
+    expect(legacy.fixture.catalogPath).toBeUndefined();
+    expect(legacy.fixture.fingerprint).toBe(sha256Hex(legacyFixture));
+    expect(verifyOneA3bG1ReleaseManifest(legacy)).toEqual({
+      mismatches: [],
+      passed: true,
+    });
+
+    // A release that explicitly pins a catalog path binds that path.
+    const pinned = build({ fixture: { ...legacyFixture, catalogPath } });
+    expect(pinned.fixture.catalogPath).toBe(catalogPath);
+    expect(pinned.fixture.fingerprint).not.toBe(legacy.fixture.fingerprint);
+    expect(verifyOneA3bG1ReleaseManifest(pinned)).toEqual({
+      mismatches: [],
+      passed: true,
+    });
+
+    // Swapping the path while keeping the stored fingerprint is rejected.
+    const tampered = {
+      ...pinned,
+      fixture: {
+        ...pinned.fixture,
+        catalogPath: "eval/continuation-acceptance-1a3b/fixtures.json",
+      },
+    };
+    expect(verifyOneA3bG1ReleaseManifest(tampered).mismatches).toContain(
+      "fixture fingerprint does not match its pins",
+    );
+
+    // A non-string pinned path is refused even if its hash is self-consistent.
+    const malformed = {
+      ...pinned,
+      fixture: { ...pinned.fixture, catalogPath: 7 },
+    };
+    expect(verifyOneA3bG1ReleaseManifest(malformed).mismatches).toContain(
+      "F3 fixture catalog path is invalid",
     );
   });
 

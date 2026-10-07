@@ -338,12 +338,22 @@ export {
   createUserTextConversationService,
   InvalidUserTextTurnError,
   localDateAt,
+  CONVERSATION_DATE_PAGE_LIMIT,
+  ConversationSessionNotFoundError,
+  InvalidConversationCursorError,
+  OLDER_CONVERSATION_MESSAGE_LIMIT,
+  RECENT_CONVERSATION_MESSAGE_LIMIT,
   UserTextIdempotencyConflictError,
   UserTextOwnerDeniedError,
   UserTextPrivateWriteDeniedError,
   type ClientEventId,
   type ClientTurnId,
+  type ConversationDateEntry,
+  type ConversationDatePage,
+  type ConversationMessagePage,
   type ConversationRetryTurn,
+  type ConversationSessionRef,
+  type CurrentConversationIdentity,
   type ExplicitContinuousExchangeEnd,
   type GenerationPolicy,
   type InactivityPolicy,
@@ -381,6 +391,10 @@ export {
   TRUST_ACTION_KINDS,
   trustActionFencesMemory,
   trustActionUnverifiablePhrasing,
+} from "./context-compiler";
+export {
+  CONVERSATION_OUTPUT_FORMAT_VERSION,
+  PREVIOUS_CONVERSATION_OUTPUT_FORMAT_VERSION,
 } from "./context-compiler";
 export {
   ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
@@ -428,6 +442,7 @@ export {
 } from "./conversation-response";
 export {
   ProviderDispatchError,
+  normalizeModelRoleCallUsage,
   type ConversationTextChampion,
   type ConversationTextMessage,
   type ConversationTextProvider,
@@ -569,13 +584,24 @@ export {
 } from "./internal-inspection";
 export {
   createJournalService,
+  decodeJournalDateCursor,
+  encodeJournalDateCursor,
+  journalDateCursorAfter,
   runAutomaticJournal,
   runJournalRegeneration,
   validateJournalDraft,
+  validateJournalLogicalDate,
   normalizeJournalDiagnosticFindings,
+  JOURNAL_DATE_PAGE_LIMIT,
+  InvalidJournalDateError,
+  JournalDateCursorError,
   type JournalDraft,
   type CurrentJournal,
   type CurrentJournalVersion,
+  type JournalDateCursor,
+  type JournalDateEntry,
+  type JournalDatePage,
+  type JournalDateState,
   type JournalDiagnosticCode,
   type JournalDiagnosticDetailCode,
   type JournalDiagnosticFinding,
@@ -599,6 +625,10 @@ export {
 } from "./journal-regeneration";
 export {
   assertWorkflowHistoryCanaryClean,
+  isRawProviderErrorWaiver,
+  RAW_PROVIDER_ERROR_WAIVER,
+  RAW_PROVIDER_ERROR_WAIVER_VERSION,
+  type RawProviderErrorWaiver,
   type WorkflowCanaryArtifacts,
   type WorkflowCanaryValues,
 } from "./workflow-history-canary";

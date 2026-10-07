@@ -25,7 +25,7 @@
     "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
     "test": "vitest run",
     "test:system": "vitest run tests/system",
-    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.g1-tools.json && pnpm -r --if-present typecheck",
     "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {

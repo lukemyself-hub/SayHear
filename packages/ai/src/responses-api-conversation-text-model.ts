@@ -281,6 +281,12 @@ export function createResponsesApiConversationTextModel(input: {
                 yield { delta, type: "delta" };
               }
               if (continuation.usage) {
+                const cachedOnEither =
+                  cachedTokensFrom(usage) !== null ||
+                  cachedTokensFrom(continuation.usage) !== null;
+                const totalOnEither =
+                  asOptionalNumber(usage?.total_tokens) !== null ||
+                  asOptionalNumber(continuation.usage.total_tokens) !== null;
                 finalUsage = {
                   input_tokens:
                     (asOptionalNumber(usage?.input_tokens) ?? 0) +
@@ -288,6 +294,22 @@ export function createResponsesApiConversationTextModel(input: {
                   output_tokens:
                     (asOptionalNumber(usage?.output_tokens) ?? 0) +
                     (asOptionalNumber(continuation.usage.output_tokens) ?? 0),
+                  ...(cachedOnEither
+                    ? {
+                        input_tokens_details: {
+                          cached_tokens:
+                            (cachedTokensFrom(usage) ?? 0) +
+                            (cachedTokensFrom(continuation.usage) ?? 0),
+                        },
+                      }
+                    : {}),
+                  ...(totalOnEither
+                    ? {
+                        total_tokens:
+                          (asOptionalNumber(usage?.total_tokens) ?? 0) +
+                          (asOptionalNumber(continuation.usage.total_tokens) ?? 0),
+                      }
+                    : {}),
                 };
               }
               providerRequestId = continuation.providerRequestId ?? providerRequestId;
@@ -295,6 +317,8 @@ export function createResponsesApiConversationTextModel(input: {
             if (pendingBufferedCall) {
               yield { ...pendingBufferedCall, type: "tool_call" };
             }
+            const cachedTokens = cachedTokensFrom(finalUsage);
+            const totalTokens = asOptionalNumber(finalUsage?.total_tokens);
             yield {
               costMicros: null,
               finishReason: "completed",
@@ -303,6 +327,10 @@ export function createResponsesApiConversationTextModel(input: {
               outputTokens: asOptionalNumber(finalUsage?.output_tokens),
               providerRequestId,
               reasoningTokens: reasoningTokensFrom(finalUsage),
+              // Reported only: an absent split stays absent rather than
+              // becoming an invented zero or a derived sum.
+              ...(cachedTokens === null ? {} : { cachedTokens }),
+              ...(totalTokens === null ? {} : { totalTokens }),
               type: "completed",
             };
           } else if (
@@ -513,14 +541,29 @@ function terminalStreamEventError(
     "The Provider reported that it stopped at the pinned output budget.",
     true,
     {
+      cachedTokens: cachedTokensFrom(usage),
       kind: "output_budget_exhausted",
       inputTokens: asOptionalNumber(usage?.input_tokens),
       outputLength: emittedTextLength,
       outputTokens: asOptionalNumber(usage?.output_tokens),
       providerReason: "max_output_tokens",
       reasoningTokens: reasoningTokensFrom(usage),
+      totalTokens: asOptionalNumber(usage?.total_tokens),
     },
   );
+}
+
+/**
+ * Cached input tokens are reported under `usage.input_tokens_details`, a
+ * separate nested object from `output_tokens_details`. An absent split stays
+ * `null` rather than a zero so "did not report" is never read as "cached
+ * nothing".
+ */
+function cachedTokensFrom(usage: unknown): number | null {
+  if (!isRecord(usage)) return null;
+  const details = usage.input_tokens_details;
+  if (!isRecord(details)) return null;
+  return asOptionalNumber(details.cached_tokens);
 }
 
 /**

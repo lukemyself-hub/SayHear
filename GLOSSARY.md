@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-- 本文件路径由 matt skills 依赖，不得移动或改名。
+- 本文件（`GLOSSARY.md`）路径由 matt skills 依赖，不得移动或改名。
 - 本文件是 SayHear 产品与领域术语、定义和禁用近义词的唯一权威来源。
 - 只在任务涉及命名、领域模型或跨模块接口时读取相关章节，不要求日常任务全文加载。
 - 功能规则读取 `docs/product/`，技术约束读取 `docs/architecture/`，决策原因读取

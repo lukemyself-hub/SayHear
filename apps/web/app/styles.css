@@ -335,11 +335,20 @@ h1 {
 }
 
 .conversation {
-  border-top: 1px solid #d7d0c4;
-  display: grid;
-  gap: 1.5rem;
-  margin-top: 2rem;
-  padding-top: 2rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  margin: 0 auto;
+  min-height: 0;
+  width: min(800px, 100%);
+}
+
+.conversationStatus {
+  color: #686a63;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  margin: 0;
+  padding: 14px 0 8px;
 }
 
 .journalCard {
@@ -368,56 +377,63 @@ h1 {
 .journalActions button { background: transparent; border: 1px solid #83745e; border-radius: 999px; color: #22211f; cursor: pointer; font: inherit; padding: .5rem .8rem; }
 
 .messageList {
-  display: grid;
-  gap: 0.9rem;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 16px;
 }
 
 .emptyConversation {
-  color: #625d54;
+  color: #686a63;
   margin: 0;
 }
 
 .userMessage {
-  background: #ece7dc;
-  border-radius: 1rem 1rem 0.25rem 1rem;
-  justify-self: end;
-  max-width: min(36rem, 90%);
-  padding: 0.85rem 1rem;
+  align-self: flex-end;
+  background: #f0eee8;
+  border-radius: 22px;
+  max-width: min(34rem, 88%);
+  min-width: 0;
+  padding: 10px 14px;
 }
 
 .assistantMessage {
-  background: #fffdf9;
-  border: 1px solid #d7d0c4;
-  border-radius: 1rem 1rem 1rem 0.25rem;
-  justify-self: start;
-  max-width: min(36rem, 90%);
-  padding: 0.85rem 1rem;
-}
-
-.userMessage span,
-.assistantMessage span,
-.assistantMessage em {
-  color: #625d54;
-  display: block;
-  font-size: 0.75rem;
-  margin-bottom: 0.35rem;
-}
-
-.userMessage p,
-.assistantMessage p {
-  line-height: 1.5;
-  margin: 0;
-  white-space: pre-wrap;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  max-width: min(42rem, 100%);
+  min-width: 0;
+  padding: 0;
 }
 
 .assistantMessage em {
   color: #8f2d20;
+  display: block;
   font-style: normal;
-  margin-top: 0.5rem;
+  margin-top: 6px;
 }
 
 .interruptedMessage {
-  border-color: #d1a08e;
+  border: 1px solid #d1a08e;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.userMessage p,
+.assistantMessage p {
+  line-height: 1.7;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistantMessage .inspectionLink {
+  display: inline-block;
+  margin-top: 6px;
 }
 
 .retryResponse {
@@ -439,47 +455,55 @@ h1 {
 }
 
 .composer {
-  display: grid;
-  gap: 0.7rem;
+  background: #faf9f6;
+  border-top: 1px solid #e2e3dc;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
 }
 
 .composer label {
-  font-size: 0.85rem;
-  font-weight: 650;
+  color: #686a63;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .composer textarea {
-  background: #fffdf9;
-  border: 1px solid #cfc7b9;
-  border-radius: 0.8rem;
-  color: #22211f;
+  background: #f0eee8;
+  border: 1px solid transparent;
+  border-radius: 22px;
+  color: #242522;
   font: inherit;
   line-height: 1.5;
-  padding: 0.8rem;
-  resize: vertical;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 12px 16px;
+  resize: none;
 }
 
 .composer textarea:focus {
-  border-color: #83745e;
-  outline: 2px solid rgba(131, 116, 94, 0.2);
+  border-color: #242522;
+  outline: 2px solid rgba(36, 37, 34, 0.14);
 }
 
 .composerActions {
   align-items: center;
   display: flex;
-  gap: 1rem;
+  gap: 12px;
   justify-content: space-between;
 }
 
 .composer button {
-  background: #22211f;
+  background: #242522;
   border: 0;
   border-radius: 999px;
-  color: #fffdf9;
+  color: #faf9f6;
   cursor: pointer;
   font: inherit;
   font-weight: 650;
-  padding: 0.65rem 1rem;
+  padding: 10px 16px;
 }
 
 .composer button:disabled {
@@ -487,8 +511,1594 @@ h1 {
   opacity: 0.45;
 }
 
+.composerBlocked {
+  background: #f7e9e3;
+  border: 1px solid #d1a08e;
+  border-radius: 12px;
+  color: #8f2d20;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 12px;
+}
+
 .submissionError {
   color: #8f2d20;
   font-size: 0.85rem;
   margin: 0;
 }
+
+/* ---- Internal Portal responsive shell (SPEC #260 / ticket #261) ---- */
+
+.portalShell {
+  background: #faf9f6;
+  color: #242522;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.portalHeader {
+  align-items: center;
+  background: #faf9f6;
+  border-bottom: 1px solid #e2e3dc;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 56px;
+  padding: 0 12px;
+}
+
+.portalHamburger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: #242522;
+  cursor: pointer;
+  display: flex;
+  font-size: 1.25rem;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.portalHamburger:hover {
+  background: #efede7;
+}
+
+.portalBrand {
+  color: #242522;
+  font-size: 1.05rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.portalBody {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.portalContent {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0 16px;
+}
+
+.portalNav {
+  background: #f2f0eb;
+  border-right: 1px solid #e2e3dc;
+  display: flex;
+}
+
+.moduleRail {
+  border-right: 1px solid #e2e3dc;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 8px 6px;
+  width: 56px;
+}
+
+.moduleRailLink {
+  align-items: center;
+  border-radius: 10px;
+  color: #686a63;
+  display: flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.moduleRailLink:hover {
+  background: #e7e5de;
+  color: #242522;
+}
+
+.moduleRailLink.isActive {
+  background: #e2e0d8;
+  color: #242522;
+}
+
+.moduleList {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 12px 10px;
+}
+
+.moduleListHeading {
+  color: #686a63;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 0;
+  padding: 0 8px;
+}
+
+.moduleList ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.moduleListEntry {
+  border-radius: 10px;
+  color: #242522;
+  display: block;
+  font-size: 0.95rem;
+  overflow: hidden;
+  padding: 8px 10px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moduleListEntry:hover {
+  background: #e7e5de;
+}
+
+.moduleListEntry[aria-current="page"] {
+  background: #e2e0d8;
+  font-weight: 600;
+}
+
+.portalFooter {
+  border-top: 1px solid #e2e3dc;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+}
+
+.portalFooterOwner {
+  color: #686a63;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.portalFooterState {
+  color: #242522;
+  font-size: 0.82rem;
+}
+
+.portalPage {
+  margin: 0 auto;
+  max-width: 800px;
+  padding: 24px 0 64px;
+  width: 100%;
+}
+
+.inspectorPage {
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 24px 0 64px;
+  width: 100%;
+}
+
+@media (max-width: 1023.98px) {
+  .portalNav {
+    bottom: 0;
+    box-shadow: 8px 0 24px rgba(36, 37, 34, 0.12);
+    left: 0;
+    max-width: 320px;
+    position: fixed;
+    top: 56px;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease;
+    visibility: hidden;
+    width: 86vw;
+    z-index: 30;
+  }
+
+  .portalShell[data-nav-open="true"] .portalNav {
+    transform: none;
+    visibility: visible;
+  }
+
+  .portalOverlay {
+    background: rgba(36, 37, 34, 0.35);
+    border: 0;
+    bottom: 0;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: 56px;
+    z-index: 20;
+  }
+}
+
+@media (min-width: 1024px) {
+  .portalNav {
+    flex-shrink: 0;
+    width: min(320px, 26vw);
+  }
+
+  .portalShell[data-nav-open="false"] .portalNav {
+    display: none;
+  }
+
+  .portalOverlay {
+    display: none;
+  }
+}
+
+.portalShell a:focus-visible,
+.portalShell button:focus-visible,
+.portalShell textarea:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portalNav {
+    transition: none;
+  }
+}
+
+/* === #266 context inspector hierarchy === */
+
+/* Scoped to the Context Inspector so the shared `.inspector*` rules used by
+   Reflection Inspector and Candidate Review are untouched. */
+
+.contextInspector .inspectorPage {
+  max-width: 1100px;
+}
+
+.contextInspectorHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.contextInspectorHeader h1 {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 8px 0 12px;
+}
+
+.contextBackLink {
+  color: #686a63;
+  font-size: 0.9rem;
+  padding-top: 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.contextBackLink:hover {
+  color: #242522;
+  text-decoration: underline;
+}
+
+.contextInspector .inspectorLookup input {
+  background: #fff;
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  color: #242522;
+}
+
+.contextInspector .inspectorLookup input:focus-visible {
+  border-color: #242522;
+  outline: 2px solid rgba(36, 37, 34, 0.14);
+}
+
+.contextInspector .inspectorLookup button {
+  background: #242522;
+  border-radius: 12px;
+  color: #faf9f6;
+}
+
+.contextInspector .inspectorError {
+  background: #fbf3ee;
+  border: 1px solid #d8b4a4;
+  border-radius: 12px;
+  color: #8f2d20;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+}
+
+.inspectorEmpty {
+  color: #686a63;
+  line-height: 1.5;
+}
+
+.contextInspector .inspectorSummary,
+.contextInspector .inspectorCard {
+  background: #fff;
+  border: 1px solid #e2e3dc;
+  border-radius: 16px;
+}
+
+.contextInspector .inspectorSummary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.contextCommandId {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.contextCommandId code {
+  overflow-wrap: anywhere;
+}
+
+.contextPosture[data-posture-state="released"],
+.contextPosture[data-posture-state="default"] {
+  color: #686a63;
+}
+
+.contextPosture[data-posture-state="active"] {
+  color: #8f2d20;
+}
+
+.contextWarnings {
+  border-color: #d8b4a4;
+}
+
+.contextWarningLine {
+  color: #8f2d20;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.contextWarningLine code {
+  color: inherit;
+}
+
+.contextExclusionList {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.contextExclusionList li {
+  color: #242522;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.contextExclusionCount {
+  color: #686a63;
+}
+
+.contextExclusionList code {
+  color: #686a63;
+  font-size: 0.8rem;
+}
+
+.contextDisclosure {
+  display: block;
+  padding: 0;
+}
+
+.contextDisclosure > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  padding: 16px 18px;
+}
+
+.contextDisclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.contextDisclosure > summary::marker {
+  content: "";
+}
+
+.contextDisclosureSummary:focus-visible {
+  border-radius: 16px;
+  outline: 2px solid #242522;
+  outline-offset: -2px;
+}
+
+.contextDisclosureTitle {
+  color: #242522;
+  font-size: 1.05rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.contextDisclosureSubtitle {
+  color: #686a63;
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.contextDisclosureStatus {
+  color: #686a63;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.contextDisclosureChevron {
+  color: #686a63;
+  transition: transform 0.15s ease;
+}
+
+.contextDisclosure[open] .contextDisclosureChevron {
+  transform: rotate(180deg);
+}
+
+.contextDisclosureBody {
+  border-top: 1px solid #e2e3dc;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 16px 18px;
+}
+
+.contextDisclosureBody h3 {
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.contextDisclosureBody .inspectorHeading p,
+.contextDisclosureBody .inspectorCard p {
+  color: #686a63;
+}
+
+.contextRetrieval {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.contextVerbatim {
+  margin: 8px 0 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* === #267 Reflection Inspector hierarchy & sensitive Evidence reads === */
+
+.reflectionSensitiveCard {
+  margin-top: 1.5rem;
+}
+
+.reflectionScopeSwitch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reflectionScopeSwitch button {
+  background: #f4f2ed;
+  border: 1px solid #cfc7b9;
+  border-radius: 999px;
+  color: #22211f;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.reflectionScopeSwitch button[aria-pressed="true"] {
+  background: #242522;
+  border-color: #242522;
+  color: #faf9f6;
+}
+
+.reflectionSection {
+  border-top: 1px solid #e5dfd5;
+  padding-top: 0.25rem;
+}
+
+.reflectionSectionHeading {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.reflectionSectionToggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #242522;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-weight: 650;
+  gap: 0.6rem;
+  padding: 0.55rem 0;
+  text-align: left;
+  width: 100%;
+}
+
+.reflectionSectionToggle:hover {
+  color: #000;
+}
+
+.reflectionSectionTitle {
+  min-width: 0;
+}
+
+.reflectionSectionSummary {
+  color: #756f63;
+  font-size: 0.8rem;
+  font-weight: 400;
+  margin-left: auto;
+  text-align: right;
+}
+
+.reflectionSectionChevron {
+  color: #756f63;
+  flex-shrink: 0;
+  font-size: 1rem;
+  width: 1rem;
+}
+
+.reflectionSectionBody {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.35rem 0 0.85rem;
+}
+
+.reflectionStatement {
+  border-left: 2px solid #d7d0c4;
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 0.8rem;
+}
+
+.reflectionStatementMeta {
+  color: #756f63;
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.reflectionStatementText {
+  font-size: 1rem;
+  line-height: 1.75;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.contextRaw {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.contextRawActions {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.contextRawActions p {
+  margin: 0;
+}
+
+.contextJson {
+  background: #f7f6f2;
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  color: #242522;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 420px;
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  white-space: pre;
+}
+
+.contextJson:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+@media (max-width: 860px) {
+  .contextInspector .inspectorSummary,
+  .contextInspector .inspectorFacts,
+  .contextInspector .inspectorVersionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .contextInspectorHeader {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .contextBackLink {
+    padding-top: 0;
+  }
+
+  .contextInspector .inspectorSummary,
+  .contextInspector .inspectorFacts,
+  .contextInspector .inspectorVersionGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contextDisclosure > summary {
+    flex-wrap: wrap;
+  }
+
+  .contextDisclosureSubtitle {
+    flex-basis: 100%;
+    order: 3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contextDisclosureChevron {
+    transition: none;
+  }
+}
+
+.reflectionEvidenceText {
+  background: #f7f4ee;
+  border: 1px solid #d7d0c4;
+  border-radius: 12px;
+  line-height: 1.6;
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+  padding: 0.6rem 0.75rem;
+  white-space: pre-wrap;
+}
+
+.reflectionClaimGroup {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.reflectionVersionMeta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 760px) {
+  .reflectionSectionSummary {
+    display: none;
+  }
+
+  .reflectionVersionMeta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* === #265 journal date browsing === */
+
+.journalView {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 760px;
+  padding: 8px 0 32px;
+  width: 100%;
+}
+
+.journalViewTitle {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+.journalHeading {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+}
+
+.journalHeadingMeta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.journalState {
+  border: 1px solid #e2e3dc;
+  border-radius: 999px;
+  color: #686a63;
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.journalState-current {
+  background: #fff;
+  color: #242522;
+}
+
+.journalState-updating {
+  background: #f2f0eb;
+}
+
+.journalState-outdated {
+  border-color: #d8c79a;
+  color: #7a5c12;
+}
+
+.journalChatLink {
+  color: #242522;
+  font-size: 0.9rem;
+  text-decoration: underline;
+}
+
+.journalStatements {
+  display: grid;
+  gap: 20px;
+}
+
+.journalRawDiagnostics {
+  border-top: 1px solid #e2e3dc;
+  color: #686a63;
+  font-size: 0.85rem;
+  padding-top: 12px;
+}
+
+.journalRawDiagnostics summary {
+  cursor: pointer;
+}
+
+.journalRawDiagnostics ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.journalRawDiagnostics li {
+  display: grid;
+  gap: 4px;
+}
+
+.journalRawStatement {
+  color: #242522;
+}
+
+.journalRawDiagnostics code {
+  color: #686a63;
+  font-size: 0.78rem;
+}
+
+.journalDateEntry {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.journalDateLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journalDateState {
+  color: #686a63;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.journalStateDot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 8px;
+  width: 8px;
+}
+
+.journalStateDot-current {
+  background: #242522;
+}
+
+.journalStateDot-updating {
+  background: #b7b3a6;
+}
+
+.journalStateDot-outdated {
+  background: #c79a2a;
+}
+
+.moduleListNote {
+  color: #686a63;
+  font-size: 0.82rem;
+  margin: 0;
+  padding: 0 8px;
+}
+
+.moduleListRetry {
+  background: transparent;
+  border: 0;
+  color: #242522;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 0 4px;
+  text-decoration: underline;
+}
+
+.moduleListMore {
+  background: transparent;
+  border: 1px solid #e2e3dc;
+  border-radius: 10px;
+  color: #242522;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  margin: 4px 8px 0;
+  padding: 6px 10px;
+}
+
+.moduleListMore:disabled {
+  color: #686a63;
+  cursor: default;
+}
+
+/* === #268 candidate review === */
+
+.reviewBackLink {
+  color: #686a63;
+  display: inline-block;
+  font-size: 0.86rem;
+  margin-bottom: 8px;
+  text-decoration: none;
+}
+
+.reviewBackLink:hover {
+  color: #242522;
+  text-decoration: underline;
+}
+
+.candidateReview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.reviewToolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.reviewTabs {
+  background: #f2f0eb;
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+}
+
+.reviewTab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  color: #686a63;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.88rem;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.reviewTab:hover {
+  background: #e7e5de;
+  color: #242522;
+}
+
+.reviewTab[aria-selected="true"] {
+  background: #242522;
+  color: #ffffff;
+}
+
+.reviewTabCount {
+  background: rgba(36, 37, 34, 0.1);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.6em;
+  padding: 1px 6px;
+  text-align: center;
+}
+
+.reviewTab[aria-selected="true"] .reviewTabCount {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.reviewRefresh {
+  background: #242522;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 16px;
+}
+
+.reviewRefresh:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.reviewNotice {
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 14px;
+}
+
+.reviewNotice.is-success {
+  background: #eef3ec;
+  border-color: #b9cdb2;
+  color: #31502a;
+}
+
+.reviewNotice.is-failure {
+  background: #faf1e6;
+  border-color: #e0c39a;
+  color: #7a4a12;
+}
+
+.reviewSummary {
+  color: #686a63;
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.reviewEmpty {
+  color: #686a63;
+  margin: 0;
+  padding: 8px 0;
+}
+
+.reviewPanel {
+  min-width: 0;
+}
+
+.reviewList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviewItem {
+  min-width: 0;
+}
+
+.reviewCard {
+  background: #ffffff;
+  border: 1px solid #e2e3dc;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 16px;
+}
+
+.reviewCardHeader {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reviewCardTitle {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.reviewCardStage {
+  background: #f2f0eb;
+  border-radius: 999px;
+  color: #686a63;
+  font-size: 0.78rem;
+  padding: 2px 10px;
+}
+
+.reviewCardStatus {
+  color: #242522;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.reviewCardDeadline {
+  align-items: center;
+  background: #f7f5f0;
+  border-left: 3px solid #c9c6bd;
+  border-radius: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+}
+
+.reviewCardDeadline.isOverdue {
+  background: #faf1e6;
+  border-left-color: #c98a2e;
+  color: #7a4a12;
+}
+
+.reviewCardDeadlineLabel {
+  color: #686a63;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.reviewCardDeadline.isOverdue .reviewCardDeadlineLabel {
+  color: #7a4a12;
+}
+
+.reviewCardDeadlineFlag {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.reviewFacts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.reviewActions {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reviewField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.reviewField label,
+.reviewDraft label {
+  color: #686a63;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.reviewField input,
+.reviewField select,
+.reviewDraft input {
+  background: #ffffff;
+  border: 1px solid #e2e3dc;
+  border-radius: 8px;
+  font: inherit;
+  min-width: 0;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.reviewField button,
+.reviewProposalActions button {
+  align-self: flex-start;
+  background: #242522;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 8px 14px;
+}
+
+.reviewField button:disabled,
+.reviewProposalActions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.reviewDetails {
+  border-top: 1px solid #e2e3dc;
+  padding-top: 8px;
+}
+
+.reviewDetails > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 4px 0;
+}
+
+.reviewDetails > summary:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+.reviewDetailFacts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 8px 0;
+}
+
+.reviewDetailFacts dd {
+  overflow-wrap: anywhere;
+}
+
+.reviewDetailFacts dd code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.reviewEvidence {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reviewEvidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reviewEvidenceList code {
+  color: #686a63;
+  font-size: 0.78rem;
+}
+
+.reviewEvidenceList p {
+  background: #f7f5f0;
+  border-radius: 8px;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+}
+
+.reviewProposal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reviewDraft {
+  border: 1px solid #e2e3dc;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+}
+
+.reviewDraft legend {
+  color: #686a63;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0 6px;
+}
+
+.reviewDraft label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reviewProposalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .reviewFacts,
+  .reviewDetailFacts,
+  .reviewActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === #262 chat history and stable pagination === */
+
+.moduleListMore {
+  background: transparent;
+  border: 1px dashed #c7c8bf;
+  border-radius: 999px;
+  color: #686a63;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  margin: 4px 8px 0;
+  padding: 7px 10px;
+  text-align: center;
+}
+
+.moduleListMore:hover:not(:disabled) {
+  background: #e7e5de;
+  color: #242522;
+}
+
+.moduleListMore:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.moduleListError {
+  color: #8a5a00;
+  font-size: 0.78rem;
+  margin: 4px 8px 0;
+}
+
+/* Constrain the history column so its own message list scrolls and the
+   viewport anchor stays measurable while older pages are prepended. */
+.historyConversation {
+  overflow: hidden;
+}
+
+.historyLoadOlder {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 4px 0 12px;
+}
+
+.historyLoadOlderButton {
+  background: transparent;
+  border: 1px solid #c7c8bf;
+  border-radius: 999px;
+  color: #242522;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 14px;
+}
+
+.historyLoadOlderButton:hover:not(:disabled) {
+  background: #efede7;
+}
+
+.historyLoadOlderButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.historyLoadError {
+  color: #8a5a00;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.historyFooter {
+  border-top: 1px solid #e2e3dc;
+  flex-shrink: 0;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+}
+
+.historyReturn {
+  border: 1px solid #242522;
+  border-radius: 999px;
+  color: #242522;
+  display: inline-block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 9px 16px;
+  text-decoration: none;
+}
+
+.historyReturn:hover {
+  background: #242522;
+  color: #faf9f6;
+}
+
+/* === #263 composer and streaming === */
+
+/* Wraps the scrollable message list so "回到最新" can float above it without
+   adding a separate background board behind the composer. */
+.conversationStream {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.conversationStream .messageList {
+  flex: 1;
+}
+
+/* Single-line composer is a pill; wrapped/newline content becomes a large
+   rounded rectangle, capped so the textarea scrolls internally. */
+.composer textarea.composerInput {
+  border-radius: 28px;
+  max-height: 200px;
+}
+
+.composer textarea.composerInput.isMultiline {
+  border-radius: 22px;
+}
+
+.waitingMessage {
+  align-items: center;
+  display: flex;
+  min-height: 1.7em;
+}
+
+.waitingDots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.waitingDot {
+  animation: waitingDotPulse 1.2s ease-in-out infinite;
+  background: #686a63;
+  border-radius: 50%;
+  display: inline-block;
+  height: 7px;
+  opacity: 0.3;
+  width: 7px;
+}
+
+.waitingDot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.waitingDot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes waitingDotPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .waitingDot {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+.visuallyHidden {
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.jumpToLatest {
+  background: #242522;
+  border: 0;
+  border-radius: 999px;
+  bottom: 12px;
+  box-shadow: 0 2px 10px rgba(36, 37, 34, 0.2);
+  color: #faf9f6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  left: 50%;
+  padding: 8px 14px;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.submissionError:focus-visible {
+  outline: 2px solid #8f2d20;
+  outline-offset: 2px;
+}
+
+/* === #264 message time and context icon === */
+
+/* The secondary row is always laid out when present, so revealing the
+   persisted time never moves the message or the scroll position. */
+.messageMeta {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  justify-content: flex-start;
+  min-height: 1.35em;
+}
+
+.userMessage .messageMeta {
+  justify-content: flex-end;
+}
+
+/* Hidden by default; only the metadata text fades, the row keeps its space. */
+.messageMeta .messageTime {
+  color: #686a63;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+}
+
+/* Desktop: hover the message to reveal, move away to hide. Hover is scoped so
+   a sticky touch hover cannot defeat the second tap on mobile. */
+@media (hover: hover) {
+  .userMessage:hover .messageTime,
+  .assistantMessage:hover .messageTime {
+    opacity: 1;
+  }
+}
+
+/* Keyboard focus (the message itself or the Context icon inside it) and the
+   explicit touch/keyboard toggle. */
+.userMessage:focus-within .messageTime,
+.assistantMessage:focus-within .messageTime,
+.userMessage.timeRevealed .messageTime,
+.assistantMessage.timeRevealed .messageTime {
+  opacity: 1;
+}
+
+.userMessage:focus-visible,
+.assistantMessage:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+/* Lightweight Context entry point: an icon, not a text link, immediately left
+   of the time on the same row. Keeps the generation_command_id deep link. */
+.contextInspectIcon {
+  align-items: center;
+  color: #686a63;
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 1;
+  position: relative;
+  text-decoration: none;
+}
+
+.contextInspectIcon:hover {
+  color: #242522;
+}
+
+.contextInspectIcon:focus-visible {
+  color: #242522;
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+/* Keyboard focus and pointer hover both surface the same short description of
+   the icon; touch users follow the link directly. */
+.contextInspectIcon::after {
+  background: #242522;
+  border-radius: 6px;
+  color: #faf9f6;
+  content: attr(data-tooltip);
+  font-size: 0.72rem;
+  left: 50%;
+  line-height: 1.4;
+  opacity: 0;
+  padding: 4px 8px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+.contextInspectIcon:hover::after,
+.contextInspectIcon:focus-visible::after {
+  opacity: 1;
+}
+
+/* === #269 cross-module integration === */
+
+/* Read-only history: an interrupted item explains where it came from and offers
+   an explicit, non-automatic link into the current writable conversation. The
+   long source-date sentence wraps instead of widening the message column. */
+.interruptedAction {
+  margin-top: 6px;
+}
+
+.interruptedSource {
+  color: #686a63;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.interruptedProceed {
+  border: 1px solid #242522;
+  border-radius: 999px;
+  color: #242522;
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 8px;
+  padding: 7px 14px;
+  text-decoration: none;
+}
+
+.interruptedProceed:hover {
+  background: #242522;
+  color: #faf9f6;
+}
+
+.interruptedProceed:focus-visible {
+  outline: 2px solid #242522;
+  outline-offset: 2px;
+}
+
+

@@ -1,13 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { renderMemorySection } from "@sayhear/application";
+import {
+  renderMemorySection,
+  type MemorySectionBudgetActual,
+  type RetrievalCandidateInspection,
+  type RetrievalRunManifest,
+} from "@sayhear/application";
 
 import {
   DIALOGUE_STATE_FIELDS,
+  humanizeDiagnosticCode,
+  injectedMemoryItemCount,
   memorySectionItemsFromSections,
   parseMemorySectionItems,
+  retrievalRejectionSummary,
+  retrievalSummary,
+  safetyPostureLabel,
   sectionVersionLabel,
   type ContextInspectorContext,
+  type ContextInspectorPayload,
   type ContextInspectorSection,
 } from "../apps/web/app/internal/context-inspector-data";
 
@@ -291,5 +302,184 @@ describe("Context Inspector memory item parsing (#122)", () => {
         validTo: "2026-06-30",
       },
     ]);
+  });
+});
+
+const emptyBudget: MemorySectionBudgetActual = {
+  memory_class_total: { actual_items: 0, ceiling_items: 0 },
+  person_portrait: {
+    actual_impressions: 0,
+    actual_items: 0,
+    ceiling_impressions: 2,
+    ceiling_items: 3,
+  },
+  query_retrieved: {
+    actual_impressions: 0,
+    actual_items: 0,
+    ceiling_impressions: 2,
+    ceiling_items: 3,
+  },
+};
+
+function manifest(
+  degradedReasonCodes: RetrievalRunManifest["degraded_reason_codes"] = [],
+  portraitDegradedReasonCodes: RetrievalRunManifest["portrait_degraded_reason_codes"] = [],
+): RetrievalRunManifest {
+  return {
+    candidate_count: 0,
+    deadline_exceeded_stage: null,
+    deadline_ms: 200,
+    degraded_reason_codes: degradedReasonCodes,
+    duration_ms: 5,
+    fenced_out_count: 0,
+    lane_hit_counts: {
+      english_fts: 0,
+      lexical_term_overlap: 0,
+      structured_exact: 0,
+    },
+    lane_plan: [],
+    normalized_query_terms: {
+      canonical_keys: [],
+      date_tokens: [],
+      lexical_terms: [],
+      predicate_candidates: [],
+      resolved_entities: [],
+      time_word_classes: [],
+    },
+    portrait_degraded_reason_codes: portraitDegradedReasonCodes,
+    portrait_selection: { pool_count: 0, selected_claim_version_ids: [] },
+    projection_policy_version: "projection:v1",
+    qualified_count: 0,
+    query_construction_policy_version: "query:v1",
+    query_source_refs: [],
+    retrieval_policy_version: "retrieval:v1",
+    retrieval_run_id: "run-1",
+    section_budget_vs_actual: emptyBudget,
+    selection_policy_versions: {
+      memory_budgets: "memory-budgets:v1",
+      portrait_selection: "portrait-selection:v1",
+      recall_framing: "recall-framing:v2",
+    },
+    timings: {},
+    zero_signal: true,
+  };
+}
+
+function payloadWithManifest(
+  retrievalManifest: RetrievalRunManifest | null,
+): Pick<ContextInspectorPayload, "compiledContext"> {
+  return {
+    compiledContext: {
+      retrievalManifest,
+    } as ContextInspectorPayload["compiledContext"],
+  };
+}
+
+function candidate(
+  overrides: Partial<RetrievalCandidateInspection> = {},
+): RetrievalCandidateInspection {
+  return {
+    claimVersionId: "version-1",
+    finalRank: null,
+    lane: "structured_exact",
+    matchedFields: [],
+    matchedTerms: [],
+    rankComponents: {
+      entity_match: 0,
+      fts_rank: null,
+      last_observed_at: "2026-01-01T00:00:00.000Z",
+      lexical_coverage: 0,
+      predicate_match: 0,
+      stable_id: "claim-1",
+      temporal_fit: 0,
+      trust_kind: "objective",
+    },
+    rejectionReasonCodes: [],
+    retrievalProjectionId: "projection-1",
+    selectedSection: null,
+    selectionReasonCodes: [],
+    trustFenceResults: [],
+    ...overrides,
+  };
+}
+
+describe("Context Inspector summary helpers (#266)", () => {
+  it("labels the three safety-posture states", () => {
+    expect(safetyPostureLabel("active")).toBe("Active");
+    expect(safetyPostureLabel("released")).toBe("Cleared");
+    expect(safetyPostureLabel("default")).toBe("Default");
+  });
+
+  it("humanizes known diagnostic codes and passes unknown codes through", () => {
+    expect(humanizeDiagnosticCode("retrieval_lane_failed")).toBe(
+      "A retrieval lane failed; the round degraded and injected no memory.",
+    );
+    expect(humanizeDiagnosticCode("selected_person_portrait")).toBe(
+      "Selected into the Person Portrait.",
+    );
+    // Nothing is invented for a code this build does not know.
+    expect(humanizeDiagnosticCode("brand_new_code")).toBe("brand_new_code");
+  });
+
+  it("classifies the retrieval run as none / completed / degraded", () => {
+    expect(retrievalSummary(payloadWithManifest(null)).state).toBe("none");
+
+    const completed = retrievalSummary(payloadWithManifest(manifest()));
+    expect(completed.state).toBe("completed");
+    expect(completed.degradedReasonCodes).toEqual([]);
+
+    const degraded = retrievalSummary(
+      payloadWithManifest(manifest(["retrieval_lane_failed"], ["portrait_load_failed"])),
+    );
+    expect(degraded.state).toBe("degraded");
+    expect(degraded.degradedReasonCodes).toEqual(["retrieval_lane_failed"]);
+    expect(degraded.portraitDegradedReasonCodes).toEqual([
+      "portrait_load_failed",
+    ]);
+  });
+
+  it("counts only injected memory items across present memory sections", () => {
+    const rendered = [
+      "- [shh-memory-1] 老家在西安 — kind=objective epistemic=confirmed claim=c version=v evidence=none temporal=current",
+      "- [shh-memory-2] 重视家庭 — kind=impression epistemic=inferred claim=c2 version=v2 evidence=none temporal=ended",
+    ].join("\n");
+    expect(
+      injectedMemoryItemCount([
+        section("person_portrait", rendered),
+        section("objective_memory", "no item lines here"),
+      ]),
+    ).toBe(2);
+    expect(injectedMemoryItemCount([])).toBe(0);
+  });
+
+  it("groups rejection reasons by count and reports uncoded rejections", () => {
+    const summary = retrievalRejectionSummary([
+      candidate({
+        rejectionReasonCodes: ["relevance_cutoff_single_term"],
+      }),
+      candidate({
+        rejectionReasonCodes: [
+          "relevance_cutoff_single_term",
+          "budget_retrieval_ceiling",
+        ],
+        retrievalProjectionId: "projection-2",
+      }),
+      candidate({
+        rejectionReasonCodes: [],
+        retrievalProjectionId: "projection-3",
+      }),
+      // Selected candidates never appear in the exclusion summary.
+      candidate({
+        rejectionReasonCodes: ["relevance_cutoff_single_term"],
+        retrievalProjectionId: "projection-4",
+        selectedSection: "person_portrait",
+      }),
+    ]);
+
+    expect(summary.entries).toEqual([
+      { code: "relevance_cutoff_single_term", count: 2 },
+      { code: "budget_retrieval_ceiling", count: 1 },
+    ]);
+    expect(summary.uncodedCount).toBe(1);
   });
 });

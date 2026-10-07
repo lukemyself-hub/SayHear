@@ -70,6 +70,42 @@ function baseCommand() {
 }
 
 describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
+  it.each(["23503", "CANARY-PRIVATE-CODE"])("reports only bounded diagnostics and still settles when the observer throws (%s)", async (code) => {
+    const diagnostics: unknown[] = [];
+    let settled = false;
+    const harness = createConversationAgentHarness({
+      clock: fixedClock,
+      onUnexpectedFailure(failure) {
+        diagnostics.push(failure);
+        throw new Error("observer unavailable");
+      },
+      egressPort: {
+        async *stream() {
+          yield { delta: "ok", type: "delta" } as const;
+          yield { ...completedMetadata, type: "completed" } as const;
+        },
+      },
+      repository: {
+        async claimResponseExecution() { return "owner"; },
+        async loadResponse() { throw new Error("unexpected replay"); },
+        async claimStaleResponseExecution() { throw new Error("unexpected retry"); },
+        async commitCompleteResponse() {
+          throw Object.assign(new Error("CANARY-PRIVATE-BODY"), { code, detail: "CANARY-PRIVATE-DETAIL" });
+        },
+        async settleResponseFailure(input) {
+          settled = true;
+          return { category: input.category, outcome: "settled", status: "interrupted" };
+        },
+      },
+    });
+    const events: ConversationHarnessEvent[] = [];
+    for await (const event of harness.runDecision(baseCommand())) events.push(event);
+    expect(settled).toBe(true);
+    expect(events.at(-1)).toEqual({ category: "unknown", interrupted: true, type: "decision_failed" });
+    expect(diagnostics).toEqual([{ generationCommandId, stage: "response_commit", databaseErrorCode: code === "23503" ? code : null }]);
+    expect(JSON.stringify(diagnostics)).not.toContain("CANARY-PRIVATE");
+  });
+
   it("streams the Final Response and commits exactly one Assistant Event", async () => {
     const egressPort: ProviderEgressPort = {
       async *stream() {
@@ -88,6 +124,7 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       async commitCompleteResponse() {
         commitCalls += 1;
         return {
+          createdAt: fixedClock().toISOString(),
           eventId: assistantEventId,
           outcome: "committed",
           revisionId: assistantRevisionId,
@@ -114,6 +151,7 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
     expect(events).toEqual([
       { delta: "I hear you.", type: "decision_delta" },
       {
+        assistantCreatedAt: fixedClock().toISOString(),
         assistantEventId,
         assistantEventRevisionId: assistantRevisionId,
         type: "decision_committed",
@@ -195,6 +233,7 @@ describe("Conversation Agent Harness — ordinary Decision (issue #24)", () => {
       },
       async commitCompleteResponse() {
         return {
+          createdAt: fixedClock().toISOString(),
           eventId: assistantEventId,
           outcome: "committed",
           revisionId: assistantRevisionId,

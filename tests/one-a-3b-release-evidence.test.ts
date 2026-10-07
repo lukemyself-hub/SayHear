@@ -1,15 +1,23 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { buildManifest } from "../eval/continuation-acceptance-1a3b/manifest";
+import { evidenceArtifactValue } from "../scripts/produce-1a3b-g1-evidence";
+import {
+  verifyHostedCanaryArtifact,
+  verifyValidatorPrecisionReport,
+  verifyValidatorPrecisionReportArtifact,
+} from "../scripts/verify-1a3b-g1-evidence";
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
   type OneA3bG1Evidence,
 } from "@sayhear/application";
-import { verifyValidatorPrecisionReportArtifact } from "../scripts/verify-1a3b-g1-evidence";
 import {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   verifyOneA3bF3ReleaseArtifacts,
@@ -25,8 +33,66 @@ function readFixture(path: string): Record<string, any> {
   >;
 }
 
+function completeHostedArtifacts(runId: string): Record<string, unknown> {
+  const commandId = "01984477-59a9-7d20-9d97-e588769566a1";
+  const ownerId = "01984477-59a9-7d20-9d97-e588769566a0";
+  return {
+    completeness: {
+      runs: {
+        [runId]: { events: 1, eventsComplete: true, steps: 1, stepsComplete: true },
+      },
+      version: "1a3b-hosted-canary-completeness:v1",
+      workflowRuns: 1,
+    },
+    workflowHistory: [
+      {
+        deploymentId: "dpl_acceptance",
+        input: { workflowCommandId: commandId },
+        runId,
+        steps: [{ runId }],
+        events: [{ runId }],
+      },
+    ],
+    outboxPayloads: [
+      { payload: { workflowCommandId: commandId }, user_id: ownerId },
+    ],
+    receipts: [{ action_receipt_id: commandId, user_id: ownerId }],
+    logs: [{ runId }],
+    traces: [{ commandId }],
+    errors: [{ code: "provider_timeout", commandId }],
+  };
+}
+
 describe("1A.3b G1 evidence lineage", () => {
-  it("requires every frozen precision case exactly once with zero false blocks", () => {
+  it("rejects precision captures from dirty or different code and missing execution identities", () => {
+    const expectedCapture = { gitCommit: "a".repeat(40), catalogSha256: "catalog", pinsFingerprint: "pins" };
+    const report = {
+      ...expectedCapture, gitDirty: false,
+      version: "1a3b-f3-validator-precision-report:v1", manifestFingerprint: "manifest",
+      cases: ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.map(fixtureId => ({
+        fixtureId, outcome: "completed", verdict: "blocked", blockingFindingCodes: ["unsupported"],
+        generationCommandId: `command-${fixtureId}`, modelRunAttemptId: `attempt-${fixtureId}`,
+      })),
+    };
+    const input = { report, manifestFingerprint: "manifest", expectedCapture };
+    expect(verifyValidatorPrecisionReport(input)).toEqual({ totalCases: 6, falseBlockingCases: 6 });
+    expect(() => verifyValidatorPrecisionReport({ ...input, report: { ...report, gitDirty: true } })).toThrow("frozen code");
+    expect(() => verifyValidatorPrecisionReport({ ...input, report: { ...report, gitCommit: "b".repeat(40) } })).toThrow("frozen code");
+    expect(() => verifyValidatorPrecisionReport({ ...input, report: { ...report, cases: report.cases.map(entry => ({ ...entry, modelRunAttemptId: null })) } })).toThrow("command/attempt");
+  });
+  it("binds holdout precision IDs to the supplied frozen catalog without renaming results", () => {
+    const manifestFingerprint = `sha256:${"c".repeat(64)}`;
+    const expectedFixtureIds = ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS.map((id) => `holdout-${id}`);
+    const report = { version: "1a3b-f3-validator-precision-report:v1", manifestFingerprint, cases: expectedFixtureIds.map((fixtureId) => ({fixtureId, outcome: "completed", verdict: "accepted", blockingFindingCodes: []})) };
+    const bytes = Buffer.from(JSON.stringify(report));
+    const expectedSha256 = createHash("sha256").update(bytes).digest("hex");
+    expect(verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint, expectedFixtureIds})).toEqual({falseBlockingCases: 0, totalCases: 6});
+    expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint})).toThrow("unknown or duplicate");
+    expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint: `sha256:${"d".repeat(64)}`, expectedFixtureIds})).toThrow("does not belong");
+    expect(() => verifyValidatorPrecisionReportArtifact({bytes, expectedSha256, manifestFingerprint, expectedFixtureIds: Array(6).fill(expectedFixtureIds[0])})).toThrow("six unique");
+  });
+
+  it("requires every frozen precision case exactly once and records semantic findings without blocking", () => {
     const manifestFingerprint = `sha256:${"c".repeat(64)}`;
     const report = {
       version: "1a3b-f3-validator-precision-report:v1",
@@ -79,7 +145,7 @@ describe("1A.3b G1 evidence lineage", () => {
         ),
       }),
     );
-    expect(() =>
+    expect(
       verifyValidatorPrecisionReportArtifact({
         bytes: falseBlockBytes,
         expectedSha256: createHash("sha256")
@@ -87,7 +153,7 @@ describe("1A.3b G1 evidence lineage", () => {
           .digest("hex"),
         manifestFingerprint,
       }),
-    ).toThrow("1 false-blocking verdict");
+    ).toEqual({ falseBlockingCases: 1, totalCases: 6 });
   });
 
   it("verifies the checked-in F3 synthetic catalog, pins, and validator ledger shape", () => {
@@ -449,5 +515,120 @@ describe("1A.3b G1 evidence lineage", () => {
         knownFixtureIds: new Set(["cont-open-loop-en"]),
       }),
     ).toEqual([]);
+  });
+
+  it("retains AC-W01 hosted canary references through assembly so the final verifier can rescan", () => {
+    const contract = ONE_A_3B_G1_EVIDENCE_CONTRACTS["AC-W01"];
+    expect(contract.requiredResultKeys).toEqual(
+      expect.arrayContaining(["expectedRunIds", "canaryValuesArtifact"]),
+    );
+
+    const root = mkdtempSync(join(tmpdir(), "sayhear-ac-w01-assembly-"));
+    const write = (name: string, value: unknown) => {
+      const bytes = JSON.stringify(value);
+      writeFileSync(join(root, name), bytes, { mode: 0o600 });
+      return {
+        path: name,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      };
+    };
+    const runId = "wrun_acceptance";
+    const values = {
+      actionPayload: "private-action-payload",
+      contentHmac: "private-content-hmac",
+      privateBody: "private-body",
+      rawProviderError: "private-provider-error",
+      renderedPrompt: "private-rendered-prompt",
+      secret: "private-secret",
+    };
+    const exportArtifact = write("artifacts.json", completeHostedArtifacts(runId));
+    const canaryValuesArtifact = write("values.json", values);
+
+    const evidence: OneA3bG1Evidence = {
+      criterion: "AC-W01",
+      fixtureIds: ["cont-open-loop-en"],
+      command: "node --import tsx scripts/verify-hosted-workflow-canary.ts",
+      artifactSha256: "a".repeat(64),
+      artifactPath: "eval/run/ac-w01.json",
+      owner: "Luke",
+      source: "hosted",
+      status: "verified",
+    };
+    const source = {
+      artifactPath: "eval/run/ac-w01-source.json",
+      artifactSha256: "b".repeat(64),
+      command: evidence.command,
+      criterion: "AC-W01" as const,
+      fixtureIds: evidence.fixtureIds,
+      owner: "Luke",
+      result: {
+        hosted: true,
+        canaryRunId: runId,
+        deploymentId: "dpl_acceptance",
+        exportArtifact,
+        canaryValuesArtifact,
+        expectedRunIds: [runId],
+      },
+      runId,
+      source: "hosted" as const,
+      verificationCommand: evidence.command,
+    };
+    const assembled = evidenceArtifactValue({
+      evidence,
+      f3ManifestFingerprint: `sha256:${"c".repeat(64)}`,
+      fixtureCatalogSha256: "d".repeat(64),
+      source,
+      gitCommit: "e".repeat(40),
+      releaseIdentityFingerprint: null,
+    });
+    const assembledResult = assembled.result as Record<string, unknown>;
+
+    // The producer copies the contract keys, so the assembled artifact must
+    // still carry both references rather than only a passed summary.
+    expect(assembledResult.expectedRunIds).toEqual([runId]);
+    expect(assembledResult.canaryValuesArtifact).toEqual(canaryValuesArtifact);
+    expect(() => verifyHostedCanaryArtifact(assembled, root)).not.toThrow();
+
+    // Dropping the references is exactly the failure this regression covers:
+    // the final verifier has nothing to re-scan and must refuse the artifact.
+    expect(() =>
+      verifyHostedCanaryArtifact(
+        {
+          result: {
+            ...assembledResult,
+            expectedRunIds: undefined,
+          },
+        },
+        root,
+      ),
+    ).toThrow("Hosted canary lacks deployment and complete run-set pins");
+    expect(() =>
+      verifyHostedCanaryArtifact(
+        {
+          result: {
+            ...assembledResult,
+            canaryValuesArtifact: undefined,
+          },
+        },
+        root,
+      ),
+    ).toThrow("Hosted values reference is missing");
+  });
+
+  it("does not execute the producer CLI when imported as a module", () => {
+    // Importing the producer must stay inert. Without the CLI-entry guard, the
+    // bare import ran main() with no arguments, failed option parsing, and
+    // exited 1 through process.exitCode.
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "-e",
+        "import('./scripts/produce-1a3b-g1-evidence.ts')",
+      ],
+      { cwd: process.cwd(), encoding: "utf8" },
+    );
+    expect(result.status, result.stderr).toBe(0);
   });
 });

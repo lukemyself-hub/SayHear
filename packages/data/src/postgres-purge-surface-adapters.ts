@@ -897,10 +897,12 @@ function assertProviderReceiptRow(receipt: ProviderReceiptRow): void {
 
 /**
  * Clear the registered external integration without making a provider API
- * call. The current Responses API contract has no deletion endpoint, so the
- * durable action is a content-free retention receipt. Recovery may supply the
- * marker's exact provider receipts; an explicit empty list must remain empty
- * so a missing marker destination fails closed during independent verification.
+ * call. The current provider egress contract (stateless Responses API and the
+ * OpenCode Go Chat Completions transport) has no deletion endpoint, so the
+ * durable action is a content-free retention receipt, one per captured role.
+ * Recovery may supply the marker's exact provider receipts; an explicit empty
+ * list must remain empty so a missing marker destination fails closed during
+ * independent verification.
  */
 export async function clearPurgeSurfaceIntegration(
   client: PoolClient,

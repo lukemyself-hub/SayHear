@@ -123,6 +123,7 @@ type DispatchRow = Readonly<{
   context_sections: CompiledContextSection[];
   context_source_revision: string;
   context_total_tokens: string;
+  daily_session_id: string;
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
@@ -269,6 +270,7 @@ export class PostgresConversationResponseRepository
   }): ReturnType<ConversationResponseRepository["loadResponse"]> {
     const result = await this.pool.query<{
       error_category: string | null;
+      event_created_at: Date | null;
       event_id: string | null;
       revision_id: string | null;
       status:
@@ -286,6 +288,7 @@ export class PostgresConversationResponseRepository
           command.status,
           attempt.error_category,
           event.conversation_event_id AS event_id,
+          event.created_at AS event_created_at,
           revision.conversation_event_revision_id AS revision_id,
           revision.canonical_text AS text
         FROM generation_commands command
@@ -317,12 +320,18 @@ export class PostgresConversationResponseRepository
       throw new Error("The GenerationCommand response state was not found.");
     }
     if (row.status === "succeeded") {
-      if (!row.event_id || !row.revision_id || row.text === null) {
+      if (
+        !row.event_id ||
+        !row.revision_id ||
+        row.text === null ||
+        row.event_created_at === null
+      ) {
         throw new Error(
           "The succeeded GenerationCommand has no authoritative response.",
         );
       }
       return {
+        createdAt: row.event_created_at.toISOString(),
         eventId: asConversationEventId(row.event_id),
         outcome: "committed",
         revisionId: asConversationEventRevisionId(row.revision_id),
@@ -1228,6 +1237,7 @@ export class PostgresConversationResponseRepository
             ) AS consent_active,
             command.status,
             attempt.status AS attempt_status,
+            session.daily_session_id AS daily_session_id,
             session.dialogue_revision AS session_dialogue_revision,
             session.source_revision AS session_source_revision,
             (
@@ -1459,6 +1469,7 @@ export class PostgresConversationResponseRepository
           sections: row.context_sections,
           totalTokens: Number(row.context_total_tokens),
         },
+        dailySessionId: row.daily_session_id,
         model: row.model,
         outcome: "permitted",
       };
@@ -1948,6 +1959,7 @@ export class PostgresConversationResponseRepository
       });
       await client.query("COMMIT");
       return {
+        createdAt: input.completedAt.toISOString(),
         eventId: asConversationEventId(eventId),
         outcome: "committed",
         revisionId: asConversationEventRevisionId(revisionId),

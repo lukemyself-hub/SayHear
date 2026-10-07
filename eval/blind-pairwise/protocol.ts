@@ -40,7 +40,7 @@ export const PAIRWISE_SAMPLE_PROTECTED_CATEGORIES = Object.freeze([
 
 export type PairwiseChoice = "A" | "tie" | "B";
 
-/** The six taste dimensions of the behavior contract §二, English keys over the CONTEXT.md names. */
+/** The six taste dimensions of the behavior contract §二, English keys over the GLOSSARY.md names. */
 export const TASTE_DIMENSIONS = [
   "vitality",
   "warmth",

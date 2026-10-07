@@ -23,7 +23,11 @@ import {
   MAX_PROPOSALS_PER_BUILD,
 } from "./types";
 import { assertWorkflowSafe } from "../journal-eligibility";
-import { ProviderDispatchError } from "../conversation-model";
+import {
+  ProviderDispatchError,
+  normalizeModelRoleCallUsage,
+  type ModelRoleCallUsage,
+} from "../conversation-model";
 import {
   RecoveryGateClosedError,
   type RecoveryGate,
@@ -144,6 +148,21 @@ export function classifyEpisodeProviderError(
     default:
       return "result_unknown";
   }
+}
+
+/**
+ * The content-free usage for one attempt. A Provider failure that proves a
+ * specific response cause is authoritative for the same call; the request
+ * callback is the fallback for transport paths that report usage separately.
+ * Never reads any other call's record.
+ */
+function attemptUsage(
+  error: unknown,
+  callUsage: ModelRoleCallUsage | null,
+): ModelRoleCallUsage | null {
+  const failure =
+    error instanceof ProviderDispatchError ? (error.failure ?? null) : null;
+  return normalizeModelRoleCallUsage(failure ?? callUsage);
 }
 
 // ---- The durable Workflow entrypoints ---------------------------------------
@@ -340,6 +359,11 @@ async function executeEpisodeAttempt(input: Readonly<{
   let proposals: Awaited<
     ReturnType<EpisodeBuildModelProvider["buildProposals"]>
   >;
+  // Request-scoped so concurrent attempts cannot interleave usage records.
+  let callUsage: ModelRoleCallUsage | null = null;
+  const onUsage = (usage: ModelRoleCallUsage) => {
+    callUsage = normalizeModelRoleCallUsage(usage);
+  };
   try {
     const request = {
       userId: input.userId,
@@ -373,9 +397,10 @@ async function executeEpisodeAttempt(input: Readonly<{
               current.snapshot.ownerEpoch === input.expectedDataEpoch
             );
           },
-          execute: () => input.episodeBuildProvider.buildProposals(request),
+          execute: () =>
+            input.episodeBuildProvider.buildProposals(request, onUsage),
         })
-      : await input.episodeBuildProvider.buildProposals(request);
+      : await input.episodeBuildProvider.buildProposals(request, onUsage);
   } catch (error) {
     if (
       error instanceof RecoveryGateClosedError &&
@@ -408,6 +433,7 @@ async function executeEpisodeAttempt(input: Readonly<{
       currentSourceRevision: input.sourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.clock(),
+      usage: attemptUsage(error, callUsage),
     });
     const outcome: EpisodeBuildEntrypointResult["outcome"] =
       recorded.outcome === "discarded"
@@ -472,6 +498,7 @@ async function executeEpisodeAttempt(input: Readonly<{
       currentSourceRevision: input.sourceRevision,
       expectedDataEpoch: input.expectedDataEpoch,
       now: input.clock(),
+      usage: normalizeModelRoleCallUsage(callUsage),
     });
     return {
       dailySessionId: input.dailySessionId,
@@ -495,6 +522,7 @@ async function executeEpisodeAttempt(input: Readonly<{
     currentSourceRevision: input.sourceRevision,
     expectedDataEpoch: input.expectedDataEpoch,
     now: input.clock(),
+    usage: normalizeModelRoleCallUsage(callUsage),
   });
   if (recorded.outcome === "discarded") {
     return {

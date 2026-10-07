@@ -7,7 +7,7 @@
   对齐完整，不无目标地预加载整个 `docs/`。
 - `product/` 定义产品背景、承诺与当前产品规则；`architecture/` 只定义技术契约
   与系统不变量，不属于 SPEC。
-- 根目录 `CONTEXT.md` 是术语唯一真源；`docs/adr/` 解释重要决定的原因。
+- 根目录 `GLOSSARY.md` 是术语唯一真源；`docs/adr/` 解释重要决定的原因。
 - 完整 SPEC 由 matt skills 发布为 GitHub Issue；`specs/` 只维护轻量索引和规则，
   当前 1A.3b SPEC 为 GitHub #193。
 - `tasks/` 是短期 working spec；`archive/` 只用于追溯，默认不读取。
@@ -40,7 +40,7 @@ Accepted
 | --- | --- | --- |
 | 产品愿景、用户、价值、定位、范围、承诺和当前产品规则 | `product/` 对应主题文件 | 架构摘要、研究建议、归档 PRD |
 | 专门功能 SPEC | 对应 GitHub Issue 的完整正文、评论和标签；`specs/README.md` 只作索引 | 本地重复 SPEC 正文、架构文档、产品总结、ADR 摘要 |
-| 术语、名称和禁用近义词 | 根目录 `CONTEXT.md` | 代码里的临时命名、历史文档 |
+| 术语、名称和禁用近义词 | 根目录 `GLOSSARY.md` | 代码里的临时命名、历史文档 |
 | 技术边界、数据模型、工作流和系统不变量 | `architecture/` 对应主题文件 | 研究文档、归档架构总稿 |
 | 重要决定及其原因 | `adr/` 中对应 ADR | 归档架构中的旧决策摘要 |
 | 当前短期任务范围 | `tasks/` 中对应 working spec 或 GitHub Issue | 路线图、历史会议记录 |
@@ -105,7 +105,7 @@ Issue 是唯一执行真源；[`specs/README.md`](specs/README.md) 只维护发�
 | Action 发布验收、测试、故障注入、交付顺序、DoD、升级门槛 | [`architecture/24-29-testing-and-delivery.md`](architecture/24-29-testing-and-delivery.md) |
 
 领域命名任务只读取
-[`../CONTEXT.md`](../CONTEXT.md) 的相关章节；不要把整套产品或架构
+[`../GLOSSARY.md`](../GLOSSARY.md) 的相关章节；不要把整套产品或架构
 当作术语前置材料。
 
 ## 决策、任务与 Agent 操作

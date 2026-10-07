@@ -108,6 +108,7 @@ import {
   PostgresEpisodeRepository,
   PostgresBioInspectionRepository,
   PostgresReflectionInspectionRepository,
+  PostgresEvidenceStepUpRepository,
   PostgresMemoryClaimRepository,
   PostgresCandidateReviewRepository,
   insertCandidateRemapCommandWithin,
@@ -204,7 +205,9 @@ export function createServerComposition() {
   const journalRoleRegistry = createRuntimeJournalRoleProviderRegistry({
     adapter: configuration.provider.adapter === "deterministic"
       ? { type: "deterministic" }
-      : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
+      : configuration.provider.adapter === "opencode-go"
+        ? { apiKey: configuration.provider.apiKey!, timeoutMs: configuration.provider.timeoutMs, type: "opencode-go" }
+        : { type: "responses-api", apiKey: configuration.provider.apiKey!, baseUrl: configuration.provider.baseUrl!, timeoutMs: configuration.provider.timeoutMs },
     roles,
   });
   const evidenceConfiguration = journalRoleRegistry.configuration("evidence.extract");
@@ -363,6 +366,7 @@ export function createServerComposition() {
   const draftConfiguration = journalRoleRegistry.configuration("journal.draft");
   const validationConfiguration = journalRoleRegistry.configuration("journal.validate");
   const journalService = createJournalService({
+    cursorSecret: configuration.contextHmacSecret,
     journalPolicyVersion: draftConfiguration.policyVersion,
     validatorVersion: validationConfiguration.policyVersion,
     evidenceExtractionPolicyVersion: evidenceConfiguration.policyVersion,
@@ -412,6 +416,9 @@ export function createServerComposition() {
                 : []),
               ...(configuration.provider.roleAdapters.deepseek
                 ? [configuration.provider.roleAdapters.deepseek]
+                : []),
+              ...(configuration.provider.roleAdapters["opencode-go"]
+                ? [configuration.provider.roleAdapters["opencode-go"]]
                 : []),
             ],
             configurations:
@@ -471,6 +478,7 @@ export function createServerComposition() {
       configuration.clock,
     ),
   });
+  const evidenceStepUpRepository = new PostgresEvidenceStepUpRepository(pool);
   const candidateReviewRepository = new PostgresCandidateReviewRepository(
     pool,
     configuration.contextHmacSecret,
@@ -630,7 +638,7 @@ export function createServerComposition() {
       modelConfigVersion: configuration.provider.champion.configVersion,
       modelSnapshot: configuration.provider.champion.snapshot,
       canonicalPersonaVersion: CANONICAL_PERSONA_VERSION,
-      outputFormatVersion: "conversation-output:v1",
+      outputFormatVersion: "conversation-output:v2",
       personaBehaviorAnchorsVersion: PERSONA_BEHAVIOR_ANCHORS_VERSION,
       personaContractInvariantVersion: PERSONA_CONTRACT_INVARIANT_VERSION,
       productPolicyVersion: "product-policy:v1",
@@ -684,12 +692,18 @@ export function createServerComposition() {
                     configuration.provider.failAfterChunks,
                 }),
           }
-        : {
-            apiKey: configuration.provider.apiKey!,
-            baseUrl: configuration.provider.baseUrl!,
-            timeoutMs: configuration.provider.timeoutMs,
-            type: "responses-api",
-          },
+        : configuration.provider.adapter === "opencode-go"
+          ? {
+              apiKey: configuration.provider.apiKey!,
+              timeoutMs: configuration.provider.timeoutMs,
+              type: "opencode-go",
+            }
+          : {
+              apiKey: configuration.provider.apiKey!,
+              baseUrl: configuration.provider.baseUrl!,
+              timeoutMs: configuration.provider.timeoutMs,
+              type: "responses-api",
+            },
     champion: configuration.provider.champion,
     clock: configuration.clock,
     contextCompiler,
@@ -832,6 +846,9 @@ export function createServerComposition() {
     clock: configuration.clock,
     egressPort,
     contextCompiler,
+    onUnexpectedFailure: (failure) => {
+      console.error("conversation_decision_unexpected_failure", failure);
+    },
     repository: responseRepository,
   });
   return {
@@ -890,6 +907,7 @@ export function createServerComposition() {
     modelRoleCommandService,
     bioInspectionService,
     reflectionInspectionService,
+    evidenceStepUpRepository,
     inspectionService: createInternalInspectionService({
       clock: configuration.clock,
       policyVersion: "sensitive-inspection:v1",

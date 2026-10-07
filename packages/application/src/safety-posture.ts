@@ -1,6 +1,6 @@
 /**
  * The Daily-Session-scoped Safety Posture lifecycle (issue #76, ADR-0112,
- * architecture 08-10 §9.6, CONTEXT.md "Safety Posture").
+ * architecture 08-10 §9.6, GLOSSARY.md "Safety Posture").
  *
  * Safety Posture is deterministic domain state on the Daily Session — not a
  * DialogueState field, not model state, and not cross-day crisis tracking. A

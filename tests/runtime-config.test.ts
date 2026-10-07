@@ -230,6 +230,102 @@ describe("runtime safety configuration", () => {
       .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: false, memoryRetrievalEnabled: true, reflectionEnabled: false });
   });
 
+  it("configures OpenCode Go as an exact honest identity with no baseUrl and no silent rename", () => {
+    const goBase = {
+      CRON_SECRET: "cron",
+      DATABASE_URL: "postgres://test",
+      GITHUB_CLIENT_ID: "id",
+      GITHUB_CLIENT_SECRET: "secret",
+      NEXTAUTH_SECRET: "auth",
+      OPENCODE_GO_API_KEY: "go-key",
+      PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+      SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint",
+      SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+      SAYHEAR_CONTEXT_HMAC_SECRET: "context",
+      SAYHEAR_DEPLOYMENT: "test",
+      SAYHEAR_PROVIDER_ADAPTER: "opencode-go",
+    };
+    const configuration = loadRuntimeConfiguration(goBase);
+    expect(configuration.provider.adapter).toBe("opencode-go");
+    expect(configuration.provider.champion.provider).toBe("opencode-go");
+    expect(configuration.provider.champion.model).toBe("deepseek-v4.1-flash");
+    expect(configuration.provider.champion.snapshot).toBe("deepseek-v4.1-flash");
+    expect(configuration.provider.champion.providerPolicyVersion).toBe(
+      "opencode-go-conversation-text:v1",
+    );
+    expect(configuration.provider.champion.dataRegion).toBe("provider-managed");
+    // The fixed Go endpoint has no caller-selectable baseUrl.
+    expect(configuration.provider).not.toHaveProperty("baseUrl");
+    expect(configuration.provider.roleAdapters["opencode-go"]).toEqual({
+      apiKey: "go-key",
+      provider: "opencode-go",
+      timeoutMs: 60000,
+    });
+
+    // The credential is required for the selected Go adapter.
+    const { OPENCODE_GO_API_KEY: _omitted, ...withoutKey } = goBase;
+    void _omitted;
+    expect(() => loadRuntimeConfiguration(withoutKey)).toThrow(
+      "OPENCODE_GO_API_KEY",
+    );
+
+    // An explicit legacy model override is passed through, never silently
+    // renamed to the Go model; the transport refuses the wrong model at
+    // dispatch instead of substituting.
+    const explicit = loadRuntimeConfiguration({
+      ...goBase,
+      SAYHEAR_CONVERSATION_TEXT_MODEL: "deepseek-v4-flash",
+    });
+    expect(explicit.provider.champion.model).toBe("deepseek-v4-flash");
+    expect(explicit.provider.champion.provider).toBe("opencode-go");
+  });
+
+  it("accepts only the four known Provider adapters and keeps the unset openai default", () => {
+    const base: Record<string, string> = {
+      CRON_SECRET: "cron",
+      DATABASE_URL: "postgres://test",
+      DEEPSEEK_API_KEY: "deepseek-key",
+      GITHUB_CLIENT_ID: "id",
+      GITHUB_CLIENT_SECRET: "secret",
+      NEXTAUTH_SECRET: "auth",
+      OPENAI_API_KEY: "openai-key",
+      OPENCODE_GO_API_KEY: "go-key",
+      PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+      SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint",
+      SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+      SAYHEAR_CONTEXT_HMAC_SECRET: "context",
+      SAYHEAR_DEPLOYMENT: "test",
+      SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
+    };
+    // Unset keeps the historical openai default.
+    expect(loadRuntimeConfiguration(base).provider.adapter).toBe("openai");
+    for (const adapter of [
+      "openai",
+      "deepseek",
+      "deterministic",
+      "opencode-go",
+    ]) {
+      expect(
+        loadRuntimeConfiguration({
+          ...base,
+          SAYHEAR_PROVIDER_ADAPTER: adapter,
+        }).provider.adapter,
+      ).toBe(adapter);
+    }
+    // Any explicit unknown, typo, or empty value fails at load with a fixed
+    // message that names the choices and never echoes the invalid value.
+    for (const invalid of ["opengpt", "", " openai", "OPENAI", "gpt-5"]) {
+      expect(() =>
+        loadRuntimeConfiguration({
+          ...base,
+          SAYHEAR_PROVIDER_ADAPTER: invalid,
+        }),
+      ).toThrow(
+        "SAYHEAR_PROVIDER_ADAPTER must be one of openai, deepseek, deterministic, opencode-go.",
+      );
+    }
+  });
+
   it("requires the purge marker store to be a separate database from the business database", () => {
     const base = {
       CRON_SECRET: "cron", DATABASE_URL: "postgres://test", GITHUB_CLIENT_ID: "id", GITHUB_CLIENT_SECRET: "secret",

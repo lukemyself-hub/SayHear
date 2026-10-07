@@ -8,6 +8,7 @@ import type {
 } from "@sayhear/application";
 
 import { createBehaviorAwareConversationTextModel } from "./behavior-aware-conversation-text-model";
+import { createOpenCodeGoConversationTextModel } from "./opencode-go-conversation-text-model";
 import { createResponsesApiConversationTextModel } from "./responses-api-conversation-text-model";
 import { createProviderEgressPort } from "./provider-egress";
 
@@ -15,11 +16,20 @@ import { createProviderEgressPort } from "./provider-egress";
  * Executable provider-egress coverage manifest. The release inventory imports
  * this value from the module that constructs the provider adapter, so adding a
  * new egress path cannot be represented only by a detached registry string.
+ *
+ * ADR-0147: the same in-process Provider Egress Port capability now fronts both
+ * stateless Responses API traffic (openai/deepseek) and OpenCode Go Chat
+ * Completions traffic. It stays one logical capability — `provider:<role>` with
+ * its dynamic expected-provider-role set — because the durable integration,
+ * receipts, and purge contract are identical; only the wire protocol differs.
  */
 export const RUNTIME_PROVIDER_EGRESS_PURGE_INTEGRATION_MANIFEST = {
   integrationIds: ["provider-egress.responses-api"],
   version: PURGE_EXTERNAL_INTEGRATION_MANIFEST_VERSION,
 } as const;
+
+export const RUNTIME_PROVIDER_EGRESS_INTEGRATION_ID =
+  "provider-egress.responses-api" as const;
 
 export function assertRuntimeProviderEgressIntegration(
   integrationId: string,
@@ -41,6 +51,11 @@ type ProviderAdapterConfiguration =
       type: "responses-api";
     }>
   | Readonly<{
+      apiKey: string;
+      timeoutMs: number;
+      type: "opencode-go";
+    }>
+  | Readonly<{
       chunks: readonly string[];
       emitToolCall?: Readonly<{ rawArguments: string; rawFunctionName: string }>;
       failAfterCompletion?: boolean;
@@ -59,14 +74,26 @@ export function createRuntimeProviderEgressPort(input: {
   const model =
     input.adapter.type === "deterministic"
       ? createDeterministicBehaviorModel(input.adapter)
-      : (() => {
-          assertRuntimeProviderEgressIntegration("provider-egress.responses-api");
-          return createResponsesApiConversationTextModel({
-            apiKey: input.adapter.apiKey,
-            baseUrl: input.adapter.baseUrl,
-            timeoutMs: input.adapter.timeoutMs,
-          });
-        })();
+      : input.adapter.type === "opencode-go"
+        ? (() => {
+            assertRuntimeProviderEgressIntegration(
+              RUNTIME_PROVIDER_EGRESS_INTEGRATION_ID,
+            );
+            return createOpenCodeGoConversationTextModel({
+              apiKey: input.adapter.apiKey,
+              timeoutMs: input.adapter.timeoutMs,
+            });
+          })()
+        : (() => {
+            assertRuntimeProviderEgressIntegration(
+              RUNTIME_PROVIDER_EGRESS_INTEGRATION_ID,
+            );
+            return createResponsesApiConversationTextModel({
+              apiKey: input.adapter.apiKey,
+              baseUrl: input.adapter.baseUrl,
+              timeoutMs: input.adapter.timeoutMs,
+            });
+          })();
 
   return createProviderEgressPort({
     champion: input.champion,

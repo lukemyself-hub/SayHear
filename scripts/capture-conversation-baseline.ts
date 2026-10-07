@@ -56,8 +56,8 @@ import { createConversationResponseHandler } from "../apps/web/src/conversation-
  *   tsx scripts/capture-conversation-baseline.ts [--out <dir>] [--scenarios <file>] [--force]
  *
  * Required environment (read from process.env or the repo root .env):
- *   DATABASE_URL, SAYHEAR_PROVIDER_ADAPTER=deepseek|openai, the matching
- *   *_API_KEY, and optionally SAYHEAR_DEEPSEEK_BASE_URL /
+ *   DATABASE_URL, SAYHEAR_PROVIDER_ADAPTER=deepseek|openai|opencode-go, the
+ *   matching *_API_KEY, and optionally SAYHEAR_DEEPSEEK_BASE_URL /
  *   SAYHEAR_CONVERSATION_TEXT_MODEL / SAYHEAR_PROVIDER_TIMEOUT_MS.
  */
 
@@ -163,15 +163,28 @@ function gitCommit(): string {
 
 type ChampionAssembly = Readonly<{
   champion: ConversationTextChampion;
-  providerTransport: Readonly<{
-    apiKey: string;
-    baseUrl: string;
-    timeoutMs: number;
-  }>;
+  providerTransport: Readonly<
+    | {
+        apiKey: string;
+        baseUrl: string;
+        timeoutMs: number;
+        type: "responses-api";
+      }
+    | {
+        apiKey: string;
+        timeoutMs: number;
+        type: "opencode-go";
+      }
+  >;
 }>;
 
 function buildChampion(environment: NodeJS.ProcessEnv): ChampionAssembly {
-  const adapter = environment.SAYHEAR_PROVIDER_ADAPTER === "openai" ? "openai" : "deepseek";
+  const adapter =
+    environment.SAYHEAR_PROVIDER_ADAPTER === "openai"
+      ? "openai"
+      : environment.SAYHEAR_PROVIDER_ADAPTER === "opencode-go"
+        ? "opencode-go"
+        : "deepseek";
   const profile =
     adapter === "deepseek"
       ? {
@@ -180,20 +193,31 @@ function buildChampion(environment: NodeJS.ProcessEnv): ChampionAssembly {
           defaultModel: "deepseek-v4-flash",
           provider: "deepseek" as const,
           providerPolicyVersion: "deepseek-conversation-text:v1",
+          type: "responses-api" as const,
         }
-      : {
-          apiKey: requiredEnvironment("OPENAI_API_KEY"),
-          baseUrl: "https://api.openai.com/v1",
-          defaultModel: "gpt-5.4",
-          provider: "openai" as const,
-          providerPolicyVersion: "openai-conversation-text:v1",
-        };
+      : adapter === "opencode-go"
+        ? {
+            apiKey: requiredEnvironment("OPENCODE_GO_API_KEY"),
+            defaultModel: "deepseek-v4.1-flash",
+            provider: "opencode-go" as const,
+            providerPolicyVersion: "opencode-go-conversation-text:v1",
+            type: "opencode-go" as const,
+          }
+        : {
+            apiKey: requiredEnvironment("OPENAI_API_KEY"),
+            baseUrl: "https://api.openai.com/v1",
+            defaultModel: "gpt-5.4",
+            provider: "openai" as const,
+            providerPolicyVersion: "openai-conversation-text:v1",
+            type: "responses-api" as const,
+          };
   const model = environment.SAYHEAR_CONVERSATION_TEXT_MODEL ?? profile.defaultModel;
   const champion: ConversationTextChampion = Object.freeze({
     configVersion: "conversation-text-champion:v1",
     consentPolicyVersion: null,
     contextLimit: 1_000_000,
-    dataRegion: "provider-configured",
+    dataRegion:
+      adapter === "opencode-go" ? "provider-managed" : "provider-configured",
     model,
     provider: profile.provider,
     providerPolicyVersion: profile.providerPolicyVersion,
@@ -203,13 +227,13 @@ function buildChampion(environment: NodeJS.ProcessEnv): ChampionAssembly {
     supportedLocales: Object.freeze(["en", "zh"]),
     trainingPolicy: "api-data-controls",
   });
+  const timeoutMs = Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000");
   return {
     champion,
-    providerTransport: {
-      apiKey: profile.apiKey,
-      baseUrl: profile.baseUrl,
-      timeoutMs: Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000"),
-    },
+    providerTransport:
+      profile.type === "opencode-go"
+        ? { apiKey: profile.apiKey, timeoutMs, type: "opencode-go" }
+        : { apiKey: profile.apiKey, baseUrl: profile.baseUrl, timeoutMs, type: "responses-api" },
   };
 }
 
@@ -450,12 +474,7 @@ async function main(): Promise<void> {
       repository: new PostgresUserTextConversationRepository(database.pool),
     });
     const egressPort = createRuntimeProviderEgressPort({
-      adapter: {
-        apiKey: providerTransport.apiKey,
-        baseUrl: providerTransport.baseUrl,
-        timeoutMs: providerTransport.timeoutMs,
-        type: "responses-api",
-      },
+      adapter: providerTransport,
       champion,
       clock,
       contextCompiler,

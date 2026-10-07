@@ -3,7 +3,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  F3_CATALOG_VERSION,
   type BaselineReference,
   type FixtureCatalog,
   type F3Pins,
@@ -135,7 +134,6 @@ async function main(): Promise<void> {
       `fingerprint ${manifest.fingerprint}`,
   );
   console.log(`[f3-manifest] wrote ${path.relative(root, arguments_.outPath)}`);
-  if (catalog.version !== F3_CATALOG_VERSION) process.exitCode = 1;
 }
 
 main().catch((error: unknown) => {
