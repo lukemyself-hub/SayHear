@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
   Suspense,
@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { ChatModuleList, type ChatNav } from "./chat-module-list";
 import { JournalDateList } from "./journal-date-list";
 
 type WriteGate = Readonly<{ allowed: boolean; reason: string }>;
@@ -79,8 +80,16 @@ function isToolActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function PortalShell({ children }: { children: ReactNode }) {
+export function PortalShell({
+  chatNav,
+  children,
+}: {
+  chatNav: ChatNav | null;
+  children: ReactNode;
+}) {
   const pathname = usePathname() ?? "/internal";
+  const searchParams = useSearchParams();
+  const activeDate = searchParams.get("date");
   const moduleKey = moduleForPathname(pathname);
   const isDesktop = useSyncExternalStore(
     subscribeDesktop,
@@ -205,7 +214,9 @@ export function PortalShell({ children }: { children: ReactNode }) {
           >
             <ModuleRail active={moduleKey} />
             <ModuleList
+              activeDate={activeDate}
               activeToolPath={pathname}
+              chatNav={chatNav}
               module={moduleKey}
               onNavigate={closeNavigation}
             />
@@ -268,11 +279,15 @@ const TOOLS: readonly Readonly<{ href: string; label: string }>[] = [
 ];
 
 function ModuleList({
+  activeDate,
   activeToolPath,
+  chatNav,
   module,
   onNavigate,
 }: {
+  activeDate: string | null;
   activeToolPath: string;
+  chatNav: ChatNav | null;
   module: ModuleKey;
   onNavigate: () => void;
 }) {
@@ -314,21 +329,11 @@ function ModuleList({
     );
   }
   return (
-    <div className="moduleList">
-      <p className="moduleListHeading">聊天</p>
-      <ul>
-        <li>
-          <Link
-            aria-current="page"
-            className="moduleListEntry"
-            href="/internal"
-            onClick={onNavigate}
-          >
-            今天
-          </Link>
-        </li>
-      </ul>
-    </div>
+    <ChatModuleList
+      activeDate={activeDate}
+      initial={chatNav}
+      onNavigate={onNavigate}
+    />
   );
 }
 

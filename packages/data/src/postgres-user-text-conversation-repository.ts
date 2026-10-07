@@ -1,5 +1,7 @@
 import type {
+  ConversationDateEntry,
   ConversationRetryTurn,
+  ConversationSessionRef,
   CurrentConversationIdentity,
   InterruptedConversationResponse,
   InteractionTurnStatus,
@@ -591,6 +593,202 @@ export class PostgresUserTextConversationRepository
       sequence: Number(row.sequence_no),
       text: row.text,
     }));
+  }
+
+  public async findConversationSessionByDate(input: {
+    logicalDate: string;
+    userId: UserId;
+  }): Promise<ConversationSessionRef | null> {
+    const result = await this.pool.query<{
+      daily_session_id: string;
+      logical_date: string;
+    }>(
+      `
+        SELECT
+          session.daily_session_id,
+          session.logical_date::text
+        FROM active_internal_owner owner
+        INNER JOIN daily_sessions session
+          ON session.user_id = owner.user_id
+        WHERE owner.user_id = $1
+          AND session.logical_date = $2::date
+        LIMIT 1
+      `,
+      [input.userId, input.logicalDate],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+    return {
+      dailySessionId: asDailySessionId(row.daily_session_id),
+      logicalDate: row.logical_date,
+    };
+  }
+
+  public async findConversationSessionById(input: {
+    dailySessionId: import("@sayhear/domain").DailySessionId;
+    userId: UserId;
+  }): Promise<ConversationSessionRef | null> {
+    const result = await this.pool.query<{
+      daily_session_id: string;
+      logical_date: string;
+    }>(
+      `
+        SELECT
+          session.daily_session_id,
+          session.logical_date::text
+        FROM active_internal_owner owner
+        INNER JOIN daily_sessions session
+          ON session.user_id = owner.user_id
+        WHERE owner.user_id = $1
+          AND session.daily_session_id = $2
+        LIMIT 1
+      `,
+      [input.userId, input.dailySessionId],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+    return {
+      dailySessionId: asDailySessionId(row.daily_session_id),
+      logicalDate: row.logical_date,
+    };
+  }
+
+  public async listConversationDates(input: {
+    beforeDailySessionId: import("@sayhear/domain").DailySessionId | null;
+    beforeLogicalDate: string | null;
+    limit: number;
+    userId: UserId;
+  }): Promise<
+    Readonly<{ entries: readonly ConversationDateEntry[]; hasMore: boolean }>
+  > {
+    const result = await this.pool.query<{
+      daily_session_id: string;
+      logical_date: string;
+    }>(
+      `
+        SELECT
+          session.daily_session_id,
+          session.logical_date::text
+        FROM active_internal_owner owner
+        INNER JOIN daily_sessions session
+          ON session.user_id = owner.user_id
+        WHERE owner.user_id = $1
+          AND session.activity_state <> 'active'
+          AND (
+            $2::date IS NULL
+            OR (session.logical_date, session.daily_session_id)
+              < ($2::date, $3::uuid)
+          )
+        ORDER BY session.logical_date DESC, session.daily_session_id DESC
+        LIMIT $4
+      `,
+      [
+        input.userId,
+        input.beforeLogicalDate,
+        input.beforeDailySessionId,
+        input.limit + 1,
+      ],
+    );
+    const hasMore = result.rows.length > input.limit;
+    return {
+      entries: result.rows.slice(0, input.limit).map((row) => ({
+        dailySessionId: asDailySessionId(row.daily_session_id),
+        logicalDate: row.logical_date,
+      })),
+      hasMore,
+    };
+  }
+
+  public async listOlderUserTextMessages(input: {
+    beforeSequence: number;
+    dailySessionId: import("@sayhear/domain").DailySessionId;
+    limit: number;
+    userId: UserId;
+  }): Promise<
+    Readonly<{ hasMore: boolean; messages: readonly UserTextMessage[] }>
+  > {
+    const result = await this.pool.query<{
+      actor: "user" | "assistant";
+      conversation_event_id: string;
+      generation_command_id: string | null;
+      locale: string;
+      logical_date: string;
+      revision_id: string;
+      sequence_no: string;
+      text: string;
+    }>(
+      `
+        SELECT
+          recent.actor,
+          recent.conversation_event_id,
+          recent.generation_command_id,
+          recent.locale,
+          recent.logical_date,
+          recent.revision_id,
+          recent.sequence_no,
+          recent.text
+        FROM (
+          SELECT
+            event.actor,
+            event.conversation_event_id,
+            event.generation_command_id,
+            revision.locale,
+            session.logical_date::text AS logical_date,
+            revision.conversation_event_revision_id AS revision_id,
+            event.sequence_no,
+            revision.canonical_text AS text
+          FROM active_internal_owner owner
+          INNER JOIN conversation_events event
+            ON event.user_id = owner.user_id
+          INNER JOIN conversation_event_revisions revision
+            ON revision.conversation_event_revision_id =
+              event.current_revision_id
+            AND revision.user_id = event.user_id
+          INNER JOIN daily_sessions session
+            ON session.daily_session_id = event.daily_session_id
+            AND session.user_id = event.user_id
+          WHERE owner.user_id = $1
+            AND event.daily_session_id = $2
+            AND event.actor IN ('user', 'assistant')
+            AND event.lifecycle_status = 'active'
+            AND revision.content_purged_at IS NULL
+            AND event.sequence_no < $3
+          ORDER BY event.sequence_no DESC
+          LIMIT $4
+        ) recent
+        ORDER BY recent.sequence_no ASC
+      `,
+      [
+        input.userId,
+        input.dailySessionId,
+        input.beforeSequence,
+        input.limit + 1,
+      ],
+    );
+    const hasMore = result.rows.length > input.limit;
+    // `rows` is ascending, so the newest `limit` messages are the tail.
+    const kept = result.rows.slice(
+      Math.max(0, result.rows.length - input.limit),
+    );
+    return {
+      hasMore,
+      messages: kept.map((row) => ({
+        actor: row.actor,
+        eventId: asConversationEventId(row.conversation_event_id),
+        generationCommandId: row.generation_command_id
+          ? asGenerationCommandId(row.generation_command_id)
+          : null,
+        locale: row.locale,
+        logicalDate: row.logical_date,
+        revisionId: asConversationEventRevisionId(row.revision_id),
+        sequence: Number(row.sequence_no),
+        text: row.text,
+      })),
+    };
   }
 
   private async recordRetryInTransaction(
