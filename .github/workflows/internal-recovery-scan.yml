@@ -6,9 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "Recovery scan endpoint URL (empty = use RECOVERY_SCAN_URL variable)"
+        description: "Scoped verification endpoint (empty = use RECOVERY_SCAN_URL variable)"
         required: false
         default: ""
+      mode:
+        description: "identity or recovery"
+        required: false
+        default: "identity"
 
 permissions: {}
 
@@ -22,6 +26,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Call recovery scan endpoint
+        if: ${{ github.event_name == 'schedule' || inputs.url == '' }}
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           CONFIGURED_URL: ${{ vars.RECOVERY_SCAN_URL }}
@@ -44,3 +49,53 @@ jobs:
             echo "::error::recovery scan returned HTTP ${status}"
             exit 1
           fi
+
+      - name: Verify scoped production endpoint
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.url != '' }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ENDPOINT: ${{ inputs.url }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          node --input-type=module <<'JS'
+          const url = new URL(process.env.ENDPOINT);
+          const mode = process.env.MODE;
+          if (mode !== 'identity' && mode !== 'recovery') throw new Error('mode must be identity or recovery');
+          const route = mode === 'identity'
+            ? '/api/internal/inspection/release-identity'
+            : '/api/internal/recovery/scan';
+          if (url.protocol !== 'https:' || url.pathname !== route || url.search ||
+              !/^(say-hear-web|say-hear-[a-z0-9]+-lukemyself)\.vercel\.app$/.test(url.hostname)) {
+            throw new Error('Only the scoped production verification endpoint is allowed');
+          }
+          const response = await fetch(url, {
+            headers: { Authorization: 'Bearer ' + process.env.CRON_SECRET },
+            signal: AbortSignal.timeout(120000), redirect: 'error',
+          });
+          if (response.status !== 200) throw new Error('Operator request failed HTTP ' + response.status);
+          const body = await response.json();
+          if (mode === 'identity') {
+            const allowed = ['version','commit','environment','projectId','teamId','businessTargetHash','purgeMarkerTargetHash'];
+            if (Object.keys(body).length !== allowed.length ||
+                allowed.some(k => k === 'teamId' ? body[k] !== null && typeof body[k] !== 'string' : typeof body[k] !== 'string') ||
+                body.projectId !== 'prj_KJD7fJhlIxlOMc4W4goUsIhOaLly' || body.environment !== 'production' ||
+                !/^[a-f0-9]{40}$/.test(body.commit) ||
+                !/^[a-f0-9]{64}$/.test(body.businessTargetHash) || !/^[a-f0-9]{64}$/.test(body.purgeMarkerTargetHash)) {
+              console.log('IDENTITY_SHAPE ' + JSON.stringify(Object.fromEntries(Object.entries(body).map(([k,v]) => [k, v === null ? 'null' : typeof v]))));
+              throw new Error('Unexpected content-free production identity');
+            }
+            console.log('RELEASE_IDENTITY ' + JSON.stringify(body));
+          } else {
+            const counters = {};
+            for (const [group, values] of Object.entries(body)) {
+              if (!/^[A-Za-z]+$/.test(group) || !values || typeof values !== 'object') throw new Error('Unexpected scan group');
+              counters[group] = {};
+              for (const [key, value] of Object.entries(values)) {
+                if (!/^[A-Za-z]+$/.test(key) || !Number.isSafeInteger(value) || value < 0) throw new Error('Unexpected scan counter');
+                counters[group][key] = value;
+              }
+            }
+            console.log('RECOVERY_SCAN ' + JSON.stringify(counters));
+          }
+          console.log('time=' + new Date().toISOString() + ' status=200');
+          JS
