@@ -141,7 +141,7 @@ systemDescribe("G1 release activation persistence", () => {
     // stay self-consistent: the rollout pin and all four config versions are
     // pinned here, not only derived from the same constants used to build the
     // expectations above.
-    expect(ONE_A_3B_G1_ROLLOUT_PIN_VERSION).toBe("v16");
+    expect(ONE_A_3B_G1_ROLLOUT_PIN_VERSION).toBe("v17");
     expect(ONE_A_3B_G1_ROLE_CONFIG_VERSIONS).toEqual({
       "episode.build": "v7",
       "reflection.daily": "v9",
