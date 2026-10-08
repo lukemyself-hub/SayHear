@@ -912,6 +912,15 @@ G1 写入由数据库 active rollout pins 复核该角色的不可变配置逐�
 manifest 与 pins，不重跑完整证据，也不重绑未变角色。部署不为满足 runtime 文件读取而
 混入 commit 之外的 evidence 文件。
 
+真实 Prompt、参数 / 预算、Schema、Provider 或 policy 变化走受控的单角色配置切换：
+目标仍是完整 G1 四角色集合，但只有身份 `(role, config_version,
+provider_policy_version, rollout_pin)` 真正变化的角色获得新的不可变配置与授权；其余
+角色保留原 pin 的激活时间与历史验收 fingerprint，不重新捕获或重绑。切换与回滚都先
+撤销被取代的 active pin 再激活目标 pin，历史配置行与 revoked pin 全部保留；旧在途
+结果因 `rollout_pin_changed`、`source_changed` 或 `data_epoch` 被拒绝，不能取得新授权
+或进入 current。完整集合、缺失 / 未知 / 退场角色、未知 Provider policy 与固化
+fallback 仍 fail closed。合成升级、撤销与回滚由隔离 PostgreSQL system 测试重复验证。
+
 完整 Purge / restore drill 的触发条件是 Purge Surface Registry entry、Schema、
 clear / verify handler 或外部 integration 的变化，而不是每个 release manifest。新能力启用、
 重大整体合同变化或 External MVP 发布才要求整体能力验收；历史已通过且未受影响的证据不因
