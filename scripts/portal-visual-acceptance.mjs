@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Repeatable local visual acceptance for the Portal sidebar layout (ticket
- * #283 / SPEC #260 US 6–7).
+ * Repeatable local visual acceptance for the Portal sidebar layout
+ * (SPEC #260 US 6–7, aligned with the high-fidelity Portal reference).
  *
  * The real Portal requires a signed-in GitHub-OAuth owner session, which a
  * headless browser cannot obtain. Instead this harness renders the same DOM
@@ -86,18 +86,18 @@ function syntheticEntries(module) {
       entries.push({ label: labels[index % labels.length] });
     } else if (module === "journal") {
       const labels = [
-        `2026-${month}-${day}`,
-        `2026-${month}-${day} · 已更新至v12（长日期示例）`,
-        `2026-${month}-${day}T23:59:59.999_unbroken_journal_logical_date`,
+        `${Number(month)}月${Number(day)}日`,
+        `${Number(month)}月${Number(day)}日 · 已更新至v12（长日期示例）`,
+        `2026年${month}月${day}日T23:59:59.999_unbroken_journal_logical_date`,
       ];
       entries.push({
         label: labels[index % labels.length],
-        state: ["current", "outdated", "updating"][index % 3],
+        state: ["current", "outdated", "updating", "no_journal"][index % 4],
       });
     } else {
       const labels = [
-        `2026年${Number(month)}月${Number(day)}日`,
-        `2026年${month}月${day}日 · 跨夜连续交流（长日期示例）`,
+        `${Number(month)}月${Number(day)}日`,
+        `${month}月${day}日 · 跨夜连续交流（长日期示例）`,
         `2026-${month}-${day}T23:59:59_unbroken_chat_logical_date`,
       ];
       entries.push({ label: labels[index % labels.length] });
@@ -112,16 +112,25 @@ function listMarkup(module) {
   const items = entries
     .map((entry) => {
       if (module === "journal") {
-        const stateLabel = { current: "最新", outdated: "过期", updating: "更新中" }[
-          entry.state
-        ];
-        return `<li><a class="moduleListEntry journalDateEntry" href="#" aria-current="${
+        const stateLabel = {
+          current: "已发布",
+          outdated: "过期",
+          updating: "更新中",
+          no_journal: "交流内容较少，无日记",
+        }[entry.state];
+        const stateMarkup =
+          entry.state === "current"
+            ? ""
+            : entry.state === "no_journal"
+              ? `<span class="journalDateNote">${stateLabel}</span>`
+              : `<span aria-hidden="true" class="journalStateDot journalStateDot-${entry.state}"></span><span class="journalDateState">${stateLabel}</span>`;
+        return `<li><a class="moduleListEntry journalDateEntry${
+          entry.state === "no_journal" ? " is-no-journal" : ""
+        }" href="#" aria-current="${
           entry.state === "current" ? "page" : "false"
         }"><span class="journalDateLabel">${escapeHtml(
           entry.label,
-        )}</span><span aria-hidden="true" class="journalStateDot journalStateDot-${
-          entry.state
-        }"></span><span class="journalDateState">${stateLabel}</span></a></li>`;
+        )}</span>${stateMarkup}</a></li>`;
       }
       const current = entry.label.startsWith("2026年10月") && !entry.label.includes("·");
       return `<li><a class="moduleListEntry" href="#" aria-current="${
@@ -132,7 +141,7 @@ function listMarkup(module) {
   return `<div class="moduleList">
     <p class="moduleListHeading">${heading}</p>
     <ul>${items}</ul>
-    <button class="moduleListMore" type="button">加载更早日期</button>
+    <button class="moduleListMore" type="button">更早记录</button>
   </div>`;
 }
 
@@ -150,15 +159,19 @@ function harnessHtml(module) {
   </header>
   <div class="portalBody">
     <nav class="portalNav" id="portal-navigation" aria-label="模块导航">
-      <div class="moduleRail">
-        <a class="moduleRailLink isActive" href="#">聊</a>
-        <a class="moduleRailLink" href="#">记</a>
-        <a class="moduleRailLink" href="#">具</a>
+      <div class="portalRailColumn">
+        <div class="moduleRail">
+          <a class="moduleRailLink isActive" href="#">聊</a>
+          <a class="moduleRailLink" href="#">记</a>
+          <a class="moduleRailLink" href="#">具</a>
+        </div>
       </div>
-      ${listMarkup(module)}
-      <div class="portalFooter">
-        <span class="portalFooterOwner">Internal Owner</span>
-        <span class="portalFooterState">内部自用 · 写入已阻断：recovery_gate_closed</span>
+      <div class="portalModuleColumn">
+        ${listMarkup(module)}
+        <div class="portalFooter">
+          <span class="portalFooterOwner">Internal Owner</span>
+          <span class="portalFooterState">内部自用 · 写入已阻断：recovery_gate_closed</span>
+        </div>
       </div>
     </nav>
     <div class="portalContent"><div class="portalPage"><h1>内容区</h1></div></div>
@@ -173,7 +186,9 @@ window.addEventListener("load", () => {
     return { bottom: round(box.bottom), left: round(box.left), right: round(box.right), top: round(box.top), width: round(box.width) };
   };
   const nav = document.querySelector(".portalNav");
+  const railColumn = document.querySelector(".portalRailColumn");
   const rail = document.querySelector(".moduleRail");
+  const moduleColumn = document.querySelector(".portalModuleColumn");
   const list = document.querySelector(".moduleList");
   const footer = document.querySelector(".portalFooter");
   const state = document.querySelector(".portalFooterState");
@@ -184,7 +199,9 @@ window.addEventListener("load", () => {
     documentScrollWidth: document.documentElement.scrollWidth,
     bodyScrollWidth: document.body.scrollWidth,
     nav: rect(nav),
+    railColumn: rect(railColumn),
     rail: { ...rect(rail), flexDirection: getComputedStyle(rail).flexDirection },
+    moduleColumn: rect(moduleColumn),
     list: {
       ...rect(list),
       canScroll: list.scrollHeight > list.clientHeight + 1,
@@ -201,6 +218,7 @@ window.addEventListener("load", () => {
       ...rect(entry),
       clientWidth: entry.clientWidth,
       scrollWidth: entry.scrollWidth,
+      minHeight: getComputedStyle(entry).minHeight,
       textOverflow: getComputedStyle(entry).textOverflow,
       whiteSpace: getComputedStyle(entry).whiteSpace,
     })),
@@ -215,20 +233,42 @@ function evaluate(module, viewport, metrics) {
   const failures = [];
   const near = (a, b, tolerance = 1) => Math.abs(a - b) <= tolerance;
   const label = `${module}@${viewport.width}px`;
+  const drawer = viewport.width < 1024;
+  const expectedRailWidth = drawer ? 64 : 72;
+  const expectedNavWidth = drawer
+    ? Math.min(320, viewport.width * 0.86)
+    : 320;
 
   if (metrics.documentScrollWidth > metrics.viewport.width + 1) {
     failures.push(
       `${label}: full-page horizontal overflow (scrollWidth=${metrics.documentScrollWidth} > width=${metrics.viewport.width})`,
     );
   }
-  if (metrics.rail.flexDirection !== "row") {
-    failures.push(`${label}: module rail is ${metrics.rail.flexDirection}, expected row`);
+  if (!near(metrics.nav.width, expectedNavWidth, 1)) {
+    failures.push(
+      `${label}: nav width is ${metrics.nav.width}, expected ${expectedNavWidth}`,
+    );
   }
-  if (!near(metrics.rail.top, metrics.nav.top, 2)) {
-    failures.push(`${label}: module rail is not at the nav top`);
+  if (!near(metrics.railColumn.width, expectedRailWidth, 1)) {
+    failures.push(
+      `${label}: module rail column is ${metrics.railColumn.width}px wide, expected ${expectedRailWidth}px`,
+    );
   }
-  if (metrics.rail.bottom > metrics.list.top + 1) {
-    failures.push(`${label}: module rail overlaps the module list`);
+  if (metrics.rail.flexDirection !== "column") {
+    failures.push(
+      `${label}: module rail is ${metrics.rail.flexDirection}, expected column`,
+    );
+  }
+  if (!near(metrics.railColumn.left, metrics.nav.left, 1)) {
+    failures.push(`${label}: module rail column is not flush with the nav left`);
+  }
+  if (!near(metrics.moduleColumn.left, metrics.railColumn.right, 1)) {
+    failures.push(
+      `${label}: date column does not start at the rail column edge (${metrics.moduleColumn.left} vs ${metrics.railColumn.right})`,
+    );
+  }
+  if (!near(metrics.moduleColumn.right, metrics.nav.right, 1)) {
+    failures.push(`${label}: date column does not reach the nav right edge`);
   }
   if (!metrics.list.canScroll) {
     failures.push(
@@ -239,6 +279,9 @@ function evaluate(module, viewport, metrics) {
     failures.push(
       `${label}: footer is not bottom-anchored (footer.bottom=${metrics.footer.bottom}, nav.bottom=${metrics.nav.bottom})`,
     );
+  }
+  if (metrics.footer.left < metrics.moduleColumn.left - 1) {
+    failures.push(`${label}: footer is not contained by the date column`);
   }
   if (metrics.footer.top < metrics.list.bottom - 1) {
     failures.push(`${label}: footer overlaps the module list`);
@@ -263,6 +306,14 @@ function evaluate(module, viewport, metrics) {
   }
   if (metrics.clippedDateLabels > 0) {
     failures.push(`${label}: ${metrics.clippedDateLabels} journal date labels overflow horizontally`);
+  }
+  const shortEntries = metrics.entries.filter(
+    (entry) => Number.parseFloat(entry.minHeight) < 48,
+  );
+  if (shortEntries.length > 0) {
+    failures.push(
+      `${label}: ${shortEntries.length} module entries are shorter than 48px`,
+    );
   }
   return failures;
 }

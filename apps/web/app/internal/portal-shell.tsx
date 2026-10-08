@@ -311,25 +311,29 @@ export function PortalShell({
             className="portalNav"
             id="portal-navigation"
           >
-            <ModuleRail
-              active={moduleKey}
-              journalHref={journalRailHref(lastJournalDate)}
-              onRememberTool={rememberCurrentTool}
-              onToolsClick={handleToolsRailClick}
-            />
-            <ModuleList
-              activeDate={activeDate}
-              activeToolPath={pathname}
-              chatNav={chatNav}
-              module={moduleKey}
-              onNavigate={handleNavigate}
-              onToolEntryClick={handleToolEntryClick}
-            />
-            <div className="portalFooter">
-              <span className="portalFooterOwner">Internal Owner</span>
-              <span className="portalFooterState">
-                {portalFooterStateText(writeStatus)}
-              </span>
+            <div className="portalRailColumn">
+              <ModuleRail
+                active={moduleKey}
+                journalHref={journalRailHref(lastJournalDate)}
+                onRememberTool={rememberCurrentTool}
+                onToolsClick={handleToolsRailClick}
+              />
+            </div>
+            <div className="portalModuleColumn">
+              <ModuleList
+                activeDate={activeDate}
+                activeToolPath={pathname}
+                chatNav={chatNav}
+                module={moduleKey}
+                onNavigate={handleNavigate}
+                onToolEntryClick={handleToolEntryClick}
+              />
+              <div className="portalFooter">
+                <span className="portalFooterOwner">Internal Owner</span>
+                <span className="portalFooterState">
+                  {portalFooterStateText(writeStatus)}
+                </span>
+              </div>
             </div>
           </nav>
           <div className="portalContent">{children}</div>
@@ -458,13 +462,13 @@ function ModuleList({
 
 function ChatIcon() {
   return (
-    <svg aria-hidden="true" focusable="false" height="20" viewBox="0 0 24 24" width="20">
+    <svg aria-hidden="true" focusable="false" height="24" viewBox="0 0 24 24" width="24">
       <path
-        d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9.4L4 19V6z"
+        d="M5.5 5.2h13a1.8 1.8 0 0 1 1.8 1.8v7.2a1.8 1.8 0 0 1-1.8 1.8H9.2l-4.4 3.3V7a1.8 1.8 0 0 1 .7-1.8z"
         fill="none"
         stroke="currentColor"
         strokeLinejoin="round"
-        strokeWidth="1.7"
+        strokeWidth="1.6"
       />
     </svg>
   );
@@ -472,16 +476,28 @@ function ChatIcon() {
 
 function NotebookIcon() {
   return (
-    <svg aria-hidden="true" focusable="false" height="20" viewBox="0 0 24 24" width="20">
-      <rect fill="none" height="17" rx="2" stroke="currentColor" strokeWidth="1.7" width="13" x="5.5" y="3.5" />
-      <path d="M9.5 3.5v17M5.5 8h4M5.5 12h4M5.5 16h4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <svg aria-hidden="true" focusable="false" height="24" viewBox="0 0 24 24" width="24">
+      <path
+        d="M6 4.2h11.5a1.4 1.4 0 0 1 1.4 1.4v12.8a1.4 1.4 0 0 1-1.4 1.4H6a1.4 1.4 0 0 1-1.4-1.4V5.6A1.4 1.4 0 0 1 6 4.2z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M9.1 4.2v15.6M4.6 8.4h3.1M4.6 12h3.1M4.6 15.6h3.1"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.4"
+      />
     </svg>
   );
 }
 
 function WrenchIcon() {
   return (
-    <svg aria-hidden="true" focusable="false" height="20" viewBox="0 0 24 24" width="20">
+    <svg aria-hidden="true" focusable="false" height="24" viewBox="0 0 24 24" width="24">
       <path
         d="M14.4 6.2a3.6 3.6 0 0 0-4.7 4.3l-5.9 5.9a1.9 1.9 0 1 0 2.7 2.7l5.9-5.9a3.6 3.6 0 0 0 4.3-4.7l-2.3 2.3-2.2-.6-.6-2.2 2.8-1.8z"
         fill="none"

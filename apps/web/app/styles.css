@@ -338,17 +338,18 @@ h1 {
   display: flex;
   flex: 1;
   flex-direction: column;
-  margin: 0 auto;
+  margin: 0;
   min-height: 0;
-  width: min(800px, 100%);
+  width: 100%;
 }
 
 .conversationStatus {
-  color: #686a63;
+  color: #8a867f;
   flex-shrink: 0;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
   margin: 0;
-  padding: 14px 0 8px;
+  padding: 26px 0 12px;
 }
 
 .journalCard {
@@ -362,28 +363,65 @@ h1 {
 }
 
 .journalHeading {
-  align-items: end;
+  align-items: flex-start;
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   justify-content: space-between;
 }
 
-.journalHeading h2 { margin: 0; }
-.journalHeading a { color: #625d54; font-size: .9rem; }
-.journalStatement { line-height: 1.6; margin: 0; white-space: pre-wrap; }
-.journalStatementBlock { display: grid; gap: 0.35rem; }
-.journalFinding, .diagnosticNotice { color: #8a5a00; font-size: 0.9rem; line-height: 1.45; margin: 0; }
-.journalActions { display: flex; flex-wrap: wrap; gap: .7rem; }
-.journalActions button { background: transparent; border: 1px solid #83745e; border-radius: 999px; color: #22211f; cursor: pointer; font: inherit; padding: .5rem .8rem; }
+.journalHeadingTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.journalStatement {
+  font-size: 1rem;
+  line-height: 1.9;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.journalStatementBlock { display: grid; gap: 0.5rem; }
+.journalFinding { color: #9a6f25; font-size: 0.9rem; line-height: 1.5; margin: 0; }
+.diagnosticNotice { color: #8a5a00; font-size: 0.9rem; line-height: 1.5; margin: 0; }
+.journalActions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; }
+
+.journalActions button {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e4e0d9;
+  border-radius: 12px;
+  color: #242522;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.95rem;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.journalActions button:hover:not(:disabled) {
+  background: #f8f7f5;
+}
+
+.journalActions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
 
 .messageList {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 0 16px;
+  padding: 32px 0 24px;
 }
 
 .emptyConversation {
@@ -393,18 +431,27 @@ h1 {
 
 .userMessage {
   align-self: flex-end;
-  background: #f0eee8;
-  border-radius: 22px;
-  max-width: min(34rem, 88%);
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  max-width: min(760px, 86%);
   min-width: 0;
-  padding: 10px 14px;
+  padding: 0;
+}
+
+.userMessage .messageBody {
+  background: #efebe5;
+  border-radius: 28px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 16px 22px;
 }
 
 .assistantMessage {
   align-self: flex-start;
   background: transparent;
   border: 0;
-  max-width: min(42rem, 100%);
+  max-width: min(980px, 100%);
   min-width: 0;
   padding: 0;
 }
@@ -424,7 +471,8 @@ h1 {
 
 .userMessage p,
 .assistantMessage p {
-  line-height: 1.7;
+  font-size: 1rem;
+  line-height: 1.65;
   margin: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -455,60 +503,96 @@ h1 {
 }
 
 .composer {
-  background: #faf9f6;
-  border-top: 1px solid #e2e3dc;
+  background: #fcfbf9;
+  border-top: 0;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  gap: 8px;
-  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+  gap: 10px;
+  padding: 8px 0 calc(10px + env(safe-area-inset-bottom));
 }
 
 .composer label {
-  color: #686a63;
-  font-size: 0.8rem;
-  font-weight: 600;
+  color: #8a867f;
+  font-size: 0.85rem;
 }
 
 .composer textarea {
-  background: #f0eee8;
-  border: 1px solid transparent;
-  border-radius: 22px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: #242522;
+  flex: 1;
   font: inherit;
   line-height: 1.5;
   max-height: 40vh;
+  min-height: 48px;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 12px 0;
   resize: none;
 }
 
 .composer textarea:focus {
-  border-color: #242522;
-  outline: 2px solid rgba(36, 37, 34, 0.14);
+  border-color: transparent;
+  outline: none;
 }
 
-.composerActions {
+.composer textarea::placeholder {
+  color: #9a958c;
+}
+
+.composerInputRow {
+  /* The send control is a fixed 44px circle: centering it keeps the gap to the
+     rounded border even on the top, bottom, and right edge. */
   align-items: center;
+  background: #fff;
+  border: 1px solid #e4e0d9;
+  border-radius: 32px;
   display: flex;
-  gap: 12px;
-  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 20px;
 }
 
-.composer button {
+.composerInputRow:focus-within {
+  border-color: #242522;
+  box-shadow: 0 0 0 3px rgba(36, 37, 34, 0.08);
+}
+
+/* The keyboard shortcut line is desktop-only guidance; on touch layouts the
+   composer stays a single compact row plus safe-area padding. */
+@media (max-width: 1023.98px) {
+  .composerHint {
+    display: none;
+  }
+}
+
+.composerSend {
+  align-items: center;
   background: #242522;
   border: 0;
-  border-radius: 999px;
-  color: #faf9f6;
+  border-radius: 50%;
+  color: #fcfbf9;
   cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-  padding: 10px 16px;
+  display: flex;
+  flex-shrink: 0;
+  height: 44px;
+  justify-content: center;
+  padding: 0;
+  width: 44px;
 }
 
-.composer button:disabled {
+.composerSend:disabled {
+  /* The reference design keeps the control solid black in its empty state, so
+     the disabled attribute carries the semantics and the fill stays. */
   cursor: default;
-  opacity: 0.45;
+  opacity: 1;
+}
+
+.composerHint {
+  color: #9a958c;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 0 0 0 20px;
 }
 
 .composerBlocked {
@@ -531,7 +615,7 @@ h1 {
 /* ---- Internal Portal responsive shell (SPEC #260 / ticket #261) ---- */
 
 .portalShell {
-  background: #faf9f6;
+  background: #fcfbf9;
   color: #242522;
   display: flex;
   flex-direction: column;
@@ -542,13 +626,13 @@ h1 {
 
 .portalHeader {
   align-items: center;
-  background: #faf9f6;
-  border-bottom: 1px solid #e2e3dc;
+  background: #fcfbf9;
+  border-bottom: 1px solid #e8e5df;
   display: flex;
   flex-shrink: 0;
-  gap: 8px;
-  min-height: 56px;
-  padding: 0 12px;
+  gap: 12px;
+  min-height: 64px;
+  padding: 0 16px;
 }
 
 .portalHamburger {
@@ -559,20 +643,21 @@ h1 {
   color: #242522;
   cursor: pointer;
   display: flex;
-  font-size: 1.25rem;
-  height: 40px;
+  font-size: 1.5rem;
+  height: 48px;
   justify-content: center;
-  width: 40px;
+  width: 48px;
 }
 
 .portalHamburger:hover {
-  background: #efede7;
+  background: #f0ede8;
 }
 
 .portalBrand {
   color: #242522;
-  font-size: 1.05rem;
-  font-weight: 650;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   text-decoration: none;
 }
 
@@ -590,62 +675,76 @@ h1 {
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  padding: 0 16px;
+  padding: 0 36px;
 }
 
 .portalNav {
-  background: #f2f0eb;
-  border-right: 1px solid #e2e3dc;
+  background: #f8f7f5;
+  border-right: 1px solid #e8e5df;
   display: flex;
-  flex-direction: column;
   min-height: 0;
 }
 
-.moduleRail {
-  border-bottom: 1px solid #e2e3dc;
-  display: flex;
-  flex-direction: row;
+.portalRailColumn {
+  border-right: 1px solid #e8e5df;
   flex-shrink: 0;
-  gap: 4px;
-  padding: 8px 6px;
+  padding: 10px 0;
+  width: 72px;
+}
+
+.moduleRail {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 0 12px;
 }
 
 .moduleRailLink {
   align-items: center;
-  border-radius: 10px;
-  color: #686a63;
+  border-radius: 14px;
+  color: #6f6b65;
   display: flex;
-  height: 44px;
+  height: 48px;
   justify-content: center;
-  width: 44px;
+  width: 48px;
 }
 
 .moduleRailLink:hover {
-  background: #e7e5de;
+  background: #efede9;
   color: #242522;
 }
 
 .moduleRailLink.isActive {
-  background: #e2e0d8;
+  background: #ece9e4;
   color: #242522;
+}
+
+.portalModuleColumn {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
 }
 
 .moduleList {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  padding: 12px 10px;
+  padding: 22px 16px 12px;
 }
 
 .moduleListHeading {
-  color: #686a63;
-  font-size: 0.8rem;
+  color: #242522;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   margin: 0;
   padding: 0 8px;
 }
@@ -660,52 +759,54 @@ h1 {
 }
 
 .moduleListEntry {
-  border-radius: 10px;
+  align-items: center;
+  border-radius: 12px;
   color: #242522;
-  display: block;
-  font-size: 0.95rem;
+  display: flex;
+  font-size: 1rem;
+  min-height: 48px;
   overflow-wrap: anywhere;
-  padding: 8px 10px;
+  padding: 10px 12px;
   text-decoration: none;
   white-space: normal;
 }
 
 .moduleListEntry:hover {
-  background: #e7e5de;
+  background: #efede9;
 }
 
 .moduleListEntry[aria-current="page"] {
-  background: #e2e0d8;
+  background: #ece9e4;
   font-weight: 600;
 }
 
 .portalFooter {
-  border-top: 1px solid #e2e3dc;
+  border-top: 1px solid #e8e5df;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  gap: 2px;
-  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  gap: 4px;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
 }
 
 .portalFooterOwner {
-  color: #686a63;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  color: #8a867f;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .portalFooterState {
-  color: #242522;
-  font-size: 0.82rem;
+  color: #8a867f;
+  font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
 
 .portalPage {
-  margin: 0 auto;
-  max-width: 800px;
-  padding: 24px 0 64px;
+  margin: 0;
+  max-width: none;
+  padding: 0;
   width: 100%;
 }
 
@@ -723,12 +824,29 @@ h1 {
     left: 0;
     max-width: 320px;
     position: fixed;
-    top: 56px;
+    top: 64px;
     transform: translateX(-100%);
     transition: transform 0.18s ease;
     visibility: hidden;
-    width: 86vw;
+    width: min(320px, 86vw);
     z-index: 30;
+  }
+
+  .portalRailColumn {
+    width: 64px;
+  }
+
+  .moduleRail {
+    padding: 0 9px;
+  }
+
+  .moduleRailLink {
+    height: 46px;
+    width: 46px;
+  }
+
+  .portalContent {
+    padding: 0 20px;
   }
 
   .portalShell[data-nav-open="true"] .portalNav {
@@ -743,7 +861,7 @@ h1 {
     left: 0;
     position: fixed;
     right: 0;
-    top: 56px;
+    top: 64px;
     z-index: 20;
   }
 }
@@ -751,7 +869,7 @@ h1 {
 @media (min-width: 1024px) {
   .portalNav {
     flex-shrink: 0;
-    width: min(320px, 26vw);
+    width: 320px;
   }
 
   .portalShell[data-nav-open="false"] .portalNav {
@@ -1220,76 +1338,107 @@ h1 {
 
 .journalView {
   display: grid;
-  gap: 16px;
-  margin: 0 auto;
-  max-width: 760px;
-  padding: 8px 0 32px;
+  gap: 25px;
+  margin: 0;
+  padding: 40px 0 64px;
   width: 100%;
 }
 
 .journalViewTitle {
-  font-size: 1.35rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
-.journalHeading {
-  align-items: flex-start;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  justify-content: space-between;
-}
-
-.journalHeadingMeta {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .journalState {
-  border: 1px solid #e2e3dc;
+  background: #ece9e4;
+  border: 1px solid transparent;
   border-radius: 999px;
-  color: #686a63;
-  font-size: 0.78rem;
-  padding: 3px 10px;
+  color: #6f6b65;
+  font-size: 0.85rem;
+  padding: 5px 12px;
   white-space: nowrap;
 }
 
 .journalState-current {
-  background: #fff;
-  color: #242522;
+  background: #ece9e4;
+  color: #6f6b65;
 }
 
 .journalState-updating {
-  background: #f2f0eb;
+  background: #efede9;
+  color: #6f6b65;
 }
 
 .journalState-outdated {
+  background: #fbf3e2;
   border-color: #d8c79a;
   color: #7a5c12;
 }
 
+.journalBody {
+  display: grid;
+  gap: 36px;
+  max-width: 880px;
+}
+
+.journalNotices {
+  display: grid;
+  gap: 12px;
+}
+
 .journalChatLink {
+  align-items: center;
   color: #242522;
-  font-size: 0.9rem;
+  display: inline-flex;
+  font-size: 1.05rem;
+  font-weight: 700;
+  gap: 8px;
+  justify-self: start;
+  text-decoration: none;
+}
+
+.journalChatLink:hover {
   text-decoration: underline;
 }
 
 .journalStatements {
   display: grid;
-  gap: 20px;
+  gap: 32px;
 }
 
 .journalRawDiagnostics {
-  border-top: 1px solid #e2e3dc;
-  color: #686a63;
-  font-size: 0.85rem;
-  padding-top: 12px;
+  border-top: 1px solid #e8e5df;
+  color: #8a867f;
+  font-size: 0.9rem;
+  padding-top: 16px;
 }
 
 .journalRawDiagnostics summary {
+  align-items: center;
   cursor: pointer;
+  display: flex;
+  gap: 10px;
+  list-style: none;
+}
+
+.journalRawDiagnostics summary::-webkit-details-marker {
+  display: none;
+}
+
+.journalRawDiagnostics summary::before {
+  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  content: "";
+  height: 7px;
+  transform: rotate(-45deg);
+  transition: transform 120ms ease;
+  width: 7px;
+}
+
+.journalRawDiagnostics[open] summary::before {
+  transform: rotate(45deg);
 }
 
 .journalRawDiagnostics ul {
@@ -1310,15 +1459,28 @@ h1 {
 }
 
 .journalRawDiagnostics code {
-  color: #686a63;
+  color: #8a867f;
   font-size: 0.78rem;
 }
 
 .journalDateEntry {
   align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: space-between;
+  min-height: 48px;
+}
+
+.journalDateEntry.is-no-journal {
+  flex-wrap: wrap;
+}
+
+.journalDateNote {
+  color: #8a867f;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin-top: -2px;
+  width: 100%;
 }
 
 .journalDateLabel {
@@ -1329,9 +1491,9 @@ h1 {
 }
 
 .journalDateState {
-  color: #686a63;
+  color: #8a867f;
   flex-shrink: 0;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
 }
 
 .journalStateDot {
@@ -1351,6 +1513,24 @@ h1 {
 
 .journalStateDot-outdated {
   background: #c79a2a;
+}
+
+/* Compact reading scale on phone widths; the desktop reference typography
+   above is calibrated for 1440px. */
+@media (max-width: 1023.98px) {
+  .journalView {
+    padding-top: 24px;
+  }
+
+  .journalViewTitle {
+    font-size: 1.75rem;
+  }
+
+  .journalStatement,
+  .userMessage p,
+  .assistantMessage p {
+    font-size: 1rem;
+  }
 }
 
 .moduleListNote {
@@ -1765,26 +1945,32 @@ h1 {
 /* === #262 chat history and stable pagination === */
 
 .moduleListMore {
+  align-items: center;
   background: transparent;
-  border: 1px dashed #c7c8bf;
-  border-radius: 999px;
-  color: #686a63;
+  border: 0;
+  border-radius: 12px;
+  color: #242522;
   cursor: pointer;
+  display: flex;
   font: inherit;
-  font-size: 0.82rem;
-  margin: 4px 8px 0;
-  padding: 7px 10px;
-  text-align: center;
+  font-size: 1rem;
+  justify-content: flex-start;
+  margin: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
 }
 
 .moduleListMore:hover:not(:disabled) {
-  background: #e7e5de;
+  background: #efede9;
   color: #242522;
 }
 
 .moduleListMore:disabled {
+  color: #8a867f;
   cursor: default;
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 .moduleListError {
@@ -1835,25 +2021,26 @@ h1 {
 }
 
 .historyFooter {
-  border-top: 1px solid #e2e3dc;
   flex-shrink: 0;
-  padding: 12px 0 calc(12px + env(safe-area-inset-bottom));
+  padding: 10px 0 calc(12px + env(safe-area-inset-bottom));
 }
 
 .historyReturn {
-  border: 1px solid #242522;
-  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e4e0d9;
+  border-radius: 32px;
   color: #242522;
-  display: inline-block;
-  font-size: 0.9rem;
-  font-weight: 600;
-  padding: 9px 16px;
+  display: block;
+  font-size: 1rem;
+  min-height: 56px;
+  padding: 16px 20px;
+  text-align: center;
   text-decoration: none;
+  width: 100%;
 }
 
 .historyReturn:hover {
-  background: #242522;
-  color: #faf9f6;
+  background: #f8f7f5;
 }
 
 /* === #263 composer and streaming === */
@@ -1869,17 +2056,6 @@ h1 {
 
 .conversationStream .messageList {
   flex: 1;
-}
-
-/* Single-line composer is a pill; wrapped/newline content becomes a large
-   rounded rectangle, capped so the textarea scrolls internally. */
-.composer textarea.composerInput {
-  border-radius: 28px;
-  max-height: 200px;
-}
-
-.composer textarea.composerInput.isMultiline {
-  border-radius: 22px;
 }
 
 .waitingMessage {
@@ -1972,8 +2148,9 @@ h1 {
   align-items: center;
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 8px;
   justify-content: flex-start;
+  margin-top: 8px;
   min-height: 1.35em;
 }
 
@@ -1983,8 +2160,8 @@ h1 {
 
 /* Hidden by default; only the metadata text fades, the row keeps its space. */
 .messageMeta .messageTime {
-  color: #686a63;
-  font-size: 0.75rem;
+  color: #8a867f;
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   line-height: 1.35;
   opacity: 0;
@@ -2020,7 +2197,7 @@ h1 {
    of the time on the same row. Keeps the generation_command_id deep link. */
 .contextInspectIcon {
   align-items: center;
-  color: #686a63;
+  color: #8a867f;
   display: inline-flex;
   flex-shrink: 0;
   line-height: 1;
@@ -2102,5 +2279,3 @@ h1 {
   outline: 2px solid #242522;
   outline-offset: 2px;
 }
-
-

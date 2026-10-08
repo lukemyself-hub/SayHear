@@ -354,6 +354,35 @@ describe("Portal Journal date browsing system seam — ticket #265", () => {
     });
   }
 
+  /**
+   * A Daily Session with only a date outcome: the exchange was recorded but
+   * eligibility never produced a Journal version.
+   */
+  async function seedDateOutcome(
+    date: string,
+    outcome: "insufficient_expression" | "no_activity",
+  ): Promise<string> {
+    const sessionId = randomUUID();
+    await database.pool.query(
+      `INSERT INTO daily_sessions (
+         daily_session_id, user_id, logical_date, timezone_at_start,
+         started_at, last_activity_at, activity_state, source_revision,
+         created_at, updated_at)
+       VALUES ($1, $2, $3::date, 'America/Los_Angeles', now(), now(),
+         'finalized', 1, now(), now())`,
+      [sessionId, OWNER, date],
+    );
+    await database.pool.query(
+      `INSERT INTO daily_session_date_outcomes (
+         daily_session_id, user_id, logical_date, outcome,
+         eligibility_policy_version, source_revision, workflow_receipt_id,
+         computed_at)
+       VALUES ($1, $2, $3::date, $4, 'journal-eligibility:v1', 1, NULL, now())`,
+      [sessionId, OWNER, date, outcome],
+    );
+    return sessionId;
+  }
+
   it("pages the date list with a fixed cap, stable order and no duplicates or misses (AC #7)", async () => {
     const expected = days(31);
     for (const date of expected) {
@@ -616,6 +645,116 @@ describe("Portal Journal date browsing system seam — ticket #265", () => {
     await expect(
       service.listJournalDates({ userId: OWNER }),
     ).resolves.toEqual({ entries: [], nextCursor: null });
+  });
+
+  it("lists insufficient_expression days as no_journal and keeps no_activity days absent (AC #4)", async () => {
+    await seedDay("2026-07-01");
+    await seedDateOutcome("2026-07-02", "insufficient_expression");
+    await seedDateOutcome("2026-07-03", "no_activity");
+
+    // A late or stale eligibility projection must never downgrade a day that
+    // already published a Journal back to "no journal".
+    const published = await seedDay("2026-07-04");
+    await database.pool.query(
+      `INSERT INTO daily_session_date_outcomes (
+         daily_session_id, user_id, logical_date, outcome,
+         eligibility_policy_version, source_revision, workflow_receipt_id,
+         computed_at)
+       VALUES ($1, $2, '2026-07-04'::date, 'insufficient_expression',
+         'journal-eligibility:v1', 1, NULL, now())`,
+      [published.dailySessionId, OWNER],
+    );
+
+    const service = buildService(database);
+    const list = await service.listJournalDates({ userId: OWNER });
+
+    expect(
+      list.entries.map((entry) => [entry.logicalDate, entry.state]),
+    ).toEqual([
+      ["2026-07-04", "current"],
+      ["2026-07-02", "no_journal"],
+      ["2026-07-01", "current"],
+    ]);
+  });
+
+  it("pages a mixed published and no_journal list without duplicates or misses (AC #4, #7)", async () => {
+    const expected: { logicalDate: string; state: string }[] = [];
+    for (let index = 1; index <= 31; index += 1) {
+      const day = String(index).padStart(2, "0");
+      const logicalDate = `2026-12-${day}`;
+      if (index % 2 === 0) {
+        await seedDateOutcome(logicalDate, "insufficient_expression");
+        expected.push({ logicalDate, state: "no_journal" });
+      } else {
+        await seedDay(logicalDate);
+        expected.push({ logicalDate, state: "current" });
+      }
+    }
+    const service = buildService(database);
+
+    const first = await service.listJournalDates({ userId: OWNER });
+    expect(first.entries).toHaveLength(30);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await service.listJournalDates({
+      cursor: first.nextCursor,
+      userId: OWNER,
+    });
+    expect(second.entries).toHaveLength(1);
+    expect(second.nextCursor).toBeNull();
+
+    const combined = [...first.entries, ...second.entries].map((entry) => ({
+      logicalDate: entry.logicalDate,
+      state: entry.state,
+    }));
+    expect(combined).toEqual([...expected].reverse());
+    expect(new Set(combined.map((entry) => entry.logicalDate)).size).toBe(31);
+  });
+
+  it("reads a generation notice only for the selected owner and date (AC #6)", async () => {
+    await seedDay("2026-08-01", { versionStatus: "validation_failed" });
+    await seedDay("2026-08-02");
+    const service = buildService(database);
+
+    await expect(
+      service.readGenerationNoticeForDate({
+        logicalDate: "2026-08-01",
+        userId: OWNER,
+      }),
+    ).resolves.toEqual({
+      failureCode: "invalid_schema",
+      logicalDate: "2026-08-01",
+    });
+    // The next day published successfully, so it has no unresolved notice and
+    // must not inherit the earlier date's failure.
+    await expect(
+      service.readGenerationNoticeForDate({
+        logicalDate: "2026-08-02",
+        userId: OWNER,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      service.readGenerationNoticeForDate({
+        logicalDate: "2026-02-30",
+        userId: OWNER,
+      }),
+    ).rejects.toBeInstanceOf(InvalidJournalDateError);
+    await expect(
+      service.readGenerationNoticeForDate({
+        logicalDate: "2026-08-01",
+        userId: asUserId("01984477-1f9a-7b25-a5cc-83c3b21fbc69"),
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("fails closed on the generation notice when the Recovery Gate is closed (AC #6)", async () => {
+    await seedDay("2026-08-03", { versionStatus: "validation_failed" });
+    const closed = buildService(database, closedGate);
+    await expect(
+      closed.readGenerationNoticeForDate({
+        logicalDate: "2026-08-03",
+        userId: OWNER,
+      }),
+    ).rejects.toBeInstanceOf(RecoveryGateClosedError);
   });
 
   it("serves the list through the read-only BFF and rejects owner identifiers", async () => {
