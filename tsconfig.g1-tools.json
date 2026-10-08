@@ -5,6 +5,8 @@
     "scripts/capture-g1-role-provider-calls.ts",
     "scripts/build-validator-completion.ts",
     "scripts/build-1a3b-g1-release-manifest.ts",
+    "scripts/ci/assert-system-suites-ran.ts",
+    "scripts/ci/verify-test-databases.ts",
     "scripts/verify-1a3b-g1-release-manifest.ts",
     "scripts/export-hosted-workflow-canary.ts",
     "scripts/hosted-workflow-canary-gate.ts",

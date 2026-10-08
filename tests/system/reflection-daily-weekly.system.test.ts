@@ -2166,4 +2166,8 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     expect(disposition.rows).toHaveLength(1);
     expect(disposition.rows[0]!.outcome).toBe("created");
   });
+
+  afterAll(async () => {
+    await database?.dispose();
+  });
 });
