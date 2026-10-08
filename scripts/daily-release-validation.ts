@@ -33,6 +33,7 @@ import {
   compareEffectiveRuntimeConfiguration,
   parseEffectiveConfigurationSnapshot,
 } from "./effective-runtime-config-gate";
+import { buildG1PromotionConfigReport } from "./g1-promotion-config-report";
 
 export const DAILY_RELEASE_VALIDATION_VERSION =
   "1a3b-daily-release-validation:v1";
@@ -50,6 +51,16 @@ export const FIXED_PR_CI_BASELINE = [
   "baseline:test",
   "baseline:build",
 ] as const;
+
+/**
+ * The two points in the daily release where the deployed effective
+ * configuration is compared against current production. Reusing one stage
+ * vocabulary keeps the acceptance-time and promotion-time collection on the
+ * same implementation (SPEC #275 decision 5).
+ */
+export const RELEASE_STAGES = ["acceptance", "promotion"] as const;
+
+export type ReleaseStage = (typeof RELEASE_STAGES)[number];
 
 export type ReleaseImpactKind =
   | "ui"
@@ -81,7 +92,11 @@ export type ReleaseCheckKind =
   | "evidence-producer"
   | "full-acceptance";
 
-export type ReleaseCheckImpact = ReleaseImpactKind | "baseline" | "capability";
+export type ReleaseCheckImpact =
+  | ReleaseImpactKind
+  | "baseline"
+  | "capability"
+  | "stage";
 
 export type ReleaseCheck = Readonly<{
   id: string;
@@ -314,6 +329,17 @@ export const RELEASE_CHECKS: readonly ReleaseCheck[] = [
     evidenceLocation: "tests/system/portal-acceptance.system.test.ts",
   },
   {
+    id: "promotion:effective-config-diff",
+    title: "Promotion effective config diff and rollback report",
+    command: "pnpm release:promotion:report",
+    kind: "behavior",
+    impact: "stage",
+    fullProducer: false,
+    providerCalls: false,
+    modelCalls: false,
+    evidenceLocation: "g1 promotion config report",
+  },
+  {
     id: FULL_ACCEPTANCE_ID,
     title: "Full 12-item capability acceptance",
     command: FULL_PRODUCER_COMMAND,
@@ -350,7 +376,19 @@ const IMPACT_CHECK_IDS: Readonly<Record<ReleaseImpactKind, readonly string[]>> =
     ],
   };
 
+/**
+ * Checks that a release stage itself requires, independent of the declared
+ * behavior impact. Promotion compares the candidate deployment with current
+ * production and carries the rollback report.
+ */
+const STAGE_CHECK_IDS: Readonly<Record<ReleaseStage, readonly string[]>> = {
+  acceptance: [],
+  promotion: ["promotion:effective-config-diff"],
+};
+
 const CHECK_RATIONALE: Readonly<Record<string, string>> = {
+  "promotion:effective-config-diff":
+    "Promotion compares the candidate deployment's effective configuration with current production through the shared #278 gate and carries the variable/deployment rollback report; it does not start any evidence producer.",
   "ui:portal-smoke":
     "A UI change needs the fixed baseline plus this relevant portal behavior smoke test; no evidence producer is started.",
   "server:deterministic-behavior":
@@ -415,6 +453,16 @@ export type ReleaseValidationInput = Readonly<{
   contentSha256: string;
 }>;
 
+export type ReleaseValidationPromotionConfig = Readonly<{
+  authorization?: Readonly<{
+    reauthorizedRoles?: readonly string[];
+    reusedRoles?: readonly string[];
+  }>;
+  candidateDeployment: unknown;
+  currentProduction: unknown;
+  isolatedAcceptance: unknown;
+}>;
+
 export type ReleaseValidationRequest = Readonly<{
   version: string;
   change: Readonly<{
@@ -430,6 +478,8 @@ export type ReleaseValidationRequest = Readonly<{
   previousArtifacts?: readonly ReleaseValidationArtifact[];
   currentInputs?: readonly ReleaseValidationInput[];
   effectiveConfig?: Readonly<{ baseline: unknown; candidate: unknown }>;
+  releaseStage?: ReleaseStage;
+  promotionConfig?: ReleaseValidationPromotionConfig;
 }>;
 
 export type ReleaseValidationDisposition =
@@ -440,7 +490,12 @@ export type ReleaseValidationDisposition =
 export type SelectedReleaseCheck = Readonly<{
   check: ReleaseCheck;
   rationale: string;
-  source: "fixed-baseline" | "declared-impact" | "path-hint" | "capability-trigger";
+  source:
+    | "fixed-baseline"
+    | "declared-impact"
+    | "path-hint"
+    | "capability-trigger"
+    | "release-stage";
   disposition: ReleaseValidationDisposition;
   contentIdentity?: string;
   evidencePath?: string;
@@ -450,10 +505,17 @@ export type ReleaseValidationPlan = Readonly<{
   version: string;
   changeSummary: string;
   impact: ReleaseValidationImpact;
+  releaseStage: ReleaseStage;
   effectiveConfig?: Readonly<{
     configDigest: string;
     compatible: boolean;
     blockingOperations: readonly string[];
+  }>;
+  promotion?: Readonly<{
+    blockers: readonly Readonly<{ key: string; operation: string }>[];
+    configDigest: string;
+    promotionAllowed: boolean;
+    reauthorizedRoles: readonly string[];
   }>;
   fullAcceptance: Readonly<{
     required: boolean;
@@ -530,6 +592,34 @@ function analyzeEffectiveConfig(
   };
 }
 
+function analyzePromotionConfig(
+  promotionConfig: ReleaseValidationPromotionConfig,
+): NonNullable<ReleaseValidationPlan["promotion"]> {
+  const report = buildG1PromotionConfigReport({
+    isolatedAcceptance: parseEffectiveConfigurationSnapshot(
+      promotionConfig.isolatedAcceptance,
+    ),
+    currentProduction: parseEffectiveConfigurationSnapshot(
+      promotionConfig.currentProduction,
+    ),
+    candidateDeployment: parseEffectiveConfigurationSnapshot(
+      promotionConfig.candidateDeployment,
+    ),
+    ...(promotionConfig.authorization
+      ? { authorization: promotionConfig.authorization }
+      : {}),
+  });
+  return {
+    blockers: report.blockers.map((blocker) => ({
+      key: blocker.key,
+      operation: blocker.operation,
+    })),
+    configDigest: report.configDigest,
+    promotionAllowed: report.promotionAllowed,
+    reauthorizedRoles: report.rollback.authorization.reauthorizedRoles,
+  };
+}
+
 /**
  * Build the daily release validation plan. The fixed baseline is always
  * present, targeted checks follow the classified impact, and the full producer
@@ -538,6 +628,7 @@ function analyzeEffectiveConfig(
 export function planDailyReleaseValidation(
   request: ReleaseValidationRequest,
 ): ReleaseValidationPlan {
+  const releaseStage: ReleaseStage = request.releaseStage ?? "acceptance";
   const impact = classifyReleaseImpact(
     request.change.declaredImpacts,
     request.change.changedPaths,
@@ -601,6 +692,9 @@ export function planDailyReleaseValidation(
     ? analyzeEffectiveConfig(request.effectiveConfig)
     : undefined;
   const configDigest = effectiveConfig?.configDigest;
+  const promotion = request.promotionConfig
+    ? analyzePromotionConfig(request.promotionConfig)
+    : undefined;
 
   const selectedIds = new Set<string>();
   for (const entry of fixedBaseline) selectedIds.add(entry.check.id);
@@ -631,6 +725,20 @@ export function planDailyReleaseValidation(
     }
   }
 
+  for (const id of STAGE_CHECK_IDS[releaseStage]) {
+    if (selectedIds.has(id)) continue;
+    const check = CHECK_BY_ID.get(id);
+    if (!check) throw new Error(`Unknown stage check ${id}`);
+    const entry = select(
+      check,
+      "release-stage",
+      CHECK_RATIONALE[id] ?? `Required by the ${releaseStage} release stage.`,
+    );
+    selectedIds.add(id);
+    if (entry.disposition === "reused") reused.push(entry);
+    else targeted.push(entry);
+  }
+
   if (trigger) {
     const check = CHECK_BY_ID.get(FULL_ACCEPTANCE_ID);
     if (!check) throw new Error(`Unknown check ${FULL_ACCEPTANCE_ID}`);
@@ -657,7 +765,9 @@ export function planDailyReleaseValidation(
     version: DAILY_RELEASE_VALIDATION_PLAN_VERSION,
     changeSummary: request.change.summary,
     impact,
+    releaseStage,
     ...(effectiveConfig ? { effectiveConfig } : {}),
+    ...(promotion ? { promotion } : {}),
     fullAcceptance: { required: trigger !== null, trigger },
     requiresImpactLocation,
     fixedBaseline,
@@ -677,6 +787,7 @@ export function formatDailyReleaseValidationSummary(
 ): string {
   const lines = [
     `daily release validation ${plan.version}`,
+    `release_stage=${plan.releaseStage}`,
     `change=${plan.changeSummary}`,
     `impact=${
       plan.impact.effective.length > 0
@@ -699,6 +810,17 @@ export function formatDailyReleaseValidationSummary(
     lines.push(
       `effective_config_digest=${plan.effectiveConfig.configDigest} compatible=${plan.effectiveConfig.compatible} blocking=${
         plan.effectiveConfig.blockingOperations.join(",") || "none"
+      }`,
+    );
+  }
+  if (plan.promotion) {
+    lines.push(
+      `promotion_allowed=${plan.promotion.promotionAllowed} promotion_config_digest=${
+        plan.promotion.configDigest
+      } promotion_blocking=${
+        plan.promotion.blockers.map((blocker) => blocker.key).join(",") || "none"
+      } reauthorized_roles=${
+        plan.promotion.reauthorizedRoles.join(",") || "none"
       }`,
     );
   }
@@ -833,6 +955,52 @@ export function parseDailyReleaseValidationRequest(
     effectiveConfig = { baseline: parsed.baseline, candidate: parsed.candidate };
   }
 
+  let releaseStage: ReleaseStage | undefined;
+  if (raw.releaseStage !== undefined) {
+    if (
+      typeof raw.releaseStage !== "string" ||
+      !(RELEASE_STAGES as readonly string[]).includes(raw.releaseStage)
+    ) {
+      throw new Error(
+        `Daily release validation releaseStage must be one of ${RELEASE_STAGES.join(", ")}.`,
+      );
+    }
+    releaseStage = raw.releaseStage as ReleaseStage;
+  }
+
+  let promotionConfig: ReleaseValidationPromotionConfig | undefined;
+  if (raw.promotionConfig !== undefined) {
+    const parsed = assertObject(
+      raw.promotionConfig,
+      "Daily release validation promotionConfig",
+    );
+    let authorization: ReleaseValidationPromotionConfig["authorization"];
+    if (parsed.authorization !== undefined) {
+      const rawAuthorization = assertObject(
+        parsed.authorization,
+        "Daily release validation promotionConfig authorization",
+      );
+      authorization = {
+        ...(Array.isArray(rawAuthorization.reauthorizedRoles)
+          ? {
+              reauthorizedRoles: rawAuthorization.reauthorizedRoles.map(
+                (role) => String(role),
+              ),
+            }
+          : {}),
+        ...(Array.isArray(rawAuthorization.reusedRoles)
+          ? { reusedRoles: rawAuthorization.reusedRoles.map((role) => String(role)) }
+          : {}),
+      };
+    }
+    promotionConfig = {
+      candidateDeployment: parsed.candidateDeployment,
+      currentProduction: parsed.currentProduction,
+      isolatedAcceptance: parsed.isolatedAcceptance,
+      ...(authorization ? { authorization } : {}),
+    };
+  }
+
   return {
     version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
     change: { summary: change.summary, declaredImpacts, changedPaths },
@@ -844,6 +1012,8 @@ export function parseDailyReleaseValidationRequest(
       ? { currentInputs: parseInputs(raw.currentInputs) }
       : {}),
     ...(effectiveConfig ? { effectiveConfig } : {}),
+    ...(releaseStage ? { releaseStage } : {}),
+    ...(promotionConfig ? { promotionConfig } : {}),
   };
 }
 

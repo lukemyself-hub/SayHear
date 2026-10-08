@@ -346,8 +346,19 @@ function changeFor(item: EffectiveConfigComparisonItem): EffectiveConfigChange {
 export function compareEffectiveRuntimeConfiguration(input: Readonly<{
   baseline: EffectiveConfigurationSnapshot;
   candidate: EffectiveConfigurationSnapshot;
+  /**
+   * `enforce` (default) treats the isolated project, synthetic owner, two
+   * database targets and credentials as expected separations, which is the
+   * acceptance-environment contract. `ignore` compares every key for plain
+   * equality, which is what a promotion comparison between current production
+   * and a candidate production deployment needs: those two deployments share
+   * the production identity, and equality there is correct rather than a
+   * separation failure.
+   */
+  isolation?: "enforce" | "ignore";
 }>): EffectiveRuntimeConfigurationComparison {
   const { baseline, candidate } = input;
+  const enforceIsolation = input.isolation !== "ignore";
   const baselineByKey = new Map(baseline.items.map((item) => [item.key, item]));
   const candidateByKey = new Map(candidate.items.map((item) => [item.key, item]));
   const keys = [
@@ -361,7 +372,9 @@ export function compareEffectiveRuntimeConfiguration(input: Readonly<{
     if (!reference) throw new Error(`Unknown key ${key}`);
     const baselineValue = fromBaseline?.value ?? null;
     const candidateValue = fromCandidate?.value ?? null;
-    const isolation = EXPECTED_ISOLATION_BY_KEY[key] ?? null;
+    const isolation = enforceIsolation
+      ? EXPECTED_ISOLATION_BY_KEY[key] ?? null
+      : null;
     const unverified = isUnverified(fromBaseline) || isUnverified(fromCandidate);
 
     const status: EffectiveConfigItemStatus = unverified

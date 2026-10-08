@@ -1,0 +1,154 @@
+{
+  "version": "1a3b-g1-effective-runtime-config:v1",
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deploymentId": "dpl_isolated_acceptance",
+  "collectedAt": "2026-10-07T10:00:00.000Z",
+  "items": [
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "provider",
+      "key": "provider.adapter",
+      "value": "opencode-go"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "provider",
+      "key": "provider.model",
+      "value": "deepseek-v4.1-flash"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "provider",
+      "key": "provider.snapshot",
+      "value": "deepseek-v4.1-flash"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "prompt-schema-policy",
+      "key": "prompt.policy_bundle_version",
+      "value": "1a3b-model-role-policy:v1"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "parameters-budget",
+      "key": "parameters.episode.build.config_version",
+      "value": "episode.build:g1-release:v7"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "parameters-budget",
+      "key": "parameters.episode.build.prompt_version",
+      "value": "episode-prompt:v1"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "parameters-budget",
+      "key": "parameters.episode.build.max_output_tokens",
+      "value": 32000
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "deadline-budgets",
+      "key": "deadline.provider_ms",
+      "value": 300000,
+      "defaultValue": 60000
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "deadline-budgets",
+      "key": "deadline.lease_ms",
+      "value": 60000,
+      "defaultValue": 60000
+    },
+    {
+      "critical": false,
+      "inManifestFingerprint": false,
+      "source": "unverified",
+      "category": "deadline-budgets",
+      "key": "deadline.gateway_limit_ms",
+      "value": null
+    },
+    {
+      "critical": false,
+      "inManifestFingerprint": false,
+      "source": "platform",
+      "category": "schedule-targets",
+      "key": "schedule.recovery_scan_target",
+      "value": "platform:recovery-scan"
+    },
+    {
+      "critical": false,
+      "inManifestFingerprint": false,
+      "source": "platform",
+      "category": "schedule-targets",
+      "key": "schedule.backup_renewal_target",
+      "value": "platform:backup-renewal"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "backup-retention",
+      "key": "backup.policy_version",
+      "value": "neon-free-6h-pitr-1gb-limit"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "platform",
+      "category": "runtime",
+      "key": "hosted.project_id",
+      "value": "prj_isolated_acceptance"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "owner-auth",
+      "key": "owner.subject",
+      "value": "synthetic-owner"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "database-identity",
+      "key": "database.business_target",
+      "value": "sha256:isolated-business"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "database-identity",
+      "key": "database.purge_marker_target",
+      "value": "sha256:isolated-marker"
+    },
+    {
+      "critical": true,
+      "inManifestFingerprint": true,
+      "source": "override",
+      "category": "credentials",
+      "key": "credentials.provider_key",
+      "value": "present"
+    }
+  ]
+}

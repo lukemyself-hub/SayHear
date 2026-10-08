@@ -424,6 +424,107 @@ describe("CLI entry", () => {
   });
 });
 
+describe("promotion stage integration", () => {
+  const snapshot = (commit: string, deploymentId: string, items: unknown[]) => ({
+    version: "1a3b-g1-effective-runtime-config:v1",
+    commit,
+    deploymentId,
+    collectedAt: "2026-10-07T20:00:00.000Z",
+    items,
+  });
+  const deadline = (value: number) => ({
+    category: "deadline-budgets",
+    critical: true,
+    inManifestFingerprint: true,
+    key: "deadline.provider_ms",
+    source: "override",
+    value,
+  });
+  const sharedProvider = [
+    {
+      category: "provider",
+      critical: true,
+      inManifestFingerprint: true,
+      key: "provider.adapter",
+      source: "override",
+      value: "opencode-go",
+    },
+  ];
+  const isolated = snapshot("a".repeat(40), "dpl_isolated", [
+    ...sharedProvider,
+    deadline(300_000),
+  ]);
+  const production = snapshot("b".repeat(40), "dpl_production", [
+    ...sharedProvider,
+    deadline(300_000),
+  ]);
+  const blockedCandidate = snapshot("c".repeat(40), "dpl_candidate", [
+    ...sharedProvider,
+    deadline(120_000),
+  ]);
+
+  it("selects the promotion config report only at the promotion stage", () => {
+    const acceptance = planDailyReleaseValidation(
+      request({ declaredImpacts: ["ui"] }),
+    );
+    expect(selectedIds(acceptance)).not.toContain("promotion:effective-config-diff");
+
+    const promotion = planDailyReleaseValidation({
+      ...request({ declaredImpacts: ["ui"] }),
+      releaseStage: "promotion",
+    });
+    expect(promotion.releaseStage).toBe("promotion");
+    expect(selectedIds(promotion)).toContain("promotion:effective-config-diff");
+    expect(promotion.producerInvocations).toEqual([]);
+  });
+
+  it("surfaces a blocked promotion report in the plan and summary", () => {
+    const plan = planDailyReleaseValidation({
+      ...request({ declaredImpacts: ["ui"] }),
+      releaseStage: "promotion",
+      promotionConfig: {
+        isolatedAcceptance: isolated,
+        currentProduction: production,
+        candidateDeployment: blockedCandidate,
+      },
+    });
+
+    expect(plan.promotion).toBeDefined();
+    expect(plan.promotion?.promotionAllowed).toBe(false);
+    expect(plan.promotion?.blockers).toEqual([
+      expect.objectContaining({ key: "deadline.provider_ms" }),
+    ]);
+    const summary = formatDailyReleaseValidationSummary(plan);
+    expect(summary).toContain("release_stage=promotion");
+    expect(summary).toContain("promotion_allowed=false");
+  });
+
+  it("reports a clean promotion when the candidate matches production", () => {
+    const plan = planDailyReleaseValidation({
+      ...request({ declaredImpacts: ["ui"] }),
+      releaseStage: "promotion",
+      promotionConfig: {
+        isolatedAcceptance: isolated,
+        currentProduction: production,
+        candidateDeployment: production,
+      },
+    });
+
+    expect(plan.promotion?.promotionAllowed).toBe(true);
+    expect(plan.promotion?.blockers).toEqual([]);
+  });
+
+  it("rejects an unknown release stage", () => {
+    expect(() =>
+      parseDailyReleaseValidationRequest({
+        version: DAILY_RELEASE_VALIDATION_REQUEST_VERSION,
+        change: { summary: "x", declaredImpacts: [], changedPaths: [] },
+        releaseStage: "deploy",
+      }),
+    ).toThrow(/releaseStage/);
+  });
+});
+
 describe("request parsing", () => {
   it("rejects an unknown request version", () => {
     expect(() =>
