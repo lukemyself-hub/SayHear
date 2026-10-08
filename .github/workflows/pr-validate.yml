@@ -75,7 +75,12 @@ jobs:
       SAYHEAR_AUTH_SECRET_SOURCE: managed
 
     steps:
+      # Full history: tests/g1-release-authorization.test.ts checks that the
+      # accepted commit is an ancestor of the checkout, which needs `HEAD~1` and
+      # the rest of the branch history (the default fetch-depth is 1).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 

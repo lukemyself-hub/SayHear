@@ -18,7 +18,19 @@ function git(...arguments_: string[]): string {
 
 describe("G1 release checkout identity", () => {
   const head = git("rev-parse", "HEAD");
-  const parent = git("rev-parse", "HEAD~1");
+  // The ancestry assertion needs at least one parent commit. Fail loudly with
+  // the fix rather than letting a shallow checkout turn this into a bare
+  // `Command failed: git rev-parse HEAD~1` (see `fetch-depth: 0` in
+  // .github/workflows/pr-validate.yml).
+  const parent = (() => {
+    try {
+      return git("rev-parse", "HEAD~1");
+    } catch {
+      throw new Error(
+        "G1 release checkout identity needs branch history; check out with at least two commits (actions/checkout fetch-depth: 0).",
+      );
+    }
+  })();
 
   it("accepts the acceptance commit itself and a later checkout that contains it", () => {
     expect(() => assertRepositoryIncludesCommit(head)).not.toThrow();

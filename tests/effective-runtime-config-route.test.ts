@@ -39,6 +39,12 @@ const environment = {
   CRON_SECRET: "route-cron-secret",
 } as const;
 
+// The PR CI workflow exports these synthetic variables for the whole job.
+// `SAYHEAR_DEPLOYMENT` conflicts with the `VERCEL_ENV=preview` signal this
+// test asserts, and `resolveDeployment` correctly rejects the contradiction,
+// so the test must remove any inherited value before exercising the route.
+const inheritedKeysToClear = ["SAYHEAR_DEPLOYMENT"] as const;
+
 const saved: Record<string, string | undefined> = {};
 
 beforeAll(() => {
@@ -46,10 +52,14 @@ beforeAll(() => {
     saved[key] = process.env[key];
     process.env[key] = value;
   }
+  for (const key of inheritedKeysToClear) {
+    saved[key] = process.env[key];
+    delete process.env[key];
+  }
 });
 
 afterAll(() => {
-  for (const key of Object.keys(environment)) {
+  for (const key of [...Object.keys(environment), ...inheritedKeysToClear]) {
     if (saved[key] === undefined) delete process.env[key];
     else process.env[key] = saved[key];
   }
