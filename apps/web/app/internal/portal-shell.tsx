@@ -27,8 +27,12 @@ import {
   shouldCollapseNavigationOnEscape,
   toToolLocation,
 } from "./portal-integration";
-
-type WriteGate = Readonly<{ allowed: boolean; reason: string }>;
+import {
+  portalFooterStateText,
+  UNKNOWN_WRITE_STATUS,
+  writeStatusFromAccessResponse,
+  type PortalWriteStatus,
+} from "./portal-write-status";
 
 type PortalShellContextValue = Readonly<{
   clearDraft(key: string): void;
@@ -111,7 +115,9 @@ export function PortalShell({
   const [navOverride, setNavOverride] = useState<boolean | null>(null);
   const navOpen = navOverride ?? isDesktop;
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
-  const [writeGate, setWriteGate] = useState<WriteGate | null>(null);
+  const [writeStatus, setWriteStatus] = useState<PortalWriteStatus>(
+    UNKNOWN_WRITE_STATUS,
+  );
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   // In-memory only (never localStorage/sessionStorage): the last tool entry the
   // reader opened, so the tools rail can restore a selected entry (AC-19). It
@@ -134,31 +140,22 @@ export function PortalShell({
   useEffect(() => {
     let active = true;
     fetch("/api/internal/access", { headers: { accept: "application/json" } })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload: unknown) => {
+      .then(async (response) => {
+        let payload: unknown = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+        return { httpStatus: response.status, payload };
+      })
+      .then(({ httpStatus, payload }) => {
         if (!active) {
           return;
         }
-        const privateWrites =
-          typeof payload === "object" &&
-          payload !== null &&
-          "privateWrites" in payload
-            ? (payload as { privateWrites?: unknown }).privateWrites
-            : null;
-        if (
-          typeof privateWrites === "object" &&
-          privateWrites !== null &&
-          "allowed" in privateWrites &&
-          "reason" in privateWrites
-        ) {
-          const gate = privateWrites as { allowed: unknown; reason: unknown };
-          if (
-            typeof gate.allowed === "boolean" &&
-            typeof gate.reason === "string"
-          ) {
-            setWriteGate({ allowed: gate.allowed, reason: gate.reason });
-          }
-        }
+        // A non-2xx response (401/403/503 Recovery-Gate-closed) is a write
+        // block; it must never render as the unblocked-looking neutral state.
+        setWriteStatus(writeStatusFromAccessResponse(httpStatus, payload));
       })
       .catch(() => {});
     return () => {
@@ -331,11 +328,7 @@ export function PortalShell({
             <div className="portalFooter">
               <span className="portalFooterOwner">Internal Owner</span>
               <span className="portalFooterState">
-                {writeGate === null
-                  ? "内部自用"
-                  : writeGate.allowed
-                    ? "内部自用 · 可写入"
-                    : "内部自用 · 写入已阻断"}
+                {portalFooterStateText(writeStatus)}
               </span>
             </div>
           </nav>
