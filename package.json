@@ -19,6 +19,7 @@
     "release:config:compare": "tsx scripts/effective-runtime-config-gate.ts",
     "release:promotion:report": "tsx scripts/g1-promotion-config-report.ts",
     "release:validate": "tsx scripts/daily-release-validation.ts",
+    "release:closure:report": "tsx scripts/release-closure-report.ts",
     "check:runtime": "node scripts/check-runtime.mjs",
     "db:migrate": "tsx packages/data/src/cli/migrate.ts",
     "db:provision-owner": "tsx packages/data/src/cli/provision-internal-owner.ts",
