@@ -26,7 +26,10 @@ export { PostgresOutboxDispatcherRepository } from "./postgres-outbox-dispatcher
 export { PostgresInternalOwnerAccessRepository } from "./postgres-internal-owner-access-repository";
 export { PostgresInternalInspectionRepository } from "./postgres-internal-inspection-repository";
 export { PostgresConversationResponseRepository } from "./postgres-conversation-response-repository";
-export { PostgresRecentContextSource } from "./postgres-recent-context-source";
+export {
+  PostgresRecentContextSource,
+  RECENT_CONTEXT_CANDIDATE_SQL,
+} from "./postgres-recent-context-source";
 export {
   PostgresConversationActionRepository,
   PostgresJournalRegenerationActionRepository,

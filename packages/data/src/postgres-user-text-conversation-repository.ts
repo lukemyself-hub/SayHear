@@ -88,6 +88,12 @@ type OriginalRetrySourceRow = DailySessionRow &
     input_revision_id: string;
     locale: string;
     original_turn_id: string;
+    /**
+     * Admitted request zone of the original command. Copied to the retry so a
+     * cross-midnight retry freezes the same local window; legacy commands
+     * keep NULL and fall back to the session-start zone (issue #294).
+     */
+    request_timezone: string | null;
     subject_id: string;
     turn_status: InteractionTurnStatus;
   }>;
@@ -904,6 +910,7 @@ export class PostgresUserTextConversationRepository
             original_command.subject_id,
             original_command.input_revision_id,
             original_command.locale,
+            original_command.request_timezone,
             session.daily_session_id,
             session.logical_date::text,
             session.timezone_at_start,
@@ -961,6 +968,7 @@ export class PostgresUserTextConversationRepository
               $5::uuid AS subject_id,
               $6::uuid AS input_revision_id,
               $7::text AS locale,
+              $9::text AS request_timezone,
               daily_session_id,
               logical_date::text,
               timezone_at_start,
@@ -979,6 +987,7 @@ export class PostgresUserTextConversationRepository
             source.input_revision_id,
             source.locale,
             input.inactivityPolicy.version,
+            source.request_timezone,
           ],
         )
       ).rows[0];
@@ -1083,13 +1092,14 @@ export class PostgresUserTextConversationRepository
           conversation_action_catalog_version,
           expected_data_epoch,
           status,
-          created_at
+          created_at,
+          request_timezone
         )
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
           $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-          'prepared', $27
+          'prepared', $27, $28
         )
       `,
       [
@@ -1126,6 +1136,7 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.conversationActionCatalogVersion,
         ownerRow.data_epoch,
         input.now,
+        source.request_timezone,
       ],
     );
     await client.query(
@@ -1534,13 +1545,14 @@ export class PostgresUserTextConversationRepository
           conversation_action_catalog_version,
           expected_data_epoch,
           status,
-          created_at
+          created_at,
+          request_timezone
         )
         VALUES (
           $1, $2, $3, 'conversation.text', $4, 'conversation_event', $5,
           'conversation_event_revision', $6, $7, $8, $9, $10, $11, $12, $13,
           $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-          'prepared', $27
+          'prepared', $27, $28
         )
       `,
       [
@@ -1577,6 +1589,7 @@ export class PostgresUserTextConversationRepository
         input.generationPolicy.conversationActionCatalogVersion,
         ownerRow.data_epoch,
         input.now,
+        input.timezone,
       ],
     );
     await client.query(

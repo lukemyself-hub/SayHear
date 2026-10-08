@@ -23,6 +23,7 @@ import {
   INITIAL_CONVERSATION_HARNESS_POLICY,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   ProviderDispatchError,
+  RECENT_CONTEXT_COMPILER_VERSION,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
   type ConversationResponseRepository,
@@ -1205,7 +1206,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       attemptStatus: "succeeded",
       commandStatus: "succeeded",
       compiledContext: {
-        compilerVersion: "context-compiler:v1",
+        compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
         // The compile never waits on the fast path: the committed User Event's
         // extraction command is still pending (issue #113).
         degradedReason: "fast_path_pending",

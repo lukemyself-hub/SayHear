@@ -46,6 +46,7 @@ import {
   PERSONA_CONTRACT_INVARIANT_VERSION,
   loadPredicateRegistrySnapshot,
   PREDICATE_REGISTRY_RUNTIME_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
   createReflectionSchedulerScanService,
@@ -115,6 +116,7 @@ import {
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
+  PostgresRecentContextSource,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
@@ -673,6 +675,14 @@ export function createServerComposition() {
     compilerVersion: "context-compiler:v1",
     contentHmacSecret: configuration.contextHmacSecret,
     rawEventTokenBudget: 4_000,
+    // #294: the seven-local-day bounded recent source. It is wired into the
+    // real compile/save/replay/egress path; frozen legacy manifests still
+    // replay unchanged and a deployment that does not pass this dependency
+    // compiles exactly as the pre-#293 compiler (ADR-0149).
+    recentContext: {
+      policy: RECENT_CONTEXT_DEFAULT_POLICY,
+      source: new PostgresRecentContextSource(pool),
+    },
     repository: responseRepository,
     ...(memoryRetrievalPort ? { memoryRetrieval: memoryRetrievalPort } : {}),
   });

@@ -64,6 +64,7 @@ import {
   type RecentContextCutoff,
   type RecentContextSelection,
   type RecentContextSelectionPolicy,
+  type RecentContextSourceFailure,
   type RecentContextSourcePort,
   type RecentContextSourceRequest,
   type RecentContextSourceSnapshot,
@@ -146,8 +147,18 @@ export type ContextSourceSnapshot = Readonly<{
   dialogueStateFailure?: boolean;
   /** Owner data epoch the command was created under (issue #293). */
   expectedDataEpoch?: number;
-  /** Admitted GenerationCommand time, the frozen recent-source cutoff. */
+  /**
+   * Admitted request's input event instant, the frozen recent-source cutoff.
+   * Stable across an explicit retry; legacy commands fall back to the command
+   * instant (issue #294).
+   */
   commandCreatedAt?: Date;
+  /**
+   * IANA zone of the actual admitted request (issue #294). Travel keeps one
+   * Daily Session, so this wins over `dailySession.timezone`; absent legacy
+   * rows fall back to the session-start zone.
+   */
+  requestTimezone?: string;
   events: readonly ContextSourceEvent[];
   generationStage: GenerationCommandStage;
   /**
@@ -345,6 +356,21 @@ export type RecentContextCompilerDependency = Readonly<{
   source: RecentContextSourcePort;
 }>;
 
+/**
+ * The pre-#294 compiler version. It never emits a recent section and must stay
+ * replayable by the recent-aware compiler.
+ */
+export const LEGACY_CONTEXT_COMPILER_VERSION = "context-compiler:v1" as const;
+
+/**
+ * The #294 recent-aware compiler version (issue #294). It is written whenever a
+ * recent-source dependency is wired, so the frozen CompiledContext is
+ * distinguishable from a genuinely legacy v1 manifest; a legacy process
+ * rejecting it fails closed with `policy_blocked` before any model call.
+ */
+export const RECENT_CONTEXT_COMPILER_VERSION =
+  "context-compiler:recent:v1" as const;
+
 export class CompiledContextIntegrityError extends Error {
   public constructor() {
     super("The frozen CompiledContext manifest failed integrity validation.");
@@ -366,6 +392,13 @@ export function createContextCompiler(dependencies: {
 }): ContextCompiler {
   const integrityKeyVersion =
     dependencies.contentHmacKeyVersion ?? "context-integrity:v1";
+  // The frozen format is honest about the recent-source capability: wiring the
+  // dependency upgrades the stored version, so an old process rejects a new
+  // manifest (policy_blocked) instead of silently reinterpreting it.
+  const effectiveCompilerVersion =
+    dependencies.recentContext === undefined
+      ? dependencies.compilerVersion
+      : RECENT_CONTEXT_COMPILER_VERSION;
 
   return {
     async compile(input) {
@@ -580,7 +613,7 @@ export function createContextCompiler(dependencies: {
         ...(actionReferenceHandles.length === 0
           ? {}
           : { actionReferenceHandles }),
-        compilerVersion: dependencies.compilerVersion,
+        compilerVersion: effectiveCompilerVersion,
         degradedReason,
         dialogueRevision: source.dialogueRevision,
         generationCommandId: input.generationCommandId,
@@ -620,8 +653,24 @@ export function createContextCompiler(dependencies: {
     },
     renderPermittedPayload(source) {
       assertSupportedPolicyVersions(source.policyVersions);
+      // Replay is version-honest: the recent-aware compiler accepts its own
+      // version and a genuine legacy v1 manifest that carries no recent
+      // metadata. Any other version (including a #294 manifest replayed by an
+      // old process, or a legacy version with recent metadata grafted on) fails
+      // closed instead of being reinterpreted.
+      const hasRecentMetadata =
+        source.sections.some(
+          (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+        ) ||
+        source.referencedEvents.some(
+          (event) => event.section === "recent_conversation_context",
+        );
+      const versionAccepted =
+        source.compilerVersion === effectiveCompilerVersion ||
+        (source.compilerVersion === LEGACY_CONTEXT_COMPILER_VERSION &&
+          !hasRecentMetadata);
       if (
-        source.compilerVersion !== dependencies.compilerVersion ||
+        !versionAccepted ||
         source.integrity.algorithm !== "hmac-sha256" ||
         source.integrity.keyVersion !== integrityKeyVersion
       ) {
@@ -1069,7 +1118,7 @@ function emptyRecentContextSelection(
   windowStartLocalDate: string,
   windowEndLocalDate: string,
   cutoff: RecentContextCutoff,
-  failure: Readonly<{ code: string; detail: string | null }> | null,
+  failure: RecentContextSourceFailure | null,
 ): RecentContextSelection {
   return {
     budgetTokens: policy.budgets.maxContextTokens,
@@ -1087,6 +1136,7 @@ function emptyRecentContextSelection(
       failure === null
         ? []
         : [{ controlId: null, reason: "source_read_failed", revisionId: null }],
+    perDate: [],
     policyVersion: policy.version,
     selected: [],
     selectedTokens: 0,
@@ -1104,7 +1154,11 @@ async function loadRecentContextSelection(input: {
   source: ContextSourceSnapshot;
   userId: UserId;
 }): Promise<RecentContextSelection | null> {
-  const timezone = input.source.dailySession.timezone;
+  // The admitted request zone wins over the session-start zone: travel keeps
+  // the same Daily Session, and the window must follow the actual request
+  // (issue #294). Legacy rows only have the session-start zone.
+  const timezone =
+    input.source.requestTimezone ?? input.source.dailySession.timezone;
   const expectedDataEpoch = input.source.expectedDataEpoch;
   // Without the epoch/timezone the window cannot be frozen deterministically.
   // Composition wiring these fields is part of enabling #294; until then the
@@ -1206,8 +1260,10 @@ async function loadRecentContextSelection(input: {
     candidateRows: snapshot.candidateRows,
     cutoff,
     excludeRevisionIds,
+    failure: snapshot.failure,
     frozenAt: commandCreatedAt,
     items: snapshot.items,
+    ...(snapshot.perDate === undefined ? {} : { perDate: snapshot.perDate }),
     policy: input.dependency.policy,
     timezone,
     truncated: snapshot.truncated,

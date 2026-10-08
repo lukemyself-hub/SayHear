@@ -86,6 +86,10 @@ type ContextHeadRow = Readonly<{
   timezone_at_start: string;
   expected_data_epoch: string;
   command_created_at: Date;
+  /** Admitted request zone written by #294; NULL for legacy commands. */
+  request_timezone: string | null;
+  /** `created_at` of the admitted input event behind `command.subject_id`. */
+  request_created_at: Date | null;
   rolling_summary_id: string | null;
   rolling_summary_version: string | null;
   rolling_summary_covered_through: string | null;
@@ -726,7 +730,14 @@ export class PostgresConversationResponseRepository
             session.source_revision,
             session.timezone_at_start,
             command.expected_data_epoch,
+            command.request_timezone,
             command.created_at AS command_created_at,
+            (
+              SELECT input_event.created_at
+              FROM conversation_events input_event
+              WHERE input_event.conversation_event_id = command.subject_id
+                AND input_event.user_id = command.user_id
+            ) AS request_created_at,
             command.action_execution_id::text AS action_execution_id,
             command.action_execution_status,
             command.action_receipt_sequence,
@@ -912,7 +923,14 @@ export class PostgresConversationResponseRepository
         dialogueState: dialogueState.dialogueState,
         dialogueStateFailure: dialogueState.failure,
         expectedDataEpoch: Number(row.expected_data_epoch),
-        commandCreatedAt: row.command_created_at,
+        // The frozen recent-source cutoff is the admitted request's input
+        // event instant, so an explicit retry reuses the original window
+        // instead of moving it to the retry clock (issue #294). Legacy rows
+        // without an addressable subject fall back to the command instant.
+        commandCreatedAt: row.request_created_at ?? row.command_created_at,
+        ...(row.request_timezone === null
+          ? {}
+          : { requestTimezone: row.request_timezone }),
         events: events.rows.map((event) => ({
           actor: event.actor,
           locale: event.locale,
@@ -2448,6 +2466,43 @@ async function contextReferencesAreCurrent(
           AND event.current_revision_id = ref.conversation_event_revision_id
           AND revision.content_purged_at IS NULL
           AND event.user_id = command.user_id
+          -- #294: a recent-source ref is only current while it stays free of
+          -- the explicit Correction / Forget associations re-read at dispatch.
+          -- A control committed after compile but before egress turns the ref
+          -- stale and the command fails closed through the existing
+          -- policy_blocked freshness path instead of shipping old background.
+          AND NOT (
+            ref.section = 'recent_conversation_context'
+            AND (
+              EXISTS (
+                SELECT 1
+                FROM evidence_items item
+                INNER JOIN memory_forget_evidence_exclusions exclusion
+                  ON exclusion.evidence_item_id = item.evidence_item_id
+                 AND exclusion.user_id = item.user_id
+                WHERE item.user_id = ref.user_id
+                  AND item.source_revision_id =
+                    ref.conversation_event_revision_id
+                  AND item.status = 'active'
+                  AND exclusion.status = 'active'
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM claim_evidence_links link
+                INNER JOIN evidence_items item
+                  ON item.evidence_item_id = link.evidence_item_id
+                 AND item.user_id = link.user_id
+                INNER JOIN memory_claim_corrections correction
+                  ON correction.deactivated_claim_version_id =
+                    link.memory_claim_version_id
+                 AND correction.user_id = link.user_id
+                WHERE link.user_id = ref.user_id
+                  AND link.status = 'active'
+                  AND item.source_revision_id =
+                    ref.conversation_event_revision_id
+              )
+            )
+          )
         ),
         FALSE
       ) AS current

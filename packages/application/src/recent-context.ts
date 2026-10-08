@@ -24,15 +24,41 @@ import type {
 /** Section key for the independently frozen recent-source projection. */
 export const RECENT_CONTEXT_SECTION_KEY = "recent_conversation_context" as const;
 
-/** Version of the deterministic selection algorithm below. */
+/**
+ * Version of the deterministic selection algorithm below. v2 adds the
+ * cheapest-complete-expression per-date floor and newest-first remainder fill
+ * (issue #294); v1 references are rejected rather than reinterpreted.
+ */
 export const RECENT_CONTEXT_SELECTION_POLICY_VERSION =
-  "recent-context-selection:v1" as const;
+  "recent-context-selection:v2" as const;
 
 /** Version of the frozen reference wire format written by {@link encode}. */
-export const RECENT_CONTEXT_REFERENCE_VERSION = 2 as const;
+export const RECENT_CONTEXT_REFERENCE_VERSION = 3 as const;
 
 /** Window is today plus the previous six local days; empty days are not padded. */
 export const RECENT_CONTEXT_WINDOW_DAYS = 7 as const;
+
+/**
+ * Versioned initial production budgets for the recent-source path (issue
+ * #294). These are additive to the existing raw-event budget and were
+ * calibrated against the fixed synthetic long conversation and the
+ * `EXPLAIN (ANALYZE, BUFFERS)` plan recorded in the #294 validation; they are
+ * not derived from the retired research 1500 / 4000 token figures.
+ */
+export const RECENT_CONTEXT_DEFAULT_POLICY: RecentContextSelectionPolicy =
+  Object.freeze({
+    budgets: Object.freeze({
+      // Read caps (SQL-level, before any body crosses the port).
+      maxCandidateBytes: 262_144,
+      maxCandidateRows: 400,
+      // Shared selection budget for user expressions + adjacent assistants.
+      maxContextTokens: 2_000,
+      maxSingleEventTokens: 600,
+      readTimeoutMs: 2_000,
+    }),
+    version: "recent-context-selection-policy:v1",
+    windowDays: RECENT_CONTEXT_WINDOW_DAYS,
+  });
 
 export type RecentContextControlReason =
   | "correction_association"
@@ -48,7 +74,11 @@ export type RecentContextOmissionReason =
   | "unreferenced_assistant"
   | "single_event_over_budget"
   | "context_budget_exceeded"
-  | "source_read_failed";
+  | "source_read_failed"
+  /** A prior local date had candidates but none fit the selection budget. */
+  | "date_budget_excluded"
+  /** A prior local date had more candidates than the bounded read returned. */
+  | "date_read_bounded";
 
 export type RecentContextSelectionReason =
   | "today"
@@ -119,8 +149,25 @@ export type RecentContextSourceItem = Readonly<{
   /** Message expression instant (ISO-8601); never the Daily Session date. */
   expressedAt: string;
   /**
-   * InteractionTurn the revision belongs to. #293 only uses it to keep the
-   * user/assistant relationship carryable for #294's turn-scoped association.
+   * The Assistant event's own `generation_command_id`, when the row is an
+   * Assistant. `null` is the pre-0003 legacy shape; `undefined` is used only by
+   * synthetic callers that have no command identity to offer (treated as
+   * legacy for the same-turn fallback). A non-null value is authoritative:
+   * {@link generatingUserRevisionId} must resolve or the Assistant is omitted.
+   */
+  generationCommandId?: string | null;
+  /**
+   * The canonical generating input revision for an Assistant, resolved at the
+   * source from `generation_commands.input_revision_id` (issue #294). This is
+   * the only association the selector trusts for a modern Assistant: neither
+   * turn adjacency nor the nearest preceding user can recover a retried,
+   * delayed, concurrent or action-finalized Assistant.
+   */
+  generatingUserRevisionId?: ConversationEventRevisionId | null;
+  /**
+   * InteractionTurn the revision belongs to. Used ONLY as the legacy
+   * (`generation_command_id IS NULL`) same-turn fallback; never as the modern
+   * association mechanism.
    */
   interactionTurnId?: InteractionTurnId | null;
   /** Real-world event time when known; never fabricated from expression time. */
@@ -131,9 +178,35 @@ export type RecentContextSourceItem = Readonly<{
   text: string;
 }>;
 
+/**
+ * Closed set of content-free source failure codes (issue #294). The adapter
+ * never returns SQL text, parameter values or message bodies; #295's Inspector
+ * distinguishes timeout / owner / epoch / failure from this typed value.
+ */
+export type RecentContextSourceFailureCode =
+  | "source_read_failed"
+  | "source_read_timeout"
+  | "source_read_threw"
+  | "owner_inactive"
+  | "expected_data_epoch_mismatch"
+  | "source_metadata_mismatch"
+  | "cutoff_unavailable";
+
 export type RecentContextSourceFailure = Readonly<{
-  code: string;
+  code: RecentContextSourceFailureCode;
   detail: string | null;
+}>;
+
+/**
+ * Per-local-date bounded-read diagnosis (issue #294). `empty` distinguishes a
+ * genuinely empty date from one whose rows were dropped by the read caps
+ * (`readBounded`); unpadded dates stay explicitly empty rather than fabricated.
+ */
+export type RecentContextPerDateCoverage = Readonly<{
+  localDate: string;
+  candidateRows: number;
+  readBounded: boolean;
+  empty: boolean;
 }>;
 
 export type RecentContextSourceSnapshot = Readonly<{
@@ -141,6 +214,8 @@ export type RecentContextSourceSnapshot = Readonly<{
   candidateRows: number;
   failure: RecentContextSourceFailure | null;
   items: readonly RecentContextSourceItem[];
+  /** Optional so pre-#294 fakes stay valid; real adapters always set it. */
+  perDate?: readonly RecentContextPerDateCoverage[];
   policyVersion: string;
   selectorVersion: string;
   timezone: string;
@@ -191,6 +266,7 @@ export type RecentContextSelection = Readonly<{
   excludedRevisionIds: readonly ConversationEventRevisionId[];
   failure: RecentContextSourceFailure | null;
   omitted: readonly RecentContextOmission[];
+  perDate: readonly RecentContextPerDateCoverage[];
   policyVersion: string;
   selected: readonly RecentContextSelectedEvent[];
   selectedTokens: number;
@@ -222,7 +298,9 @@ export type RecentContextFrozenReference = Readonly<{
     expressedAt: string;
   }>;
   excludedRevisionIds: readonly string[];
+  failure: RecentContextSourceFailure | null;
   omitted: readonly RecentContextOmission[];
+  perDate: readonly RecentContextPerDateCoverage[];
   policyVersion: string;
   selected: readonly RecentContextFrozenSelectedRef[];
   selectedTokens: number;
@@ -252,6 +330,18 @@ const OMISSION_REASONS: readonly RecentContextOmissionReason[] = [
   "single_event_over_budget",
   "context_budget_exceeded",
   "source_read_failed",
+  "date_budget_excluded",
+  "date_read_bounded",
+];
+
+const SOURCE_FAILURE_CODES: readonly RecentContextSourceFailureCode[] = [
+  "source_read_failed",
+  "source_read_timeout",
+  "source_read_threw",
+  "owner_inactive",
+  "expected_data_epoch_mismatch",
+  "source_metadata_mismatch",
+  "cutoff_unavailable",
 ];
 
 const SELECTION_REASONS: readonly RecentContextSelectionReason[] = [
@@ -344,10 +434,8 @@ function classify(input: {
   items: readonly RecentContextSourceItem[];
   seen: Set<string>;
   timezone: string;
-  userBySessionThenSequence: ReadonlyMap<
-    string,
-    readonly Readonly<{ revisionId: string; sequence: number }>[]
-  >;
+  /** Legacy same-turn user per InteractionTurn, for rows with no command id. */
+  userByTurnId: ReadonlyMap<string, string>;
   windowEndLocalDate: string;
   windowStartLocalDate: string;
 }): readonly Disposition[] {
@@ -398,7 +486,7 @@ function classify(input: {
     return {
       associationUserRevisionId:
         item.actor === "assistant"
-          ? precedingUserRevisionId(input.userBySessionThenSequence, item)
+          ? associatedUserRevisionId(input, item)
           : null,
       kind: "candidate",
       localDate,
@@ -407,21 +495,34 @@ function classify(input: {
 }
 
 /**
- * The nearest preceding User expression in the same session, computed from
- * ALL user rows (including excluded ones) by session-local sequence. This is
- * structural adjacency, never semantic matching.
+ * Associate an Assistant row with the User expression that actually generated
+ * it (issue #294). For a modern Assistant the event's
+ * `generation_command_id` is authoritative: the canonical
+ * `generation_commands.input_revision_id` must resolve to a fetched revision or
+ * the Assistant is omitted fail-closed. That binding survives retries (the new
+ * turn has no user revision), delayed/concurrent commits and action
+ * finalization (the generated input is reused, not re-derived from adjacency),
+ * and an excluded or omitted generating user can never be swapped for a
+ * different eligible neighbor. Only a legacy row with
+ * `generation_command_id IS NULL` may fall back to the same InteractionTurn's
+ * user revision; with no such identity it is omitted.
  */
-function precedingUserRevisionId(
-  userBySessionThenSequence: ReadonlyMap<
-    string,
-    readonly Readonly<{ revisionId: string; sequence: number }>[]
-  >,
+function associatedUserRevisionId(
+  input: Readonly<{ userByTurnId: ReadonlyMap<string, string> }>,
   assistant: RecentContextSourceItem,
 ): string | null {
-  const users = userBySessionThenSequence.get(assistant.dailySessionId) ?? [];
-  const preceding = users.filter((user) => user.sequence < assistant.sequence);
-  if (preceding.length === 0) return null;
-  return preceding[preceding.length - 1]!.revisionId;
+  if (
+    assistant.generationCommandId !== undefined &&
+    assistant.generationCommandId !== null
+  ) {
+    const generatingRevisionId = assistant.generatingUserRevisionId;
+    return generatingRevisionId === undefined || generatingRevisionId === null
+      ? null
+      : String(generatingRevisionId);
+  }
+  const turnId = assistant.interactionTurnId;
+  if (turnId === undefined || turnId === null) return null;
+  return input.userByTurnId.get(String(turnId)) ?? null;
 }
 
 export function selectRecentContext(input: {
@@ -429,8 +530,10 @@ export function selectRecentContext(input: {
   candidateRows?: number;
   cutoff?: RecentContextCutoff;
   excludeRevisionIds?: readonly ConversationEventRevisionId[];
+  failure?: RecentContextSourceFailure | null;
   frozenAt: Date;
   items: readonly RecentContextSourceItem[];
+  perDate?: readonly RecentContextPerDateCoverage[];
   policy: RecentContextSelectionPolicy;
   timezone: string;
   truncated?: boolean;
@@ -448,21 +551,18 @@ export function selectRecentContext(input: {
     (input.excludeRevisionIds ?? []).map((revisionId) => String(revisionId)),
   );
 
-  // Full pre-exclusion view for structural assistant adjacency.
-  const userBySessionThenSequence = new Map<
-    string,
-    Readonly<{ revisionId: string; sequence: number }>[]
-  >();
+  // Legacy-only view: the same-turn user revision per InteractionTurn. Modern
+  // Assistants ignore this and use their canonical generating command input.
+  const userByTurnId = new Map<string, string>();
   for (const item of input.items) {
     if (item.actor !== "user") continue;
-    const list = userBySessionThenSequence.get(item.dailySessionId) ?? [];
-    userBySessionThenSequence.set(item.dailySessionId, [
-      ...list,
-      { revisionId: item.revisionId, sequence: item.sequence },
-    ]);
-  }
-  for (const list of userBySessionThenSequence.values()) {
-    list.sort((left, right) => left.sequence - right.sequence);
+    const turnId = item.interactionTurnId;
+    if (turnId !== undefined && turnId !== null) {
+      const key = String(turnId);
+      if (!userByTurnId.has(key)) {
+        userByTurnId.set(key, item.revisionId);
+      }
+    }
   }
   const excludedUserRevisionIds = new Set<string>();
   for (const item of input.items) {
@@ -477,7 +577,7 @@ export function selectRecentContext(input: {
     items: input.items,
     seen: new Set<string>(),
     timezone: input.timezone,
-    userBySessionThenSequence,
+    userByTurnId,
     windowEndLocalDate: input.windowEndLocalDate,
     windowStartLocalDate: input.windowStartLocalDate,
   });
@@ -545,6 +645,11 @@ export function selectRecentContext(input: {
     return true;
   };
 
+  const tokensOf = (candidate: Candidate): number =>
+    estimateRecentContextTokens(candidate.item.text);
+  const isPriorDate = (candidate: Candidate): boolean =>
+    candidate.disposition.localDate < input.windowEndLocalDate;
+
   // Priority 1: today's conversation, oldest first so a user is always
   // considered before its adjacent assistant.
   for (const candidate of chronological) {
@@ -553,44 +658,62 @@ export function selectRecentContext(input: {
     }
   }
 
-  // Priority 2: one complete user representation per earlier local day,
-  // nearest day first. If the newest expression cannot fit, try the next
-  // newest complete expression for that day instead of losing the day.
-  const earlierDates = [
-    ...new Set(
-      chronological
-        .map((candidate) => candidate.disposition.localDate)
-        .filter((localDate) => localDate < input.windowEndLocalDate),
-    ),
-  ].toSorted((left, right) => right.localeCompare(left));
-  for (const localDate of earlierDates) {
-    const representatives = newestFirst.filter(
-      (candidate) =>
-        candidate.disposition.localDate === localDate &&
-        candidate.item.actor === "user" &&
-        !selectedIds.has(candidate.item.revisionId),
-    );
-    let chosen: Candidate | null = null;
-    for (const representative of representatives) {
-      if (tryAdd(representative, "day_representation")) {
-        chosen = representative;
-        break;
-      }
+  // Priority 2 (floor): reserve the *cheapest* complete user expression per
+  // eligible earlier local date, globally cheapest first, so a tight budget
+  // covers as many distinct dates as mathematically possible instead of
+  // letting the nearest date starve the rest. No summary/model/semantic
+  // matching: only the deterministic token estimate and recency order.
+  // Impossible cases are left honest rather than fabricated: a date whose
+  // every expression exceeds `maxSingleEventTokens`, or a remaining budget
+  // smaller than the cheapest expression, is recorded as an omission
+  // (`single_event_over_budget` / `date_budget_excluded`) with no summary row.
+  const cheapestByDate = new Map<string, Candidate>();
+  for (const candidate of chronological) {
+    if (candidate.item.actor !== "user" || !isPriorDate(candidate)) continue;
+    if (selectedIds.has(candidate.item.revisionId)) continue;
+    if (tokensOf(candidate) > budgets.maxSingleEventTokens) continue;
+    const localDate = candidate.disposition.localDate;
+    const existing = cheapestByDate.get(localDate);
+    if (existing === undefined) {
+      cheapestByDate.set(localDate, candidate);
+      continue;
     }
-    if (chosen === null) continue;
-    for (const candidate of chronological) {
-      if (
-        candidate.disposition.localDate === localDate &&
-        candidate.item.actor === "assistant" &&
-        candidate.associationUserRevisionId === chosen.item.revisionId
-      ) {
-        tryAdd(candidate, "day_representation");
-      }
+    const delta = tokensOf(candidate) - tokensOf(existing);
+    if (
+      delta < 0 ||
+      (delta === 0 &&
+        compareByTimeThenSessionOrder(
+          candidate.item,
+          existing.item,
+          "descending",
+        ) < 0)
+    ) {
+      cheapestByDate.set(localDate, candidate);
+    }
+  }
+  const floor = [...cheapestByDate.values()].toSorted(
+    (left, right) =>
+      tokensOf(left) - tokensOf(right) ||
+      compareByTimeThenSessionOrder(left.item, right.item, "descending"),
+  );
+  for (const candidate of floor) {
+    tryAdd(candidate, "day_representation");
+  }
+  // Adjacent assistants of whatever floor representative was actually added.
+  for (const candidate of chronological) {
+    if (
+      candidate.item.actor === "assistant" &&
+      isPriorDate(candidate) &&
+      candidate.associationUserRevisionId !== null &&
+      selectedIds.has(candidate.associationUserRevisionId)
+    ) {
+      tryAdd(candidate, "day_representation");
     }
   }
 
-  // Priority 3: remaining budget goes to the nearest remaining content.
-  for (const candidate of chronological) {
+  // Priority 3: remaining budget goes to the nearest/newest remaining
+  // content, newest first.
+  for (const candidate of newestFirst) {
     tryAdd(candidate, "budget_fill");
   }
 
@@ -598,6 +721,10 @@ export function selectRecentContext(input: {
   // failed probe attempt never leaves a stale reason in the frozen manifest.
   const omitted: RecentContextOmission[] = [];
   const omittedKeys = new Set<string>();
+  // Local dates with at least one candidate genuinely dropped by the selection
+  // budget. A date-level `date_budget_excluded` is only honest when backed by a
+  // concrete item-level `context_budget_excluded` / `single_event_over_budget`.
+  const budgetStarvedDates = new Set<string>();
   const record = (omission: RecentContextOmission): void => {
     const key = `${omission.reason}:${omission.revisionId ?? ""}:${omission.controlId ?? ""}`;
     if (omittedKeys.has(key)) return;
@@ -642,14 +769,56 @@ export function selectRecentContext(input: {
         continue;
       }
     }
+    const budgetReason =
+      estimateRecentContextTokens(item.text) > budgets.maxSingleEventTokens
+        ? "single_event_over_budget"
+        : "context_budget_exceeded";
+    budgetStarvedDates.add(disposition.localDate);
     record({
       controlId: null,
-      reason:
-        estimateRecentContextTokens(item.text) > budgets.maxSingleEventTokens
-          ? "single_event_over_budget"
-          : "context_budget_exceeded",
+      reason: budgetReason,
       revisionId: item.revisionId,
     });
+  }
+
+  // Honest per-date coverage for the frozen diagnostics: distinguish a truly
+  // empty date (no candidate existed) from one whose rows were dropped by the
+  // bounded read (`date_read_bounded`) or by the selection budget
+  // (`date_budget_excluded`). Dates are never padded.
+  const selectedDates = new Set(
+    selected.map((event) =>
+      localDateOf(new Date(event.expressedAt), input.timezone),
+    ),
+  );
+  const perDate = input.perDate ?? [];
+  for (const coverage of perDate) {
+    if (coverage.localDate >= input.windowEndLocalDate) continue;
+    const covered = selectedDates.has(coverage.localDate);
+    // A bounded read already explains the gap; do not double-report it as a
+    // budget exclusion.
+    if (coverage.readBounded) {
+      record({
+        controlId: null,
+        reason: "date_read_bounded",
+        revisionId: null,
+      });
+    }
+    // Only report a date-level budget exclusion when a candidate on that date
+    // was actually dropped for `context_budget_excluded` /
+    // `single_event_over_budget`. A date whose candidates were all dropped for
+    // control, duplicate or assistant-association reasons already has an
+    // item-level reason and must not be misattributed to the budget.
+    if (
+      !covered &&
+      coverage.readBounded === false &&
+      budgetStarvedDates.has(coverage.localDate)
+    ) {
+      record({
+        controlId: null,
+        reason: "date_budget_excluded",
+        revisionId: null,
+      });
+    }
   }
 
   const orderedSelected = [...selected]
@@ -672,15 +841,17 @@ export function selectRecentContext(input: {
       candidateBytes,
       candidateRows,
       selectedCount: orderedSelected.length,
+      // Exact-cap is not truncation: only strictly exceeding a cap drops rows.
       truncated:
         input.truncated ??
-        (candidateRows >= budgets.maxCandidateRows ||
-          candidateBytes >= budgets.maxCandidateBytes),
+        (candidateRows > budgets.maxCandidateRows ||
+          candidateBytes > budgets.maxCandidateBytes),
     },
     cutoff,
     excludedRevisionIds: input.excludeRevisionIds ?? [],
-    failure: null,
+    failure: input.failure ?? null,
     omitted,
+    perDate,
     policyVersion: input.policy.version,
     selected: orderedSelected,
     selectedTokens,
@@ -747,7 +918,9 @@ export function encodeRecentContextReference(
     excludedRevisionIds: selection.excludedRevisionIds.map((revisionId) =>
       String(revisionId),
     ),
+    failure: selection.failure,
     omitted: selection.omitted,
+    perDate: selection.perDate,
     policyVersion: selection.policyVersion,
     selected: selection.selected.map((event) => ({
       actor: event.actor,
@@ -828,6 +1001,12 @@ export function decodeRecentContextReference(
   }
   const cutoff = decodeCutoff(record["cutoff"]);
   const counts = decodeCounts(record["counts"]);
+  const failure = decodeSourceFailure(record["failure"]);
+  const perDate = decodePerDate(
+    record["perDate"],
+    windowStartLocalDate,
+    windowEndLocalDate,
+  );
   const selectedRaw = record["selected"];
   if (!Array.isArray(selectedRaw)) {
     throw new RecentContextReferenceError("selected_not_an_array");
@@ -858,6 +1037,9 @@ export function decodeRecentContextReference(
   if (counts.selectedCount !== selected.length) {
     throw new RecentContextReferenceError("selected_count_mismatch");
   }
+  if (failure !== null && selected.length > 0) {
+    throw new RecentContextReferenceError("failure_with_selected");
+  }
   const excludedRevisionIds = record["excludedRevisionIds"];
   if (!Array.isArray(excludedRevisionIds)) {
     throw new RecentContextReferenceError("excluded_revision_ids_not_an_array");
@@ -886,7 +1068,9 @@ export function decodeRecentContextReference(
     counts,
     cutoff,
     excludedRevisionIds: parsedExcludedIds,
+    failure,
     omitted,
+    perDate,
     policyVersion,
     selected,
     selectedTokens,
@@ -1036,6 +1220,66 @@ function decodeSelectedRef(value: unknown, index: number): DecodedSelectedRef {
     ),
     selectionReason: selectionReason as RecentContextSelectionReason,
   };
+}
+
+function decodeSourceFailure(
+  value: unknown,
+): RecentContextSourceFailure | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new RecentContextReferenceError("failure_not_an_object");
+  }
+  const record = value as Record<string, unknown>;
+  const code = record["code"];
+  if (
+    typeof code !== "string" ||
+    !SOURCE_FAILURE_CODES.includes(code as RecentContextSourceFailureCode)
+  ) {
+    throw new RecentContextReferenceError("failure_bad_code");
+  }
+  const detail = record["detail"];
+  if (detail !== null && typeof detail !== "string") {
+    throw new RecentContextReferenceError("failure_bad_detail");
+  }
+  return { code: code as RecentContextSourceFailureCode, detail };
+}
+
+function decodePerDate(
+  value: unknown,
+  windowStartLocalDate: string,
+  windowEndLocalDate: string,
+): readonly RecentContextPerDateCoverage[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new RecentContextReferenceError("per_date_not_an_array");
+  }
+  return value.map((entry, index) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new RecentContextReferenceError(`per_date[${index}]_not_an_object`);
+    }
+    const record = entry as Record<string, unknown>;
+    const localDate = requireLocalDate(
+      record["localDate"],
+      `per_date[${index}].localDate`,
+    );
+    if (localDate < windowStartLocalDate || localDate > windowEndLocalDate) {
+      throw new RecentContextReferenceError(`per_date[${index}]_outside_window`);
+    }
+    const readBounded = record["readBounded"];
+    const empty = record["empty"];
+    if (typeof readBounded !== "boolean" || typeof empty !== "boolean") {
+      throw new RecentContextReferenceError(`per_date[${index}]_bad_flags`);
+    }
+    return {
+      candidateRows: requireNonNegativeInteger(
+        record["candidateRows"],
+        `per_date[${index}].candidateRows`,
+      ),
+      empty,
+      localDate,
+      readBounded,
+    };
+  });
 }
 
 function decodeOmission(value: unknown, index: number): RecentContextOmission {
