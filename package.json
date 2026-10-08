@@ -17,6 +17,7 @@
     "release:g1:rollback": "tsx scripts/rollback-1a3b-g1.ts",
     "release:g1:verify": "tsx scripts/verify-1a3b-g1-release-manifest.ts",
     "release:config:compare": "tsx scripts/effective-runtime-config-gate.ts",
+    "release:validate": "tsx scripts/daily-release-validation.ts",
     "check:runtime": "node scripts/check-runtime.mjs",
     "db:migrate": "tsx packages/data/src/cli/migrate.ts",
     "db:provision-owner": "tsx packages/data/src/cli/provision-internal-owner.ts",
