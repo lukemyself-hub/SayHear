@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-09-30
 ---
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where "a different commit or configuration invalidates promotion" makes commit an acceptance equality; a different configuration still invalidates promotion.
 
 # G1 hosted acceptance is isolated from production
 

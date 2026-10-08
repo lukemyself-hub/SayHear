@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-09-07
 ---
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where it concerns running the complete drill for every exact release manifest; synthetic-only acceptance and the change-triggered re-run rule stay in force.
 
 # 1A.3b formal acceptance uses synthetic data
 

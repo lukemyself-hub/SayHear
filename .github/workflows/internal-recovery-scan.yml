@@ -39,6 +39,9 @@ jobs:
             exit 1
           fi
           start=$(date -u +%s)
+          # Fixed by spec decision 8: no operator-visible timeout knob may raise
+          # a scan deadline to mask a fault. The test substitutes this literal
+          # in its own extracted-step fixture instead.
           status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
             --max-time 120 \
             --header "Authorization: Bearer ${CRON_SECRET}" \

@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-09-13
 ---
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where it concerns whole-manifest pin binding; the alias snapshot refusal and per-role AC-M01 evidence stay in force.
 
 # G1 DeepSeek model alias is pinned evidence
 

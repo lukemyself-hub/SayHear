@@ -1,0 +1,32 @@
+{
+  "version": "1a3b-g1-effective-runtime-config:v1",
+  "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "deploymentId": "dpl_isolated_acceptance",
+  "collectedAt": "2026-10-07T20:00:00.000Z",
+  "items": [
+    {
+      "category": "provider",
+      "key": "provider.adapter",
+      "value": "opencode-go",
+      "source": "override",
+      "critical": true,
+      "inManifestFingerprint": true
+    },
+    {
+      "category": "prompt-schema-policy",
+      "key": "prompt.policy_bundle_version",
+      "value": "1a3b-model-role-policy:v1",
+      "source": "default",
+      "critical": true,
+      "inManifestFingerprint": true
+    },
+    {
+      "category": "runtime",
+      "key": "hosted.project_id",
+      "value": "prj_isolated",
+      "source": "override",
+      "critical": true,
+      "inManifestFingerprint": false
+    }
+  ]
+}

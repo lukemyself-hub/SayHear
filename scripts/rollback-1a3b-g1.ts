@@ -12,7 +12,7 @@ import {
   type OneA3bModelRole,
   type OneA3bG1ReleaseManifest,
 } from "@sayhear/application";
-import { assertRepositoryCommit } from "./verify-1a3b-g1-evidence";
+import { assertRepositoryIncludesCommit } from "./verify-1a3b-g1-evidence";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -99,7 +99,7 @@ function parseRoles(value: string): readonly OneA3bModelRole[] {
 async function main(): Promise<void> {
   const arguments_ = process.argv.slice(2);
   const manifest = readManifest(requiredOption(arguments_, "--manifest"));
-  assertRepositoryCommit(manifest.gitCommit, repositoryRoot);
+  assertRepositoryIncludesCommit(manifest.gitCommit, repositoryRoot);
   const roles = parseRoles(requiredOption(arguments_, "--roles"));
   if (
     roles.length !== manifest.roles.enabledRoles.length ||

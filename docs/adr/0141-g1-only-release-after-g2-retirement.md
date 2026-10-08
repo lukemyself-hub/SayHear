@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-09-27
 ---
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where it concerns "the prior production G1 manifest cannot authorize new code" as a per-commit rule; the G1-only scope, G2 retirement and no-table-drop rules stay in force.
 
 # Keep 1A.3b at G1 while retiring the in-conversation G2 path
 

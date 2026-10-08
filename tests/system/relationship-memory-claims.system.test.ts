@@ -594,7 +594,7 @@ describe("Relationship Memory Claims system seam (#115)", () => {
   });
 
   afterAll(async () => {
-    await database.pool.end();
+    await database.dispose();
   });
 
   it("canonicalizes inverse phrasing onto one logical Claim with evidence-backed Qualifiers", async () => {

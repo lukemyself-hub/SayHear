@@ -597,16 +597,17 @@ h1 {
   background: #f2f0eb;
   border-right: 1px solid #e2e3dc;
   display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .moduleRail {
-  border-right: 1px solid #e2e3dc;
+  border-bottom: 1px solid #e2e3dc;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   flex-shrink: 0;
   gap: 4px;
   padding: 8px 6px;
-  width: 56px;
 }
 
 .moduleRailLink {
@@ -634,6 +635,7 @@ h1 {
   flex: 1;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
   min-width: 0;
   overflow-y: auto;
   padding: 12px 10px;
@@ -662,11 +664,10 @@ h1 {
   color: #242522;
   display: block;
   font-size: 0.95rem;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 8px 10px;
   text-decoration: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .moduleListEntry:hover {
@@ -698,6 +699,7 @@ h1 {
 .portalFooterState {
   color: #242522;
   font-size: 0.82rem;
+  overflow-wrap: anywhere;
 }
 
 .portalPage {
@@ -1322,8 +1324,8 @@ h1 {
 .journalDateLabel {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .journalDateState {

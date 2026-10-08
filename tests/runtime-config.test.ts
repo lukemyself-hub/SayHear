@@ -12,6 +12,78 @@ import {
   resolveOneA3bG1ReleaseManifest,
 } from "../apps/web/src/runtime-config";
 
+function buildActiveG1Manifest(gitCommit: string) {
+  return buildOneA3bG1ReleaseManifest({
+    gitCommit,
+    migrations: [{ name: "0052_release.sql", sha256: "b".repeat(64) }],
+    purgeMarkerMigrations: [
+      { name: "0002_marker.sql", sha256: "c".repeat(64) },
+    ],
+    roleConfigurations: ONE_A_3B_G1_ENABLED_ROLES.map((role) => ({
+      role,
+      configVersion: `${role}:v1`,
+      provider: "synthetic-provider",
+      model: "synthetic-model",
+      modelSnapshot: "synthetic-model@2026-09-12",
+      promptVersion: `${role}-prompt:v1`,
+      schemaVersion: `${role}-schema:v1`,
+      rolePolicyVersion: "1a3b-model-role-policy:v1",
+      providerPolicyVersion: `${role}-egress:v1`,
+      rolloutPin: `${role}-rollout:v1`,
+      freshnessPolicy:
+        role === "episode.build" ? "source_valid:v1" : "exact_head:v1",
+      fallbackMode: "disabled",
+      maxTechnicalRetries: 1,
+      maxSemanticRepairs: 0,
+      parameterSnapshot: { temperature: 0 },
+    })),
+    fixture: {
+      f3ManifestPath: "release-evidence/not-deployed/manifest.json",
+      f3ManifestSha256: "d".repeat(64),
+      f3ManifestFingerprint: `sha256:${"e".repeat(64)}`,
+      fixtureSeed: 196,
+      sampleSeed: 1960,
+    },
+    validatorCalibration: {
+      ledgerPath: "release-evidence/not-deployed/validator-ledger.json",
+      ledgerSha256: "f".repeat(64),
+      ledgerVersion: "1a3b-f3-adjudication:v1",
+      precisionReportPath:
+        "release-evidence/not-deployed/validator-precision-report.json",
+      precisionReportSha256: "1".repeat(64),
+      precisionReportVersion: "1a3b-f3-validator-precision-report:v1",
+      precisionTotalCases: 6,
+      precisionFalseBlockingCases: 0,
+      f3ManifestFingerprint: `sha256:${"e".repeat(64)}`,
+      totalCases: 6,
+      acceptedCases: 6,
+      maxRejects: 0,
+      humanOwner: "Luke",
+      status: "verified",
+    },
+    commands: ["CI=true pnpm validate"],
+    evidence: ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA.map(
+      (criterion, index) => ({
+        criterion,
+        fixtureIds: ["synthetic-fixture"],
+        command: `verify ${criterion}`,
+        artifactSha256: (index + 1).toString(16).repeat(64),
+        artifactPath: `release-evidence/not-deployed/${criterion.toLowerCase()}.json`,
+        owner: "Luke",
+        source:
+          criterion === "AC-M01"
+            ? "provider"
+            : criterion === "AC-W01" || criterion === "AC-D01"
+              ? "hosted"
+              : "ci",
+        status: "verified",
+      }),
+    ),
+    cutoverState: "active",
+    createdAt: "2026-09-12T00:00:00.000Z",
+  });
+}
+
 describe("runtime safety configuration", () => {
   it("rejects leftover G2 switches and release pins at startup", () => {
     for (const name of [
@@ -118,85 +190,51 @@ describe("runtime safety configuration", () => {
   });
 
   it("verifies an active G1 manifest without requiring release evidence in the deployed checkout", () => {
-    const gitCommit = "a".repeat(40);
-    const manifest = buildOneA3bG1ReleaseManifest({
-      gitCommit,
-      migrations: [{ name: "0052_release.sql", sha256: "b".repeat(64) }],
-      purgeMarkerMigrations: [
-        { name: "0002_marker.sql", sha256: "c".repeat(64) },
-      ],
-      roleConfigurations: ONE_A_3B_G1_ENABLED_ROLES.map((role) => ({
-        role,
-        configVersion: `${role}:v1`,
-        provider: "synthetic-provider",
-        model: "synthetic-model",
-        modelSnapshot: "synthetic-model@2026-09-12",
-        promptVersion: `${role}-prompt:v1`,
-        schemaVersion: `${role}-schema:v1`,
-        rolePolicyVersion: "1a3b-model-role-policy:v1",
-        providerPolicyVersion: `${role}-egress:v1`,
-        rolloutPin: `${role}-rollout:v1`,
-        freshnessPolicy:
-          role === "episode.build" ? "source_valid:v1" : "exact_head:v1",
-        fallbackMode: "disabled",
-        maxTechnicalRetries: 1,
-        maxSemanticRepairs: 0,
-        parameterSnapshot: { temperature: 0 },
-      })),
-      fixture: {
-        f3ManifestPath: "release-evidence/not-deployed/manifest.json",
-        f3ManifestSha256: "d".repeat(64),
-        f3ManifestFingerprint: `sha256:${"e".repeat(64)}`,
-        fixtureSeed: 196,
-        sampleSeed: 1960,
-      },
-      validatorCalibration: {
-        ledgerPath: "release-evidence/not-deployed/validator-ledger.json",
-        ledgerSha256: "f".repeat(64),
-        ledgerVersion: "1a3b-f3-adjudication:v1",
-        precisionReportPath:
-          "release-evidence/not-deployed/validator-precision-report.json",
-        precisionReportSha256: "1".repeat(64),
-        precisionReportVersion: "1a3b-f3-validator-precision-report:v1",
-        precisionTotalCases: 6,
-        precisionFalseBlockingCases: 0,
-        f3ManifestFingerprint: `sha256:${"e".repeat(64)}`,
-        totalCases: 6,
-        acceptedCases: 6,
-        maxRejects: 0,
-        humanOwner: "Luke",
-        status: "verified",
-      },
-      commands: ["CI=true pnpm validate"],
-      evidence: ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA.map(
-        (criterion, index) => ({
-          criterion,
-          fixtureIds: ["synthetic-fixture"],
-          command: `verify ${criterion}`,
-          artifactSha256: (index + 1).toString(16).repeat(64),
-          artifactPath: `release-evidence/not-deployed/${criterion.toLowerCase()}.json`,
-          owner: "Luke",
-          source:
-            criterion === "AC-M01"
-              ? "provider"
-              : criterion === "AC-W01" || criterion === "AC-D01"
-                ? "hosted"
-                : "ci",
-          status: "verified",
-        }),
-      ),
-      cutoverState: "active",
-      createdAt: "2026-09-12T00:00:00.000Z",
-    });
+    const manifest = buildActiveG1Manifest("a".repeat(40));
 
     expect(() =>
       resolveOneA3bG1ReleaseManifest({
         SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: JSON.stringify(manifest),
-        SAYHEAR_DEPLOYED_GIT_COMMIT_SHA: gitCommit,
+        SAYHEAR_DEPLOYED_GIT_COMMIT_SHA: manifest.gitCommit,
         SAYHEAR_EPISODE_BUILD_ENABLED: "true",
         SAYHEAR_REFLECTION_ENABLED: "true",
       }),
     ).not.toThrow();
+  });
+
+  it("accepts a same-configuration UI commit whose deployment SHA differs from the acceptance commit", () => {
+    const manifest = buildActiveG1Manifest("a".repeat(40));
+    const resolved = resolveOneA3bG1ReleaseManifest({
+      SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: JSON.stringify(manifest),
+      VERCEL_GIT_COMMIT_SHA: "b".repeat(40),
+      SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+      SAYHEAR_REFLECTION_ENABLED: "true",
+    });
+    // The acceptance commit is preserved; the deployment identity is separate.
+    expect(resolved?.gitCommit).toBe("a".repeat(40));
+  });
+
+  it("accepts a same-configuration server commit recorded through the explicit deployment SHA", () => {
+    const manifest = buildActiveG1Manifest("a".repeat(40));
+    const resolved = resolveOneA3bG1ReleaseManifest({
+      SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: JSON.stringify(manifest),
+      SAYHEAR_DEPLOYED_GIT_COMMIT_SHA: "c".repeat(40),
+      SAYHEAR_DEPLOYMENT: "production",
+      SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+      SAYHEAR_REFLECTION_ENABLED: "true",
+    });
+    expect(resolved?.gitCommit).toBe("a".repeat(40));
+  });
+
+  it("still requires a deployment identity before a G1 write switch can open", () => {
+    const manifest = buildActiveG1Manifest("a".repeat(40));
+    expect(() =>
+      resolveOneA3bG1ReleaseManifest({
+        SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: JSON.stringify(manifest),
+        SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+        SAYHEAR_REFLECTION_ENABLED: "true",
+      }),
+    ).toThrow("SAYHEAR_DEPLOYED_GIT_COMMIT_SHA or VERCEL_GIT_COMMIT_SHA");
   });
 
   it("requires the Episode and Reflection G1 switches to cut over atomically", () => {

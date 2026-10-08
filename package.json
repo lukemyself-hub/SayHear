@@ -16,6 +16,10 @@
     "release:g1:activate": "tsx scripts/activate-1a3b-g1.ts",
     "release:g1:rollback": "tsx scripts/rollback-1a3b-g1.ts",
     "release:g1:verify": "tsx scripts/verify-1a3b-g1-release-manifest.ts",
+    "release:config:compare": "tsx scripts/effective-runtime-config-gate.ts",
+    "release:promotion:report": "tsx scripts/g1-promotion-config-report.ts",
+    "release:validate": "tsx scripts/daily-release-validation.ts",
+    "release:closure:report": "tsx scripts/release-closure-report.ts",
     "check:runtime": "node scripts/check-runtime.mjs",
     "db:migrate": "tsx packages/data/src/cli/migrate.ts",
     "db:provision-owner": "tsx packages/data/src/cli/provision-internal-owner.ts",
@@ -25,8 +29,11 @@
     "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
     "test": "vitest run",
     "test:system": "vitest run tests/system",
+    "test:ci": "vitest run --maxWorkers=2 --hookTimeout=60000 --reporter=default --reporter=json --outputFile.json=artifacts/vitest-report.json",
+    "ci:verify-test-databases": "tsx scripts/ci/verify-test-databases.ts",
+    "ci:assert-system-suites": "tsx scripts/ci/assert-system-suites-ran.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.g1-tools.json && pnpm -r --if-present typecheck",
-    "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test && pnpm build"
+    "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test:ci && pnpm build"
   },
   "devDependencies": {
     "@sayhear/ai": "workspace:*",

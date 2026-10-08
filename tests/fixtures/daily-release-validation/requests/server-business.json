@@ -1,0 +1,8 @@
+{
+  "version": "1a3b-daily-release-validation-request:v1",
+  "change": {
+    "summary": "ordinary server-side fix to private write gate",
+    "declaredImpacts": ["server-business"],
+    "changedPaths": ["apps/web/src/server/private-write-gate.ts"]
+  }
+}

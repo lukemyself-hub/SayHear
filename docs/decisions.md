@@ -21,6 +21,7 @@ Accepted
 
 ### 技术底座、部署与运行时
 
+- [`0148`](adr/0148-deployment-identity-config-authorization-and-acceptance-are-separate.md)：部署身份、运行配置授权与历史能力验收分离；同配置新 commit 复用未变角色配置与 pins，真实配置变化仍诚实版本化
 - [`0144`](adr/0144-g1-hosted-acceptance-isolated-from-production.md)：G1 在隔离 hosted 环境验收，生产以同一发布身份、pins 和实际功能核验完成切换
 - [`0145`](adr/0145-g1-raw-provider-error-probe-waiver.md)：本次 G1 恢复上线仅跳过原始 Provider 错误探针，保留其余安全门禁并披露缺口
 - [`0147`](adr/0147-g1-opencode-go-provider.md)：G1 对话、Journal 与四个角色改由 OpenCode Go 承载 DeepSeek V4.1 Flash；新增诚实 `opencode-go` 身份与 Chat Completions transport，取代 0102 的 Responses-only 传输限制，保留完整 pin、快照比对与日期化 ZDR 边界

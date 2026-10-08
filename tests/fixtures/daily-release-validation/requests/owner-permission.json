@@ -1,0 +1,8 @@
+{
+  "version": "1a3b-daily-release-validation-request:v1",
+  "change": {
+    "summary": "change deletion recovery authorization",
+    "declaredImpacts": ["owner-permission"],
+    "changedPaths": ["packages/application/src/owner/internal-access.ts"]
+  }
+}

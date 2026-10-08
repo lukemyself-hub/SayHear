@@ -229,15 +229,23 @@ function rolloutMatchesConfiguration(
   row: ActiveRolloutRow,
   role: string,
   configuration: ModelRoleConfigurationSnapshot,
-  releaseFingerprint?: string,
+  // Only the presence of an acceptance binding matters; the fingerprint value
+  // itself is never compared (ADR-0148). Named for what it requires.
+  requiresAcceptanceBinding?: string,
 ): boolean {
   return (
+    // ADR-0148: runtime authorization is the exact immutable role
+    // configuration joined to the active pin, Provider Egress policy, role
+    // policy, freshness, fallback, retry and parameter snapshot — not the
+    // deployment's acceptance-manifest fingerprint. A production repository is
+    // still constructed with the accepted release identity, so an active pin
+    // must carry an acceptance binding, but that binding may predate the
+    // current deployment. The value itself is historical and is not compared.
+    (requiresAcceptanceBinding === undefined || row.release_fingerprint !== null) &&
     row.role === role &&
     row.enabled &&
     row.policy_status === "active" &&
     row.policy_role === role &&
-    (releaseFingerprint === undefined ||
-      row.release_fingerprint === releaseFingerprint) &&
     row.policy_provider === configuration.provider &&
     row.policy_model_config_version === configuration.configVersion &&
     row.config_version === configuration.configVersion &&
@@ -820,7 +828,16 @@ export class PostgresModelRoleCommandRepository
     }
   }
 
-  /** Provision and activate the exact manifest role set before cutover. */
+  /**
+   * Provision and activate the exact manifest role set before cutover.
+   *
+   * ADR-0148 keeps the complete four-role set as an activation precondition.
+   * A later ticket that upgrades, revokes, or rolls back a single role should
+   * extend this seam with a scoped transition rather than weakening the
+   * complete-set check: an unchanged role keeps its existing pin and
+   * historical acceptance binding, while only the affected role receives a new
+   * immutable configuration version and pin.
+   */
   public async bindActiveG1Release(input: Readonly<{
     configurations: readonly ModelRoleConfigurationSnapshot[];
     manifestFingerprint: string;
@@ -932,19 +949,24 @@ export class PostgresModelRoleCommandRepository
           pin.rows[0] &&
           (pin.rows[0].config_version !== configuration.configVersion ||
             pin.rows[0].provider_policy_version !==
-              configuration.providerPolicyVersion ||
-            (pin.rows[0].release_fingerprint !== null &&
-              pin.rows[0].release_fingerprint !== input.manifestFingerprint))
+              configuration.providerPolicyVersion)
         ) {
           throw new Error(
             `Immutable G1 rollout pin for ${configuration.role} conflicts with the release manifest.`,
           );
         }
         if (pin.rows[0]) {
+          // ADR-0148: re-activating an unchanged configuration under a later
+          // accepted manifest must not rewrite the pin's historical acceptance
+          // binding, and a different deployment/report fingerprint must not
+          // force a rebind. COALESCE preserves the original binding; a legacy
+          // revoked pin with no binding still receives one.
           await client.query(
             `UPDATE model_role_rollout_pins
              SET status = 'active', activated_at = $1, revoked_at = NULL,
-                 release_fingerprint = $2
+                 release_fingerprint = COALESCE(
+                   model_role_rollout_pins.release_fingerprint, $2
+                 )
              WHERE role = $3 AND rollout_pin = $4`,
             [
               input.now,
@@ -1010,6 +1032,237 @@ export class PostgresModelRoleCommandRepository
   }
 
   /**
+   * Upgrade, revoke, or roll back a single role's runtime configuration
+   * authorization without disturbing the other G1 roles (ADR-0148, SPEC #275
+   * ticket #280).
+   *
+   * The target is still the complete four-role set, so a missing, unknown, or
+   * retired role is rejected exactly as during first activation. For every role
+   * whose immutable `(config_version, provider_policy_version, rollout_pin)`
+   * identity already matches its active pin, the pin row is left byte-for-byte
+   * untouched: no re-capture, no re-bind, and no rewrite of its historical
+   * acceptance fingerprint. A role whose identity changed gets its new
+   * immutable configuration provisioned and its new pin activated in the same
+   * transaction, while the superseded pin is revoked and retained as history.
+   * The transaction commits only after all four roles are active on the target
+   * set, so G1 admission never observes a partial or mixed authorisation.
+   */
+  public async transitionActiveG1Configurations(input: Readonly<{
+    configurations: readonly ModelRoleConfigurationSnapshot[];
+    manifestFingerprint: string;
+    now: Date;
+  }>): Promise<
+    Readonly<{
+      reauthorized: readonly OneA3bModelRole[];
+      reused: readonly OneA3bModelRole[];
+    }>
+  > {
+    if (
+      !hasExactG1RoleSet(
+        input.configurations.map((configuration) => configuration.role),
+      ) ||
+      !/^sha256:[a-f0-9]{64}$/.test(input.manifestFingerprint)
+    ) {
+      throw new Error(
+        "G1 configuration transition requires the complete role set and a valid manifest fingerprint.",
+      );
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await assertG1SchemaContract(client, this.schemaContract);
+      const active = await client.query<{
+        role: string;
+        rollout_pin: string;
+        config_version: string;
+        provider_policy_version: string;
+      }>(
+        `SELECT role, rollout_pin, config_version, provider_policy_version
+         FROM model_role_rollout_pins
+         WHERE status = 'active'
+         FOR UPDATE`,
+        [],
+      );
+      if (
+        active.rows.length !== ONE_A_3B_G1_ENABLED_ROLES.length ||
+        new Set(active.rows.map((row) => row.role)).size !==
+          ONE_A_3B_G1_ENABLED_ROLES.length ||
+        active.rows.some(
+          (row) =>
+            !(ONE_A_3B_G1_ENABLED_ROLES as readonly string[]).includes(
+              row.role,
+            ),
+        )
+      ) {
+        throw new Error(
+          "G1 configuration transition requires the complete active four-role pin set.",
+        );
+      }
+      const activeByRole = new Map(active.rows.map((row) => [row.role, row]));
+      const reauthorized: OneA3bModelRole[] = [];
+      const reused: OneA3bModelRole[] = [];
+
+      for (const configuration of input.configurations) {
+        const current = activeByRole.get(configuration.role)!;
+        const unchanged =
+          current.rollout_pin === configuration.rolloutPin &&
+          current.config_version === configuration.configVersion &&
+          current.provider_policy_version ===
+            configuration.providerPolicyVersion;
+        if (unchanged) {
+          reused.push(configuration.role);
+          continue;
+        }
+        reauthorized.push(configuration.role);
+
+        // Provision the new immutable configuration, or prove that an existing
+        // row for this (role, config_version) is identical. A silent rewrite of
+        // an immutable configuration version stays rejected.
+        await client.query(
+          `INSERT INTO model_role_configurations (
+             role, config_version, provider, model, model_snapshot,
+             prompt_version, schema_version, role_policy_version,
+             provider_policy_version, freshness_policy, fallback_mode,
+             max_technical_retries, max_semantic_repairs,
+             parameter_snapshot, created_at
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+             $14::jsonb, $15
+           )
+           ON CONFLICT (role, config_version) DO NOTHING`,
+          [
+            configuration.role,
+            configuration.configVersion,
+            configuration.provider,
+            configuration.model,
+            configuration.modelSnapshot,
+            configuration.promptVersion,
+            configuration.schemaVersion,
+            configuration.rolePolicyVersion,
+            configuration.providerPolicyVersion,
+            configuration.freshnessPolicy,
+            configuration.fallbackMode,
+            configuration.maxTechnicalRetries,
+            configuration.maxSemanticRepairs,
+            JSON.stringify(configuration.parameterSnapshot),
+            input.now,
+          ],
+        );
+        const stored = await client.query<ConfigurationRow>(
+          `SELECT role, config_version, provider, model, model_snapshot,
+                  prompt_version, schema_version, role_policy_version,
+                  provider_policy_version, freshness_policy, fallback_mode,
+                  max_technical_retries, max_semantic_repairs,
+                  parameter_snapshot
+           FROM model_role_configurations
+           WHERE role = $1 AND config_version = $2
+           FOR UPDATE`,
+          [configuration.role, configuration.configVersion],
+        );
+        if (
+          !stored.rows[0] ||
+          !storedConfigurationMatches(stored.rows[0], configuration)
+        ) {
+          throw new Error(
+            `Immutable G1 configuration for ${configuration.role} conflicts with the release manifest.`,
+          );
+        }
+
+        // Supersede the currently active pin; the revoked row stays as history.
+        await client.query(
+          `UPDATE model_role_rollout_pins
+           SET status = 'revoked', revoked_at = $1
+           WHERE role = $2 AND status = 'active'`,
+          [input.now, configuration.role],
+        );
+
+        const pin = await client.query<{
+          config_version: string;
+          provider_policy_version: string;
+          release_fingerprint: string | null;
+        }>(
+          `SELECT config_version, provider_policy_version, release_fingerprint
+           FROM model_role_rollout_pins
+           WHERE role = $1 AND rollout_pin = $2
+           FOR UPDATE`,
+          [configuration.role, configuration.rolloutPin],
+        );
+        if (
+          pin.rows[0] &&
+          (pin.rows[0].config_version !== configuration.configVersion ||
+            pin.rows[0].provider_policy_version !==
+              configuration.providerPolicyVersion)
+        ) {
+          throw new Error(
+            `Immutable G1 rollout pin for ${configuration.role} conflicts with the release manifest.`,
+          );
+        }
+        if (pin.rows[0]) {
+          // Re-activating a prior immutable pin during rollback preserves its
+          // historical acceptance binding.
+          await client.query(
+            `UPDATE model_role_rollout_pins
+             SET status = 'active', activated_at = $1, revoked_at = NULL,
+                 release_fingerprint = COALESCE(
+                   model_role_rollout_pins.release_fingerprint, $2
+                 )
+             WHERE role = $3 AND rollout_pin = $4`,
+            [
+              input.now,
+              input.manifestFingerprint,
+              configuration.role,
+              configuration.rolloutPin,
+            ],
+          );
+        } else {
+          await client.query(
+            `INSERT INTO model_role_rollout_pins (
+               role, rollout_pin, config_version, provider_policy_version,
+               status, activated_at, release_fingerprint
+             ) VALUES ($1, $2, $3, $4, 'active', $5, $6)`,
+            [
+              configuration.role,
+              configuration.rolloutPin,
+              configuration.configVersion,
+              configuration.providerPolicyVersion,
+              input.now,
+              input.manifestFingerprint,
+            ],
+          );
+        }
+      }
+
+      for (const configuration of input.configurations) {
+        const rollout = await lockActiveRollout(
+          client,
+          configuration.role,
+          configuration.rolloutPin,
+        );
+        if (
+          !rollout ||
+          !rolloutMatchesConfiguration(
+            rollout,
+            configuration.role,
+            configuration,
+            input.manifestFingerprint,
+          )
+        ) {
+          throw new Error(
+            `Active G1 rollout pin for ${configuration.role} does not match the release manifest.`,
+          );
+        }
+      }
+      await client.query("COMMIT");
+      return { reauthorized, reused };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Revoke the active pins before or during a G1 rollback. Admission and late
    * result recording lock the same rows, so a result that arrives after this
    * transaction commits is discarded by lockActiveRollout rather than becoming
@@ -1036,14 +1289,17 @@ export class PostgresModelRoleCommandRepository
     try {
       await client.query("BEGIN");
       await this.assertActiveG1Release(client, input.configurations);
+      // ADR-0148: revoke by role and status. `assertActiveG1Release` already
+      // proved that the complete four-role active set matches these exact
+      // configurations, so the historical acceptance fingerprint must not
+      // decide which pins a rollback can remove.
       const result = await client.query<{ role: string }>(
         `UPDATE model_role_rollout_pins
          SET status = 'revoked', revoked_at = $1
          WHERE status = 'active'
            AND role = ANY($2::text[])
-           AND release_fingerprint = $3
          RETURNING role`,
-        [input.now, [...input.roles], input.manifestFingerprint],
+        [input.now, [...input.roles]],
       );
       if (result.rows.length !== input.roles.length) {
         throw new Error(
