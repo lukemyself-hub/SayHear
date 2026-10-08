@@ -3,9 +3,10 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 /**
- * Layout is the behavior here (ticket #283 / SPEC #260 US 6): the Owner status
- * is a bottom strip under a locally scrolling module list, the module rail is a
- * top row, and long dates/tool names wrap instead of being clipped. These tests
+ * Layout is the behavior here (SPEC #260 US 6, aligned with the high-fidelity
+ * Portal reference): a vertical module rail, a second column holding the date
+ * list, and the Owner status pinned under that list. The list scrolls locally
+ * and long dates or tool names wrap instead of being clipped. These tests
  * assert the structural CSS and DOM order rather than pixel snapshots.
  */
 
@@ -45,20 +46,28 @@ async function readDeclarationsBySelector(): Promise<Map<string, Declarations>> 
   return rules;
 }
 
-describe("portal shell layout (ticket #283)", () => {
-  it("stacks the navigation columns so the module list sits above a bottom footer", async () => {
+describe("portal shell layout (high-fidelity alignment)", () => {
+  it("lays the navigation out as a module rail beside a date column", async () => {
     const rules = await readDeclarationsBySelector();
     const nav = rules.get(".portalNav") ?? {};
-    expect(nav["flex-direction"]).toBe("column");
+    const railColumn = rules.get(".portalRailColumn") ?? {};
+    const moduleColumn = rules.get(".portalModuleColumn") ?? {};
+
+    // The default flex direction keeps the two columns side by side; a column
+    // direction here would stack the rail above the date list again.
+    expect(nav["flex-direction"] ?? "row").toBe("row");
+    expect(moduleColumn["flex-direction"]).toBe("column");
+    expect(railColumn["border-right"]).toBeTruthy();
+    // Desktop keeps the 72px reference rail; the drawer narrows it to 64px.
+    expect(railColumn.width).toMatch(/^(72px|64px)$/);
   });
 
-  it("turns the module rail into a top icon row instead of a left column", async () => {
+  it("keeps the module rail a vertical icon column", async () => {
     const rules = await readDeclarationsBySelector();
     const rail = rules.get(".moduleRail") ?? {};
-    expect(rail["flex-direction"]).toBe("row");
-    expect(rail.width ?? "auto").toBe("auto");
-    expect(rail["border-right"] ?? "0").toMatch(/^(0|none)$/);
-    expect(rail["border-bottom"]).toBeTruthy();
+
+    expect(rail["flex-direction"]).toBe("column");
+    expect(rail["border-bottom"] ?? "0").toMatch(/^(0|none)$/);
   });
 
   it("lets the module list shrink and scroll locally under a definite-height nav", async () => {
@@ -69,11 +78,14 @@ describe("portal shell layout (ticket #283)", () => {
     expect(list.flex).toContain("1");
   });
 
-  it("keeps the footer pinned as a non-shrinking bottom strip", async () => {
+  it("keeps the footer pinned as a non-shrinking strip inside the date column", async () => {
     const rules = await readDeclarationsBySelector();
     const footer = rules.get(".portalFooter") ?? {};
+    const moduleColumn = rules.get(".portalModuleColumn") ?? {};
+
     expect(footer["border-top"]).toBeTruthy();
     expect(footer["flex-shrink"]).toBe("0");
+    expect(moduleColumn["min-height"]).toBe("0");
   });
 
   it("wraps long module entries and Journal date labels instead of clipping them", async () => {
@@ -91,16 +103,19 @@ describe("portal shell layout (ticket #283)", () => {
     );
   });
 
-  it("renders the rail before the list and the footer after the list in the DOM", async () => {
+  it("renders the rail column before the date column and the footer after the list", async () => {
     const shell = await readFile(shellUrl, "utf8");
-    const railIndex = shell.indexOf("<ModuleRail");
+    const railIndex = shell.indexOf('className="portalRailColumn"');
     const listIndex = shell.indexOf("<ModuleList");
     const footerIndex = shell.indexOf('className="portalFooter"');
+    const moduleColumnIndex = shell.indexOf('className="portalModuleColumn"');
 
     expect(railIndex).toBeGreaterThan(-1);
     expect(listIndex).toBeGreaterThan(-1);
     expect(footerIndex).toBeGreaterThan(-1);
-    expect(railIndex).toBeLessThan(listIndex);
+    expect(moduleColumnIndex).toBeGreaterThan(-1);
+    expect(railIndex).toBeLessThan(moduleColumnIndex);
+    expect(moduleColumnIndex).toBeLessThan(listIndex);
     expect(listIndex).toBeLessThan(footerIndex);
   });
 
@@ -118,7 +133,9 @@ describe("portal shell layout (ticket #283)", () => {
     const measuredClasses = [
       "portalShell",
       "portalNav",
+      "portalRailColumn",
       "moduleRail",
+      "portalModuleColumn",
       "moduleList",
       "moduleListEntry",
       "journalDateLabel",
@@ -133,6 +150,8 @@ describe("portal shell layout (ticket #283)", () => {
       );
     }
     for (const className of [
+      "portalRailColumn",
+      "portalModuleColumn",
       "portalFooter",
       "portalFooterOwner",
       "portalFooterState",

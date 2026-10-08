@@ -129,7 +129,12 @@ export type CurrentJournal = Readonly<{
 /** Server-side fixed cap for one Journal date page; clients cannot raise it. */
 export const JOURNAL_DATE_PAGE_LIMIT = 30;
 
-export type JournalDateState = "current" | "outdated" | "updating";
+/**
+ * `no_journal` marks a real Daily Session whose exchange was recorded but
+ * cannot support one truthful Statement (ADR-0011). Those dates stay readable
+ * in the date list as an explicit No Journal Notice instead of disappearing.
+ */
+export type JournalDateState = "current" | "outdated" | "updating" | "no_journal";
 
 export type JournalDateEntry = Readonly<{
   dailySessionId: string;
@@ -335,7 +340,14 @@ export type JournalRepository = Readonly<{
   readCurrent?(input: { dailySessionId: string; userId: string }): Promise<JournalDraft | null>;
   readCurrentJournalForDate?(input: { userId: string; logicalDate: string }): Promise<CurrentJournal | null>;
   readLatestCurrent(input: { userId: string }): Promise<CurrentJournal | null>;
-  readLatestGenerationNotice?(input: { userId: string }): Promise<JournalGenerationNotice | null>;
+  /**
+   * Owner- and date-scoped generation notice. The Journal page must never mix
+   * another date's unresolved failure into the selected date.
+   */
+  readGenerationNoticeForDate?(input: {
+    userId: string;
+    logicalDate: string;
+  }): Promise<JournalGenerationNotice | null>;
   listCurrentJournalDates?(input: {
     userId: string;
     limit: number;
@@ -386,7 +398,10 @@ export type JournalService = Readonly<{
     logicalDate: string;
   }): Promise<CurrentJournal | null>;
   readLatest(input: { userId: string }): Promise<CurrentJournal | null>;
-  readLatestGenerationNotice(input: { userId: string }): Promise<JournalGenerationNotice | null>;
+  readGenerationNoticeForDate(input: {
+    userId: string;
+    logicalDate: string;
+  }): Promise<JournalGenerationNotice | null>;
 }>;
 
 export type AutomaticJournalCommand = Readonly<{
@@ -586,9 +601,15 @@ export function createJournalService(dependencies: {
       await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
       return dependencies.repository.readLatestCurrent({ userId: input.userId });
     },
-    async readLatestGenerationNotice(input) {
+    async readGenerationNoticeForDate(input) {
       await dependencies.recoveryGate?.requireOpen(input.userId as UserId);
-      return dependencies.repository.readLatestGenerationNotice?.({ userId: input.userId }) ?? null;
+      const logicalDate = validateJournalLogicalDate(input.logicalDate);
+      return (
+        dependencies.repository.readGenerationNoticeForDate?.({
+          logicalDate,
+          userId: input.userId,
+        }) ?? null
+      );
     },
   };
 }

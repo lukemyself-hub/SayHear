@@ -598,6 +598,14 @@ export class PostgresJournalRepository implements JournalRepository {
       : null;
   }
 
+  /**
+   * Owner-scoped Journal date page. Published current versions come first for
+   * each date; a date whose recorded exchange cannot support one truthful
+   * Statement (ADR-0011 `insufficient_expression`) is listed as `no_journal`
+   * so the reader sees an explicit No Journal Notice instead of a gap. Days
+   * with `no_activity` stay absent, and a date that later publishes a Journal
+   * stops being reported as `no_journal`.
+   */
   public async listCurrentJournalDates(input: {
     userId: string;
     limit: number;
@@ -606,38 +614,69 @@ export class PostgresJournalRepository implements JournalRepository {
     const result = await this.pool.query<{
       activity_state: "active" | "quiescent" | "finalized";
       daily_session_id: string;
-      journal_source_revision: string;
+      journal_source_revision: string | null;
       logical_date: string;
+      listing: "no_journal" | "published";
       source_revision: string;
     }>(
-      `SELECT journal.daily_session_id, daily_session.logical_date::text,
-          daily_session.activity_state, daily_session.source_revision::text,
-          version.source_revision::text AS journal_source_revision
-       FROM journals journal
-       INNER JOIN daily_sessions daily_session
-         ON daily_session.daily_session_id = journal.daily_session_id
-         AND daily_session.user_id = journal.user_id
-       INNER JOIN journal_versions version ON version.journal_version_id = journal.current_version_id
-       INNER JOIN app_users owner ON owner.user_id = journal.user_id
-       WHERE journal.user_id = $1
-         AND journal.current_version_id IS NOT NULL
-         AND journal.deleted_at IS NULL
+      `WITH journal_dates AS (
+         SELECT journal.daily_session_id,
+             daily_session.logical_date,
+             daily_session.activity_state,
+             daily_session.source_revision,
+             version.source_revision AS journal_source_revision,
+             'published'::text AS listing
+         FROM journals journal
+         INNER JOIN daily_sessions daily_session
+           ON daily_session.daily_session_id = journal.daily_session_id
+           AND daily_session.user_id = journal.user_id
+         INNER JOIN journal_versions version ON version.journal_version_id = journal.current_version_id
+         WHERE journal.user_id = $1
+           AND journal.current_version_id IS NOT NULL
+           AND journal.deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM journal_statements version_statement
+             INNER JOIN journal_statement_evidence_links version_link
+               ON version_link.journal_statement_id = version_statement.journal_statement_id
+             INNER JOIN evidence_items version_evidence
+               ON version_evidence.evidence_item_id = version_link.evidence_item_id
+             INNER JOIN conversation_event_revisions version_source
+               ON version_source.conversation_event_revision_id = version_evidence.source_revision_id
+             WHERE version_statement.journal_version_id = version.journal_version_id
+               AND (version_evidence.status <> 'active' OR version_source.content_purged_at IS NOT NULL)
+           )
+         UNION ALL
+         SELECT daily_session.daily_session_id,
+             daily_session.logical_date,
+             daily_session.activity_state,
+             daily_session.source_revision,
+             NULL,
+             'no_journal'::text AS listing
+         FROM daily_session_date_outcomes date_outcome
+         INNER JOIN daily_sessions daily_session
+           ON daily_session.daily_session_id = date_outcome.daily_session_id
+           AND daily_session.user_id = date_outcome.user_id
+         WHERE date_outcome.user_id = $1
+           AND date_outcome.outcome = 'insufficient_expression'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM journals journal
+             WHERE journal.daily_session_id = date_outcome.daily_session_id
+               AND journal.deleted_at IS NULL
+           )
+       )
+       SELECT listing_day.daily_session_id, listing_day.logical_date::text,
+          listing_day.activity_state, listing_day.source_revision::text,
+          listing_day.journal_source_revision::text AS journal_source_revision,
+          listing_day.listing
+       FROM journal_dates listing_day
+       INNER JOIN app_users owner
+         ON owner.user_id = $1
          AND owner.status = 'active'
-         AND ($2::date IS NULL OR daily_session.logical_date < $2::date
-           OR (daily_session.logical_date = $2::date AND journal.daily_session_id < $3::uuid))
-         AND NOT EXISTS (
-           SELECT 1
-           FROM journal_statements version_statement
-           INNER JOIN journal_statement_evidence_links version_link
-             ON version_link.journal_statement_id = version_statement.journal_statement_id
-           INNER JOIN evidence_items version_evidence
-             ON version_evidence.evidence_item_id = version_link.evidence_item_id
-           INNER JOIN conversation_event_revisions version_source
-             ON version_source.conversation_event_revision_id = version_evidence.source_revision_id
-           WHERE version_statement.journal_version_id = version.journal_version_id
-             AND (version_evidence.status <> 'active' OR version_source.content_purged_at IS NOT NULL)
-         )
-       ORDER BY daily_session.logical_date DESC, journal.daily_session_id DESC
+       WHERE ($2::date IS NULL OR listing_day.logical_date < $2::date
+           OR (listing_day.logical_date = $2::date AND listing_day.daily_session_id < $3::uuid))
+       ORDER BY listing_day.logical_date DESC, listing_day.daily_session_id DESC
        LIMIT $4`,
       [
         input.userId,
@@ -649,7 +688,14 @@ export class PostgresJournalRepository implements JournalRepository {
     return result.rows.map((row) => ({
       dailySessionId: row.daily_session_id,
       logicalDate: row.logical_date,
-      state: currentJournalState(row),
+      state:
+        row.listing === "no_journal"
+          ? "no_journal"
+          : currentJournalState({
+              activity_state: row.activity_state,
+              journal_source_revision: row.journal_source_revision ?? "",
+              source_revision: row.source_revision,
+            }),
     }));
   }
 
@@ -701,16 +747,25 @@ export class PostgresJournalRepository implements JournalRepository {
       : null;
   }
 
-  public async readLatestGenerationNotice(input: { userId: string }): Promise<import("@sayhear/application").JournalGenerationNotice | null> {
+  /**
+   * Owner- and date-scoped unresolved generation failure. A failure on another
+   * date never leaks into the selected date's Journal page.
+   */
+  public async readGenerationNoticeForDate(input: {
+    userId: string;
+    logicalDate: string;
+  }): Promise<import("@sayhear/application").JournalGenerationNotice | null> {
     const result = await this.pool.query<{ logical_date: string; status: "validated" | "validation_failed" | "needs_review"; failure_code: string | null }>(
       `SELECT session.logical_date::text, validation.status, validation.failure_code
        FROM journal_validation_results validation
        INNER JOIN daily_sessions session ON session.daily_session_id = validation.daily_session_id
        INNER JOIN app_users owner ON owner.user_id = session.user_id
-       WHERE session.user_id = $1 AND owner.status = 'active'
+       WHERE session.user_id = $1
+         AND session.logical_date = $2::date
+         AND owner.status = 'active'
        ORDER BY validation.created_at DESC
        LIMIT 1`,
-      [input.userId],
+      [input.userId, input.logicalDate],
     );
     const row = result.rows[0];
     return row?.status === "needs_review" && row.failure_code
@@ -723,7 +778,7 @@ function currentJournalState(row: {
   activity_state: "active" | "quiescent" | "finalized";
   journal_source_revision: string;
   source_revision: string;
-}): JournalDateState {
+}): Exclude<JournalDateState, "no_journal"> {
   return Number(row.source_revision) === Number(row.journal_source_revision)
     ? "current"
     : row.activity_state === "quiescent"

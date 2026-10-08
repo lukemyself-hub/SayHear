@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { formatShortLogicalDate } from "./portal-date-format";
+
 /**
  * The chat module's date list. The first page is server-rendered and passed in
  * as `initial`; "load earlier dates" continues it through the read-only dates
@@ -37,6 +39,7 @@ export function ChatModuleList({
     initial?.nextCursor ?? null,
   );
   const [state, setState] = useState<"error" | "idle" | "loading">("idle");
+  const referenceYear = new Date().getFullYear();
 
   async function loadEarlier(): Promise<void> {
     if (nextCursor === null || state === "loading") {
@@ -92,19 +95,20 @@ export function ChatModuleList({
               href={`/internal?date=${entry.logicalDate}`}
               onClick={onNavigate}
             >
-              {formatLogicalDate(entry.logicalDate)}
+              {formatShortLogicalDate(entry.logicalDate, referenceYear)}
             </Link>
           </li>
         ))}
       </ul>
       {nextCursor !== null ? (
         <button
+          aria-label="加载更早日期"
           className="moduleListMore"
           disabled={state === "loading"}
           onClick={() => void loadEarlier()}
           type="button"
         >
-          {state === "loading" ? "加载中…" : "加载更早日期"}
+          {state === "loading" ? "加载中…" : "更早记录"}
         </button>
       ) : null}
       {state === "error" ? (
@@ -150,13 +154,4 @@ function mergeEntries(
     }
   }
   return merged;
-}
-
-/** Formats `YYYY-MM-DD` as `2026年10月6日`; unknown shapes pass through. */
-function formatLogicalDate(logicalDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(logicalDate);
-  if (!match) {
-    return logicalDate;
-  }
-  return `${Number(match[1])}年${Number(match[2])}月${Number(match[3])}日`;
 }

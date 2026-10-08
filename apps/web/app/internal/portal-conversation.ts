@@ -1,21 +1,18 @@
 import { localDateAt } from "@sayhear/application";
 
+import {
+  formatLogicalDate,
+  formatShortLogicalDate,
+} from "./portal-date-format";
+
+export { formatLogicalDate, formatShortLogicalDate };
+
 /**
  * Presentation-only helpers for the current-conversation status line. The
  * authoritative ownership still comes from the server read; these functions
  * only decide how to label a `logical_date` the server already returned and
  * never infer which session is writable.
  */
-
-/** Formats a `YYYY-MM-DD` logical date as `2026年10月6日`. */
-export function formatLogicalDate(logicalDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(logicalDate);
-  if (!match) {
-    return logicalDate;
-  }
-  const [, year, month, day] = match;
-  return `${Number(year)}年${Number(month)}月${Number(day)}日`;
-}
 
 /**
  * Whether the Daily Session's logical date is still the owner's current local
