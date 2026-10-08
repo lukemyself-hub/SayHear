@@ -1,0 +1,139 @@
+name: PR Validate
+
+# Every pull request runs the repository's existing `pnpm validate` composition
+# against two independent temporary PostgreSQL databases. There is deliberately
+# no `paths` / `paths-ignore` filter: a path filter would let a change to source,
+# a check script, or this workflow itself skip the run.
+on:
+  pull_request:
+
+# Unprivileged event: no repository secret is exposed to code under review.
+permissions:
+  contents: read
+
+# One run per pull request; a superseded run is pointless work.
+concurrency:
+  group: pr-validate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Two separate PostgreSQL containers so the business and Purge Marker stores
+    # are separate databases by construction, not by convention. Each system
+    # suite creates and migrates its own disposable `sayhear_test_*` schema, so
+    # an empty database per service is all the suite needs. Major version 17
+    # matches the server the suite is exercised against locally.
+    services:
+      business-postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sayhear
+          POSTGRES_PASSWORD: sayhear
+          POSTGRES_DB: sayhear_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sayhear -d sayhear_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      purge-marker-postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: sayhear
+          POSTGRES_PASSWORD: sayhear
+          POSTGRES_DB: sayhear_purge_marker_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U sayhear -d sayhear_purge_marker_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://sayhear:sayhear@127.0.0.1:5432/sayhear_test
+      TEST_PURGE_MARKER_DATABASE_URL: postgresql://sayhear:sayhear@127.0.0.1:5433/sayhear_purge_marker_test
+      # Synthetic, legal configuration for the web build: `assertSafeRuntimeConfiguration`
+      # still runs through `validate-startup`, but no G1 write switch is open and
+      # no credential is a real one. The build never contacts these URLs because
+      # startup validation only opens a pool for a production G1 deployment.
+      SAYHEAR_DEPLOYMENT: test
+      SAYHEAR_PROVIDER_ADAPTER: deterministic
+      SAYHEAR_DEEPSEEK_BASE_URL: https://api.deepseek.invalid
+      DEEPSEEK_API_KEY: ci-synthetic-not-a-real-key
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-synthetic-not-a-real-secret
+      GITHUB_CLIENT_ID: ci-synthetic-client-id
+      GITHUB_CLIENT_SECRET: ci-synthetic-not-a-real-secret
+      SAYHEAR_CONTEXT_HMAC_SECRET: ci-synthetic-context-hmac
+      CRON_SECRET: ci-synthetic-cron-secret
+      SAYHEAR_AUTH_SECRET_SOURCE: managed
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fail before the suite when a database is missing, unreachable, or shared
+      # by both roles. Several system suites degrade to `describe.skip` in that
+      # state and would otherwise report a pass with no coverage.
+      - name: Verify the two test databases
+        run: pnpm ci:verify-test-databases
+
+      # `test:ci` bounds the database-backed concurrency instead of inheriting it from
+      # the runner's core count. Measured on a 15-core machine against two
+      # disposable databases, full 137-141 file runs at the default 14 workers
+      # fail on PostgreSQL serialization errors and deadlocks in system suites
+      # (3 of 3 runs fail on the unmodified integration tip; 1 of 2 fail with
+      # this ticket applied). The same runs at `--maxWorkers=2` pass (2 of 2 on
+      # the integration tip, 3 of 3 here) for about 15 extra seconds, so CI pins
+      # the budget instead of relying on the runner size. `hookTimeout` rises
+      # from the 10s default because a `beforeAll` hook runs 75 migrations before
+      # any assertion, and it is still a finite bound.
+      - name: Unit and system tests
+        run: pnpm test:ci
+
+      # Asserts the expected 39 system suites actually executed with no skipped
+      # test, so an environment-caused skip cannot read as a pass.
+      - name: Assert the expected system suites ran
+        run: pnpm ci:assert-system-suites artifacts/vitest-report.json
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Purge surface inventory
+        run: pnpm check:purge-surfaces
+
+      - name: Module boundaries
+        run: pnpm check:boundaries
+
+      - name: Runtime version
+        run: pnpm check:runtime
+
+      # Includes `validate-startup` and `scripts/check-browser-bundle.mjs`, so the
+      # build and the browser bundle check share one job.
+      - name: Build
+        run: pnpm build
+
+      # The JSON report is the one artifact worth keeping: it names each failing
+      # suite. Everything else stays in the step log for on-demand reading.
+      - name: Upload the vitest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-report-${{ github.event.pull_request.number }}
+          path: artifacts/vitest-report.json
+          if-no-files-found: warn

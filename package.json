@@ -25,8 +25,11 @@
     "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
     "test": "vitest run",
     "test:system": "vitest run tests/system",
+    "test:ci": "vitest run --maxWorkers=2 --hookTimeout=60000 --reporter=default --reporter=json --outputFile.json=artifacts/vitest-report.json",
+    "ci:verify-test-databases": "tsx scripts/ci/verify-test-databases.ts",
+    "ci:assert-system-suites": "tsx scripts/ci/assert-system-suites-ran.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.g1-tools.json && pnpm -r --if-present typecheck",
-    "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test && pnpm build"
+    "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test:ci && pnpm build"
   },
   "devDependencies": {
     "@sayhear/ai": "workspace:*",
