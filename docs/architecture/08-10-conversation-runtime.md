@@ -550,6 +550,39 @@ sensitive framing 与 policy bundle；该 Command 强制 tools disabled，只能
 Response；Assistant Event lineage 同时引用 main Decision Command 和 Segment Command，typed use 只引用
 Segment Command。Retry 创建新的 Decision Command，并重新取得 state、selection、reservation 与 segment。
 
+### 9.1.1 近期对话背景
+
+首版技术与验收路线见 [ADR-0150](../adr/0150-recent-context-ships-after-deterministic-validation.md)：
+在现有来源读取与 Context Compiler 内直接编译原文，不增加模型摘要流水线或自主
+历史查询循环；新增路径可单独关闭，读取失败/超时放弃本轮新增背景。上线前验证
+真实跨日冻结与出站围栏，不追加正式人评，体验在上线后正常聊天中验收。
+
+[#287](https://github.com/lukemyself-hub/SayHear/issues/287) 与
+[ADR-0149](../adr/0149-recent-conversation-context-is-bounded-source-history.md) 已确认
+以下设计合同，具体实现与发布仍待 #286 后续方案。本节补充 §9.1 的跨 Session 来源
+输入；它是 Context 中的来源投影，不新增长期 Memory、模型摘要或 Framework 真源。
+
+- 每轮自动读取最近 7 个用户本地日内的有界原文，包含今天和此前 6 天，空日不补足。
+  当前 Session 输入仍走既有路径，不迁移 Daily Session 或 Journal，不重复注入同一
+  revision。表达时间与经历时间分别保留，不能从 Session 归属推导经历日期。
+- 事实只由有效 final / corrected User revision 支持。必要的相邻 Assistant 文本按
+  交流顺序与角色带入，只帮助理解用户表达；完整提交与中断排除规则继续适用。
+- 原文路径不等待 Claim、Episode、Reflection 或抽取结果；不扩大 Registry，不复活
+  rejected Candidate，不把进入背景当作长期 Memory 准入。
+- 复用既有 Correction / Forget 记录、Claim / Evidence 与 source revision 关系。
+  明确关联到受控内容的旧消息整条不选入，不建立片段级治理、语义匹配或新的来源级
+  Trust Action。无法明确关联的旧表达不保证全部排除；整条排除可能连带丢失无关内容。
+  不从旧 Assistant 文本补回被排除的用户事实，普通重提不解除既有 Forget。
+- 近期 User 与必要 Assistant 文本共用该背景预算。当前输入与今天的对话优先，
+  历史尽量分日覆盖，再把剩余预算分配给近期；不保证每日或所有经历均有代表。
+  具体总额、分配、单次读取上限与超长消息处置由后续实现 SPEC 确定，不静默生成摘要。
+- 源读取、冻结引用与 Provider Egress 继续执行 owner、有效 revision、epoch、删除
+  和用户控制检查，不允许新增背景绕过既有边界。Inspector 记录选中来源、日期、
+  预算、遗漏及排除或读取失败原因，遵守既有权限与快照保留规则，不新增明文历史副本。
+- 读取失败可降级为只依据当前有效输入回应，不复用未经重验的旧背景、不编造连续性。
+  用户可见语言遵循 [§15.3.1](../product/15-conversation-behavior.md#1531-近期对话背景)，
+  不把内部 degraded reason 直接作为聊天文案。
+
 ### 9.2 输出
 
 `CompiledContext` 至少包含：

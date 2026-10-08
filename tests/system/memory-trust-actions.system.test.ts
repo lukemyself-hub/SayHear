@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
   runMemoryCorrectionFollowupWorkflow,
+  CompiledContextIntegrityError,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   createConversationActionGateway,
   createContinuousExchangeService,
@@ -26,8 +27,14 @@ import {
   createMemoryForgetRequestActionHandler,
   createMemoryForgetReversalActionHandler,
   trustActionUnverifiablePhrasing,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+  RECENT_CONTEXT_SECTION_KEY,
+  decodeRecentContextReference,
+  resolveRecentContextWindow,
+  selectRecentContext,
   type ConversationResponseStreamEvent,
   type MemoryClaimService,
+  type RecentContextSelectionPolicy,
   type TrustActionResolutionCandidate,
 } from "@sayhear/application";
 import {
@@ -42,9 +49,15 @@ import {
   PostgresMemoryRetrievalRepository,
   PostgresMemoryTrustActionCommitPort,
   PostgresMemoryTrustActionTargetSource,
+  PostgresRecentContextSource,
   PostgresUserTextConversationRepository,
   runMigrations,
 } from "@sayhear/data";
+import {
+  asCompiledContextId,
+  asConversationEventRevisionId,
+  asDailySessionId,
+} from "@sayhear/domain";
 import { createProviderEgressPort } from "@sayhear/ai/testing";
 import {
   createIsolatedPostgresSchema,
@@ -479,6 +492,10 @@ function createTrustGateway() {
 type ModelScript = Readonly<{
   actionKind?: string;
   arguments?: Record<string, unknown>;
+  /** Test hook: observes the provider payload actually rendered for egress. */
+  onStream?: (request: {
+    messages: readonly { role: string; text: string }[];
+  }) => void;
   reply: string;
 }>;
 
@@ -487,9 +504,75 @@ type ModelScript = Readonly<{
  * trust-action proposal (a provider-native tool call the Egress normalizes),
  * the tools-disabled finalization stage streams the scripted reply.
  */
+const RECENT_CONTEXT_POLICY: RecentContextSelectionPolicy = Object.freeze({
+  budgets: Object.freeze({
+    maxCandidateBytes: 5_000_000,
+    maxCandidateRows: 500,
+    maxContextTokens: 4_000,
+    maxSingleEventTokens: 2_000,
+    readTimeoutMs: 5_000,
+  }),
+  version: "recent-context-selection-policy:v1",
+  windowDays: 7,
+});
+
+function createContextCompilerWithRecentSource() {
+  return createContextCompiler({
+    clock,
+    compilerVersion: "context-compiler:v1",
+    contentHmacSecret: "test-context-integrity-secret",
+    rawEventTokenBudget: 4_000,
+    recentContext: {
+      policy: RECENT_CONTEXT_POLICY,
+      source: new PostgresRecentContextSource(database.pool),
+    },
+    repository: responseRepository,
+  });
+}
+
+async function loadLatestCompiledContextId(): Promise<string> {
+  const row = await database.pool.query<{ compiled_context_id: string }>(
+    `SELECT compiled_context_id::text AS compiled_context_id
+     FROM compiled_contexts
+     WHERE user_id = $1
+     ORDER BY created_at DESC, compiled_context_id DESC
+     LIMIT 1`,
+    [OWNER],
+  );
+  const id = row.rows[0]?.compiled_context_id;
+  if (!id) throw new Error("No CompiledContext was persisted.");
+  return id;
+}
+
+/**
+ * Runs an insert expected to violate a database invariant and returns the
+ * PostgreSQL SQLSTATE so the test proves which real constraint fired.
+ */
+async function expectPgRejection(
+  sql: string,
+  parameters: readonly unknown[],
+): Promise<string> {
+  try {
+    await database.pool.query(sql, parameters as unknown[]);
+  } catch (error) {
+    return (error as { code?: string }).code ?? "unknown";
+  }
+  throw new Error("Expected the insert to be rejected by the schema.");
+}
+
+const RECENT_REF_INSERT = `
+  INSERT INTO compiled_context_revision_refs (
+    compiled_context_id, user_id, conversation_event_revision_id, ordinal,
+    actor, estimated_tokens, sequence_no, section, selection_order,
+    daily_session_id, expressed_at, occurred_at, selection_reason
+  ) VALUES ($1, $2, $3, $4, 'user', 4, 1, 'recent_conversation_context',
+    $5, $6, $7, NULL, $8)
+`;
+
 function createScriptedModel(script: ModelScript): ConversationTextModel {
   return {
     async *stream(request) {
+      script.onStream?.({ messages: request.messages });
       if (request.toolsDisabled !== true && script.actionKind) {
         yield {
           rawArguments: JSON.stringify(script.arguments ?? {}),
@@ -529,9 +612,10 @@ type ActionReceipt = Extract<
 async function respond(
   text: string,
   script: ModelScript,
+  contextCompiler: ReturnType<typeof createContextCompiler> =
+    createContextCompilerForTest(),
 ): Promise<{ replyText: string; receipt: ActionReceipt | null }> {
   counter += 1;
-  const contextCompiler = createContextCompilerForTest();
   const { gateway } = createTrustGateway();
   const harness = createConversationAgentHarness({
     actionGateway: gateway,
@@ -2062,5 +2146,656 @@ describe("Trust actions core (issue #119)", () => {
       [OWNER, fixture.claimId],
     );
     expect(requestsAfterUnsupported.rowCount).toBe(0);
+  });
+});
+
+/**
+ * SPEC #292 / issue #293: the recent-source adapter must associate source
+ * revisions with the existing explicit Correction / Forget records, and the
+ * real repository must persist, load and replay the frozen recent refs.
+ */
+describe("Recent context source explicit trust-control mapping (#293)", () => {
+  async function loadRecentSource(frozenAt: Date = clock()) {
+    const window = resolveRecentContextWindow({
+      frozenAt,
+      timezone: "Asia/Shanghai",
+      windowDays: RECENT_CONTEXT_POLICY.windowDays,
+    });
+    const session = await database.pool.query<{ daily_session_id: string }>(
+      `SELECT daily_session_id::text FROM daily_sessions
+       WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [OWNER],
+    );
+    return new PostgresRecentContextSource(database.pool).loadRecentContextSource({
+      budgets: RECENT_CONTEXT_POLICY.budgets,
+      cutoff: {
+        currentInputRevisionId: null,
+        currentInputSequence: null,
+        dailySessionId: null,
+        expressedAt: frozenAt.toISOString(),
+      },
+      currentDailySessionId: asDailySessionId(
+        session.rows[0]!.daily_session_id,
+      ),
+      excludeRevisionIds: [],
+      expectedDataEpoch: 1,
+      frozenAt,
+      policyVersion: RECENT_CONTEXT_POLICY.version,
+      selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+      timezone: "Asia/Shanghai",
+      userId: OWNER,
+      windowEndLocalDate: window.windowEndLocalDate,
+      windowStartLocalDate: window.windowStartLocalDate,
+    });
+  }
+
+  it("maps whole-Claim Forget, Correction and Qualifier Forget evidence to explicit controls", async () => {
+    // Whole-Claim Forget through the real trust-action path.
+    const forgottenClaim = await seedResidenceClaim("我住在上海。");
+    const forgottenEvidence = await database.pool.query<{
+      source_revision_id: string;
+    }>(
+      `SELECT item.source_revision_id::text AS source_revision_id
+       FROM claim_evidence_links link
+       INNER JOIN evidence_items item
+         ON item.evidence_item_id = link.evidence_item_id
+        AND item.user_id = link.user_id
+       WHERE link.user_id = $1
+         AND link.memory_claim_version_id = (
+           SELECT current_version_id FROM memory_claims
+           WHERE user_id = $1 AND memory_claim_id = $2
+         )
+         AND link.status = 'active'
+       LIMIT 1`,
+      [OWNER, forgottenClaim],
+    );
+    const forgottenRevision = forgottenEvidence.rows[0]!.source_revision_id;
+    advanceMs(60 * 1_000);
+    await respond("请忘掉我住在上海。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "好，我不会再把这件事作为记忆提起。",
+    });
+    const forgetRequest = await database.pool.query<{
+      memory_forget_request_id: string;
+    }>(
+      `SELECT memory_forget_request_id::text AS memory_forget_request_id
+       FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, forgottenClaim],
+    );
+    const forgetRequestId =
+      forgetRequest.rows[0]!.memory_forget_request_id;
+    const afterForget = await loadRecentSource();
+    expect(afterForget.failure).toBeNull();
+    expect(
+      afterForget.items.find(
+        (candidate) => String(candidate.revisionId) === forgottenRevision,
+      )?.exclusion,
+    ).toEqual({ controlId: forgetRequestId, reason: "forget_association" });
+
+    // A real relationship-Qualifier Forget maps its qualifier evidence too.
+    const relative = await seedRelativeClaim({ label: "小刚" });
+    advanceMs(60 * 1_000);
+    await respond("请忘掉小刚是我姑姑这个称谓。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "姑姑" },
+      reply: "好，我保留中性的关系。",
+    });
+    const qualifierForget = await database.pool.query<{
+      memory_forget_request_id: string;
+    }>(
+      `SELECT memory_forget_request_id::text AS memory_forget_request_id
+       FROM memory_forget_requests
+       WHERE user_id = $1 AND target_claim_id = $2`,
+      [OWNER, relative.claimId],
+    );
+    const afterQualifier = await loadRecentSource();
+    expect(
+      afterQualifier.items.find(
+        (candidate) => String(candidate.revisionId) === relative.revisionId,
+      )?.exclusion,
+    ).toEqual({
+      controlId: qualifierForget.rows[0]!.memory_forget_request_id,
+      reason: "forget_association",
+    });
+
+    // A real Correction row deactivating a ClaimVersion maps its evidence.
+    const corrected = await seedRelativeClaim({ label: "小红" });
+    const correctedVersion = await database.pool.query<{
+      current_version_id: string;
+      source_revision_id: string;
+    }>(
+      `SELECT claim.current_version_id::text AS current_version_id,
+              item.source_revision_id::text AS source_revision_id
+       FROM memory_claims claim
+       INNER JOIN claim_evidence_links link
+         ON link.memory_claim_version_id = claim.current_version_id
+        AND link.user_id = claim.user_id
+        AND link.status = 'active'
+       INNER JOIN evidence_items item
+         ON item.evidence_item_id = link.evidence_item_id
+        AND item.user_id = link.user_id
+       WHERE claim.user_id = $1 AND claim.memory_claim_id = $2
+       LIMIT 1`,
+      [OWNER, corrected.claimId],
+    );
+    const correctionId = createTestUuidV7(clock());
+    await database.pool.query(
+      `INSERT INTO memory_claim_corrections (
+         memory_claim_correction_id, user_id, request_event_revision_id,
+         target_claim_id, deactivated_claim_version_id, target_scope,
+         corrected_fact_recorded, correction_policy_version, created_at
+       ) VALUES ($1, $2, $3, $4, $5, 'whole_claim', FALSE,
+         'memory-correction:v1', $6)`,
+      [
+        correctionId,
+        OWNER,
+        correctedVersion.rows[0]!.source_revision_id,
+        corrected.claimId,
+        correctedVersion.rows[0]!.current_version_id,
+        clock(),
+      ],
+    );
+    const afterCorrection = await loadRecentSource();
+    expect(
+      afterCorrection.items.find(
+        (candidate) =>
+          String(candidate.revisionId) ===
+          correctedVersion.rows[0]!.source_revision_id,
+      )?.exclusion,
+    ).toEqual({
+      controlId: correctionId,
+      reason: "correction_association",
+    });
+  });
+
+  it("persists and replays a real frozen recent section without restoring excluded facts", async () => {
+    const claimId = await seedResidenceClaim("我住在上海。");
+    const evidence = await database.pool.query<{ source_revision_id: string }>(
+      `SELECT item.source_revision_id::text AS source_revision_id
+       FROM claim_evidence_links link
+       INNER JOIN evidence_items item
+         ON item.evidence_item_id = link.evidence_item_id
+        AND item.user_id = link.user_id
+       WHERE link.user_id = $1
+         AND link.memory_claim_version_id = (
+           SELECT current_version_id FROM memory_claims
+           WHERE user_id = $1 AND memory_claim_id = $2
+         )
+         AND link.status = 'active'
+       LIMIT 1`,
+      [OWNER, claimId],
+    );
+    const forbiddenRevision = evidence.rows[0]!.source_revision_id;
+    advanceMs(60 * 1_000);
+    await respond("请忘掉我住在上海。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "好，我不会再提起。",
+    });
+    // Move to a finalized prior Session so the excluded source is cross-day.
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+
+    const renderedPayloads: { role: string; text: string }[][] = [];
+    const { replyText } = await respond(
+      "今天我们聊点别的。",
+      {
+        onStream: (request) => {
+          renderedPayloads.push(
+            request.messages.map((message) => ({
+              role: message.role,
+              text: message.text,
+            })),
+          );
+        },
+        reply: "好呀，我在听。",
+      },
+      createContextCompilerWithRecentSource(),
+    );
+    expect(replyText.length).toBeGreaterThan(0);
+
+    const compiledContextId = await loadLatestCompiledContextId();
+    const context = await database.pool.query<{
+      sections: readonly { key: string; reference: string }[];
+    }>(
+      `SELECT sections FROM compiled_contexts
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, compiledContextId],
+    );
+    const recentSection = context.rows[0]!.sections.find(
+      (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+    );
+    expect(recentSection).toBeDefined();
+    const decoded = decodeRecentContextReference(recentSection!.reference);
+    expect(
+      decoded.selected.map((selected) => selected.revisionId),
+    ).not.toContain(forbiddenRevision);
+    expect(decoded.omitted).toContainEqual(
+      expect.objectContaining({
+        reason: "explicit_control",
+        revisionId: forbiddenRevision,
+      }),
+    );
+
+    // The real claimDispatch -> renderPermittedPayload egress path re-read the
+    // frozen reference and re-rendered the same selection (HMAC validated).
+    const payload = renderedPayloads.find(
+      (messages) => messages.at(-1)?.text === "今天我们聊点别的。",
+    );
+    expect(payload).toBeDefined();
+    const selectedTexts = await database.pool.query<{ text: string }>(
+      `SELECT canonical_text AS text
+       FROM conversation_event_revisions
+       WHERE user_id = $1
+         AND conversation_event_revision_id = ANY($2::uuid[])`,
+      [OWNER, decoded.selected.map((selected) => selected.revisionId)],
+    );
+    expect(selectedTexts.rows.length).toBe(decoded.selected.length);
+    const renderedTexts = payload!.map((message) => message.text);
+    for (const selected of selectedTexts.rows) {
+      expect(renderedTexts).toContain(selected.text);
+    }
+    const forbiddenText = await database.pool.query<{ text: string }>(
+      `SELECT canonical_text AS text
+       FROM conversation_event_revisions
+       WHERE user_id = $1 AND conversation_event_revision_id = $2`,
+      [OWNER, forbiddenRevision],
+    );
+    expect(renderedTexts).not.toContain(forbiddenText.rows[0]!.text);
+    expect(payload!.at(-1)).toMatchObject({
+      role: "user",
+      text: "今天我们聊点别的。",
+    });
+
+    const refs = await database.pool.query<{
+      daily_session_id: string | null;
+      expressed_at: Date | null;
+      selection_reason: string | null;
+      selection_order: number | null;
+    }>(
+      `SELECT daily_session_id::text, expressed_at, selection_reason,
+              selection_order
+       FROM compiled_context_revision_refs
+       WHERE compiled_context_id = $1
+         AND section = 'recent_conversation_context'
+       ORDER BY ordinal`,
+      [compiledContextId],
+    );
+    expect(refs.rows).toHaveLength(decoded.selected.length);
+    for (const ref of refs.rows) {
+      expect(ref.daily_session_id).not.toBeNull();
+      expect(ref.expressed_at).not.toBeNull();
+      expect(ref.selection_reason).not.toBeNull();
+      expect(ref.selection_order).not.toBeNull();
+    }
+
+    // The same frozen selection replayed through the selector restores no
+    // fact from the excluded user or its adjacent assistant.
+    const replayed = selectRecentContext({
+      cutoff: {
+        currentInputRevisionId:
+          decoded.cutoff.currentInputRevisionId === null
+            ? null
+            : asConversationEventRevisionId(
+                decoded.cutoff.currentInputRevisionId,
+              ),
+        currentInputSequence: decoded.cutoff.currentInputSequence,
+        dailySessionId:
+          decoded.cutoff.dailySessionId === null
+            ? null
+            : asDailySessionId(decoded.cutoff.dailySessionId),
+        expressedAt: decoded.cutoff.expressedAt,
+      },
+      excludeRevisionIds: [],
+      frozenAt: clock(),
+      items: (await loadRecentSource()).items,
+      policy: RECENT_CONTEXT_POLICY,
+      timezone: "Asia/Shanghai",
+      windowEndLocalDate: decoded.windowEndLocalDate,
+      windowStartLocalDate: decoded.windowStartLocalDate,
+    });
+    expect(
+      replayed.selected.map((selected) => String(selected.revisionId)),
+    ).not.toContain(forbiddenRevision);
+
+    // The migrated schema itself rejects missing / invalid / cross-owner /
+    // session-mismatched recent metadata, not only the application layer.
+    const forbiddenSession = (
+      await database.pool.query<{ daily_session_id: string }>(
+        `SELECT event.daily_session_id::text AS daily_session_id
+         FROM conversation_event_revisions revision
+         INNER JOIN conversation_events event
+           ON event.conversation_event_id = revision.conversation_event_id
+          AND event.user_id = revision.user_id
+         WHERE revision.user_id = $1
+           AND revision.conversation_event_revision_id = $2`,
+        [OWNER, forbiddenRevision],
+      )
+    ).rows[0]!.daily_session_id;
+    const otherOwnerSession = (
+      await database.pool.query<{ daily_session_id: string }>(
+        `SELECT daily_session_id::text AS daily_session_id
+         FROM daily_sessions
+         WHERE user_id = $1 AND daily_session_id <> $2
+         ORDER BY started_at
+         LIMIT 1`,
+        [OWNER, forbiddenSession],
+      )
+    ).rows[0]!.daily_session_id;
+
+    const attempt = (input: {
+      dailySessionId: string;
+      ordinal: number;
+      selectionReason: string | null;
+    }) =>
+      expectPgRejection(RECENT_REF_INSERT, [
+        compiledContextId,
+        OWNER,
+        forbiddenRevision,
+        input.ordinal,
+        0,
+        input.dailySessionId,
+        clock(),
+        input.selectionReason,
+      ]);
+    expect(
+      await attempt({
+        dailySessionId: forbiddenSession,
+        ordinal: 900,
+        selectionReason: null,
+      }),
+    ).toBe("23514");
+    expect(
+      await attempt({
+        dailySessionId: forbiddenSession,
+        ordinal: 901,
+        selectionReason: "not_a_reason",
+      }),
+    ).toBe("23514");
+
+    // A session that belongs to another owner fails the composite owner FK.
+    const foreignOwner = createTestUuidV7(clock());
+    await database.pool.query(
+      `INSERT INTO app_users (user_id, status, data_epoch, created_at, updated_at)
+       VALUES ($1, 'active', 1, $2, $2)`,
+      [foreignOwner, clock()],
+    );
+    const foreignSession = createTestUuidV7(clock());
+    await database.pool.query(
+      `INSERT INTO daily_sessions (
+         daily_session_id, user_id, logical_date, timezone_at_start,
+         started_at, last_activity_at, created_at, updated_at
+       ) VALUES ($1, $2, '2026-08-20', 'Asia/Shanghai', $3, $3, $3, $3)`,
+      [foreignSession, foreignOwner, clock()],
+    );
+    expect(
+      await attempt({
+        dailySessionId: foreignSession,
+        ordinal: 902,
+        selectionReason: "today",
+      }),
+    ).toMatch(/^23/);
+
+    // The same owner's other session is valid lineage but not the revision's
+    // session, so the trigger rejects it.
+    expect(
+      await attempt({
+        dailySessionId: otherOwnerSession,
+        ordinal: 903,
+        selectionReason: "today",
+      }),
+    ).toBe("23514");
+  });
+
+  it("fails closed on tampered recent metadata or HMAC through real persistence", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+
+    const compileFreshTurn = async () => {
+      counter += 1;
+      const turn = await conversationService.submit(OWNER, {
+        clientEventId: `trust-tamper-event-${counter}`,
+        clientTurnId: `trust-tamper-turn-${counter}`,
+        locale: "zh-CN",
+        text: "今天我们聊点别的。",
+        timezone: "Asia/Shanghai",
+      });
+      expect(
+        await responseRepository.claimResponseExecution({
+          generationCommandId: turn.generation.commandId,
+          modelRunAttemptId: turn.generation.attemptId,
+          userId: OWNER,
+        }),
+      ).toBe("owner");
+      const compiler = createContextCompilerWithRecentSource();
+      const compiled = await compiler.compile({
+        generationCommandId: turn.generation.commandId,
+        interactionTurnId: turn.turn.id,
+        userId: OWNER,
+      });
+      return { compiled, compiler, turn };
+    };
+    const sectionsOf = async (compiledContextId: string) =>
+      (
+        await database.pool.query<{
+          sections: readonly { key: string; reference: string }[];
+        }>(
+          `SELECT sections FROM compiled_contexts
+           WHERE user_id = $1 AND compiled_context_id = $2`,
+          [OWNER, compiledContextId],
+        )
+      ).rows[0]!.sections;
+
+    // A malformed frozen recent reference fails closed even though the row
+    // loaded and the HMAC was untouched.
+    const metadataTurn = await compileFreshTurn();
+    const metadataSections = await sectionsOf(metadataTurn.compiled.id);
+    expect(
+      metadataSections.some(
+        (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+      ),
+    ).toBe(true);
+    await database.pool.query(
+      `UPDATE compiled_contexts SET sections = $3::jsonb
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [
+        OWNER,
+        metadataTurn.compiled.id,
+        JSON.stringify(
+          metadataSections.map((section) =>
+            section.key === RECENT_CONTEXT_SECTION_KEY
+              ? { ...section, reference: `${section.reference}corrupt` }
+              : section,
+          ),
+        ),
+      ],
+    );
+    const metadataClaim = await responseRepository.claimDispatch({
+      champion: testChampion,
+      compiledContextId: asCompiledContextId(metadataTurn.compiled.id),
+      generationCommandId: metadataTurn.turn.generation.commandId,
+      modelRunAttemptId: metadataTurn.turn.generation.attemptId,
+      now: clock(),
+    });
+    expect(metadataClaim.outcome).toBe("permitted");
+    if (metadataClaim.outcome !== "permitted") {
+      throw new Error("Expected the metadata-tampered claim to be permitted.");
+    }
+    expect(() =>
+      metadataTurn.compiler.renderPermittedPayload(metadataClaim.context),
+    ).toThrow(CompiledContextIntegrityError);
+
+    // A tampered manifest HMAC fails closed too.
+    const hmacTurn = await compileFreshTurn();
+    await database.pool.query(
+      `UPDATE compiled_contexts SET content_hmac = 'tampered'
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, hmacTurn.compiled.id],
+    );
+    const hmacClaim = await responseRepository.claimDispatch({
+      champion: testChampion,
+      compiledContextId: asCompiledContextId(hmacTurn.compiled.id),
+      generationCommandId: hmacTurn.turn.generation.commandId,
+      modelRunAttemptId: hmacTurn.turn.generation.attemptId,
+      now: clock(),
+    });
+    expect(hmacClaim.outcome).toBe("permitted");
+    if (hmacClaim.outcome !== "permitted") {
+      throw new Error("Expected the HMAC-tampered claim to be permitted.");
+    }
+    expect(() =>
+      hmacTurn.compiler.renderPermittedPayload(hmacClaim.context),
+    ).toThrow(CompiledContextIntegrityError);
+  });
+
+  it("keeps a Forgot revision excluded from recent context after a real Reversal", async () => {
+    const claimId = await seedResidenceClaim("我住在上海。");
+    const evidence = await database.pool.query<{ source_revision_id: string }>(
+      `SELECT item.source_revision_id::text AS source_revision_id
+       FROM claim_evidence_links link
+       INNER JOIN evidence_items item
+         ON item.evidence_item_id = link.evidence_item_id
+        AND item.user_id = link.user_id
+       WHERE link.user_id = $1
+         AND link.memory_claim_version_id = (
+           SELECT current_version_id FROM memory_claims
+           WHERE user_id = $1 AND memory_claim_id = $2
+         )
+         AND link.status = 'active'
+       LIMIT 1`,
+      [OWNER, claimId],
+    );
+    const forgottenRevision = evidence.rows[0]!.source_revision_id;
+    advanceMs(60 * 1_000);
+    await respond("请忘掉我住在上海。", {
+      actionKind: "memory_forget_request",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "好，我不会再把这件事作为记忆提起。",
+    });
+    advanceMs(60 * 1_000);
+    const { receipt } = await respond("我明确允许你重新记住我住在上海。", {
+      actionKind: "memory_forget_reversal",
+      arguments: { targetAnchor: "我住在上海" },
+      reply: "你已经明确允许我重新记住这件事了。",
+    });
+    expect(receipt).toMatchObject({
+      admission: "accepted",
+      disposition: "committed_in_transaction",
+      execution: "succeeded",
+    });
+
+    const afterReversal = await loadRecentSource();
+    expect(afterReversal.failure).toBeNull();
+    expect(
+      afterReversal.items.find(
+        (candidate) => String(candidate.revisionId) === forgottenRevision,
+      )?.exclusion,
+    ).toMatchObject({ reason: "forget_association" });
+
+    const window = resolveRecentContextWindow({
+      frozenAt: clock(),
+      timezone: "Asia/Shanghai",
+      windowDays: RECENT_CONTEXT_POLICY.windowDays,
+    });
+    const selected = selectRecentContext({
+      cutoff: {
+        currentInputRevisionId: null,
+        currentInputSequence: null,
+        dailySessionId: null,
+        expressedAt: clock().toISOString(),
+      },
+      excludeRevisionIds: [],
+      frozenAt: clock(),
+      items: afterReversal.items,
+      policy: RECENT_CONTEXT_POLICY,
+      timezone: "Asia/Shanghai",
+      windowEndLocalDate: window.windowEndLocalDate,
+      windowStartLocalDate: window.windowStartLocalDate,
+    });
+    expect(
+      selected.selected.map((candidate) => String(candidate.revisionId)),
+    ).not.toContain(forgottenRevision);
+    expect(selected.omitted).toContainEqual(
+      expect.objectContaining({
+        reason: "explicit_control",
+        revisionId: forgottenRevision,
+      }),
+    );
+  });
+
+  it("keeps the same frozen recent selection when the same command compiles again", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+
+    counter += 1;
+    const turn = await conversationService.submit(OWNER, {
+      clientEventId: `trust-idempotency-event-${counter}`,
+      clientTurnId: `trust-idempotency-turn-${counter}`,
+      locale: "zh-CN",
+      text: "今天我们聊点别的。",
+      timezone: "Asia/Shanghai",
+    });
+    expect(
+      await responseRepository.claimResponseExecution({
+        generationCommandId: turn.generation.commandId,
+        modelRunAttemptId: turn.generation.attemptId,
+        userId: OWNER,
+      }),
+    ).toBe("owner");
+
+    const compiler = createContextCompilerWithRecentSource();
+    const compileInput = {
+      generationCommandId: turn.generation.commandId,
+      interactionTurnId: turn.turn.id,
+      userId: OWNER,
+    } as const;
+    const first = await compiler.compile(compileInput);
+    const firstSections = await database.pool.query<{
+      sections: readonly { key: string; reference: string }[];
+    }>(
+      `SELECT sections FROM compiled_contexts
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, first.id],
+    );
+
+    // A retry clock far ahead of the admitted command must not re-select.
+    advanceMs(5 * 60 * 1_000);
+    const second = await compiler.compile(compileInput);
+    expect(second.id).toBe(first.id);
+    expect(second.referencedRevisionIds).toEqual(first.referencedRevisionIds);
+
+    const compiledRows = await database.pool.query(
+      `SELECT 1 FROM compiled_contexts
+       WHERE user_id = $1 AND generation_command_id = $2`,
+      [OWNER, turn.generation.commandId],
+    );
+    expect(compiledRows.rowCount).toBe(1);
+    const secondSections = await database.pool.query<{
+      sections: readonly { key: string; reference: string }[];
+    }>(
+      `SELECT sections FROM compiled_contexts
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, second.id],
+    );
+    expect(secondSections.rows[0]!.sections).toEqual(
+      firstSections.rows[0]!.sections,
+    );
+
+    const command = await database.pool.query<{ created_at: Date }>(
+      `SELECT created_at FROM generation_commands
+       WHERE user_id = $1 AND generation_command_id = $2`,
+      [OWNER, turn.generation.commandId],
+    );
+    const recentSection = firstSections.rows[0]!.sections.find(
+      (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+    );
+    expect(recentSection).toBeDefined();
+    expect(
+      decodeRecentContextReference(recentSection!.reference).cutoff.expressedAt,
+    ).toBe(command.rows[0]!.created_at.toISOString());
   });
 });

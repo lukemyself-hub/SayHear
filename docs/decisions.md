@@ -22,6 +22,7 @@ Accepted
 ### 技术底座、部署与运行时
 
 - [`0148`](adr/0148-deployment-identity-config-authorization-and-acceptance-are-separate.md)：部署身份、运行配置授权与历史能力验收分离；同配置新 commit 复用未变角色配置与 pins，真实配置变化仍诚实版本化
+- [`0150`](adr/0150-recent-context-ships-after-deterministic-validation.md)：近期对话背景先完成确定性合成验收再上线，体验由 Luke 在正常聊天中验收，不设人评/盲评发布门槛
 - [`0144`](adr/0144-g1-hosted-acceptance-isolated-from-production.md)：G1 在隔离 hosted 环境验收，生产以同一发布身份、pins 和实际功能核验完成切换
 - [`0145`](adr/0145-g1-raw-provider-error-probe-waiver.md)：本次 G1 恢复上线仅跳过原始 Provider 错误探针，保留其余安全门禁并披露缺口
 - [`0147`](adr/0147-g1-opencode-go-provider.md)：G1 对话、Journal 与四个角色改由 OpenCode Go 承载 DeepSeek V4.1 Flash；新增诚实 `opencode-go` 身份与 Chat Completions transport，取代 0102 的 Responses-only 传输限制，保留完整 pin、快照比对与日期化 ZDR 边界
@@ -100,6 +101,7 @@ Accepted
 - [`0141`](adr/0141-g1-only-release-after-g2-retirement.md)：当前只重发 G1；G2 退出、G3 暂停，历史三阶段上线不再适用
 - [`0142`](adr/0142-high-risk-gate-requires-referral-not-a-crisis-number.md)：高风险硬门禁要求把用户引向真实帮助，不要求报出危机热线；号码准确性由白名单另行把关
 - [`0146`](adr/0146-f3-ordinary-double-questions-are-observations.md)：F3 普通回复偶尔两个问句只记录观察；禁止问题、安全姿态及三个以上问题仍阻断
+- [`0149`](adr/0149-recent-conversation-context-is-bounded-source-history.md)：近期对话背景用含今天的七个本地日有界原文，不依赖 Claim/Episode/Reflection；既有 Correction/Forget 明确关联的旧消息整条排除
 - [`0134`](adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)：1A.3b 分三阶段直接切换，已确认的正确性失败立即回滚受影响阶段
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语

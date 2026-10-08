@@ -162,6 +162,10 @@ _Avoid_: Advice, Coaching
 为了继续理解而紧扣用户当前表达提出的问题；默认每轮最多一个，偶尔出现第二个符合日常对话习惯、不算失败，只有频繁堆叠才需要优化。用户愿意继续时可跨轮追问，用户简短回应、回避、拒绝或转换话题后必须停止原方向。
 _Avoid_: Intake question, Question stack
 
+**近期对话背景**:
+来自近期历史交流的有界背景，用于理解用户当前表达；它不等同于长期 Memory，也不表示其中内容已经通过长期记忆准入。
+_Avoid_: 短期 Memory Claim, 长期 Memory, Reflection
+
 **DialogueState**:
 当前 Continuous Exchange 内、由已确认 Event 异步派生的非权威对话状态，包含 `current_topic`、`emotional_intensity`、`advice_explicitly_requested`、`current_request_requires_focus`、`close_intent` 与 `user_willing_to_elaborate` 六个语义字段；每个字段都带 source revision 与 confidence，证据不足时为 null。它只帮助当前对话理解和选择回应，不是 Safety Posture、Continuous Exchange End、Conversation Action 授权、Memory 或 Profile，也不能单独关闭交流或作出安全判断。
 _Avoid_: Model-decided closure, Safety Posture, Conversation Action authorization, Memory, Profile

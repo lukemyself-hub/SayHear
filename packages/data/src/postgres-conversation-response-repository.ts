@@ -83,7 +83,9 @@ type ContextHeadRow = Readonly<{
   relationship_policy_version: string;
   safety_policy_version: string;
   source_revision: string;
+  timezone_at_start: string;
   expected_data_epoch: string;
+  command_created_at: Date;
   rolling_summary_id: string | null;
   rolling_summary_version: string | null;
   rolling_summary_covered_through: string | null;
@@ -722,7 +724,9 @@ export class PostgresConversationResponseRepository
             session.current_continuous_exchange_no AS continuous_exchange_no,
             session.dialogue_revision,
             session.source_revision,
+            session.timezone_at_start,
             command.expected_data_epoch,
+            command.created_at AS command_created_at,
             command.action_execution_id::text AS action_execution_id,
             command.action_execution_status,
             command.action_receipt_sequence,
@@ -902,10 +906,13 @@ export class PostgresConversationResponseRepository
           closurePolicyVersion: row.closure_policy_version,
           continuousExchangeNo: Number(row.continuous_exchange_no),
           id: asDailySessionId(row.daily_session_id),
+          timezone: row.timezone_at_start,
         },
         dialogueRevision: Number(row.dialogue_revision),
         dialogueState: dialogueState.dialogueState,
         dialogueStateFailure: dialogueState.failure,
+        expectedDataEpoch: Number(row.expected_data_epoch),
+        commandCreatedAt: row.command_created_at,
         events: events.rows.map((event) => ({
           actor: event.actor,
           locale: event.locale,
@@ -1070,9 +1077,13 @@ export class PostgresConversationResponseRepository
               estimated_tokens,
               sequence_no,
               section,
-              selection_order
+              selection_order,
+              daily_session_id,
+              expressed_at,
+              occurred_at,
+              selection_reason
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `,
           [
             compiledContextId,
@@ -1084,6 +1095,10 @@ export class PostgresConversationResponseRepository
             event.sequence,
             event.section,
             event.selectionOrder,
+            event.dailySessionId ?? null,
+            event.expressedAt ?? null,
+            event.occurredAt ?? null,
+            event.selectionReason ?? null,
           ],
         );
       }
@@ -2967,11 +2982,18 @@ async function loadContextReferencedEvents(
 ): Promise<readonly CompiledContextReferencedEvent[]> {
   const result = await client.query<{
     actor: "user" | "assistant";
+    daily_session_id: string | null;
     estimated_tokens: string;
+    expressed_at: Date | null;
     locale: string;
+    occurred_at: Date | null;
     revision_id: string;
-    section: "committed_raw_events" | "current_user_input";
+    section:
+      | "committed_raw_events"
+      | "current_user_input"
+      | "recent_conversation_context";
     selection_order: string | null;
+    selection_reason: string | null;
     sequence_no: string;
     text: string;
   }>(
@@ -2982,6 +3004,10 @@ async function loadContextReferencedEvents(
         ref.sequence_no,
         ref.section,
         ref.selection_order,
+        ref.daily_session_id,
+        ref.expressed_at,
+        ref.occurred_at,
+        ref.selection_reason,
         revision.conversation_event_revision_id AS revision_id,
         revision.locale,
         revision.canonical_text AS text
@@ -3005,6 +3031,18 @@ async function loadContextReferencedEvents(
       row.selection_order === null ? null : Number(row.selection_order),
     sequence: Number(row.sequence_no),
     text: row.text,
+    ...(row.daily_session_id === null
+      ? {}
+      : { dailySessionId: asDailySessionId(row.daily_session_id) }),
+    ...(row.expressed_at === null
+      ? {}
+      : { expressedAt: row.expressed_at.toISOString() }),
+    ...(row.occurred_at === null
+      ? {}
+      : { occurredAt: row.occurred_at.toISOString() }),
+    ...(row.selection_reason === null
+      ? {}
+      : { selectionReason: row.selection_reason }),
   }));
 }
 

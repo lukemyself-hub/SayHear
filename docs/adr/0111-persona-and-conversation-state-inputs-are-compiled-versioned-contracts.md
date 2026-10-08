@@ -5,6 +5,10 @@ date: 2026-08-22
 
 # Persona and conversation-state inputs are compiled, versioned contracts
 
+> 2026-10-07：跨日连续性输入由 [ADR-0149](0149-recent-conversation-context-is-bounded-source-history.md)
+> 补充每轮自动带入的近期原文背景，不再只依赖长期 Claim。下文保留原决定及预算基线；
+> 新增背景的预算与读取策略以 ADR-0149 和后续实现 SPEC 为准，不能推断功能已上线。
+
 Issue #64 asks which modules and versioned contracts own stable personality, current-turn emotional understanding, cross-turn conversation state, and cross-day continuity. The answer keeps the existing Context Compiler and bounded Conversation Agent Harness (ADR-0093 / ADR-0094) as the only owners: every one of these concerns enters the model as a compiled, versioned input. No concern is owned by model memory, framework session state (ADR-0068), or a new intermediate artifact.
 
 **Stable personality** is owned by versioned prompt artifacts rendered by the Context Compiler. The persona artifact is structured in three blocks: the Persona Contract Invariant (identity, relationship, trust, and safety commitments shared by all future Personas), the Canonical Persona self-concept and voice, and operational behavior anchors (Selective Curiosity, Curiosity Stop Signal, Playful Warmth, Conversational Rhythm, Grounded Persona Perspective, Capability-Honest Directness). Locale packs realize tone and language habits per language rather than translating; task instruction differs per GenerationCommand stage. Persona commitments are enforced twice: conversationally in the prompt and mechanically by the behavior contract's hard gates. Persona or locale version resolution failure fails the compile closed — identity never ships absent.

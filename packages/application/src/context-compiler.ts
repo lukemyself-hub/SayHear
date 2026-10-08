@@ -53,6 +53,21 @@ import type {
   ConversationActionAdmission,
   ConversationActionExecution,
 } from "./conversation-action-gateway";
+import {
+  decodeRecentContextReference,
+  encodeRecentContextReference,
+  RECENT_CONTEXT_SECTION_KEY,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+  RecentContextReferenceError,
+  resolveRecentContextWindow,
+  selectRecentContext,
+  type RecentContextCutoff,
+  type RecentContextSelection,
+  type RecentContextSelectionPolicy,
+  type RecentContextSourcePort,
+  type RecentContextSourceRequest,
+  type RecentContextSourceSnapshot,
+} from "./recent-context";
 
 /**
  * The trust-action detail of a frozen Action Finalization Receipt (issue
@@ -123,10 +138,16 @@ export type ContextSourceSnapshot = Readonly<{
     closurePolicyVersion: string;
     continuousExchangeNo: number;
     id: DailySessionId;
+    /** IANA timezone at session start; required for recent-source windows. */
+    timezone?: string;
   }>;
   dialogueRevision: number;
   dialogueState?: CurrentDialogueState | null;
   dialogueStateFailure?: boolean;
+  /** Owner data epoch the command was created under (issue #293). */
+  expectedDataEpoch?: number;
+  /** Admitted GenerationCommand time, the frozen recent-source cutoff. */
+  commandCreatedAt?: Date;
   events: readonly ContextSourceEvent[];
   generationStage: GenerationCommandStage;
   /**
@@ -176,6 +197,7 @@ export type CompiledContextSectionKey =
   | "recall_experience"
   | "trust_action_expression"
   | "rolling_summary"
+  | "recent_conversation_context"
   | "committed_raw_events"
   | "current_user_input"
   | "action_finalization_receipt";
@@ -192,8 +214,18 @@ export type CompiledContextSection = Readonly<{
 
 export type CompiledContextReferencedEvent = ContextSourceEvent &
   Readonly<{
+    /** Session identity for cross-day provenance; absent on legacy rows. */
+    dailySessionId?: DailySessionId;
     estimatedTokens: number;
-    section: "committed_raw_events" | "current_user_input";
+    /** Message expression instant for cross-session ordering (ISO-8601). */
+    expressedAt?: string;
+    /** Real-world event time when the source supplied it; never fabricated. */
+    occurredAt?: string | null;
+    selectionReason?: string | null;
+    section:
+      | "committed_raw_events"
+      | "current_user_input"
+      | "recent_conversation_context";
     selectionOrder: number | null;
   }>;
 
@@ -303,6 +335,16 @@ export type ContextCompiler = Readonly<{
   ): RenderedCompiledContextPayload;
 }>;
 
+/**
+ * Optional recent-source wiring (issue #293). When absent the compiler is
+ * byte-for-byte the previous same-day compiler: no recent section is emitted,
+ * no source port is called, and old frozen manifests replay unchanged.
+ */
+export type RecentContextCompilerDependency = Readonly<{
+  policy: RecentContextSelectionPolicy;
+  source: RecentContextSourcePort;
+}>;
+
 export class CompiledContextIntegrityError extends Error {
   public constructor() {
     super("The frozen CompiledContext manifest failed integrity validation.");
@@ -319,12 +361,15 @@ export function createContextCompiler(dependencies: {
   repository: ContextCompilerRepository;
   /** #116: optional until composition enables the retrieval baseline. */
   memoryRetrieval?: MemoryRetrievalPort;
+  /** #293: optional until composition enables the recent-source path (#294). */
+  recentContext?: RecentContextCompilerDependency;
 }): ContextCompiler {
   const integrityKeyVersion =
     dependencies.contentHmacKeyVersion ?? "context-integrity:v1";
 
   return {
     async compile(input) {
+      const now = dependencies.clock();
       const source = await dependencies.repository.loadContextSource(input);
       assertSupportedPolicyVersions(source.policyVersions);
       // Identity-layer resolution is fail-closed: an unknown persona, locale,
@@ -374,6 +419,32 @@ export function createContextCompiler(dependencies: {
           })
         : null;
 
+      const recentContext = dependencies.recentContext
+        ? await loadRecentContextSelection({
+            dependency: dependencies.recentContext,
+            frozenAt: now,
+            source,
+            userId: input.userId,
+          })
+        : null;
+      const recentReferencedEvents: CompiledContextReferencedEvent[] =
+        recentContext === null
+          ? []
+          : recentContext.selected.map((event) => ({
+              actor: event.actor,
+              dailySessionId: event.dailySessionId,
+              estimatedTokens: event.estimatedTokens,
+              expressedAt: event.expressedAt,
+              locale: source.locale,
+              occurredAt: event.occurredAt,
+              revisionId: event.revisionId,
+              section: "recent_conversation_context",
+              selectionOrder: event.selectionOrder,
+              selectionReason: event.selectionReason,
+              sequence: event.sequence,
+              text: event.text,
+            }));
+
       const historyNewestFirst = source.events
         .filter((event) => {
           const dialogueCoverage = dialogueState?.coveredThroughSequence ?? 0;
@@ -402,6 +473,7 @@ export function createContextCompiler(dependencies: {
         (left, right) => left.sequence - right.sequence,
       );
       const referencedEvents: CompiledContextReferencedEvent[] = [
+        ...recentReferencedEvents,
         ...selectedHistory,
         {
           ...currentInput,
@@ -441,6 +513,15 @@ export function createContextCompiler(dependencies: {
         rollingSummary: source.rollingSummary ?? null,
         safetyPosture: source.safetyPosture ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
+        ...(recentContext === null
+          ? {}
+          : {
+              recentContext: {
+                budgetTokens: recentContext.budgetTokens,
+                events: recentReferencedEvents,
+                reference: encodeRecentContextReference(recentContext),
+              },
+            }),
       });
       const sections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -509,7 +590,7 @@ export function createContextCompiler(dependencies: {
           keyVersion: integrityKeyVersion,
         },
         locale: source.locale,
-        now: dependencies.clock(),
+        now,
         policyVersions: source.policyVersions,
         ...(retrievalOutcome
           ? {
@@ -559,6 +640,51 @@ export function createContextCompiler(dependencies: {
       const history = source.referencedEvents
         .filter((event) => event.section === "committed_raw_events")
         .toSorted((left, right) => left.sequence - right.sequence);
+      // #293: the recent section replays only from its frozen reference plus
+      // the revision refs; bodies are re-read from source revisions, never
+      // duplicated in the manifest. An unknown or malformed reference fails
+      // the whole payload closed instead of being reinterpreted.
+      const recentSection = source.sections.find(
+        (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+      );
+      const recentEvents = source.referencedEvents
+        .filter((event) => event.section === "recent_conversation_context")
+        .toSorted(
+          (left, right) =>
+            (left.selectionOrder ?? 0) - (right.selectionOrder ?? 0),
+        );
+      let recentContext:
+        | Readonly<{
+            budgetTokens: number;
+            events: readonly CompiledContextReferencedEvent[];
+            reference: string;
+          }>
+        | undefined;
+      if (recentSection) {
+        let decoded: ReturnType<typeof decodeRecentContextReference>;
+        try {
+          decoded = decodeRecentContextReference(recentSection.reference);
+        } catch (error) {
+          if (error instanceof RecentContextReferenceError) {
+            throw new CompiledContextIntegrityError();
+          }
+          throw error;
+        }
+        if (
+          !recentEventsMatch(decoded, recentEvents) ||
+          decoded.selectedTokens !==
+            recentEvents.reduce((total, event) => total + event.estimatedTokens, 0)
+        ) {
+          throw new CompiledContextIntegrityError();
+        }
+        recentContext = {
+          budgetTokens: decoded.budgetTokens,
+          events: recentEvents,
+          reference: recentSection.reference,
+        };
+      } else if (recentEvents.length > 0) {
+        throw new CompiledContextIntegrityError();
+      }
       const currentInput = currentInputs[0];
       const dailySessionReference = source.sections.find(
         (section) => section.key === "daily_session",
@@ -644,6 +770,7 @@ export function createContextCompiler(dependencies: {
         memorySectionContents,
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
+        ...(recentContext === undefined ? {} : { recentContext }),
       });
       const expectedSections = renderableSections.map(
         ({ content: _content, ...section }) => section,
@@ -671,19 +798,22 @@ export function createContextCompiler(dependencies: {
         instructions: renderableSections
           .filter(
             (section) =>
+              section.key !== "recent_conversation_context" &&
               section.key !== "committed_raw_events" &&
               section.key !== "current_user_input",
           )
           .map((section) => section.content)
           .join("\n") +
           renderActionReferenceInstructions(source.actionReferenceHandles),
-        messages: [...history, currentInput]
-          .toSorted((left, right) => left.sequence - right.sequence)
-          .map((event) => ({
-            revisionId: event.revisionId,
-            role: event.actor,
-            text: event.text,
-          })),
+        messages: [
+          ...(recentContext?.events ?? []),
+          ...history,
+          currentInput,
+        ].map((event) => ({
+          revisionId: event.revisionId,
+          role: event.actor,
+          text: event.text,
+        })),
       };
     },
   };
@@ -933,6 +1063,181 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil([...text].length / 4));
 }
 
+function emptyRecentContextSelection(
+  policy: RecentContextSelectionPolicy,
+  timezone: string,
+  windowStartLocalDate: string,
+  windowEndLocalDate: string,
+  cutoff: RecentContextCutoff,
+  failure: Readonly<{ code: string; detail: string | null }> | null,
+): RecentContextSelection {
+  return {
+    budgetTokens: policy.budgets.maxContextTokens,
+    budgets: policy.budgets,
+    counts: {
+      candidateBytes: 0,
+      candidateRows: 0,
+      selectedCount: 0,
+      truncated: false,
+    },
+    cutoff,
+    excludedRevisionIds: [],
+    failure,
+    omitted:
+      failure === null
+        ? []
+        : [{ controlId: null, reason: "source_read_failed", revisionId: null }],
+    policyVersion: policy.version,
+    selected: [],
+    selectedTokens: 0,
+    selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+    timezone,
+    windowDays: policy.windowDays,
+    windowEndLocalDate,
+    windowStartLocalDate,
+  };
+}
+
+async function loadRecentContextSelection(input: {
+  dependency: RecentContextCompilerDependency;
+  frozenAt: Date;
+  source: ContextSourceSnapshot;
+  userId: UserId;
+}): Promise<RecentContextSelection | null> {
+  const timezone = input.source.dailySession.timezone;
+  const expectedDataEpoch = input.source.expectedDataEpoch;
+  // Without the epoch/timezone the window cannot be frozen deterministically.
+  // Composition wiring these fields is part of enabling #294; until then the
+  // compiler behaves exactly like the pre-#293 compiler.
+  if (timezone === undefined || expectedDataEpoch === undefined) {
+    return null;
+  }
+  const currentInput = input.source.events.find(
+    (event) => event.revisionId === input.source.inputRevisionId,
+  );
+  if (currentInput === undefined) {
+    return null;
+  }
+  // The cutoff is the admitted GenerationCommand time, never the retry clock.
+  const commandCreatedAt = input.source.commandCreatedAt;
+  const windowAnchor = commandCreatedAt ?? input.frozenAt;
+  const window = resolveRecentContextWindow({
+    frozenAt: windowAnchor,
+    timezone,
+    windowDays: input.dependency.policy.windowDays,
+  });
+  const cutoff: RecentContextCutoff = {
+    currentInputRevisionId: currentInput.revisionId,
+    currentInputSequence: currentInput.sequence,
+    dailySessionId: input.source.dailySession.id,
+    expressedAt: windowAnchor.toISOString(),
+  };
+  if (commandCreatedAt === undefined) {
+    return emptyRecentContextSelection(
+      input.dependency.policy,
+      timezone,
+      window.windowStartLocalDate,
+      window.windowEndLocalDate,
+      cutoff,
+      { code: "cutoff_unavailable", detail: null },
+    );
+  }
+  const excludeRevisionIds = input.source.events.map(
+    (event) => event.revisionId,
+  );
+  const request: RecentContextSourceRequest = {
+    budgets: input.dependency.policy.budgets,
+    cutoff,
+    currentDailySessionId: input.source.dailySession.id,
+    excludeRevisionIds,
+    expectedDataEpoch,
+    frozenAt: commandCreatedAt,
+    policyVersion: input.dependency.policy.version,
+    selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+    timezone,
+    userId: input.userId,
+    windowEndLocalDate: window.windowEndLocalDate,
+    windowStartLocalDate: window.windowStartLocalDate,
+  };
+  let snapshot: RecentContextSourceSnapshot;
+  try {
+    snapshot = await input.dependency.source.loadRecentContextSource(request);
+  } catch (error) {
+    return emptyRecentContextSelection(
+      input.dependency.policy,
+      timezone,
+      window.windowStartLocalDate,
+      window.windowEndLocalDate,
+      cutoff,
+      {
+        code: "source_read_threw",
+        detail: error instanceof Error ? error.message : null,
+      },
+    );
+  }
+  if (snapshot.failure !== null) {
+    return emptyRecentContextSelection(
+      input.dependency.policy,
+      timezone,
+      window.windowStartLocalDate,
+      window.windowEndLocalDate,
+      cutoff,
+      snapshot.failure,
+    );
+  }
+  if (
+    snapshot.timezone !== timezone ||
+    snapshot.windowStartLocalDate !== window.windowStartLocalDate ||
+    snapshot.windowEndLocalDate !== window.windowEndLocalDate ||
+    snapshot.selectorVersion !== RECENT_CONTEXT_SELECTION_POLICY_VERSION ||
+    snapshot.policyVersion !== input.dependency.policy.version
+  ) {
+    return emptyRecentContextSelection(
+      input.dependency.policy,
+      timezone,
+      window.windowStartLocalDate,
+      window.windowEndLocalDate,
+      cutoff,
+      { code: "source_metadata_mismatch", detail: null },
+    );
+  }
+  return selectRecentContext({
+    candidateBytes: snapshot.candidateBytes,
+    candidateRows: snapshot.candidateRows,
+    cutoff,
+    excludeRevisionIds,
+    frozenAt: commandCreatedAt,
+    items: snapshot.items,
+    policy: input.dependency.policy,
+    timezone,
+    truncated: snapshot.truncated,
+    windowEndLocalDate: window.windowEndLocalDate,
+    windowStartLocalDate: window.windowStartLocalDate,
+  });
+}
+
+function recentEventsMatch(
+  decoded: ReturnType<typeof decodeRecentContextReference>,
+  events: readonly CompiledContextReferencedEvent[],
+): boolean {
+  if (decoded.selected.length !== events.length) return false;
+  for (const [index, reference] of decoded.selected.entries()) {
+    const event = events[index];
+    if (event === undefined) return false;
+    if (
+      event.revisionId !== reference.revisionId ||
+      event.actor !== reference.actor ||
+      event.selectionOrder !== reference.selectionOrder ||
+      event.expressedAt !== reference.expressedAt ||
+      event.dailySessionId !== reference.dailySessionId ||
+      (event.occurredAt ?? null) !== reference.occurredAt
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function createSections(input: {
   contentHmacSecret: string;
   currentInput: CompiledContextReferencedEvent;
@@ -956,6 +1261,12 @@ function createSections(input: {
   safetyPosture?: CurrentSafetyPosture | null;
   safetyPostureContent?: string;
   actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
+  /** #293: frozen recent-source selection; bodies come from referenced events. */
+  recentContext?: Readonly<{
+    budgetTokens: number;
+    events: readonly CompiledContextReferencedEvent[];
+    reference: string;
+  }>;
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   // While the Safety Posture is active, enforcement is compilation: the
   // ordinary behavior anchors are swapped for the versioned reduced variant,
@@ -1107,6 +1418,26 @@ function createSections(input: {
     ...renderCuriosityStopSignalSection(input),
     ...renderMemorySections(input),
     ...renderRecallExperienceSection(input),
+    ...(input.recentContext === undefined
+      ? []
+      : [
+          {
+            budgetTokens: input.recentContext.budgetTokens,
+            content: input.recentContext.events
+              .map(
+                (event) =>
+                  `${event.actor}:${event.revisionId}:${event.expressedAt ?? "unknown"}:${event.occurredAt ?? "null"}:${event.text}`,
+              )
+              .join("\n"),
+            key: RECENT_CONTEXT_SECTION_KEY,
+            reference: input.recentContext.reference,
+            selectedTokens: input.recentContext.events.reduce(
+              (total, event) => total + event.estimatedTokens,
+              0,
+            ),
+            truncatable: false,
+          },
+        ]),
     {
       budgetTokens: input.rawEventTokenBudget,
       content: input.history

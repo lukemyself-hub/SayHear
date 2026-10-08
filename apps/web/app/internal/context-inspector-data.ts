@@ -254,6 +254,13 @@ export function sectionVersionLabel(
       return "event-revisions";
     case "current_user_input":
       return "event-revision";
+    case "recent_conversation_context":
+      // #293: the frozen reference pins the selector and policy identities.
+      return (
+        section.reference.match(/"selectorVersion":"([^"]+)"/)?.[1] ??
+        section.reference.match(/"policyVersion":"([^"]+)"/)?.[1] ??
+        "recent-context:unavailable"
+      );
   }
 }
 
