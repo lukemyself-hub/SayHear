@@ -17,6 +17,9 @@ next-env.d.ts
 .vercel
 
 # F3 run artifacts are generated per release and bind a git commit that cannot
-# be the commit they are stored in, so they are never tracked. A completed
-# adjudication ledger is the exception: it becomes release evidence.
-eval/continuation-acceptance-1a3b/run/holdout/
+# be the commit they are stored in, so they are never tracked. Completed human
+# evidence is the exception: the adjudication ledger and the four G1 test
+# reports stay tracked as release evidence.
+eval/continuation-acceptance-1a3b/run/*
+!eval/continuation-acceptance-1a3b/run/validator-ledger.json
+!eval/continuation-acceptance-1a3b/run/test-reports/
