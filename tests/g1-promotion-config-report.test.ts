@@ -9,7 +9,10 @@ import {
   collectG1PromotionSnapshots,
   formatG1PromotionConfigReport,
   main as runPromotionConfigReport,
+  resolveScheduleTargetItems,
+  scheduleTargetValue,
   type G1PromotionConfigReport,
+  type ScheduleTargetReader,
 } from "../scripts/g1-promotion-config-report.ts";
 import type {
   EffectiveConfigurationItem,
@@ -182,6 +185,56 @@ function productionWith(
   });
 }
 
+describe("repo-level schedule targets", () => {
+  it("derives cron plus target selection from the workflow, and null when either is missing", () => {
+    const recovery = [
+      "on:",
+      "  schedule:",
+      '    - cron: "13 * * * *"',
+      "          url=\"${OVERRIDE_URL:-$CONFIGURED_URL}\"",
+      "          $url RECOVERY_SCAN_URL api/internal/recovery/scan",
+    ].join("\n");
+    const recoveryValue = scheduleTargetValue(recovery, "recovery");
+    expect(recoveryValue).toContain("13 * * * *");
+    expect(recoveryValue).toContain("/api/internal/recovery/scan");
+
+    const backup = [
+      "on:",
+      "  schedule:",
+      '    - cron: "13 4 1 * *"',
+      "      - name: Record renewed backup evidence",
+      "        run: pnpm db:record-backup",
+    ].join("\n");
+    const backupValue = scheduleTargetValue(backup, "backup");
+    expect(backupValue).toContain("13 4 1 * *");
+    expect(backupValue).toContain("db:record-backup");
+
+    // A removed schedule or a removed target is null, never an assumed equal.
+    expect(
+      scheduleTargetValue("on:\n  workflow_dispatch:\n", "recovery"),
+    ).toBeNull();
+    expect(
+      scheduleTargetValue('on:\n  schedule:\n    - cron: "13 * * * *"\n', "backup"),
+    ).toBeNull();
+  });
+
+  it("resolves the two items through an injected ref reader and reports unreadable refs", async () => {
+    const reader: ScheduleTargetReader = async (path) =>
+      path.includes("recovery")
+        ? 'on:\n  schedule:\n    - cron: "13 * * * *"\nRECOVERY_SCAN_URL api/internal/recovery/scan'
+        : null;
+
+    const resolution = await resolveScheduleTargetItems("b".repeat(40), reader);
+
+    expect(resolution.items.map((entry) => entry.key)).toEqual([
+      "schedule.recovery_scan_target",
+    ]);
+    expect(resolution.items[0]?.source).toBe("platform");
+    expect(resolution.items[0]?.value).toContain("13 * * * *");
+    expect(resolution.unreadable).toEqual(["schedule.backup_renewal_target"]);
+  });
+});
+
 describe("promotion config report identity", () => {
   it("binds the actual candidate SHA, deployment, collection time and config digest", () => {
     const report = build();
@@ -320,6 +373,60 @@ describe("promotion blocking and disclosure", () => {
       operation: "scheduled-scan",
       key: "schedule.recovery_scan_target",
     });
+  });
+
+  it("fires the lost-trigger blocker from repo-derived schedule targets over unverified deployment items", () => {
+    const unverified = (snapshotWithItems: EffectiveConfigurationSnapshot) =>
+      snapshot(
+        snapshotWithItems.items.map((entry) =>
+          entry.category === "schedule-targets"
+            ? { ...entry, source: "unverified" as const, value: null }
+            : entry,
+        ),
+        {
+          commit: snapshotWithItems.commit,
+          deploymentId: snapshotWithItems.deploymentId,
+          collectedAt: snapshotWithItems.collectedAt,
+        },
+      );
+
+    const report = build({
+      currentProduction: unverified(currentProduction),
+      candidateDeployment: unverified(candidateDeployment),
+      scheduleTargets: {
+        currentProduction: [
+          item({
+            category: "schedule-targets",
+            key: "schedule.recovery_scan_target",
+            value: "13 * * * * -> vars.RECOVERY_SCAN_URL -> /api/internal/recovery/scan",
+            source: "platform",
+            critical: false,
+            inManifestFingerprint: false,
+          }),
+        ],
+        candidateDeployment: [
+          item({
+            category: "schedule-targets",
+            key: "schedule.recovery_scan_target",
+            // A candidate whose workflow no longer has a schedule resolves to
+            // null, so the comparison sees a real lost trigger.
+            value: null,
+            source: "platform",
+            critical: false,
+            inManifestFingerprint: false,
+          }),
+        ],
+      },
+    });
+
+    expect(report.promotionAllowed).toBe(false);
+    expect(
+      report.blockers.some(
+        (entry) =>
+          entry.operation === "scheduled-scan" &&
+          entry.key === "schedule.recovery_scan_target",
+      ),
+    ).toBe(true);
   });
 
   it("discloses but does not block on a non-critical difference outside the fingerprint", () => {

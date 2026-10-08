@@ -39,9 +39,11 @@ jobs:
             exit 1
           fi
           start=$(date -u +%s)
-          # 120s by default; overridable so the deadline is deterministic to exercise.
+          # Fixed by spec decision 8: no operator-visible timeout knob may raise
+          # a scan deadline to mask a fault. The test substitutes this literal
+          # in its own extracted-step fixture instead.
           status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
-            --max-time "${RECOVERY_SCAN_MAX_TIME_SECONDS:-120}" \
+            --max-time 120 \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             "$url")
           end=$(date -u +%s)

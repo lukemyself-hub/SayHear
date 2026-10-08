@@ -22,8 +22,8 @@ import {
 } from "@sayhear/application";
 
 import {
+  authorizeContentFreeInspection,
   buildHostedReleaseIdentity,
-  isReleaseIdentityOperatorRequest,
   normalizeDatabaseIdentity,
 } from "./release-identity";
 import { loadRuntimeConfiguration } from "./runtime-config";
@@ -618,17 +618,12 @@ export async function handleEffectiveRuntimeConfigRequest(
   request: Request,
   dependencies: EffectiveRuntimeConfigHandlerDependencies,
 ): Promise<Response> {
-  if (!isReleaseIdentityOperatorRequest(request, dependencies.operatorSecret)) {
-    const session = await dependencies.getSession();
-    if (!session?.user?.id) {
-      return Response.json({ error: "unauthorized" }, { status: 401 });
-    }
-    try {
-      await dependencies.assertOperator(session.user.id);
-    } catch {
-      return Response.json({ error: "forbidden" }, { status: 403 });
-    }
-  }
+  const denied = await authorizeContentFreeInspection(request, {
+    operatorSecret: dependencies.operatorSecret,
+    getSession: dependencies.getSession,
+    assertOperator: dependencies.assertOperator,
+  });
+  if (denied) return denied;
   try {
     return Response.json(
       buildEffectiveRuntimeConfiguration(

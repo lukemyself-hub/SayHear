@@ -34,8 +34,10 @@
  * bearer or an authenticated Owner. Local environment declarations are never
  * the authority for a deployment.
  */
+import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 
 import { ONE_A_3B_G1_ENABLED_ROLES } from "@sayhear/application";
 
@@ -46,11 +48,45 @@ import {
   readEffectiveRuntimeConfiguration,
   type EffectiveConfigItemSource,
   type EffectiveConfigItemValue,
+  type EffectiveConfigurationItem,
   type EffectiveConfigurationSnapshot,
   type EffectiveConfigItemStatus,
   type EffectiveRuntimeConfigCategory,
   type EffectiveRuntimeConfigurationComparison,
 } from "./effective-runtime-config-gate";
+
+const execFileAsync = promisify(execFile);
+
+export type PromotionCommandResult = Readonly<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}>;
+
+export type PromotionCommandRunner = (
+  command: string,
+  args: readonly string[],
+) => Promise<PromotionCommandResult>;
+
+const defaultRunner: PromotionCommandRunner = async (command, args) => {
+  try {
+    const { stdout, stderr } = await execFileAsync(command, [...args], {
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return { stdout, stderr, exitCode: 0 };
+  } catch (error) {
+    const failure = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number | string;
+    };
+    return {
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+      exitCode: typeof failure.code === "number" ? failure.code : 1,
+    };
+  }
+};
 
 export const G1_PROMOTION_CONFIG_REPORT_VERSION =
   "1a3b-g1-promotion-config-report:v1";
@@ -65,6 +101,125 @@ export type PromotionEnvironmentRole =
   (typeof PROMOTION_ENVIRONMENT_ROLES)[number];
 
 export type PromotionComparisonStage = "acceptance" | "promotion";
+
+/**
+ * The scheduled triggers SPEC #275 decisions 6 and 7 require the promotion
+ * comparison to cover. Their real value is owned by the repository workflow at
+ * the compared commit, not by the deployed web process, so
+ * {@link resolveScheduleTargetItems} reads them from git at that ref. A ref or
+ * file that cannot be read stays `unverified` (never equal) and is reported as
+ * a platform read blocker.
+ */
+export const SCHEDULE_TARGET_WORKFLOWS: Readonly<
+  Record<
+    string,
+    Readonly<{ kind: "recovery" | "backup"; path: string }>
+  >
+> = {
+  "schedule.recovery_scan_target": {
+    kind: "recovery",
+    path: ".github/workflows/internal-recovery-scan.yml",
+  },
+  "schedule.backup_renewal_target": {
+    kind: "backup",
+    path: ".github/workflows/backup-evidence-renewal.yml",
+  },
+};
+
+/**
+ * The content-free schedule value derived from one workflow file: the cron
+ * expression plus the target/destination the schedule selects. A missing cron
+ * or a missing target is `null`, so the comparison sees a real lost trigger
+ * rather than an assumption of equality.
+ */
+export function scheduleTargetValue(
+  workflow: string,
+  kind: "recovery" | "backup",
+): EffectiveConfigItemValue {
+  const crons = [
+    ...workflow.matchAll(/-\s*cron:\s*["']?([^"'\n]+?)["']?\s*$/gm),
+  ]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value));
+  if (crons.length === 0) return null;
+  const target =
+    kind === "recovery"
+      ? /api\/internal\/recovery\/scan/.test(workflow) &&
+        /RECOVERY_SCAN_URL/.test(workflow)
+        ? "vars.RECOVERY_SCAN_URL -> /api/internal/recovery/scan"
+        : null
+      : /db:record-backup/.test(workflow)
+        ? "db:record-backup (+30 days after the Neon PITR window verifies)"
+        : null;
+  if (!target) return null;
+  return `${crons.join(",")} -> ${target}`;
+}
+
+/** Read a workflow file at a commit; `null` means the ref/file was unreadable. */
+export type ScheduleTargetReader = (
+  path: string,
+  commit: string,
+) => Promise<string | null>;
+
+/** The default reader: `git show <commit>:<path>`, never the working tree. */
+export function gitScheduleTargetReader(
+  runner: PromotionCommandRunner = defaultRunner,
+): ScheduleTargetReader {
+  return async (path, commit) => {
+    const result = await runner("git", ["show", `${commit}:${path}`]);
+    return result.exitCode === 0 ? result.stdout : null;
+  };
+}
+
+export type ScheduleTargetResolution = Readonly<{
+  items: readonly EffectiveConfigurationItem[];
+  /** Keys whose ref/file was unreadable and therefore stay `unverified`. */
+  unreadable: readonly string[];
+}>;
+
+export async function resolveScheduleTargetItems(
+  commit: string,
+  readWorkflowAtRef: ScheduleTargetReader,
+): Promise<ScheduleTargetResolution> {
+  const items: EffectiveConfigurationItem[] = [];
+  const unreadable: string[] = [];
+  for (const [key, { kind, path }] of Object.entries(SCHEDULE_TARGET_WORKFLOWS)) {
+    const workflow = await readWorkflowAtRef(path, commit);
+    if (workflow === null) {
+      unreadable.push(key);
+      continue;
+    }
+    items.push({
+      category: "schedule-targets",
+      critical: false,
+      inManifestFingerprint: false,
+      key,
+      source: "platform",
+      value: scheduleTargetValue(workflow, kind),
+    });
+  }
+  return { items, unreadable };
+}
+
+function scheduleItemsMissingOrUnverified(
+  snapshot: EffectiveConfigurationSnapshot,
+): boolean {
+  const byKey = new Map(snapshot.items.map((item) => [item.key, item]));
+  return Object.keys(SCHEDULE_TARGET_WORKFLOWS).some((key) => {
+    const entry = byKey.get(key);
+    return entry === undefined || entry.source === "unverified";
+  });
+}
+
+function withScheduleTargets(
+  snapshot: EffectiveConfigurationSnapshot,
+  extra: readonly EffectiveConfigurationItem[] | undefined,
+): EffectiveConfigurationSnapshot {
+  if (!extra || extra.length === 0) return snapshot;
+  const byKey = new Map(snapshot.items.map((item) => [item.key, item]));
+  for (const item of extra) byKey.set(item.key, item);
+  return { ...snapshot, items: [...byKey.values()] };
+}
 
 export type PromotionEnvironmentEvidence = Readonly<{
   collectedAt: string;
@@ -156,6 +311,16 @@ export type PromotionConfigReportInput = Readonly<{
   currentProduction: EffectiveConfigurationSnapshot;
   isolatedAcceptance: EffectiveConfigurationSnapshot;
   platformReadBlockers?: readonly PromotionPlatformReadBlocker[];
+  /**
+   * Repo-level schedule targets resolved at each compared ref (see
+   * {@link resolveScheduleTargetItems}). They override the deployment's
+   * `unverified` schedule items so a real lost trigger can be detected.
+   */
+  scheduleTargets?: Readonly<{
+    candidateDeployment?: readonly EffectiveConfigurationItem[];
+    currentProduction?: readonly EffectiveConfigurationItem[];
+    isolatedAcceptance?: readonly EffectiveConfigurationItem[];
+  }>;
 }>;
 
 function environmentEvidence(
@@ -338,13 +503,26 @@ function buildRollbackPlan(
 export function buildG1PromotionConfigReport(
   input: PromotionConfigReportInput,
 ): G1PromotionConfigReport {
+  const isolatedAcceptance = withScheduleTargets(
+    input.isolatedAcceptance,
+    input.scheduleTargets?.isolatedAcceptance,
+  );
+  const currentProduction = withScheduleTargets(
+    input.currentProduction,
+    input.scheduleTargets?.currentProduction,
+  );
+  const candidateDeployment = withScheduleTargets(
+    input.candidateDeployment,
+    input.scheduleTargets?.candidateDeployment,
+  );
+
   const acceptanceComparison = compareEffectiveRuntimeConfiguration({
-    baseline: input.isolatedAcceptance,
-    candidate: input.currentProduction,
+    baseline: isolatedAcceptance,
+    candidate: currentProduction,
   });
   const promotionComparison = compareEffectiveRuntimeConfiguration({
-    baseline: input.currentProduction,
-    candidate: input.candidateDeployment,
+    baseline: currentProduction,
+    candidate: candidateDeployment,
     // Production and its candidate share the production identity; only the
     // isolated acceptance comparison enforces expected separation.
     isolation: "ignore",
@@ -368,15 +546,15 @@ export function buildG1PromotionConfigReport(
   return {
     acceptanceComparison,
     blockers,
-    collectedAt: input.candidateDeployment.collectedAt,
-    commit: input.candidateDeployment.commit,
+    collectedAt: candidateDeployment.collectedAt,
+    commit: candidateDeployment.commit,
     configDigest: promotionComparison.candidate.configDigest,
-    deploymentId: input.candidateDeployment.deploymentId,
+    deploymentId: candidateDeployment.deploymentId,
     differences,
     environments: [
-      environmentEvidence("isolated-acceptance", input.isolatedAcceptance),
-      environmentEvidence("current-production", input.currentProduction),
-      environmentEvidence("candidate-deployment", input.candidateDeployment),
+      environmentEvidence("isolated-acceptance", isolatedAcceptance),
+      environmentEvidence("current-production", currentProduction),
+      environmentEvidence("candidate-deployment", candidateDeployment),
     ],
     platformReadBlockers,
     promotionAllowed,
@@ -517,7 +695,10 @@ async function readJson(path: string): Promise<unknown> {
  */
 export async function main(
   argv: readonly string[] = process.argv.slice(2),
-  io: { stdout: (line: string) => void } = {
+  io: {
+    stdout: (line: string) => void;
+    runner?: PromotionCommandRunner;
+  } = {
     stdout: (line) => process.stdout.write(`${line}\n`),
   },
 ): Promise<number> {
@@ -530,16 +711,56 @@ export async function main(
       "Usage: g1-promotion-config-report.ts --isolated <acceptance.json> --production <current.json> --candidate <candidate.json> [--report <report.json>]",
     );
   }
+  const isolatedAcceptance = parseEffectiveConfigurationSnapshot(
+    await readJson(isolatedPath),
+  );
+  const currentProduction = parseEffectiveConfigurationSnapshot(
+    await readJson(productionPath),
+  );
+  const candidateDeployment = parseEffectiveConfigurationSnapshot(
+    await readJson(candidatePath),
+  );
+
+  // The deployment cannot read the repository's schedule, so fill the schedule
+  // targets from the workflow at each compared ref via git. An unreadable ref
+  // keeps the deployment's `unverified` item and is reported as a platform
+  // read blocker; it is never assumed equal.
+  const reader = gitScheduleTargetReader(io.runner);
+  const platformReadBlockers: PromotionPlatformReadBlocker[] = [];
+  async function resolveFor(
+    role: PromotionEnvironmentRole,
+    snapshot: EffectiveConfigurationSnapshot,
+  ): Promise<readonly EffectiveConfigurationItem[]> {
+    if (!scheduleItemsMissingOrUnverified(snapshot)) return [];
+    const resolved = await resolveScheduleTargetItems(snapshot.commit, reader);
+    for (const key of resolved.unreadable) {
+      platformReadBlockers.push({
+        role,
+        reason: `The ${key} workflow could not be read at ${snapshot.commit}; the schedule item stays unverified and is never treated as equal.`,
+      });
+    }
+    return resolved.items;
+  }
+
   const report = buildG1PromotionConfigReport({
-    isolatedAcceptance: parseEffectiveConfigurationSnapshot(
-      await readJson(isolatedPath),
-    ),
-    currentProduction: parseEffectiveConfigurationSnapshot(
-      await readJson(productionPath),
-    ),
-    candidateDeployment: parseEffectiveConfigurationSnapshot(
-      await readJson(candidatePath),
-    ),
+    isolatedAcceptance,
+    currentProduction,
+    candidateDeployment,
+    scheduleTargets: {
+      isolatedAcceptance: await resolveFor(
+        "isolated-acceptance",
+        isolatedAcceptance,
+      ),
+      currentProduction: await resolveFor(
+        "current-production",
+        currentProduction,
+      ),
+      candidateDeployment: await resolveFor(
+        "candidate-deployment",
+        candidateDeployment,
+      ),
+    },
+    platformReadBlockers,
   });
   io.stdout(formatG1PromotionConfigReport(report));
   const reportPath = args.get("--report");

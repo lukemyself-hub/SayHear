@@ -229,7 +229,9 @@ function rolloutMatchesConfiguration(
   row: ActiveRolloutRow,
   role: string,
   configuration: ModelRoleConfigurationSnapshot,
-  releaseFingerprint?: string,
+  // Only the presence of an acceptance binding matters; the fingerprint value
+  // itself is never compared (ADR-0148). Named for what it requires.
+  requiresAcceptanceBinding?: string,
 ): boolean {
   return (
     // ADR-0148: runtime authorization is the exact immutable role
@@ -239,7 +241,7 @@ function rolloutMatchesConfiguration(
     // still constructed with the accepted release identity, so an active pin
     // must carry an acceptance binding, but that binding may predate the
     // current deployment. The value itself is historical and is not compared.
-    (releaseFingerprint === undefined || row.release_fingerprint !== null) &&
+    (requiresAcceptanceBinding === undefined || row.release_fingerprint !== null) &&
     row.role === role &&
     row.enabled &&
     row.policy_status === "active" &&

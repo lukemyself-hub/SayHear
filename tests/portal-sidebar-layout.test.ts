@@ -103,4 +103,43 @@ describe("portal shell layout (ticket #283)", () => {
     expect(railIndex).toBeLessThan(listIndex);
     expect(listIndex).toBeLessThan(footerIndex);
   });
+
+  it("keeps the visual-acceptance harness classes aligned with the real stylesheet", async () => {
+    const harness = await readFile(
+      new URL("../scripts/portal-visual-acceptance.mjs", import.meta.url),
+      "utf8",
+    );
+    const styles = await readFile(stylesUrl, "utf8");
+    const shell = await readFile(shellUrl, "utf8");
+
+    // The harness mirrors the shell's markup by hand (it cannot import the TS
+    // components), so this guard fails if either side renames one of the
+    // measured classes and the harness would otherwise measure nothing.
+    const measuredClasses = [
+      "portalShell",
+      "portalNav",
+      "moduleRail",
+      "moduleList",
+      "moduleListEntry",
+      "journalDateLabel",
+      "portalFooter",
+      "portalFooterOwner",
+      "portalFooterState",
+    ];
+    for (const className of measuredClasses) {
+      expect(harness, `harness is missing .${className}`).toContain(className);
+      expect(styles, `styles.css is missing .${className}`).toContain(
+        `.${className}`,
+      );
+    }
+    for (const className of [
+      "portalFooter",
+      "portalFooterOwner",
+      "portalFooterState",
+    ]) {
+      expect(shell, `portal-shell.tsx is missing .${className}`).toContain(
+        className,
+      );
+    }
+  });
 });

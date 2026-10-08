@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { describe, expect, it } from "vitest";
 
+import { expectedSystemSuiteCount } from "../scripts/ci/system-suite-execution.ts";
+
 const repositoryRoot = new URL("../", import.meta.url);
 
 async function readRepositoryFile(relativePath: string): Promise<string> {
@@ -47,10 +49,9 @@ describe("PR validate workflow", () => {
 
     expect(validateSteps.length).toBeGreaterThan(1);
     for (const script of validateSteps) {
-      const ciVariant = script === "test" ? "test:ci" : script;
       expect(
-        workflow.includes(`run: pnpm ${ciVariant}\n`),
-        `the PR workflow does not run \`pnpm ${ciVariant}\` from the validate composition`,
+        workflow.includes(`run: pnpm ${script}\n`),
+        `the PR workflow does not run \`pnpm ${script}\` from the validate composition`,
       ).toBe(true);
     }
   });
@@ -130,6 +131,16 @@ describe("PR validate workflow", () => {
     expect(workflow).toContain(
       "run: pnpm ci:assert-system-suites artifacts/vitest-report.json\n",
     );
+  });
+
+  it("cites the pinned system suite count so the workflow comment cannot go stale", async () => {
+    const workflow = await readRepositoryFile(
+      ".github/workflows/pr-validate.yml",
+    );
+
+    // The workflow comment must repeat the exact count pinned by
+    // `expectedSystemSuiteCount`; this guard fails the moment the two drift.
+    expect(workflow).toContain(`${expectedSystemSuiteCount} system suites`);
   });
 
   it("does not make the merge gate depend on lint or a local hook", async () => {

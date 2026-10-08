@@ -26,14 +26,18 @@
  * The effective configuration comparison reuses the pure module from ticket
  * #278 (`./effective-runtime-config-gate`) rather than duplicating it.
  */
+import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 
 import {
   compareEffectiveRuntimeConfiguration,
   parseEffectiveConfigurationSnapshot,
 } from "./effective-runtime-config-gate";
 import { buildG1PromotionConfigReport } from "./g1-promotion-config-report";
+
+const execFileAsync = promisify(execFile);
 
 export const DAILY_RELEASE_VALIDATION_VERSION =
   "1a3b-daily-release-validation:v1";
@@ -487,6 +491,20 @@ export type ReleaseValidationDisposition =
   | "reused"
   | "rerun-retained-failure";
 
+/**
+ * Whether a selected check was actually run in this process. Planning never
+ * claims a result it did not produce: everything is `planned` until the opt-in
+ * `--execute` path runs the lightweight deterministic checks, heavy evidence
+ * producers stay explicitly `out-of-scope`, and a same-byte artifact is
+ * `reused` rather than re-run.
+ */
+export type ReleaseCheckExecutionStatus =
+  | "planned"
+  | "reused"
+  | "out-of-scope"
+  | "executed"
+  | "failed";
+
 export type SelectedReleaseCheck = Readonly<{
   check: ReleaseCheck;
   rationale: string;
@@ -497,6 +515,7 @@ export type SelectedReleaseCheck = Readonly<{
     | "capability-trigger"
     | "release-stage";
   disposition: ReleaseValidationDisposition;
+  execution: ReleaseCheckExecutionStatus;
   contentIdentity?: string;
   evidencePath?: string;
 }>;
@@ -663,11 +682,20 @@ export function planDailyReleaseValidation(
             previous.contentSha256 === input.contentSha256
           ? "reused"
           : "run";
+    const heavy =
+      check.fullProducer || check.providerCalls || check.modelCalls;
+    const execution: ReleaseCheckExecutionStatus =
+      disposition === "reused"
+        ? "reused"
+        : heavy
+          ? "out-of-scope"
+          : "planned";
     return {
       check,
       rationale,
       source,
       disposition,
+      execution,
       ...(input ? { contentIdentity: input.contentSha256 } : {}),
       ...(previous?.evidencePath ? { evidencePath: previous.evidencePath } : {}),
     };
@@ -832,12 +860,116 @@ export function formatDailyReleaseValidationSummary(
   );
   for (const entry of [...plan.fixedBaseline, ...plan.targeted, ...plan.reused]) {
     lines.push(
-      `check ${entry.check.id} disposition=${entry.disposition} content_identity=${
+      `check ${entry.check.id} disposition=${entry.disposition} execution=${
+        entry.execution
+      } content_identity=${
         entry.contentIdentity ?? "unrecorded"
       } evidence=${entry.evidencePath ?? entry.check.evidenceLocation ?? "-"}`,
     );
   }
   return lines.join("\n");
+}
+
+export type DailyReleaseCommandResult = Readonly<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}>;
+
+export type DailyReleaseCommandRunner = (
+  command: string,
+  args: readonly string[],
+) => Promise<DailyReleaseCommandResult>;
+
+const defaultRunner: DailyReleaseCommandRunner = async (command, args) => {
+  try {
+    const { stdout, stderr } = await execFileAsync(command, [...args], {
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    return { stdout, stderr, exitCode: 0 };
+  } catch (error) {
+    const failure = error as {
+      stdout?: string;
+      stderr?: string;
+      code?: number | string;
+    };
+    return {
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+      exitCode: typeof failure.code === "number" ? failure.code : 1,
+    };
+  }
+};
+
+/**
+ * Only the lightweight deterministic check commands are auto-run. The full
+ * `test:ci`, `build`, `typecheck` and every evidence producer are deliberately
+ * excluded: the daily entry must not start the heavy 12-item producer, and it
+ * must not recursively invoke the whole suite from inside a plan step.
+ */
+function isLightweightDeterministicCheck(check: ReleaseCheck): boolean {
+  return (
+    !check.fullProducer &&
+    !check.providerCalls &&
+    !check.modelCalls &&
+    check.command.startsWith("pnpm exec vitest run ")
+  );
+}
+
+/**
+ * Opt-in execution of the selected lightweight deterministic checks. Each
+ * selected check records whether it was actually executed in this run, and a
+ * non-zero exit from the check is reported as `failed` rather than hidden
+ * behind a plan.
+ */
+export async function executeSelectedChecks(
+  plan: ReleaseValidationPlan,
+  runner: DailyReleaseCommandRunner = defaultRunner,
+): Promise<ReleaseValidationPlan> {
+  const runEntry = async (
+    entry: SelectedReleaseCheck,
+  ): Promise<SelectedReleaseCheck> => {
+    if (
+      entry.execution !== "planned" ||
+      !isLightweightDeterministicCheck(entry.check)
+    ) {
+      return entry;
+    }
+    const [command, ...args] = entry.check.command
+      .split(" ")
+      .filter((part) => part.length > 0);
+    if (!command) return entry;
+    const result = await runner(command, args);
+    return {
+      ...entry,
+      execution: result.exitCode === 0 ? "executed" : "failed",
+    };
+  };
+  const fixedBaseline = await Promise.all(plan.fixedBaseline.map(runEntry));
+  const targeted = await Promise.all(plan.targeted.map(runEntry));
+  const reused = await Promise.all(plan.reused.map(runEntry));
+  return { ...plan, fixedBaseline, targeted, reused };
+}
+
+/**
+ * The daily entry's exit code. A plan that still needs its impact located, an
+ * incompatible effective configuration, a blocked promotion or a failed
+ * executed check is a non-zero result; a plan with nothing to do exits 0.
+ */
+export function dailyReleaseValidationExitCode(
+  plan: ReleaseValidationPlan,
+): number {
+  const failedExecution = [...plan.fixedBaseline, ...plan.targeted].some(
+    (entry) => entry.execution === "failed",
+  );
+  const incompatible = plan.effectiveConfig?.compatible === false;
+  const promotionBlocked = plan.promotion?.promotionAllowed === false;
+  return plan.requiresImpactLocation ||
+    incompatible ||
+    promotionBlocked ||
+    failedExecution
+    ? 1
+    : 0;
 }
 
 function assertObject(value: unknown, label: string): Record<string, unknown> {
@@ -1043,7 +1175,10 @@ async function readJson(path: string): Promise<unknown> {
  */
 export async function main(
   argv: readonly string[] = process.argv.slice(2),
-  io: { stdout: (line: string) => void } = {
+  io: {
+    stdout: (line: string) => void;
+    runner?: DailyReleaseCommandRunner;
+  } = {
     stdout: (line) => process.stdout.write(`${line}\n`),
   },
 ): Promise<number> {
@@ -1051,18 +1186,21 @@ export async function main(
   const requestPath = args.get("--request");
   if (!requestPath) {
     throw new Error(
-      "Usage: daily-release-validation.ts --request <request.json> [--report <plan.json>]",
+      "Usage: daily-release-validation.ts --request <request.json> [--report <plan.json>] [--execute]",
     );
   }
   const request = parseDailyReleaseValidationRequest(await readJson(requestPath));
-  const plan = planDailyReleaseValidation(request);
+  let plan = planDailyReleaseValidation(request);
+  if (args.has("--execute")) {
+    plan = await executeSelectedChecks(plan, io.runner);
+  }
   io.stdout(formatDailyReleaseValidationSummary(plan));
   const reportPath = args.get("--report");
   if (reportPath) {
     await writeFile(reportPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
     io.stdout(`plan written to ${reportPath}`);
   }
-  return 0;
+  return dailyReleaseValidationExitCode(plan);
 }
 
 const isDirectRun =
