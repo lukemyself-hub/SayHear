@@ -39,8 +39,9 @@ jobs:
             exit 1
           fi
           start=$(date -u +%s)
+          # 120s by default; overridable so the deadline is deterministic to exercise.
           status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
-            --max-time 120 \
+            --max-time "${RECOVERY_SCAN_MAX_TIME_SECONDS:-120}" \
             --header "Authorization: Bearer ${CRON_SECRET}" \
             "$url")
           end=$(date -u +%s)
