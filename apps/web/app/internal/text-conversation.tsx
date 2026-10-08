@@ -244,6 +244,12 @@ export function TextConversation(props: {
       } satisfies PendingSubmission);
     pending.current = submission;
     inFlightRef.current = true;
+    // Hide the sent text the moment it is on its way. Keeping it in the field
+    // while the reply is still streaming read as "not sent yet", even though
+    // the message was already committed above the composer. `pending` keeps the
+    // exact submission, and a failure before that commit puts the text back for
+    // an explicit retry.
+    setText("");
     setWait((current) => reduceWaitState(current, { type: "submit" }));
     setError(null);
     let userCommitted = false;
@@ -388,7 +394,9 @@ export function TextConversation(props: {
           setTimeline,
         );
       }
-      if (!plan.preserveDraft) {
+      if (plan.preserveDraft) {
+        setText(submission.text);
+      } else {
         setText("");
         shell?.clearDraft(props.draftKey);
       }
