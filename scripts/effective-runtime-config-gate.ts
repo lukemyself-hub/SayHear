@@ -35,6 +35,8 @@ import { pathToFileURL } from "node:url";
 
 import { sha256Hex } from "@sayhear/application";
 
+import { containsForbiddenContent } from "./content-free";
+
 export const EFFECTIVE_RUNTIME_CONFIG_VERSION =
   "1a3b-g1-effective-runtime-config:v1";
 export const EFFECTIVE_RUNTIME_CONFIG_REPORT_VERSION =
@@ -493,12 +495,7 @@ function assertContentFree(label: string, value: unknown): void {
   if (value.length > 4096) {
     throw new Error(`${label} is too long to be a content-free configuration value.`);
   }
-  if (
-    /postgres(?:ql)?:\/\//i.test(value) ||
-    /\bsk-[A-Za-z0-9_-]{8,}/.test(value) ||
-    /bearer\s+\S+/i.test(value) ||
-    /-----BEGIN [A-Z ]+-----/.test(value)
-  ) {
+  if (containsForbiddenContent(value)) {
     throw new Error(
       `${label} is not content-free; secret values and connection strings are never recorded.`,
     );

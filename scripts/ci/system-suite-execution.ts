@@ -101,7 +101,7 @@ export function assertSystemSuitesExecuted(
     executedSystemSuites !== input.expectedCount
   ) {
     throw new Error(
-      `System suite execution check failed: expected ${input.expectedCount} system suites in tests/${SYSTEM_SUITE_DIRECTORY}, discovered ${input.discoveredSystemSuites.length} and executed ${executedSystemSuites}.`,
+      `System suite execution check failed: expected ${input.expectedCount} system suites in ${SYSTEM_SUITE_DIRECTORY}, discovered ${input.discoveredSystemSuites.length} and executed ${executedSystemSuites}.`,
     );
   }
   if (!input.report.success) {

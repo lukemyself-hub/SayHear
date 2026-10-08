@@ -47,6 +47,7 @@ import {
   buildG1PromotionConfigReport,
   type G1PromotionConfigReport,
 } from "./g1-promotion-config-report";
+import { containsForbiddenContent } from "./content-free";
 import { parseEffectiveConfigurationSnapshot } from "./effective-runtime-config-gate";
 
 const execFileAsync = promisify(execFile);
@@ -59,20 +60,14 @@ const PROMOTION_FIXTURE_DIRECTORY = join(
   "tests/fixtures/g1-promotion-config-report",
 );
 
-const INTEGRATION_SHA = "a1fcb4595af825b9817c21226fc1cff77f738f28";
-const BASE_SHA = "5812cf3a6ef4aa2e0e58e99ca4ef27505767c356";
-
-/** Full SHAs of the merged implementation tickets #276-#283. */
-const TICKET_SHA = {
-  "276": "04d9c6ad25724dcae48be4d30d80964be5ead141",
-  "277": "387cc2e80f16cc7a7155ed11de8707e445df55be",
-  "278": "6c7524d11abf5242231da0027f03a47a0c422f2a",
-  "279": "25385de07f17b0fd913d3ae3af360494a326c138",
-  "280": "c0c4c1be8c8f9bc1505335047791c349217371a7",
-  "281": "a166e758173af8e69d133ca63f4cb4be31715a3d",
-  "282": "3e7332467799144770af4146a4c619175162551d",
-  "283": "b83449c736ab7eb7be95ef7f5fd2c5051e3b6117",
-} as const;
+/**
+ * Identity used only by {@link syntheticClosureFixture}. The runtime collector
+ * has no identity default: it requires an explicit PR/branch/base and fails
+ * when git or `gh` cannot establish them, so a report can never silently assert
+ * a SPEC-specific commit as evidence.
+ */
+const FIXTURE_INTEGRATION_COMMIT = "a1fcb4595af825b9817c21226fc1cff77f738f28";
+const FIXTURE_BASE_COMMIT = "5812cf3a6ef4aa2e0e58e99ca4ef27505767c356";
 
 export type CommandResult = Readonly<{
   stdout: string;
@@ -233,7 +228,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-01",
     title: "PR CI runs runtime/boundaries/purge/typecheck/test/build and browser bundle",
     tickets: ["#276"],
-    commits: [TICKET_SHA["276"]],
+    commits: ["04d9c6ad25724dcae48be4d30d80964be5ead141"],
     files: [
       ".github/workflows/pr-validate.yml",
       "tests/ci-pr-validate-workflow.test.ts",
@@ -250,7 +245,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-02",
     title: "Two real, separate test databases with migrations and synthetic fixtures",
     tickets: ["#276"],
-    commits: [TICKET_SHA["276"]],
+    commits: ["04d9c6ad25724dcae48be4d30d80964be5ead141"],
     files: [
       ".github/workflows/pr-validate.yml",
       "tests/ci-test-databases.test.ts",
@@ -270,7 +265,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-03",
     title: "CI is isolated from production secrets, private data and real providers",
     tickets: ["#276"],
-    commits: [TICKET_SHA["276"]],
+    commits: ["04d9c6ad25724dcae48be4d30d80964be5ead141"],
     files: [
       ".github/workflows/pr-validate.yml",
       "tests/ci-pr-validate-workflow.test.ts",
@@ -285,7 +280,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-04",
     title: "Hourly recovery scan and backup renewal schedules stay structurally protected",
     tickets: ["#277"],
-    commits: [TICKET_SHA["277"]],
+    commits: ["387cc2e80f16cc7a7155ed11de8707e445df55be"],
     files: [
       "scripts/ci/check-workflow-triggers.mjs",
       "tests/recovery-cron-config.test.ts",
@@ -301,7 +296,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-05",
     title: "Schedule and dispatch still route through the original scan behavior",
     tickets: ["#277"],
-    commits: [TICKET_SHA["277"]],
+    commits: ["387cc2e80f16cc7a7155ed11de8707e445df55be"],
     files: [
       "tests/recovery-scan-workflow-behavior.test.ts",
       "tests/recovery-scanner-handler.test.ts",
@@ -318,7 +313,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-06",
     title: "Effective deployed configuration is compared with sources and defaults",
     tickets: ["#278", "#282"],
-    commits: [TICKET_SHA["278"], TICKET_SHA["282"]],
+    commits: ["6c7524d11abf5242231da0027f03a47a0c422f2a", "3e7332467799144770af4146a4c619175162551d"],
     files: [
       "scripts/effective-runtime-config-gate.ts",
       "tests/effective-runtime-config-gate.test.ts",
@@ -335,7 +330,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-07",
     title: "Layered Weekly deadline budgets are checked instead of one ~120s window",
     tickets: ["#278"],
-    commits: [TICKET_SHA["278"]],
+    commits: ["6c7524d11abf5242231da0027f03a47a0c422f2a"],
     files: [
       "scripts/effective-runtime-config-gate.ts",
       "tests/effective-runtime-config-gate.test.ts",
@@ -350,7 +345,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-08",
     title: "Promotion report covers in/out fingerprint keys with reason, impact, verification and rollback",
     tickets: ["#282"],
-    commits: [TICKET_SHA["282"]],
+    commits: ["3e7332467799144770af4146a4c619175162551d"],
     files: [
       "scripts/g1-promotion-config-report.ts",
       "tests/g1-promotion-config-report.test.ts",
@@ -366,7 +361,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-09",
     title: "Same-config UI and ordinary server commits reuse unchanged pins without full evidence",
     tickets: ["#279", "#281"],
-    commits: [TICKET_SHA["279"], TICKET_SHA["281"]],
+    commits: ["25385de07f17b0fd913d3ae3af360494a326c138", "a166e758173af8e69d133ca63f4cb4be31715a3d"],
     files: [
       "tests/g1-release-authorization.test.ts",
       "scripts/daily-release-validation.ts",
@@ -374,15 +369,16 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     ],
     commands: ["pnpm release:validate"],
     runIds: [37732855645],
-    status: "verified",
-    blocker: null,
-    note: "The release trajectory never starts release:g1:produce for a same-config commit.",
+    status: "partial",
+    blocker:
+      "No production deployment of a same-config UI or ordinary server commit exists, so this is proven only by the local release-trajectory test and a CI run; neither proves a real deployment was authorized and published.",
+    note: "The release trajectory never starts release:g1:produce for a same-config commit; a real deployment remains pending (see LIMITATIONS).",
   },
   {
     id: "AC-10",
     title: "A real configuration change honestly versions only the affected role",
     tickets: ["#280"],
-    commits: [TICKET_SHA["280"]],
+    commits: ["c0c4c1be8c8f9bc1505335047791c349217371a7"],
     files: [
       "tests/system/g1-single-role-config-transition.system.test.ts",
       "packages/data/src/postgres-model-role-command-repository.ts",
@@ -391,15 +387,16 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
       "pnpm exec vitest run tests/system/g1-single-role-config-transition.system.test.ts",
     ],
     runIds: [],
-    status: "verified",
-    blocker: null,
+    status: "partial",
+    blocker:
+      "The single-role versioning is proven only against the isolated synthetic PostgreSQL system seam in this checkout; no real production configuration change has been versioned or deployed, so this runId list is empty.",
     note: "Runs against the isolated PostgreSQL system seam; missing/unknown/retired roles still fail closed.",
   },
   {
     id: "AC-11",
     title: "Config revoke/rollback and data fences keep old in-flight results out of current",
     tickets: ["#279", "#280"],
-    commits: [TICKET_SHA["279"], TICKET_SHA["280"]],
+    commits: ["25385de07f17b0fd913d3ae3af360494a326c138", "c0c4c1be8c8f9bc1505335047791c349217371a7"],
     files: [
       "tests/system/g1-single-role-config-transition.system.test.ts",
       "tests/system/g1-release-activation.system.test.ts",
@@ -409,15 +406,16 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
       "pnpm exec vitest run tests/system/g1-single-role-config-transition.system.test.ts tests/system/g1-release-activation.system.test.ts tests/system/g1-purge-restore-drill.system.test.ts",
     ],
     runIds: [],
-    status: "verified",
-    blocker: null,
+    status: "partial",
+    blocker:
+      "Revoke/rollback and the data fences are proven only against the isolated synthetic PostgreSQL system suites in this checkout; no real production deployment has exercised them, so this runId list is empty.",
     note: "Revoke stops admission; rollout_pin_changed/source_changed/data_epoch discard in-flight results.",
   },
   {
     id: "AC-12",
     title: "Impact-based check selection covers each behavior kind without full re-verification",
     tickets: ["#281"],
-    commits: [TICKET_SHA["281"]],
+    commits: ["a166e758173af8e69d133ca63f4cb4be31715a3d"],
     files: [
       "scripts/daily-release-validation.ts",
       "tests/daily-release-validation.test.ts",
@@ -432,7 +430,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-13",
     title: "ADR and current architecture revise the release clauses coherently",
     tickets: ["#279", "#280", "#281"],
-    commits: [TICKET_SHA["279"], TICKET_SHA["280"], TICKET_SHA["281"]],
+    commits: ["25385de07f17b0fd913d3ae3af360494a326c138", "c0c4c1be8c8f9bc1505335047791c349217371a7", "a166e758173af8e69d133ca63f4cb4be31715a3d"],
     files: [
       "docs/adr/0148-deployment-identity-config-authorization-and-acceptance-are-separate.md",
       "docs/architecture/24-29-testing-and-delivery.md",
@@ -448,7 +446,7 @@ export const ACCEPTANCE_EVIDENCE: readonly AcceptanceEvidence[] = [
     id: "AC-14",
     title: "Portal sidebar bottom owner status with readable dates and long tool names",
     tickets: ["#283"],
-    commits: [TICKET_SHA["283"]],
+    commits: ["b83449c736ab7eb7be95ef7f5fd2c5051e3b6117"],
     files: [
       "scripts/portal-visual-acceptance.mjs",
       "apps/web/app/internal/portal-shell.tsx",
@@ -629,8 +627,8 @@ export function syntheticClosureFixture(): ReleaseClosureInput {
     collectedAt: "2026-10-08T07:30:00.000Z",
     repository: {
       integrationBranch: "integration/spec-275",
-      integrationCommit: INTEGRATION_SHA,
-      baseCommit: BASE_SHA,
+      integrationCommit: FIXTURE_INTEGRATION_COMMIT,
+      baseCommit: FIXTURE_BASE_COMMIT,
       acceptanceCommit: null,
     },
     pullRequest: {
@@ -646,7 +644,7 @@ export function syntheticClosureFixture(): ReleaseClosureInput {
         workflow: "PR Validate",
         event: "pull_request",
         branch: "integration/spec-275",
-        commit: INTEGRATION_SHA,
+        commit: FIXTURE_INTEGRATION_COMMIT,
         status: "in_progress",
         conclusion: null,
         createdAt: "2026-10-08T07:11:09Z",
@@ -693,8 +691,8 @@ export function syntheticClosureFixture(): ReleaseClosureInput {
         state: "active",
         schedule: ["13 * * * *"],
         lastRuns: [
-          apiRun(37715214472, "Internal Recovery Scan", "schedule", BASE_SHA, "2026-10-08T01:54:13Z"),
-          apiRun(37705683165, "Internal Recovery Scan", "workflow_dispatch", BASE_SHA, "2026-10-08T00:03:26Z"),
+          apiRun(37715214472, "Internal Recovery Scan", "schedule", FIXTURE_BASE_COMMIT, "2026-10-08T01:54:13Z"),
+          apiRun(37705683165, "Internal Recovery Scan", "workflow_dispatch", FIXTURE_BASE_COMMIT, "2026-10-08T00:03:26Z"),
         ],
         lastScheduledConclusion: "success",
         target:
@@ -709,7 +707,7 @@ export function syntheticClosureFixture(): ReleaseClosureInput {
         state: "active",
         schedule: ["13 4 1 * *"],
         lastRuns: [
-          apiRun(36852051522, "Backup Evidence Renewal", "schedule", BASE_SHA, "2026-10-01T10:54:43Z"),
+          apiRun(36852051522, "Backup Evidence Renewal", "schedule", FIXTURE_BASE_COMMIT, "2026-10-01T10:54:43Z"),
         ],
         lastScheduledConclusion: "success",
         target:
@@ -841,22 +839,13 @@ export function buildReleaseClosureReport(
   return report;
 }
 
-const FORBIDDEN_CONTENT: readonly RegExp[] = [
-  /postgres(?:ql)?:\/\//i,
-  /\bsk-[A-Za-z0-9_-]{8,}/,
-  /bearer\s+\S+/i,
-  /-----BEGIN [A-Z ]+-----/,
-];
-
 /** Fail closed rather than writing a secret, connection string or private body. */
 export function assertReleaseClosureContentFree(value: unknown): void {
   const serialized = JSON.stringify(value);
-  for (const pattern of FORBIDDEN_CONTENT) {
-    if (pattern.test(serialized)) {
-      throw new Error(
-        "Release closure report is not content-free; secret values, connection strings and private bodies are never recorded.",
-      );
-    }
+  if (containsForbiddenContent(serialized)) {
+    throw new Error(
+      "Release closure report is not content-free; secret values, connection strings and private bodies are never recorded.",
+    );
   }
 }
 
@@ -1089,9 +1078,24 @@ export async function collectReleaseClosureInput(
 ): Promise<ReleaseClosureInput> {
   const runner = options.runner ?? defaultRunner;
   const repository = options.repository ?? "lukemyself-hub/SayHear";
-  const pullRequestNumber = options.pullRequestNumber ?? 285;
-  const integrationBranch = options.integrationBranch ?? "integration/spec-275";
-  const baseBranch = options.baseBranch ?? "main";
+  if (options.pullRequestNumber === undefined) {
+    throw new Error(
+      "Release closure requires an explicit pullRequestNumber; there is no SPEC-specific default.",
+    );
+  }
+  if (!options.integrationBranch) {
+    throw new Error(
+      "Release closure requires an explicit integrationBranch; there is no SPEC-specific default.",
+    );
+  }
+  if (!options.baseBranch) {
+    throw new Error(
+      "Release closure requires an explicit baseBranch; there is no SPEC-specific default.",
+    );
+  }
+  const pullRequestNumber = options.pullRequestNumber;
+  const integrationBranch = options.integrationBranch;
+  const baseBranch = options.baseBranch;
   const collectedAt = options.collectedAt ?? new Date().toISOString();
   const workflowDirectory =
     options.workflowDirectory ??
@@ -1130,15 +1134,27 @@ export async function collectReleaseClosureInput(
     prHeadOid = typeof raw.headRefOid === "string" ? raw.headRefOid : null;
     prBaseOid = typeof raw.baseRefOid === "string" ? raw.baseRefOid : null;
   } catch {
-    // A missing PR falls back to the honest head-branch defaults above.
+    // The PR may be unreadable; the git refs below are then the only allowed
+    // source, and the report fails closed if neither can establish identity.
   }
 
   // The remote PR head/base SHAs are the authority for remote delivery; the
   // local `git rev-parse` values are only a fallback because a worktree's local
-  // branch ref can lag `origin`.
-  const integrationCommit =
-    prHeadOid ?? trimSha(headResult.stdout) ?? INTEGRATION_SHA;
-  const baseCommit = prBaseOid ?? trimSha(baseResult.stdout) ?? BASE_SHA;
+  // branch ref can lag `origin`. There is deliberately no hard-coded fallback:
+  // identity that cannot be established fails the report instead of being
+  // asserted from a SPEC-specific constant.
+  const integrationCommit = prHeadOid ?? trimSha(headResult.stdout);
+  const baseCommit = prBaseOid ?? trimSha(baseResult.stdout);
+  if (integrationCommit === null) {
+    throw new Error(
+      "Release closure could not establish the integration commit identity: the pull request head and `git rev-parse HEAD` were both unreadable; refusing to assert a default identity.",
+    );
+  }
+  if (baseCommit === null) {
+    throw new Error(
+      "Release closure could not establish the base commit identity: the pull request base and `git rev-parse` were both unreadable; refusing to assert a default identity.",
+    );
+  }
 
   const runsResult = await runner("gh", [
     "run",
@@ -1337,17 +1353,41 @@ export async function main(
   },
 ): Promise<number> {
   const args = parseArgs(argv);
-  const input = args.has("--fixture")
-    ? syntheticClosureFixture()
-    : await collectReleaseClosureInput({
-        repository: args.get("--repo") ?? "lukemyself-hub/SayHear",
-        pullRequestNumber: Number(args.get("--pr") ?? "285"),
-        integrationBranch: args.get("--branch") ?? "integration/spec-275",
-        baseBranch: args.get("--base") ?? "main",
-        promotionReportPath: args.get("--promotion-report") ?? null,
-        visualResult: args.get("--visual-result") ?? "not recorded in this process",
-        collectedAt: new Date().toISOString(),
-      });
+  if (args.has("--fixture")) {
+    const report = buildReleaseClosureReport(syntheticClosureFixture());
+    io.stdout(formatReleaseClosureReport(report));
+    if (args.has("--summary")) {
+      io.stdout(renderReleaseClosureSummary(report));
+    }
+    const reportPath = args.get("--report");
+    if (reportPath) {
+      await mkdir(dirname(reportPath), { recursive: true });
+      await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+      io.stdout(`report written to ${reportPath}`);
+    }
+    return report.closureStatus === "closed" ? 0 : 1;
+  }
+
+  // Identity is never guessed: the live reader needs an explicit pull request
+  // and branches, so a stale SPEC-specific default can never be recorded.
+  const missing = ["--pr", "--branch", "--base"].filter(
+    (flag) => !args.has(flag),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Release closure report requires explicit identity: missing ${missing.join(", ")}. Usage: release-closure-report.ts --pr <n> --branch <head> --base <base> [--summary] [--report <file>] | --fixture`,
+    );
+  }
+
+  const input = await collectReleaseClosureInput({
+    repository: args.get("--repo") ?? "lukemyself-hub/SayHear",
+    pullRequestNumber: Number(args.get("--pr")),
+    integrationBranch: args.get("--branch") as string,
+    baseBranch: args.get("--base") as string,
+    promotionReportPath: args.get("--promotion-report") ?? null,
+    visualResult: args.get("--visual-result") ?? "not recorded in this process",
+    collectedAt: new Date().toISOString(),
+  });
 
   const report = buildReleaseClosureReport(input);
   io.stdout(formatReleaseClosureReport(report));

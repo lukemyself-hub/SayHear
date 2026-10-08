@@ -247,8 +247,10 @@ describe("Internal recovery scan workflow behavior", () => {
     "fails the original recovery scan when the request times out",
     { timeout: 8_000 },
     async () => {
-      // The fixture never responds; a short override proves the step's curl
-      // deadline fails the job instead of hanging.
+      // The fixture never responds. The production workflow ships a fixed
+      // `--max-time 120` (spec decision 8 forbids an operator-visible timeout
+      // knob); the fixture substitutes the literal so the deadline is short and
+      // deterministic to exercise.
       const hanging = createServer(() => {});
       await new Promise<void>((resolve) =>
         hanging.listen(0, "127.0.0.1", resolve),
@@ -258,18 +260,17 @@ describe("Internal recovery scan workflow behavior", () => {
         throw new Error("hanging fixture did not bind a TCP port");
       }
       try {
-        const result = await runBash(
-          extractRunBlock(
-            await readFile(recoveryWorkflowPath, "utf8"),
-            "Call recovery scan endpoint",
-          ),
-          {
-            CRON_SECRET: cronSecret,
-            CONFIGURED_URL: `http://127.0.0.1:${address.port}/api/internal/recovery/scan`,
-            OVERRIDE_URL: "",
-            RECOVERY_SCAN_MAX_TIME_SECONDS: "1",
-          },
-        );
+        const script = extractRunBlock(
+          await readFile(recoveryWorkflowPath, "utf8"),
+          "Call recovery scan endpoint",
+        ).replace("--max-time 120", "--max-time 1");
+        expect(script).toContain("--max-time 1");
+        expect(script).not.toContain("--max-time 120");
+        const result = await runBash(script, {
+          CRON_SECRET: cronSecret,
+          CONFIGURED_URL: `http://127.0.0.1:${address.port}/api/internal/recovery/scan`,
+          OVERRIDE_URL: "",
+        });
         expect(result.exitCode).not.toBe(0);
       } finally {
         await new Promise<void>((resolve) => hanging.close(() => resolve()));

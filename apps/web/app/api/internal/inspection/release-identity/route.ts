@@ -2,7 +2,10 @@ import { getServerSession } from "next-auth";
 
 import { asUserId } from "@sayhear/application";
 
-import { buildHostedReleaseIdentity, isReleaseIdentityOperatorRequest } from "../../../../../src/release-identity";
+import {
+  authorizeContentFreeInspection,
+  buildHostedReleaseIdentity,
+} from "../../../../../src/release-identity";
 import { createServerComposition } from "../../../../../src/server-composition";
 
 export const dynamic = "force-dynamic";
@@ -16,17 +19,14 @@ export const runtime = "nodejs";
  */
 export async function GET(request: Request): Promise<Response> {
   const composition = createServerComposition();
-  if (!isReleaseIdentityOperatorRequest(request, process.env.CRON_SECRET)) {
-    const session = await getServerSession(composition.authOptions);
-    if (!session?.user?.id) {
-      return Response.json({ error: "unauthorized" }, { status: 401 });
-    }
-    try {
-      await composition.accessService.assertOperator(asUserId(session.user.id));
-    } catch {
-      return Response.json({ error: "forbidden" }, { status: 403 });
-    }
-  }
+  const denied = await authorizeContentFreeInspection(request, {
+    operatorSecret: process.env.CRON_SECRET,
+    getSession: () => getServerSession(composition.authOptions),
+    assertOperator: async (userId) => {
+      await composition.accessService.assertOperator(asUserId(userId));
+    },
+  });
+  if (denied) return denied;
   try {
     return Response.json(buildHostedReleaseIdentity(process.env), { headers: { "Cache-Control": "no-store" } });
   } catch {

@@ -21,15 +21,30 @@ import {
   type ReleaseClosureInput,
 } from "../scripts/release-closure-report.ts";
 
-const INTEGRATION_SHA = "a1fcb4595af825b9817c21226fc1cff77f738f28";
-const BASE_SHA = "5812cf3a6ef4aa2e0e58e99ca4ef27505767c356";
 const CANDIDATE_SHA = "c".repeat(40);
-const TICKET_276_SHA = "04d9c6ad25724dcae48be4d30d80964be5ead141";
 
 function fixtureInput(
   overrides: Partial<ReleaseClosureInput> = {},
 ): ReleaseClosureInput {
   return { ...syntheticClosureFixture(), ...overrides };
+}
+
+function fixtureIntegrationCommit(): string {
+  return syntheticClosureFixture().repository.integrationCommit;
+}
+
+function fixtureBaseCommit(): string {
+  return syntheticClosureFixture().repository.baseCommit;
+}
+
+function fixtureTicketCommit(id: string): string {
+  const entry = syntheticClosureFixture().acceptance.find(
+    (evidence) => evidence.id === id,
+  );
+  if (!entry || entry.commits.length === 0) {
+    throw new Error(`missing fixture evidence for ${id}`);
+  }
+  return entry.commits[0] as string;
 }
 
 function successRun(id: number): ReleaseClosureInput["ciRuns"][number] {
@@ -38,7 +53,7 @@ function successRun(id: number): ReleaseClosureInput["ciRuns"][number] {
     workflow: "PR Validate",
     event: "pull_request",
     branch: "integration/spec-275",
-    commit: INTEGRATION_SHA,
+    commit: fixtureIntegrationCommit(),
     status: "completed",
     conclusion: "success",
     createdAt: "2026-10-08T07:00:00Z",
@@ -65,8 +80,8 @@ describe("release closure aggregation", () => {
     const report = buildReleaseClosureReport(fixtureInput());
 
     expect(report.version).toBe(RELEASE_CLOSURE_REPORT_VERSION);
-    expect(report.repository.integrationCommit).toBe(INTEGRATION_SHA);
-    expect(report.repository.baseCommit).toBe(BASE_SHA);
+    expect(report.repository.integrationCommit).toBe(fixtureIntegrationCommit());
+    expect(report.repository.baseCommit).toBe(fixtureBaseCommit());
     expect(report.pullRequest.number).toBe(285);
     expect(report.ciRuns[0]?.id).toBe(37741892121);
     expect(report.acceptance.find((entry) => entry.id === "AC-01")?.runIds).toContain(
@@ -102,6 +117,20 @@ describe("release closure aggregation", () => {
     expect(blockerIds).toContain("ci-latest-run-not-success");
   });
 
+  it("does not mark a locally-proven AC verified while no production deployment exists", () => {
+    const byId = new Map(
+      syntheticClosureFixture().acceptance.map((entry) => [entry.id, entry]),
+    );
+
+    for (const id of ["AC-09", "AC-10", "AC-11"]) {
+      const entry = byId.get(id);
+      expect(entry?.status, `${id} must not be verified without a real run`).not.toBe(
+        "verified",
+      );
+      expect(entry?.blocker, `${id} must carry its concrete blocker`).toBeTruthy();
+    }
+  });
+
   it("reports closed only when every blocker is resolved and every AC is verified", () => {
     const base = syntheticClosureFixture();
     const closed = buildReleaseClosureReport({
@@ -111,7 +140,7 @@ describe("release closure aggregation", () => {
       deploymentIdentity: {
         production: {
           status: "verified",
-          commit: BASE_SHA,
+          commit: fixtureBaseCommit(),
           deploymentId: "dpl_production",
           reason: "read from the authenticated release-identity endpoint",
         },
@@ -198,6 +227,12 @@ describe("release closure CLI", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("refuses to guess an identity when --pr/--branch/--base are missing", async () => {
+    await expect(
+      runReleaseClosureReport([], { stdout: () => {} }),
+    ).rejects.toThrow(/--pr|--branch|--base/);
+  });
 });
 
 describe("non-production promotion rehearsal", () => {
@@ -236,7 +271,7 @@ describe("gh reader", () => {
           workflowName: "PR Validate",
           event: "pull_request",
           headBranch: "integration/spec-275",
-          headSha: INTEGRATION_SHA,
+          headSha: fixtureIntegrationCommit(),
           status: "in_progress",
           conclusion: "",
           createdAt: "2026-10-08T07:11:09Z",
@@ -272,7 +307,7 @@ describe("gh reader", () => {
         workflowName: "PR Validate",
         event: "pull_request",
         headBranch: "integration/spec-275",
-        headSha: INTEGRATION_SHA,
+        headSha: fixtureIntegrationCommit(),
         status: "completed",
         conclusion: "success",
         createdAt: "2026-10-08T07:11:09Z",
@@ -285,7 +320,7 @@ describe("gh reader", () => {
         workflowName: "Internal Recovery Scan",
         event: "schedule",
         headBranch: "main",
-        headSha: BASE_SHA,
+        headSha: fixtureBaseCommit(),
         status: "completed",
         conclusion: "success",
         createdAt: "2026-10-08T01:54:13Z",
@@ -301,8 +336,8 @@ describe("gh reader", () => {
           baseRefName: "main",
           headRefName: "integration/spec-275",
           isDraft: true,
-          headRefOid: INTEGRATION_SHA,
-          baseRefOid: BASE_SHA,
+          headRefOid: fixtureIntegrationCommit(),
+          baseRefOid: fixtureBaseCommit(),
         });
       }
       if (joined.includes("/branches/main/protection")) {
@@ -347,10 +382,10 @@ describe("gh reader", () => {
         return ghJson(runs);
       }
       if (joined.startsWith("git rev-parse HEAD")) {
-        return { stdout: `${INTEGRATION_SHA}\n`, stderr: "", exitCode: 0 };
+        return { stdout: `${fixtureIntegrationCommit()}\n`, stderr: "", exitCode: 0 };
       }
       if (joined.startsWith("git rev-parse main")) {
-        return { stdout: `${BASE_SHA}\n`, stderr: "", exitCode: 0 };
+        return { stdout: `${fixtureBaseCommit()}\n`, stderr: "", exitCode: 0 };
       }
       if (joined.startsWith("git cat-file")) {
         return { stdout: "", stderr: "", exitCode: 0 };
@@ -369,8 +404,8 @@ describe("gh reader", () => {
       visualResult: "not run in this process",
     });
 
-    expect(input.repository.integrationCommit).toBe(INTEGRATION_SHA);
-    expect(input.repository.baseCommit).toBe(BASE_SHA);
+    expect(input.repository.integrationCommit).toBe(fixtureIntegrationCommit());
+    expect(input.repository.baseCommit).toBe(fixtureBaseCommit());
     expect(input.requiredChecks.status).toBe("plan-blocked");
     expect(input.ciRuns).toHaveLength(1);
     expect(input.schedulers.map((entry) => entry.workflowId)).toEqual([
@@ -378,6 +413,56 @@ describe("gh reader", () => {
     ]);
     expect(input.deploymentIdentity.production.status).toBe("unverified");
     expect(input.acceptance).toHaveLength(14);
+  });
+
+  it("fails rather than falling back to a SPEC-specific identity when the head cannot be established", async () => {
+    const runner: CommandRunner = async (command, args) => {
+      const joined = [command, ...args].join(" ");
+      if (joined.startsWith("gh pr view")) {
+        return { stdout: "", stderr: "no pull request", exitCode: 1 };
+      }
+      if (joined.startsWith("git rev-parse HEAD")) {
+        return { stdout: "\n", stderr: "", exitCode: 0 };
+      }
+      if (joined.startsWith("git rev-parse main")) {
+        return { stdout: "\n", stderr: "", exitCode: 0 };
+      }
+      throw new Error(`unexpected command: ${joined}`);
+    };
+
+    await expect(
+      collectReleaseClosureInput({
+        runner,
+        repository: "lukemyself-hub/SayHear",
+        pullRequestNumber: 285,
+        integrationBranch: "integration/spec-275",
+        baseBranch: "main",
+      }),
+    ).rejects.toThrow(/identity|integration commit|base commit/i);
+  });
+
+  it("requires an explicit pull request and branches instead of SPEC defaults", async () => {
+    const runner: CommandRunner = async () => {
+      throw new Error("the runner must not be called without an explicit identity");
+    };
+
+    await expect(
+      collectReleaseClosureInput({
+        runner,
+        repository: "lukemyself-hub/SayHear",
+        integrationBranch: "integration/spec-275",
+        baseBranch: "main",
+      }),
+    ).rejects.toThrow(/pullRequestNumber|pull request/i);
+
+    await expect(
+      collectReleaseClosureInput({
+        runner,
+        repository: "lukemyself-hub/SayHear",
+        pullRequestNumber: 285,
+        baseBranch: "main",
+      }),
+    ).rejects.toThrow(/integrationBranch|integration branch/i);
   });
 });
 
@@ -387,7 +472,7 @@ describe("acceptance evidence map", () => {
       syntheticClosureFixture().acceptance.map((entry) => [entry.id, entry]),
     );
 
-    expect(byId.get("AC-01")?.commits).toContain(TICKET_276_SHA);
+    expect(byId.get("AC-01")?.commits).toContain(fixtureTicketCommit("AC-01"));
     expect(byId.get("AC-01")?.files).toContain(
       ".github/workflows/pr-validate.yml",
     );

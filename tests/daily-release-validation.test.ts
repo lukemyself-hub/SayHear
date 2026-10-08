@@ -7,6 +7,7 @@ import {
   FIXED_PR_CI_BASELINE,
   RELEASE_CHECKS,
   classifyReleaseImpact,
+  dailyReleaseValidationExitCode,
   formatDailyReleaseValidationSummary,
   main as runDailyReleaseValidation,
   parseDailyReleaseValidationRequest,
@@ -73,8 +74,7 @@ describe("fixed PR CI baseline", () => {
     ) as { scripts?: Record<string, string> };
     const validateSteps = (rootPackage.scripts?.validate ?? "")
       .split("&&")
-      .map((step) => step.trim().replace(/^pnpm /, ""))
-      .map((step) => (step === "test" ? "test:ci" : step));
+      .map((step) => step.trim().replace(/^pnpm /, ""));
 
     const baselineCommands = RELEASE_CHECKS.filter((check) =>
       (FIXED_PR_CI_BASELINE as readonly string[]).includes(check.id),
@@ -422,6 +422,84 @@ describe("CLI entry", () => {
     expect(output).toContain("purge:full-restore-drill");
     expect(output).toContain("producer_invocations=none");
   });
+
+  it("exits non-zero and asks for the impact location instead of a green plan", async () => {
+    const lines: string[] = [];
+    const code = await runDailyReleaseValidation(
+      [
+        "--request",
+        "tests/fixtures/daily-release-validation/requests/unknown.json",
+      ],
+      { stdout: (line) => lines.push(line) },
+    );
+
+    expect(code).not.toBe(0);
+    expect(lines.join("\n")).toContain("requires_impact_location=true");
+  });
+
+  it("does not claim results without --execute, then records executed checks honestly", async () => {
+    const planned: string[] = [];
+    const plannedCode = await runDailyReleaseValidation(
+      [
+        "--request",
+        "tests/fixtures/daily-release-validation/requests/server-business.json",
+      ],
+      { stdout: (line) => planned.push(line) },
+    );
+    expect(plannedCode).toBe(0);
+    expect(planned.join("\n")).toContain(
+      "check server:deterministic-behavior disposition=run execution=planned",
+    );
+
+    const calls: string[] = [];
+    const lines: string[] = [];
+    const code = await runDailyReleaseValidation(
+      [
+        "--request",
+        "tests/fixtures/daily-release-validation/requests/server-business.json",
+        "--execute",
+      ],
+      {
+        stdout: (line) => lines.push(line),
+        runner: async (command, args) => {
+          calls.push([command, ...args].join(" "));
+          return { stdout: "", stderr: "", exitCode: 0 };
+        },
+      },
+    );
+    const output = lines.join("\n");
+
+    expect(code).toBe(0);
+    expect(calls).toContain(
+      "pnpm exec vitest run tests/private-write-gate.test.ts tests/startup-validation-runtime.test.ts",
+    );
+    expect(output).toContain(
+      "check server:deterministic-behavior disposition=run execution=executed",
+    );
+    // The full `pnpm test:ci` baseline is never auto-run recursively.
+    expect(calls.some((call) => call.startsWith("pnpm test:ci"))).toBe(false);
+    expect(output).toContain("check baseline:test disposition=run execution=planned");
+  });
+
+  it("reports a failed executed check instead of a green plan", async () => {
+    const lines: string[] = [];
+    const code = await runDailyReleaseValidation(
+      [
+        "--request",
+        "tests/fixtures/daily-release-validation/requests/server-business.json",
+        "--execute",
+      ],
+      {
+        stdout: (line) => lines.push(line),
+        runner: async () => ({ stdout: "", stderr: "boom", exitCode: 1 }),
+      },
+    );
+
+    expect(code).not.toBe(0);
+    expect(lines.join("\n")).toContain(
+      "check server:deterministic-behavior disposition=run execution=failed",
+    );
+  });
 });
 
 describe("promotion stage integration", () => {
@@ -512,6 +590,41 @@ describe("promotion stage integration", () => {
 
     expect(plan.promotion?.promotionAllowed).toBe(true);
     expect(plan.promotion?.blockers).toEqual([]);
+    expect(dailyReleaseValidationExitCode(plan)).toBe(0);
+  });
+
+  it("exits non-zero while the promotion is blocked", () => {
+    const plan = planDailyReleaseValidation({
+      ...request({ declaredImpacts: ["ui"] }),
+      releaseStage: "promotion",
+      promotionConfig: {
+        isolatedAcceptance: isolated,
+        currentProduction: production,
+        candidateDeployment: blockedCandidate,
+      },
+    });
+
+    expect(plan.promotion?.promotionAllowed).toBe(false);
+    expect(dailyReleaseValidationExitCode(plan)).not.toBe(0);
+  });
+
+  it("exits non-zero when the effective configuration is incompatible", () => {
+    const plan = planDailyReleaseValidation(
+      request(
+        { declaredImpacts: ["prompt-budget"] },
+        {
+          effectiveConfig: {
+            baseline: snapshot("a".repeat(40), "dpl_baseline", [...sharedProvider]),
+            candidate: snapshot("b".repeat(40), "dpl_candidate", [
+              { ...sharedProvider[0], value: "openai" },
+            ]),
+          },
+        },
+      ),
+    );
+
+    expect(plan.effectiveConfig?.compatible).toBe(false);
+    expect(dailyReleaseValidationExitCode(plan)).not.toBe(0);
   });
 
   it("rejects an unknown release stage", () => {

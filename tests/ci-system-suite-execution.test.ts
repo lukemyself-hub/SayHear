@@ -106,6 +106,22 @@ describe("PR system suite execution", () => {
     ).toThrow(new RegExp(`expected ${expectedSystemSuiteCount}`));
   });
 
+  it("names the real tests/system directory rather than a doubled tests/tests/system prefix", () => {
+    let message = "";
+    try {
+      assertSystemSuitesExecuted({
+        discoveredSystemSuites: [],
+        expectedCount: expectedSystemSuiteCount,
+        report: report([]),
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).toContain(`in tests/system`);
+    expect(message).not.toContain("tests/tests/");
+  });
+
   it("matches a suite whose report path is rooted differently from the checkout", () => {
     // A symlinked working directory makes vitest report a resolved prefix while
     // the discovered path keeps the one the process was started in.

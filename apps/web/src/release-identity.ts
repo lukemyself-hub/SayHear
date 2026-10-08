@@ -80,3 +80,35 @@ export function isReleaseIdentityOperatorRequest(request: Request, secret: strin
   const expected = Buffer.from(`Bearer ${secret}`);
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
+
+export type ContentFreeInspectionAuth = Readonly<{
+  operatorSecret: string | undefined;
+  getSession: () => Promise<{ user?: { id?: string } } | null>;
+  assertOperator: (userId: string) => Promise<void>;
+}>;
+
+/**
+ * The shared authorization for content-free inspection reads: the Cron operator
+ * bearer, or an authenticated Owner. Returns the `401`/`403` response to send,
+ * or `null` when the caller may proceed. Keeping this in one place is what
+ * keeps the release-identity and effective-runtime-config endpoints from
+ * drifting on their auth behavior.
+ */
+export async function authorizeContentFreeInspection(
+  request: Request,
+  auth: ContentFreeInspectionAuth,
+): Promise<Response | null> {
+  if (isReleaseIdentityOperatorRequest(request, auth.operatorSecret)) {
+    return null;
+  }
+  const session = await auth.getSession();
+  if (!session?.user?.id) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+  try {
+    await auth.assertOperator(session.user.id);
+  } catch {
+    return Response.json({ error: "forbidden" }, { status: 403 });
+  }
+  return null;
+}
