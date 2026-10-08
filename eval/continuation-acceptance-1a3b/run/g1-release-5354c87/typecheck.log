@@ -1,0 +1,14 @@
+$ tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.g1-tools.json && pnpm -r --if-present typecheck
+Scope: 6 of 7 workspace projects
+packages/domain typecheck$ tsc --noEmit
+packages/domain typecheck: Done
+packages/application typecheck$ tsc --noEmit
+packages/application typecheck: Done
+packages/data typecheck$ tsc --noEmit
+packages/ai typecheck$ tsc --noEmit
+packages/ai typecheck: Done
+packages/data typecheck: Done
+apps/web typecheck$ tsc --noEmit
+packages/test-support typecheck$ tsc --noEmit
+packages/test-support typecheck: Done
+apps/web typecheck: Done

@@ -1,0 +1,48 @@
+{
+  "version": "g1-provider-capture:v1",
+  "synthetic": true,
+  "preflight": false,
+  "gitDirty": false,
+  "runId": "g1-provider-6827c462-73fb-456b-bd8b-e25a6f0dadd8",
+  "manifestFingerprint": "sha256:9e09d8ac334b814b5d87b81d9019f3b828b53e5964e5a6df1c580a0c496c5deb",
+  "gitCommit": "544ba555342db4565631531e1afe79fe95c72bdc",
+  "capturedAt": "2026-10-01T19:42:17.539Z",
+  "providerCalls": [
+    {
+      "errorCode": "timeout",
+      "responseFailure": null,
+      "role": "episode.build",
+      "generationCommandId": "01a0f8f5-dab4-7406-947a-3d23f491a2ae",
+      "modelRunAttemptId": "01a0f8f5-dab4-7e26-a2db-30446b894008",
+      "outcome": "failed",
+      "usage": null
+    },
+    {
+      "errorCode": "timeout",
+      "responseFailure": null,
+      "role": "reflection.daily",
+      "generationCommandId": "01a0f8f5-dab4-7675-ab8a-84f0f2019518",
+      "modelRunAttemptId": "01a0f8f5-dab4-791f-85ac-10f2dd84a55f",
+      "outcome": "failed",
+      "usage": null
+    },
+    {
+      "errorCode": "timeout",
+      "responseFailure": null,
+      "role": "reflection.weekly",
+      "generationCommandId": "01a0f8f5-dab4-7013-a44a-ce2c7c585034",
+      "modelRunAttemptId": "01a0f8f5-dab4-7e69-8f72-10fb7d59f71f",
+      "outcome": "failed",
+      "usage": null
+    },
+    {
+      "errorCode": "timeout",
+      "responseFailure": null,
+      "role": "narrative.validate",
+      "generationCommandId": "01a0f8f5-dab4-708d-8344-a4c5d3b7b989",
+      "modelRunAttemptId": "01a0f8f5-dab4-78ae-a846-0d2c5e92a176",
+      "outcome": "failed",
+      "usage": null
+    }
+  ]
+}

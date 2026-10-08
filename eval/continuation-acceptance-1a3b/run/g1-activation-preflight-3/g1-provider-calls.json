@@ -1,0 +1,90 @@
+{
+  "version": "g1-provider-capture:v1",
+  "synthetic": true,
+  "runId": "g1-provider-f9db0768-f6e9-45ad-a94d-492a3c1de5cb",
+  "manifestFingerprint": "sha256:f722744b27144139081de2698a1b08a77565baa17e5228908a03d88f35eec3b7",
+  "gitCommit": "13d6dd2bf6c9145330617980572d3d178fa6a1d9",
+  "capturedAt": "2026-10-01T04:06:48.015Z",
+  "providerCalls": [
+    {
+      "errorCode": "invalid_response",
+      "responseFailure": {
+        "kind": "output_budget_exhausted",
+        "inputTokens": 450,
+        "outputLength": 0,
+        "outputTokens": 4000,
+        "providerReason": "max_output_tokens",
+        "reasoningTokens": 4000
+      },
+      "role": "episode.build",
+      "generationCommandId": "01a0f5a3-63e2-7744-bd5d-ac00ad3f6c11",
+      "modelRunAttemptId": "01a0f5a3-63e2-70dd-bf26-83af3dc4c94e",
+      "outcome": "failed",
+      "usage": {
+        "inputTokens": 450,
+        "outputTokens": 4000,
+        "reasoningTokens": 4000
+      }
+    },
+    {
+      "errorCode": "invalid_response",
+      "responseFailure": {
+        "kind": "output_budget_exhausted",
+        "inputTokens": 585,
+        "outputLength": 0,
+        "outputTokens": 4000,
+        "providerReason": "max_output_tokens",
+        "reasoningTokens": 4000
+      },
+      "role": "reflection.daily",
+      "generationCommandId": "01a0f5a3-63e2-784b-a131-d681d6710d70",
+      "modelRunAttemptId": "01a0f5a3-63e2-7f2a-b6f7-b2580ecbcc22",
+      "outcome": "failed",
+      "usage": {
+        "inputTokens": 585,
+        "outputTokens": 4000,
+        "reasoningTokens": 4000
+      }
+    },
+    {
+      "errorCode": "invalid_response",
+      "responseFailure": {
+        "kind": "output_budget_exhausted",
+        "inputTokens": 582,
+        "outputLength": 0,
+        "outputTokens": 4000,
+        "providerReason": "max_output_tokens",
+        "reasoningTokens": 4000
+      },
+      "role": "reflection.weekly",
+      "generationCommandId": "01a0f5a3-63e2-7da1-aa9a-ef33fd1c4f03",
+      "modelRunAttemptId": "01a0f5a3-63e2-7683-9306-b7146db6e9ae",
+      "outcome": "failed",
+      "usage": {
+        "inputTokens": 582,
+        "outputTokens": 4000,
+        "reasoningTokens": 4000
+      }
+    },
+    {
+      "role": "narrative.validate",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "generationCommandId": "01a0f5a3-63e2-73c5-8e75-999b88414a65",
+      "modelRunAttemptId": "01a0f5a3-63e2-7e25-b42e-14c8896f9be0",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 537,
+        "outputTokens": 2277,
+        "reasoningTokens": 2206
+      }
+    }
+  ]
+}

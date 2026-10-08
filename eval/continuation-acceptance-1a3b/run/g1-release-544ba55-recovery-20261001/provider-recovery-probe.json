@@ -1,0 +1,79 @@
+{
+  "startedAt": "2026-10-01T22:20:28.619Z",
+  "finishedAt": "2026-10-01T22:20:29.573Z",
+  "request": {
+    "model": "deepseek-flash",
+    "input": [
+      {
+        "role": "user",
+        "content": "Reply with OK."
+      }
+    ],
+    "instructions": "Be concise.",
+    "reasoning": {
+      "effort": "low"
+    },
+    "stream": true,
+    "store": false,
+    "max_output_tokens": 256
+  },
+  "http": 200,
+  "elapsedMs": 954,
+  "bytes": 12000,
+  "terminalType": "response.completed",
+  "responseModel": "deepseek-flash",
+  "usage": {
+    "input_tokens": 37,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    },
+    "output_tokens": 29,
+    "output_tokens_details": {
+      "reasoning_tokens": 27
+    },
+    "total_tokens": 66
+  },
+  "output": [
+    {
+      "type": "reasoning",
+      "id": "1782cbd7-221e-4b98-a8a7-f6fd752750b4",
+      "status": "completed",
+      "content": [
+        {
+          "type": "reasoning_text",
+          "text": "We need answer user says \"Reply with OK.\" So we just reply OK. Must be concise. Need no extra. final OK."
+        }
+      ],
+      "summary": [],
+      "encrypted_content": "e9dad9d7-2e69-4c62-958d-878d7b67c44a-0"
+    },
+    {
+      "type": "message",
+      "id": "897a08dc-1dc8-49d3-9fff-3ea097ed7416",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "logprobs": [],
+          "text": "OK"
+        }
+      ],
+      "phase": "final_answer",
+      "role": "assistant"
+    }
+  ],
+  "eventTypes": [
+    "response.created",
+    "response.in_progress",
+    "response.output_item.added",
+    "response.content_part.added",
+    "response.reasoning_text.delta",
+    "response.reasoning_text.done",
+    "response.content_part.done",
+    "response.output_item.done",
+    "response.output_text.delta",
+    "response.output_text.done",
+    "response.completed"
+  ]
+}

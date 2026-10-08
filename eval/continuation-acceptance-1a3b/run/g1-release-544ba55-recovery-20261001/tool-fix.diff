@@ -1,0 +1,409 @@
+diff --git a/packages/application/src/one-a-3b-release-evidence.ts b/packages/application/src/one-a-3b-release-evidence.ts
+index 857e353..46e67c0 100644
+--- a/packages/application/src/one-a-3b-release-evidence.ts
++++ b/packages/application/src/one-a-3b-release-evidence.ts
+@@ -209,12 +209,25 @@ export const ONE_A_3B_G1_EVIDENCE_CONTRACTS: Readonly<
+   "AC-W01": {
+     evidenceKind: "hosted-canary-ledger",
+     requiredAssertionIds: ["hosted_canary", "workflow_history", "outbox_receipt"],
+-    requiredResultKeys: ["hosted", "canaryRunId", "deploymentId", "exportArtifact"],
++    requiredResultKeys: [
++      "hosted",
++      "canaryRunId",
++      "deploymentId",
++      "exportArtifact",
++      // ADR-0144/0145: the final verifier re-scans the linked raw exports at
++      // release time, so assembly must carry both references. Without them the
++      // verifier sees a passed summary with nothing to re-scan and refuses the
++      // artifact ("Hosted canary lacks deployment and complete run-set pins").
++      "canaryValuesArtifact",
++      "expectedRunIds",
++    ],
+     resultFieldKinds: {
+       hosted: "true",
+       canaryRunId: "non-empty-string",
+       deploymentId: "non-empty-string",
+       exportArtifact: "content-addressed-artifact",
++      canaryValuesArtifact: "content-addressed-artifact",
++      expectedRunIds: "non-empty-array",
+     },
+   },
+   "AC-D01": {
+diff --git a/packages/application/src/one-a-3b-release.test.ts b/packages/application/src/one-a-3b-release.test.ts
+index d14741b..9459a20 100644
+--- a/packages/application/src/one-a-3b-release.test.ts
++++ b/packages/application/src/one-a-3b-release.test.ts
+@@ -6,6 +6,7 @@ import {
+   ONE_A_3B_F3_VALIDATOR_LEDGER_VERSION,
+   ONE_A_3B_G1_ENABLED_ROLES,
+   ONE_A_3B_G1_REQUIRED_ACCEPTANCE_CRITERIA,
++  sha256Hex,
+   validatorCalibrationRejectsWithinBudget,
+   verifyOneA3bG1ReleaseManifest,
+   type OneA3bG1Evidence,
+@@ -318,6 +319,57 @@ describe("1A.3b G1 release manifest", () => {
+     );
+   });
+ 
++  it("binds an explicitly pinned catalog path into the fixture fingerprint", () => {
++    const legacyFixture = {
++      f3ManifestPath: "eval/continuation-acceptance-1a3b/run/manifest.json",
++      f3ManifestSha256: "d".repeat(64),
++      f3ManifestFingerprint: `sha256:${"f".repeat(64)}`,
++      fixtureSeed: 196,
++      sampleSeed: 1960,
++    };
++    const catalogPath = "eval/continuation-acceptance-1a3b/holdout/fixtures.json";
++
++    // Legacy releases pin no catalog path and must keep verifying with the
++    // exact five-field fingerprint they were frozen with.
++    const legacy = build({ fixture: legacyFixture });
++    expect(legacy.fixture.catalogPath).toBeUndefined();
++    expect(legacy.fixture.fingerprint).toBe(sha256Hex(legacyFixture));
++    expect(verifyOneA3bG1ReleaseManifest(legacy)).toEqual({
++      mismatches: [],
++      passed: true,
++    });
++
++    // A release that explicitly pins a catalog path binds that path.
++    const pinned = build({ fixture: { ...legacyFixture, catalogPath } });
++    expect(pinned.fixture.catalogPath).toBe(catalogPath);
++    expect(pinned.fixture.fingerprint).not.toBe(legacy.fixture.fingerprint);
++    expect(verifyOneA3bG1ReleaseManifest(pinned)).toEqual({
++      mismatches: [],
++      passed: true,
++    });
++
++    // Swapping the path while keeping the stored fingerprint is rejected.
++    const tampered = {
++      ...pinned,
++      fixture: {
++        ...pinned.fixture,
++        catalogPath: "eval/continuation-acceptance-1a3b/fixtures.json",
++      },
++    };
++    expect(verifyOneA3bG1ReleaseManifest(tampered).mismatches).toContain(
++      "fixture fingerprint does not match its pins",
++    );
++
++    // A non-string pinned path is refused even if its hash is self-consistent.
++    const malformed = {
++      ...pinned,
++      fixture: { ...pinned.fixture, catalogPath: 7 },
++    };
++    expect(verifyOneA3bG1ReleaseManifest(malformed).mismatches).toContain(
++      "F3 fixture catalog path is invalid",
++    );
++  });
++
+   it("returns mismatches for malformed untrusted JSON", () => {
+     expect(verifyOneA3bG1ReleaseManifest({ roles: {} }).passed).toBe(false);
+   });
+diff --git a/packages/application/src/one-a-3b-release.ts b/packages/application/src/one-a-3b-release.ts
+index 568cfc2..8559b69 100644
+--- a/packages/application/src/one-a-3b-release.ts
++++ b/packages/application/src/one-a-3b-release.ts
+@@ -265,6 +265,29 @@ function safeSha256Hex(value: unknown): string | null {
+   }
+ }
+ 
++/**
++ * The exact fixture pin set the content-addressed fixture fingerprint covers.
++ *
++ * `catalogPath` is optional for the historical no-holdout releases. When it is
++ * present it is part of the identity, so a manifest cannot point the verifier
++ * at a different catalog than the one its fingerprint was frozen over. Builder
++ * and verifier both hash this same shape, which keeps the legacy five-field
++ * fingerprint byte-identical when no path is pinned.
++ */
++function fixtureFingerprintSource(
++  fixture: Record<string, unknown>,
++): Record<string, unknown> {
++  const source: Record<string, unknown> = {
++    f3ManifestPath: fixture.f3ManifestPath,
++    f3ManifestSha256: fixture.f3ManifestSha256,
++    f3ManifestFingerprint: fixture.f3ManifestFingerprint,
++    fixtureSeed: fixture.fixtureSeed,
++    sampleSeed: fixture.sampleSeed,
++  };
++  if (fixture.catalogPath !== undefined) source.catalogPath = fixture.catalogPath;
++  return source;
++}
++
+ export function sha256Hex(value: unknown): string {
+   return createHash("sha256").update(stableJson(value)).digest("hex");
+ }
+@@ -342,6 +365,9 @@ function sortedConfigurations(
+ }
+ 
+ function validateFixture(input: OneA3bG1ReleaseManifestInput["fixture"]): void {
++  if (input.catalogPath !== undefined) {
++    requireNonEmpty(input.catalogPath, "fixture.catalogPath");
++  }
+   requireNonEmpty(input.f3ManifestPath, "fixture.f3ManifestPath");
+   requireSha256(input.f3ManifestSha256, "fixture.f3ManifestSha256");
+   requireFingerprint(input.f3ManifestFingerprint, "fixture.f3ManifestFingerprint");
+@@ -748,7 +774,7 @@ export function buildOneA3bG1ReleaseManifest(
+     },
+     fixture: {
+       ...input.fixture,
+-      fingerprint: sha256Hex(input.fixture),
++      fingerprint: sha256Hex(fixtureFingerprintSource({ ...input.fixture })),
+     },
+     validatorCalibration: { ...input.validatorCalibration },
+     commands: [...input.commands],
+@@ -1075,13 +1101,14 @@ export function verifyOneA3bG1ReleaseManifest(
+     pushIf(mismatches, typeof fixture.sampleSeed !== "number" || !Number.isSafeInteger(fixture.sampleSeed) || fixture.sampleSeed < 0, "sample seed is invalid");
+     pushIf(
+       mismatches,
+-      fixture.fingerprint !== safeSha256Hex({
+-        f3ManifestPath: fixture.f3ManifestPath,
+-        f3ManifestSha256: fixture.f3ManifestSha256,
+-        f3ManifestFingerprint: fixture.f3ManifestFingerprint,
+-        fixtureSeed: fixture.fixtureSeed,
+-        sampleSeed: fixture.sampleSeed,
+-      }),
++      fixture.catalogPath !== undefined &&
++        (typeof fixture.catalogPath !== "string" ||
++          fixture.catalogPath.trim() === ""),
++      "F3 fixture catalog path is invalid",
++    );
++    pushIf(
++      mismatches,
++      fixture.fingerprint !== safeSha256Hex(fixtureFingerprintSource(fixture)),
+       "fixture fingerprint does not match its pins",
+     );
+   }
+diff --git a/scripts/produce-1a3b-g1-evidence.ts b/scripts/produce-1a3b-g1-evidence.ts
+index 374efd6..6745ba9 100644
+--- a/scripts/produce-1a3b-g1-evidence.ts
++++ b/scripts/produce-1a3b-g1-evidence.ts
+@@ -1193,6 +1193,50 @@ async function parseSourceEvidence(
+           );
+         }
+       }
++      // ADR-0144/0145: the final verifier re-scans the hashed values export and
++      // the complete run-set pins. Validate both at the source boundary so the
++      // producer cannot assemble a passed summary whose linked raw data is
++      // missing, tampered, or an incomplete run set.
++      const canaryValuesArtifact = isRecord(result.canaryValuesArtifact)
++        ? result.canaryValuesArtifact
++        : null;
++      const valuesPathValue = canaryValuesArtifact
++        ? objectString(canaryValuesArtifact, "path")
++        : null;
++      const valuesHash = canaryValuesArtifact
++        ? objectString(canaryValuesArtifact, "sha256")
++        : null;
++      if (!valuesPathValue || !valuesHash || !SHA256_PATTERN.test(valuesHash)) {
++        errors.push("AC-W01 canaryValuesArtifact must contain a repository path and SHA-256 hash");
++      } else {
++        try {
++          const valuesPath = repositoryPath(
++            valuesPathValue,
++            "AC-W01 canary values artifact",
++          );
++          const valuesBytes = await readFile(valuesPath);
++          if (sha256Bytes(valuesBytes) !== valuesHash) {
++            errors.push("AC-W01 canaryValuesArtifact hash does not match its file");
++          }
++        } catch (error) {
++          errors.push(
++            `AC-W01 canary values artifact is unavailable: ${
++              error instanceof Error ? error.message : "read failed"
++            }`,
++          );
++        }
++      }
++      const expectedRunIds = result.expectedRunIds;
++      if (
++        !Array.isArray(expectedRunIds) ||
++        expectedRunIds.length === 0 ||
++        expectedRunIds.some(
++          (id) => typeof id !== "string" || !/^wrun_[A-Za-z0-9]+$/.test(id),
++        ) ||
++        new Set(expectedRunIds).size !== expectedRunIds.length
++      ) {
++        errors.push("AC-W01 expectedRunIds must be a complete unique Workflow run set");
++      }
+     }
+   }
+   // artifactSha256 is already covered by the errors pushed above, but stating
+@@ -1534,7 +1578,7 @@ function criterionReports(
+   });
+ }
+ 
+-function evidenceArtifactValue(input: Readonly<{
++export function evidenceArtifactValue(input: Readonly<{
+   evidence: OneA3bG1Evidence;
+   f3ManifestFingerprint: string;
+   fixtureCatalogSha256: string;
+diff --git a/tests/one-a-3b-release-evidence.test.ts b/tests/one-a-3b-release-evidence.test.ts
+index bc7c37b..9384c9d 100644
+--- a/tests/one-a-3b-release-evidence.test.ts
++++ b/tests/one-a-3b-release-evidence.test.ts
+@@ -1,15 +1,22 @@
+ import { createHash } from "node:crypto";
+-import { readFileSync } from "node:fs";
++import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
+ 
+ import { describe, expect, it } from "vitest";
+ 
+ import { buildManifest } from "../eval/continuation-acceptance-1a3b/manifest";
++import { evidenceArtifactValue } from "../scripts/produce-1a3b-g1-evidence";
++import {
++  verifyHostedCanaryArtifact,
++  verifyValidatorPrecisionReport,
++  verifyValidatorPrecisionReportArtifact,
++} from "../scripts/verify-1a3b-g1-evidence";
+ import {
+   ONE_A_3B_G1_ENABLED_ROLES,
+   ONE_A_3B_F3_VALIDATOR_PRECISION_FIXTURE_IDS,
+   type OneA3bG1Evidence,
+ } from "@sayhear/application";
+-import { verifyValidatorPrecisionReport, verifyValidatorPrecisionReportArtifact } from "../scripts/verify-1a3b-g1-evidence";
+ import {
+   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
+   verifyOneA3bF3ReleaseArtifacts,
+@@ -25,6 +32,36 @@ function readFixture(path: string): Record<string, any> {
+   >;
+ }
+ 
++function completeHostedArtifacts(runId: string): Record<string, unknown> {
++  const commandId = "01984477-59a9-7d20-9d97-e588769566a1";
++  const ownerId = "01984477-59a9-7d20-9d97-e588769566a0";
++  return {
++    completeness: {
++      runs: {
++        [runId]: { events: 1, eventsComplete: true, steps: 1, stepsComplete: true },
++      },
++      version: "1a3b-hosted-canary-completeness:v1",
++      workflowRuns: 1,
++    },
++    workflowHistory: [
++      {
++        deploymentId: "dpl_acceptance",
++        input: { workflowCommandId: commandId },
++        runId,
++        steps: [{ runId }],
++        events: [{ runId }],
++      },
++    ],
++    outboxPayloads: [
++      { payload: { workflowCommandId: commandId }, user_id: ownerId },
++    ],
++    receipts: [{ action_receipt_id: commandId, user_id: ownerId }],
++    logs: [{ runId }],
++    traces: [{ commandId }],
++    errors: [{ code: "provider_timeout", commandId }],
++  };
++}
++
+ describe("1A.3b G1 evidence lineage", () => {
+   it("rejects precision captures from dirty or different code and missing execution identities", () => {
+     const expectedCapture = { gitCommit: "a".repeat(40), catalogSha256: "catalog", pinsFingerprint: "pins" };
+@@ -478,4 +515,102 @@ describe("1A.3b G1 evidence lineage", () => {
+       }),
+     ).toEqual([]);
+   });
++
++  it("retains AC-W01 hosted canary references through assembly so the final verifier can rescan", () => {
++    const contract = ONE_A_3B_G1_EVIDENCE_CONTRACTS["AC-W01"];
++    expect(contract.requiredResultKeys).toEqual(
++      expect.arrayContaining(["expectedRunIds", "canaryValuesArtifact"]),
++    );
++
++    const root = mkdtempSync(join(tmpdir(), "sayhear-ac-w01-assembly-"));
++    const write = (name: string, value: unknown) => {
++      const bytes = JSON.stringify(value);
++      writeFileSync(join(root, name), bytes, { mode: 0o600 });
++      return {
++        path: name,
++        sha256: createHash("sha256").update(bytes).digest("hex"),
++      };
++    };
++    const runId = "wrun_acceptance";
++    const values = {
++      actionPayload: "private-action-payload",
++      contentHmac: "private-content-hmac",
++      privateBody: "private-body",
++      rawProviderError: "private-provider-error",
++      renderedPrompt: "private-rendered-prompt",
++      secret: "private-secret",
++    };
++    const exportArtifact = write("artifacts.json", completeHostedArtifacts(runId));
++    const canaryValuesArtifact = write("values.json", values);
++
++    const evidence: OneA3bG1Evidence = {
++      criterion: "AC-W01",
++      fixtureIds: ["cont-open-loop-en"],
++      command: "node --import tsx scripts/verify-hosted-workflow-canary.ts",
++      artifactSha256: "a".repeat(64),
++      artifactPath: "eval/run/ac-w01.json",
++      owner: "Luke",
++      source: "hosted",
++      status: "verified",
++    };
++    const source = {
++      artifactPath: "eval/run/ac-w01-source.json",
++      artifactSha256: "b".repeat(64),
++      command: evidence.command,
++      criterion: "AC-W01" as const,
++      fixtureIds: evidence.fixtureIds,
++      owner: "Luke",
++      result: {
++        hosted: true,
++        canaryRunId: runId,
++        deploymentId: "dpl_acceptance",
++        exportArtifact,
++        canaryValuesArtifact,
++        expectedRunIds: [runId],
++      },
++      runId,
++      source: "hosted" as const,
++      verificationCommand: evidence.command,
++    };
++    const assembled = evidenceArtifactValue({
++      evidence,
++      f3ManifestFingerprint: `sha256:${"c".repeat(64)}`,
++      fixtureCatalogSha256: "d".repeat(64),
++      source,
++      gitCommit: "e".repeat(40),
++      releaseIdentityFingerprint: null,
++    });
++    const assembledResult = assembled.result as Record<string, unknown>;
++
++    // The producer copies the contract keys, so the assembled artifact must
++    // still carry both references rather than only a passed summary.
++    expect(assembledResult.expectedRunIds).toEqual([runId]);
++    expect(assembledResult.canaryValuesArtifact).toEqual(canaryValuesArtifact);
++    expect(() => verifyHostedCanaryArtifact(assembled, root)).not.toThrow();
++
++    // Dropping the references is exactly the failure this regression covers:
++    // the final verifier has nothing to re-scan and must refuse the artifact.
++    expect(() =>
++      verifyHostedCanaryArtifact(
++        {
++          result: {
++            ...assembledResult,
++            expectedRunIds: undefined,
++          },
++        },
++        root,
++      ),
++    ).toThrow("Hosted canary lacks deployment and complete run-set pins");
++    expect(() =>
++      verifyHostedCanaryArtifact(
++        {
++          result: {
++            ...assembledResult,
++            canaryValuesArtifact: undefined,
++          },
++        },
++        root,
++      ),
++    ).toThrow("Hosted values reference is missing");
++  });
+ });

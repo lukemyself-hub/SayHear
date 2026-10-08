@@ -1,0 +1,291 @@
+{
+  "version": "1a3b-f3-validator-precision-report:v1",
+  "manifestFingerprint": "sha256:a2c819b531c0581e52f3964f3e9fccb69611a3899dd1546ef448e33acb83d358",
+  "gitCommit": "5354c873e75f04d6e93336422cbb4b4ddc1ab4ba",
+  "gitDirty": false,
+  "catalogSha256": "sha256:448baccf5742991e853c60ccb4d662883b74007175ba7d92f3a5589ec3bab791",
+  "pinsFingerprint": "sha256:a558f4a54eaa91c3592dc6ed7dc45ecb7e2dd136fc8a8af172b0fe0100eddd55",
+  "capturedAt": "2026-10-01T16:19:56.420Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "modelSnapshot": "deepseek-flash",
+  "configVersion": "narrative.validate:g1-release:v4",
+  "promptVersion": "narrative-validate:eval:v4",
+  "schemaVersion": "narrative-findings:v1",
+  "parameters": {
+    "temperature": 0,
+    "maxOutputTokens": 10000
+  },
+  "maxOutputTokens": 10000,
+  "providerCallBudget": 2,
+  "cases": [
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-precision-clean-en-1",
+      "generationCommandId": "01a0852e-5000-7936-8e5d-b8f8086e1a6c",
+      "modelRunAttemptId": "01a0852e-5000-7a79-8fd7-cbd9298681c4",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 479,
+        "outputTokens": 6896,
+        "reasoningTokens": 6804
+      },
+      "verdict": "accepted",
+      "draftText": "The fictional user restores old clocks.",
+      "generatorManifest": [
+        {
+          "statementKey": "holdout-precision-clean-en-1:statement:1",
+          "text": "The fictional user restores old clocks.",
+          "propositionStatements": [
+            {
+              "propositionKey": "holdout-precision-clean-en-1:proposition:1",
+              "normalizedProposition": "The fictional user restores old clocks.",
+              "propositionKind": "fact",
+              "epistemicRendering": "confirmed",
+              "supportKeys": [
+                "syn-event-holdout-en"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-event-holdout-en",
+          "sourceKind": "evidence_item",
+          "text": "The fictional source claim says only that the user restores old clocks.",
+          "epistemicKind": "objective_memory"
+        }
+      ]
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-precision-clean-en-2",
+      "generationCommandId": "01a0852e-5000-79c1-84d4-8c9357b68ea0",
+      "modelRunAttemptId": "01a0852e-5000-7858-ab51-8c4f343c0db8",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 482,
+        "outputTokens": 576,
+        "reasoningTokens": 494
+      },
+      "verdict": "accepted",
+      "draftText": "Restoring old clocks is what the fictional user does.",
+      "generatorManifest": [
+        {
+          "statementKey": "holdout-precision-clean-en-2:statement:1",
+          "text": "Restoring old clocks is what the fictional user does.",
+          "propositionStatements": [
+            {
+              "propositionKey": "holdout-precision-clean-en-2:proposition:1",
+              "normalizedProposition": "Restoring old clocks is what the fictional user does.",
+              "propositionKind": "fact",
+              "epistemicRendering": "confirmed",
+              "supportKeys": [
+                "syn-event-holdout-en"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-event-holdout-en",
+          "sourceKind": "evidence_item",
+          "text": "The fictional source claim says only that the user restores old clocks.",
+          "epistemicKind": "objective_memory"
+        }
+      ]
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-precision-clean-zh-1",
+      "generationCommandId": "01a0852e-5000-710c-a4f6-5dafff3e2a15",
+      "modelRunAttemptId": "01a0852e-5000-7da8-9a02-f8ce745896a7",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 478,
+        "outputTokens": 733,
+        "reasoningTokens": 653
+      },
+      "verdict": "accepted",
+      "draftText": "虚构用户修理古董钟表。",
+      "generatorManifest": [
+        {
+          "statementKey": "holdout-precision-clean-zh-1:statement:1",
+          "text": "虚构用户修理古董钟表。",
+          "propositionStatements": [
+            {
+              "propositionKey": "holdout-precision-clean-zh-1:proposition:1",
+              "normalizedProposition": "虚构用户修理古董钟表。",
+              "propositionKind": "fact",
+              "epistemicRendering": "confirmed",
+              "supportKeys": [
+                "syn-event-holdout-zh"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-event-holdout-zh",
+          "sourceKind": "evidence_item",
+          "text": "虚构来源只说明该用户修理古董钟表。",
+          "epistemicKind": "objective_memory"
+        }
+      ]
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-precision-clean-zh-2",
+      "generationCommandId": "01a0852e-5000-7199-930e-5454f6b0a14d",
+      "modelRunAttemptId": "01a0852e-5000-72ef-972f-6cb21cfdd38a",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 481,
+        "outputTokens": 839,
+        "reasoningTokens": 728
+      },
+      "verdict": "accepted",
+      "draftText": "修理古董钟表是虚构用户会做的事情。",
+      "generatorManifest": [
+        {
+          "statementKey": "holdout-precision-clean-zh-2:statement:1",
+          "text": "修理古董钟表是虚构用户会做的事情。",
+          "propositionStatements": [
+            {
+              "propositionKey": "holdout-precision-clean-zh-2:proposition:1",
+              "normalizedProposition": "修理古董钟表是虚构用户会做的事情。",
+              "propositionKind": "fact",
+              "epistemicRendering": "confirmed",
+              "supportKeys": [
+                "syn-event-holdout-zh"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-event-holdout-zh",
+          "sourceKind": "evidence_item",
+          "text": "虚构来源只说明该用户修理古董钟表。",
+          "epistemicKind": "objective_memory"
+        }
+      ]
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-precision-clean-mix-1",
+      "generationCommandId": "01a0852e-5000-7142-a584-199dd0a51b85",
+      "modelRunAttemptId": "01a0852e-5000-7b4d-8072-bf1446e80be0",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 482,
+        "outputTokens": 6708,
+        "reasoningTokens": 6624
+      },
+      "verdict": "accepted",
+      "draftText": "Restoring old clocks 是虚构用户会做的事情。",
+      "generatorManifest": [
+        {
+          "statementKey": "holdout-precision-clean-mix-1:statement:1",
+          "text": "Restoring old clocks 是虚构用户会做的事情。",
+          "propositionStatements": [
+            {
+              "propositionKey": "holdout-precision-clean-mix-1:proposition:1",
+              "normalizedProposition": "Restoring old clocks 是虚构用户会做的事情。",
+              "propositionKind": "fact",
+              "epistemicRendering": "confirmed",
+              "supportKeys": [
+                "syn-event-holdout-mix"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-event-holdout-mix",
+          "sourceKind": "evidence_item",
+          "text": "虚构来源只说明该用户 restores old clocks。",
+          "epistemicKind": "objective_memory"
+        }
+      ]
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-precision-clean-mix-2",
+      "generationCommandId": "01a0852e-5000-7620-b7de-cfb9c8709516",
+      "modelRunAttemptId": "01a0852e-5000-7331-bf64-2f23038cee25",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 478,
+        "outputTokens": 9064,
+        "reasoningTokens": 8956
+      },
+      "verdict": "accepted",
+      "draftText": "虚构用户会 restore old clocks。",
+      "generatorManifest": [
+        {
+          "statementKey": "holdout-precision-clean-mix-2:statement:1",
+          "text": "虚构用户会 restore old clocks。",
+          "propositionStatements": [
+            {
+              "propositionKey": "holdout-precision-clean-mix-2:proposition:1",
+              "normalizedProposition": "虚构用户会 restore old clocks。",
+              "propositionKind": "fact",
+              "epistemicRendering": "confirmed",
+              "supportKeys": [
+                "syn-event-holdout-mix"
+              ]
+            }
+          ]
+        }
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-event-holdout-mix",
+          "sourceKind": "evidence_item",
+          "text": "虚构来源只说明该用户 restores old clocks。",
+          "epistemicKind": "objective_memory"
+        }
+      ]
+    }
+  ]
+}

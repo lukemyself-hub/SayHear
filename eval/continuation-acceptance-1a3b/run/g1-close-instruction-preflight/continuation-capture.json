@@ -1,0 +1,29 @@
+{
+  "arm": "continuation-incumbent-1a3a",
+  "catalogVersion": "1a3b-f3-holdout-fixtures:v1",
+  "configurationFingerprint": "sha256:c154d970171657e269c6d49bf4fd88e7ac4483d2b4935173285312d7f15a69bb",
+  "configId": "continuation-incumbent-1a3a",
+  "format": "1a3b-f3-synthetic-run:v1",
+  "group": "continuation",
+  "scenarios": [
+    {
+      "fixtureId": "holdout-cont-stop-en",
+      "promptFingerprint": null,
+      "sharedInputFingerprint": "sha256:47e1c0bd167f589d71bb347d3e72e4e4e56f1b79ba175d3cf8dbcf91bcdfa08e",
+      "turns": [
+        {
+          "assistantText": "Got it — the clock restoration is the only thing that's there. And that's fine; we can stop here. I'm around whenever you feel like picking something up again.",
+          "sequenceInScenario": 1,
+          "userInput": {
+            "locale": "en-US",
+            "text": "That is all. I do not want to keep going with this.",
+            "timezone": "America/Los_Angeles"
+          }
+        }
+      ]
+    }
+  ],
+  "sourceKind": "synthetic-eval",
+  "synthetic": true,
+  "version": "1a3b-f3-synthetic-run:v1"
+}

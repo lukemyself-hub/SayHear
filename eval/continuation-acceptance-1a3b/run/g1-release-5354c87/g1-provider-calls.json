@@ -1,0 +1,112 @@
+{
+  "version": "g1-provider-capture:v1",
+  "synthetic": true,
+  "preflight": false,
+  "gitDirty": false,
+  "runId": "g1-provider-82da6ce4-42bb-40b5-89b2-b91e2086f3de",
+  "manifestFingerprint": "sha256:a2c819b531c0581e52f3964f3e9fccb69611a3899dd1546ef448e33acb83d358",
+  "gitCommit": "5354c873e75f04d6e93336422cbb4b4ddc1ab4ba",
+  "capturedAt": "2026-10-01T16:17:55.948Z",
+  "providerCalls": [
+    {
+      "role": "episode.build",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "episode-build:eval:v3",
+      "schemaVersion": "episode-proposal:v1",
+      "configVersion": "episode.build:g1-release:v3",
+      "providerPolicyVersion": "deepseek-episode.build-egress:g1-release:v3",
+      "rolloutPin": "episode.build-g1-release-pin:v5",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T16:16:52.683Z",
+      "generationCommandId": "01a0f840-f455-7bfb-99b1-66f7cc921b6b",
+      "modelRunAttemptId": "01a0f840-f455-742e-80ef-8c122d8d5587",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 545,
+        "outputTokens": 2482,
+        "reasoningTokens": 2152
+      }
+    },
+    {
+      "role": "reflection.daily",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "reflection-daily:eval:v4",
+      "schemaVersion": "reflection-proposal:v1",
+      "configVersion": "reflection.daily:g1-release:v3",
+      "providerPolicyVersion": "deepseek-reflection.daily-egress:g1-release:v3",
+      "rolloutPin": "reflection.daily-g1-release-pin:v5",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T16:17:15.714Z",
+      "generationCommandId": "01a0f840-f455-7c52-bdae-eaa014a1c494",
+      "modelRunAttemptId": "01a0f840-f455-74d3-89b5-3afcf455b10a",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 684,
+        "outputTokens": 6055,
+        "reasoningTokens": 5067
+      }
+    },
+    {
+      "role": "reflection.weekly",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "reflection-weekly:eval:v4",
+      "schemaVersion": "reflection-proposal:v1",
+      "configVersion": "reflection.weekly:g1-release:v3",
+      "providerPolicyVersion": "deepseek-reflection.weekly-egress:g1-release:v3",
+      "rolloutPin": "reflection.weekly-g1-release-pin:v5",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T16:17:47.790Z",
+      "generationCommandId": "01a0f840-f455-7d26-99dd-486f19e9a36e",
+      "modelRunAttemptId": "01a0f840-f455-7baa-9601-7262f831a623",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 688,
+        "outputTokens": 8610,
+        "reasoningTokens": 8038
+      }
+    },
+    {
+      "role": "narrative.validate",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "configVersion": "narrative.validate:g1-release:v4",
+      "providerPolicyVersion": "deepseek-narrative.validate-egress:g1-release:v4",
+      "rolloutPin": "narrative.validate-g1-release-pin:v5",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T16:17:55.948Z",
+      "generationCommandId": "01a0f840-f455-7ef9-b0db-87463e26cb63",
+      "modelRunAttemptId": "01a0f840-f455-7baf-9965-badcc62673a9",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 538,
+        "outputTokens": 1739,
+        "reasoningTokens": 1668
+      }
+    }
+  ]
+}

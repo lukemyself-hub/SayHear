@@ -1,0 +1,66 @@
+[
+  {
+    "file": "continuation-capture.json",
+    "sha256": "b20b0f03e04197386088aa4099d297ac95fd58f7115362105b054c84c8f5ae1f"
+  },
+  {
+    "file": "continuation-hard-gates.json",
+    "sha256": "ec7a5231d8700b59e37961de9f21578e9e2a72f46e5faa58a86b4e665326741b"
+  },
+  {
+    "file": "g1-evidence-production-report.json",
+    "sha256": "590c3d53612a184399659b882bc649c026fbfa8d8c57b7d15748316e2e133d07"
+  },
+  {
+    "file": "g1-provider-calls.json",
+    "sha256": "1dae17429acd473ceb365273972927a978b06363acc25dd7a50f3f6b6955b7bc"
+  },
+  {
+    "file": "manifest.json",
+    "sha256": "24615b8aac30efceba7eb5c15095b8917a85b85911e7dfbd6069199ca31a0ecc"
+  },
+  {
+    "file": "provider-recovery-probe.json",
+    "sha256": "b3290dd260c3f5a0255ec43c297f4793f3ea102c09f1b2432e82be8f395a04fa"
+  },
+  {
+    "file": "restoration-status.json",
+    "sha256": "00bd2bbcce691a8dd3afe8227c1c197bfc82ca57619854233d50cf1e2b98aabe"
+  },
+  {
+    "file": "test-reports/ac-episode-admission.json",
+    "sha256": "7487b388ba9860ac8c5f66606d5f0eb88cef9ef4733b1e4e35a460e9465f7060"
+  },
+  {
+    "file": "test-reports/ac-purge-restore-drill.json",
+    "sha256": "20b530bc98e9aac168df2d40cfa55a49bf7d57ffab3ee0e79774c4afecc53067"
+  },
+  {
+    "file": "test-reports/ac-purge-seam.json",
+    "sha256": "730effdf9a969b7849b488e2751453600b9390b898d7bef57a6bee0b26bf33c2"
+  },
+  {
+    "file": "test-reports/ac-system-seams.json",
+    "sha256": "49b6d4e65420135a3e30aa5ed93f224426f8958018ddcef9269d735c1ddd3559"
+  },
+  {
+    "file": "test-reports/execution-context.json",
+    "sha256": "04678c38f72dcd8c72745a4a8996074f021c414c00d4a7cb5000d220f3091816"
+  },
+  {
+    "file": "test-reports/full-regression.json",
+    "sha256": "0687e425c0d210a1f670cecfd8d7b04a687586295dd246cba6510df11104288b"
+  },
+  {
+    "file": "validator-completion.json",
+    "sha256": "655c93a6454a608148e42e0f5cc7917a1ac13fc7d04956a149db1773722ba0da"
+  },
+  {
+    "file": "validator-machine-verdicts.json",
+    "sha256": "a342a624d4d310a23cb30b70f24526fbca3f420245107e02430c8f86415fa6be"
+  },
+  {
+    "file": "validator-precision.json",
+    "sha256": "04b8cc7e6fc3276b28be58f0c2788831b3e1c919075a96005342510158500b53"
+  }
+]

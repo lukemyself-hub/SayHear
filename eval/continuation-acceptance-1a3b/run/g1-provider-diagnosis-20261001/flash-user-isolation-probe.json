@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-10-01T20:30:29.323Z",
+  "path": "/chat/completions",
+  "body": {
+    "model": "deepseek-flash",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Reply with OK."
+      }
+    ],
+    "thinking": {
+      "type": "disabled"
+    },
+    "max_tokens": 100,
+    "user_id": "sayhear-g1-synthetic-isolation-20261001",
+    "stream": true
+  },
+  "http": 200,
+  "bytes": 70,
+  "ms": 65011,
+  "error": "TimeoutError"
+}

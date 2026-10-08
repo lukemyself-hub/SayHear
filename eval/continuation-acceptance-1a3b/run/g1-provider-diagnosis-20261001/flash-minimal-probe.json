@@ -1,0 +1,36 @@
+[
+  {
+    "label": "plain",
+    "body": {
+      "model": "deepseek-flash",
+      "input": "Hello.",
+      "stream": true
+    },
+    "http": 200,
+    "bytes": 70,
+    "ms": 65007,
+    "error": "TimeoutError"
+  },
+  {
+    "label": "typed",
+    "body": {
+      "model": "deepseek-flash",
+      "input": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_text",
+              "text": "Hello."
+            }
+          ]
+        }
+      ],
+      "stream": true
+    },
+    "http": 200,
+    "bytes": 70,
+    "ms": 65002,
+    "error": "TimeoutError"
+  }
+]

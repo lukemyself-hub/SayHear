@@ -1,0 +1,28 @@
+{
+  "advisories": [
+    "continuation-incumbent-1a3a/holdout-cont-stop-en t1: required_recall_missing — required-recall token \"okay\" absent from the response"
+  ],
+  "applicable": true,
+  "checkedFixtureCount": 18,
+  "configId": "continuation-incumbent-1a3a",
+  "failures": [
+    "continuation-incumbent-1a3a/holdout-cont-open-loop-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-memory-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-greeting-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-task-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-risk-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-sensitive-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-incomplete-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-extra-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-topic-en: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-surveillance-zh: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-repeat-zh: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-open-loop-zh: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-memory-greeting-zh: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-task-zh: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-short-zh: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-risk-sensitive-mix: missing from complete hard-gate run",
+    "continuation-incumbent-1a3a/holdout-cont-stop-lane-mix: missing from complete hard-gate run"
+  ],
+  "passed": false
+}

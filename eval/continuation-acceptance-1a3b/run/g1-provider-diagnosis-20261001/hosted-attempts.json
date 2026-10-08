@@ -1,0 +1,50 @@
+[
+  {
+    "model_run_attempt_id": "01a0f90d-4ace-7a49-9d27-9d2e7d1f1a3e",
+    "generation_command_id": "01a0f90d-4ace-7636-b3a3-bcf33e7f6a2a",
+    "status": "failed",
+    "error_category": "timeout",
+    "started_at": "2026-10-01T19:59:54.199Z",
+    "completed_at": "2026-10-01T20:01:54.367Z",
+    "provider_completed_at": null,
+    "recovery_status": "retried",
+    "created_at": "2026-10-01T19:59:53.038Z",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "model_snapshot": "deepseek-flash",
+    "input_tokens": null,
+    "output_tokens": null
+  },
+  {
+    "model_run_attempt_id": "01a0f90f-2597-7576-854c-942ef278f9a7",
+    "generation_command_id": "01a0f90d-4ace-7636-b3a3-bcf33e7f6a2a",
+    "status": "failed",
+    "error_category": "timeout",
+    "started_at": "2026-10-01T20:01:54.818Z",
+    "completed_at": "2026-10-01T20:03:54.976Z",
+    "provider_completed_at": null,
+    "recovery_status": "retried",
+    "created_at": "2026-10-01T20:01:54.583Z",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "model_snapshot": "deepseek-flash",
+    "input_tokens": null,
+    "output_tokens": null
+  },
+  {
+    "model_run_attempt_id": "01a0f910-fdab-71a6-a091-2b18c07580b4",
+    "generation_command_id": "01a0f90d-4ace-7636-b3a3-bcf33e7f6a2a",
+    "status": "running",
+    "error_category": null,
+    "started_at": "2026-10-01T20:03:55.656Z",
+    "completed_at": null,
+    "provider_completed_at": null,
+    "recovery_status": "recovering",
+    "created_at": "2026-10-01T20:03:55.435Z",
+    "provider": "deepseek",
+    "model": "deepseek-v4-flash",
+    "model_snapshot": "deepseek-flash",
+    "input_tokens": null,
+    "output_tokens": null
+  }
+]

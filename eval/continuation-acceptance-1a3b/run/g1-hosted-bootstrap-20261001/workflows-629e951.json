@@ -1,0 +1,510 @@
+[
+  {
+    "events": [
+      {
+        "eventType": "run_created",
+        "correlationId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "specVersion": 3,
+        "eventData": {
+          "deploymentId": "dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7",
+          "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+          "input": [
+            {
+              "workflowCommandId": "01a0f8aa-7ea7-7b30-9cd2-d3eb345faec3",
+              "subjectId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+              "sourceRevision": 4,
+              "policyVersion": "dialogue-state:v2",
+              "expectedDataEpoch": 1
+            }
+          ],
+          "executionContext": {
+            "traceCarrier": {},
+            "workflowCoreVersion": "4.8.2",
+            "features": {
+              "encryption": true
+            }
+          }
+        },
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "eventId": "evnt_01M3WAN1GS000DZHWBWJ274QH6",
+        "createdAt": "2026-10-01T18:12:00.153Z",
+        "occurredAt": "2026-10-01T18:12:00.125Z"
+      },
+      {
+        "eventType": "run_started",
+        "correlationId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "specVersion": 3,
+        "eventData": {},
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "eventId": "evnt_01M3WAN2R4M5EJRN4PYX5NBGVG",
+        "createdAt": "2026-10-01T18:12:01.412Z",
+        "occurredAt": "2026-10-01T18:12:01.301Z"
+      },
+      {
+        "eventType": "step_created",
+        "correlationId": "step_01M3WAN2QV7XXSWJQDTDTNBFF8",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep",
+          "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+          "input": {
+            "args": [
+              {
+                "workflowCommandId": "01a0f8aa-7ea7-7b30-9cd2-d3eb345faec3",
+                "subjectId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+                "sourceRevision": 4,
+                "policyVersion": "dialogue-state:v2",
+                "expectedDataEpoch": 1
+              }
+            ]
+          }
+        },
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "eventId": "evnt_01M3WAN2V2SFRK71QFF5R3AGJM",
+        "createdAt": "2026-10-01T18:12:01.506Z",
+        "occurredAt": "2026-10-01T18:12:01.464Z"
+      },
+      {
+        "eventType": "step_started",
+        "correlationId": "step_01M3WAN2QV7XXSWJQDTDTNBFF8",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep"
+        },
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "eventId": "evnt_01M3WAN45JDAJGY3VF46S3JJHY",
+        "createdAt": "2026-10-01T18:12:02.866Z",
+        "occurredAt": "2026-10-01T18:12:02.751Z"
+      },
+      {
+        "eventType": "step_completed",
+        "correlationId": "step_01M3WAN2QV7XXSWJQDTDTNBFF8",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep",
+          "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+          "result": {
+            "dailySessionId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+            "outcome": "published",
+            "workflowReceiptId": "wf-ada06ce0-5e25-4a4c-a9eb-f77160fbea85"
+          }
+        },
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "eventId": "evnt_01M3WANERHC3N18093MC5GA483",
+        "createdAt": "2026-10-01T18:12:13.713Z",
+        "occurredAt": "2026-10-01T18:12:13.675Z"
+      },
+      {
+        "eventType": "run_completed",
+        "correlationId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "specVersion": 3,
+        "eventData": {
+          "output": {
+            "dailySessionId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+            "outcome": "published",
+            "workflowReceiptId": "wf-ada06ce0-5e25-4a4c-a9eb-f77160fbea85"
+          }
+        },
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "eventId": "evnt_01M3WANF32606TWHDBCQBB2WRP",
+        "createdAt": "2026-10-01T18:12:14.050Z",
+        "occurredAt": "2026-10-01T18:12:14.004Z"
+      }
+    ],
+    "run": {
+      "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+      "status": "completed",
+      "deploymentId": "dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7",
+      "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+      "specVersion": 3,
+      "input": [
+        {
+          "workflowCommandId": "01a0f8aa-7ea7-7b30-9cd2-d3eb345faec3",
+          "subjectId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+          "sourceRevision": 4,
+          "policyVersion": "dialogue-state:v2",
+          "expectedDataEpoch": 1
+        }
+      ],
+      "output": {
+        "dailySessionId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+        "outcome": "published",
+        "workflowReceiptId": "wf-ada06ce0-5e25-4a4c-a9eb-f77160fbea85"
+      },
+      "expiredAt": "2026-10-02T18:12:14.073Z",
+      "startedAt": "2026-10-01T18:12:01.403Z",
+      "completedAt": "2026-10-01T18:12:14.041Z",
+      "createdAt": "2026-10-01T18:12:00.154Z",
+      "updatedAt": "2026-10-01T18:12:14.074Z",
+      "blobStorageBytes": 891,
+      "streamStorageBytes": 0,
+      "workflowCoreVersion": "4.8.2"
+    },
+    "steps": [
+      {
+        "runId": "wrun_01M3WAN1FW8XBTC5BSPJXMVXN9",
+        "stepId": "step_01M3WAN2QV7XXSWJQDTDTNBFF8",
+        "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep",
+        "status": "completed",
+        "input": {
+          "args": [
+            {
+              "workflowCommandId": "01a0f8aa-7ea7-7b30-9cd2-d3eb345faec3",
+              "subjectId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+              "sourceRevision": 4,
+              "policyVersion": "dialogue-state:v2",
+              "expectedDataEpoch": 1
+            }
+          ]
+        },
+        "output": {
+          "dailySessionId": "01a0f88a-bef4-72a6-bf46-5c814f603612",
+          "outcome": "published",
+          "workflowReceiptId": "wf-ada06ce0-5e25-4a4c-a9eb-f77160fbea85"
+        },
+        "attempt": 1,
+        "startedAt": "2026-10-01T18:12:02.856Z",
+        "completedAt": "2026-10-01T18:12:13.702Z",
+        "createdAt": "2026-10-01T18:12:01.498Z",
+        "updatedAt": "2026-10-01T18:12:14.114Z",
+        "specVersion": 3
+      }
+    ]
+  },
+  {
+    "events": [
+      {
+        "eventType": "run_created",
+        "correlationId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "specVersion": 3,
+        "eventData": {
+          "deploymentId": "dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7",
+          "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+          "input": [
+            {
+              "workflowCommandId": "01a0f899-a3ad-78b0-8ee8-27b8fff29485",
+              "subjectId": "01a0f899-a3ad-72e4-af3a-87e341abbdb1",
+              "sourceRevision": 1,
+              "policyVersion": "fast-path-extraction:v1",
+              "expectedDataEpoch": 1
+            }
+          ],
+          "executionContext": {
+            "traceCarrier": {},
+            "workflowCoreVersion": "4.8.2",
+            "features": {
+              "encryption": true
+            }
+          }
+        },
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "eventId": "evnt_01M3WAN1DE402KMG9QA379TVH1",
+        "createdAt": "2026-10-01T18:12:00.046Z",
+        "occurredAt": "2026-10-01T18:12:00.025Z"
+      },
+      {
+        "eventType": "run_started",
+        "correlationId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "specVersion": 3,
+        "eventData": {},
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "eventId": "evnt_01M3WAN2S8E71XG4JRXG4B423N",
+        "createdAt": "2026-10-01T18:12:01.448Z",
+        "occurredAt": "2026-10-01T18:12:01.329Z"
+      },
+      {
+        "eventType": "step_created",
+        "correlationId": "step_01M3WAN2S11W8QXG9Y3FRNTZ4H",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep",
+          "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+          "input": {
+            "args": [
+              {
+                "workflowCommandId": "01a0f899-a3ad-78b0-8ee8-27b8fff29485",
+                "subjectId": "01a0f899-a3ad-72e4-af3a-87e341abbdb1",
+                "sourceRevision": 1,
+                "policyVersion": "fast-path-extraction:v1",
+                "expectedDataEpoch": 1
+              }
+            ]
+          }
+        },
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "eventId": "evnt_01M3WAN2VZ1776MCV3VHE4H6DS",
+        "createdAt": "2026-10-01T18:12:01.535Z",
+        "occurredAt": "2026-10-01T18:12:01.499Z"
+      },
+      {
+        "eventType": "step_started",
+        "correlationId": "step_01M3WAN2S11W8QXG9Y3FRNTZ4H",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep"
+        },
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "eventId": "evnt_01M3WAN482A4D6PCSC6MBYMME6",
+        "createdAt": "2026-10-01T18:12:02.946Z",
+        "occurredAt": "2026-10-01T18:12:02.808Z"
+      },
+      {
+        "eventType": "step_completed",
+        "correlationId": "step_01M3WAN2S11W8QXG9Y3FRNTZ4H",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep",
+          "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+          "result": {
+            "outcome": "extracted",
+            "workflowReceiptId": "wf-67f20c81-8da6-4720-94db-191618e8c20e"
+          }
+        },
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "eventId": "evnt_01M3WAPJ16T9XG5J12YFCGJDNH",
+        "createdAt": "2026-10-01T18:12:49.830Z",
+        "occurredAt": "2026-10-01T18:12:49.775Z"
+      },
+      {
+        "eventType": "run_completed",
+        "correlationId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "specVersion": 3,
+        "eventData": {
+          "output": {
+            "outcome": "extracted",
+            "workflowReceiptId": "wf-67f20c81-8da6-4720-94db-191618e8c20e"
+          }
+        },
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "eventId": "evnt_01M3WAPJBJJ6KTQDYECZH7BBBG",
+        "createdAt": "2026-10-01T18:12:50.162Z",
+        "occurredAt": "2026-10-01T18:12:50.127Z"
+      }
+    ],
+    "run": {
+      "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+      "status": "completed",
+      "deploymentId": "dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7",
+      "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+      "specVersion": 3,
+      "input": [
+        {
+          "workflowCommandId": "01a0f899-a3ad-78b0-8ee8-27b8fff29485",
+          "subjectId": "01a0f899-a3ad-72e4-af3a-87e341abbdb1",
+          "sourceRevision": 1,
+          "policyVersion": "fast-path-extraction:v1",
+          "expectedDataEpoch": 1
+        }
+      ],
+      "output": {
+        "outcome": "extracted",
+        "workflowReceiptId": "wf-67f20c81-8da6-4720-94db-191618e8c20e"
+      },
+      "expiredAt": "2026-10-02T18:12:50.191Z",
+      "startedAt": "2026-10-01T18:12:01.441Z",
+      "completedAt": "2026-10-01T18:12:50.151Z",
+      "createdAt": "2026-10-01T18:12:00.046Z",
+      "updatedAt": "2026-10-01T18:12:50.191Z",
+      "blobStorageBytes": 783,
+      "streamStorageBytes": 0,
+      "workflowCoreVersion": "4.8.2"
+    },
+    "steps": [
+      {
+        "runId": "wrun_01M3WAN1CRYNP4RPR58V9VX570",
+        "stepId": "step_01M3WAN2S11W8QXG9Y3FRNTZ4H",
+        "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep",
+        "status": "completed",
+        "input": {
+          "args": [
+            {
+              "workflowCommandId": "01a0f899-a3ad-78b0-8ee8-27b8fff29485",
+              "subjectId": "01a0f899-a3ad-72e4-af3a-87e341abbdb1",
+              "sourceRevision": 1,
+              "policyVersion": "fast-path-extraction:v1",
+              "expectedDataEpoch": 1
+            }
+          ]
+        },
+        "output": {
+          "outcome": "extracted",
+          "workflowReceiptId": "wf-67f20c81-8da6-4720-94db-191618e8c20e"
+        },
+        "attempt": 1,
+        "startedAt": "2026-10-01T18:12:02.933Z",
+        "completedAt": "2026-10-01T18:12:49.820Z",
+        "createdAt": "2026-10-01T18:12:01.526Z",
+        "updatedAt": "2026-10-01T18:12:50.228Z",
+        "specVersion": 3
+      }
+    ]
+  },
+  {
+    "events": [
+      {
+        "eventType": "run_created",
+        "correlationId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "specVersion": 3,
+        "eventData": {
+          "deploymentId": "dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7",
+          "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+          "input": [
+            {
+              "workflowCommandId": "01a0f88a-bef4-7131-8b32-3fa49c8e5887",
+              "subjectId": "01a0f88a-bef4-710f-8aa8-9aab4f7fe443",
+              "sourceRevision": 1,
+              "policyVersion": "fast-path-extraction:v1",
+              "expectedDataEpoch": 1
+            }
+          ],
+          "executionContext": {
+            "traceCarrier": {},
+            "workflowCoreVersion": "4.8.2",
+            "features": {
+              "encryption": true
+            }
+          }
+        },
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "eventId": "evnt_01M3WAN127Z50S504NDGW0VBAX",
+        "createdAt": "2026-10-01T18:11:59.687Z",
+        "occurredAt": "2026-10-01T18:11:59.635Z"
+      },
+      {
+        "eventType": "run_started",
+        "correlationId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "specVersion": 3,
+        "eventData": {},
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "eventId": "evnt_01M3WAN2VF869ZVH2ZB08ASZZF",
+        "createdAt": "2026-10-01T18:12:01.519Z",
+        "occurredAt": "2026-10-01T18:12:01.359Z"
+      },
+      {
+        "eventType": "step_created",
+        "correlationId": "step_01M3WAN2V24WFSGKTRJDQ99GN6",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep",
+          "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+          "input": {
+            "args": [
+              {
+                "workflowCommandId": "01a0f88a-bef4-7131-8b32-3fa49c8e5887",
+                "subjectId": "01a0f88a-bef4-710f-8aa8-9aab4f7fe443",
+                "sourceRevision": 1,
+                "policyVersion": "fast-path-extraction:v1",
+                "expectedDataEpoch": 1
+              }
+            ]
+          }
+        },
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "eventId": "evnt_01M3WAN2YFNYHVZRF9S31YVW2B",
+        "createdAt": "2026-10-01T18:12:01.615Z",
+        "occurredAt": "2026-10-01T18:12:01.577Z"
+      },
+      {
+        "eventType": "step_started",
+        "correlationId": "step_01M3WAN2V24WFSGKTRJDQ99GN6",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep"
+        },
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "eventId": "evnt_01M3WAN495YX9DRNKXT20PPFNT",
+        "createdAt": "2026-10-01T18:12:02.981Z",
+        "occurredAt": "2026-10-01T18:12:02.859Z"
+      },
+      {
+        "eventType": "step_completed",
+        "correlationId": "step_01M3WAN2V24WFSGKTRJDQ99GN6",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep",
+          "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+          "result": {
+            "outcome": "extracted",
+            "workflowReceiptId": "wf-a0b33c71-849d-489a-9073-55b8cb0973e3"
+          }
+        },
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "eventId": "evnt_01M3WANY8NHJSX88TTZZ1GA47R",
+        "createdAt": "2026-10-01T18:12:29.589Z",
+        "occurredAt": "2026-10-01T18:12:29.555Z"
+      },
+      {
+        "eventType": "run_completed",
+        "correlationId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "specVersion": 3,
+        "eventData": {
+          "output": {
+            "outcome": "extracted",
+            "workflowReceiptId": "wf-a0b33c71-849d-489a-9073-55b8cb0973e3"
+          }
+        },
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "eventId": "evnt_01M3WANYKQ64TYBWX0GY7EXH76",
+        "createdAt": "2026-10-01T18:12:29.943Z",
+        "occurredAt": "2026-10-01T18:12:29.901Z"
+      }
+    ],
+    "run": {
+      "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+      "status": "completed",
+      "deploymentId": "dpl_DqmVY2oXViWfySYHwRmEw3ZaqSC7",
+      "workflowName": "workflow//./src/workflows/fast-path-extraction.workflow//fastPathExtractionWorkflow",
+      "specVersion": 3,
+      "input": [
+        {
+          "workflowCommandId": "01a0f88a-bef4-7131-8b32-3fa49c8e5887",
+          "subjectId": "01a0f88a-bef4-710f-8aa8-9aab4f7fe443",
+          "sourceRevision": 1,
+          "policyVersion": "fast-path-extraction:v1",
+          "expectedDataEpoch": 1
+        }
+      ],
+      "output": {
+        "outcome": "extracted",
+        "workflowReceiptId": "wf-a0b33c71-849d-489a-9073-55b8cb0973e3"
+      },
+      "expiredAt": "2026-10-02T18:12:29.987Z",
+      "startedAt": "2026-10-01T18:12:01.506Z",
+      "completedAt": "2026-10-01T18:12:29.933Z",
+      "createdAt": "2026-10-01T18:11:59.687Z",
+      "updatedAt": "2026-10-01T18:12:29.987Z",
+      "blobStorageBytes": 783,
+      "streamStorageBytes": 0,
+      "workflowCoreVersion": "4.8.2"
+    },
+    "steps": [
+      {
+        "runId": "wrun_01M3WAN0ZT6DQ4893RZKC5JMZD",
+        "stepId": "step_01M3WAN2V24WFSGKTRJDQ99GN6",
+        "stepName": "step//./src/workflows/fast-path-extraction.workflow//runFastPathStep",
+        "status": "completed",
+        "input": {
+          "args": [
+            {
+              "workflowCommandId": "01a0f88a-bef4-7131-8b32-3fa49c8e5887",
+              "subjectId": "01a0f88a-bef4-710f-8aa8-9aab4f7fe443",
+              "sourceRevision": 1,
+              "policyVersion": "fast-path-extraction:v1",
+              "expectedDataEpoch": 1
+            }
+          ]
+        },
+        "output": {
+          "outcome": "extracted",
+          "workflowReceiptId": "wf-a0b33c71-849d-489a-9073-55b8cb0973e3"
+        },
+        "attempt": 1,
+        "startedAt": "2026-10-01T18:12:02.974Z",
+        "completedAt": "2026-10-01T18:12:29.581Z",
+        "createdAt": "2026-10-01T18:12:01.602Z",
+        "updatedAt": "2026-10-01T18:12:30.028Z",
+        "specVersion": 3
+      }
+    ]
+  }
+]

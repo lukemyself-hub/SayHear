@@ -1,0 +1,267 @@
+{
+  "version": "1a3b-f3-validator-review:v1",
+  "manifestFingerprint": "sha256:f722744b27144139081de2698a1b08a77565baa17e5228908a03d88f35eec3b7",
+  "cases": [
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic holdout Reflection output points at the wrong frozen input manifest.",
+      "draftText": "The supplied reflection was generated from manifest syn-holdout-other.",
+      "draftRef": "validator-fixture:holdout-validator-reflection-manifest_mismatch-en",
+      "expectedFindingCode": "manifest_mismatch",
+      "expectedOutcome": "advisory",
+      "expectedVerdict": "accepted",
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": {
+        "advisoryFindingCodes": [
+          "manifest_mismatch",
+          "unsupported",
+          "material_absence"
+        ],
+        "blockingFindingCodes": [],
+        "errorCode": null,
+        "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+        "model": "deepseek-v4-flash",
+        "outcome": "completed",
+        "provider": "deepseek",
+        "responseFailure": null,
+        "usage": {
+          "inputTokens": 483,
+          "outputTokens": 1090,
+          "reasoningTokens": 1019
+        },
+        "verdict": "accepted"
+      },
+      "plannedCoverageKeys": [
+        "syn-claim-holdout-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-holdout-en",
+          "text": "The fictional user restores old clocks."
+        }
+      ],
+      "validatorErrorClass": "manifest_mismatch"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic holdout Reflection output leaves its proposition support ambiguous.",
+      "draftText": "There is something about the clock that may matter to them.",
+      "draftRef": "validator-fixture:holdout-validator-reflection-ambiguity-en",
+      "expectedFindingCode": "ambiguous",
+      "expectedOutcome": "advisory",
+      "expectedVerdict": "accepted",
+      "fixtureId": "holdout-validator-reflection-ambiguity-en",
+      "generatorManifest": [],
+      "languageVariant": "en",
+      "locale": "en-US",
+      "machineVerdict": {
+        "advisoryFindingCodes": [
+          "manifest_mismatch",
+          "unsupported",
+          "ambiguous",
+          "material_absence"
+        ],
+        "blockingFindingCodes": [],
+        "errorCode": null,
+        "fixtureId": "holdout-validator-reflection-ambiguity-en",
+        "model": "deepseek-v4-flash",
+        "outcome": "completed",
+        "provider": "deepseek",
+        "responseFailure": null,
+        "usage": {
+          "inputTokens": 479,
+          "outputTokens": 5099,
+          "reasoningTokens": 5001
+        },
+        "verdict": "accepted"
+      },
+      "plannedCoverageKeys": [
+        "syn-claim-holdout-en"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-holdout-en",
+          "text": "The fictional user restores old clocks."
+        }
+      ],
+      "validatorErrorClass": "ambiguity"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic holdout Reflection output points at the wrong frozen input manifest.",
+      "draftText": "该草稿声称由 manifest syn-holdout-other 生成。",
+      "draftRef": "validator-fixture:holdout-validator-reflection-manifest_mismatch-zh",
+      "expectedFindingCode": "manifest_mismatch",
+      "expectedOutcome": "advisory",
+      "expectedVerdict": "accepted",
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": {
+        "advisoryFindingCodes": [
+          "manifest_mismatch",
+          "unsupported",
+          "material_absence"
+        ],
+        "blockingFindingCodes": [],
+        "errorCode": null,
+        "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+        "model": "deepseek-v4-flash",
+        "outcome": "completed",
+        "provider": "deepseek",
+        "responseFailure": null,
+        "usage": {
+          "inputTokens": 486,
+          "outputTokens": 2598,
+          "reasoningTokens": 2526
+        },
+        "verdict": "accepted"
+      },
+      "plannedCoverageKeys": [
+        "syn-claim-holdout-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-holdout-zh",
+          "text": "虚构用户修理古董钟表。"
+        }
+      ],
+      "validatorErrorClass": "manifest_mismatch"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic holdout Reflection output leaves its proposition support ambiguous.",
+      "draftText": "关于那只钟表，有些事情可能对他们很重要。",
+      "draftRef": "validator-fixture:holdout-validator-reflection-ambiguity-zh",
+      "expectedFindingCode": "ambiguous",
+      "expectedOutcome": "advisory",
+      "expectedVerdict": "accepted",
+      "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+      "generatorManifest": [],
+      "languageVariant": "zh",
+      "locale": "zh-CN",
+      "machineVerdict": {
+        "advisoryFindingCodes": [
+          "manifest_mismatch",
+          "unsupported",
+          "ambiguous",
+          "material_absence"
+        ],
+        "blockingFindingCodes": [],
+        "errorCode": null,
+        "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+        "model": "deepseek-v4-flash",
+        "outcome": "completed",
+        "provider": "deepseek",
+        "responseFailure": null,
+        "usage": {
+          "inputTokens": 479,
+          "outputTokens": 4096,
+          "reasoningTokens": 3999
+        },
+        "verdict": "accepted"
+      },
+      "plannedCoverageKeys": [
+        "syn-claim-holdout-zh"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-holdout-zh",
+          "text": "虚构用户修理古董钟表。"
+        }
+      ],
+      "validatorErrorClass": "ambiguity"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic holdout Reflection output points at the wrong frozen input manifest.",
+      "draftText": "该草稿声称来自 manifest syn-holdout-other。",
+      "draftRef": "validator-fixture:holdout-validator-reflection-manifest_mismatch-mix",
+      "expectedFindingCode": "manifest_mismatch",
+      "expectedOutcome": "advisory",
+      "expectedVerdict": "accepted",
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": {
+        "advisoryFindingCodes": [
+          "manifest_mismatch",
+          "unsupported",
+          "material_absence"
+        ],
+        "blockingFindingCodes": [],
+        "errorCode": null,
+        "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+        "model": "deepseek-v4-flash",
+        "outcome": "completed",
+        "provider": "deepseek",
+        "responseFailure": null,
+        "usage": {
+          "inputTokens": 484,
+          "outputTokens": 2391,
+          "reasoningTokens": 2321
+        },
+        "verdict": "accepted"
+      },
+      "plannedCoverageKeys": [
+        "syn-claim-holdout-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-holdout-mix",
+          "text": "虚构用户 restores old clocks."
+        }
+      ],
+      "validatorErrorClass": "manifest_mismatch"
+    },
+    {
+      "artifactKind": "reflection",
+      "description": "Synthetic holdout Reflection output leaves its proposition support ambiguous.",
+      "draftText": "那件 关于 clocks 的事 可能 对他们 很重要。",
+      "draftRef": "validator-fixture:holdout-validator-reflection-ambiguity-mix",
+      "expectedFindingCode": "ambiguous",
+      "expectedOutcome": "advisory",
+      "expectedVerdict": "accepted",
+      "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+      "generatorManifest": [],
+      "languageVariant": "code_switch",
+      "locale": "zh-CN",
+      "machineVerdict": {
+        "advisoryFindingCodes": [
+          "manifest_mismatch",
+          "unsupported",
+          "ambiguous",
+          "material_absence"
+        ],
+        "blockingFindingCodes": [],
+        "errorCode": null,
+        "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+        "model": "deepseek-v4-flash",
+        "outcome": "completed",
+        "provider": "deepseek",
+        "responseFailure": null,
+        "usage": {
+          "inputTokens": 483,
+          "outputTokens": 5248,
+          "reasoningTokens": 5175
+        },
+        "verdict": "accepted"
+      },
+      "plannedCoverageKeys": [
+        "syn-claim-holdout-mix"
+      ],
+      "sourceEntries": [
+        {
+          "sourceKey": "syn-claim-holdout-mix",
+          "text": "虚构用户 restores old clocks."
+        }
+      ],
+      "validatorErrorClass": "ambiguity"
+    }
+  ]
+}

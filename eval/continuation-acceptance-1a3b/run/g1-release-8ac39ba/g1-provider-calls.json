@@ -1,0 +1,132 @@
+{
+  "version": "g1-provider-capture:v1",
+  "synthetic": true,
+  "preflight": false,
+  "gitDirty": false,
+  "runId": "g1-provider-96c79e2f-bcc6-445c-ad2d-e5fd5e9df59a",
+  "manifestFingerprint": "sha256:94fc26e3432e20054bbd89d8e907d6e038c9be43cd6336af12bd8f74256da468",
+  "gitCommit": "8ac39ba03c691e96cb90335a6290a847176c6324",
+  "capturedAt": "2026-10-05T06:40:23.616Z",
+  "providerCalls": [
+    {
+      "role": "episode.build",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "modelSnapshot": "deepseek-v4.1-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 32000,
+        "reasoning": {
+          "effort": "low"
+        }
+      },
+      "promptVersion": "episode-build:eval:v4",
+      "schemaVersion": "episode-proposal:v1",
+      "configVersion": "episode.build:g1-release:v7",
+      "providerPolicyVersion": "opencode-go-episode.build-egress:g1-release:v7",
+      "rolloutPin": "episode.build-g1-release-pin:v16",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-05T06:39:07.227Z",
+      "generationCommandId": "01a10ac9-4416-7824-a1e4-bb92108ee2af",
+      "modelRunAttemptId": "01a10ac9-4416-7ebf-b8a4-d7bc91c1395c",
+      "outcome": "completed",
+      "usage": {
+        "cachedTokens": 0,
+        "inputTokens": 739,
+        "outputTokens": 3543,
+        "reasoningTokens": 3275,
+        "totalTokens": 4282
+      }
+    },
+    {
+      "role": "reflection.daily",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "modelSnapshot": "deepseek-v4.1-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 32000,
+        "reasoning": {
+          "effort": "low"
+        }
+      },
+      "promptVersion": "reflection-daily:eval:v6",
+      "schemaVersion": "reflection-proposal:v1",
+      "configVersion": "reflection.daily:g1-release:v9",
+      "providerPolicyVersion": "opencode-go-reflection.daily-egress:g1-release:v9",
+      "rolloutPin": "reflection.daily-g1-release-pin:v16",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-05T06:39:44.617Z",
+      "generationCommandId": "01a10ac9-4416-78e4-bfb7-85c7405aa873",
+      "modelRunAttemptId": "01a10ac9-4416-7bd8-9694-b09a46f05ad4",
+      "outcome": "completed",
+      "usage": {
+        "cachedTokens": 0,
+        "inputTokens": 826,
+        "outputTokens": 6992,
+        "reasoningTokens": 6017,
+        "totalTokens": 7818
+      }
+    },
+    {
+      "role": "reflection.weekly",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "modelSnapshot": "deepseek-v4.1-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 48000,
+        "reasoning": {
+          "effort": "low"
+        }
+      },
+      "promptVersion": "reflection-weekly:eval:v5",
+      "schemaVersion": "reflection-proposal:v1",
+      "configVersion": "reflection.weekly:g1-release:v8",
+      "providerPolicyVersion": "opencode-go-reflection.weekly-egress:g1-release:v8",
+      "rolloutPin": "reflection.weekly-g1-release-pin:v16",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-05T06:40:06.291Z",
+      "generationCommandId": "01a10ac9-4416-7b7d-a78d-f0a53e00c24c",
+      "modelRunAttemptId": "01a10ac9-4416-706c-9315-16d0b7f0aa68",
+      "outcome": "completed",
+      "usage": {
+        "cachedTokens": 0,
+        "inputTokens": 789,
+        "outputTokens": 3489,
+        "reasoningTokens": 2613,
+        "totalTokens": 4278
+      }
+    },
+    {
+      "role": "narrative.validate",
+      "provider": "opencode-go",
+      "model": "deepseek-v4.1-flash",
+      "modelSnapshot": "deepseek-v4.1-flash",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 48000,
+        "reasoning": {
+          "effort": "low"
+        }
+      },
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "configVersion": "narrative.validate:g1-release:v7",
+      "providerPolicyVersion": "opencode-go-narrative.validate-egress:g1-release:v7",
+      "rolloutPin": "narrative.validate-g1-release-pin:v16",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-05T06:40:23.616Z",
+      "generationCommandId": "01a10ac9-4416-7dc6-9e37-8c0ac1e2ce63",
+      "modelRunAttemptId": "01a10ac9-4416-7f66-9ce3-645c8c332173",
+      "outcome": "completed",
+      "usage": {
+        "cachedTokens": 0,
+        "inputTokens": 532,
+        "outputTokens": 2715,
+        "reasoningTokens": 2591,
+        "totalTokens": 3247
+      }
+    }
+  ]
+}

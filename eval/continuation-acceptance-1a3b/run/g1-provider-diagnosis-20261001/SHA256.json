@@ -1,0 +1,46 @@
+[
+  {
+    "file": "diagnosis.md",
+    "sha256": "df0b33beb9a81708fda1babc16250c52e4190e4f51762715050d7957aafcbcf9"
+  },
+  {
+    "file": "feedback-receipt.json",
+    "sha256": "1ecc574241af2abd930c17f71198a23c1bfb86f7d0015481947b1ae2d240be3c"
+  },
+  {
+    "file": "feedback-submitted.png",
+    "sha256": "47bb83f19be4fed06f8c992c1063ed86c2c51c02cd59971514f8152a6073b541"
+  },
+  {
+    "file": "flash-180s-probe.json",
+    "sha256": "98b7dbf6651c974bb80ec26e1238da2c47fb05e766269b76ea36d58af52197cb"
+  },
+  {
+    "file": "flash-anthropic-probe.json",
+    "sha256": "aa4b3fdb520c90b2b48d1063ff4a9edcf5e0fe8c37de8c33d88cec2ac80930c6"
+  },
+  {
+    "file": "flash-full-queue-window.json",
+    "sha256": "54a4dfccdeb295e727a53ed2edbea2a54c84335d48912fe7e859e8f89bf6f4ff"
+  },
+  {
+    "file": "flash-minimal-probe.json",
+    "sha256": "d4317b43101e0d20adbb7e56a4a38e3066dbaebaf33807e38e13e70c2147bf30"
+  },
+  {
+    "file": "flash-user-isolation-probe.json",
+    "sha256": "aff3d29646b2dbf1abffd13e36f7cf22c2472601733e48744189d92925debed1"
+  },
+  {
+    "file": "hosted-attempts.json",
+    "sha256": "2941be2e616f6626c384b60aff1e2aec4a3ced98549c01dd095d4b5d46fb7444"
+  },
+  {
+    "file": "paired-model-probe.json",
+    "sha256": "5e6375a0937c25c6f2fa64366d1fb29901ad6c5c930412f04f2d249932feed53"
+  },
+  {
+    "file": "provider-support-repro.md",
+    "sha256": "f27cb6ed03c339045b7e0bf836da64bf24e9e09178b841cd9ced1d0cb74f649f"
+  }
+]

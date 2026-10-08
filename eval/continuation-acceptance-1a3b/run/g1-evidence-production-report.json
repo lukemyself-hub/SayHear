@@ -1,0 +1,151 @@
+{
+  "version": "1a3b-g1-evidence-production-report:v1",
+  "generatedAt": "2026-09-30T23:46:22.343Z",
+  "runId": "g1-evidence-producer-1790811982344",
+  "status": "blocked",
+  "preflight": {
+    "currentCommit": "13d6dd2bf6c9145330617980572d3d178fa6a1d9",
+    "f3Manifest": {
+      "path": "eval/continuation-acceptance-1a3b/run/holdout/manifest.json",
+      "fingerprint": "sha256:f722744b27144139081de2698a1b08a77565baa17e5228908a03d88f35eec3b7",
+      "sha256": "62f55cc7a039e34b720f5640191d70c1f7a59127f9e8d882387679cd68f84479",
+      "catalogSha256": "448baccf5742991e853c60ccb4d662883b74007175ba7d92f3a5589ec3bab791",
+      "status": "ready_for_evaluation",
+      "comparisonAllowed": true,
+      "ready": true,
+      "mismatches": []
+    },
+    "validator": {
+      "acceptedCases": null,
+      "ledgerSha256": "be5603bb969db1a95c1c65e526acdcecc173fb7ab4798e6f8f400e743f0e4cc7",
+      "maxRejects": null,
+      "note": "Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.",
+      "precisionFalseBlockingCases": null,
+      "precisionReportSha256": "a85a67ca3a9a5daf9b87a204df84ec01ec907097140a5c96d46bc9d11c03ec6e",
+      "precisionTotalCases": null,
+      "rejectedCases": null,
+      "status": "blocked",
+      "totalCases": null
+    },
+    "hardGate": {
+      "artifactSha256": null,
+      "configId": null,
+      "failures": [],
+      "note": "Hard-gate artifact is unavailable: ENOENT: no such file or directory, open '/Users/lukemyself/Projects/SayHear/eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json'",
+      "passed": false,
+      "path": "eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json"
+    },
+    "hostedCanary": {
+      "artifactSha256": null,
+      "canaryRunId": null,
+      "note": "Hosted canary export is unavailable: ENOENT: no such file or directory, open '/Users/lukemyself/Projects/SayHear/eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json'",
+      "passed": false,
+      "path": "eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json"
+    },
+    "roleMismatches": []
+  },
+  "sources": {
+    "discoveredFiles": [],
+    "validCriteria": [],
+    "errors": []
+  },
+  "criteria": [
+    {
+      "criterion": "AC-F01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-F02",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-E01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-R01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-G01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-I01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-M01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-L01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-L02",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-W01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources; hosted canary: Hosted canary export is unavailable: ENOENT: no such file or directory, open '/Users/lukemyself/Projects/SayHear/eval/continuation-acceptance-1a3b/run/hosted-canary/artifacts.json'",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-D01",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    },
+    {
+      "criterion": "AC-X04",
+      "fixtureIds": [],
+      "note": "validator calibration: Validator precision report has an unknown or duplicate fixture holdout-precision-clean-en-1.; no verified evidence source; add one under eval/continuation-acceptance-1a3b/run/evidence-sources; raw hard-gate report: Hard-gate artifact is unavailable: ENOENT: no such file or directory, open '/Users/lukemyself/Projects/SayHear/eval/continuation-acceptance-1a3b/run/continuation-incumbent-hard-gates.json'",
+      "sourceArtifactPath": null,
+      "status": "blocked"
+    }
+  ],
+  "output": {
+    "evidenceDirectory": "eval/continuation-acceptance-1a3b/run/evidence",
+    "evidenceArtifactsWritten": [],
+    "manifestInputPath": "eval/continuation-acceptance-1a3b/run/g1-release-manifest-input.json",
+    "manifestInputWritten": false,
+    "assemblyError": null
+  },
+  "nextSteps": [
+    "Produce a clean incumbent rebaseline on the current checkout and rebuild the F3 manifest with comparisonAllowed=true.",
+    "Replace the validator prefill with Luke's final dated adjudication before treating calibration as verified.",
+    "Collect one independently verified, hashed source document for every missing G1 criterion; do not hand-edit passed results.",
+    "Resolve the hosted canary and raw hard-gate failures before assembling AC-W01 or AC-X04."
+  ]
+}

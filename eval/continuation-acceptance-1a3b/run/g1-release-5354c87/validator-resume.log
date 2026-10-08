@@ -1,0 +1,9 @@
+[f3-validator-capture] resume: kept 5 completed verdict(s).
+[f3-validator-capture] holdout-validator-reflection-manifest_mismatch-en: skipped (already recorded)
+[f3-validator-capture] holdout-validator-reflection-ambiguity-en: skipped (already recorded)
+[f3-validator-capture] holdout-validator-reflection-manifest_mismatch-zh: skipped (already recorded)
+[f3-validator-capture] holdout-validator-reflection-ambiguity-zh: skipped (already recorded)
+[f3-validator-capture] holdout-validator-reflection-manifest_mismatch-mix: skipped (already recorded)
+[f3-validator-capture] holdout-validator-reflection-ambiguity-mix: failed
+[f3-validator-capture] fail-fast: holdout-validator-reflection-ambiguity-mix ended failed (errorCode=schema_incompatible); wrote 6 partial verdict(s).
+[f3-validator-capture] wrote 6 verdicts to eval/continuation-acceptance-1a3b/run/g1-release-5354c87/validator-machine-verdicts.json

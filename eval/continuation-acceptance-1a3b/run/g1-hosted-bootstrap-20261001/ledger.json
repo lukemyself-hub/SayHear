@@ -1,0 +1,37 @@
+{
+  "recordedAt": "2026-10-01T05:05:38.012077+00:00",
+  "phase": "g1-off-bootstrap",
+  "releaseAcceptance": "incomplete",
+  "deployment": {
+    "id": "dpl_CMdz2r75BdweQuoDmogCpfCpVVPA",
+    "url": "sayhear-g1-acceptance-ev5qu4omz-lukemyself.vercel.app",
+    "projectId": "prj_nNj1vzuYjj7oeiwzqfsV3iMb3THs",
+    "state": "READY",
+    "commit": "9db7a9c6dfe6793f173fee4bbdb67eb9de9eaf09",
+    "gitDirtyFlag": null
+  },
+  "alias": "https://sayhear-g1-canary-lukemyself.vercel.app",
+  "ownerLogin": "normal-github-oauth-observed",
+  "privateWriteGate": "backup_evidence_current-observed",
+  "providerCaptureCommit": "9db7a9c6dfe6793f173fee4bbdb67eb9de9eaf09",
+  "localRegression": {
+    "files": 108,
+    "tests": 1348,
+    "passed": 1348,
+    "failed": 0,
+    "skipped": 0
+  },
+  "artifactHashes": {
+    "deployment": "307cf3e9d3b6966dac52ff8f890488ad43d14e3e08d9cdc742bb84e6c7b05b2f",
+    "backupEvidence": "8ca97111f9cbcc4b292709dadad906aebb14909db8b6d0915e54e522500c7780",
+    "localTestReport": "760d17873e0628ba9d150f0ef89f86d57a984c1e47df034afb7c10026da8a9db"
+  },
+  "pending": [
+    "six review fixes and refreeze",
+    "real hosted canary probes and six-category exports",
+    "frozen Validator/precision capture",
+    "isolated G1-on functional/purge/rollback acceptance",
+    "production promotion and scheduled artifacts"
+  ],
+  "productionG1": "off"
+}

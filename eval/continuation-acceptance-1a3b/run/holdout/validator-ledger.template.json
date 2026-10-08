@@ -1,0 +1,40 @@
+{
+  "_instructions": "Luke fills verdict per case after reading validator-review-bundle.md. Every verdict must be accepted or rejected; empty verdicts fail validation loudly. Do not add machineVerdict fields.",
+  "adjudicator": "Luke",
+  "decidedAt": "",
+  "entries": [
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-en",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+      "note": "",
+      "verdict": ""
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+      "note": "",
+      "verdict": ""
+    }
+  ],
+  "group": "validator",
+  "manifestFingerprint": "sha256:f722744b27144139081de2698a1b08a77565baa17e5228908a03d88f35eec3b7",
+  "version": "1a3b-f3-adjudication:v1"
+}

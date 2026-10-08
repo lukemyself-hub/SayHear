@@ -1,0 +1,30 @@
+[
+  {
+    "path": "continuation-capture.json",
+    "sha256": "7b64119af3aaf55db6a9a8bb3df9c2c315dcb5cf01d55dab07f05121440e1de6"
+  },
+  {
+    "path": "continuation-hard-gates.json",
+    "sha256": "f14868ba4f86e232989e6b30a690d03e64ef5b1670932579ac706eefe43d0bf5"
+  },
+  {
+    "path": "g1-provider-calls.json",
+    "sha256": "fa5048850cbc9e478a44d541d5fc414e0d5aad71c95970bfe2fee02eb209a093"
+  },
+  {
+    "path": "manifest.json",
+    "sha256": "eff708bad4ee8979a80334ec5012198d4692490838dcdf1a51e3d567bcfe1402"
+  },
+  {
+    "path": "validator-ledger.json",
+    "sha256": "956f4965c60e4bdf92d3372d789fd8336c36862aaa648325a320b7f086bff59a"
+  },
+  {
+    "path": "validator-machine-verdicts.json",
+    "sha256": "10e3d0f3b6496b389d926ca9e1d5381b9d1d5e571565f79f04625e3431ed75c4"
+  },
+  {
+    "path": "validator-precision.json",
+    "sha256": "5f9021490da68c9e24a84d9ccf9ff4fbb5d6baed6ce90d0894cbabac05c6d082"
+  }
+]

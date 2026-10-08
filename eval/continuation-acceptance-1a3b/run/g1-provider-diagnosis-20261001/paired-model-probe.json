@@ -1,0 +1,98 @@
+{
+  "checkedAt": "2026-10-01T20:05:10.190Z",
+  "rows": [
+    {
+      "model": "deepseek-flash",
+      "body": {
+        "model": "deepseek-flash",
+        "input": [
+          {
+            "role": "user",
+            "content": "Reply with OK."
+          }
+        ],
+        "instructions": "Be concise.",
+        "reasoning": {
+          "effort": "low"
+        },
+        "stream": true,
+        "store": false,
+        "max_output_tokens": 256
+      },
+      "http": 200,
+      "headers": {
+        "requestId": null,
+        "server": "elb"
+      },
+      "ms": 45002,
+      "bytes": 42,
+      "error": "TimeoutError"
+    },
+    {
+      "model": "deepseek-v4-flash",
+      "body": {
+        "model": "deepseek-v4-flash",
+        "input": [
+          {
+            "role": "user",
+            "content": "Reply with OK."
+          }
+        ],
+        "instructions": "Be concise.",
+        "reasoning": {
+          "effort": "low"
+        },
+        "stream": true,
+        "store": false,
+        "max_output_tokens": 256
+      },
+      "http": 200,
+      "headers": {
+        "requestId": null,
+        "server": "elb"
+      },
+      "ms": 45002,
+      "bytes": 42,
+      "error": "TimeoutError"
+    },
+    {
+      "model": "deepseek-v4-pro",
+      "body": {
+        "model": "deepseek-v4-pro",
+        "input": [
+          {
+            "role": "user",
+            "content": "Reply with OK."
+          }
+        ],
+        "instructions": "Be concise.",
+        "reasoning": {
+          "effort": "low"
+        },
+        "stream": true,
+        "store": false,
+        "max_output_tokens": 256
+      },
+      "http": 200,
+      "headers": {
+        "requestId": null,
+        "server": "elb"
+      },
+      "ms": 6222,
+      "bytes": 10049,
+      "terminalType": "response.completed",
+      "responseModel": "deepseek-v4-pro",
+      "usage": {
+        "input_tokens": 11,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 20,
+        "output_tokens_details": {
+          "reasoning_tokens": 18
+        },
+        "total_tokens": 31
+      }
+    }
+  ]
+}

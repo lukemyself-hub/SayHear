@@ -1,0 +1,17 @@
+{
+  "runId": "g1-hosted-bootstrap-20261001-0509",
+  "deploymentId": "dpl_CMdz2r75BdweQuoDmogCpfCpVVPA",
+  "enteredVia": "authenticated-owner-ui-user-text-turn",
+  "privateBodyProbe": "G1CANARY_20261001_0509_BODY_A7C4",
+  "generationCommandId": "01a0f5dd-7dd8-7a68-8c70-379b7a8e34a2",
+  "identities": [
+    {
+      "conversation_event_id": "01a0f5dd-7dd8-7b70-ac6c-c4bc2d704f91",
+      "daily_session_id": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+      "interaction_turn_id": "01a0f5dd-7dd8-7fff-ac26-9ae0bd8a93ac",
+      "conversation_event_revision_id": "01a0f5dd-7dd8-75a8-afea-c78c3f6a807b"
+    }
+  ],
+  "coverage": "private_body_only; remaining five categories pending",
+  "status": "provider-response-observed"
+}

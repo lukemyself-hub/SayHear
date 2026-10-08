@@ -1,0 +1,10 @@
+[
+  {
+    "path": "g1-provider-calls.json",
+    "sha256": "d4e5902344262b8d0430d1fd57a3e2353eee50bae703f91b87690e1ca70316b9"
+  },
+  {
+    "path": "manifest.json",
+    "sha256": "20e7973a4227cfb5019506621720710fbe9ce98d899ea6a1fd6c16435393f690"
+  }
+]

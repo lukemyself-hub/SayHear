@@ -1,0 +1,34 @@
+{
+  "version": "1a3b-f3-adjudication:v1",
+  "group": "validator",
+  "manifestFingerprint": "sha256:f722744b27144139081de2698a1b08a77565baa17e5228908a03d88f35eec3b7",
+  "adjudicator": "Luke",
+  "decidedAt": "2026-09-30",
+  "maxRejects": 1,
+  "entries": [
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-en",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+      "verdict": "accepted"
+    }
+  ]
+}

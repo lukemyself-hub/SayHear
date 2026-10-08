@@ -1,0 +1,23 @@
+[f3-synthetic-capture] provider=deepseek model=deepseek-v4-flash fixtures=18
+[f3-synthetic-capture] holdout-cont-open-loop-en t1: 418 chars
+[f3-synthetic-capture] holdout-cont-memory-en t1: 167 chars
+[f3-synthetic-capture] holdout-cont-greeting-en t1: 103 chars
+[f3-synthetic-capture] holdout-cont-task-en t1: 272 chars
+[f3-synthetic-capture] holdout-cont-risk-en t1: 713 chars
+[f3-synthetic-capture] holdout-cont-sensitive-en t1: 269 chars
+[f3-synthetic-capture] holdout-cont-stop-en t1: 174 chars
+[f3-synthetic-capture] holdout-cont-incomplete-en t1: 138 chars
+[f3-synthetic-capture] holdout-cont-extra-en t1: 27 chars
+[f3-synthetic-capture] holdout-cont-topic-en t1: 695 chars
+[f3-synthetic-capture] holdout-cont-surveillance-zh t1: 102 chars
+[f3-synthetic-capture] holdout-cont-repeat-zh t1: 68 chars
+[f3-synthetic-capture] holdout-cont-repeat-zh t2: 106 chars
+[f3-synthetic-capture] holdout-cont-open-loop-zh t1: 107 chars
+[f3-synthetic-capture] holdout-cont-memory-greeting-zh t1: 63 chars
+[f3-synthetic-capture] holdout-cont-task-zh t1: 60 chars
+[f3-synthetic-capture] holdout-cont-short-zh t1: 34 chars
+[f3-synthetic-capture] holdout-cont-risk-sensitive-mix t1: 309 chars
+[f3-synthetic-capture] holdout-cont-stop-lane-mix t1: 23 chars
+[f3-synthetic-capture] wrote 18/18 scenarios to eval/continuation-acceptance-1a3b/run/g1-release-5354c87/continuation-capture.json
+[f3-synthetic-capture] hard gates: checked=18 passed=false failures=1
+[f3-synthetic-capture]   - continuation-incumbent-1a3a/holdout-cont-stop-en t1: questions are not allowed

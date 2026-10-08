@@ -1,0 +1,61 @@
+$ pnpm --filter @sayhear/web build
+$ tsx src/validate-startup.ts && next build --webpack && node ../../scripts/check-browser-bundle.mjs
+workflows build complete (20 steps, 17 workflows, time 13ms)
+▲ Next.js 16.2.12 (webpack)
+- Experiments (use with caution):
+  ✓ useTypeScriptCli
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 4.3s
+  Running TypeScript ...
+  Finished TypeScript in 293ms ...
+  Collecting page data using 14 workers ...
+  Generating static pages using 14 workers (0/6) ...
+  Generating static pages using 14 workers (1/6) 
+  Generating static pages using 14 workers (2/6) 
+  Generating static pages using 14 workers (4/6) 
+✓ Generating static pages using 14 workers (6/6) in 101ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /.well-known/workflow/v1/flow
+├ ƒ /.well-known/workflow/v1/step
+├ ƒ /.well-known/workflow/v1/webhook/[token]
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/internal/access
+├ ƒ /api/internal/conversation/corrections
+├ ƒ /api/internal/conversation/date-outcomes
+├ ƒ /api/internal/conversation/exchanges/end
+├ ƒ /api/internal/conversation/responses
+├ ƒ /api/internal/conversation/retries
+├ ƒ /api/internal/conversation/turns
+├ ƒ /api/internal/inspection/conversation-content
+├ ƒ /api/internal/inspection/generation
+├ ƒ /api/internal/inspection/journal
+├ ƒ /api/internal/inspection/recovery
+├ ƒ /api/internal/inspection/reflection
+├ ƒ /api/internal/inspection/release-identity
+├ ƒ /api/internal/operator/full-purge
+├ ƒ /api/internal/operator/recovery/reapply
+├ ƒ /api/internal/recovery/scan
+├ ƒ /api/internal/review/candidates/[candidateId]/approve
+├ ƒ /api/internal/review/candidates/[candidateId]/evidence
+├ ƒ /api/internal/review/candidates/[candidateId]/map
+├ ƒ /api/internal/review/candidates/[candidateId]/reject
+├ ƒ /api/internal/review/proposals/[proposalId]
+├ ƒ /api/internal/review/proposals/[proposalId]/cancel
+├ ƒ /api/internal/review/proposals/[proposalId]/reconsider
+├ ƒ /api/internal/review/queue
+├ ƒ /internal
+├ ƒ /internal/candidate-review
+├ ƒ /internal/context-inspector
+└ ƒ /internal/reflection-inspector
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+Browser bundle excludes server-only credentials.

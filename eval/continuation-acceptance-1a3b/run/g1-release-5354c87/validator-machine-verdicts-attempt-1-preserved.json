@@ -1,0 +1,159 @@
+{
+  "version": "1a3b-f3-validator-machine-verdicts:v1",
+  "manifestFingerprint": "sha256:a2c819b531c0581e52f3964f3e9fccb69611a3899dd1546ef448e33acb83d358",
+  "gitCommit": "5354c873e75f04d6e93336422cbb4b4ddc1ab4ba",
+  "gitDirty": false,
+  "catalogSha256": "sha256:448baccf5742991e853c60ccb4d662883b74007175ba7d92f3a5589ec3bab791",
+  "pinsFingerprint": "sha256:a558f4a54eaa91c3592dc6ed7dc45ecb7e2dd136fc8a8af172b0fe0100eddd55",
+  "capturedAt": "2026-10-01T16:19:43.548Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "modelSnapshot": "deepseek-flash",
+  "configVersion": "narrative.validate:g1-release:v4",
+  "promptVersion": "narrative-validate:eval:v4",
+  "schemaVersion": "narrative-findings:v1",
+  "parameters": {
+    "temperature": 0,
+    "maxOutputTokens": 10000
+  },
+  "maxOutputTokens": 10000,
+  "providerCallBudget": 2,
+  "cases": [
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "generationCommandId": "01a0852e-5000-7b0f-9ce2-a6b9da8cd2cd",
+      "modelRunAttemptId": "01a0852e-5000-70e1-9c1d-3fa5461a1c03",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 484,
+        "outputTokens": 931,
+        "reasoningTokens": 860
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous",
+        "unsupported",
+        "ambiguous",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-ambiguity-en",
+      "generationCommandId": "01a0852e-5000-7f04-868a-3122beeac515",
+      "modelRunAttemptId": "01a0852e-5000-7926-98fa-bf53b0d6b75d",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 480,
+        "outputTokens": 3952,
+        "reasoningTokens": 3786
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+      "generationCommandId": "01a0852e-5000-7777-ad47-ee6f3259ddfc",
+      "modelRunAttemptId": "01a0852e-5000-7f1e-86e4-829b09bb0c0b",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 487,
+        "outputTokens": 2063,
+        "reasoningTokens": 1963
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "manifest_mismatch",
+        "unsupported",
+        "ambiguous"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+      "generationCommandId": "01a0852e-5000-7863-b245-7f068ec629db",
+      "modelRunAttemptId": "01a0852e-5000-7197-b6ae-92cef535d37b",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 480,
+        "outputTokens": 9221,
+        "reasoningTokens": 9039
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [
+        "manifest_mismatch",
+        "unsupported",
+        "material_absence"
+      ],
+      "blockingFindingCodes": [],
+      "errorCode": null,
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+      "generationCommandId": "01a0852e-5000-79c4-95b6-f0b20e622608",
+      "modelRunAttemptId": "01a0852e-5000-7aab-8bd1-d5441fb422c5",
+      "model": "deepseek-v4-flash",
+      "outcome": "completed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": {
+        "inputTokens": 485,
+        "outputTokens": 2886,
+        "reasoningTokens": 2788
+      },
+      "verdict": "accepted"
+    },
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "schema_incompatible",
+      "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+      "generationCommandId": "01a0852e-5000-7d8c-850b-9576713d7139",
+      "modelRunAttemptId": "01a0852e-5000-7add-82e8-9f6b88844401",
+      "model": "deepseek-v4-flash",
+      "outcome": "failed",
+      "provider": "deepseek",
+      "responseFailure": {
+        "kind": "output_budget_exhausted",
+        "inputTokens": 484,
+        "outputLength": 0,
+        "outputTokens": 10000,
+        "providerReason": "max_output_tokens",
+        "reasoningTokens": 10000
+      },
+      "usage": null,
+      "verdict": null
+    }
+  ]
+}

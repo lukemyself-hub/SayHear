@@ -1,0 +1,50 @@
+{
+  "gitCommit": "5354c873e75f04d6e93336422cbb4b4ddc1ab4ba",
+  "gitStatus": "",
+  "business": "sayhear_g1_business_test",
+  "marker": "sayhear_g1_purge_marker_test",
+  "maxWorkers": 2,
+  "completedAt": "2026-10-01T16:17:43.828Z",
+  "results": [
+    {
+      "name": "ac-system-seams",
+      "tests": 59,
+      "passed": 59,
+      "failed": 0,
+      "pending": 0,
+      "sha256": "abb701803f3c8440ae0b25631d113a5bef07b31fc16847062b6ce9398be63447"
+    },
+    {
+      "name": "ac-purge-seam",
+      "tests": 15,
+      "passed": 15,
+      "failed": 0,
+      "pending": 0,
+      "sha256": "b1b862e87f80212b4e01fbd021582805941cf2219541bb94619e1fc2c8014afe"
+    },
+    {
+      "name": "ac-episode-admission",
+      "tests": 19,
+      "passed": 19,
+      "failed": 0,
+      "pending": 0,
+      "sha256": "08821b033dd30422f6cbb348326dbeec53453bd2d896c8cd5be8c4c73012e0b6"
+    },
+    {
+      "name": "ac-purge-restore-drill",
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "pending": 0,
+      "sha256": "7f565aa4af3bf36f13cc0d54b3333065dac72883d050c46890dc778dc9107a96"
+    },
+    {
+      "name": "full-regression",
+      "tests": 1386,
+      "passed": 1386,
+      "failed": 0,
+      "pending": 0,
+      "sha256": "121c4154f217cc91b32b359386b0e9024043739e156dfdfbb4874cc4a71d085d"
+    }
+  ]
+}

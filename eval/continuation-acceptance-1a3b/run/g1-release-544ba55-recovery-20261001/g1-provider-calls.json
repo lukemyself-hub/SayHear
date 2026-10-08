@@ -1,0 +1,115 @@
+{
+  "version": "g1-provider-capture:v1",
+  "synthetic": true,
+  "preflight": false,
+  "gitDirty": false,
+  "runId": "g1-provider-f8ec6ebe-12c6-435d-83ec-f7bf4939a31d",
+  "manifestFingerprint": "sha256:9e09d8ac334b814b5d87b81d9019f3b828b53e5964e5a6df1c580a0c496c5deb",
+  "gitCommit": "544ba555342db4565631531e1afe79fe95c72bdc",
+  "capturedAt": "2026-10-01T22:23:02.187Z",
+  "providerCalls": [
+    {
+      "role": "episode.build",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "episode-build:eval:v3",
+      "schemaVersion": "episode-proposal:v1",
+      "configVersion": "episode.build:g1-release:v3",
+      "providerPolicyVersion": "deepseek-episode.build-egress:g1-release:v3",
+      "rolloutPin": "episode.build-g1-release-pin:v6",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T22:22:04.900Z",
+      "generationCommandId": "01a0f98f-3166-7cc5-8dce-f044063a56f3",
+      "modelRunAttemptId": "01a0f98f-3166-7908-ba6d-116999d0c00b",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 551,
+        "outputTokens": 4420,
+        "reasoningTokens": 4097
+      }
+    },
+    {
+      "role": "reflection.daily",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "reflection-daily:eval:v4",
+      "schemaVersion": "reflection-proposal:v1",
+      "configVersion": "reflection.daily:g1-release:v3",
+      "providerPolicyVersion": "deepseek-reflection.daily-egress:g1-release:v3",
+      "rolloutPin": "reflection.daily-g1-release-pin:v6",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T22:22:33.330Z",
+      "generationCommandId": "01a0f98f-3166-7912-ab8e-df70e174b98f",
+      "modelRunAttemptId": "01a0f98f-3166-707a-9ab3-b4eba84ea166",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 694,
+        "outputTokens": 7216,
+        "reasoningTokens": 6709
+      }
+    },
+    {
+      "role": "reflection.weekly",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0.2,
+        "maxOutputTokens": 10000
+      },
+      "promptVersion": "reflection-weekly:eval:v4",
+      "schemaVersion": "reflection-proposal:v1",
+      "configVersion": "reflection.weekly:g1-release:v3",
+      "providerPolicyVersion": "deepseek-reflection.weekly-egress:g1-release:v3",
+      "rolloutPin": "reflection.weekly-g1-release-pin:v6",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T22:22:54.396Z",
+      "generationCommandId": "01a0f98f-3166-75fe-bbc6-1cf09a3d19dc",
+      "modelRunAttemptId": "01a0f98f-3166-7eac-9a52-a8426ac1dd7e",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 694,
+        "outputTokens": 5770,
+        "reasoningTokens": 4855
+      }
+    },
+    {
+      "role": "narrative.validate",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "modelSnapshot": "deepseek-flash",
+      "parameters": {
+        "temperature": 0,
+        "maxOutputTokens": 10000,
+        "reasoning": {
+          "effort": "low"
+        }
+      },
+      "promptVersion": "narrative-validate:eval:v4",
+      "schemaVersion": "narrative-findings:v1",
+      "configVersion": "narrative.validate:g1-release:v5",
+      "providerPolicyVersion": "deepseek-narrative.validate-egress:g1-release:v5",
+      "rolloutPin": "narrative.validate-g1-release-pin:v6",
+      "rolePolicyVersion": "1a3b-model-role-policy:v1",
+      "completedAt": "2026-10-01T22:23:02.187Z",
+      "generationCommandId": "01a0f98f-3166-7dae-be02-4a934fb6b56a",
+      "modelRunAttemptId": "01a0f98f-3166-7bdb-8b40-4f45d7790805",
+      "outcome": "completed",
+      "usage": {
+        "inputTokens": 538,
+        "outputTokens": 1558,
+        "reasoningTokens": 1460
+      }
+    }
+  ]
+}

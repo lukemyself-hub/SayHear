@@ -1,0 +1,363 @@
+{
+  "acceptance": {
+    "evidenceGroups": {
+      "continuation": "AC-X01",
+      "deterministicHardGates": "AC-X04",
+      "modelRoles": "AC-M01",
+      "validator": "AC-X03"
+    },
+    "humanOwner": "Luke",
+    "required": [
+      "AC-X04"
+    ]
+  },
+  "baseline": {
+    "currentIncumbent": {
+      "status": "clean",
+      "commit": "131e4e417c1c9be06746e40d62987535a119ed6e",
+      "manifestPath": "eval/continuation-acceptance-1a3b/run/manifest.json",
+      "confirmedHardGateFailures": 0
+    },
+    "historicalFindingIssues": [
+      166,
+      186
+    ],
+    "historicalIncumbent": {
+      "issue": 166,
+      "manifestPath": "eval/incumbent-baseline-1a3a/run/manifest.json",
+      "artifactPath": "eval/incumbent-baseline-1a3a/",
+      "runCommit": "a46e53eee80f78ad4eb857d968902a129e776121"
+    }
+  },
+  "bio": null,
+  "catalog": {
+    "sha256": "sha256:448baccf5742991e853c60ccb4d662883b74007175ba7d92f3a5589ec3bab791",
+    "version": "1a3b-f3-holdout-fixtures:v1"
+  },
+  "commands": [
+    "pnpm exec tsx eval/continuation-acceptance-1a3b/verify-fixtures.ts",
+    "pnpm exec tsx eval/continuation-acceptance-1a3b/build-manifest.ts --seed 196 --sample-seed 1960 --git-commit 13d6dd2bf6c9145330617980572d3d178fa6a1d9"
+  ],
+  "comparisonAllowed": true,
+  "continuation": {
+    "hardGateScope": "full_pool",
+    "poolCount": 18,
+    "sample": {
+      "eligibleCounts": {
+        "code_switch": 2,
+        "en": 10,
+        "zh": 6
+      },
+      "forcedCoverage": {
+        "open_loop_question": "holdout-cont-open-loop-zh",
+        "memory_acknowledgment": "holdout-cont-memory-en",
+        "greeting_or_pause": "holdout-cont-memory-greeting-zh",
+        "direct_task": "holdout-cont-task-en",
+        "high_risk": "holdout-cont-risk-sensitive-mix",
+        "sensitive_target": "holdout-cont-risk-sensitive-mix",
+        "stop_signal": "holdout-cont-stop-en",
+        "incomplete_lane": "holdout-cont-incomplete-en",
+        "surveillance": "holdout-cont-surveillance-zh",
+        "repetition_boundary": "holdout-cont-repeat-zh"
+      },
+      "protectedCoverage": {
+        "high_risk": "holdout-cont-risk-sensitive-mix",
+        "refusal": "holdout-cont-stop-en",
+        "short_answers": "holdout-cont-short-zh",
+        "topic_change": "holdout-cont-topic-en",
+        "direct_task": "holdout-cont-task-en"
+      },
+      "quotas": {
+        "code_switch": 2,
+        "en": 8,
+        "zh": 5
+      },
+      "sampleSeed": 1960,
+      "scenarioIds": [
+        "holdout-cont-stop-en",
+        "holdout-cont-task-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-en",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-open-loop-en",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-topic-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-short-zh"
+      ],
+      "selectedCounts": {
+        "code_switch": 2,
+        "en": 8,
+        "zh": 5
+      },
+      "strategy": "stratified-random-v1"
+    }
+  },
+  "createdAt": "2026-10-01T04:08:30.937Z",
+  "fixtureSeed": 196,
+  "gitCommit": "13d6dd2bf6c9145330617980572d3d178fa6a1d9",
+  "pinnedConfiguration": {
+    "version": "1a3b-f3-pins:v3",
+    "syntheticOnly": true,
+    "shared": {
+      "events": "synthetic-events:v1",
+      "memory": "frozen-memory-claims:v1",
+      "retrieval": "memory-retrieval-query:v3",
+      "portrait": "portrait-selection:v1",
+      "persona": "canonical-persona:v2",
+      "locale": "locale-packs:v2",
+      "safety": "safety-resources:v2",
+      "conversation": "conversation-harness:v3"
+    },
+    "roles": {
+      "episode.build": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "episode-build:eval:v2",
+        "schemaVersion": "episode-proposal:v1",
+        "policyVersion": "episode-admission:v1",
+        "parameters": {
+          "temperature": 0.2,
+          "maxOutputTokens": 10000
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      },
+      "open_loop.extract": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "open-loop-extract:eval:v1",
+        "schemaVersion": "open-loop-proposal:v1",
+        "policyVersion": "open-loop-admission:v1",
+        "parameters": {
+          "temperature": 0.2,
+          "maxOutputTokens": 700
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      },
+      "reflection.daily": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "reflection-daily:eval:v3",
+        "schemaVersion": "reflection-proposal:v1",
+        "policyVersion": "reflection-admission:v1",
+        "parameters": {
+          "temperature": 0.2,
+          "maxOutputTokens": 10000
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      },
+      "reflection.weekly": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "reflection-weekly:eval:v3",
+        "schemaVersion": "reflection-proposal:v1",
+        "policyVersion": "reflection-admission:v1",
+        "parameters": {
+          "temperature": 0.2,
+          "maxOutputTokens": 10000
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      },
+      "bio.write": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "bio-write:eval:v1",
+        "schemaVersion": "bio-draft:v1",
+        "policyVersion": "bio-publish:v1",
+        "parameters": {
+          "temperature": 0.3,
+          "maxOutputTokens": 1200
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      },
+      "narrative.validate": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "narrative-validate:eval:v4",
+        "schemaVersion": "narrative-findings:v1",
+        "policyVersion": "narrative-validation:v1",
+        "parameters": {
+          "temperature": 0,
+          "maxOutputTokens": 10000
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      },
+      "proactive.followup": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "proactive-followup-prompt:v2",
+        "schemaVersion": "proactive-segment:v1",
+        "policyVersion": "proactive-followup-policy-bundle:v2",
+        "parameters": {
+          "temperature": 0.4,
+          "maxOutputTokens": 240
+        },
+        "maxTechnicalRetries": 0,
+        "fallback": "none"
+      }
+    },
+    "continuation": {
+      "allowedDifferenceKeys": [
+        "open_loop_bundle",
+        "proactive_bundle"
+      ],
+      "arms": {
+        "incumbent": {
+          "id": "continuation-incumbent-1a3a",
+          "openLoop": {
+            "configVersion": "open-loop-disabled:v1",
+            "promptVersion": "not-enabled",
+            "schemaVersion": "not-enabled",
+            "policyVersion": "not-enabled"
+          },
+          "proactive": {
+            "configVersion": "proactive-disabled:v1",
+            "promptVersion": "not-enabled",
+            "schemaVersion": "not-enabled",
+            "policyVersion": "not-enabled"
+          }
+        },
+        "candidate": {
+          "id": "continuation-bundle-1a3b-v1",
+          "openLoop": {
+            "configVersion": "open-loop-extract:v1",
+            "promptVersion": "open-loop-extract:eval:v1",
+            "schemaVersion": "open-loop-proposal:v1",
+            "policyVersion": "open-loop-admission:v1"
+          },
+          "proactive": {
+            "configVersion": "proactive-followup:v1",
+            "promptVersion": "proactive-followup-prompt:v2",
+            "schemaVersion": "proactive-segment:v1",
+            "policyVersion": "proactive-followup-policy-bundle:v2"
+          }
+        }
+      }
+    },
+    "bio": {
+      "configurations": [
+        {
+          "id": "bio-deepseek-v1",
+          "writer": {
+            "provider": "deepseek",
+            "model": "deepseek-v4-flash",
+            "snapshot": "deepseek-flash",
+            "promptVersion": "bio-write:deepseek:v1",
+            "schemaVersion": "bio-draft:v1",
+            "policyVersion": "bio-publish:v1",
+            "parameters": {
+              "temperature": 0.3,
+              "maxOutputTokens": 1200
+            },
+            "maxTechnicalRetries": 1,
+            "fallback": "none"
+          },
+          "validator": {
+            "provider": "deepseek",
+            "model": "deepseek-v4-flash",
+            "snapshot": "deepseek-flash",
+            "promptVersion": "narrative-validate:deepseek:v2",
+            "schemaVersion": "narrative-findings:v1",
+            "policyVersion": "narrative-validation:v1",
+            "parameters": {
+              "temperature": 0,
+              "maxOutputTokens": 900
+            },
+            "maxTechnicalRetries": 1,
+            "fallback": "none"
+          }
+        },
+        {
+          "id": "bio-openai-v1",
+          "writer": {
+            "provider": "openai",
+            "model": "gpt-5.4",
+            "snapshot": "gpt-5.4",
+            "promptVersion": "bio-write:openai:v1",
+            "schemaVersion": "bio-draft:v1",
+            "policyVersion": "bio-publish:v1",
+            "parameters": {
+              "temperature": 0.3,
+              "maxOutputTokens": 1200
+            },
+            "maxTechnicalRetries": 1,
+            "fallback": "none"
+          },
+          "validator": {
+            "provider": "openai",
+            "model": "gpt-5.4",
+            "snapshot": "gpt-5.4",
+            "promptVersion": "narrative-validate:openai:v1",
+            "schemaVersion": "narrative-findings:v1",
+            "policyVersion": "narrative-validation:v1",
+            "parameters": {
+              "temperature": 0,
+              "maxOutputTokens": 900
+            },
+            "maxTechnicalRetries": 1,
+            "fallback": "none"
+          }
+        }
+      ]
+    },
+    "validator": {
+      "configuration": {
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "snapshot": "deepseek-flash",
+        "promptVersion": "narrative-validate:eval:v4",
+        "schemaVersion": "narrative-findings:v1",
+        "policyVersion": "narrative-validation:v1",
+        "parameters": {
+          "temperature": 0,
+          "maxOutputTokens": 4000
+        },
+        "maxTechnicalRetries": 1,
+        "fallback": "none"
+      }
+    }
+  },
+  "pins": {
+    "sha256": "sha256:1775fb3673b3c61f15e7e1f1bf46d48a0567237519fc46b02be97a81ccd56741",
+    "version": "1a3b-f3-pins:v3"
+  },
+  "sampleSeed": 1960,
+  "status": "ready_for_evaluation",
+  "validator": {
+    "byLanguage": {
+      "code_switch": {
+        "bio": 0,
+        "reflection": 2
+      },
+      "en": {
+        "bio": 0,
+        "reflection": 2
+      },
+      "zh": {
+        "bio": 0,
+        "reflection": 2
+      }
+    },
+    "total": 6
+  },
+  "version": "1a3b-f3-manifest:v1",
+  "fingerprint": "sha256:55ea09aa9a14d54fcd36bc86a5fc58e2c39e12a529f0a51cf9c56c8bbe67a836"
+}

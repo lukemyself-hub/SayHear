@@ -1,0 +1,23 @@
+{
+  "frozenCommit": "544ba555342db4565631531e1afe79fe95c72bdc",
+  "providerRecovery": {
+    "actualModel": "deepseek-flash",
+    "completed": true,
+    "elapsedMs": 954
+  },
+  "rolesCompleted": 4,
+  "validatorCompleted": 6,
+  "precisionCompleted": 6,
+  "continuationChecked": 18,
+  "continuationFailures": 0,
+  "hostedCanaryVerified": true,
+  "rawProviderErrorProbe": "skipped ADR-0145",
+  "hostedActionDisposition": "canceled/fenced",
+  "releaseManifestBuilt": false,
+  "productionPromoted": false,
+  "remainingAssemblySource": "AC-X04",
+  "priorTestReportsCopiedWithoutRerun": true,
+  "manifestBuilt": true,
+  "manifestVerificationPassed": false,
+  "blocker": "Final verifier rejects fixture fingerprint: builder hashes optional catalogPath; verifier omits it. Permanent source fixes delegated. Production unchanged."
+}

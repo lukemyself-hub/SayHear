@@ -1,0 +1,24 @@
+{
+  "verifiedAt": "2026-10-01T04:57:50.377Z",
+  "validUntil": "2026-10-31T04:57:50.377Z",
+  "method": "authenticated-neon-console-read",
+  "business": {
+    "project": "purple-mud-80758224",
+    "branch": "br-misty-star-axjbc1ts",
+    "endpoint": "ep-ancient-cell-axqf6lcv",
+    "historyHours": 6,
+    "snapshots": 0,
+    "schedule": false
+  },
+  "marker": {
+    "project": "icy-mountain-24847199",
+    "branch": "br-cold-meadow-axq7y2ve",
+    "endpoint": "ep-curly-dream-axnplkfp",
+    "historyHours": 6,
+    "snapshots": 0,
+    "schedule": false
+  },
+  "deletedProjectRecoveryDays": 7,
+  "source": "https://api-docs.neon.tech/reference/recoverproject",
+  "configurationFingerprint": "neon-free-6h-pitr-1gb-limit"
+}

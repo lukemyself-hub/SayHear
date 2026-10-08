@@ -1,0 +1,346 @@
+[
+  {
+    "events": [
+      {
+        "eventType": "run_created",
+        "correlationId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "specVersion": 3,
+        "eventData": {
+          "deploymentId": "dpl_CMdz2r75BdweQuoDmogCpfCpVVPA",
+          "workflowName": "workflow//./src/workflows/journal-eligibility.workflow//journalEligibilityWorkflow",
+          "input": [
+            {
+              "workflowCommandId": "01a0f5fc-0621-7989-a984-4b01636f3f13",
+              "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+              "sourceRevision": 2,
+              "policyVersion": "journal-eligibility:v1",
+              "expectedDataEpoch": 1
+            }
+          ],
+          "executionContext": {
+            "traceCarrier": {},
+            "workflowCoreVersion": "4.8.2",
+            "features": {
+              "encryption": true
+            }
+          }
+        },
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "eventId": "evnt_01M3TZR32DATK8FPCRK03P1S6N",
+        "createdAt": "2026-10-01T05:42:11.277Z",
+        "occurredAt": "2026-10-01T05:42:11.259Z"
+      },
+      {
+        "eventType": "run_started",
+        "correlationId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "specVersion": 3,
+        "eventData": {},
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "eventId": "evnt_01M3TZR4AJG1B9KKR0TC2WE9AX",
+        "createdAt": "2026-10-01T05:42:12.562Z",
+        "occurredAt": "2026-10-01T05:42:12.432Z"
+      },
+      {
+        "eventType": "step_created",
+        "correlationId": "step_01M3TZR4AAW5VJ5X7B275S9KYB",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/journal-eligibility.workflow//runEligibilityStep",
+          "workflowName": "workflow//./src/workflows/journal-eligibility.workflow//journalEligibilityWorkflow",
+          "input": {
+            "args": [
+              {
+                "workflowCommandId": "01a0f5fc-0621-7989-a984-4b01636f3f13",
+                "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+                "sourceRevision": 2,
+                "policyVersion": "journal-eligibility:v1",
+                "expectedDataEpoch": 1
+              }
+            ]
+          }
+        },
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "eventId": "evnt_01M3TZR4DWXJ33W4G8YQ9JZ7TX",
+        "createdAt": "2026-10-01T05:42:12.668Z",
+        "occurredAt": "2026-10-01T05:42:12.620Z"
+      },
+      {
+        "eventType": "step_started",
+        "correlationId": "step_01M3TZR4AAW5VJ5X7B275S9KYB",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/journal-eligibility.workflow//runEligibilityStep"
+        },
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "eventId": "evnt_01M3TZR5Q9AQMNXT5FRP3D9J1V",
+        "createdAt": "2026-10-01T05:42:13.993Z",
+        "occurredAt": "2026-10-01T05:42:13.871Z"
+      },
+      {
+        "eventType": "step_completed",
+        "correlationId": "step_01M3TZR4AAW5VJ5X7B275S9KYB",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/journal-eligibility.workflow//runEligibilityStep",
+          "workflowName": "workflow//./src/workflows/journal-eligibility.workflow//journalEligibilityWorkflow",
+          "result": {
+            "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+            "outcome": "published",
+            "workflowReceiptId": "wf-dc0fe179-a84e-4185-a430-db67079bad4f"
+          }
+        },
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "eventId": "evnt_01M3TZRXVPZR5277PCJRRPFWKG",
+        "createdAt": "2026-10-01T05:42:38.710Z",
+        "occurredAt": "2026-10-01T05:42:38.662Z"
+      },
+      {
+        "eventType": "run_completed",
+        "correlationId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "specVersion": 3,
+        "eventData": {
+          "output": {
+            "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+            "outcome": "published",
+            "workflowReceiptId": "wf-dc0fe179-a84e-4185-a430-db67079bad4f"
+          }
+        },
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "eventId": "evnt_01M3TZRY7F1WTR0H01MFSYHQ9A",
+        "createdAt": "2026-10-01T05:42:39.087Z",
+        "occurredAt": "2026-10-01T05:42:39.019Z"
+      }
+    ],
+    "run": {
+      "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+      "status": "completed",
+      "deploymentId": "dpl_CMdz2r75BdweQuoDmogCpfCpVVPA",
+      "workflowName": "workflow//./src/workflows/journal-eligibility.workflow//journalEligibilityWorkflow",
+      "specVersion": 3,
+      "input": [
+        {
+          "workflowCommandId": "01a0f5fc-0621-7989-a984-4b01636f3f13",
+          "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+          "sourceRevision": 2,
+          "policyVersion": "journal-eligibility:v1",
+          "expectedDataEpoch": 1
+        }
+      ],
+      "output": {
+        "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+        "outcome": "published",
+        "workflowReceiptId": "wf-dc0fe179-a84e-4185-a430-db67079bad4f"
+      },
+      "expiredAt": "2026-10-02T05:42:39.116Z",
+      "startedAt": "2026-10-01T05:42:12.554Z",
+      "completedAt": "2026-10-01T05:42:39.050Z",
+      "createdAt": "2026-10-01T05:42:11.277Z",
+      "updatedAt": "2026-10-01T05:42:39.117Z",
+      "blobStorageBytes": 901,
+      "streamStorageBytes": 0,
+      "workflowCoreVersion": "4.8.2"
+    },
+    "steps": [
+      {
+        "runId": "wrun_01M3TZR31S4CJT96CNFD091F90",
+        "stepId": "step_01M3TZR4AAW5VJ5X7B275S9KYB",
+        "stepName": "step//./src/workflows/journal-eligibility.workflow//runEligibilityStep",
+        "status": "completed",
+        "input": {
+          "args": [
+            {
+              "workflowCommandId": "01a0f5fc-0621-7989-a984-4b01636f3f13",
+              "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+              "sourceRevision": 2,
+              "policyVersion": "journal-eligibility:v1",
+              "expectedDataEpoch": 1
+            }
+          ]
+        },
+        "output": {
+          "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+          "outcome": "published",
+          "workflowReceiptId": "wf-dc0fe179-a84e-4185-a430-db67079bad4f"
+        },
+        "attempt": 1,
+        "startedAt": "2026-10-01T05:42:13.986Z",
+        "completedAt": "2026-10-01T05:42:38.700Z",
+        "createdAt": "2026-10-01T05:42:12.657Z",
+        "updatedAt": "2026-10-01T05:42:39.180Z",
+        "specVersion": 3
+      }
+    ]
+  },
+  {
+    "events": [
+      {
+        "eventType": "run_created",
+        "correlationId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "specVersion": 3,
+        "eventData": {
+          "deploymentId": "dpl_CMdz2r75BdweQuoDmogCpfCpVVPA",
+          "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+          "input": [
+            {
+              "workflowCommandId": "01a0f5fc-0693-767d-b334-d65b2763e1e7",
+              "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+              "sourceRevision": 2,
+              "policyVersion": "dialogue-state:v2",
+              "expectedDataEpoch": 1
+            }
+          ],
+          "executionContext": {
+            "traceCarrier": {},
+            "workflowCoreVersion": "4.8.2",
+            "features": {
+              "encryption": true
+            }
+          }
+        },
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "eventId": "evnt_01M3TZR352E3MHSMENKTP4F4ZB",
+        "createdAt": "2026-10-01T05:42:11.362Z",
+        "occurredAt": "2026-10-01T05:42:11.334Z"
+      },
+      {
+        "eventType": "run_started",
+        "correlationId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "specVersion": 3,
+        "eventData": {},
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "eventId": "evnt_01M3TZR4CZPBBRX9VKVCF1TR9S",
+        "createdAt": "2026-10-01T05:42:12.639Z",
+        "occurredAt": "2026-10-01T05:42:12.482Z"
+      },
+      {
+        "eventType": "step_created",
+        "correlationId": "step_01M3TZR4CRRBEVWAWWE0C8R14B",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep",
+          "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+          "input": {
+            "args": [
+              {
+                "workflowCommandId": "01a0f5fc-0693-767d-b334-d65b2763e1e7",
+                "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+                "sourceRevision": 2,
+                "policyVersion": "dialogue-state:v2",
+                "expectedDataEpoch": 1
+              }
+            ]
+          }
+        },
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "eventId": "evnt_01M3TZR4G11MNW214XY6ZNBF9J",
+        "createdAt": "2026-10-01T05:42:12.737Z",
+        "occurredAt": "2026-10-01T05:42:12.703Z"
+      },
+      {
+        "eventType": "step_started",
+        "correlationId": "step_01M3TZR4CRRBEVWAWWE0C8R14B",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep"
+        },
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "eventId": "evnt_01M3TZR5SYSDV0CDHGEDY9QG9D",
+        "createdAt": "2026-10-01T05:42:14.078Z",
+        "occurredAt": "2026-10-01T05:42:13.939Z"
+      },
+      {
+        "eventType": "step_completed",
+        "correlationId": "step_01M3TZR4CRRBEVWAWWE0C8R14B",
+        "specVersion": 3,
+        "eventData": {
+          "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep",
+          "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+          "result": {
+            "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+            "outcome": "published",
+            "workflowReceiptId": "wf-a4086ab5-6f38-473a-98d6-092aaba75e59"
+          }
+        },
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "eventId": "evnt_01M3TZRKVMS65HEYBQ8PDCXQH9",
+        "createdAt": "2026-10-01T05:42:28.468Z",
+        "occurredAt": "2026-10-01T05:42:28.441Z"
+      },
+      {
+        "eventType": "run_completed",
+        "correlationId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "specVersion": 3,
+        "eventData": {
+          "output": {
+            "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+            "outcome": "published",
+            "workflowReceiptId": "wf-a4086ab5-6f38-473a-98d6-092aaba75e59"
+          }
+        },
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "eventId": "evnt_01M3TZRM8YCG9HGMPWGW1AKF6F",
+        "createdAt": "2026-10-01T05:42:28.894Z",
+        "occurredAt": "2026-10-01T05:42:28.858Z"
+      }
+    ],
+    "run": {
+      "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+      "status": "completed",
+      "deploymentId": "dpl_CMdz2r75BdweQuoDmogCpfCpVVPA",
+      "workflowName": "workflow//./src/workflows/dialogue-state.workflow//dialogueStateWorkflow",
+      "specVersion": 3,
+      "input": [
+        {
+          "workflowCommandId": "01a0f5fc-0693-767d-b334-d65b2763e1e7",
+          "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+          "sourceRevision": 2,
+          "policyVersion": "dialogue-state:v2",
+          "expectedDataEpoch": 1
+        }
+      ],
+      "output": {
+        "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+        "outcome": "published",
+        "workflowReceiptId": "wf-a4086ab5-6f38-473a-98d6-092aaba75e59"
+      },
+      "expiredAt": "2026-10-02T05:42:29.044Z",
+      "startedAt": "2026-10-01T05:42:12.632Z",
+      "completedAt": "2026-10-01T05:42:28.884Z",
+      "createdAt": "2026-10-01T05:42:11.363Z",
+      "updatedAt": "2026-10-01T05:42:29.045Z",
+      "blobStorageBytes": 891,
+      "streamStorageBytes": 0,
+      "workflowCoreVersion": "4.8.2"
+    },
+    "steps": [
+      {
+        "runId": "wrun_01M3TZR344Q93ECW403MXDXXP5",
+        "stepId": "step_01M3TZR4CRRBEVWAWWE0C8R14B",
+        "stepName": "step//./src/workflows/dialogue-state.workflow//runDialogueStateStep",
+        "status": "completed",
+        "input": {
+          "args": [
+            {
+              "workflowCommandId": "01a0f5fc-0693-767d-b334-d65b2763e1e7",
+              "subjectId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+              "sourceRevision": 2,
+              "policyVersion": "dialogue-state:v2",
+              "expectedDataEpoch": 1
+            }
+          ]
+        },
+        "output": {
+          "dailySessionId": "01a0f5dd-7dd8-73b1-88b5-2965c4ca3979",
+          "outcome": "published",
+          "workflowReceiptId": "wf-a4086ab5-6f38-473a-98d6-092aaba75e59"
+        },
+        "attempt": 1,
+        "startedAt": "2026-10-01T05:42:14.069Z",
+        "completedAt": "2026-10-01T05:42:28.460Z",
+        "createdAt": "2026-10-01T05:42:12.731Z",
+        "updatedAt": "2026-10-01T05:42:29.077Z",
+        "specVersion": 3
+      }
+    ]
+  }
+]

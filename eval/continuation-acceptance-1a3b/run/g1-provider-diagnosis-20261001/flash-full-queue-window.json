@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-10-01T20:25:24.653Z",
+  "body": {
+    "model": "deepseek-flash",
+    "input": "Reply with OK.",
+    "stream": true,
+    "reasoning": {
+      "effort": "low"
+    },
+    "max_output_tokens": 1000
+  },
+  "http": 200,
+  "bytes": 714,
+  "ms": 620016,
+  "firstEventMs": null,
+  "error": "TimeoutError"
+}

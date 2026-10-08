@@ -1,0 +1,40 @@
+{
+  "version": "1a3b-f3-validator-machine-verdicts:v1",
+  "manifestFingerprint": "sha256:9e09d8ac334b814b5d87b81d9019f3b828b53e5964e5a6df1c580a0c496c5deb",
+  "gitCommit": "544ba555342db4565631531e1afe79fe95c72bdc",
+  "gitDirty": false,
+  "catalogSha256": "sha256:448baccf5742991e853c60ccb4d662883b74007175ba7d92f3a5589ec3bab791",
+  "pinsFingerprint": "sha256:536bb3a90136dfe37bb89b67e3ea230ed8374bca5bf4e39dbe31dc1dc91193c3",
+  "capturedAt": "2026-10-01T19:36:18.813Z",
+  "provider": "deepseek",
+  "model": "deepseek-v4-flash",
+  "modelSnapshot": "deepseek-flash",
+  "configVersion": "narrative.validate:g1-release:v5",
+  "promptVersion": "narrative-validate:eval:v4",
+  "schemaVersion": "narrative-findings:v1",
+  "parameters": {
+    "temperature": 0,
+    "maxOutputTokens": 10000,
+    "reasoning": {
+      "effort": "low"
+    }
+  },
+  "maxOutputTokens": 10000,
+  "providerCallBudget": 2,
+  "cases": [
+    {
+      "advisoryFindingCodes": [],
+      "blockingFindingCodes": [],
+      "errorCode": "timeout",
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "generationCommandId": "01a0852e-5000-74ae-b599-2e0b98a0466b",
+      "modelRunAttemptId": "01a0852e-5000-7161-bb3b-26e7b075c1f1",
+      "model": "deepseek-v4-flash",
+      "outcome": "retryable_failed",
+      "provider": "deepseek",
+      "responseFailure": null,
+      "usage": null,
+      "verdict": null
+    }
+  ]
+}

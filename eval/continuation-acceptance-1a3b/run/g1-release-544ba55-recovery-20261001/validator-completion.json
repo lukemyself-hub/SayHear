@@ -1,0 +1,36 @@
+{
+  "version": "1a3b-f3-completion:v1",
+  "group": "validator",
+  "adjudicator": "capture-verifier",
+  "decidedAt": "2026-10-01T22:24:11.584Z",
+  "manifestFingerprint": "sha256:9e09d8ac334b814b5d87b81d9019f3b828b53e5964e5a6df1c580a0c496c5deb",
+  "capturePath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/validator-machine-verdicts.json",
+  "captureSha256": "a342a624d4d310a23cb30b70f24526fbca3f420245107e02430c8f86415fa6be",
+  "maxRejects": 0,
+  "entries": [
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-en",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-en",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-zh",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-zh",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-manifest_mismatch-mix",
+      "verdict": "accepted"
+    },
+    {
+      "fixtureId": "holdout-validator-reflection-ambiguity-mix",
+      "verdict": "accepted"
+    }
+  ]
+}

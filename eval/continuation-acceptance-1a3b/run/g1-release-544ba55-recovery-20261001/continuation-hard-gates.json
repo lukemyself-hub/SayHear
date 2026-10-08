@@ -1,0 +1,14 @@
+{
+  "advisories": [
+    "continuation-incumbent-1a3a/holdout-cont-memory-en t1: required_recall_missing — required-recall token \"clock\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-sensitive-en t1: required_recall_missing — required-recall token \"her\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-stop-en t1: required_recall_missing — required-recall token \"okay\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-extra-en t1: required_recall_missing — required-recall token \"minute\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-topic-en t1: required_recall_missing — required-recall token \"mainspring\" absent from the response"
+  ],
+  "applicable": true,
+  "checkedFixtureCount": 18,
+  "configId": "continuation-incumbent-1a3a",
+  "failures": [],
+  "passed": true
+}

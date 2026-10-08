@@ -1,0 +1,801 @@
+{
+  "version": "1a3b-g1-release:v1",
+  "stage": "g1",
+  "status": "ready_for_cutover",
+  "createdAt": "2026-10-01T22:43:43.541Z",
+  "gitCommit": "544ba555342db4565631531e1afe79fe95c72bdc",
+  "schema": {
+    "migrations": [
+      {
+        "name": "0001_foundation.sql",
+        "sha256": "9715686105dfed8a05224da475b61b1c963cd71d0678929a1964310950c5a246"
+      },
+      {
+        "name": "0002_user_text_conversation.sql",
+        "sha256": "d9288943e4d67a9fa9234f73a24e7b226a542ce976747afbe88e9fc38fb56369"
+      },
+      {
+        "name": "0003_complete_assistant_response.sql",
+        "sha256": "23c13acb37e22940e0d9e3afa6cfaee0af5e5988b4a76a4c53e45ca4bdafe2ec"
+      },
+      {
+        "name": "0004_claim_conversation_response_execution.sql",
+        "sha256": "e4a6c69f4b56be866b5f7a5946fe15cde542bbf54e5e9970674d68bfebaae4b9"
+      },
+      {
+        "name": "0005_continuous_exchange_end.sql",
+        "sha256": "6e24dfccdcdd7d71a0f01e4cf48c59486e44af130fbb0b59ed23bc2b65a125b8"
+      },
+      {
+        "name": "0005_provider_egress_policy.sql",
+        "sha256": "8132c55a51993af2ddecc201ca3869b8760e3252ea423ae85b2ce491eac6366c"
+      },
+      {
+        "name": "0006_compiled_context_manifest.sql",
+        "sha256": "b876c37e36bc1c1d64ed0888c38c30b42ba5ff15663ae7ac88014abeaec446f6"
+      },
+      {
+        "name": "0007_text_response_recovery.sql",
+        "sha256": "f4520ae53110b12f0075d6adf35d7f02d953fca51cc2246e27cbfde82cea2245"
+      },
+      {
+        "name": "0008_deepseek_provider_egress_policy.sql",
+        "sha256": "62f5449642be1ec21f5361d8152feccc4b51fc2d13cb5013cde1e793bc7a256f"
+      },
+      {
+        "name": "0009_conversation_decision_command_harness.sql",
+        "sha256": "1a616ea7c7e0561cb2dc97703641b02144faf8e03b6f2711b141ce80a9e2c2d9"
+      },
+      {
+        "name": "0009_journal_eligibility_outbox.sql",
+        "sha256": "2b2026be00e3a038c0cf432bc30376358b00bf45e87c18afca3ac30cdb595487"
+      },
+      {
+        "name": "0010_typed_user_evidence.sql",
+        "sha256": "afad10a5596b127f357e4c059a07a2aadd5bfe87cd17ccaf853be8d9c001e416"
+      },
+      {
+        "name": "0011_journal_versions.sql",
+        "sha256": "c9c49d28581272aa4ac8f8dbf42daca1ff404f71c42acd4a0a992b4c4340eef2"
+      },
+      {
+        "name": "0012_journal_workflow_outcomes.sql",
+        "sha256": "a46299b6fb29d19a92c67a70ddba719412134ef4cef3b5ec85736e6983a7b6fb"
+      },
+      {
+        "name": "0013_journal_supersession.sql",
+        "sha256": "eeb96fef0413a5b88d5562eacdecae9f5a9db8fe8517c4e47c118b48b4e0ff3b"
+      },
+      {
+        "name": "0014_corrected_user_evidence_advances_journal_source.sql",
+        "sha256": "3feceb6973a39a3bd5dd0c89ac628a7e76215cd7a6988ba29d8d8d823d84ab18"
+      },
+      {
+        "name": "0015_rolling_summary.sql",
+        "sha256": "ac81dd86777bd056373368824b444ea23596ffa9d578463d327ea45066a9b563"
+      },
+      {
+        "name": "0016_dialogue_state.sql",
+        "sha256": "282bd0c5bffbf1cc0cad3680eae18f3de44f59da0cf5c60240c2622090b508a6"
+      },
+      {
+        "name": "0017_dialogue_state_claim_recovery.sql",
+        "sha256": "3fe421f54386dc315abfe34ecd47acffd4f69693563449cf47a0a8a6b546b21d"
+      },
+      {
+        "name": "0018_dialogue_state_coverage_idempotency.sql",
+        "sha256": "a6bf48ecdeededd56d57b15e87d2d5886284b2393c04f6373336bd3d5a3e78dc"
+      },
+      {
+        "name": "0019_conversation_action_admission.sql",
+        "sha256": "eb29ac7c94032ee414046030a4dfa1278c8c2d931f2cb017550ec843fc1f2f32"
+      },
+      {
+        "name": "0019_owner_full_purge.sql",
+        "sha256": "6b66a35af529a71bea600091da5833cf7dfd07250b6a2c06c777d4ade37ab94a"
+      },
+      {
+        "name": "0020_action_finalization_and_receipt_keys.sql",
+        "sha256": "b72067f716bcc7ac1909193112a640693b557d58804ff8c5f46058431076221a"
+      },
+      {
+        "name": "0021_allow_action_finalization_per_turn.sql",
+        "sha256": "233bb1c6bbb21cabd718729a516eeee150e89a97626ca32c81b316f7bdf66923"
+      },
+      {
+        "name": "0022_freeze_action_finalization_receipt.sql",
+        "sha256": "40a9da24538e0dfb4f1763a55eeeb76e99e26f69a90fc07fc5a77e25c259c3eb"
+      },
+      {
+        "name": "0023_preserve_journal_regeneration_workflow_types.sql",
+        "sha256": "92e8cde4a925c05fcc9dba52e581707b447fdc621c07120f9f960ee961b5682c"
+      },
+      {
+        "name": "0024_journal_statements_allow_many_per_version.sql",
+        "sha256": "839ad5f75bdc141a28ab9d347d6679856604792610ce8ae1d365a9843090e884"
+      },
+      {
+        "name": "0025_journal_diagnostic_findings.sql",
+        "sha256": "5fff57d1efefd4fa2daaee8e86fa4fa2c0b977e7e802e5f4bb30ba5aad250f09"
+      },
+      {
+        "name": "0026_dialogue_state_v2_fields.sql",
+        "sha256": "0f899e4fc6e72aff1c38117df1c53236336151c3011370ac96341bc083425954"
+      },
+      {
+        "name": "0027_curiosity_stop_signal.sql",
+        "sha256": "7e8139dcb4f52ccad4d583dab9c7f441383e6371139da3db80e003fbef7666f1"
+      },
+      {
+        "name": "0027_versioned_persona_and_stage_task_artifacts.sql",
+        "sha256": "4a87ab4626887f2461889c11c20adc9ada37321a21e6d8f558ea465f50b6d13a"
+      },
+      {
+        "name": "0028_safety_posture.sql",
+        "sha256": "dcdd40d26bf5c462f4d6c19860df47e89a410109f736e7820400536230a849de"
+      },
+      {
+        "name": "0029_policy_versions_v2.sql",
+        "sha256": "3c276f979bdfd6792d8626f4fef30b8874e5167962a77f5dc924856172b64806"
+      },
+      {
+        "name": "0030_conversation_action_catalog_v2_foundation.sql",
+        "sha256": "77e9da6153b42a4fa0c9436a50b5174af0ce650d083f269421d19b9f78dc3039"
+      },
+      {
+        "name": "0031_entity_domain_foundation.sql",
+        "sha256": "f102a9da069ec9df39855ca298bb8cb10cb0ce965721c46be0ae17721ffa3fc5"
+      },
+      {
+        "name": "0032_predicate_registry_v1.sql",
+        "sha256": "959f1bc21cf1520c951147412f6b2a8054ba02a3d4c0653b49396754f33e9ae3"
+      },
+      {
+        "name": "0033_memory_claim_domain.sql",
+        "sha256": "c38e31ade94c6565bd8b3b9c5c6b9ba560ac2083530b718a61f9a90177a917ad"
+      },
+      {
+        "name": "0034_fast_path_extraction.sql",
+        "sha256": "cb88bcf0acdeb3b92074c6f1a3b9ef059197e6371b73df59b2e01b8b313d6efe"
+      },
+      {
+        "name": "0035_memory_consolidation.sql",
+        "sha256": "d0e686844af9406b09c1cfff5efecbd545a265090deb3305202b6e84c6ddfaa7"
+      },
+      {
+        "name": "0036_relationship_claims_qualifiers_hints.sql",
+        "sha256": "5833c97b7219cc5db1fcee2cd00ae4a86bac14a64d21fef5b565bc2b44e8d905"
+      },
+      {
+        "name": "0037_structured_lexical_retrieval.sql",
+        "sha256": "96a4819f1cd5a922a9982125456922c2df1ada0f55f6fb18ac7872f0bdbdc8e7"
+      },
+      {
+        "name": "0038_memory_trust_actions.sql",
+        "sha256": "9015873b1fe6014c75b3013e8eb2d74445b4bb3a9c0f3a350d4601e5fc91bb45"
+      },
+      {
+        "name": "0039_memory_forget_actions.sql",
+        "sha256": "63b10153c6973c429b9046432ec7db2be0b8446f214d2a7496025331dcebee85"
+      },
+      {
+        "name": "0040_entity_identity_correction.sql",
+        "sha256": "966a296ecb0b3bdf59e7fb7cf9c2fdd940903750c6146b29b77b6cc350236d15"
+      },
+      {
+        "name": "0041_memory_purge_face.sql",
+        "sha256": "7d2b0f6245257d66150023d3c93c0ea4411cfa62d0ea7e69875b76decd29e61c"
+      },
+      {
+        "name": "0042_outbox_policy_idempotency.sql",
+        "sha256": "52727104b0adaa16e4e55bcc18b55bff53fb7a2c96bb06a0760294c8e3e1b635"
+      },
+      {
+        "name": "0043_backup_retention_days_numeric.sql",
+        "sha256": "a05fa617acd07cdf9773bd12723ddd8922f98de6e550adf500bcd0d932e05777"
+      },
+      {
+        "name": "0044_1a3b_model_roles_and_bio_read_schema.sql",
+        "sha256": "dab05e5e5df252617fe4e1badf9d9111e10abf2e7cb7923a0f79c0cbb8b476e1"
+      },
+      {
+        "name": "0044_purge_surface_registry.sql",
+        "sha256": "7c3964fc665b5bce96b1cfaaa97eaef78f526f17905eba1e024371c9972c3b41"
+      },
+      {
+        "name": "0045_episode_domain.sql",
+        "sha256": "6cadc0549dfc5dd322faa984c7cd22b0d4ba2f0bbfd3567de58bc5a5f920d40b"
+      },
+      {
+        "name": "0046_narrative_validation.sql",
+        "sha256": "64580827781bca3ca2fe76250f7159104c95b51174fe96ae7ce04e7b8ca3a249"
+      },
+      {
+        "name": "0046_predicate_candidate_governance.sql",
+        "sha256": "7102f71a06f30003b1de50fc4880af5ccace2c705eb58d3a582ad48a97f449eb"
+      },
+      {
+        "name": "0047_reflection_domain.sql",
+        "sha256": "a742f7b8da30499978ab635d5efd22c8c92bd247b76c79cf22875bc56d35d393"
+      },
+      {
+        "name": "0048_reflection_inspection_access.sql",
+        "sha256": "b01a6bfe0715d6b22eff75f9440d7f094ec8bcb7c72172cf91af8e4654a7acf1"
+      },
+      {
+        "name": "0049_1a3b_g1_release_fingerprint.sql",
+        "sha256": "b3463a536774b5013a15d1183ee428dd71728aa0a544965363ca4dd5f393c2ef"
+      },
+      {
+        "name": "0049_open_loop_domain.sql",
+        "sha256": "9c3395bf098c39b4e7d715f13b410dacbd770727f503efb8a912d5cf9cd3b482"
+      },
+      {
+        "name": "0050_journal_diagnostic_findings_purge_pass.sql",
+        "sha256": "67fa9a768a57c74e4455274693736550160e45d45cfb07cb4077b0047b0e1269"
+      },
+      {
+        "name": "0050_proactive_followup.sql",
+        "sha256": "625001bb6525bee8f699625cdda5287452e34de2c65e11295121327ef9b27be5"
+      },
+      {
+        "name": "0051_proactive_followup_integrity.sql",
+        "sha256": "120b41e158d52cbd0794993354c586ee3c58ba3b4a9721f522d7f4b898831725"
+      },
+      {
+        "name": "0052_proactive_followup_segment.sql",
+        "sha256": "337462141eafef3eac793cb6a3b3346c8b311473dfafd54245e417661cc51b1a"
+      },
+      {
+        "name": "0053_g1_deepseek_provider_egress_policies.sql",
+        "sha256": "40737ffda9729a31a3e45956b188d286912917ad08125c03aed8be32a2bd5df3"
+      },
+      {
+        "name": "0054_g1_narrative_validate_v3_egress_policy.sql",
+        "sha256": "f5c22ee9189f5e1c3ab7083d3265c9bb470a8253eeab8bd5853c95b40988ce48"
+      },
+      {
+        "name": "0055_g1_narrative_validate_v4_egress_policy.sql",
+        "sha256": "c8773445cd692804867afcc37d1d62706acbf33d4daae3530a7f78de4f7d815f"
+      },
+      {
+        "name": "0056_g1_episode_reflection_v3_egress_policies.sql",
+        "sha256": "4213f849e681895d1653e13a1a13a24c19b7fbcca68cc31fd43ed56895974d3b"
+      },
+      {
+        "name": "0057_g1_validator_low_reasoning_policy.sql",
+        "sha256": "a8d5a0900c19171067832edbf0f2c23d0e275bf29ffb949cb1c1b0bc6766ccf3"
+      }
+    ],
+    "fingerprint": "91e82ed75280b4d9e0ee32d39ef089eaaec79da1ea2c2f51aed09f065f7137d6",
+    "purgeMarkerMigrations": [
+      {
+        "name": "0001_purge_marker.sql",
+        "sha256": "cb53831650c1bedf86edf06a8836f856cc572575b08825fac1eabbc9feb006cf"
+      },
+      {
+        "name": "0002_latest_marker_high_water.sql",
+        "sha256": "a8189c7eb42a0bd6b184f51704664bc54d7d5ec967c3918f3b7b0cda1ef8a9e4"
+      }
+    ],
+    "purgeMarkerFingerprint": "749f1f1a649bdc5ae9334e09cc338cb0ae2f10694b8756a5098a5d3023c6d4b6",
+    "purgeSurfaceRegistryVersion": "purge-surface-registry:v1",
+    "externalIntegrationManifestVersion": "purge-external-integration-manifest:v1",
+    "workflowSubjectManifestVersion": "purge-workflow-subject-manifest:v1"
+  },
+  "policyBundle": {
+    "modelRolePolicyVersion": "1a3b-model-role-policy:v1",
+    "episodeBuilderPolicyVersion": "episode-builder:v1",
+    "reflectionReadinessPolicyVersion": "reflection-readiness:v1",
+    "narrativeValidationPolicyVersion": "narrative-validation:v1",
+    "fallbackMode": "disabled",
+    "futureStages": "closed",
+    "fingerprint": "7972577b82d155185f10471fa4d89b148bdcc4bedd1bfbfb5512295beb9a0385"
+  },
+  "roles": {
+    "configurations": [
+      {
+        "role": "episode.build",
+        "configVersion": "episode.build:g1-release:v3",
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "modelSnapshot": "deepseek-flash",
+        "promptVersion": "episode-build:eval:v3",
+        "schemaVersion": "episode-proposal:v1",
+        "rolePolicyVersion": "1a3b-model-role-policy:v1",
+        "providerPolicyVersion": "deepseek-episode.build-egress:g1-release:v3",
+        "rolloutPin": "episode.build-g1-release-pin:v6",
+        "freshnessPolicy": "source_valid:v1",
+        "fallbackMode": "disabled",
+        "maxTechnicalRetries": 1,
+        "maxSemanticRepairs": 0,
+        "parameterSnapshot": {
+          "temperature": 0.2,
+          "maxOutputTokens": 10000
+        }
+      },
+      {
+        "role": "narrative.validate",
+        "configVersion": "narrative.validate:g1-release:v5",
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "modelSnapshot": "deepseek-flash",
+        "promptVersion": "narrative-validate:eval:v4",
+        "schemaVersion": "narrative-findings:v1",
+        "rolePolicyVersion": "1a3b-model-role-policy:v1",
+        "providerPolicyVersion": "deepseek-narrative.validate-egress:g1-release:v5",
+        "rolloutPin": "narrative.validate-g1-release-pin:v6",
+        "freshnessPolicy": "exact_head:v1",
+        "fallbackMode": "disabled",
+        "maxTechnicalRetries": 1,
+        "maxSemanticRepairs": 0,
+        "parameterSnapshot": {
+          "temperature": 0,
+          "maxOutputTokens": 10000,
+          "reasoning": {
+            "effort": "low"
+          }
+        }
+      },
+      {
+        "role": "reflection.daily",
+        "configVersion": "reflection.daily:g1-release:v3",
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "modelSnapshot": "deepseek-flash",
+        "promptVersion": "reflection-daily:eval:v4",
+        "schemaVersion": "reflection-proposal:v1",
+        "rolePolicyVersion": "1a3b-model-role-policy:v1",
+        "providerPolicyVersion": "deepseek-reflection.daily-egress:g1-release:v3",
+        "rolloutPin": "reflection.daily-g1-release-pin:v6",
+        "freshnessPolicy": "exact_head:v1",
+        "fallbackMode": "disabled",
+        "maxTechnicalRetries": 1,
+        "maxSemanticRepairs": 0,
+        "parameterSnapshot": {
+          "temperature": 0.2,
+          "maxOutputTokens": 10000
+        }
+      },
+      {
+        "role": "reflection.weekly",
+        "configVersion": "reflection.weekly:g1-release:v3",
+        "provider": "deepseek",
+        "model": "deepseek-v4-flash",
+        "modelSnapshot": "deepseek-flash",
+        "promptVersion": "reflection-weekly:eval:v4",
+        "schemaVersion": "reflection-proposal:v1",
+        "rolePolicyVersion": "1a3b-model-role-policy:v1",
+        "providerPolicyVersion": "deepseek-reflection.weekly-egress:g1-release:v3",
+        "rolloutPin": "reflection.weekly-g1-release-pin:v6",
+        "freshnessPolicy": "exact_head:v1",
+        "fallbackMode": "disabled",
+        "maxTechnicalRetries": 1,
+        "maxSemanticRepairs": 0,
+        "parameterSnapshot": {
+          "temperature": 0.2,
+          "maxOutputTokens": 10000
+        }
+      }
+    ],
+    "enabledRoles": [
+      "episode.build",
+      "reflection.daily",
+      "reflection.weekly",
+      "narrative.validate"
+    ],
+    "deferredRoles": [
+      "open_loop.extract",
+      "bio.write",
+      "proactive.followup"
+    ],
+    "configurationFingerprint": "b36afe4eb2e1d9afd19c9cba6df1514ed3e2537ba0c55f48d57b624fd48ebee7"
+  },
+  "fixture": {
+    "catalogPath": "eval/continuation-acceptance-1a3b/holdout/fixtures.json",
+    "f3ManifestPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/manifest.json",
+    "f3ManifestSha256": "24615b8aac30efceba7eb5c15095b8917a85b85911e7dfbd6069199ca31a0ecc",
+    "f3ManifestFingerprint": "sha256:9e09d8ac334b814b5d87b81d9019f3b828b53e5964e5a6df1c580a0c496c5deb",
+    "fixtureSeed": 196,
+    "sampleSeed": 1960,
+    "fingerprint": "a4a248397fb838ff7b83dcc91beb8e3ed2cc0dd8d93ac50d8d7665a6d224fec3"
+  },
+  "validatorCalibration": {
+    "ledgerPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/validator-completion.json",
+    "ledgerSha256": "655c93a6454a608148e42e0f5cc7917a1ac13fc7d04956a149db1773722ba0da",
+    "ledgerVersion": "1a3b-f3-completion:v1",
+    "precisionReportPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/validator-precision.json",
+    "precisionReportSha256": "04b8cc7e6fc3276b28be58f0c2788831b3e1c919075a96005342510158500b53",
+    "precisionReportVersion": "1a3b-f3-validator-precision-report:v1",
+    "precisionTotalCases": 6,
+    "precisionFalseBlockingCases": 0,
+    "f3ManifestFingerprint": "sha256:9e09d8ac334b814b5d87b81d9019f3b828b53e5964e5a6df1c580a0c496c5deb",
+    "totalCases": 6,
+    "acceptedCases": 6,
+    "maxRejects": 0,
+    "humanOwner": "capture-verifier",
+    "status": "verified"
+  },
+  "commands": [
+    "pnpm exec tsx scripts/produce-1a3b-g1-evidence.ts",
+    "pnpm exec tsx eval/continuation-acceptance-1a3b/verify-fixtures.ts",
+    "pnpm canary:workflow",
+    "pnpm exec vercel inspect https://sayhear-g1-acceptance-8054b2qa9-lukemyself.vercel.app --json",
+    "CI=true pnpm exec vitest run packages/application/src/episode/admission.test.ts",
+    "node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/artifacts.json --values eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/values.env.json --deployment-id dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg --expected-run-ids wrun_01M3WSC05BHEY0DYJXEC8SDAHW",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/candidate-review-governance.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-inspection.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts",
+    "pnpm exec tsx eval/continuation-acceptance-1a3b/verify-fixtures.ts && pnpm exec vitest run tests/continuation-acceptance-f3.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-daily-weekly.system.test.ts",
+    "node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/artifacts.json --values eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/values.env.json --deployment-id dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg --expected-run-ids wrun_01M3WSC05BHEY0DYJXEC8SDAHW",
+    "node --import tsx /private/tmp/g1-recovery-acx04-source.mts --root /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55 --run-root /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55/eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001 --catalog /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55/eval/continuation-acceptance-1a3b/holdout/fixtures.json --verify-only",
+    "node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/artifacts.json --values eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/values.env.json --deployment-id dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg --expected-run-ids wrun_01M3WSC05BHEY0DYJXEC8SDAHW",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+    "CI=true pnpm exec vitest run packages/application/src/episode/admission.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-daily-weekly.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/candidate-review-governance.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-inspection.system.test.ts",
+    "node --import tsx scripts/capture-g1-role-provider-calls.ts --pins eval/continuation-acceptance-1a3b/g1-activation-pins.json --manifest eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/manifest.json --catalog eval/continuation-acceptance-1a3b/holdout/fixtures.json --out eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/g1-provider-calls.json",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+    "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts --reporter=json --outputFile=eval/continuation-acceptance-1a3b/run/test-reports/ac-purge-restore-drill.json",
+    "node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/artifacts.json --values eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/values.env.json --deployment-id dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg --expected-run-ids wrun_01M3WSC05BHEY0DYJXEC8SDAHW",
+    "pnpm exec vercel api /v13/deployments/dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg",
+    "node --import tsx /private/tmp/g1-recovery-acx04-source.mts --root /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55 --run-root /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55/eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001 --catalog /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55/eval/continuation-acceptance-1a3b/holdout/fixtures.json"
+  ],
+  "evidence": [
+    {
+      "criterion": "AC-F01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/artifacts.json --values eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/values.env.json --deployment-id dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg --expected-run-ids wrun_01M3WSC05BHEY0DYJXEC8SDAHW",
+      "artifactSha256": "31ec01fee620b9671c0f6296794f5e90ebdad166eb1df4d77afd99fc8b25363a",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-f01.json",
+      "owner": "SayHear CI",
+      "source": "hosted",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-F02",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+      "artifactSha256": "9cb776e8519d8ad8dcd767b97a0d9b350d7973b6764bb68e6b10bca2fb86dbf5",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-f02.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-E01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "CI=true pnpm exec vitest run packages/application/src/episode/admission.test.ts",
+      "artifactSha256": "67cc2485f9e8ae982da2d72999467b5191b7b6dc8933a93c633caa8160d8462f",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-e01.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-R01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-daily-weekly.system.test.ts",
+      "artifactSha256": "ae04761a53d8999c59ed2579cfbba84ca74dee629debe3a6b8dd2e55ba1e292c",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-r01.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-G01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/candidate-review-governance.system.test.ts",
+      "artifactSha256": "cd130cefe2f367de62319aec9620e9833cf0d8b368c8951a7c520da98102fb5f",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-g01.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-I01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/reflection-inspection.system.test.ts",
+      "artifactSha256": "317436a5294ebff10d71cdc44aba2ef81c530336beb9d9b02b6a3fe5c13bcc1f",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-i01.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-M01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "node --import tsx scripts/capture-g1-role-provider-calls.ts --pins eval/continuation-acceptance-1a3b/g1-activation-pins.json --manifest eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/manifest.json --catalog eval/continuation-acceptance-1a3b/holdout/fixtures.json --out eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/g1-provider-calls.json",
+      "artifactSha256": "89f6a34023ea03e3bddd090dbab85ec234b2583aff98877ed6687211f9dfe36f",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-m01.json",
+      "owner": "SayHear CI",
+      "source": "provider",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-L01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/owner-full-purge.system.test.ts",
+      "artifactSha256": "491a2044dc4c5776047f2cff1a7b6d88c385c6c6a1fc4b857d4629be1ed7e91d",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-l01.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-L02",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "source $HOME/.config/sayhear/test-env.sh && CI=true pnpm exec vitest run tests/system/g1-purge-restore-drill.system.test.ts --reporter=json --outputFile=eval/continuation-acceptance-1a3b/run/test-reports/ac-purge-restore-drill.json",
+      "artifactSha256": "4eac358c80631d57424dabc00b7054ee98eca9eed1addf9d57e2c06c63b89642",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-l02.json",
+      "owner": "SayHear CI",
+      "source": "ci",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-W01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "node --import tsx scripts/verify-hosted-workflow-canary.ts --artifacts eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/artifacts.json --values eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/hosted-canary/values.env.json --deployment-id dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg --expected-run-ids wrun_01M3WSC05BHEY0DYJXEC8SDAHW",
+      "artifactSha256": "73ef4742c1483d871a7375145adf25fec1ea3a952839c79902a576fc7d8be523",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-w01-final.json",
+      "owner": "SayHear CI",
+      "source": "hosted",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-D01",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "pnpm exec vercel api /v13/deployments/dpl_Bse9Ki483b4GoUAQNbA2HPgA3FUg",
+      "artifactSha256": "54d11012b4e74e7ae17586c96572bbe61d9aa4fb8824ab4a6b70f04f986869f7",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-d01.json",
+      "owner": "SayHear CI",
+      "source": "hosted",
+      "status": "verified"
+    },
+    {
+      "criterion": "AC-X04",
+      "fixtureIds": [
+        "holdout-cont-open-loop-en",
+        "holdout-cont-memory-en",
+        "holdout-cont-greeting-en",
+        "holdout-cont-task-en",
+        "holdout-cont-risk-en",
+        "holdout-cont-sensitive-en",
+        "holdout-cont-stop-en",
+        "holdout-cont-incomplete-en",
+        "holdout-cont-extra-en",
+        "holdout-cont-topic-en",
+        "holdout-cont-surveillance-zh",
+        "holdout-cont-repeat-zh",
+        "holdout-cont-open-loop-zh",
+        "holdout-cont-memory-greeting-zh",
+        "holdout-cont-task-zh",
+        "holdout-cont-short-zh",
+        "holdout-cont-risk-sensitive-mix",
+        "holdout-cont-stop-lane-mix"
+      ],
+      "command": "node --import tsx /private/tmp/g1-recovery-acx04-source.mts --root /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55 --run-root /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55/eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001 --catalog /Users/lukemyself/Projects/SayHear/.codex/g1-restoration/frozen-544ba55/eval/continuation-acceptance-1a3b/holdout/fixtures.json",
+      "artifactSha256": "c470c4d2a6e7a4c0a672289992094f4df68fce9642d14b1e945e299642ab3fda",
+      "artifactPath": "eval/continuation-acceptance-1a3b/run/g1-release-544ba55-recovery-20261001/evidence/ac-x04.json",
+      "owner": "SayHear CI",
+      "source": "local",
+      "status": "verified"
+    }
+  ],
+  "cutoverState": "disabled",
+  "releaseIdentityFingerprint": "sha256:3a416d184a5a092b25cbcce0b44b5f94a1bab1a9d86be1a4c7b7fa742cb98625",
+  "fingerprint": "sha256:382eb6b2b5474d8866346944b00b88eb16497ae2e7b4bdb99ac95050ef73c3bb"
+}

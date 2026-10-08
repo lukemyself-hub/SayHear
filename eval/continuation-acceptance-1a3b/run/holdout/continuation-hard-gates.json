@@ -1,0 +1,15 @@
+{
+  "advisories": [
+    "continuation-incumbent-1a3a/holdout-cont-memory-en t1: required_recall_missing — required-recall token \"clock\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-topic-en t1: required_recall_missing — required-recall token \"mainspring\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-surveillance-zh t1: required_recall_missing — required-recall token \"钟\" absent from the response",
+    "continuation-incumbent-1a3a/holdout-cont-memory-greeting-zh t1: forbidden_memory_mention — response references a never-injected detail (我记得)",
+    "continuation-incumbent-1a3a/holdout-cont-risk-sensitive-mix t1: forbidden_memory_mention — response references a never-injected detail (保证)",
+    "continuation-incumbent-1a3a/holdout-cont-stop-lane-mix t1: required_recall_missing — required-recall token \"好\" absent from the response"
+  ],
+  "applicable": true,
+  "checkedFixtureCount": 18,
+  "configId": "continuation-incumbent-1a3a",
+  "failures": [],
+  "passed": true
+}

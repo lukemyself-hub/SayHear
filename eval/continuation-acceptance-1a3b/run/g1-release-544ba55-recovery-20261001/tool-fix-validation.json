@@ -1,0 +1,42 @@
+{
+  "frozenProviderCommit": "544ba555342db4565631531e1afe79fe95c72bdc",
+  "sourceFixIsUncommitted": false,
+  "rootChecks": [
+    {
+      "command": "Node24 vitest run packages/application/src/one-a-3b-release.test.ts tests/one-a-3b-release-evidence.test.ts --maxWorkers=2",
+      "passed": 22,
+      "failed": 0
+    },
+    {
+      "command": "Node24 vitest run tests/generate-1a3b-g1-source-docs.test.ts tests/g1-hard-gate-arm-attribution.test.ts tests/hosted-canary-export.test.ts tests/runtime-config.test.ts --maxWorkers=2",
+      "passed": 47,
+      "failed": 0
+    },
+    {
+      "command": "Node24 PATH pnpm typecheck",
+      "exitCode": 0
+    },
+    {
+      "command": "Node24 CI Vitest full run two isolated local databases --maxWorkers=2",
+      "passed": 1413,
+      "failed": 0,
+      "pending": 0,
+      "sourceIsUncommitted": true
+    }
+  ],
+  "independentReview": "completed; no remaining P1/P2 release blocker",
+  "productionPromoted": false,
+  "sourceFixCommit": "405f96ea71607d1dcf3b1d3857bee673debffc5b",
+  "finalFullRegression": {
+    "passed": 1414,
+    "failed": 0,
+    "pending": 0
+  },
+  "finalDirectTypeScriptProjects": 8,
+  "boundaries": "passed",
+  "purgeInventory": {
+    "tables": 124,
+    "indexes": 130
+  },
+  "freshProviderEvidenceForSourceFixCommit": false
+}
