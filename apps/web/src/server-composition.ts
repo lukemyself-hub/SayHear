@@ -116,6 +116,7 @@ import {
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
+  PostgresRecentContextPolicyRepository,
   PostgresRecentContextSource,
 } from "@sayhear/data";
 
@@ -686,6 +687,11 @@ export function createServerComposition() {
     repository: responseRepository,
     ...(memoryRetrievalPort ? { memoryRetrieval: memoryRetrievalPort } : {}),
   });
+  // #295: independent, immutable recent-context governance. The compiler reads
+  // the active identity inside the same source snapshot; this repository is
+  // also the operator enable/disable surface and the effective-config probe.
+  const recentContextGovernanceRepository =
+    new PostgresRecentContextPolicyRepository(pool);
   const egressPort = createRuntimeProviderEgressPort({
     adapter:
       configuration.provider.adapter === "deterministic"
@@ -967,6 +973,7 @@ export function createServerComposition() {
     narrativeValidationEntrypointDependencies,
     oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
+    recentContextGovernanceRepository,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

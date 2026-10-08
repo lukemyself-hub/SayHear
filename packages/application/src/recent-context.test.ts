@@ -878,6 +878,34 @@ describe("recent-context frozen reference (#293)", () => {
     });
   });
 
+  it("round-trips the recorded read latency and reads v3 without it (#295)", () => {
+    const selection = select([item({ revisionId: 24, text: "yesterday" })], {
+      readLatencyMs: 137,
+    });
+    const decoded = decodeRecentContextReference(
+      encodeRecentContextReference(selection),
+    );
+    expect(decoded.readLatencyMs).toBe(137);
+    expect(decoded.wireVersion).toBe(RECENT_CONTEXT_REFERENCE_VERSION);
+
+    // A #294 v3 reference had no read latency; it stays readable and reports
+    // the honest "not recorded" state instead of fabricating a value. `version`
+    // is normalized for existing consumers but `wireVersion` preserves the
+    // actual encoded format so the Inspector is not misled.
+    const legacy = JSON.parse(
+      encodeRecentContextReference(selection).slice("recent-context:".length),
+    ) as Record<string, unknown>;
+    delete legacy["readLatencyMs"];
+    legacy["version"] = 3;
+    const decodedLegacy = decodeRecentContextReference(
+      `recent-context:${JSON.stringify(legacy)}`,
+    );
+    expect(decodedLegacy.readLatencyMs).toBeNull();
+    expect(decodedLegacy.version).toBe(RECENT_CONTEXT_REFERENCE_VERSION);
+    expect(decodedLegacy.wireVersion).toBe(3);
+    expect(decodedLegacy.selected).toHaveLength(1);
+  });
+
   it("rejects unknown and inconsistent frozen references", () => {
     const valid = JSON.parse(
       encodeRecentContextReference(
@@ -965,6 +993,24 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
   const generationCommandId = asGenerationCommandId(`${U}000000000063`);
   const interactionTurnId = asInteractionTurnId(`${U}000000000064`);
   const commandCreatedAt = new Date("2026-08-13T19:00:00.000Z");
+  const RECENT_CONTEXT_POLICY_VERSION = "recent-context-governance:test-active";
+
+  // #295: the governance row must name the runtime actually wired here —
+  // the recent-aware compiler, the v2 selector, this policy's selection
+  // version and budgets — or the compile treats the path as disabled.
+  function matchingGovernance() {
+    return {
+      budgetTokens: POLICY.budgets.maxContextTokens,
+      compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+      maxCandidateBytes: POLICY.budgets.maxCandidateBytes,
+      maxCandidateRows: POLICY.budgets.maxCandidateRows,
+      maxSingleEventTokens: POLICY.budgets.maxSingleEventTokens,
+      policyVersion: RECENT_CONTEXT_POLICY_VERSION,
+      readTimeoutMs: POLICY.budgets.readTimeoutMs,
+      selectionPolicyVersion: POLICY.version,
+      selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+    };
+  }
 
   function buildSource(
     extraEvents: ContextSourceSnapshot["events"] = [],
@@ -994,6 +1040,11 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       inputRevisionId: currentInputRevisionId,
       locale: "en-US",
       policyVersions,
+      // #295: these tests exercise the enabled path, so the compile snapshot
+      // carries an active immutable governance row that matches the wired
+      // runtime. Without it the compiler treats the recent path as disabled
+      // and emits no selection.
+      recentContextPolicy: matchingGovernance(),
       sourceRevision: 2,
     };
   }

@@ -332,9 +332,16 @@ export class PostgresRecentContextSource implements RecentContextSourcePort {
       windowStartLocalDate: request.windowStartLocalDate,
     };
     let client;
+    // #295: measure the bounded read at the adapter boundary so the Inspector
+    // can show the actual read duration the frozen selection was produced
+    // under. Content-free; measured even when the read fails or times out.
+    const startedAt = performance.now();
+    const readLatencyMs = (): number =>
+      Math.max(0, Math.round(performance.now() - startedAt));
     try {
       client = await this.pool.connect();
-      return await this.load(client, request, base);
+      const snapshot = await this.load(client, request, base);
+      return { ...snapshot, readLatencyMs: readLatencyMs() };
     } catch (error) {
       return {
         ...base,
@@ -346,6 +353,7 @@ export class PostgresRecentContextSource implements RecentContextSourcePort {
             : "source_read_failed",
           detail: null,
         },
+        readLatencyMs: readLatencyMs(),
       };
     } finally {
       client?.release();

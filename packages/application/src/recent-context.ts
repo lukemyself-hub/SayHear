@@ -32,8 +32,18 @@ export const RECENT_CONTEXT_SECTION_KEY = "recent_conversation_context" as const
 export const RECENT_CONTEXT_SELECTION_POLICY_VERSION =
   "recent-context-selection:v2" as const;
 
-/** Version of the frozen reference wire format written by {@link encode}. */
-export const RECENT_CONTEXT_REFERENCE_VERSION = 3 as const;
+/**
+ * Version of the frozen reference wire format written by {@link encode}.
+ *
+ * v4 adds the content-free `readLatencyMs` measurement to the frozen
+ * recent-source diagnostics (issue #295); v3 stays decodable so a Context
+ * compiled by #294 still replays and still renders in the Inspector. An
+ * unknown future version fails closed instead of being reinterpreted.
+ */
+export const RECENT_CONTEXT_REFERENCE_VERSION = 4 as const;
+
+/** Prior decodable reference version written before #295. */
+export const RECENT_CONTEXT_PREVIOUS_REFERENCE_VERSION = 3 as const;
 
 /** Window is today plus the previous six local days; empty days are not padded. */
 export const RECENT_CONTEXT_WINDOW_DAYS = 7 as const;
@@ -217,6 +227,12 @@ export type RecentContextSourceSnapshot = Readonly<{
   /** Optional so pre-#294 fakes stay valid; real adapters always set it. */
   perDate?: readonly RecentContextPerDateCoverage[];
   policyVersion: string;
+  /**
+   * Wall-clock duration of the bounded source read, measured at the adapter
+   * boundary (issue #295). Content-free; `null` when a caller could not measure
+   * it. Optional so pre-#295 fakes stay valid.
+   */
+  readLatencyMs?: number | null;
   selectorVersion: string;
   timezone: string;
   truncated: boolean;
@@ -228,6 +244,93 @@ export type RecentContextSourcePort = Readonly<{
   loadRecentContextSource(
     request: RecentContextSourceRequest,
   ): Promise<RecentContextSourceSnapshot>;
+}>;
+
+/**
+ * Independent, versioned operator governance for the recent-context path
+ * (issue #295). A row is content-free; it records the compiler / selector /
+ * budget identities the path was enabled under. Disabling revokes the single
+ * active row; re-enabling inserts a brand-new immutable version, so a revoked
+ * identity can never be resurrected.
+ */
+export const RECENT_CONTEXT_GOVERNANCE_PREFIX =
+  "recent-context-governance:" as const;
+
+export type RecentContextGovernanceStatus =
+  | "active"
+  | "revoked"
+  | "absent";
+
+export type RecentContextGovernancePolicy = Readonly<{
+  budgetTokens: number;
+  /** The actor who enabled this version; write-once, never overwritten. */
+  changedBy: string;
+  compilerVersion: string;
+  createdAt: string;
+  maxCandidateBytes: number;
+  maxCandidateRows: number;
+  maxSingleEventTokens: number;
+  policyVersion: string;
+  readTimeoutMs: number;
+  /** `null` while active; set once revoked. */
+  revokedAt: string | null;
+  /** The actor who revoked this version; `null` while active, write-once. */
+  revokedBy: string | null;
+  selectionPolicyVersion: string;
+  selectorPolicyVersion: string;
+  status: "active" | "revoked";
+}>;
+
+export type RecentContextGovernanceEffectiveState = Readonly<{
+  active: RecentContextGovernancePolicy | null;
+  enabled: boolean;
+  latest: RecentContextGovernancePolicy | null;
+  policyCount: number;
+}>;
+
+export type RecentContextGovernanceInput = Readonly<{
+  budgetTokens: number;
+  changedBy: string;
+  compilerVersion: string;
+  maxCandidateBytes: number;
+  maxCandidateRows: number;
+  maxSingleEventTokens: number;
+  now: Date;
+  /** Optional caller-supplied immutable version; generated when absent. */
+  policyVersion?: string;
+  readTimeoutMs: number;
+  selectionPolicyVersion: string;
+  selectorPolicyVersion: string;
+}>;
+
+export class RecentContextGovernanceConflictError extends Error {
+  public constructor(
+    message = "A recent-context governance policy is already active, or the requested version already exists.",
+  ) {
+    super(message);
+    this.name = "RecentContextGovernanceConflictError";
+  }
+}
+
+export type RecentContextGovernanceRepository = Readonly<{
+  findActivePolicy(): Promise<RecentContextGovernancePolicy | null>;
+  findEffectiveState(): Promise<RecentContextGovernanceEffectiveState>;
+  findPolicyStatus(
+    policyVersion: string,
+  ): Promise<RecentContextGovernanceStatus>;
+  insertActivePolicy(
+    input: RecentContextGovernanceInput,
+  ): Promise<RecentContextGovernancePolicy>;
+  revokeActivePolicy(input: {
+    now: Date;
+    revokedBy: string;
+  }): Promise<
+    | Readonly<{
+        outcome: "revoked";
+        policy: RecentContextGovernancePolicy;
+      }>
+    | Readonly<{ outcome: "already_disabled" }>
+  >;
 }>;
 
 export type RecentContextOmission = Readonly<{
@@ -268,6 +371,8 @@ export type RecentContextSelection = Readonly<{
   omitted: readonly RecentContextOmission[];
   perDate: readonly RecentContextPerDateCoverage[];
   policyVersion: string;
+  /** Content-free bounded-read duration measured at the source boundary. */
+  readLatencyMs: number | null;
   selected: readonly RecentContextSelectedEvent[];
   selectedTokens: number;
   selectorVersion: string;
@@ -302,6 +407,7 @@ export type RecentContextFrozenReference = Readonly<{
   omitted: readonly RecentContextOmission[];
   perDate: readonly RecentContextPerDateCoverage[];
   policyVersion: string;
+  readLatencyMs: number | null;
   selected: readonly RecentContextFrozenSelectedRef[];
   selectedTokens: number;
   selectorVersion: string;
@@ -311,6 +417,15 @@ export type RecentContextFrozenReference = Readonly<{
   windowEndLocalDate: string;
   windowStartLocalDate: string;
 }>;
+
+/**
+ * #295: the decoded reference keeps `version` normalized to the current wire
+ * format for existing consumers, and additionally records the actual encoded
+ * `wireVersion` so the Inspector can be honest about a v3 reference rendered by
+ * a v4 reader.
+ */
+export type RecentContextDecodedReference = RecentContextFrozenReference &
+  Readonly<{ wireVersion: number }>;
 
 export class RecentContextReferenceError extends Error {
   public constructor(detail: string) {
@@ -535,6 +650,8 @@ export function selectRecentContext(input: {
   items: readonly RecentContextSourceItem[];
   perDate?: readonly RecentContextPerDateCoverage[];
   policy: RecentContextSelectionPolicy;
+  /** Content-free read duration from the source snapshot (issue #295). */
+  readLatencyMs?: number | null;
   timezone: string;
   truncated?: boolean;
   windowEndLocalDate: string;
@@ -853,6 +970,7 @@ export function selectRecentContext(input: {
     omitted,
     perDate,
     policyVersion: input.policy.version,
+    readLatencyMs: normalizeReadLatencyMs(input.readLatencyMs),
     selected: orderedSelected,
     selectedTokens,
     selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
@@ -922,6 +1040,7 @@ export function encodeRecentContextReference(
     omitted: selection.omitted,
     perDate: selection.perDate,
     policyVersion: selection.policyVersion,
+    readLatencyMs: selection.readLatencyMs,
     selected: selection.selected.map((event) => ({
       actor: event.actor,
       dailySessionId: event.dailySessionId,
@@ -944,7 +1063,7 @@ export function encodeRecentContextReference(
 
 export function decodeRecentContextReference(
   reference: string,
-): RecentContextFrozenReference {
+): RecentContextDecodedReference {
   const prefix = "recent-context:";
   if (!reference.startsWith(prefix)) {
     throw new RecentContextReferenceError("unknown_reference_prefix");
@@ -959,9 +1078,19 @@ export function decodeRecentContextReference(
     throw new RecentContextReferenceError("reference_not_an_object");
   }
   const record = parsed as Record<string, unknown>;
-  if (record["version"] !== RECENT_CONTEXT_REFERENCE_VERSION) {
+  const version = record["version"];
+  if (
+    version !== RECENT_CONTEXT_REFERENCE_VERSION &&
+    version !== RECENT_CONTEXT_PREVIOUS_REFERENCE_VERSION
+  ) {
     throw new RecentContextReferenceError("unknown_reference_version");
   }
+  // v3 predates the read-latency measurement: it decodes as `null` rather than
+  // being reinterpreted or invented.
+  const readLatencyMs =
+    version === RECENT_CONTEXT_PREVIOUS_REFERENCE_VERSION
+      ? null
+      : normalizeReadLatencyMs(record["readLatencyMs"]);
   if (record["selectorVersion"] !== RECENT_CONTEXT_SELECTION_POLICY_VERSION) {
     throw new RecentContextReferenceError("unknown_selector_version");
   }
@@ -1072,6 +1201,7 @@ export function decodeRecentContextReference(
     omitted,
     perDate,
     policyVersion,
+    readLatencyMs,
     selected,
     selectedTokens,
     selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
@@ -1080,6 +1210,7 @@ export function decodeRecentContextReference(
     windowDays,
     windowEndLocalDate,
     windowStartLocalDate,
+    wireVersion: version,
   };
 }
 
@@ -1327,6 +1458,14 @@ function requireNonEmptyString(value: unknown, field: string): string {
 function requireNonNegativeInteger(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     throw new RecentContextReferenceError(`bad_${field}`);
+  }
+  return value;
+}
+
+function normalizeReadLatencyMs(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new RecentContextReferenceError("bad_read_latency_ms");
   }
   return value;
 }

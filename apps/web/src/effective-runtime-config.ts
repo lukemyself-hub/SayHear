@@ -18,7 +18,11 @@
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_ROLE_POLICIES,
+  RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   sha256Hex,
+  type RecentContextGovernanceEffectiveState,
 } from "@sayhear/application";
 
 import {
@@ -90,7 +94,16 @@ function overrideSource(
  */
 export function buildEffectiveRuntimeConfiguration(
   environment: Environment,
-  options: { now?: () => Date } = {},
+  options: {
+    now?: () => Date;
+    /**
+     * #295: content-free snapshot of the deployed recent-context governance.
+     * `null` (or absent) reports the items `unverified` with a null value
+     * rather than guessing; the release comparison must never read a missing
+     * probe as equal.
+     */
+    recentContextGovernance?: RecentContextGovernanceEffectiveState | null;
+  } = {},
 ): EffectiveRuntimeConfigurationSnapshot {
   const runtime = loadRuntimeConfiguration(environment);
   const identity = buildHostedReleaseIdentity(environment);
@@ -286,6 +299,116 @@ export function buildEffectiveRuntimeConfiguration(
       value,
     });
   }
+
+  // Recent-context governance (#295): independent, versioned switch. The
+  // switch itself is not part of the G1 manifest fingerprint; it is reported
+  // separately so a disable is visible without changing G1 role pins. A row
+  // only counts as effective when every identity/budget names the runtime
+  // wired here; a mismatched row is reported not-effective and its
+  // policy/parameter values as `unverified`, never as the effective override.
+  const governance = options.recentContextGovernance ?? null;
+  const activeGovernance = governance?.active ?? null;
+  const governanceMatchesRuntime =
+    activeGovernance !== null &&
+    activeGovernance.compilerVersion === RECENT_CONTEXT_COMPILER_VERSION &&
+    activeGovernance.selectorPolicyVersion ===
+      RECENT_CONTEXT_SELECTION_POLICY_VERSION &&
+    activeGovernance.selectionPolicyVersion ===
+      RECENT_CONTEXT_DEFAULT_POLICY.version &&
+    activeGovernance.budgetTokens ===
+      RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens &&
+    activeGovernance.maxCandidateRows ===
+      RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows &&
+    activeGovernance.maxCandidateBytes ===
+      RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes &&
+    activeGovernance.maxSingleEventTokens ===
+      RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens &&
+    activeGovernance.readTimeoutMs ===
+      RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs;
+  const effectiveRecentContextEnabled =
+    governanceMatchesRuntime && (governance?.enabled ?? false);
+  // The source union has no `absent`: a verified absence of an active policy
+  // (or a mismatched row) reports `unverified` with a null value rather than
+  // claiming an effective override the deployment does not actually run.
+  const policySource = governanceMatchesRuntime ? "override" : "unverified";
+  add({
+    category: "roles-switches",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "switch.recent_context_enabled",
+    source: governance ? "override" : "unverified",
+    value: governance ? effectiveRecentContextEnabled : null,
+  });
+  add({
+    category: "prompt-schema-policy",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "policy.recent_context_governance_version",
+    source: policySource,
+    value: governanceMatchesRuntime ? activeGovernance.policyVersion : null,
+  });
+  add({
+    category: "prompt-schema-policy",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "policy.recent_context_selector_version",
+    source: policySource,
+    value: governanceMatchesRuntime
+      ? activeGovernance.selectorPolicyVersion
+      : null,
+  });
+  add({
+    category: "prompt-schema-policy",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "policy.recent_context_selection_version",
+    source: policySource,
+    value: governanceMatchesRuntime
+      ? activeGovernance.selectionPolicyVersion
+      : null,
+  });
+  add({
+    category: "parameters-budget",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "parameters.recent_context.budget_tokens",
+    source: policySource,
+    value: governanceMatchesRuntime ? activeGovernance.budgetTokens : null,
+  });
+  add({
+    category: "parameters-budget",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "parameters.recent_context.max_candidate_rows",
+    source: policySource,
+    value: governanceMatchesRuntime ? activeGovernance.maxCandidateRows : null,
+  });
+  add({
+    category: "parameters-budget",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "parameters.recent_context.max_candidate_bytes",
+    source: policySource,
+    value: governanceMatchesRuntime ? activeGovernance.maxCandidateBytes : null,
+  });
+  add({
+    category: "parameters-budget",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "parameters.recent_context.max_single_event_tokens",
+    source: policySource,
+    value: governanceMatchesRuntime
+      ? activeGovernance.maxSingleEventTokens
+      : null,
+  });
+  add({
+    category: "parameters-budget",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "parameters.recent_context.read_timeout_ms",
+    source: policySource,
+    value: governanceMatchesRuntime ? activeGovernance.readTimeoutMs : null,
+  });
 
   // Runtime / hosted identity.
   add({
@@ -605,6 +728,12 @@ export type EffectiveRuntimeConfigHandlerDependencies = Readonly<{
   getSession: () => Promise<{ user?: { id?: string } } | null>;
   assertOperator: (userId: string) => Promise<void>;
   now?: () => Date;
+  /**
+   * Optional DB probe for the recent-context governance state (#295). A
+   * missing probe, or a probe that throws, reports the items `unverified`
+   * instead of guessing; it never fails the whole report.
+   */
+  loadRecentContextGovernance?: () => Promise<RecentContextGovernanceEffectiveState | null>;
 }>;
 
 /**
@@ -625,11 +754,21 @@ export async function handleEffectiveRuntimeConfigRequest(
   });
   if (denied) return denied;
   try {
+    let recentContextGovernance: RecentContextGovernanceEffectiveState | null =
+      null;
+    if (dependencies.loadRecentContextGovernance) {
+      try {
+        recentContextGovernance =
+          await dependencies.loadRecentContextGovernance();
+      } catch {
+        recentContextGovernance = null;
+      }
+    }
     return Response.json(
-      buildEffectiveRuntimeConfiguration(
-        dependencies.environment,
-        dependencies.now ? { now: dependencies.now } : {},
-      ),
+      buildEffectiveRuntimeConfiguration(dependencies.environment, {
+        ...(dependencies.now ? { now: dependencies.now } : {}),
+        recentContextGovernance,
+      }),
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {

@@ -120,6 +120,13 @@ export type ContextPolicyVersions = Readonly<{
   relationshipPolicyVersion: string;
   safetyPolicyVersion: string;
   taskInstructionVersion: string;
+  /**
+   * #295: the immutable recent-context governance identity frozen into a
+   * Context that actually selected recent content. Absent on legacy, disabled
+   * and recent-free contexts, which are the only ones the dispatch fence lets
+   * pass without a recognized active authorization.
+   */
+  recentContextPolicyVersion?: string;
 }>;
 
 export type ContextSourceEvent = Readonly<{
@@ -128,6 +135,24 @@ export type ContextSourceEvent = Readonly<{
   revisionId: ConversationEventRevisionId;
   sequence: number;
   text: string;
+}>;
+
+/**
+ * #295: the identity/budget fields of the active governance row that the
+ * compile gate compares against the wired compiler and policy before honoring
+ * it. A row naming a different runtime is treated exactly like an absent one:
+ * no recent content is selected and nothing is frozen.
+ */
+export type ContextSourceRecentContextPolicy = Readonly<{
+  budgetTokens: number;
+  compilerVersion: string;
+  maxCandidateBytes: number;
+  maxCandidateRows: number;
+  maxSingleEventTokens: number;
+  policyVersion: string;
+  readTimeoutMs: number;
+  selectionPolicyVersion: string;
+  selectorPolicyVersion: string;
 }>;
 
 export type ContextSourceSnapshot = Readonly<{
@@ -159,6 +184,14 @@ export type ContextSourceSnapshot = Readonly<{
    * rows fall back to the session-start zone.
    */
   requestTimezone?: string;
+  /**
+   * #295: the currently active immutable recent-context governance row, read
+   * in the same source transaction. `null` / absent means the recent path is
+   * disabled (or absent). Even a present row is only honored when its
+   * identities and budgets match the wired compiler/policy, so the frozen
+   * authorization can never name a runtime that does not actually enforce it.
+   */
+  recentContextPolicy?: ContextSourceRecentContextPolicy | null;
   events: readonly ContextSourceEvent[];
   generationStage: GenerationCommandStage;
   /**
@@ -452,14 +485,34 @@ export function createContextCompiler(dependencies: {
           })
         : null;
 
-      const recentContext = dependencies.recentContext
-        ? await loadRecentContextSelection({
-            dependency: dependencies.recentContext,
-            frozenAt: now,
-            source,
-            userId: input.userId,
-          })
-        : null;
+      // #295: the recent path is gated on the DB governance identity, not on
+      // process wiring or env. A disabled / revoked / absent policy makes the
+      // compiler behave exactly like the legacy same-day compiler for this
+      // turn — the original conversation still responds — while the dependency
+      // stays wired for when an operator re-enables it. A present row is only
+      // honored when it names the runtime actually wired here; a mismatched
+      // row fails closed exactly like an absent one, so the frozen
+      // authorization can never claim a runtime that does not enforce it.
+      const sourceGovernance = source.recentContextPolicy ?? null;
+      const recentContextPolicyVersion =
+        dependencies.recentContext &&
+        sourceGovernance !== null &&
+        recentContextPolicyMatchesRuntime({
+          compilerVersion: effectiveCompilerVersion,
+          governance: sourceGovernance,
+          policy: dependencies.recentContext.policy,
+        })
+          ? sourceGovernance.policyVersion
+          : null;
+      const recentContext =
+        dependencies.recentContext && recentContextPolicyVersion !== null
+          ? await loadRecentContextSelection({
+              dependency: dependencies.recentContext,
+              frozenAt: now,
+              source,
+              userId: input.userId,
+            })
+          : null;
       const recentReferencedEvents: CompiledContextReferencedEvent[] =
         recentContext === null
           ? []
@@ -624,7 +677,18 @@ export function createContextCompiler(dependencies: {
         },
         locale: source.locale,
         now,
-        policyVersions: source.policyVersions,
+        // #295: freeze the immutable governance identity only when recent
+        // content was actually selected. A recent-free / degraded context
+        // carries no authorization and no recent refs, so the dispatch fence
+        // treats it as legacy and lets the original response through.
+        policyVersions: {
+          ...source.policyVersions,
+          ...(recentContext !== null &&
+          recentContextPolicyVersion !== null &&
+          recentContext.selected.length > 0
+            ? { recentContextPolicyVersion }
+            : {}),
+        },
         ...(retrievalOutcome
           ? {
               retrievalManifest: retrievalOutcome.manifest,
@@ -1112,6 +1176,32 @@ function estimateTokens(text: string): number {
   return Math.max(1, Math.ceil([...text].length / 4));
 }
 
+/**
+ * #295: a governance row only authorizes the recent path when every identity
+ * and budget field names the runtime actually wired into this compiler. Any
+ * mismatch (or an absent row) fails closed: no recent content is selected and
+ * no governance version is frozen.
+ */
+function recentContextPolicyMatchesRuntime(input: {
+  compilerVersion: string;
+  governance: ContextSourceRecentContextPolicy | null;
+  policy: RecentContextSelectionPolicy;
+}): boolean {
+  const { governance, policy } = input;
+  if (governance === null) return false;
+  return (
+    governance.compilerVersion === input.compilerVersion &&
+    governance.selectorPolicyVersion ===
+      RECENT_CONTEXT_SELECTION_POLICY_VERSION &&
+    governance.selectionPolicyVersion === policy.version &&
+    governance.budgetTokens === policy.budgets.maxContextTokens &&
+    governance.maxCandidateRows === policy.budgets.maxCandidateRows &&
+    governance.maxCandidateBytes === policy.budgets.maxCandidateBytes &&
+    governance.maxSingleEventTokens === policy.budgets.maxSingleEventTokens &&
+    governance.readTimeoutMs === policy.budgets.readTimeoutMs
+  );
+}
+
 function emptyRecentContextSelection(
   policy: RecentContextSelectionPolicy,
   timezone: string,
@@ -1119,6 +1209,7 @@ function emptyRecentContextSelection(
   windowEndLocalDate: string,
   cutoff: RecentContextCutoff,
   failure: RecentContextSourceFailure | null,
+  readLatencyMs: number | null = null,
 ): RecentContextSelection {
   return {
     budgetTokens: policy.budgets.maxContextTokens,
@@ -1138,6 +1229,7 @@ function emptyRecentContextSelection(
         : [{ controlId: null, reason: "source_read_failed", revisionId: null }],
     perDate: [],
     policyVersion: policy.version,
+    readLatencyMs,
     selected: [],
     selectedTokens: 0,
     selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
@@ -1194,6 +1286,7 @@ async function loadRecentContextSelection(input: {
       window.windowEndLocalDate,
       cutoff,
       { code: "cutoff_unavailable", detail: null },
+      null,
     );
   }
   const excludeRevisionIds = input.source.events.map(
@@ -1237,6 +1330,7 @@ async function loadRecentContextSelection(input: {
       window.windowEndLocalDate,
       cutoff,
       snapshot.failure,
+      snapshot.readLatencyMs ?? null,
     );
   }
   if (
@@ -1253,6 +1347,7 @@ async function loadRecentContextSelection(input: {
       window.windowEndLocalDate,
       cutoff,
       { code: "source_metadata_mismatch", detail: null },
+      snapshot.readLatencyMs ?? null,
     );
   }
   return selectRecentContext({
@@ -1265,6 +1360,7 @@ async function loadRecentContextSelection(input: {
     items: snapshot.items,
     ...(snapshot.perDate === undefined ? {} : { perDate: snapshot.perDate }),
     policy: input.dependency.policy,
+    readLatencyMs: snapshot.readLatencyMs ?? null,
     timezone,
     truncated: snapshot.truncated,
     windowEndLocalDate: window.windowEndLocalDate,

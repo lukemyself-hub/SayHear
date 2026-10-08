@@ -1,6 +1,7 @@
 import type {
   CompiledContextSectionKey,
   ContextPolicyVersions,
+  RecentContextInspection,
   RetrievalCandidateInspection,
   RetrievalRunManifest,
 } from "@sayhear/application";
@@ -64,6 +65,27 @@ export type ContextInspectorContext = Readonly<{
   safetyPosture: ContextInspectorSafetyPosture;
 }>;
 
+/**
+ * #295: a referenced revision with its stored provenance. For
+ * `recent_conversation_context` rows the extra selection columns describe the
+ * frozen recent-source selection; the message body itself is never included.
+ */
+export type ContextInspectorReferencedEvent = Readonly<{
+  actor: "user" | "assistant";
+  dailySessionId: string | null;
+  estimatedTokens: number;
+  expressedAt: string | null;
+  occurredAt: string | null;
+  revisionId: string;
+  section:
+    | "committed_raw_events"
+    | "current_user_input"
+    | "recent_conversation_context";
+  selectionOrder: number | null;
+  selectionReason: string | null;
+  sequence: number;
+}>;
+
 export type ContextInspectorPayload = Readonly<{
   attemptStatus: string;
   checkedAt: string;
@@ -74,6 +96,8 @@ export type ContextInspectorPayload = Readonly<{
       degradedReason: string | null;
       dialogueRevision: number;
       locale: string;
+      recentContext: RecentContextInspection | null;
+      referencedEvents: readonly ContextInspectorReferencedEvent[];
       retrievalManifest: RetrievalRunManifest | null;
       sectionBudgets: Readonly<{ committedRawEvents: number }>;
       sections: readonly ContextInspectorSection[];

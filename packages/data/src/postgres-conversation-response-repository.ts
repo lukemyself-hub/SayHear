@@ -7,6 +7,7 @@ import type {
   CompiledContextSection,
   ContextCompilerRepository,
   ContextPolicyVersions,
+  ContextSourceRecentContextPolicy,
   ContextSourceSnapshot,
   CurrentRollingSummary,
   ConversationResponseRepository,
@@ -868,6 +869,39 @@ export class PostgresConversationResponseRepository
         `SELECT EXISTS (${FAST_PATH_PENDING_REVISIONS_SQL}) AS pending`,
         [row.daily_session_id],
       );
+      // #295: the active recent-context governance row is read in the compile
+      // snapshot. Absent / revoked means the recent path is disabled for this
+      // turn: the compiler emits no recent selection and the original
+      // conversation continues. The full identity/budget row is returned so
+      // the compiler can refuse a row that names a runtime it does not
+      // actually run. The dispatch fence re-checks the frozen version under a
+      // shared lock, so a disable after this read still fails the in-flight
+      // selection closed.
+      const recentPolicy = await client.query<{
+        budget_tokens: number;
+        compiler_version: string;
+        max_candidate_bytes: number;
+        max_candidate_rows: number;
+        max_single_event_tokens: number;
+        policy_version: string;
+        read_timeout_ms: number;
+        selection_policy_version: string;
+        selector_policy_version: string;
+      }>(
+        `SELECT
+           policy_version,
+           compiler_version,
+           selector_policy_version,
+           selection_policy_version,
+           budget_tokens,
+           max_candidate_rows,
+           max_candidate_bytes,
+           max_single_event_tokens,
+           read_timeout_ms
+         FROM recent_context_policies
+         WHERE status = 'active'
+         LIMIT 1`,
+      );
       const memoryActionTargets = await loadMemoryActionReferenceTargets(
         client,
         input.userId,
@@ -975,6 +1009,7 @@ export class PostgresConversationResponseRepository
                 modelConfigVersion: row.rolling_summary_model_config_version,
               },
         rollingSummaryFailure: row.rolling_summary_failed,
+        recentContextPolicy: mapRecentContextPolicy(recentPolicy.rows[0]),
         safetyPosture,
         sourceRevision: Number(row.source_revision),
       };
@@ -1601,6 +1636,35 @@ export class PostgresConversationResponseRepository
       );
       if (recorded.rowCount !== 1) {
         await client.query("COMMIT");
+        return false;
+      }
+      // #295: re-check the recent-context governance fence at Provider result
+      // time. If the frozen selection was revoked while the Provider was
+      // streaming, the result is not accepted; the transaction also holds the
+      // governance row lock until commit.
+      const command = await client.query<{
+        compiled_context_id: string | null;
+      }>(
+        `
+          SELECT command.compiled_context_id
+          FROM model_run_attempts attempt
+          INNER JOIN generation_commands command
+            ON command.generation_command_id = attempt.generation_command_id
+           AND command.user_id = attempt.user_id
+          WHERE attempt.model_run_attempt_id = $1
+        `,
+        [input.modelRunAttemptId],
+      );
+      const compiledContextId = command.rows[0]?.compiled_context_id;
+      if (
+        compiledContextId !== null &&
+        compiledContextId !== undefined &&
+        !(await recentContextSelectionAuthorized(
+          client,
+          asCompiledContextId(compiledContextId),
+        ))
+      ) {
+        await client.query("ROLLBACK");
         return false;
       }
       await client.query(
@@ -2522,7 +2586,96 @@ async function contextReferencesAreCurrent(
     `,
     [compiledContextId, generationCommandId],
   );
-  return result.rows[0]?.current === true;
+  if (result.rows[0]?.current !== true) return false;
+  // #295: the revision refs being current is not enough for the recent-source
+  // path. When the context carries selected recent content it must also carry
+  // a recognized *active* immutable governance identity; the lock is held for
+  // the rest of this transaction so a concurrent disable serializes with
+  // dispatch / result / commit in either ordering.
+  return recentContextSelectionAuthorized(client, compiledContextId);
+}
+
+/**
+ * #295 independent recent-context governance fence.
+ *
+ * A compiled context with at least one `recent_conversation_context` ref must
+ * carry a non-null frozen governance version that still exists and is active.
+ * The row is locked `FOR SHARE`; the operator disable takes the same row
+ * `FOR UPDATE`, so the two orderings are serializable. A context with no
+ * selected recent ref (legacy, disabled, degraded or zero-selected) passes
+ * without any governance row, preserving pre-#294 replay.
+ */
+async function recentContextSelectionAuthorized(
+  client: PoolClient,
+  compiledContextId: CompiledContextId,
+): Promise<boolean> {
+  const frozen = await client.query<{
+    has_recent: boolean;
+    policy_version: string | null;
+  }>(
+    `
+      SELECT
+        EXISTS (
+          SELECT 1
+          FROM compiled_context_revision_refs ref
+          WHERE ref.compiled_context_id = $1
+            AND ref.section = 'recent_conversation_context'
+        ) AS has_recent,
+        (
+          SELECT context.policy_versions ->> 'recentContextPolicyVersion'
+          FROM compiled_contexts context
+          WHERE context.compiled_context_id = $1
+        ) AS policy_version
+    `,
+    [compiledContextId],
+  );
+  const row = frozen.rows[0];
+  if (!row || row.has_recent !== true) return true;
+  // Selected recent content without a recognized frozen identity is
+  // unauthorized, never grandfathered.
+  if (row.policy_version === null || row.policy_version === undefined) {
+    return false;
+  }
+  const active = await client.query(
+    `
+      SELECT 1
+      FROM recent_context_policies
+      WHERE policy_version = $1
+        AND status = 'active'
+      FOR SHARE
+    `,
+    [row.policy_version],
+  );
+  return (active.rowCount ?? 0) === 1;
+}
+
+function mapRecentContextPolicy(
+  row:
+    | {
+        budget_tokens: number;
+        compiler_version: string;
+        max_candidate_bytes: number;
+        max_candidate_rows: number;
+        max_single_event_tokens: number;
+        policy_version: string;
+        read_timeout_ms: number;
+        selection_policy_version: string;
+        selector_policy_version: string;
+      }
+    | undefined,
+): ContextSourceRecentContextPolicy | null {
+  if (!row) return null;
+  return {
+    budgetTokens: Number(row.budget_tokens),
+    compilerVersion: row.compiler_version,
+    maxCandidateBytes: Number(row.max_candidate_bytes),
+    maxCandidateRows: Number(row.max_candidate_rows),
+    maxSingleEventTokens: Number(row.max_single_event_tokens),
+    policyVersion: row.policy_version,
+    readTimeoutMs: Number(row.read_timeout_ms),
+    selectionPolicyVersion: row.selection_policy_version,
+    selectorPolicyVersion: row.selector_policy_version,
+  };
 }
 
 async function contextReferencesAreCurrentForCommand(

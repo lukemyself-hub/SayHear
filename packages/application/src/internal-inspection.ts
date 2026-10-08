@@ -21,7 +21,58 @@ import type {
   TrustFenceResult,
 } from "./memory-retrieval/types";
 import type { RecoveryGate } from "./recovery-gate";
+import type {
+  RecentContextFrozenReference,
+  RecentContextOmission,
+  RecentContextPerDateCoverage,
+  RecentContextSelectionBudgets,
+  RecentContextSelectionCounts,
+  RecentContextSourceFailure,
+} from "./recent-context";
 import type { CurrentSafetyPosture } from "./safety-posture";
+
+/**
+ * #295: content-free presentation of the frozen recent-source selection plus
+ * the per-ref provenance columns stored on `compiled_context_revision_refs`.
+ * It never carries message bodies and is only built from the recorded
+ * CompiledContext, so it cannot fabricate a selection the model did not see.
+ */
+export type RecentContextInspectionSelectedRef = Readonly<{
+  actor: "user" | "assistant";
+  dailySessionId: string;
+  estimatedTokens: number | null;
+  expressedAt: string;
+  occurredAt: string | null;
+  revisionId: string;
+  selectionOrder: number;
+  selectionReason: string;
+  sequence: number | null;
+}>;
+
+export type RecentContextInspection = Readonly<{
+  authorizationPolicyVersion: string | null;
+  authorizationStatus: "active" | "revoked" | "absent" | "unrecognized";
+  budgetTokens: number;
+  budgets: RecentContextSelectionBudgets;
+  counts: RecentContextSelectionCounts;
+  cutoff: RecentContextFrozenReference["cutoff"];
+  excludedRevisionIds: readonly string[];
+  failure: RecentContextSourceFailure | null;
+  omitted: readonly RecentContextOmission[];
+  perDate: readonly RecentContextPerDateCoverage[];
+  policyVersion: string;
+  readLatencyMs: number | null;
+  /** The actual encoded wire version (v3 stays v3 under a v4 reader). */
+  referenceVersion: number;
+  selected: readonly RecentContextInspectionSelectedRef[];
+  selectorVersion: string;
+  timezone: string;
+  /** Non-null when the frozen reference could not be decoded at all. */
+  unreadableReason: string | null;
+  windowDays: number;
+  windowEndLocalDate: string;
+  windowStartLocalDate: string;
+}>;
 
 export type CompiledContextSafetyPostureInspection = Readonly<{
   posture: CurrentSafetyPosture | null;
@@ -61,12 +112,24 @@ export type CompiledContextInspection = Readonly<{
   }>;
   locale: string;
   policyVersions: ContextPolicyVersions;
+  /**
+   * #295: decoded content-free recent-source diagnostics for this Context.
+   * `null` when the Context never carried a recent section.
+   */
+  recentContext: RecentContextInspection | null;
   referencedEvents: readonly Readonly<{
     actor: "user" | "assistant";
+    dailySessionId: string | null;
     estimatedTokens: number;
+    expressedAt: string | null;
+    occurredAt: string | null;
     revisionId: ConversationEventRevisionId;
-    section: "committed_raw_events" | "current_user_input";
+    section:
+      | "committed_raw_events"
+      | "current_user_input"
+      | "recent_conversation_context";
     selectionOrder: number | null;
+    selectionReason: string | null;
     sequence: number;
   }>[];
   sectionBudgets: Readonly<{ committedRawEvents: number }>;

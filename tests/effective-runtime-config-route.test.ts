@@ -5,6 +5,14 @@ const mocks = vi.hoisted(() => {
   const createServerComposition = vi.fn(() => ({
     authOptions: {},
     accessService: { assertOperator },
+    recentContextGovernanceRepository: {
+      findEffectiveState: async () => ({
+        active: null,
+        enabled: false,
+        latest: null,
+        policyCount: 0,
+      }),
+    },
   }));
   return { assertOperator, createServerComposition };
 });
@@ -13,7 +21,15 @@ vi.mock("../apps/web/src/server-composition", () => ({
   createServerComposition: mocks.createServerComposition,
 }));
 
+import {
+  RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+  type RecentContextGovernancePolicy,
+} from "@sayhear/application";
+
 import { GET } from "../apps/web/app/api/internal/inspection/effective-runtime-config/route";
+import { buildEffectiveRuntimeConfiguration } from "../apps/web/src/effective-runtime-config";
 import {
   EFFECTIVE_RUNTIME_CONFIG_CATEGORIES,
   parseEffectiveConfigurationSnapshot,
@@ -80,9 +96,101 @@ describe("effective runtime configuration route", () => {
     expect(new Set(snapshot.items.map((entry) => entry.category))).toEqual(
       new Set(EFFECTIVE_RUNTIME_CONFIG_CATEGORIES),
     );
+    // #295: the independent recent-context governance is reported content-free
+    // and separately from the G1 manifest fingerprint.
+    expect(
+      snapshot.items.find(
+        (entry) => entry.key === "switch.recent_context_enabled",
+      ),
+    ).toMatchObject({ inManifestFingerprint: false, value: false });
+    expect(
+      snapshot.items.find(
+        (entry) => entry.key === "policy.recent_context_governance_version",
+      ),
+    ).toMatchObject({ inManifestFingerprint: false, source: "unverified" });
+
     const serialized = JSON.stringify(snapshot);
     expect(serialized).not.toContain("route-dbsecret");
     expect(serialized).not.toContain("route-github-secret");
     expect(serialized).not.toContain("postgres://");
+  });
+});
+
+describe("effective runtime configuration recent-context governance (#295)", () => {
+  function activePolicy(
+    overrides: Partial<RecentContextGovernancePolicy> = {},
+  ): RecentContextGovernancePolicy {
+    return {
+      budgetTokens: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+      changedBy: "operator",
+      compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+      createdAt: "2026-08-27T08:00:00.000Z",
+      maxCandidateBytes:
+        RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes,
+      maxCandidateRows: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows,
+      maxSingleEventTokens:
+        RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens,
+      policyVersion: "recent-context-governance:test",
+      readTimeoutMs: RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs,
+      revokedAt: null,
+      revokedBy: null,
+      selectionPolicyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+      selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+      status: "active",
+      ...overrides,
+    };
+  }
+
+  function governanceOf(active: RecentContextGovernancePolicy) {
+    return {
+      active,
+      enabled: true,
+      latest: active,
+      policyCount: 1,
+    };
+  }
+
+  it("reports override with real values for a matching active policy", () => {
+    const snapshot = buildEffectiveRuntimeConfiguration(environment, {
+      recentContextGovernance: governanceOf(activePolicy()),
+    });
+    const item = (key: string) =>
+      snapshot.items.find((entry) => entry.key === key)!;
+    expect(item("switch.recent_context_enabled")).toMatchObject({
+      inManifestFingerprint: false,
+      source: "override",
+      value: true,
+    });
+    expect(item("policy.recent_context_governance_version")).toMatchObject({
+      source: "override",
+      value: "recent-context-governance:test",
+    });
+    expect(item("parameters.recent_context.budget_tokens")).toMatchObject({
+      source: "override",
+      value: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+    });
+  });
+
+  it("reports not-effective and unverified on a mismatched active policy", () => {
+    const snapshot = buildEffectiveRuntimeConfiguration(environment, {
+      recentContextGovernance: governanceOf(
+        activePolicy({ compilerVersion: "context-compiler:v1" }),
+      ),
+    });
+    const item = (key: string) =>
+      snapshot.items.find((entry) => entry.key === key)!;
+    expect(item("switch.recent_context_enabled")).toMatchObject({
+      inManifestFingerprint: false,
+      source: "override",
+      value: false,
+    });
+    expect(item("policy.recent_context_governance_version")).toMatchObject({
+      source: "unverified",
+      value: null,
+    });
+    expect(item("parameters.recent_context.budget_tokens")).toMatchObject({
+      source: "unverified",
+      value: null,
+    });
   });
 });

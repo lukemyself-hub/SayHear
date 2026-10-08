@@ -30,6 +30,7 @@ export {
   PostgresRecentContextSource,
   RECENT_CONTEXT_CANDIDATE_SQL,
 } from "./postgres-recent-context-source";
+export { PostgresRecentContextPolicyRepository } from "./postgres-recent-context-policy-repository";
 export {
   PostgresConversationActionRepository,
   PostgresJournalRegenerationActionRepository,

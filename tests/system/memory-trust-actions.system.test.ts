@@ -27,9 +27,12 @@ import {
   createMemoryForgetRequestActionHandler,
   createMemoryForgetReversalActionHandler,
   trustActionUnverifiablePhrasing,
+  RECENT_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_DEFAULT_POLICY,
   RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   RECENT_CONTEXT_SECTION_KEY,
+  RecentContextGovernanceConflictError,
+  asGenerationCommandId,
   decodeRecentContextReference,
   resolveRecentContextWindow,
   selectRecentContext,
@@ -45,12 +48,14 @@ import {
   PostgresMemoryCorrectionFollowupRepository,
   PostgresConversationResponseRepository,
   PostgresEntityRepository,
+  PostgresInternalInspectionRepository,
   PostgresInternalOwnerAccessRepository,
   PostgresJournalRegenerationActionRepository,
   PostgresMemoryClaimRepository,
   PostgresMemoryRetrievalRepository,
   PostgresMemoryTrustActionCommitPort,
   PostgresMemoryTrustActionTargetSource,
+  PostgresRecentContextPolicyRepository,
   PostgresRecentContextSource,
   PostgresUserTextConversationRepository,
   RECENT_CONTEXT_CANDIDATE_SQL,
@@ -352,9 +357,10 @@ beforeEach(async () => {
       internal_diagnostic_access_grants,
       provider_egress_consents,
       provider_egress_dispositions,
-      compiled_context_revision_refs,
-      compiled_contexts,
-      model_run_attempts,
+        compiled_context_revision_refs,
+        compiled_contexts,
+        recent_context_policies,
+        model_run_attempts,
       generation_commands,
       continuous_exchange_inactivity_evaluations,
       reflection_runs,
@@ -372,6 +378,12 @@ beforeEach(async () => {
   await database.pool.query(
     "UPDATE app_users SET status = 'active', data_epoch = 1",
   );
+  // #295: the #293/#294 suites exercise the *enabled* recent-source path, so
+  // each test starts from one active immutable governance row that matches the
+  // production wired runtime. The #293 suite overrides it with a row matching
+  // its own test policy; tests that need the disabled / revoked / mismatched
+  // state revoke or re-seed explicitly.
+  await seedRecentContextGovernance(RECENT_CONTEXT_DEFAULT_POLICY);
   await new PostgresEntityRepository(database.pool).ensureSelfEntity({
     userId: OWNER,
     now: clock(),
@@ -518,6 +530,45 @@ const RECENT_CONTEXT_POLICY: RecentContextSelectionPolicy = Object.freeze({
   version: "recent-context-selection-policy:v1",
   windowDays: 7,
 });
+
+/** #295: the active immutable governance identity seeded per test. */
+const ACTIVE_RECENT_CONTEXT_POLICY_VERSION =
+  "recent-context-governance:system-test-active";
+
+/**
+ * #295: seed exactly one active governance row whose identities and budgets
+ * match the given wired policy. The compile gate refuses a row that does not
+ * name the runtime actually wired, so a test using a non-production policy
+ * must seed the matching row.
+ */
+async function seedRecentContextGovernance(
+  policy: RecentContextSelectionPolicy,
+): Promise<void> {
+  await database.pool.query("DELETE FROM recent_context_policies");
+  await database.pool.query(
+    `INSERT INTO recent_context_policies (
+       policy_version, status, compiler_version, selector_policy_version,
+       selection_policy_version, budget_tokens, max_candidate_rows,
+       max_candidate_bytes, max_single_event_tokens, read_timeout_ms,
+       changed_by, created_at, revoked_at, revoked_by
+     ) VALUES (
+       $1, 'active', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, NULL
+     )`,
+    [
+      ACTIVE_RECENT_CONTEXT_POLICY_VERSION,
+      RECENT_CONTEXT_COMPILER_VERSION,
+      RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+      policy.version,
+      policy.budgets.maxContextTokens,
+      policy.budgets.maxCandidateRows,
+      policy.budgets.maxCandidateBytes,
+      policy.budgets.maxSingleEventTokens,
+      policy.budgets.readTimeoutMs,
+      String(OWNER),
+      clock(),
+    ],
+  );
+}
 
 function createContextCompilerWithRecentSource() {
   return createContextCompiler({
@@ -2176,6 +2227,13 @@ describe("Trust actions core (issue #119)", () => {
  * real repository must persist, load and replay the frozen recent refs.
  */
 describe("Recent context source explicit trust-control mapping (#293)", () => {
+  // This suite wires the looser #293 test policy through the compiler, so it
+  // needs a governance row that names that policy, not the production default
+  // seeded by the outer beforeEach.
+  beforeEach(async () => {
+    await seedRecentContextGovernance(RECENT_CONTEXT_POLICY);
+  });
+
   async function loadRecentSource(frozenAt: Date = clock()) {
     const window = resolveRecentContextWindow({
       frozenAt,
@@ -4021,5 +4079,617 @@ describe("Bounded recent context production wiring (#294)", () => {
     } finally {
       client.release();
     }
+  });
+});
+
+/**
+ * Issue #295: the recent-source path must be independently disable-able by an
+ * operator, without touching G1 role pins, provider egress policy, or any user
+ * content. The governance identity is immutable and versioned: disabling
+ * revokes, re-enabling inserts a brand-new version, and a revoked version can
+ * never be resurrected. The compile freezes the identity only when recent
+ * content was actually selected, and the dispatch / Provider-result / commit
+ * fences fail closed when it is no longer active.
+ */
+describe("Recent context independent governance (#295)", () => {
+  const governanceRepository = () =>
+    new PostgresRecentContextPolicyRepository(database.pool);
+
+  async function sectionsOf(compiledContextId: string) {
+    return (
+      await database.pool.query<{
+        sections: readonly { key: string; reference: string }[];
+      }>(
+        `SELECT sections FROM compiled_contexts
+         WHERE user_id = $1 AND compiled_context_id = $2`,
+        [OWNER, compiledContextId],
+      )
+    ).rows[0]!.sections;
+  }
+
+  async function prepareRecentTurn() {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    counter += 1;
+    const turn = await conversationService.submit(OWNER, {
+      clientEventId: `trust-governance-event-${counter}`,
+      clientTurnId: `trust-governance-turn-${counter}`,
+      locale: "zh-CN",
+      text: "今天我们聊点别的。",
+      timezone: "Asia/Shanghai",
+    });
+    expect(
+      await responseRepository.claimResponseExecution({
+        generationCommandId: turn.generation.commandId,
+        modelRunAttemptId: turn.generation.attemptId,
+        userId: OWNER,
+      }),
+    ).toBe("owner");
+    const compiled =
+      await createContextCompilerWithProductionRecentSource().compile({
+        generationCommandId: turn.generation.commandId,
+        interactionTurnId: turn.turn.id,
+        userId: OWNER,
+      });
+    const recentSection = (await sectionsOf(compiled.id)).find(
+      (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+    );
+    expect(recentSection).toBeDefined();
+    return { compiled, recentSection: recentSection!, turn };
+  }
+
+  /**
+   * A compiler whose recent source always fails. It still emits the recent
+   * section (with a recorded failure and zero selected refs) so the test can
+   * prove a degraded recent section never blocks the original response.
+   */
+  function createCompilerWithFailingRecentSource() {
+    return createContextCompiler({
+      clock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      recentContext: {
+        policy: RECENT_CONTEXT_DEFAULT_POLICY,
+        source: {
+          async loadRecentContextSource(request) {
+            return {
+              candidateBytes: 0,
+              candidateRows: 0,
+              failure: { code: "source_read_failed" as const, detail: null },
+              items: [],
+              policyVersion: request.policyVersion,
+              selectorVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+              timezone: request.timezone,
+              truncated: false,
+              windowEndLocalDate: request.windowEndLocalDate,
+              windowStartLocalDate: request.windowStartLocalDate,
+            };
+          },
+        },
+      },
+      repository: responseRepository,
+    });
+  }
+
+  async function prepareTurnWithCompiler(
+    compiler: ReturnType<typeof createContextCompiler>,
+  ) {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    counter += 1;
+    const turn = await conversationService.submit(OWNER, {
+      clientEventId: `trust-governance-turn-${counter}`,
+      clientTurnId: `trust-governance-turn-${counter}`,
+      locale: "zh-CN",
+      text: "今天我们聊点别的。",
+      timezone: "Asia/Shanghai",
+    });
+    expect(
+      await responseRepository.claimResponseExecution({
+        generationCommandId: turn.generation.commandId,
+        modelRunAttemptId: turn.generation.attemptId,
+        userId: OWNER,
+      }),
+    ).toBe("owner");
+    const compiled = await compiler.compile({
+      generationCommandId: turn.generation.commandId,
+      interactionTurnId: turn.turn.id,
+      userId: OWNER,
+    });
+    return { compiled, turn };
+  }
+
+  it("revokes and re-enables with a new immutable version, never resurrecting the old one", async () => {
+    const repository = governanceRepository();
+    const before = await repository.findEffectiveState();
+    expect(before.enabled).toBe(true);
+    const activeVersion = before.active!.policyVersion;
+
+    const revoked = await repository.revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+    expect(revoked.outcome).toBe("revoked");
+    if (revoked.outcome !== "revoked") {
+      throw new Error("Expected the active policy to be revoked.");
+    }
+    // F2: revocation records its own actor and never overwrites the enable
+    // actor.
+    expect(revoked.policy.changedBy).toBe(String(OWNER));
+    expect(revoked.policy.revokedBy).toBe(String(OWNER));
+    expect(revoked.policy.revokedAt).not.toBeNull();
+    expect(await repository.findActivePolicy()).toBeNull();
+    expect(await repository.findPolicyStatus(activeVersion)).toBe("revoked");
+
+    // A second disable is an idempotent no-op, not an error.
+    expect(
+      (
+        await repository.revokeActivePolicy({
+          now: clock(),
+          revokedBy: String(OWNER),
+        })
+      ).outcome,
+    ).toBe("already_disabled");
+
+    const reEnabled = await repository.insertActivePolicy({
+      budgetTokens: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+      changedBy: String(OWNER),
+      compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+      maxCandidateBytes:
+        RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes,
+      maxCandidateRows: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows,
+      maxSingleEventTokens:
+        RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens,
+      now: clock(),
+      readTimeoutMs: RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs,
+      selectionPolicyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+      selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+    });
+    expect(reEnabled.policyVersion).not.toBe(activeVersion);
+    expect(reEnabled.changedBy).toBe(String(OWNER));
+    expect(reEnabled.revokedBy).toBeNull();
+    expect(reEnabled.status).toBe("active");
+    // The revoked version stays revoked forever.
+    expect(await repository.findPolicyStatus(activeVersion)).toBe("revoked");
+
+    // Enabling while an active version exists fails closed and leaves it
+    // unchanged.
+    await expect(
+      repository.insertActivePolicy({
+        budgetTokens: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+        changedBy: String(OWNER),
+        compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+        maxCandidateBytes:
+          RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes,
+        maxCandidateRows:
+          RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows,
+        maxSingleEventTokens:
+          RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens,
+        now: clock(),
+        readTimeoutMs: RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs,
+        selectionPolicyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+        selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+      }),
+    ).rejects.toBeInstanceOf(RecentContextGovernanceConflictError);
+    expect((await repository.findActivePolicy())!.policyVersion).toBe(
+      reEnabled.policyVersion,
+    );
+  });
+
+  it("stops selecting recent content when disabled and keeps the original conversation responding", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    await governanceRepository().revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+
+    const { replyText } = await respond(
+      "今天想聊聊别的。",
+      { reply: "好啊，我在听。" },
+      createContextCompilerWithProductionRecentSource(),
+    );
+    expect(replyText).toBe("好啊，我在听。");
+
+    const compiledId = await loadLatestCompiledContextId();
+    expect(
+      (await sectionsOf(compiledId)).some(
+        (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+      ),
+    ).toBe(false);
+  });
+
+  it("freezes the active governance identity only when recent content is selected", async () => {
+    const { compiled } = await prepareRecentTurn();
+    const row = await database.pool.query<{
+      policy_versions: Record<string, unknown>;
+    }>(
+      `SELECT policy_versions FROM compiled_contexts
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, compiled.id],
+    );
+    expect(row.rows[0]!.policy_versions["recentContextPolicyVersion"]).toBe(
+      ACTIVE_RECENT_CONTEXT_POLICY_VERSION,
+    );
+  });
+
+  it("blocks dispatch when the frozen governance version was revoked first", async () => {
+    const { compiled, turn } = await prepareRecentTurn();
+    await governanceRepository().revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+    const claim = await responseRepository.claimDispatch({
+      champion: testChampion,
+      compiledContextId: asCompiledContextId(compiled.id),
+      generationCommandId: turn.generation.commandId,
+      modelRunAttemptId: turn.generation.attemptId,
+      now: clock(),
+    });
+    expect(claim).toMatchObject({
+      category: "policy_blocked",
+      outcome: "blocked",
+    });
+  });
+
+  it("rejects the Provider result when governance is revoked after dispatch", async () => {
+    const { compiled, turn } = await prepareRecentTurn();
+    expect(
+      (
+        await responseRepository.claimDispatch({
+          champion: testChampion,
+          compiledContextId: asCompiledContextId(compiled.id),
+          generationCommandId: turn.generation.commandId,
+          modelRunAttemptId: turn.generation.attemptId,
+          now: clock(),
+        })
+      ).outcome,
+    ).toBe("permitted");
+    await governanceRepository().revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+    const accepted = await responseRepository.recordProviderCompletion({
+      completion: {
+        costMicros: 0,
+        finishReason: "completed",
+        inputTokens: 4,
+        modelSnapshot: "gpt-5.4",
+        outputTokens: 3,
+        providerRequestId: "governance-revoked-result",
+        type: "completed",
+      },
+      modelRunAttemptId: turn.generation.attemptId,
+      now: clock(),
+    });
+    expect(accepted).toBe(false);
+  });
+
+  it("rejects the authoritative Assistant when governance is revoked after the result", async () => {
+    const { compiled, turn } = await prepareRecentTurn();
+    expect(
+      (
+        await responseRepository.claimDispatch({
+          champion: testChampion,
+          compiledContextId: asCompiledContextId(compiled.id),
+          generationCommandId: turn.generation.commandId,
+          modelRunAttemptId: turn.generation.attemptId,
+          now: clock(),
+        })
+      ).outcome,
+    ).toBe("permitted");
+    expect(
+      await responseRepository.recordProviderCompletion({
+        completion: {
+          costMicros: 0,
+          finishReason: "completed",
+          inputTokens: 4,
+          modelSnapshot: "gpt-5.4",
+          outputTokens: 3,
+          providerRequestId: "governance-revoked-commit",
+          type: "completed",
+        },
+        modelRunAttemptId: turn.generation.attemptId,
+        now: clock(),
+      }),
+    ).toBe(true);
+    await governanceRepository().revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+    const rejected = await responseRepository.commitCompleteResponse({
+      completedAt: clock(),
+      generationCommandId: turn.generation.commandId,
+      metadata: {
+        costMicros: 0,
+        finishReason: "completed",
+        inputTokens: 4,
+        modelSnapshot: "gpt-5.4",
+        outputTokens: 3,
+        providerRequestId: "governance-revoked-commit",
+      },
+      modelRunAttemptId: turn.generation.attemptId,
+      text: "好的。",
+      userId: OWNER,
+    });
+    expect(rejected).toEqual({ outcome: "fence_rejected" });
+  });
+
+  it("serializes a concurrent disable against an in-flight shared governance lock", async () => {
+    const repository = governanceRepository();
+    const active = await repository.findActivePolicy();
+    const holder = await database.pool.connect();
+    try {
+      await holder.query("BEGIN");
+      await holder.query(
+        `SELECT 1 FROM recent_context_policies
+         WHERE policy_version = $1 AND status = 'active'
+         FOR SHARE`,
+        [active!.policyVersion],
+      );
+      let settled = false;
+      const disable = repository
+        .revokeActivePolicy({ now: clock(), revokedBy: String(OWNER) })
+        .then((result) => {
+          settled = true;
+          return result;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      // The disable must wait on the shared lock the in-flight selection holds.
+      expect(settled).toBe(false);
+      await holder.query("COMMIT");
+      expect((await disable).outcome).toBe("revoked");
+    } finally {
+      holder.release();
+    }
+  });
+
+  it("reports the frozen recent selection content-free through the Inspector read model", async () => {
+    const yesterdayRevision = await submitTurn("昨天我去公园跑步，心情很好。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    counter += 1;
+    const turn = await conversationService.submit(OWNER, {
+      clientEventId: `trust-inspector-event-${counter}`,
+      clientTurnId: `trust-inspector-turn-${counter}`,
+      locale: "zh-CN",
+      text: "今天我们聊点别的。",
+      timezone: "Asia/Shanghai",
+    });
+    await responseRepository.claimResponseExecution({
+      generationCommandId: turn.generation.commandId,
+      modelRunAttemptId: turn.generation.attemptId,
+      userId: OWNER,
+    });
+    const compiled =
+      await createContextCompilerWithProductionRecentSource().compile({
+        generationCommandId: turn.generation.commandId,
+        interactionTurnId: turn.turn.id,
+        userId: OWNER,
+      });
+    expect(
+      (
+        await responseRepository.claimDispatch({
+          champion: testChampion,
+          compiledContextId: asCompiledContextId(compiled.id),
+          generationCommandId: turn.generation.commandId,
+          modelRunAttemptId: turn.generation.attemptId,
+          now: clock(),
+        })
+      ).outcome,
+    ).toBe("permitted");
+
+    const metadata = await new PostgresInternalInspectionRepository(
+      database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(turn.generation.commandId),
+      userId: OWNER,
+    });
+    const recent = metadata!.compiledContext!.recentContext;
+    expect(recent).not.toBeNull();
+    expect(recent!.authorizationStatus).toBe("active");
+    expect(recent!.authorizationPolicyVersion).toBe(
+      ACTIVE_RECENT_CONTEXT_POLICY_VERSION,
+    );
+    expect(
+      recent!.selected.some(
+        (selected) => selected.revisionId === yesterdayRevision,
+      ),
+    ).toBe(true);
+    expect(recent!.readLatencyMs).toBeGreaterThanOrEqual(0);
+    // Content-free: the Inspector renders the frozen metadata, never a
+    // re-read of the previous session's message body.
+    expect(JSON.stringify(recent)).not.toContain("昨天我去公园跑步");
+
+    const recentRef = metadata!.compiledContext!.referencedEvents.find(
+      (event) =>
+        event.section === RECENT_CONTEXT_SECTION_KEY &&
+        event.revisionId === yesterdayRevision,
+    );
+    expect(recentRef).toMatchObject({
+      dailySessionId: expect.any(String),
+      selectionReason: expect.any(String),
+    });
+  });
+
+  it("keeps the governance switch independent from G1 policies and content-free", async () => {
+    const before = await database.pool.query(
+      `SELECT policy_version, status, role, provider
+       FROM provider_egress_policy_versions
+       ORDER BY policy_version, role, provider`,
+    );
+    await governanceRepository().revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+    const after = await database.pool.query(
+      `SELECT policy_version, status, role, provider
+       FROM provider_egress_policy_versions
+       ORDER BY policy_version, role, provider`,
+    );
+    expect(after.rows).toEqual(before.rows);
+
+    // Content-free global governance: no owner column, no message body column.
+    const columns = await database.pool.query<{ column_name: string }>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'recent_context_policies'`,
+    );
+    const names = columns.rows.map((row) => row.column_name);
+    expect(names).not.toContain("user_id");
+    expect(names).not.toContain("canonical_text");
+    expect(names).not.toContain("content");
+  });
+
+  it("selects no recent content when the active governance row names a different runtime", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    // Active row, but its compiler identity does not match the wired runtime.
+    await database.pool.query(
+      `UPDATE recent_context_policies
+       SET compiler_version = 'context-compiler:v1'
+       WHERE status = 'active'`,
+    );
+    const { replyText } = await respond(
+      "今天想聊聊别的。",
+      { reply: "好啊，我在听。" },
+      createContextCompilerWithProductionRecentSource(),
+    );
+    expect(replyText).toBe("好啊，我在听。");
+    const compiledId = await loadLatestCompiledContextId();
+    expect(
+      (await sectionsOf(compiledId)).some(
+        (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+      ),
+    ).toBe(false);
+  });
+
+  it("selects no recent content and still responds when governance was never enabled", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    await database.pool.query("DELETE FROM recent_context_policies");
+    const { replyText } = await respond(
+      "今天想聊聊别的。",
+      { reply: "好啊，我在听。" },
+      createContextCompilerWithProductionRecentSource(),
+    );
+    expect(replyText).toBe("好啊，我在听。");
+    const compiledId = await loadLatestCompiledContextId();
+    expect(
+      (await sectionsOf(compiledId)).some(
+        (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not block the original response for a zero-selected degraded recent section after revoke", async () => {
+    const { compiled, turn } = await prepareTurnWithCompiler(
+      createCompilerWithFailingRecentSource(),
+    );
+    expect(
+      (await sectionsOf(compiled.id)).some(
+        (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+      ),
+    ).toBe(true);
+    const refs = await database.pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM compiled_context_revision_refs
+       WHERE compiled_context_id = $1
+         AND section = 'recent_conversation_context'`,
+      [compiled.id],
+    );
+    expect(Number(refs.rows[0]!.count)).toBe(0);
+    const versions = await database.pool.query<{
+      policy_versions: Record<string, unknown>;
+    }>(
+      `SELECT policy_versions FROM compiled_contexts
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, compiled.id],
+    );
+    expect(
+      versions.rows[0]!.policy_versions["recentContextPolicyVersion"],
+    ).toBeUndefined();
+
+    await governanceRepository().revokeActivePolicy({
+      now: clock(),
+      revokedBy: String(OWNER),
+    });
+    const claim = await responseRepository.claimDispatch({
+      champion: testChampion,
+      compiledContextId: asCompiledContextId(compiled.id),
+      generationCommandId: turn.generation.commandId,
+      modelRunAttemptId: turn.generation.attemptId,
+      now: clock(),
+    });
+    expect(claim.outcome).toBe("permitted");
+  });
+
+  it("renders an explicit unreadable state for a malformed frozen recent reference", async () => {
+    const { compiled, turn } = await prepareRecentTurn();
+    await responseRepository.claimDispatch({
+      champion: testChampion,
+      compiledContextId: asCompiledContextId(compiled.id),
+      generationCommandId: turn.generation.commandId,
+      modelRunAttemptId: turn.generation.attemptId,
+      now: clock(),
+    });
+    const tampered = (await sectionsOf(compiled.id)).map((section) =>
+      section.key === RECENT_CONTEXT_SECTION_KEY
+        ? { ...section, reference: 'recent-context:{"version":99}' }
+        : section,
+    );
+    await database.pool.query(
+      `UPDATE compiled_contexts SET sections = $3::jsonb
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, compiled.id, JSON.stringify(tampered)],
+    );
+    const metadata = await new PostgresInternalInspectionRepository(
+      database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(turn.generation.commandId),
+      userId: OWNER,
+    });
+    const recent = metadata!.compiledContext!.recentContext;
+    expect(recent).not.toBeNull();
+    expect(recent!.unreadableReason).not.toBeNull();
+    expect(recent!.selected).toHaveLength(0);
+    expect(JSON.stringify(recent)).not.toContain("我住在上海");
+  });
+
+  it("serializes concurrent enable and disable so at most one active version survives", async () => {
+    const repository = governanceRepository();
+    await database.pool.query("DELETE FROM recent_context_policies");
+    await Promise.allSettled([
+      repository.insertActivePolicy({
+        budgetTokens: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+        changedBy: String(OWNER),
+        compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+        maxCandidateBytes:
+          RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes,
+        maxCandidateRows:
+          RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows,
+        maxSingleEventTokens:
+          RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens,
+        now: clock(),
+        readTimeoutMs: RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs,
+        selectionPolicyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+        selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+      }),
+      repository.revokeActivePolicy({
+        now: clock(),
+        revokedBy: String(OWNER),
+      }),
+    ]);
+    const activeCount = await database.pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM recent_context_policies
+       WHERE status = 'active'`,
+    );
+    expect(Number(activeCount.rows[0]!.count)).toBeLessThanOrEqual(1);
+    const state = await repository.findEffectiveState();
+    expect(state.enabled).toBe(state.active !== null);
   });
 });

@@ -352,6 +352,22 @@ function InspectionReport(props: { inspection: ContextInspectorPayload }) {
 
       <ContextDisclosure
         status={
+          compiledContext.recentContext === null
+            ? "Not included"
+            : compiledContext.recentContext.unreadableReason !== null
+              ? "Unreadable"
+              : `${compiledContext.recentContext.counts.selectedCount} recent refs · ${
+                  compiledContext.recentContext.authorizationStatus
+                }`
+        }
+        subtitle="Frozen cross-session recent-source selection, per-ref provenance and the independent governance authorization. Content-free: it never renders message bodies and never re-reads history."
+        title="Recent conversation context"
+      >
+        <RecentContextBody inspection={props.inspection} />
+      </ContextDisclosure>
+
+      <ContextDisclosure
+        status={
           retrieval.state === "none"
             ? "No retrieval run"
             : retrieval.state === "degraded"
@@ -825,6 +841,234 @@ function RetrievalBody(props: { inspection: ContextInspectorPayload }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function RecentContextBody(props: { inspection: ContextInspectorPayload }) {
+  const recent = props.inspection.compiledContext.recentContext;
+  if (!recent) {
+    return (
+      <p className="inspectorMuted">
+        This Context carried no recent-conversation background section. The
+        original conversation was compiled without cross-session recent content.
+      </p>
+    );
+  }
+  const authorizationLabel =
+    recent.authorizationStatus === "active"
+      ? "Active"
+      : recent.authorizationStatus === "revoked"
+        ? "Revoked"
+        : recent.authorizationStatus === "absent"
+          ? "No governance identity frozen"
+          : "Unrecognized governance identity";
+  return (
+    <div className="contextRetrieval">
+      <p className="inspectorMuted">
+        Frozen, content-free selection metadata. Message bodies are never shown
+        here; this is the recorded selection, not a re-read of history.
+      </p>
+      {recent.unreadableReason ? (
+        <div className="inspectorDegradation isDegraded" role="status">
+          The frozen recent-context reference could not be decoded
+          ({recent.unreadableReason}). The selection is shown as unreadable
+          rather than guessed.
+        </div>
+      ) : null}
+      <dl className="inspectorFacts">
+        <InspectorFact label="Authorization">
+          <span
+            className={`contextPosture`}
+            data-posture-state={recent.authorizationStatus}
+          >
+            {authorizationLabel}
+          </span>
+          {recent.authorizationPolicyVersion ? (
+            <>
+              {" "}
+              <code>{recent.authorizationPolicyVersion}</code>
+            </>
+          ) : null}
+        </InspectorFact>
+        <InspectorFact label="Reference version">
+          {recent.referenceVersion}
+        </InspectorFact>
+        <InspectorFact label="Selection policy">
+          <code>{recent.policyVersion || "—"}</code>
+        </InspectorFact>
+        <InspectorFact label="Selector">
+          <code>{recent.selectorVersion || "—"}</code>
+        </InspectorFact>
+        <InspectorFact label="Timezone">
+          {recent.timezone || "—"}
+        </InspectorFact>
+        <InspectorFact label="Window">
+          {recent.windowStartLocalDate || "—"} →{" "}
+          {recent.windowEndLocalDate || "—"} ({recent.windowDays} days)
+        </InspectorFact>
+        <InspectorFact label="Cutoff">
+          {recent.cutoff.currentInputRevisionId ? (
+            <>
+              <code>{recent.cutoff.currentInputRevisionId}</code>
+              {recent.cutoff.currentInputSequence !== null
+                ? ` seq ${recent.cutoff.currentInputSequence}`
+                : ""}
+              {recent.cutoff.expressedAt
+                ? ` · ${recent.cutoff.expressedAt}`
+                : ""}
+            </>
+          ) : (
+            "—"
+          )}
+        </InspectorFact>
+        <InspectorFact label="Budget">
+          {recent.budgetTokens.toLocaleString()} tokens ·{" "}
+          {recent.budgets.maxCandidateRows.toLocaleString()} rows ·{" "}
+          {recent.budgets.maxCandidateBytes.toLocaleString()} bytes ·{" "}
+          {recent.budgets.readTimeoutMs.toLocaleString()} ms read timeout
+        </InspectorFact>
+        <InspectorFact label="Read latency">
+          {recent.readLatencyMs === null
+            ? "Not recorded"
+            : `${recent.readLatencyMs.toLocaleString()} ms`}
+        </InspectorFact>
+        <InspectorFact label="Counts">
+          {recent.counts.selectedCount} selected of{" "}
+          {recent.counts.candidateRows} candidate rows ·{" "}
+          {recent.counts.candidateBytes.toLocaleString()} bytes
+          {recent.counts.truncated ? " · truncated" : ""}
+        </InspectorFact>
+        <InspectorFact label="Source read">
+          {recent.failure
+            ? `${recent.failure.code}${recent.failure.detail ? ` (${recent.failure.detail})` : ""}`
+            : "Completed"}
+        </InspectorFact>
+      </dl>
+
+      <div className="inspectorTableWrap">
+        <table className="inspectorTable">
+          <caption>
+            Frozen recent refs: order, provenance and selection reason
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Order</th>
+              <th scope="col">Revision</th>
+              <th scope="col">Actor</th>
+              <th scope="col">Daily session</th>
+              <th scope="col">Expressed</th>
+              <th scope="col">Occurred</th>
+              <th scope="col">Reason</th>
+              <th scope="col">Est. tokens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recent.selected.length === 0 ? (
+              <tr>
+                <td colSpan={8}>
+                  No recent event was selected for this Context.
+                </td>
+              </tr>
+            ) : (
+              recent.selected.map((ref) => (
+                <tr key={`${ref.selectionOrder}-${ref.revisionId}`}>
+                  <th scope="row">{ref.selectionOrder}</th>
+                  <td>
+                    <code className="inspectorId">{ref.revisionId}</code>
+                  </td>
+                  <td>{ref.actor}</td>
+                  <td>
+                    <code className="inspectorId">{ref.dailySessionId}</code>
+                  </td>
+                  <td>{ref.expressedAt}</td>
+                  <td>{ref.occurredAt ?? "—"}</td>
+                  <td>{ref.selectionReason}</td>
+                  <td>{formatTokens(ref.estimatedTokens)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Omissions</h3>
+      {recent.omitted.length === 0 ? (
+        <p className="inspectorMuted">
+          No candidate was omitted from the recent window.
+        </p>
+      ) : (
+        <div className="inspectorTableWrap">
+          <table className="inspectorTable">
+            <caption>
+              Candidates that were not selected, with the recorded reason
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Revision</th>
+                <th scope="col">Control</th>
+                <th scope="col">Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.omitted.map((omission, index) => (
+                <tr key={`${omission.revisionId ?? "none"}-${index}`}>
+                  <td>
+                    {omission.revisionId ? (
+                      <code className="inspectorId">
+                        {omission.revisionId}
+                      </code>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>
+                    {omission.controlId ? (
+                      <code className="inspectorId">{omission.controlId}</code>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>{humanizeDiagnosticCode(omission.reason)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <h3>Per-date coverage</h3>
+      {recent.perDate.length === 0 ? (
+        <p className="inspectorMuted">
+          No per-date coverage was recorded for the recent window.
+        </p>
+      ) : (
+        <div className="inspectorTableWrap">
+          <table className="inspectorTable">
+            <caption>
+              Local-date coverage of the frozen seven-day window
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Local date</th>
+                <th scope="col">Candidate rows</th>
+                <th scope="col">Read bounded</th>
+                <th scope="col">Empty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.perDate.map((day) => (
+                <tr key={day.localDate}>
+                  <th scope="row">{day.localDate}</th>
+                  <td>{day.candidateRows}</td>
+                  <td>{day.readBounded ? "yes" : "no"}</td>
+                  <td>{day.empty ? "yes" : "no"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
