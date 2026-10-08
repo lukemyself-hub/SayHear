@@ -212,9 +212,9 @@ export function MessageSurface(props: {
         <div className="messageMeta">
           {showsContextIcon ? (
             <a
-              aria-label="查看生成这段回复的 Context"
+              aria-label="查看 context"
               className="contextInspectIcon"
-              data-tooltip="查看生成这段回复的 Context"
+              data-tooltip="查看 context"
               href={`/internal/context-inspector?generation_command_id=${encodeURIComponent(props.generationCommandId ?? "")}`}
             >
               <svg
