@@ -895,24 +895,27 @@ Shadow、runtime A/B 或永久 feature flag：
 2. Open Loop 与 Proactive Memory Follow-up 完整 policy bundle；
 3. Bio，且 `narrative.validate` 危险错误验收与 Bio 自然度均已通过。
 
-每个阶段的 release manifest 冻结准确 main commit、schema / migration、Prompt、
+每个阶段的 release manifest 冻结其能力验收时的 acceptance commit、schema / migration、Prompt、
 Schema、policy、model config、provider / model snapshot、bundle、fixture、抽样与盲化 seed、
 命令、artifact hash、确定性门禁与人工裁定结果。正式验收只用固定合成
 数据；真实 Internal Owner 数据只作上线后观察，不是 release gate。历史
 Conversation 不 backfill；真实数据不自动进入 Replay 或验收 artifact。
 
-Release evidence 在准确 main commit 确定后生成，不作为该 commit 的 tracked
+部署身份、运行配置授权与历史能力验收分离（[ADR-0148](../adr/0148-deployment-identity-config-authorization-and-acceptance-are-separate.md)）。
+Release evidence 在 acceptance commit 确定后生成，不作为该 commit 的 tracked
 application files。Manifest build、独立 verify 与数据库 activation 都必须从 operator
-checkout 校验实际 artifact bytes 和 hash；production runtime 校验自哈希 active manifest
-与 deployment commit，并在每次 G1 写入时由数据库 active rollout pins 复核同一 manifest
-fingerprint。部署不为满足 runtime 文件读取而混入 commit 之外的 evidence 文件。
+checkout 校验实际 artifact bytes 和 hash。production runtime 校验自哈希 active manifest
+的 schema contract、完整 G1 角色配置与 Provider Egress policy；部署 commit 由
+release-identity 端点与 promotion 记录如实记录，不再要求等于 acceptance commit。每次
+G1 写入由数据库 active rollout pins 复核该角色的不可变配置逐字段一致，不要求 pin 绑定
+完整 manifest fingerprint。同配置的新 UI 或普通服务端 commit 复用已接受的 active
+manifest 与 pins，不重跑完整证据，也不重绑未变角色。部署不为满足 runtime 文件读取而
+混入 commit 之外的 evidence 文件。
 
-每个准确 release manifest 至少完成一次覆盖 Purge Surface Registry 全部
-`delete` / `content_purge` surface 的 seeded-canary purge，以及一次“备份快照早于
-purge”的 restore drill。Episode、Open Loop、Reflection、Bio、Proactive、Candidate、
-Workflow 与 Provider result 的在途竞态均以受控方式覆盖 purge 先提交与结果先
-返回两种顺序。Registry entry、Schema、clear / verify handler 或外部 integration 改变
-即使证据失效并要求整套重跑；不用任意重复相同确定性运行凑次数。
+完整 Purge / restore drill 的触发条件是 Purge Surface Registry entry、Schema、
+clear / verify handler 或外部 integration 的变化，而不是每个 release manifest。新能力启用、
+重大整体合同变化或 External MVP 发布才要求整体能力验收；历史已通过且未受影响的证据不因
+新部署失效或被改标成新 commit 实测。
 
 回滚先停止受影响阶段的新 command admission 并撤销 active rollout pins。任何冻结
 旧 pins 的在途结果均不得成为 current、进入 Context 或展示。Typed rows 保留为
@@ -925,9 +928,10 @@ Proactive suppression 与 use 历史跨回滚保持有效。新 Schema / policy 
 Timeout、429 / 5xx、生成成功率、延迟、token 和成本只记账，不自动回滚；这些指标
 只能引发 Internal Owner 人工判断能力是否已不可用。
 
-Core Flow 1A.3b 只在三个阶段均已切换，准确 main commit 与生产 pins 的全量
-回归、Continuation 体验、Bio 自然度与 fidelity、确定性 Internal correctness 全部
-通过，且没有未解决的已确认硬失败时才算接受。任何一组失败都不得被其他
+Core Flow 1A.3b 在当前 G1 范围内（[ADR-0141](../adr/0141-g1-only-release-after-g2-retirement.md)）只在其
+完整角色配置、schema contract 与 provider / policy 合同被接受，且已接受的能力证据
+与确定性 Internal correctness 没有未解决的已确认硬失败时才算接受。部署到新的
+commit 不使已接受的能力失效，也不要求重跑旧完整证据；任何一组失败都不得被其他
 体验结果、延迟、成本、token 或安全降级数据抵消。
 
 ### Core Flow 1A.4：Replay

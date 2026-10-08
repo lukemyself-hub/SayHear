@@ -58,6 +58,160 @@ systemDescribe("G1 release activation persistence", () => {
     database = undefined;
   });
 
+  it("accepts the same immutable configuration under a later accepted manifest without rebinding pins", async () => {
+    const repository = new PostgresModelRoleCommandRepository(
+      database!.pool,
+      undefined,
+      manifestFingerprint,
+    );
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+
+    const selectPins = `
+      SELECT role, rollout_pin, config_version, provider_policy_version,
+             status, release_fingerprint
+      FROM model_role_rollout_pins
+      ORDER BY role`;
+    const before = await database!.pool.query(selectPins);
+
+    // ADR-0148: a new UI or server commit with unchanged configuration reuses
+    // the accepted pins. The deployment/report fingerprint is separate from the
+    // per-role configuration authorization.
+    const laterManifestFingerprint = `sha256:${"e".repeat(64)}`;
+    const laterRepository = new PostgresModelRoleCommandRepository(
+      database!.pool,
+      undefined,
+      laterManifestFingerprint,
+    );
+    await expect(
+      laterRepository.verifyActiveG1Release({ configurations }),
+    ).resolves.toBeUndefined();
+
+    const after = await database!.pool.query(selectPins);
+    expect(after.rows).toEqual(before.rows);
+  });
+
+  it("re-running activation with a later accepted manifest keeps the original pin identity", async () => {
+    const repository = new PostgresModelRoleCommandRepository(database!.pool);
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+
+    const laterManifestFingerprint = `sha256:${"e".repeat(64)}`;
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint: laterManifestFingerprint,
+        now: new Date("2026-09-13T10:00:00.000Z"),
+      }),
+    ).resolves.toBe(4);
+
+    const pins = await database!.pool.query<{
+      role: string;
+      release_fingerprint: string | null;
+    }>(
+      `SELECT role, release_fingerprint
+       FROM model_role_rollout_pins
+       WHERE status = 'active'
+       ORDER BY role`,
+    );
+    expect(pins.rows).toEqual(
+      [...ONE_A_3B_G1_ENABLED_ROLES]
+        .sort((left, right) => left.localeCompare(right))
+        .map((role) => ({ role, release_fingerprint: manifestFingerprint })),
+    );
+  });
+
+  it("rejects a changed role configuration even under a valid accepted manifest", async () => {
+    const repository = new PostgresModelRoleCommandRepository(
+      database!.pool,
+      undefined,
+      manifestFingerprint,
+    );
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+
+    const changed = configurations.map((configuration) =>
+      configuration.role === "episode.build"
+        ? { ...configuration, promptVersion: `${configuration.role}-prompt:v2` }
+        : configuration,
+    );
+    await expect(
+      repository.verifyActiveG1Release({ configurations: changed }),
+    ).rejects.toThrow("does not match the release manifest");
+  });
+
+  it("rejects an active pin that carries no acceptance binding", async () => {
+    await expect(
+      new PostgresModelRoleCommandRepository(database!.pool).bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+    // A production repository is constructed with the accepted release
+    // identity; an active pin without any acceptance binding is not authorized.
+    await database!.pool.query(
+      `UPDATE model_role_rollout_pins SET release_fingerprint = NULL
+       WHERE status = 'active'`,
+    );
+    await expect(
+      new PostgresModelRoleCommandRepository(
+        database!.pool,
+        undefined,
+        manifestFingerprint,
+      ).verifyActiveG1Release({ configurations }),
+    ).rejects.toThrow("does not match the release manifest");
+  });
+
+  it("rejects an expired (revoked) authorization before any G1 commit", async () => {
+    const repository = new PostgresModelRoleCommandRepository(
+      database!.pool,
+      undefined,
+      manifestFingerprint,
+    );
+    await expect(
+      repository.bindActiveG1Release({
+        configurations,
+        manifestFingerprint,
+        now: activatedAt,
+      }),
+    ).resolves.toBe(4);
+
+    await expect(
+      new PostgresModelRoleCommandRepository(
+        database!.pool,
+        undefined,
+        manifestFingerprint,
+      ).revokeActiveRolloutPins({
+        now: new Date("2026-09-12T10:05:00.000Z"),
+        roles: ONE_A_3B_G1_ENABLED_ROLES,
+        configurations,
+        manifestFingerprint,
+      }),
+    ).resolves.toBe(4);
+
+    // Revocation removes the active pins; the same complete configuration can
+    // no longer admit or commit a G1 result until it is authorized again.
+    await expect(
+      repository.verifyActiveG1Release({ configurations }),
+    ).rejects.toThrow("not the complete four-role set");
+  });
+
   it("preserves old v2 rows while activating versioned new configurations and pins", async () => {
     const repository = new PostgresModelRoleCommandRepository(database!.pool);
 

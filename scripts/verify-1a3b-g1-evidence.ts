@@ -42,8 +42,16 @@ export const repositoryRoot = resolve(
   "..",
 );
 
-/** Refuse release verification or database pin changes from another checkout. */
-export function assertRepositoryCommit(
+/**
+ * Refuse release verification or database pin changes from a checkout that
+ * does not contain the accepted commit.
+ *
+ * ADR-0148: a new UI or server commit with unchanged G1 configuration reuses
+ * the accepted manifest and pins. The operator may therefore verify or roll
+ * back from a later commit, as long as the manifest's acceptance commit is in
+ * the current checkout history. The accepted commit itself still passes.
+ */
+export function assertRepositoryIncludesCommit(
   expectedCommit: string,
   root = repositoryRoot,
 ): void {
@@ -59,12 +67,29 @@ export function assertRepositoryCommit(
       `Unable to verify the release checkout commit: ${error instanceof Error ? error.message : "git rev-parse failed"}`,
     );
   }
-  if (actualCommit !== expectedCommit) {
+  if (actualCommit === expectedCommit) return;
+  let containsAcceptedCommit = false;
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", expectedCommit, "HEAD"], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    containsAcceptedCommit = true;
+  } catch {
+    containsAcceptedCommit = false;
+  }
+  if (!containsAcceptedCommit) {
     throw new Error(
-      `Release manifest targets commit ${expectedCommit}, but the current checkout is ${actualCommit}.`,
+      `Release manifest targets commit ${expectedCommit}, which is not contained in the current checkout ${actualCommit}.`,
     );
   }
 }
+
+/**
+ * @deprecated Use {@link assertRepositoryIncludesCommit}. Kept so existing
+ * release tooling keeps one exact implementation.
+ */
+export const assertRepositoryCommit = assertRepositoryIncludesCommit;
 
 function sha256Bytes(value: Uint8Array): string {
   return createHash("sha256").update(value).digest("hex");

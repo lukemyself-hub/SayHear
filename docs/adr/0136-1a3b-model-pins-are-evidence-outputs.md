@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-09-07
 ---
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where it concerns re-freezing the whole manifest when one role changes; per-role honesty is retained.
 
 # 1A.3b model pins are evidence outputs
 

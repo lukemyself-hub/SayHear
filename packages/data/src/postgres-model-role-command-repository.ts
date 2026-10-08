@@ -232,12 +232,18 @@ function rolloutMatchesConfiguration(
   releaseFingerprint?: string,
 ): boolean {
   return (
+    // ADR-0148: runtime authorization is the exact immutable role
+    // configuration joined to the active pin, Provider Egress policy, role
+    // policy, freshness, fallback, retry and parameter snapshot — not the
+    // deployment's acceptance-manifest fingerprint. A production repository is
+    // still constructed with the accepted release identity, so an active pin
+    // must carry an acceptance binding, but that binding may predate the
+    // current deployment. The value itself is historical and is not compared.
+    (releaseFingerprint === undefined || row.release_fingerprint !== null) &&
     row.role === role &&
     row.enabled &&
     row.policy_status === "active" &&
     row.policy_role === role &&
-    (releaseFingerprint === undefined ||
-      row.release_fingerprint === releaseFingerprint) &&
     row.policy_provider === configuration.provider &&
     row.policy_model_config_version === configuration.configVersion &&
     row.config_version === configuration.configVersion &&
@@ -820,7 +826,16 @@ export class PostgresModelRoleCommandRepository
     }
   }
 
-  /** Provision and activate the exact manifest role set before cutover. */
+  /**
+   * Provision and activate the exact manifest role set before cutover.
+   *
+   * ADR-0148 keeps the complete four-role set as an activation precondition.
+   * A later ticket that upgrades, revokes, or rolls back a single role should
+   * extend this seam with a scoped transition rather than weakening the
+   * complete-set check: an unchanged role keeps its existing pin and
+   * historical acceptance binding, while only the affected role receives a new
+   * immutable configuration version and pin.
+   */
   public async bindActiveG1Release(input: Readonly<{
     configurations: readonly ModelRoleConfigurationSnapshot[];
     manifestFingerprint: string;
@@ -932,19 +947,24 @@ export class PostgresModelRoleCommandRepository
           pin.rows[0] &&
           (pin.rows[0].config_version !== configuration.configVersion ||
             pin.rows[0].provider_policy_version !==
-              configuration.providerPolicyVersion ||
-            (pin.rows[0].release_fingerprint !== null &&
-              pin.rows[0].release_fingerprint !== input.manifestFingerprint))
+              configuration.providerPolicyVersion)
         ) {
           throw new Error(
             `Immutable G1 rollout pin for ${configuration.role} conflicts with the release manifest.`,
           );
         }
         if (pin.rows[0]) {
+          // ADR-0148: re-activating an unchanged configuration under a later
+          // accepted manifest must not rewrite the pin's historical acceptance
+          // binding, and a different deployment/report fingerprint must not
+          // force a rebind. COALESCE preserves the original binding; a legacy
+          // revoked pin with no binding still receives one.
           await client.query(
             `UPDATE model_role_rollout_pins
              SET status = 'active', activated_at = $1, revoked_at = NULL,
-                 release_fingerprint = $2
+                 release_fingerprint = COALESCE(
+                   model_role_rollout_pins.release_fingerprint, $2
+                 )
              WHERE role = $3 AND rollout_pin = $4`,
             [
               input.now,
@@ -1036,14 +1056,17 @@ export class PostgresModelRoleCommandRepository
     try {
       await client.query("BEGIN");
       await this.assertActiveG1Release(client, input.configurations);
+      // ADR-0148: revoke by role and status. `assertActiveG1Release` already
+      // proved that the complete four-role active set matches these exact
+      // configurations, so the historical acceptance fingerprint must not
+      // decide which pins a rollback can remove.
       const result = await client.query<{ role: string }>(
         `UPDATE model_role_rollout_pins
          SET status = 'revoked', revoked_at = $1
          WHERE status = 'active'
            AND role = ANY($2::text[])
-           AND release_fingerprint = $3
          RETURNING role`,
-        [input.now, [...input.roles], input.manifestFingerprint],
+        [input.now, [...input.roles]],
       );
       if (result.rows.length !== input.roles.length) {
         throw new Error(

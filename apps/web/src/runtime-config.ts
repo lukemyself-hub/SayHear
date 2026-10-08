@@ -63,8 +63,14 @@ function g1StageFullyRequested(environment: Environment): boolean {
  * Resolve and verify the exact G1 release artifact. An absent artifact keeps
  * the stage closed. The build, verification, and activation commands verify
  * evidence files before binding database pins; deployed runtime verifies the
- * content-addressed manifest and exact deployment commit without requiring
+ * content-addressed manifest and configuration authorization without requiring
  * post-commit release artifacts in the application checkout.
+ *
+ * Deployment identity, runtime configuration authorization, and historical
+ * capability acceptance are separate (ADR-0148). The deployed commit SHA is
+ * still required and recorded, but it is no longer required to equal the
+ * manifest's acceptance commit: a new UI or server commit with unchanged G1
+ * configuration reuses the accepted manifest and pins.
  */
 export function resolveOneA3bG1ReleaseManifest(
   environment: Environment,
@@ -115,11 +121,9 @@ export function resolveOneA3bG1ReleaseManifest(
       "SAYHEAR_DEPLOYED_GIT_COMMIT_SHA or VERCEL_GIT_COMMIT_SHA is required when the G1 write switches are enabled.",
     );
   }
-  if (deployedCommit && manifest.gitCommit !== deployedCommit) {
-    throw new Error(
-      "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST gitCommit does not match the deployed commit.",
-    );
-  }
+  // ADR-0148: the deployed SHA is recorded as deployment identity, not an
+  // equality condition for capability authorization. A same-configuration
+  // commit keeps the accepted manifest and pins.
   if (g1StageRequested(environment) && manifest.status !== "active") {
     throw new Error(
       "SAYHEAR_1A_3B_G1_RELEASE_MANIFEST must be active before a G1 write switch can open.",

@@ -12,7 +12,7 @@ import {
 } from "@sayhear/data";
 
 import {
-  assertRepositoryCommit,
+  assertRepositoryIncludesCommit,
   verifyG1EvidenceFiles,
 } from "./verify-1a3b-g1-evidence";
 
@@ -71,7 +71,7 @@ async function main(): Promise<void> {
   const manifest = readManifest(
     requiredManifestPath(process.argv.slice(2)),
   );
-  assertRepositoryCommit(manifest.gitCommit, repositoryRoot);
+  assertRepositoryIncludesCommit(manifest.gitCommit, repositoryRoot);
   await verifyG1EvidenceFiles(
     {
       gitCommit: manifest.gitCommit,

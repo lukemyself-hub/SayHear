@@ -6,7 +6,7 @@ import {
   type OneA3bG1ReleaseManifest,
 } from "@sayhear/application";
 import {
-  assertRepositoryCommit,
+  assertRepositoryIncludesCommit,
   verifyG1EvidenceFiles,
 } from "./verify-1a3b-g1-evidence";
 
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     throw new Error(`G1 release manifest verification failed: ${verification.mismatches.join("; ")}`);
   }
   const verifiedManifest = manifest as OneA3bG1ReleaseManifest;
-  assertRepositoryCommit(verifiedManifest.gitCommit, repositoryRoot);
+  assertRepositoryIncludesCommit(verifiedManifest.gitCommit, repositoryRoot);
   await verifyG1EvidenceFiles({
     gitCommit: verifiedManifest.gitCommit,
     fixture: verifiedManifest.fixture,

@@ -3,6 +3,7 @@ status: accepted
 date: 2026-09-07
 ---
 > Current release scope: [ADR-0141](0141-g1-only-release-after-g2-retirement.md) supersedes this decision where it concerns G2/G3 or the three-stage rollout. Historical rationale follows.
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where it concerns the exact main commit and full regression as a per-deployment requirement. Hard-failure rules stay in force.
 
 
 # 1A.3b acceptance does not grandfather hard failures

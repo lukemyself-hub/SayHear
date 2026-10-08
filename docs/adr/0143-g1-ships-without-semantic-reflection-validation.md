@@ -3,6 +3,7 @@ status: accepted
 date: 2026-09-30
 supersedes: [0137, 0139]
 ---
+> Revised by [ADR-0148](0148-deployment-identity-config-authorization-and-acceptance-are-separate.md) where "保留的拦截能力" lists the pin→manifest binding as a whole-manifest fingerprint; the completion gate and the other runtime fences stay in force.
 
 # G1 ships without semantic Reflection validation; the gold set is built after launch
 
