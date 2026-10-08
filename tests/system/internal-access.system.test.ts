@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createInternalAccessHandler } from "../../apps/web/src/internal-access-handler";
 import {
@@ -139,6 +139,12 @@ function createTestHarness(options: {
     repository: options.repository,
   });
 }
+
+// Every case below drives a real `next dev` server over HTTP. The default 20s
+// per-test budget is too tight on a shared CI runner (the ten-submission case
+// was observed at 20.3s), while `test:ci` already raises the hook budget. Keep
+// the bound finite so a hung server still fails the suite.
+vi.setConfig({ testTimeout: 60_000 });
 
 describe("Authenticated Internal Text Conversation System Seam", () => {
   const sessionCookieName = "sayhear.session-token";
