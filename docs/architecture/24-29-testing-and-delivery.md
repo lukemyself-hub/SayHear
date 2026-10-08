@@ -943,6 +943,31 @@ Core Flow 1A.3b 在当前 G1 范围内（[ADR-0141](../adr/0141-g1-only-release-
 commit 不使已接受的能力失效，也不要求重跑旧完整证据；任何一组失败都不得被其他
 体验结果、延迟、成本、token 或安全降级数据抵消。
 
+#### 日常发布按行为影响验证
+
+`pnpm release:validate`（`scripts/daily-release-validation.ts`）是 ADR-0148 之后的统一
+日常发布入口。它在固定 PR CI 基线（`check:runtime`、`check:boundaries`、
+`check:purge-surfaces`、`typecheck`、`test:ci`、`build`，与 `pnpm validate` 组合
+一一对应且不可被影响声明移除）之外，只按本次行为影响补充针对性检查，并记录选择
+依据：
+
+- UI 与普通服务端修复：固定基线 + 相关行为烟测，不启动任何证据 producer，不更新
+  未变角色 pins，也不改写历史证据的 commit。
+- Reflection/Journal：受影响血缘、幂等、current-pointer CAS、Data Epoch 与 source
+  freshness。
+- Prompt/预算：少量固定合成样本检查完成度、格式、安全边界与本次目标，不新增强制
+  语义阈值、不调用模型，并用 `release:config:compare`（ticket #278 的有效配置 gate）
+  比较部署实际值。
+- owner/权限/删除恢复：对应隔离与竞态检查；清理覆盖变化：完整相关 Purge/restore
+  演练；Provider/模型迁移：受影响角色调用与必要隐私检查。
+- 路径只作线索：边界变化（migration、Purge Surface Registry、Provider、权限）会
+  补上对应专项检查，不因声明过窄而漏检；未知影响先定位，不自动升级为 12 项完整
+  验收。
+- 完整 12 项能力验收（`pnpm release:g1:produce`）只由新能力启用、重大整体合同变化
+  或 External MVP 发布触发；已确认硬失败仍需修复或关闭受影响能力。
+- 同字节产物按内容身份复用，不重复解析或审阅；失败证据保留，修复后只重跑受影响
+  项，不重复抽样覆盖失败。摘要输出检查选择、结果、内容身份与按需证据位置。
+
 ### Core Flow 1A.4：Replay
 
 - Replay schema 和权限；

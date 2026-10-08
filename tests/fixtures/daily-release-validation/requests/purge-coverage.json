@@ -1,0 +1,8 @@
+{
+  "version": "1a3b-daily-release-validation-request:v1",
+  "change": {
+    "summary": "add purge coverage for a new private surface",
+    "declaredImpacts": ["purge-coverage"],
+    "changedPaths": ["packages/data/migrations/0071_new_private_surface.sql"]
+  }
+}
