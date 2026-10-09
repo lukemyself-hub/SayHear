@@ -2290,3 +2290,108 @@ h1 {
   outline: 2px solid #242522;
   outline-offset: 2px;
 }
+
+/* === #292 compatibility release operations === */
+
+.releaseOperations {
+  display: grid;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.releaseOperationsCard {
+  border: 1px solid #d8d6cf;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.releaseOperationsCard h2 {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+
+.releaseOperationsFacts {
+  display: grid;
+  gap: 4px 16px;
+  grid-template-columns: max-content 1fr;
+  margin: 8px 0 0;
+}
+
+.releaseOperationsFacts dt {
+  color: #686a63;
+  font-size: 0.85rem;
+}
+
+.releaseOperationsFacts dd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.releaseOperationsMigration {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.releaseOperationsActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.releaseOperationsActions button {
+  border: 1px solid #242522;
+  border-radius: 999px;
+  color: #242522;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 7px 14px;
+}
+
+.releaseOperationsActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.releaseOperationsConfig {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.releaseOperationsConfig li {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  overflow-wrap: anywhere;
+}
+
+.releaseOperationsConfig code {
+  font-size: 0.82rem;
+}
+
+.releaseOperationsConfig span {
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.notice {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+
+.noticeFailure {
+  color: #9d3b2f;
+}
+
+.noticeSuccess {
+  color: #2f6b3d;
+}

@@ -544,6 +544,45 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     );
   }, 120_000);
 
+  it("keeps the purge-marker schema contract exact and fails closed on an unregistered migration", async () => {
+    const applied = await markerDatabase.pool.query<{
+      migration_name: string;
+      migration_sha256: string;
+    }>(
+      `SELECT migration_name, migration_sha256
+       FROM schema_migrations
+       ORDER BY migration_name`,
+    );
+    const pins = applied.rows.map((row) => ({
+      name: row.migration_name,
+      sha256: row.migration_sha256,
+    }));
+    const contract = {
+      purgeMarkerMigrations: pins,
+      purgeMarkerFingerprint: `sha256:${"a".repeat(64)}`,
+    };
+    const exact = new PostgresPurgeMarkerRepository(
+      markerDatabase.pool,
+      contract,
+    );
+    await expect(exact.findLatestMarker({ userId: OWNER })).resolves.toBeNull();
+
+    await markerDatabase.pool.query(
+      `INSERT INTO schema_migrations (migration_name, migration_sha256)
+       VALUES ('9999_unregistered.sql', $1)`,
+      ["a".repeat(64)],
+    );
+    try {
+      await expect(exact.findLatestMarker({ userId: OWNER })).rejects.toThrow(
+        /Purge-marker schema does not match the frozen G1 migration contract/,
+      );
+    } finally {
+      await markerDatabase.pool.query(
+        "DELETE FROM schema_migrations WHERE migration_name = '9999_unregistered.sql'",
+      );
+    }
+  }, 60_000);
+
   async function seedCanaryChainRestored(): Promise<void> {
     // The purge tombstoned the R1 revision row instead of deleting it, and
     // the immutability trigger forbids rewriting that tombstone. A restored
