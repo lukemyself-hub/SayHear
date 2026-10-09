@@ -20,12 +20,14 @@ import {
 import {
   decodeRecentContextReference,
   encodeRecentContextReference,
+  localDateOf,
   RECENT_CONTEXT_REFERENCE_VERSION,
   RECENT_CONTEXT_SECTION_KEY,
   RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   RecentContextReferenceError,
   resolveRecentContextWindow,
   selectRecentContext,
+  shiftLocalDate,
   type RecentContextSelectionPolicy,
   type RecentContextSourceItem,
   type RecentContextSourcePort,
@@ -1332,5 +1334,211 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         generationStage: "decision",
       }),
     ).toThrow(CompiledContextIntegrityError);
+  });
+});
+
+/**
+ * Issue #296: the frozen seven-local-day window must stay correct when the UTC
+ * offset changes inside the window. These tests use the real ICU zone data of
+ * the pinned runtime (not a mock) with a fixed clock, so the cross-day matrix
+ * genuinely covers a spring-forward gap and a DST-at-midnight zone.
+ */
+describe("recent-context window across DST transitions (#296)", () => {
+  const HOUR_MS = 60 * 60 * 1_000;
+
+  /**
+   * Offset (local wall clock minus UTC) of `instant` in `timezone`, in ms.
+   * Uses `Intl` only, so it is independent of the process timezone.
+   */
+  function zoneOffsetMs(instant: Date, timezone: string): number {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      hour: "2-digit",
+      hour12: false,
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: timezone,
+      year: "numeric",
+    }).formatToParts(instant);
+    const value = (type: string) =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    const hour = value("hour") === "24" ? "00" : value("hour");
+    const wallClockAsUtc = Date.UTC(
+      Number(value("year")),
+      Number(value("month")) - 1,
+      Number(value("day")),
+      Number(hour),
+      Number(value("minute")),
+      Number(value("second")),
+    );
+    return wallClockAsUtc - instant.getTime();
+  }
+
+  function wallClockAsUtc(instant: Date, timezone: string): number {
+    return instant.getTime() + zoneOffsetMs(instant, timezone);
+  }
+
+  /**
+   * The UTC instant of local midnight for `localDate`, matching PostgreSQL's
+   * `timestamp AT TIME ZONE` semantics: the normal offset is used, and when the
+   * local midnight falls in a spring-forward gap the offset in effect
+   * immediately before the gap is used instead (the instant after the skipped
+   * hour).
+   */
+  function localMidnightInstant(localDate: string, timezone: string): Date {
+    const [year, month, day] = localDate.split("-").map(Number);
+    const wallMidnightAsUtc = Date.UTC(year!, month! - 1, day!);
+    for (const probe of [
+      wallMidnightAsUtc - 24 * HOUR_MS,
+      wallMidnightAsUtc,
+      wallMidnightAsUtc + 24 * HOUR_MS,
+    ]) {
+      const offset = zoneOffsetMs(new Date(probe), timezone);
+      const candidate = new Date(wallMidnightAsUtc - offset);
+      if (
+        zoneOffsetMs(candidate, timezone) === offset &&
+        wallClockAsUtc(candidate, timezone) === wallMidnightAsUtc
+      ) {
+        return candidate;
+      }
+    }
+    const offsetBeforeGap = zoneOffsetMs(
+      new Date(wallMidnightAsUtc - 60_000),
+      timezone,
+    );
+    return new Date(wallMidnightAsUtc - offsetBeforeGap);
+  }
+
+  function localDatesInWindow(windowStart: string, windowEnd: string): string[] {
+    const dates: string[] = [];
+    for (
+      let date = windowStart;
+      date <= windowEnd;
+      date = shiftLocalDate(date, 1)
+    ) {
+      dates.push(date);
+    }
+    return dates;
+  }
+
+  /**
+   * Asserts the window enumerates exactly seven distinct local dates and that
+   * every day's UTC midnight boundary maps back to that same local date while
+   * one millisecond earlier still maps to the previous date, so no local day is
+   * dropped or duplicated across the offset change.
+   */
+  function expectUnbrokenDayBoundaries(
+    windowStart: string,
+    windowEnd: string,
+    timezone: string,
+  ): void {
+    const dates = localDatesInWindow(windowStart, windowEnd);
+    expect(dates).toHaveLength(7);
+    expect(new Set(dates).size).toBe(7);
+    for (const date of dates) {
+      const start = localMidnightInstant(date, timezone);
+      expect(localDateOf(start, timezone)).toBe(date);
+      expect(localDateOf(new Date(start.getTime() - 1), timezone)).toBe(
+        shiftLocalDate(date, -1),
+      );
+    }
+    const exclusiveEnd = localMidnightInstant(
+      shiftLocalDate(windowEnd, 1),
+      timezone,
+    );
+    expect(localDateOf(new Date(exclusiveEnd.getTime() - 1), timezone)).toBe(
+      windowEnd,
+    );
+    expect(localDateOf(exclusiveEnd, timezone)).toBe(
+      shiftLocalDate(windowEnd, 1),
+    );
+  }
+
+  it("freezes seven local dates across the 2026-03-08 spring-forward", () => {
+    const frozenAt = new Date("2026-03-10T18:00:00.000Z");
+    const window = resolveRecentContextWindow({
+      frozenAt,
+      timezone: TZ,
+      windowDays: 7,
+    });
+    expect(window).toEqual({
+      windowEndLocalDate: "2026-03-10",
+      windowStartLocalDate: "2026-03-04",
+    });
+    expect(
+      localDatesInWindow(
+        window.windowStartLocalDate,
+        window.windowEndLocalDate,
+      ),
+    ).toEqual([
+      "2026-03-04",
+      "2026-03-05",
+      "2026-03-06",
+      "2026-03-07",
+      "2026-03-08",
+      "2026-03-09",
+      "2026-03-10",
+    ]);
+
+    // The window start is still PST (UTC-8); the window end is PDT (UTC-7);
+    // the exclusive end is the start of the next local day.
+    expect(localMidnightInstant("2026-03-04", TZ).toISOString()).toBe(
+      "2026-03-04T08:00:00.000Z",
+    );
+    expect(localMidnightInstant("2026-03-10", TZ).toISOString()).toBe(
+      "2026-03-10T07:00:00.000Z",
+    );
+    expect(localMidnightInstant("2026-03-11", TZ).toISOString()).toBe(
+      "2026-03-11T07:00:00.000Z",
+    );
+    // 2026-03-08 is the 23-hour spring-forward day.
+    expect(
+      localMidnightInstant("2026-03-09", TZ).getTime() -
+        localMidnightInstant("2026-03-08", TZ).getTime(),
+    ).toBe(23 * HOUR_MS);
+
+    expectUnbrokenDayBoundaries(
+      window.windowStartLocalDate,
+      window.windowEndLocalDate,
+      TZ,
+    );
+  });
+
+  it("keeps every local day across the 2026-09-06 Santiago midnight spring-forward", () => {
+    const timezone = "America/Santiago";
+    const frozenAt = new Date("2026-09-08T18:00:00.000Z");
+    const window = resolveRecentContextWindow({
+      frozenAt,
+      timezone,
+      windowDays: 7,
+    });
+    expect(window).toEqual({
+      windowEndLocalDate: "2026-09-08",
+      windowStartLocalDate: "2026-09-02",
+    });
+
+    // This zone skips local midnight itself: 2026-09-06T00:00 local does not
+    // exist, and PostgreSQL resolves it to 04:00Z (offset before the gap).
+    expect(localMidnightInstant("2026-09-02", timezone).toISOString()).toBe(
+      "2026-09-02T04:00:00.000Z",
+    );
+    expect(localMidnightInstant("2026-09-06", timezone).toISOString()).toBe(
+      "2026-09-06T04:00:00.000Z",
+    );
+    expect(localMidnightInstant("2026-09-09", timezone).toISOString()).toBe(
+      "2026-09-09T03:00:00.000Z",
+    );
+    // 2026-09-06 is the 23-hour spring-forward day.
+    expect(
+      localMidnightInstant("2026-09-07", timezone).getTime() -
+        localMidnightInstant("2026-09-06", timezone).getTime(),
+    ).toBe(23 * HOUR_MS);
+
+    expectUnbrokenDayBoundaries(
+      window.windowStartLocalDate,
+      window.windowEndLocalDate,
+      timezone,
+    );
   });
 });

@@ -5,6 +5,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createOwnerFullPurgeService,
   PURGE_SURFACE_REGISTRY_VERSION,
+  RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
+  RECENT_CONTEXT_GOVERNANCE_PREFIX,
+  RECENT_CONTEXT_POLICY_VERSION_KEY,
+  RECENT_CONTEXT_SECTION_KEY,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
 } from "@sayhear/application";
 import {
   PostgresEntityRepository,
@@ -52,6 +58,14 @@ const CC1 = "44444444-4444-7444-8444-444444444409";
 const R_RESTORED = "44444444-4444-7444-8444-444444444408";
 const CANARY_TEXT =
   "g1-acl02-seeded-canary: the owner discussed a dentist appointment next Thursday.";
+
+/**
+ * Production-shaped governance identity for the drill. It is built from the
+ * runtime exports so the seeded rows exercise the same section key, compiler
+ * version, selector/selection policy versions and `policy_versions` key the
+ * compiler actually writes (issue #296 D).
+ */
+const GOVERNANCE_POLICY_VERSION = `${RECENT_CONTEXT_GOVERNANCE_PREFIX}test:v1`;
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -330,9 +344,11 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         integrity_algorithm, integrity_key_version
       ) VALUES (
         '${CC1}', '${OWNER}', '${GC1}',
-        'context-compiler:recent-context:v1', 1, 1, 'en',
+        '${RECENT_CONTEXT_COMPILER_VERSION}', 1, 1, 'en',
         '{"recentConversationContext": 100}', 20, 'hmac-recent', '${t0}',
-        '{"recentContextGovernanceVersion":"recent-context-governance:v1"}',
+        '${JSON.stringify({
+          [RECENT_CONTEXT_POLICY_VERSION_KEY]: GOVERNANCE_POLICY_VERSION,
+        })}',
         '[]', 'hmac-sha256', 'context-integrity:legacy'
       );
       INSERT INTO compiled_context_revision_refs (
@@ -341,7 +357,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         daily_session_id, expressed_at, occurred_at, selection_reason
       ) VALUES (
         '${CC1}', '${OWNER}', '${R1}', 0, 'user', 20, 1,
-        'recent_conversation_context', 0, '${D1}', '${t0}', '${t0}', 'today'
+        '${RECENT_CONTEXT_SECTION_KEY}', 0, '${D1}', '${t0}', '${t0}', 'today'
       );
     `);
   }
@@ -574,9 +590,10 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         max_candidate_bytes, max_single_event_tokens, read_timeout_ms,
         changed_by, created_at
       ) VALUES (
-        'recent-context-governance:test:v1', 'active',
-        'context-compiler:recent-context:v1', 'recent-context-selector:v1',
-        'recent-context-selection:v1', 1000, 200, 20000, 400, 2000,
+        '${GOVERNANCE_POLICY_VERSION}', 'active',
+        '${RECENT_CONTEXT_COMPILER_VERSION}',
+        '${RECENT_CONTEXT_SELECTION_POLICY_VERSION}',
+        '${RECENT_CONTEXT_DEFAULT_POLICY.version}', 1000, 200, 20000, 400, 2000,
         'synthetic-operator', '${BASE_TIME.toISOString()}'
       );
     `);

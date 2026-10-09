@@ -384,6 +384,7 @@ export {
   createContextCompiler,
   LEGACY_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_POLICY_VERSION_KEY,
   type CompiledContext,
   type ActionFinalizationReceiptSnapshot,
   type CompiledContextDegradedReason,

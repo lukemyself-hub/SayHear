@@ -2996,6 +2996,175 @@ describe("Bounded recent context production wiring (#294)", () => {
     expect(command.rows[0]!.request_timezone).toBe("Asia/Shanghai");
   });
 
+  it("carries a previous-day English expression into the next-day Provider payload without keyword or locale matching", async () => {
+    const englishText =
+      "Yesterday I went to the park for a long run and felt great.";
+    const yesterdayRevision = await submitTurn(englishText);
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+
+    const todayText = "今天想聊聊别的。";
+    const rendered: { role: string; text: string }[][] = [];
+    await respond(
+      todayText,
+      {
+        onStream: (request) => {
+          rendered.push(
+            request.messages.map((message) => ({
+              role: message.role,
+              text: message.text,
+            })),
+          );
+        },
+        reply: "好啊，我在听。",
+      },
+      createContextCompilerWithProductionRecentSource(),
+    );
+
+    const compiledId = await loadLatestCompiledContextId();
+    const recentSection = (await sectionsOf(compiledId)).find(
+      (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+    );
+    expect(recentSection).toBeDefined();
+    const decoded = decodeRecentContextReference(recentSection!.reference);
+    const selected = decoded.selected.find(
+      (candidate) => candidate.revisionId === yesterdayRevision,
+    );
+    expect(selected).toBeDefined();
+    // Selection is by local date and token estimate, never by keyword or
+    // locale: the English expression from the previous local day is the date
+    // representative even though today's request is zh-CN.
+    expect(selected!.selectionReason).toBe("day_representation");
+    expect(selected!.actor).toBe("user");
+
+    const payload = rendered.find(
+      (messages) => messages.at(-1)?.text === todayText,
+    );
+    expect(payload).toBeDefined();
+    expect(payload!.map((message) => message.text)).toContain(englishText);
+    expect(payload!.at(-1)).toMatchObject({ role: "user", text: todayText });
+  });
+
+  /**
+   * Issue #296 C: compilers whose real Postgres recent source observes an owner
+   * state change applied immediately before the bounded read and restored right
+   * after. This scopes the forced failure to the recent-source port so it is
+   * not masked by, or conflated with, the independent egress epoch/owner fence.
+   */
+  function createCompilerWithOwnerMutation(
+    mutate: () => Promise<void>,
+    restore: () => Promise<void>,
+  ) {
+    const source = new PostgresRecentContextSource(database.pool);
+    return createContextCompiler({
+      clock,
+      compilerVersion: "context-compiler:v1",
+      contentHmacSecret: "test-context-integrity-secret",
+      rawEventTokenBudget: 4_000,
+      recentContext: {
+        policy: RECENT_CONTEXT_DEFAULT_POLICY,
+        source: {
+          async loadRecentContextSource(request) {
+            await mutate();
+            try {
+              return await source.loadRecentContextSource(request);
+            } finally {
+              await restore();
+            }
+          },
+        },
+      },
+      repository: responseRepository,
+    });
+  }
+
+  async function expectRecentFailureTurn(
+    failureCode: "expected_data_epoch_mismatch" | "owner_inactive",
+    compiler: ReturnType<typeof createContextCompiler>,
+  ): Promise<void> {
+    const todayText = "今天想聊聊别的。";
+    const { replyText } = await respond(
+      todayText,
+      { reply: "好啊，我在听。" },
+      compiler,
+    );
+    // The original conversation still responds; nothing recent is injected.
+    expect(replyText).toBe("好啊，我在听。");
+
+    const compiledId = await loadLatestCompiledContextId();
+    const recentSection = (await sectionsOf(compiledId)).find(
+      (section) => section.key === RECENT_CONTEXT_SECTION_KEY,
+    );
+    expect(recentSection).toBeDefined();
+    const decoded = decodeRecentContextReference(recentSection!.reference);
+    expect(decoded.failure).toEqual({ code: failureCode, detail: null });
+    expect(decoded.selected).toEqual([]);
+
+    const refs = await database.pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM compiled_context_revision_refs
+       WHERE compiled_context_id = $1 AND section = 'recent_conversation_context'`,
+      [compiledId],
+    );
+    expect(Number(refs.rows[0]!.count)).toBe(0);
+
+    const versions = await database.pool.query<{
+      policy_versions: Record<string, unknown>;
+    }>(
+      `SELECT policy_versions FROM compiled_contexts
+       WHERE user_id = $1 AND compiled_context_id = $2`,
+      [OWNER, compiledId],
+    );
+    expect(
+      versions.rows[0]!.policy_versions["recentContextPolicyVersion"],
+    ).toBeUndefined();
+  }
+
+  it("fails the real recent read closed on a data-epoch mismatch and still responds", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    await expectRecentFailureTurn(
+      "expected_data_epoch_mismatch",
+      createCompilerWithOwnerMutation(
+        async () => {
+          await database.pool.query(
+            "UPDATE app_users SET data_epoch = data_epoch + 1 WHERE user_id = $1",
+            [OWNER],
+          );
+        },
+        async () => {
+          await database.pool.query(
+            "UPDATE app_users SET data_epoch = data_epoch - 1 WHERE user_id = $1",
+            [OWNER],
+          );
+        },
+      ),
+    );
+  });
+
+  it("fails the real recent read closed when the owner is not active and still responds", async () => {
+    await seedResidenceClaim("我住在上海。");
+    advanceMs(DAY_MS);
+    expect(await quiesceActiveSession()).toBe(true);
+    await expectRecentFailureTurn(
+      "owner_inactive",
+      createCompilerWithOwnerMutation(
+        async () => {
+          await database.pool.query(
+            "UPDATE app_users SET status = 'disabled' WHERE user_id = $1",
+            [OWNER],
+          );
+        },
+        async () => {
+          await database.pool.query(
+            "UPDATE app_users SET status = 'active' WHERE user_id = $1",
+            [OWNER],
+          );
+        },
+      ),
+    );
+  });
+
   it("uses the admitted request zone, not the session-start zone, for the window", async () => {
     const first = await conversationService.submit(OWNER, {
       clientEventId: "travel-event-1",

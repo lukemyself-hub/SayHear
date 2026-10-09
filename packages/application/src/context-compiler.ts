@@ -404,6 +404,15 @@ export const LEGACY_CONTEXT_COMPILER_VERSION = "context-compiler:v1" as const;
 export const RECENT_CONTEXT_COMPILER_VERSION =
   "context-compiler:recent:v1" as const;
 
+/**
+ * The `compiled_contexts.policy_versions` key that carries the frozen
+ * recent-context governance identity (issue #295). Exported so Purge drills
+ * and other fixtures seed production-shaped rows from the same source of truth
+ * the compiler writes.
+ */
+export const RECENT_CONTEXT_POLICY_VERSION_KEY =
+  "recentContextPolicyVersion" as const;
+
 export class CompiledContextIntegrityError extends Error {
   public constructor() {
     super("The frozen CompiledContext manifest failed integrity validation.");
@@ -686,7 +695,7 @@ export function createContextCompiler(dependencies: {
           ...(recentContext !== null &&
           recentContextPolicyVersion !== null &&
           recentContext.selected.length > 0
-            ? { recentContextPolicyVersion }
+            ? { [RECENT_CONTEXT_POLICY_VERSION_KEY]: recentContextPolicyVersion }
             : {}),
         },
         ...(retrievalOutcome

@@ -106,16 +106,44 @@ manifest 内容校验**无法检测注册表漂移**；注册表漂移由本票�
 | schema-extension guard | `pnpm check:schema-extensions` | exit 0；`3 verified, 0 pending`（0068/0069/0070 哈希匹配） |
 | 两测试库就绪 | `pnpm ci:verify-test-databases` | exit 0；两库独立 |
 | 定向双库 system | `pnpm exec vitest run tests/system/g1-opencode-go-schema.system.test.ts tests/system/g1-purge-restore-drill.system.test.ts` | exit 0；2 files / 13 tests passed / 0 skipped |
-| 确定性跨日矩阵 | `pnpm exec vitest run packages/application/src/recent-context.test.ts tests/system/context-inspector-retrieval.system.test.ts` | exit 0；2 files / 32 tests passed / 0 skipped |
+| 确定性跨日矩阵（语言/日期/DST/owner/epoch） | `pnpm exec vitest run packages/application/src/recent-context.test.ts tests/system/memory-trust-actions.system.test.ts` | exit 0；2 files / 92 tests passed / 0 skipped |
 | effective-config / promotion | `pnpm exec vitest run tests/effective-runtime-config-gate.test.ts tests/g1-promotion-config-report.test.ts tests/runtime-config.test.ts tests/one-a-3b-release.test.ts` | exit 0；4 files / 80 tests passed |
 | 新开关 effective-config / operator | `pnpm exec vitest run tests/effective-runtime-config-route.test.ts tests/operator-recent-context-handler.test.ts` | exit 0；2 files / 9 tests passed |
 | 固定基线一致性 | `pnpm exec vitest run tests/daily-release-validation.test.ts` | exit 0；38 tests passed |
-| 全量 | `pnpm validate` | **exit 0**；157 files / 2003 tests passed / 0 failed / 0 skipped |
-| system suite 断言 | `pnpm exec tsx scripts/ci/assert-system-suites-ran.ts artifacts/vitest-report.json` | exit 0；`system suites 40/40 executed; system tests 456; skipped 0` |
+| 全量 | `pnpm validate` | **exit 0**；158 files / 2013 tests passed / 0 failed / 0 skipped |
+| system suite 断言 | `pnpm exec tsx scripts/ci/assert-system-suites-ran.ts artifacts/vitest-report.json` | exit 0；`system suites 40/40 executed; system tests 463; skipped 0` |
 
-- 跨日/语言/日期/DST/长日/多经历/异步失败/明确用户控制/owner/revision/epoch/Purge/
-  竞态/旧格式/HMAC/读取降级/Inspector 的覆盖由上述 system 矩阵与 `pnpm validate`
-  全量执行承载；无跳过项。
+覆盖明细（用例名与所在文件，均为实际执行项）：
+
+- **DST 跨日窗口**（`packages/application/src/recent-context.test.ts`，
+  describe `recent-context window across DST transitions (#296)`）：
+  - `freezes seven local dates across the 2026-03-08 spring-forward`：冻结在
+    America/Los_Angeles spring-forward 之后的 7 日窗口，断言七个本地日期、
+    `windowStart/windowEnd` 本地日期、首/末 UTC 边界 instant（`2026-03-04T08:00:00Z`
+    → `2026-03-10T07:00:00Z`，exclusive end `2026-03-11T07:00:00Z`）与 23 小时日。
+  - `keeps every local day across the 2026-09-06 Santiago midnight spring-forward`：
+    America/Santiago 本地午夜落入 gap 的时区，按 PostgreSQL `AT TIME ZONE` 取 gap 前
+    offset（`2026-09-06T04:00:00Z`），断言首/末本地日边界、23 小时日、无日期丢失或
+    重复。
+- **语言 / 跨日**（`tests/system/memory-trust-actions.system.test.ts`，
+  describe `Bounded recent context production wiring (#294)`）：
+  `carries a previous-day English expression into the next-day Provider payload
+  without keyword or locale matching`：前一本地日的英文表达被选入次日真实 Provider
+  payload，`selectionReason=day_representation`，与关键词/locale 无关。
+- **owner / epoch**（同文件同 describe）：
+  `fails the real recent read closed on a data-epoch mismatch and still responds`
+  与 `fails the real recent read closed when the owner is not active and still
+  responds`：真实 `app_users` 在 bounded read 前分别 bump `data_epoch` / 置
+  non-active，冻结 snapshot 记录 `expected_data_epoch_mismatch` / `owner_inactive`，
+  selected 为空、无 recent revision ref、`policy_versions` 无
+  `recentContextPolicyVersion`，原对话仍应答。
+- 其它跨日/长日/多经历/明确用户控制/revision/Purge/竞态/旧格式/HMAC/读取降级/
+  Inspector 覆盖由上述 system 矩阵与 `pnpm validate` 全量执行承载；无跳过项。
+- **残余覆盖缺口（显式声明）**：DST 只在应用层窗口函数上用真实 ICU zone 数据确定性
+  验证；系统级跨日 turn 仍使用固定偏移时区（Asia/Shanghai），未跑 DST 过渡时区下的
+  PostgreSQL `AT TIME ZONE` 端到端回合。owner/epoch 的端到端 turn 在 recent read
+  端口内强制该状态后立即恢复，以隔离最近背景端口自身的 fail-closed；运行时 egress
+  的 owner/epoch fence 由既有 dispatch/commit 用例覆盖，本条不重复断言它。
 - 生产不执行 Purge/备份恢复演练；验收资产全为合成内容。
 
 ## 3. 实际生产启用（未执行，待 operator）
