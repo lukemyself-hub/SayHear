@@ -136,6 +136,16 @@ export {
   type OneA3bG1ValidatorCalibration,
 } from "./one-a-3b-release";
 export {
+  matchFrozenPrefixSchemaContract,
+  registeredSchemaExtensions,
+  ONE_A_3B_G1_SCHEMA_EXTENSION_REGISTRY_VERSION,
+  ONE_A_3B_G1_SCHEMA_EXTENSIONS,
+  type OneA3bG1SchemaExtensionPin,
+  type OneA3bG1SchemaMigrationPin,
+  type OneA3bG1SchemaStore,
+  type SchemaContractMatch,
+} from "./schema-extension";
+export {
   ONE_A_3B_G1_EVIDENCE_CONTRACTS,
   verifyOneA3bF3ReleaseArtifacts,
   verifyF3Catalog,

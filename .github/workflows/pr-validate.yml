@@ -124,6 +124,9 @@ jobs:
       - name: Purge surface inventory
         run: pnpm check:purge-surfaces
 
+      - name: Schema extensions
+        run: pnpm check:schema-extensions
+
       - name: Module boundaries
         run: pnpm check:boundaries
 

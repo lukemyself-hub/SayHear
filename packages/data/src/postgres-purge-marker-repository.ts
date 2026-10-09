@@ -1,7 +1,9 @@
-import type {
-  PurgeMarkerRepository,
-  PurgeMarkerSnapshot,
-  OneA3bG1ReleaseManifest,
+import {
+  matchFrozenPrefixSchemaContract,
+  registeredSchemaExtensions,
+  type PurgeMarkerRepository,
+  type PurgeMarkerSnapshot,
+  type OneA3bG1ReleaseManifest,
 } from "@sayhear/application";
 import type { UserId } from "@sayhear/domain";
 import type { Pool } from "pg";
@@ -40,15 +42,15 @@ export class PostgresPurgeMarkerRepository implements PurgeMarkerRepository {
        FROM schema_migrations
        ORDER BY migration_name`,
     );
-    const expected = this.schemaContract.purgeMarkerMigrations;
-    const matches =
-      applied.rows.length === expected.length &&
-      applied.rows.every(
-        (row, index) =>
-          row.migration_name === expected[index]?.name &&
-          row.migration_sha256 === expected[index]?.sha256,
-      );
-    if (!matches) {
+    const match = matchFrozenPrefixSchemaContract({
+      expected: this.schemaContract.purgeMarkerMigrations,
+      applied: applied.rows.map((row) => ({
+        name: row.migration_name,
+        sha256: row.migration_sha256,
+      })),
+      extensions: registeredSchemaExtensions("purge-marker"),
+    });
+    if (!match.matches) {
       throw new Error(
         `Purge-marker schema does not match the frozen G1 migration contract ${this.schemaContract.purgeMarkerFingerprint}.`,
       );
