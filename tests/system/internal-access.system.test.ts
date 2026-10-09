@@ -23,6 +23,7 @@ import {
   INITIAL_CONVERSATION_HARNESS_POLICY,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   ProviderDispatchError,
+  RECENT_CONTEXT_COMPILER_VERSION,
   renderMinimumHighRiskResponse,
   validateMinimumHighRiskResponse,
   type ConversationResponseRepository,
@@ -1205,7 +1206,7 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       attemptStatus: "succeeded",
       commandStatus: "succeeded",
       compiledContext: {
-        compilerVersion: "context-compiler:v1",
+        compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
         // The compile never waits on the fast path: the committed User Event's
         // extraction command is still pending (issue #113).
         degradedReason: "fast_path_pending",
@@ -2840,26 +2841,38 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
     expect(contextMetadata.compiledContext.referencedEvents).toEqual([
       {
         actor: "user",
+        dailySessionId: null,
         estimatedTokens: expect.any(Number),
+        expressedAt: null,
+        occurredAt: null,
         revisionId: firstTurnEvents[0]?.userEventRevisionId,
         section: "committed_raw_events",
         selectionOrder: 1,
+        selectionReason: null,
         sequence: 1,
       },
       {
         actor: "assistant",
+        dailySessionId: null,
         estimatedTokens: expect.any(Number),
+        expressedAt: null,
+        occurredAt: null,
         revisionId: firstTurnEvents.at(-1)?.revisionId,
         section: "committed_raw_events",
         selectionOrder: 0,
+        selectionReason: null,
         sequence: 2,
       },
       {
         actor: "user",
+        dailySessionId: null,
         estimatedTokens: expect.any(Number),
+        expressedAt: null,
+        occurredAt: null,
         revisionId: secondTurnEvents[0]?.userEventRevisionId,
         section: "current_user_input",
         selectionOrder: null,
+        selectionReason: null,
         sequence: 3,
       },
     ]);

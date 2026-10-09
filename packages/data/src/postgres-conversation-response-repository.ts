@@ -7,6 +7,7 @@ import type {
   CompiledContextSection,
   ContextCompilerRepository,
   ContextPolicyVersions,
+  ContextSourceRecentContextPolicy,
   ContextSourceSnapshot,
   CurrentRollingSummary,
   ConversationResponseRepository,
@@ -83,7 +84,13 @@ type ContextHeadRow = Readonly<{
   relationship_policy_version: string;
   safety_policy_version: string;
   source_revision: string;
+  timezone_at_start: string;
   expected_data_epoch: string;
+  command_created_at: Date;
+  /** Admitted request zone written by #294; NULL for legacy commands. */
+  request_timezone: string | null;
+  /** `created_at` of the admitted input event behind `command.subject_id`. */
+  request_created_at: Date | null;
   rolling_summary_id: string | null;
   rolling_summary_version: string | null;
   rolling_summary_covered_through: string | null;
@@ -722,7 +729,16 @@ export class PostgresConversationResponseRepository
             session.current_continuous_exchange_no AS continuous_exchange_no,
             session.dialogue_revision,
             session.source_revision,
+            session.timezone_at_start,
             command.expected_data_epoch,
+            command.request_timezone,
+            command.created_at AS command_created_at,
+            (
+              SELECT input_event.created_at
+              FROM conversation_events input_event
+              WHERE input_event.conversation_event_id = command.subject_id
+                AND input_event.user_id = command.user_id
+            ) AS request_created_at,
             command.action_execution_id::text AS action_execution_id,
             command.action_execution_status,
             command.action_receipt_sequence,
@@ -853,6 +869,39 @@ export class PostgresConversationResponseRepository
         `SELECT EXISTS (${FAST_PATH_PENDING_REVISIONS_SQL}) AS pending`,
         [row.daily_session_id],
       );
+      // #295: the active recent-context governance row is read in the compile
+      // snapshot. Absent / revoked means the recent path is disabled for this
+      // turn: the compiler emits no recent selection and the original
+      // conversation continues. The full identity/budget row is returned so
+      // the compiler can refuse a row that names a runtime it does not
+      // actually run. The dispatch fence re-checks the frozen version under a
+      // shared lock, so a disable after this read still fails the in-flight
+      // selection closed.
+      const recentPolicy = await client.query<{
+        budget_tokens: number;
+        compiler_version: string;
+        max_candidate_bytes: number;
+        max_candidate_rows: number;
+        max_single_event_tokens: number;
+        policy_version: string;
+        read_timeout_ms: number;
+        selection_policy_version: string;
+        selector_policy_version: string;
+      }>(
+        `SELECT
+           policy_version,
+           compiler_version,
+           selector_policy_version,
+           selection_policy_version,
+           budget_tokens,
+           max_candidate_rows,
+           max_candidate_bytes,
+           max_single_event_tokens,
+           read_timeout_ms
+         FROM recent_context_policies
+         WHERE status = 'active'
+         LIMIT 1`,
+      );
       const memoryActionTargets = await loadMemoryActionReferenceTargets(
         client,
         input.userId,
@@ -902,10 +951,20 @@ export class PostgresConversationResponseRepository
           closurePolicyVersion: row.closure_policy_version,
           continuousExchangeNo: Number(row.continuous_exchange_no),
           id: asDailySessionId(row.daily_session_id),
+          timezone: row.timezone_at_start,
         },
         dialogueRevision: Number(row.dialogue_revision),
         dialogueState: dialogueState.dialogueState,
         dialogueStateFailure: dialogueState.failure,
+        expectedDataEpoch: Number(row.expected_data_epoch),
+        // The frozen recent-source cutoff is the admitted request's input
+        // event instant, so an explicit retry reuses the original window
+        // instead of moving it to the retry clock (issue #294). Legacy rows
+        // without an addressable subject fall back to the command instant.
+        commandCreatedAt: row.request_created_at ?? row.command_created_at,
+        ...(row.request_timezone === null
+          ? {}
+          : { requestTimezone: row.request_timezone }),
         events: events.rows.map((event) => ({
           actor: event.actor,
           locale: event.locale,
@@ -950,6 +1009,7 @@ export class PostgresConversationResponseRepository
                 modelConfigVersion: row.rolling_summary_model_config_version,
               },
         rollingSummaryFailure: row.rolling_summary_failed,
+        recentContextPolicy: mapRecentContextPolicy(recentPolicy.rows[0]),
         safetyPosture,
         sourceRevision: Number(row.source_revision),
       };
@@ -1070,9 +1130,13 @@ export class PostgresConversationResponseRepository
               estimated_tokens,
               sequence_no,
               section,
-              selection_order
+              selection_order,
+              daily_session_id,
+              expressed_at,
+              occurred_at,
+              selection_reason
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           `,
           [
             compiledContextId,
@@ -1084,6 +1148,10 @@ export class PostgresConversationResponseRepository
             event.sequence,
             event.section,
             event.selectionOrder,
+            event.dailySessionId ?? null,
+            event.expressedAt ?? null,
+            event.occurredAt ?? null,
+            event.selectionReason ?? null,
           ],
         );
       }
@@ -1568,6 +1636,35 @@ export class PostgresConversationResponseRepository
       );
       if (recorded.rowCount !== 1) {
         await client.query("COMMIT");
+        return false;
+      }
+      // #295: re-check the recent-context governance fence at Provider result
+      // time. If the frozen selection was revoked while the Provider was
+      // streaming, the result is not accepted; the transaction also holds the
+      // governance row lock until commit.
+      const command = await client.query<{
+        compiled_context_id: string | null;
+      }>(
+        `
+          SELECT command.compiled_context_id
+          FROM model_run_attempts attempt
+          INNER JOIN generation_commands command
+            ON command.generation_command_id = attempt.generation_command_id
+           AND command.user_id = attempt.user_id
+          WHERE attempt.model_run_attempt_id = $1
+        `,
+        [input.modelRunAttemptId],
+      );
+      const compiledContextId = command.rows[0]?.compiled_context_id;
+      if (
+        compiledContextId !== null &&
+        compiledContextId !== undefined &&
+        !(await recentContextSelectionAuthorized(
+          client,
+          asCompiledContextId(compiledContextId),
+        ))
+      ) {
+        await client.query("ROLLBACK");
         return false;
       }
       await client.query(
@@ -2433,6 +2530,43 @@ async function contextReferencesAreCurrent(
           AND event.current_revision_id = ref.conversation_event_revision_id
           AND revision.content_purged_at IS NULL
           AND event.user_id = command.user_id
+          -- #294: a recent-source ref is only current while it stays free of
+          -- the explicit Correction / Forget associations re-read at dispatch.
+          -- A control committed after compile but before egress turns the ref
+          -- stale and the command fails closed through the existing
+          -- policy_blocked freshness path instead of shipping old background.
+          AND NOT (
+            ref.section = 'recent_conversation_context'
+            AND (
+              EXISTS (
+                SELECT 1
+                FROM evidence_items item
+                INNER JOIN memory_forget_evidence_exclusions exclusion
+                  ON exclusion.evidence_item_id = item.evidence_item_id
+                 AND exclusion.user_id = item.user_id
+                WHERE item.user_id = ref.user_id
+                  AND item.source_revision_id =
+                    ref.conversation_event_revision_id
+                  AND item.status = 'active'
+                  AND exclusion.status = 'active'
+              )
+              OR EXISTS (
+                SELECT 1
+                FROM claim_evidence_links link
+                INNER JOIN evidence_items item
+                  ON item.evidence_item_id = link.evidence_item_id
+                 AND item.user_id = link.user_id
+                INNER JOIN memory_claim_corrections correction
+                  ON correction.deactivated_claim_version_id =
+                    link.memory_claim_version_id
+                 AND correction.user_id = link.user_id
+                WHERE link.user_id = ref.user_id
+                  AND link.status = 'active'
+                  AND item.source_revision_id =
+                    ref.conversation_event_revision_id
+              )
+            )
+          )
         ),
         FALSE
       ) AS current
@@ -2452,7 +2586,96 @@ async function contextReferencesAreCurrent(
     `,
     [compiledContextId, generationCommandId],
   );
-  return result.rows[0]?.current === true;
+  if (result.rows[0]?.current !== true) return false;
+  // #295: the revision refs being current is not enough for the recent-source
+  // path. When the context carries selected recent content it must also carry
+  // a recognized *active* immutable governance identity; the lock is held for
+  // the rest of this transaction so a concurrent disable serializes with
+  // dispatch / result / commit in either ordering.
+  return recentContextSelectionAuthorized(client, compiledContextId);
+}
+
+/**
+ * #295 independent recent-context governance fence.
+ *
+ * A compiled context with at least one `recent_conversation_context` ref must
+ * carry a non-null frozen governance version that still exists and is active.
+ * The row is locked `FOR SHARE`; the operator disable takes the same row
+ * `FOR UPDATE`, so the two orderings are serializable. A context with no
+ * selected recent ref (legacy, disabled, degraded or zero-selected) passes
+ * without any governance row, preserving pre-#294 replay.
+ */
+async function recentContextSelectionAuthorized(
+  client: PoolClient,
+  compiledContextId: CompiledContextId,
+): Promise<boolean> {
+  const frozen = await client.query<{
+    has_recent: boolean;
+    policy_version: string | null;
+  }>(
+    `
+      SELECT
+        EXISTS (
+          SELECT 1
+          FROM compiled_context_revision_refs ref
+          WHERE ref.compiled_context_id = $1
+            AND ref.section = 'recent_conversation_context'
+        ) AS has_recent,
+        (
+          SELECT context.policy_versions ->> 'recentContextPolicyVersion'
+          FROM compiled_contexts context
+          WHERE context.compiled_context_id = $1
+        ) AS policy_version
+    `,
+    [compiledContextId],
+  );
+  const row = frozen.rows[0];
+  if (!row || row.has_recent !== true) return true;
+  // Selected recent content without a recognized frozen identity is
+  // unauthorized, never grandfathered.
+  if (row.policy_version === null || row.policy_version === undefined) {
+    return false;
+  }
+  const active = await client.query(
+    `
+      SELECT 1
+      FROM recent_context_policies
+      WHERE policy_version = $1
+        AND status = 'active'
+      FOR SHARE
+    `,
+    [row.policy_version],
+  );
+  return (active.rowCount ?? 0) === 1;
+}
+
+function mapRecentContextPolicy(
+  row:
+    | {
+        budget_tokens: number;
+        compiler_version: string;
+        max_candidate_bytes: number;
+        max_candidate_rows: number;
+        max_single_event_tokens: number;
+        policy_version: string;
+        read_timeout_ms: number;
+        selection_policy_version: string;
+        selector_policy_version: string;
+      }
+    | undefined,
+): ContextSourceRecentContextPolicy | null {
+  if (!row) return null;
+  return {
+    budgetTokens: Number(row.budget_tokens),
+    compilerVersion: row.compiler_version,
+    maxCandidateBytes: Number(row.max_candidate_bytes),
+    maxCandidateRows: Number(row.max_candidate_rows),
+    maxSingleEventTokens: Number(row.max_single_event_tokens),
+    policyVersion: row.policy_version,
+    readTimeoutMs: Number(row.read_timeout_ms),
+    selectionPolicyVersion: row.selection_policy_version,
+    selectorPolicyVersion: row.selector_policy_version,
+  };
 }
 
 async function contextReferencesAreCurrentForCommand(
@@ -2967,11 +3190,18 @@ async function loadContextReferencedEvents(
 ): Promise<readonly CompiledContextReferencedEvent[]> {
   const result = await client.query<{
     actor: "user" | "assistant";
+    daily_session_id: string | null;
     estimated_tokens: string;
+    expressed_at: Date | null;
     locale: string;
+    occurred_at: Date | null;
     revision_id: string;
-    section: "committed_raw_events" | "current_user_input";
+    section:
+      | "committed_raw_events"
+      | "current_user_input"
+      | "recent_conversation_context";
     selection_order: string | null;
+    selection_reason: string | null;
     sequence_no: string;
     text: string;
   }>(
@@ -2982,6 +3212,10 @@ async function loadContextReferencedEvents(
         ref.sequence_no,
         ref.section,
         ref.selection_order,
+        ref.daily_session_id,
+        ref.expressed_at,
+        ref.occurred_at,
+        ref.selection_reason,
         revision.conversation_event_revision_id AS revision_id,
         revision.locale,
         revision.canonical_text AS text
@@ -3005,6 +3239,18 @@ async function loadContextReferencedEvents(
       row.selection_order === null ? null : Number(row.selection_order),
     sequence: Number(row.sequence_no),
     text: row.text,
+    ...(row.daily_session_id === null
+      ? {}
+      : { dailySessionId: asDailySessionId(row.daily_session_id) }),
+    ...(row.expressed_at === null
+      ? {}
+      : { expressedAt: row.expressed_at.toISOString() }),
+    ...(row.occurred_at === null
+      ? {}
+      : { occurredAt: row.occurred_at.toISOString() }),
+    ...(row.selection_reason === null
+      ? {}
+      : { selectionReason: row.selection_reason }),
   }));
 }
 

@@ -46,6 +46,7 @@ import {
   PERSONA_CONTRACT_INVARIANT_VERSION,
   loadPredicateRegistrySnapshot,
   PREDICATE_REGISTRY_RUNTIME_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
   createReflectionSchedulerScanService,
@@ -115,6 +116,8 @@ import {
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
+  PostgresRecentContextPolicyRepository,
+  PostgresRecentContextSource,
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
@@ -673,9 +676,22 @@ export function createServerComposition() {
     compilerVersion: "context-compiler:v1",
     contentHmacSecret: configuration.contextHmacSecret,
     rawEventTokenBudget: 4_000,
+    // #294: the seven-local-day bounded recent source. It is wired into the
+    // real compile/save/replay/egress path; frozen legacy manifests still
+    // replay unchanged and a deployment that does not pass this dependency
+    // compiles exactly as the pre-#293 compiler (ADR-0149).
+    recentContext: {
+      policy: RECENT_CONTEXT_DEFAULT_POLICY,
+      source: new PostgresRecentContextSource(pool),
+    },
     repository: responseRepository,
     ...(memoryRetrievalPort ? { memoryRetrieval: memoryRetrievalPort } : {}),
   });
+  // #295: independent, immutable recent-context governance. The compiler reads
+  // the active identity inside the same source snapshot; this repository is
+  // also the operator enable/disable surface and the effective-config probe.
+  const recentContextGovernanceRepository =
+    new PostgresRecentContextPolicyRepository(pool);
   const egressPort = createRuntimeProviderEgressPort({
     adapter:
       configuration.provider.adapter === "deterministic"
@@ -957,6 +973,7 @@ export function createServerComposition() {
     narrativeValidationEntrypointDependencies,
     oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
+    recentContextGovernanceRepository,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

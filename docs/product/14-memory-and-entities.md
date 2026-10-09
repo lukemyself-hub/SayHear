@@ -532,6 +532,14 @@ Profile 的可视化逐条编辑与更细粒度内容删除可以延后，但 Me
 Memory Forget Request、Memory Source Explanation 必须从第一条可被未来召回的
 Memory Claim 开始成立。
 
+近期对话背景遵守已经生效的 Memory Correction / Forget，不新增针对未形成长期
+Memory 的普通经历的单独排除能力。已有控制能通过明确关联定位旧消息时，整条旧
+消息不再进入近期背景，不做片段切割或语义匹配。原始 Conversation 与已有 Journal
+仍保留；用户后来主动重提不自动解除 Forget。无法明确关联的表达仍可能进入近期
+背景，这是第一阶段已接受的限制，不能声称普通经历已被单独忘记或所有同义表达
+都被阻止。详见 [近期对话背景产品规则](15-conversation-behavior.md#1531-近期对话背景)
+与 [ADR-0149](../adr/0149-recent-conversation-context-is-bounded-source-history.md)。
+
 ### 14.3.1 Reflection 可见性
 
 Phase 1 不建设独立的用户式 Reflection 页面。Reflection 继续作为 1A.3 的非权威

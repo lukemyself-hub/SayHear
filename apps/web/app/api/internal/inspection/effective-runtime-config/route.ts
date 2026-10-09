@@ -24,5 +24,7 @@ export async function GET(request: Request): Promise<Response> {
     assertOperator: async (userId) => {
       await composition.accessService.assertOperator(asUserId(userId));
     },
+    loadRecentContextGovernance: () =>
+      composition.recentContextGovernanceRepository.findEffectiveState(),
   });
 }

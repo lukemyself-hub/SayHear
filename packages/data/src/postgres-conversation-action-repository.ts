@@ -1437,7 +1437,8 @@ async function createActionFinalizationCommand(
        model_config_version, provider_policy_version, consent_policy_version,
        freshness_policy, harness_policy_version, conversation_action_catalog_version,
        expected_data_epoch, generation_stage, action_execution_id,
-       action_receipt_sequence, action_execution_status, status, created_at
+       action_receipt_sequence, action_execution_status, status, created_at,
+       request_timezone
      )
      SELECT $1, command.user_id, command.interaction_turn_id, command.operation_type,
        $2, command.subject_type, command.subject_id, command.input_revision_kind,
@@ -1449,7 +1450,8 @@ async function createActionFinalizationCommand(
        command.provider, command.model, command.model_snapshot, command.model_config_version,
        command.provider_policy_version, command.consent_policy_version, command.freshness_policy,
        command.harness_policy_version, command.conversation_action_catalog_version,
-       command.expected_data_epoch, 'action_finalization', $3, $4, $5, 'prepared', $6
+       command.expected_data_epoch, 'action_finalization', $3, $4, $5, 'prepared', $6,
+       command.request_timezone
      FROM generation_commands command
      WHERE command.generation_command_id = $7
        AND command.user_id = $8

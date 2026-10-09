@@ -5,6 +5,10 @@ date: 2026-08-22
 
 # Human Taste Is Authoritative in Behavior Evaluation
 
+> 2026-10-07：[ADR-0150](0150-recent-context-ships-after-deterministic-validation.md)
+> 明确近期背景首版不以正式人评为上线门槛，确定性验证后由 Luke 在正常聊天中验收
+> 体验。人工味觉裁定仍是权威；下文不应解释为每次近期背景迭代都必须先做盲评。
+
 对话行为的评测里，「被理解感」这类用户可感知质量的最终权威是人工味觉裁定：由唯一
 权威评审（Internal Core 阶段即 Internal Owner 本人）在盲评 pairwise 中对六个味觉
 维度打分并选出场景最佳。机械检查只承担确定性结构门禁（问题计数、安全资源白名单、

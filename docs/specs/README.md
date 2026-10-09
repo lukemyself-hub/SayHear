@@ -17,6 +17,9 @@ Accepted
 
 ## Current specs
 
+- [#292 — Internal Core — 七天近期对话背景与跨日连续性修复](https://github.com/lukemyself-hub/SayHear/issues/292)
+  — Internal Core / Memory & Recall 近期连续性迭代 — `ready-for-agent`；开发票 #293–#296，初始 frontier #293。发布规格不代表实现或上线。
+
 - [#193 — Internal Core / Core Flow 1A.3b — current G1-only scope](https://github.com/lukemyself-hub/SayHear/issues/193) — G1 重发与 7 天体验；G2 退出、G3 暂停。
 - [#275 — Internal Core — 按影响验证、PR CI 与发布流程精简](https://github.com/lukemyself-hub/SayHear/issues/275)
   — Internal Core（G1-only）；固定 PR CI 基线 + 按行为影响补充验证 — `ready-for-agent`

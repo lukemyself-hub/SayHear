@@ -27,6 +27,11 @@ export { PostgresInternalOwnerAccessRepository } from "./postgres-internal-owner
 export { PostgresInternalInspectionRepository } from "./postgres-internal-inspection-repository";
 export { PostgresConversationResponseRepository } from "./postgres-conversation-response-repository";
 export {
+  PostgresRecentContextSource,
+  RECENT_CONTEXT_CANDIDATE_SQL,
+} from "./postgres-recent-context-source";
+export { PostgresRecentContextPolicyRepository } from "./postgres-recent-context-policy-repository";
+export {
   PostgresConversationActionRepository,
   PostgresJournalRegenerationActionRepository,
 } from "./postgres-conversation-action-repository";

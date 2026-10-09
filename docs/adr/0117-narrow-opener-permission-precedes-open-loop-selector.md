@@ -5,6 +5,11 @@ date: 2026-08-26
 
 # Narrow opener permission precedes the open-loop selector
 
+> 2026-10-07：[ADR-0149](0149-recent-conversation-context-is-bounded-source-history.md)
+> 修订无检索信号时的近期背景合同，每轮自动带入预算内的近期原文；长期 Claim 的词面
+> 检索仍可返回零条，打招呼也不要求提旧事。下文为原决定记录；G2 / Open Loop 运行时
+> 已由 [ADR-0141](0141-g1-only-release-after-g2-retirement.md) 退役，不因本次修订恢复。
+
 In 1A.3a, the only cross-recall-surface capability added beyond settled law is a prompt-contract
 permission: the Assistant may naturally respond to whatever memory was actually injected — a
 Person Portrait item or a query-retrieved thread — including at the conversation opening or the

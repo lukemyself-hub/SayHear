@@ -4,6 +4,7 @@ import type {
   ContextPolicyVersions,
   GenerationInspectionMetadata,
   InternalInspectionRepository,
+  RecentContextInspection,
   RetrievalCandidateInspection,
 } from "@sayhear/application";
 import {
@@ -11,6 +12,9 @@ import {
   asCompiledContextId,
   asGenerationCommandId,
   asModelRunAttemptId,
+  decodeRecentContextReference,
+  RECENT_CONTEXT_SECTION_KEY,
+  RecentContextReferenceError,
   validateSafetyPostureContent,
   type CurrentSafetyPosture,
   type MemorySectionKey,
@@ -39,10 +43,17 @@ type GenerationMetadataRow = Readonly<{
   context_policy_versions: ContextPolicyVersions;
   context_referenced_events: Array<{
     actor: "user" | "assistant";
+    dailySessionId: string | null;
     estimatedTokens: number;
+    expressedAt: string | null;
+    occurredAt: string | null;
     revisionId: string;
-    section: "committed_raw_events" | "current_user_input";
+    section:
+      | "committed_raw_events"
+      | "current_user_input"
+      | "recent_conversation_context";
     selectionOrder: number | null;
+    selectionReason: string | null;
     sequence: number;
   }>;
   context_retrieval_manifest: GenerationInspectionMetadata["compiledContext"]["retrievalManifest"];
@@ -169,10 +180,14 @@ export class PostgresInternalInspectionRepository
               SELECT jsonb_agg(
                 jsonb_build_object(
                   'actor', ref.actor,
+                  'dailySessionId', ref.daily_session_id,
                   'estimatedTokens', ref.estimated_tokens,
+                  'expressedAt', ref.expressed_at,
+                  'occurredAt', ref.occurred_at,
                   'revisionId', ref.conversation_event_revision_id,
                   'section', ref.section,
                   'selectionOrder', ref.selection_order,
+                  'selectionReason', ref.selection_reason,
                   'sequence', ref.sequence_no
                 )
                 ORDER BY ref.ordinal
@@ -293,6 +308,11 @@ export class PostgresInternalInspectionRepository
                 row.context_retrieval_manifest.retrieval_run_id,
               userId: input.userId,
             });
+      const recentContext = await loadRecentContextInspection(client, {
+        policyVersions: row.context_policy_versions,
+        referencedEvents: row.context_referenced_events,
+        sections: row.context_sections,
+      });
       await client.query("COMMIT");
       return {
         attemptStatus: row.attempt_status,
@@ -310,9 +330,18 @@ export class PostgresInternalInspectionRepository
           },
           locale: row.context_locale,
           policyVersions: row.context_policy_versions,
+          recentContext,
           referencedEvents: row.context_referenced_events.map((event) => ({
-            ...event,
+            actor: event.actor,
+            dailySessionId: event.dailySessionId,
+            estimatedTokens: event.estimatedTokens,
+            expressedAt: normalizeInstant(event.expressedAt),
+            occurredAt: normalizeInstant(event.occurredAt),
             revisionId: asConversationEventRevisionId(event.revisionId),
+            section: event.section,
+            selectionOrder: event.selectionOrder,
+            selectionReason: event.selectionReason,
+            sequence: event.sequence,
           })),
           sectionBudgets: row.context_section_budgets,
           sections: row.context_sections.map(
@@ -621,6 +650,138 @@ async function loadSafetyPostureForInspection(
     policyVersion: row.policy_version,
     sourceRevision: Number(row.source_revision),
     versionNo: Number(row.version_no),
+  };
+}
+
+const EMPTY_RECENT_BUDGETS = {
+  maxCandidateBytes: 0,
+  maxCandidateRows: 0,
+  maxContextTokens: 0,
+  maxSingleEventTokens: 0,
+  readTimeoutMs: 0,
+} as const;
+
+const EMPTY_RECENT_COUNTS = {
+  candidateBytes: 0,
+  candidateRows: 0,
+  selectedCount: 0,
+  truncated: false,
+} as const;
+
+const EMPTY_RECENT_CUTOFF = {
+  currentInputRevisionId: null,
+  currentInputSequence: null,
+  dailySessionId: null,
+  expressedAt: "",
+} as const;
+
+function normalizeInstant(value: string | null): string | null {
+  if (value === null) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+/**
+ * #295: decode the already-stored recent-source reference server-side and
+ * merge it with the per-ref provenance columns. It never re-reads message
+ * bodies and never re-derives a selection — a malformed / unknown-version
+ * reference renders an explicit unreadable state instead of fabricated values.
+ */
+async function loadRecentContextInspection(
+  client: PoolClient,
+  input: {
+    policyVersions: ContextPolicyVersions;
+    referencedEvents: GenerationMetadataRow["context_referenced_events"];
+    sections: readonly CompiledContextSection[];
+  },
+): Promise<RecentContextInspection | null> {
+  const section = input.sections.find(
+    (candidate) => candidate.key === RECENT_CONTEXT_SECTION_KEY,
+  );
+  if (!section) return null;
+  const authorizationPolicyVersion =
+    input.policyVersions.recentContextPolicyVersion ?? null;
+  let authorizationStatus: RecentContextInspection["authorizationStatus"];
+  if (authorizationPolicyVersion === null) {
+    authorizationStatus = "absent";
+  } else {
+    const status = await client.query<{ status: "active" | "revoked" }>(
+      `SELECT status FROM recent_context_policies WHERE policy_version = $1`,
+      [authorizationPolicyVersion],
+    );
+    authorizationStatus = status.rows[0]?.status ?? "unrecognized";
+  }
+  const refByRevision = new Map(
+    input.referencedEvents
+      .filter((ref) => ref.section === RECENT_CONTEXT_SECTION_KEY)
+      .map((ref) => [ref.revisionId, ref] as const),
+  );
+  let decoded: ReturnType<typeof decodeRecentContextReference>;
+  try {
+    decoded = decodeRecentContextReference(section.reference);
+  } catch (error) {
+    return {
+      authorizationPolicyVersion,
+      authorizationStatus,
+      budgetTokens: 0,
+      budgets: EMPTY_RECENT_BUDGETS,
+      counts: EMPTY_RECENT_COUNTS,
+      cutoff: EMPTY_RECENT_CUTOFF,
+      excludedRevisionIds: [],
+      failure: null,
+      omitted: [],
+      perDate: [],
+      policyVersion: "",
+      readLatencyMs: null,
+      referenceVersion: 0,
+      selected: [],
+      selectorVersion: "",
+      timezone: "",
+      unreadableReason:
+        error instanceof RecentContextReferenceError
+          ? error.message
+          : "recent_context_unreadable",
+      windowDays: 0,
+      windowEndLocalDate: "",
+      windowStartLocalDate: "",
+    };
+  }
+  return {
+    authorizationPolicyVersion,
+    authorizationStatus,
+    budgetTokens: decoded.budgetTokens,
+    budgets: decoded.budgets,
+    counts: decoded.counts,
+    cutoff: decoded.cutoff,
+    excludedRevisionIds: decoded.excludedRevisionIds,
+    failure: decoded.failure,
+    omitted: decoded.omitted,
+    perDate: decoded.perDate,
+    policyVersion: decoded.policyVersion,
+    readLatencyMs: decoded.readLatencyMs,
+    // The actual encoded wire version, so a v3 reference read by a v4 decoder
+    // is shown as v3 rather than silently relabeled.
+    referenceVersion: decoded.wireVersion,
+    selected: decoded.selected.map((ref) => {
+      const stored = refByRevision.get(ref.revisionId);
+      return {
+        actor: ref.actor,
+        dailySessionId: ref.dailySessionId,
+        estimatedTokens: stored?.estimatedTokens ?? null,
+        expressedAt: ref.expressedAt,
+        occurredAt: ref.occurredAt,
+        revisionId: ref.revisionId,
+        selectionOrder: ref.selectionOrder,
+        selectionReason: ref.selectionReason,
+        sequence: stored?.sequence ?? null,
+      };
+    }),
+    selectorVersion: decoded.selectorVersion,
+    timezone: decoded.timezone,
+    unreadableReason: null,
+    windowDays: decoded.windowDays,
+    windowEndLocalDate: decoded.windowEndLocalDate,
+    windowStartLocalDate: decoded.windowStartLocalDate,
   };
 }
 
