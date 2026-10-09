@@ -244,6 +244,12 @@ export function TextConversation(props: {
       } satisfies PendingSubmission);
     pending.current = submission;
     inFlightRef.current = true;
+    // Hide the sent text the moment it is on its way. Keeping it in the field
+    // while the reply is still streaming read as "not sent yet", even though
+    // the message was already committed above the composer. `pending` keeps the
+    // exact submission, and a failure before that commit puts the text back for
+    // an explicit retry.
+    setText("");
     setWait((current) => reduceWaitState(current, { type: "submit" }));
     setError(null);
     let userCommitted = false;
@@ -388,7 +394,9 @@ export function TextConversation(props: {
           setTimeline,
         );
       }
-      if (!plan.preserveDraft) {
+      if (plan.preserveDraft) {
+        setText(submission.text);
+      } else {
         setText("");
         shell?.clearDraft(props.draftKey);
       }
@@ -554,6 +562,11 @@ export function TextConversation(props: {
   }
 
   const streamedText = streamingText(wait);
+  const sendLabel = inFlight
+    ? "发送中"
+    : error && pending.current
+      ? "重试发送"
+      : "发送";
 
   return (
     <section className="conversation" aria-label="Text conversation">
@@ -635,7 +648,10 @@ export function TextConversation(props: {
           </button>
         ) : null}
       </div>
-      <form className="composer" onSubmit={submit}>
+      <form
+        className={`composer${multiline ? " isMultiline" : ""}`}
+        onSubmit={submit}
+      >
         <p className="visuallyHidden" role="status">
           {waitAnnouncement(wait)}
         </p>
@@ -645,54 +661,67 @@ export function TextConversation(props: {
             仍遵循各自已有的读取权限。
           </p>
         ) : null}
-        <label htmlFor="user-text">Tell SayHear what is on your mind</label>
-        <textarea
-          className={`composerInput${multiline ? " isMultiline" : ""}`}
-          disabled={inFlight || !props.writeGate.allowed}
-          id="user-text"
-          onChange={(event) => {
-            pending.current = null;
-            setText(event.target.value);
-            shell?.setDraft(props.draftKey, event.target.value);
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false;
-          }}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
-          onKeyDown={handleKeyDown}
-          placeholder="Write naturally…"
-          ref={textareaRef}
-          rows={1}
-          value={text}
-        />
-        <div className="composerActions">
-          {error ? (
-            <p
-              className="submissionError"
-              ref={errorRef}
-              role="alert"
-              tabIndex={-1}
-            >
-              {error}
-            </p>
-          ) : (
-            <span />
-          )}
+        <div className="composerInputRow">
+          <label className="visuallyHidden" htmlFor="user-text">
+            想聊些什么？
+          </label>
+          <textarea
+            className="composerInput"
+            disabled={inFlight || !props.writeGate.allowed}
+            id="user-text"
+            onChange={(event) => {
+              pending.current = null;
+              setText(event.target.value);
+              shell?.setDraft(props.draftKey, event.target.value);
+            }}
+            onCompositionEnd={() => {
+              composingRef.current = false;
+            }}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="想聊些什么？"
+            ref={textareaRef}
+            rows={1}
+            value={text}
+          />
           <button
+            aria-label={sendLabel}
+            className="composerSend"
             disabled={
               inFlight || !props.writeGate.allowed || text.trim().length === 0
             }
             type="submit"
           >
-            {inFlight
-              ? "发送中…"
-              : error && pending.current
-                ? "Retry request"
-                : "Record message"}
+            <svg
+              aria-hidden="true"
+              fill="none"
+              height="20"
+              viewBox="0 0 24 24"
+              width="20"
+            >
+              <path
+                d="M12 18V6M6.5 11.5 12 6l5.5 5.5"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.8"
+              />
+            </svg>
           </button>
         </div>
+        {error ? (
+          <p
+            className="submissionError"
+            ref={errorRef}
+            role="alert"
+            tabIndex={-1}
+          >
+            {error}
+          </p>
+        ) : null}
+        <p className="composerHint">Enter 发送 · Shift+Enter 换行</p>
       </form>
     </section>
   );

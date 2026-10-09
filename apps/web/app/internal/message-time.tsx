@@ -203,28 +203,32 @@ export function MessageSurface(props: {
       onPointerDown={handlePointerDown}
       tabIndex={hasTime ? 0 : undefined}
     >
-      {props.children}
+      {props.actor === "user" ? (
+        <div className="messageBody">{props.children}</div>
+      ) : (
+        props.children
+      )}
       {showsMeta ? (
         <div className="messageMeta">
           {showsContextIcon ? (
             <a
-              aria-label="查看生成这段回复的 Context"
+              aria-label="查看 context"
               className="contextInspectIcon"
-              data-tooltip="查看生成这段回复的 Context"
+              data-tooltip="查看 context"
               href={`/internal/context-inspector?generation_command_id=${encodeURIComponent(props.generationCommandId ?? "")}`}
             >
               <svg
                 aria-hidden="true"
                 fill="none"
-                height="15"
+                height="16"
                 stroke="currentColor"
-                strokeWidth="1.4"
+                strokeLinejoin="round"
+                strokeWidth="1.3"
                 viewBox="0 0 16 16"
-                width="15"
+                width="16"
               >
-                <circle cx="8" cy="8" r="6.2" />
-                <path d="M8 7.1v4.1" strokeLinecap="round" />
-                <circle cx="8" cy="4.9" fill="currentColor" r="0.9" stroke="none" />
+                <path d="M4.3 2.6h4.9l2.5 2.5v8.3H4.3z" />
+                <path d="M9.2 2.6v2.5h2.5M6.4 8h3.2M6.4 10.4h3.2" />
               </svg>
             </a>
           ) : null}

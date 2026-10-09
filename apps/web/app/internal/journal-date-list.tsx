@@ -8,12 +8,21 @@ import {
   mergeJournalDateEntries,
   type JournalDateEntry,
 } from "./journal-date-list-state";
+import { formatShortLogicalDate } from "./portal-date-format";
 
 const STATE_LABEL: Readonly<Record<JournalDateEntry["state"], string>> = {
-  current: "最新",
+  current: "已发布",
   outdated: "过期",
   updating: "更新中",
+  no_journal: "交流内容较少，无日记",
 };
+
+const JOURNAL_DATE_STATES = [
+  "current",
+  "outdated",
+  "updating",
+  "no_journal",
+] as const;
 
 type Payload = Readonly<{
   entries?: unknown;
@@ -28,7 +37,7 @@ function readEntries(payload: Payload): JournalDateEntry[] {
       entry !== null &&
       typeof (entry as JournalDateEntry).dailySessionId === "string" &&
       typeof (entry as JournalDateEntry).logicalDate === "string" &&
-      ["current", "outdated", "updating"].includes(
+      JOURNAL_DATE_STATES.includes(
         (entry as JournalDateEntry).state,
       ),
   );
@@ -48,6 +57,7 @@ export function JournalDateList({ onNavigate }: { onNavigate: () => void }) {
     "loading",
   );
   const [loadingMore, setLoadingMore] = useState(false);
+  const referenceYear = new Date().getFullYear();
 
   const loadFirstPage = useCallback(async () => {
     setStatus("loading");
@@ -125,18 +135,30 @@ export function JournalDateList({ onNavigate }: { onNavigate: () => void }) {
             <li key={entry.dailySessionId}>
               <Link
                 aria-current={isSelected ? "page" : undefined}
-                className="moduleListEntry journalDateEntry"
+                className={`moduleListEntry journalDateEntry${
+                  entry.state === "no_journal" ? " is-no-journal" : ""
+                }`}
                 href={`/internal/journals?date=${entry.logicalDate}`}
                 onClick={onNavigate}
               >
-                <span className="journalDateLabel">{entry.logicalDate}</span>
-                <span
-                  aria-hidden="true"
-                  className={`journalStateDot journalStateDot-${entry.state}`}
-                />
-                <span className="journalDateState">
-                  {STATE_LABEL[entry.state]}
+                <span className="journalDateLabel">
+                  {formatShortLogicalDate(entry.logicalDate, referenceYear)}
                 </span>
+                {entry.state === "no_journal" ? (
+                  <span className="journalDateNote">
+                    {STATE_LABEL[entry.state]}
+                  </span>
+                ) : entry.state === "current" ? null : (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className={`journalStateDot journalStateDot-${entry.state}`}
+                    />
+                    <span className="journalDateState">
+                      {STATE_LABEL[entry.state]}
+                    </span>
+                  </>
+                )}
               </Link>
             </li>
           );
@@ -144,12 +166,13 @@ export function JournalDateList({ onNavigate }: { onNavigate: () => void }) {
       </ul>
       {nextCursor ? (
         <button
+          aria-label="加载更早日期"
           className="moduleListMore"
           disabled={loadingMore}
           onClick={() => void loadEarlier()}
           type="button"
         >
-          {loadingMore ? "正在加载…" : "加载更早日期"}
+          {loadingMore ? "正在加载…" : "更早记录"}
         </button>
       ) : null}
     </div>

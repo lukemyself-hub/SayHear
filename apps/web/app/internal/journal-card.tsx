@@ -13,9 +13,10 @@ import {
   describeJournalFinding,
   describeJournalGenerationNotice,
 } from "./journal-diagnostics";
+import { formatLogicalDate } from "./portal-date-format";
 
 const STATE_LABEL: Readonly<Record<CurrentJournal["state"], string>> = {
-  current: "最新",
+  current: "已发布",
   outdated: "过期",
   updating: "更新中",
 };
@@ -32,16 +33,19 @@ function selectedDateMatches(logicalDate: string): boolean {
 }
 
 /**
- * Date-driven Journal body. Copy and bounded export act strictly on the
- * currently loaded current published version; state and important notices are
- * never hidden behind a disclosure.
+ * Date-driven Journal body. The heading carries the Chinese logical date, the
+ * publication state, and the copy/export actions; the reading column below
+ * holds the Statements, the link back to that day's chat, and the collapsed
+ * diagnostics. Notices and state notes are never hidden behind a disclosure.
  */
 export function JournalView({
   currentJournal,
-  latestNotice,
+  generationNotice,
+  logicalDate,
 }: {
   currentJournal: CurrentJournal | null;
-  latestNotice: JournalGenerationNotice | null;
+  generationNotice: JournalGenerationNotice | null;
+  logicalDate: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -50,16 +54,28 @@ export function JournalView({
   if (!currentJournal) {
     return (
       <section aria-label="日记" className="journalView">
-        <h1 className="journalViewTitle">日记</h1>
-        {latestNotice ? (
-          <p className="diagnosticNotice">
-            {describeJournalGenerationNotice(latestNotice)}
-          </p>
-        ) : (
-          <p className="emptyConversation">
-            还没有可读的日记。交流结束后会自动生成，无需手动创建。
-          </p>
-        )}
+        <div className="journalHeading">
+          <div className="journalHeadingTitle">
+            <h1 className="journalViewTitle">
+              {logicalDate ? formatLogicalDate(logicalDate) : "日记"}
+            </h1>
+          </div>
+        </div>
+        <div className="journalBody">
+          <div className="journalNotices">
+            {generationNotice ? (
+              <p className="diagnosticNotice">
+                {describeJournalGenerationNotice(generationNotice)}
+              </p>
+            ) : (
+              <p className="emptyConversation">
+                {logicalDate
+                  ? "这一天的交流内容较少，没有可以发布的日记。"
+                  : "还没有可读的日记。交流结束后会自动生成，无需手动创建。"}
+              </p>
+            )}
+          </div>
+        </div>
       </section>
     );
   }
@@ -75,6 +91,31 @@ export function JournalView({
       statementText: statement.text,
     })),
   );
+  const notices: { tone: "diagnostic" | "note"; text: string }[] = [];
+  if (generationNotice) {
+    notices.push({
+      tone: "diagnostic",
+      text: describeJournalGenerationNotice(generationNotice),
+    });
+  }
+  if (journal.version.diagnosticStatus === "unavailable") {
+    notices.push({
+      tone: "diagnostic",
+      text: "这篇日记已发布，但语义诊断暂时不可用。",
+    });
+  }
+  if (journal.state === "outdated") {
+    notices.push({
+      tone: "note",
+      text: "这篇日记已经过期，会在当前交流结束后重新生成。",
+    });
+  }
+  if (journal.state === "updating") {
+    notices.push({
+      tone: "note",
+      text: "正在根据最新交流更新这篇日记。",
+    });
+  }
 
   async function copy(): Promise<void> {
     if (!selectedDateMatches(journal.logicalDate)) {
@@ -112,82 +153,80 @@ export function JournalView({
   return (
     <section aria-label="日记" className="journalView">
       <div className="journalHeading">
-        <div>
-          <p className="eyebrow">Journal</p>
-          <h1 className="journalViewTitle">{journal.logicalDate}</h1>
-        </div>
-        <div className="journalHeadingMeta">
+        <div className="journalHeadingTitle">
+          <h1 className="journalViewTitle">
+            {formatLogicalDate(journal.logicalDate)}
+          </h1>
           <span
             className={`journalState journalState-${journal.state}`}
             data-state={journal.state}
           >
             {STATE_LABEL[journal.state]}
           </span>
-          <Link
-            className="journalChatLink"
-            href={`/internal?date=${journal.logicalDate}`}
-          >
-            查看当天聊天
-          </Link>
+        </div>
+        <div className="journalActions">
+          <button onClick={() => void copy()} type="button">
+            <CopyIcon />
+            {copied ? "已复制" : "复制"}
+          </button>
+          <button disabled={!boundedExport} onClick={exportJournal} type="button">
+            <ExportIcon />
+            导出
+          </button>
         </div>
       </div>
-      {latestNotice ? (
-        <p className="diagnosticNotice">
-          {describeJournalGenerationNotice(latestNotice)}
-        </p>
-      ) : null}
-      {journal.version.diagnosticStatus === "unavailable" ? (
-        <p className="diagnosticNotice">
-          这篇日记已发布，但语义诊断暂时不可用。
-        </p>
-      ) : null}
-      {journal.state === "outdated" ? (
-        <p className="note">
-          这篇日记已经过期，会在当前交流结束后重新生成。
-        </p>
-      ) : null}
-      {journal.state === "updating" ? (
-        <p className="note">正在根据最新交流更新这篇日记。</p>
-      ) : null}
-      <div className="journalStatements">
-        {journal.version.statements.map((statement) => (
-          <div className="journalStatementBlock" key={statement.id}>
-            <p className="journalStatement">{statement.text}</p>
-            {statement.diagnosticFindings?.map((finding) => (
+      <div className="journalBody">
+        {notices.length > 0 ? (
+          <div className="journalNotices">
+            {notices.map((notice) => (
               <p
-                className="journalFinding"
-                key={`${finding.code}:${finding.detailCode}`}
+                className={
+                  notice.tone === "diagnostic" ? "diagnosticNotice" : "note"
+                }
+                key={notice.text}
               >
-                {describeJournalFinding(finding)}
+                {notice.text}
               </p>
             ))}
           </div>
-        ))}
-      </div>
-      {rawFindings.length > 0 ? (
-        <details className="journalRawDiagnostics">
-          <summary>原始诊断信息</summary>
-          <ul>
-            {rawFindings.map(({ finding, statementText }, index) => (
-              <li key={`${statementText}:${finding.code}:${finding.detailCode}:${index}`}>
-                <span className="journalRawStatement">{statementText}</span>
-                <code>{`${finding.code}:${finding.detailCode}`}</code>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      <div className="journalActions">
-        <button onClick={() => void copy()} type="button">
-          {copied ? "已复制" : "复制"}
-        </button>
-        <button
-          disabled={!boundedExport}
-          onClick={exportJournal}
-          type="button"
+        ) : null}
+        <div className="journalStatements">
+          {journal.version.statements.map((statement) => (
+            <div className="journalStatementBlock" key={statement.id}>
+              <p className="journalStatement">{statement.text}</p>
+              {statement.diagnosticFindings?.map((finding) => (
+                <p
+                  className="journalFinding"
+                  key={`${finding.code}:${finding.detailCode}`}
+                >
+                  {describeJournalFinding(finding)}
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
+        <Link
+          className="journalChatLink"
+          href={`/internal?date=${journal.logicalDate}`}
         >
-          导出这篇日记
-        </button>
+          查看当天聊天
+          <span aria-hidden="true">→</span>
+        </Link>
+        {rawFindings.length > 0 ? (
+          <details className="journalRawDiagnostics">
+            <summary>诊断详情</summary>
+            <ul>
+              {rawFindings.map(({ finding, statementText }, index) => (
+                <li
+                  key={`${statementText}:${finding.code}:${finding.detailCode}:${index}`}
+                >
+                  <span className="journalRawStatement">{statementText}</span>
+                  <code>{`${finding.code}:${finding.detailCode}`}</code>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </div>
       {!boundedExport ? (
         <p className="submissionError">这篇日记过大，无法安全导出。</p>
@@ -201,5 +240,42 @@ export function JournalView({
         </p>
       ) : null}
     </section>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
+      viewBox="0 0 16 16"
+      width="16"
+    >
+      <path d="M5.6 3.1h5.8a1.5 1.5 0 0 1 1.5 1.5v5.8" />
+      <path d="M3.1 5.6h5.8a1.5 1.5 0 0 1 1.5 1.5v5.8H4.6a1.5 1.5 0 0 1-1.5-1.5z" />
+    </svg>
+  );
+}
+
+function ExportIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.5"
+      viewBox="0 0 16 16"
+      width="16"
+    >
+      <path d="M8 2.6v7.2M5.2 7.2 8 10l2.8-2.8" />
+      <path d="M3.1 11.1v1.3a1.5 1.5 0 0 0 1.5 1.5h6.8a1.5 1.5 0 0 0 1.5-1.5v-1.3" />
+    </svg>
   );
 }

@@ -44,18 +44,26 @@ export default async function JournalsPage(props: JournalsPageProps) {
       ? requestedDate
       : null;
 
-  const [currentJournal, latestJournalNotice] = await Promise.all([
-    logicalDate
-      ? composition.journalService.readByDate({ logicalDate, userId })
-      : composition.journalService.readLatest({ userId }),
-    composition.journalService.readLatestGenerationNotice({ userId }),
-  ]);
+  const currentJournal = logicalDate
+    ? await composition.journalService.readByDate({ logicalDate, userId })
+    : await composition.journalService.readLatest({ userId });
+
+  // The notice belongs to the date whose Journal is on screen; another date's
+  // unresolved failure never leaks into this view.
+  const noticeDate = logicalDate ?? currentJournal?.logicalDate ?? null;
+  const generationNotice = noticeDate
+    ? await composition.journalService.readGenerationNoticeForDate({
+        logicalDate: noticeDate,
+        userId,
+      })
+    : null;
 
   return (
     <div className="portalPage">
       <JournalView
         currentJournal={currentJournal}
-        latestNotice={latestJournalNotice}
+        generationNotice={generationNotice}
+        logicalDate={logicalDate}
       />
     </div>
   );
