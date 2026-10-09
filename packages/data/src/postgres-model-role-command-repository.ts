@@ -18,8 +18,10 @@ import type {
 } from "@sayhear/application";
 import {
   isModelRoleAttemptKind,
+  matchFrozenPrefixSchemaContract,
   normalizeModelRoleCallUsage,
   ONE_A_3B_G1_ENABLED_ROLES,
+  registeredSchemaExtensions,
 } from "@sayhear/application";
 import {
   asGenerationCommandId,
@@ -350,15 +352,18 @@ async function assertG1SchemaContract(
      FROM schema_migrations
      ORDER BY migration_name`,
   );
-  const expected = schemaContract.migrations;
-  const matches =
-    applied.rows.length === expected.length &&
-    applied.rows.every(
-      (row, index) =>
-        row.migration_name === expected[index]?.name &&
-        row.migration_sha256 === expected[index]?.sha256,
-    );
-  if (!matches) {
+  // The accepted manifest freezes an exact prefix. Registered additive
+  // extensions may follow it, but only in order, by name and by SHA-256; an
+  // unregistered extra fails with the same frozen-contract error as before.
+  const match = matchFrozenPrefixSchemaContract({
+    expected: schemaContract.migrations,
+    applied: applied.rows.map((row) => ({
+      name: row.migration_name,
+      sha256: row.migration_sha256,
+    })),
+    extensions: registeredSchemaExtensions("business"),
+  });
+  if (!match.matches) {
     throw new Error(
       `Database schema does not match the frozen G1 migration contract ${schemaContract.fingerprint}.`,
     );

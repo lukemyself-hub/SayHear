@@ -45,6 +45,7 @@ const R1 = "44444444-4444-7444-8444-444444444404";
 const GC1 = "44444444-4444-7444-8444-444444444405";
 const MA1 = "44444444-4444-7444-8444-444444444406";
 const PD1 = "44444444-4444-7444-8444-444444444407";
+const CC1 = "44444444-4444-7444-8444-444444444409";
 // A restored backup replays rows; it never mutates the purge tombstone in
 // place (the revision immutability trigger rejects that, by design). The
 // restore therefore inserts the backed-up content as a new revision row.
@@ -322,6 +323,26 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         'conversation.text', 'openai-conversation-text:v1', 1, 'completed',
         '${t0}', '${t0}', '${t1}'
       );
+      INSERT INTO compiled_contexts (
+        compiled_context_id, user_id, generation_command_id, compiler_version,
+        dialogue_revision, source_revision, locale, section_budgets,
+        total_tokens, content_hmac, created_at, policy_versions, sections,
+        integrity_algorithm, integrity_key_version
+      ) VALUES (
+        '${CC1}', '${OWNER}', '${GC1}',
+        'context-compiler:recent-context:v1', 1, 1, 'en',
+        '{"recentConversationContext": 100}', 20, 'hmac-recent', '${t0}',
+        '{"recentContextGovernanceVersion":"recent-context-governance:v1"}',
+        '[]', 'hmac-sha256', 'context-integrity:legacy'
+      );
+      INSERT INTO compiled_context_revision_refs (
+        compiled_context_id, user_id, conversation_event_revision_id, ordinal,
+        actor, estimated_tokens, sequence_no, section, selection_order,
+        daily_session_id, expressed_at, occurred_at, selection_reason
+      ) VALUES (
+        '${CC1}', '${OWNER}', '${R1}', 0, 'user', 20, 1,
+        'recent_conversation_context', 0, '${D1}', '${t0}', '${t0}', 'today'
+      );
     `);
   }
 
@@ -543,6 +564,99 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
       "purge-surface-registry:v1",
     );
   }, 120_000);
+
+  it("AC-L02 drill new recent-context surfaces: purge clears the owner-scoped freeze and cannot revive global governance", async () => {
+    await seedCanaryChain();
+    await database.pool.query(`
+      INSERT INTO recent_context_policies (
+        policy_version, status, compiler_version, selector_policy_version,
+        selection_policy_version, budget_tokens, max_candidate_rows,
+        max_candidate_bytes, max_single_event_tokens, read_timeout_ms,
+        changed_by, created_at
+      ) VALUES (
+        'recent-context-governance:test:v1', 'active',
+        'context-compiler:recent-context:v1', 'recent-context-selector:v1',
+        'recent-context-selection:v1', 1000, 200, 20000, 400, 2000,
+        'synthetic-operator', '${BASE_TIME.toISOString()}'
+      );
+    `);
+
+    const { order } = await startPurgeOrder();
+    const result = await purgeService.propagate({
+      ownerPurgeOrderId: order.ownerPurgeOrderId,
+    });
+    expect(result.status).toBe("retention_pending");
+
+    // The owner-scoped recent-context freeze and its compiled context are
+    // cleared; nothing survives to be replayed into a later selection.
+    expect(
+      await countRows("SELECT 1 FROM compiled_context_revision_refs"),
+    ).toBe(0);
+    expect(await countRows("SELECT 1 FROM compiled_contexts")).toBe(0);
+    expect(await countRows("SELECT 1 FROM generation_commands")).toBe(0);
+
+    // The source content is a content-free tombstone, not resurrected text.
+    const revisions = await database.pool.query<{
+      canonical_text: string;
+      content_purged_at: Date | null;
+    }>(
+      "SELECT canonical_text, content_purged_at FROM conversation_event_revisions WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(revisions.rows).toHaveLength(1);
+    expect(revisions.rows[0]).toMatchObject({ canonical_text: "" });
+    expect(revisions.rows[0]?.content_purged_at).not.toBeNull();
+
+    // The versioned, content-free governance identity carries no user_id, so
+    // it is outside the owner Full Purge Surface Registry and is deliberately
+    // retained; a purge can never resurrect a revoked version because
+    // re-enabling always inserts a brand-new version.
+    const policies = await database.pool.query<{ policy_version: string }>(
+      "SELECT policy_version FROM recent_context_policies",
+    );
+    expect(policies.rows.map((row) => row.policy_version)).toEqual([
+      "recent-context-governance:test:v1",
+    ]);
+  }, 120_000);
+
+  it("keeps the purge-marker schema contract exact and fails closed on an unregistered migration", async () => {
+    const applied = await markerDatabase.pool.query<{
+      migration_name: string;
+      migration_sha256: string;
+    }>(
+      `SELECT migration_name, migration_sha256
+       FROM schema_migrations
+       ORDER BY migration_name`,
+    );
+    const pins = applied.rows.map((row) => ({
+      name: row.migration_name,
+      sha256: row.migration_sha256,
+    }));
+    const contract = {
+      purgeMarkerMigrations: pins,
+      purgeMarkerFingerprint: `sha256:${"a".repeat(64)}`,
+    };
+    const exact = new PostgresPurgeMarkerRepository(
+      markerDatabase.pool,
+      contract,
+    );
+    await expect(exact.findLatestMarker({ userId: OWNER })).resolves.toBeNull();
+
+    await markerDatabase.pool.query(
+      `INSERT INTO schema_migrations (migration_name, migration_sha256)
+       VALUES ('9999_unregistered.sql', $1)`,
+      ["a".repeat(64)],
+    );
+    try {
+      await expect(exact.findLatestMarker({ userId: OWNER })).rejects.toThrow(
+        /Purge-marker schema does not match the frozen G1 migration contract/,
+      );
+    } finally {
+      await markerDatabase.pool.query(
+        "DELETE FROM schema_migrations WHERE migration_name = '9999_unregistered.sql'",
+      );
+    }
+  }, 60_000);
 
   async function seedCanaryChainRestored(): Promise<void> {
     // The purge tombstoned the R1 revision row instead of deleting it, and

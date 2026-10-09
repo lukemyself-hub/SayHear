@@ -10,6 +10,7 @@
     "build": "pnpm --filter @sayhear/web build",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:purge-surfaces": "tsx scripts/check-purge-surface-inventory.ts",
+    "check:schema-extensions": "tsx scripts/check-schema-extensions.ts",
     "canary:workflow": "tsx scripts/verify-hosted-workflow-canary.ts",
     "release:g1:produce": "tsx scripts/produce-1a3b-g1-evidence.ts",
     "release:g1:build": "tsx scripts/build-1a3b-g1-release-manifest.ts",
@@ -33,7 +34,7 @@
     "ci:verify-test-databases": "tsx scripts/ci/verify-test-databases.ts",
     "ci:assert-system-suites": "tsx scripts/ci/assert-system-suites-ran.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.g1-tools.json && pnpm -r --if-present typecheck",
-    "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm typecheck && pnpm test:ci && pnpm build"
+    "validate": "pnpm check:runtime && pnpm check:boundaries && pnpm check:purge-surfaces && pnpm check:schema-extensions && pnpm typecheck && pnpm test:ci && pnpm build"
   },
   "devDependencies": {
     "@sayhear/ai": "workspace:*",
