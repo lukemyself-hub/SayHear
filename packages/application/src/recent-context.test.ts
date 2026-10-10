@@ -13,6 +13,7 @@ import {
   createContextCompiler,
   LEGACY_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_TIME_COMPILER_VERSION,
   type ContextCompilerRepository,
   type ContextPolicyVersions,
   type ContextSourceSnapshot,
@@ -1078,19 +1079,24 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
   function createCompilerWithRecent(
     items: readonly RecentContextSourceItem[],
     extraEvents: ContextSourceSnapshot["events"] = [],
+    options: Readonly<{
+      compilerVersion?: string;
+      sourceOverrides?: Partial<ContextSourceSnapshot>;
+    }> = {},
   ) {
     let saved:
       | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]
       | undefined;
     const compiler = createContextCompiler({
       clock: () => new Date("2026-08-14T09:00:00.000Z"),
-      compilerVersion: "context-compiler:v1",
+      compilerVersion:
+        options.compilerVersion ?? "context-compiler:time:v1",
       contentHmacSecret: "recent-context-integrity-secret",
       rawEventTokenBudget: 4_000,
       recentContext: { policy: POLICY, source: sourcePort(items) },
       repository: {
         async loadContextSource() {
-          return buildSource(extraEvents);
+          return { ...buildSource(extraEvents), ...options.sourceOverrides };
         },
         async saveCompiledContext(input) {
           saved = input;
@@ -1154,6 +1160,110 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       currentInputRevisionId,
     ]);
     expect(payload.instructions).not.toContain("yesterday");
+  });
+
+  it("sends the current and per-message time anchors through the time-aware Context version", async () => {
+    const currentAt = new Date("2026-11-01T09:30:00.000Z");
+    const sameSessionLateNight = {
+      actor: "user" as const,
+      expressedAt: "2026-11-01T06:55:00.000Z",
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+      revisionId: rev(0x602),
+      sequence: 7,
+      text: "I went to bed late.",
+    };
+    const sameSessionBeforeClockChange = {
+      actor: "assistant" as const,
+      expressedAt: "2026-11-01T08:30:00.000Z",
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+      revisionId: rev(0x603),
+      sequence: 8,
+      text: "You said it was 1:30.",
+    };
+    const currentInput = {
+      actor: "user" as const,
+      expressedAt: currentAt.toISOString(),
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+      revisionId: currentInputRevisionId,
+      sequence: 9,
+      text: "What did I say yesterday?",
+    };
+    const { compiler, saved } = createCompilerWithRecent(
+      [
+        item({
+          dailySessionId: earlierSessionId,
+          expressedAt: "2026-10-31T14:30:00.000Z",
+          expressionTimezone: "Asia/Shanghai",
+          expressionTimezoneSource: "request",
+          revisionId: 0x601,
+          sequence: 4,
+          text: "I visited the garden yesterday.",
+        }),
+      ],
+      [],
+      {
+        compilerVersion: "context-compiler:time:v1",
+        sourceOverrides: {
+          commandCreatedAt: currentAt,
+          events: [sameSessionLateNight, sameSessionBeforeClockChange, currentInput],
+          requestTimezone: "America/Los_Angeles",
+        },
+      },
+    );
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+    const manifest = saved();
+    if (!manifest) throw new Error("The test manifest was not captured.");
+
+    const timeSection = manifest.sections.find(
+      (section) => section.key === "time_context",
+    );
+    expect(timeSection).toBeDefined();
+    const payload = compiler.renderPermittedPayload({
+      ...manifest,
+      generationStage: "decision",
+    });
+
+    expect(payload.instructions).toContain("current request anchor");
+    expect(payload.instructions).toContain("local date=2026-11-01");
+    expect(payload.instructions).toContain("local time=01:30:00 GMT-8");
+    expect(payload.instructions).toContain("timezone=America/Los_Angeles");
+    expect(payload.instructions).toContain("timezone=Asia/Shanghai");
+    expect(payload.instructions).toContain("local date=2026-10-31");
+    expect(payload.instructions).toContain("local time=23:55:00 GMT-7");
+    expect(payload.instructions).toContain("local time=01:30:00 GMT-7");
+    expect(payload.instructions).toContain(String(recentRevisionId));
+    expect(payload.instructions).toContain(String(rev(0x602)));
+    expect(payload.instructions).toContain(String(rev(0x603)));
+    expect(payload.instructions).toContain("experience time");
+    expect(timeSection?.selectedTokens).toBeGreaterThan(0);
+    expect(manifest.totalTokens).toBe(
+      manifest.sections.reduce((total, section) => total + section.selectedTokens, 0),
+    );
+
+    const tamperedSections = manifest.sections.map((section) =>
+      section.key === "time_context"
+        ? {
+            ...section,
+            reference: section.reference.replace(
+              "America/Los_Angeles",
+              "America/New_York",
+            ),
+          }
+        : section,
+    );
+    expect(() =>
+      compiler.renderPermittedPayload({
+        ...manifest,
+        generationStage: "decision",
+        sections: tamperedSections,
+      }),
+    ).toThrow(CompiledContextIntegrityError);
   });
 
   it("excludes events committed after the admitted command cutoff", async () => {
@@ -1279,8 +1389,28 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
     const recentManifest = recent.saved();
     if (!recentManifest) throw new Error("The recent manifest was not captured.");
     expect(recentManifest.compilerVersion).toBe(
+      RECENT_CONTEXT_TIME_COMPILER_VERSION,
+    );
+
+    const oldRecent = createCompilerWithRecent([], [], {
+      compilerVersion: LEGACY_CONTEXT_COMPILER_VERSION,
+    });
+    await oldRecent.compiler.compile({
+      generationCommandId,
+      interactionTurnId,
+      userId,
+    });
+    const oldRecentManifest = oldRecent.saved();
+    if (!oldRecentManifest) {
+      throw new Error("The old recent Context was not captured.");
+    }
+    expect(oldRecentManifest.compilerVersion).toBe(
       RECENT_CONTEXT_COMPILER_VERSION,
     );
+    expect(recent.compiler.renderPermittedPayload({
+      ...oldRecentManifest,
+      generationStage: "decision",
+    }).messages).toHaveLength(1);
 
     let legacyManifest:
       | Parameters<ContextCompilerRepository["saveCompiledContext"]>[0]

@@ -270,6 +270,8 @@ export function sectionVersionLabel(
         referenceValue(section.reference, ":closure:", ":dialogue:") ??
         "daily-session"
       );
+    case "time_context":
+      return "context-time:v1";
     case "action_finalization_receipt":
       return /^receipt:\d+$/.test(section.reference)
         ? section.reference

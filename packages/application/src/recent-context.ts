@@ -158,6 +158,9 @@ export type RecentContextSourceItem = Readonly<{
   }> | null;
   /** Message expression instant (ISO-8601); never the Daily Session date. */
   expressedAt: string;
+  /** IANA zone used to interpret the expression instant, when known. */
+  expressionTimezone?: string | null;
+  expressionTimezoneSource?: "request" | "session_start_fallback" | "unknown";
   /**
    * The Assistant event's own `generation_command_id`, when the row is an
    * Assistant. `null` is the pre-0003 legacy shape; `undefined` is used only by
@@ -344,6 +347,8 @@ export type RecentContextSelectedEvent = Readonly<{
   dailySessionId: DailySessionId;
   estimatedTokens: number;
   expressedAt: string;
+  expressionTimezone?: string | null;
+  expressionTimezoneSource?: "request" | "session_start_fallback" | "unknown";
   /** InteractionTurn of the source revision; see {@link RecentContextSourceItem}. */
   interactionTurnId?: InteractionTurnId | null;
   occurredAt: string | null;
@@ -748,6 +753,12 @@ export function selectRecentContext(input: {
       dailySessionId: item.dailySessionId,
       estimatedTokens,
       expressedAt: item.expressedAt,
+      ...(item.expressionTimezone === undefined
+        ? {}
+        : { expressionTimezone: item.expressionTimezone }),
+      ...(item.expressionTimezoneSource === undefined
+        ? {}
+        : { expressionTimezoneSource: item.expressionTimezoneSource }),
       ...(item.interactionTurnId === undefined ||
       item.interactionTurnId === null
         ? {}

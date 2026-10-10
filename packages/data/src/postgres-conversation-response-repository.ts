@@ -104,6 +104,9 @@ type ContextHeadRow = Readonly<{
 
 type ContextEventRow = Readonly<{
   actor: "user" | "assistant";
+  expressed_at: Date;
+  expression_timezone: string | null;
+  expression_timezone_source: "request" | "session_start_fallback" | null;
   locale: string;
   revision_id: string;
   sequence_no: string;
@@ -803,6 +806,20 @@ export class PostgresConversationResponseRepository
         `
           SELECT
             event.actor,
+            event.created_at AS expressed_at,
+            COALESCE(
+              generating_command.request_timezone,
+              expression_command.request_timezone,
+              session.timezone_at_start
+            ) AS expression_timezone,
+            CASE
+              WHEN generating_command.request_timezone IS NOT NULL
+                THEN 'request'
+              WHEN expression_command.request_timezone IS NOT NULL
+                THEN 'request'
+              WHEN session.timezone_at_start IS NOT NULL
+                THEN 'session_start_fallback'
+            END AS expression_timezone_source,
             event.sequence_no,
             revision.conversation_event_revision_id AS revision_id,
             revision.locale,
@@ -811,6 +828,9 @@ export class PostgresConversationResponseRepository
           INNER JOIN interaction_turns turn
             ON turn.interaction_turn_id = command.interaction_turn_id
             AND turn.user_id = command.user_id
+          INNER JOIN daily_sessions session
+            ON session.daily_session_id = turn.daily_session_id
+            AND session.user_id = turn.user_id
           INNER JOIN conversation_events input_event
             ON input_event.conversation_event_id = command.subject_id
             AND input_event.user_id = command.user_id
@@ -820,6 +840,22 @@ export class PostgresConversationResponseRepository
           INNER JOIN conversation_event_revisions revision
             ON revision.conversation_event_revision_id = event.current_revision_id
             AND revision.user_id = event.user_id
+          LEFT JOIN generation_commands generating_command
+            ON generating_command.generation_command_id =
+              event.generation_command_id
+            AND generating_command.user_id = event.user_id
+          LEFT JOIN LATERAL (
+            SELECT request_command.request_timezone
+            FROM generation_commands request_command
+            WHERE event.actor = 'user'
+              AND request_command.subject_type = 'conversation_event'
+              AND request_command.subject_id = event.conversation_event_id
+              AND request_command.interaction_turn_id =
+                event.interaction_turn_id
+              AND request_command.user_id = event.user_id
+            ORDER BY request_command.created_at
+            LIMIT 1
+          ) expression_command ON TRUE
           WHERE command.generation_command_id = $1
             AND command.user_id = $2
             AND event.sequence_no <= input_event.sequence_no
@@ -967,6 +1003,10 @@ export class PostgresConversationResponseRepository
           : { requestTimezone: row.request_timezone }),
         events: events.rows.map((event) => ({
           actor: event.actor,
+          expressedAt: event.expressed_at.toISOString(),
+          expressionTimezone: event.expression_timezone,
+          expressionTimezoneSource:
+            event.expression_timezone_source ?? "unknown",
           locale: event.locale,
           revisionId: asConversationEventRevisionId(event.revision_id),
           sequence: Number(event.sequence_no),

@@ -28,6 +28,8 @@ type CandidateRow = Readonly<{
   daily_session_id: string | null;
   exclusion: { controlId: string; reason: string } | null;
   expressed_at: Date | null;
+  expression_timezone: string | null;
+  expression_timezone_source: "request" | "session_start_fallback" | null;
   fitting_cap_hit: boolean;
   generation_command_id: string | null;
   generating_user_revision_id: string | null;
@@ -110,6 +112,17 @@ export const RECENT_CONTEXT_CANDIDATE_SQL = `
         pg_catalog.octet_length(revision.canonical_text) AS text_bytes,
         event.created_at AS expressed_at,
         COALESCE(
+          generating_command.request_timezone,
+          expression_command.request_timezone,
+          session.timezone_at_start
+        ) AS expression_timezone,
+        CASE
+          WHEN generating_command.request_timezone IS NOT NULL THEN 'request'
+          WHEN expression_command.request_timezone IS NOT NULL THEN 'request'
+          WHEN session.timezone_at_start IS NOT NULL
+            THEN 'session_start_fallback'
+        END AS expression_timezone_source,
+        COALESCE(
           (
             SELECT jsonb_build_object(
               'controlId', exclusion.memory_forget_request_id::text,
@@ -157,6 +170,20 @@ export const RECENT_CONTEXT_CANDIDATE_SQL = `
         ON generating_command.generation_command_id =
           event.generation_command_id
        AND generating_command.user_id = event.user_id
+      LEFT JOIN LATERAL (
+        SELECT request_command.request_timezone
+        FROM generation_commands request_command
+        WHERE event.actor = 'user'
+          AND request_command.subject_type = 'conversation_event'
+          AND request_command.subject_id = event.conversation_event_id
+          AND request_command.interaction_turn_id = event.interaction_turn_id
+          AND request_command.user_id = event.user_id
+        ORDER BY request_command.created_at
+        LIMIT 1
+      ) expression_command ON TRUE
+      LEFT JOIN daily_sessions session
+        ON session.daily_session_id = event.daily_session_id
+       AND session.user_id = event.user_id
       WHERE event.user_id = $1
         AND event.actor IN ('user', 'assistant')
         AND event.lifecycle_status = 'active'
@@ -271,6 +298,8 @@ export const RECENT_CONTEXT_CANDIDATE_SQL = `
     bounded.text,
     bounded.text_bytes,
     bounded.expressed_at,
+    bounded.expression_timezone,
+    bounded.expression_timezone_source,
     bounded.exclusion,
     stats.candidate_count,
     stats.row_bounded,
@@ -425,6 +454,9 @@ export class PostgresRecentContextSource implements RecentContextSourcePort {
               ? null
               : { controlId: row.exclusion.controlId, reason: controlReason },
           expressedAt: row.expressed_at!.toISOString(),
+          expressionTimezone: row.expression_timezone,
+          expressionTimezoneSource:
+            row.expression_timezone_source ?? "unknown",
           generationCommandId: row.generation_command_id,
           generatingUserRevisionId:
             row.generating_user_revision_id === null

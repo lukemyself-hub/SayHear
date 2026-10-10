@@ -47,6 +47,7 @@ import {
   loadPredicateRegistrySnapshot,
   PREDICATE_REGISTRY_RUNTIME_VERSION,
   RECENT_CONTEXT_DEFAULT_POLICY,
+  TIME_AWARE_CONTEXT_COMPILER_VERSION,
   createMemoryConsolidationScanService,
   createEpisodeBuilderScanService,
   createReflectionSchedulerScanService,
@@ -673,7 +674,7 @@ export function createServerComposition() {
     : undefined;
   const contextCompiler = createContextCompiler({
     clock: configuration.clock,
-    compilerVersion: "context-compiler:v1",
+    compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
     contentHmacSecret: configuration.contextHmacSecret,
     rawEventTokenBudget: 4_000,
     // #294: the seven-local-day bounded recent source. It is wired into the

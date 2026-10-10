@@ -20,6 +20,7 @@ import {
   JOURNAL_REGENERATION_CONVERSATION_ACTION_CATALOG,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,
   PERSONA_CONTRACT_INVARIANT_VERSION,
+  TIME_AWARE_CONTEXT_COMPILER_VERSION,
   validateMinimumHighRiskResponse,
   validateUnderstandingResponse,
   type ConversationTextChampion,
@@ -383,7 +384,7 @@ async function main(): Promise<void> {
   // the recorded manifest both read these constants, so the manifest cannot
   // drift from what actually ran.
   const contextCompilerSettings = {
-    compilerVersion: "context-compiler:v1",
+    compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
     rawEventTokenBudget: 4_000,
   } as const;
   const generationPolicy: GenerationPolicy = {
