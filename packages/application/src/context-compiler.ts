@@ -269,10 +269,6 @@ export type CompiledContextReferencedEvent = ContextSourceEvent &
     dailySessionId?: DailySessionId;
     estimatedTokens: number;
     /** Message expression instant for cross-session ordering (ISO-8601). */
-    expressedAt?: string;
-    /** IANA timezone used to interpret this message's expression time. */
-    expressionTimezone?: string | null;
-    expressionTimezoneSource?: "request" | "session_start_fallback" | "unknown";
     /** Real-world event time when the source supplied it; never fabricated. */
     occurredAt?: string | null;
     selectionReason?: string | null;
@@ -415,12 +411,22 @@ export const RECENT_CONTEXT_COMPILER_VERSION =
   "context-compiler:recent:v1" as const;
 
 /** Time-aware frozen Context format for same-session and current request time. */
-export const TIME_AWARE_CONTEXT_COMPILER_VERSION =
+export const PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v1" as const;
 
+export const TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v2" as const;
+
 /** Recent selection plus the time-aware frozen Context format. */
-export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
+export const PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v1" as const;
+
+export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v2" as const;
+
+const CONTEXT_TIME_BASE_TOKEN_BUDGET = 256;
+const CONTEXT_TIME_ENTRY_TOKEN_BUDGET = 12;
+const CONTEXT_TIME_ZONE_TOKEN_BUDGET = 16;
 
 type ContextTimeEntry = Readonly<{
   actor: "user" | "assistant";
@@ -801,6 +807,10 @@ export function createContextCompiler(dependencies: {
         (section) => section.key === "time_context",
       );
       const hasTimeMetadata = timeSection !== undefined;
+      const previousTimeFormat =
+        source.compilerVersion === PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+        source.compilerVersion ===
+          PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION;
       const versionAccepted =
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
@@ -808,6 +818,14 @@ export function createContextCompiler(dependencies: {
           !hasRecentMetadata) ||
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION &&
+          hasTimeMetadata &&
+          hasRecentMetadata) ||
+        (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          source.compilerVersion === PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          hasTimeMetadata &&
+          !hasRecentMetadata) ||
+        (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          source.compilerVersion === PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION &&
           hasTimeMetadata &&
           hasRecentMetadata) ||
         (source.compilerVersion === RECENT_CONTEXT_COMPILER_VERSION &&
@@ -895,12 +913,7 @@ export function createContextCompiler(dependencies: {
         }
         if (
           !contextTimeMetadataMatches(timeContext, [
-            ...source.referencedEvents.filter(
-              (event) => event.section === "recent_conversation_context",
-            ).toSorted(
-              (left, right) =>
-                (left.selectionOrder ?? 0) - (right.selectionOrder ?? 0),
-            ),
+            ...recentEvents,
             ...history,
             ...(currentInput ? [currentInput] : []),
           ]) ||
@@ -915,7 +928,8 @@ export function createContextCompiler(dependencies: {
       }
       if (
         (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
-          source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION) &&
+          source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+          previousTimeFormat) &&
         !timeContext
       ) {
         throw new CompiledContextIntegrityError();
@@ -977,7 +991,12 @@ export function createContextCompiler(dependencies: {
         contentHmacSecret: dependencies.contentHmacSecret,
         currentInput,
         dailySessionReference,
-        ...(timeContext === undefined ? {} : { timeContext }),
+        ...(timeContext === undefined
+          ? {}
+          : {
+              timeContext,
+              timeContextFormat: previousTimeFormat ? "legacy" : "compact",
+            }),
         history,
         locale: source.locale,
         policyVersions: source.policyVersions,
@@ -1419,7 +1438,72 @@ function contextTimeMetadataMatches(
 }
 
 function renderContextTimeMetadata(metadata: ContextTimeMetadata): string {
+  const zones = [
+    metadata.anchor.timezone,
+    ...metadata.entries.map((entry) => entry.expressionTimezone),
+  ].filter((zone): zone is string => zone !== null);
+  const zoneCodes = new Map<string, number>();
+  for (const zone of zones) {
+    if (!zoneCodes.has(zone)) zoneCodes.set(zone, zoneCodes.size);
+  }
   const anchor = formatContextInstant(
+    metadata.anchor.expressedAt,
+    metadata.anchor.timezone,
+  );
+  const lines = [
+    `current request anchor: instant=${metadata.anchor.expressedAt ?? "unknown"}; timezone=${metadata.anchor.timezone ?? "unknown"}; local=${anchor}; source=${metadata.anchor.instantSource}.`,
+    "Expression times are when messages were written, in provider message order (1-based). Zone codes name each message's timezone; source codes are r=request, s=session-start fallback, ?=unknown. The GMT offset disambiguates repeated DST hours.",
+    `Zones: ${[...zoneCodes.entries()].map(([zone, code]) => `${code}=${zone}`).join("; ") || "none"}`,
+    "Times:",
+    ...metadata.entries.map((entry) => {
+      const zoneCode =
+        entry.expressionTimezone === null
+          ? "?"
+          : String(zoneCodes.get(entry.expressionTimezone));
+      const sourceCode =
+        entry.expressionTimezoneSource === "request"
+          ? "r"
+          : entry.expressionTimezoneSource === "session_start_fallback"
+            ? "s"
+            : "?";
+      const local = formatContextInstant(
+        entry.expressedAt,
+        entry.expressionTimezone,
+      );
+      return `${entry.messageIndex}=${local};z=${zoneCode};s=${sourceCode}`;
+    }),
+    "Expression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.",
+  ];
+  return lines.join("\n");
+}
+
+function createBoundedContextTimeMetadata(input: {
+  metadata: ContextTimeMetadata;
+  maximumMessageCount: number;
+}): Readonly<{ budgetTokens: number; content: string }> {
+  const content = renderContextTimeMetadata(input.metadata);
+  const zoneCount = new Set(
+    [
+      input.metadata.anchor.timezone,
+      ...input.metadata.entries.map((entry) => entry.expressionTimezone),
+    ].filter((zone): zone is string => zone !== null),
+  ).size;
+  const budget =
+    CONTEXT_TIME_BASE_TOKEN_BUDGET +
+    input.metadata.entries.length * CONTEXT_TIME_ENTRY_TOKEN_BUDGET +
+    zoneCount * CONTEXT_TIME_ZONE_TOKEN_BUDGET;
+  const actualTokens = estimateTokens(content);
+  if (
+    input.metadata.entries.length > input.maximumMessageCount ||
+    actualTokens > budget
+  ) {
+    throw new Error("Context time metadata exceeded its bounded token budget.");
+  }
+  return { budgetTokens: budget, content };
+}
+
+function renderLegacyContextTimeMetadata(metadata: ContextTimeMetadata): string {
+  const anchor = formatLegacyContextInstant(
     metadata.anchor.expressedAt,
     metadata.anchor.timezone,
   );
@@ -1428,7 +1512,7 @@ function renderContextTimeMetadata(metadata: ContextTimeMetadata): string {
     `current request anchor instant=${metadata.anchor.expressedAt ?? "unknown"}; source=${metadata.anchor.instantSource}; timezone=${metadata.anchor.timezone ?? "unknown"}; ${anchor}`,
     "Message expression times (when each message was written). Conversation messages use the same order as the provider message array, starting at 1:",
     ...metadata.entries.map((entry) => {
-      const local = formatContextInstant(
+      const local = formatLegacyContextInstant(
         entry.expressedAt,
         entry.expressionTimezone,
       );
@@ -1439,7 +1523,7 @@ function renderContextTimeMetadata(metadata: ContextTimeMetadata): string {
   return lines.join("\n");
 }
 
-function formatContextInstant(
+function formatLegacyContextInstant(
   instant: string | null,
   timezone: string | null,
 ): string {
@@ -1478,6 +1562,43 @@ function formatContextInstant(
     return `local date=${year}-${month}-${day}; local time=${hour}:${minute}:${second} ${offset}`;
   } catch {
     return "local date=unknown; local time=unknown (invalid timezone)";
+  }
+}
+
+function formatContextInstant(
+  instant: string | null,
+  timezone: string | null,
+): string {
+  if (instant === null) return "unknown";
+  const date = new Date(instant);
+  if (!Number.isFinite(date.getTime()) || timezone === null) return instant;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US-u-nu-latn", {
+      day: "2-digit",
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      month: "2-digit",
+      second: "2-digit",
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+      year: "numeric",
+    }).formatToParts(date);
+    const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value;
+    const year = valueOf("year");
+    const month = valueOf("month");
+    const day = valueOf("day");
+    const hour = valueOf("hour");
+    const minute = valueOf("minute");
+    const second = valueOf("second");
+    const offset = valueOf("timeZoneName");
+    if (!year || !month || !day || !hour || !minute || !second || !offset) {
+      return "local date=unknown; local time=unknown";
+    }
+    return `${year}-${month}-${day} ${hour}:${minute}:${second} ${offset}`;
+  } catch {
+    return instant;
   }
 }
 
@@ -1729,6 +1850,7 @@ function createSections(input: {
     reference: string;
   }>;
   timeContext?: ContextTimeMetadata;
+  timeContextFormat?: "compact" | "legacy";
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   // While the Safety Posture is active, enforcement is compilation: the
   // ordinary behavior anchors are swapped for the versioned reduced variant,
@@ -1748,6 +1870,23 @@ function createSections(input: {
         })
       : undefined);
   const reducedPersonaActive = safetyPostureSectionContent !== undefined;
+  const timeMetadataSection =
+    input.timeContext === undefined
+      ? undefined
+      : input.timeContextFormat === "legacy"
+        ? {
+            budgetTokens: null,
+            content: renderLegacyContextTimeMetadata(input.timeContext),
+          }
+        : {
+            ...createBoundedContextTimeMetadata({
+              metadata: input.timeContext,
+              maximumMessageCount:
+                input.rawEventTokenBudget +
+                (input.recentContext?.budgetTokens ?? 0) +
+                1,
+            }),
+          };
   const definitions: readonly Readonly<{
     budgetTokens: number | null;
     content: string;
@@ -1863,14 +2002,13 @@ function createSections(input: {
       reference: input.dailySessionReference,
       truncatable: false,
     },
-    ...(input.timeContext === undefined
+    ...(timeMetadataSection === undefined
       ? []
       : [
           {
-            budgetTokens: null,
-            content: renderContextTimeMetadata(input.timeContext),
+            ...timeMetadataSection,
             key: "time_context" as const,
-            reference: encodeContextTimeMetadata(input.timeContext),
+            reference: encodeContextTimeMetadata(input.timeContext!),
             truncatable: false,
           },
         ]),

@@ -14,6 +14,7 @@ import {
   LEGACY_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_TIME_COMPILER_VERSION,
+  TIME_AWARE_CONTEXT_COMPILER_VERSION,
   type ContextCompilerRepository,
   type ContextPolicyVersions,
   type ContextSourceSnapshot,
@@ -1090,7 +1091,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
     const compiler = createContextCompiler({
       clock: () => new Date("2026-08-14T09:00:00.000Z"),
       compilerVersion:
-        options.compilerVersion ?? "context-compiler:time:v1",
+        options.compilerVersion ?? TIME_AWARE_CONTEXT_COMPILER_VERSION,
       contentHmacSecret: "recent-context-integrity-secret",
       rawEventTokenBudget: 4_000,
       recentContext: { policy: POLICY, source: sourcePort(items) },
@@ -1208,7 +1209,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       ],
       [],
       {
-        compilerVersion: "context-compiler:time:v1",
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
         sourceOverrides: {
           commandCreatedAt: currentAt,
           events: [sameSessionLateNight, sameSessionBeforeClockChange, currentInput],
@@ -1230,16 +1231,12 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
     });
 
     expect(payload.instructions).toContain("current request anchor");
-    expect(payload.instructions).toContain("local date=2026-11-01");
-    expect(payload.instructions).toContain("local time=01:30:00 GMT-8");
-    expect(payload.instructions).toContain("timezone=America/Los_Angeles");
-    expect(payload.instructions).toContain("timezone=Asia/Shanghai");
-    expect(payload.instructions).toContain("local date=2026-10-31");
-    expect(payload.instructions).toContain("local time=23:55:00 GMT-7");
-    expect(payload.instructions).toContain("local time=01:30:00 GMT-7");
-    expect(payload.instructions).toContain(String(recentRevisionId));
-    expect(payload.instructions).toContain(String(rev(0x602)));
-    expect(payload.instructions).toContain(String(rev(0x603)));
+    expect(payload.instructions).toContain("local=2026-11-01 01:30:00 GMT-8");
+    expect(payload.instructions).toContain("0=America/Los_Angeles");
+    expect(payload.instructions).toContain("1=Asia/Shanghai");
+    expect(payload.instructions).toContain("1=2026-10-31 22:30:00 GMT+8;z=1;s=r");
+    expect(payload.instructions).toContain("2=2026-10-31 23:55:00 GMT-7;z=0;s=r");
+    expect(payload.instructions).toContain("3=2026-11-01 01:30:00 GMT-7;z=0;s=r");
     expect(payload.instructions).toContain("experience time");
     expect(timeSection?.selectedTokens).toBeGreaterThan(0);
     expect(manifest.totalTokens).toBe(
@@ -1264,6 +1261,33 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         sections: tamperedSections,
       }),
     ).toThrow(CompiledContextIntegrityError);
+  });
+
+  it("keeps missing expression time and timezone unknown in the rendered request", async () => {
+    const { compiler, saved } = createCompilerWithRecent([], [], {
+      compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+      sourceOverrides: {
+        events: [
+          {
+            actor: "user",
+            locale: "en-US",
+            revisionId: currentInputRevisionId,
+            sequence: 9,
+            text: "I cannot provide the exact time.",
+          },
+        ],
+      },
+    });
+    await compiler.compile({ generationCommandId, interactionTurnId, userId });
+    const manifest = saved();
+    if (!manifest) throw new Error("The test manifest was not captured.");
+    const payload = compiler.renderPermittedPayload({
+      ...manifest,
+      generationStage: "decision",
+    });
+
+    expect(payload.instructions).toContain("timezone=unknown");
+    expect(payload.instructions).toContain("1=unknown;z=?;s=?");
   });
 
   it("excludes events committed after the admitted command cutoff", async () => {

@@ -7,6 +7,9 @@ import {
   asModelRunAttemptId,
   asUserId,
   createContextCompiler,
+  RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   TIME_AWARE_CONTEXT_COMPILER_VERSION,
   type ContextCompilerRepository,
   type ContextPolicyVersions,
@@ -30,6 +33,9 @@ const earlierUserRevisionId = asConversationEventRevisionId(
 );
 const earlierAssistantRevisionId = asConversationEventRevisionId(
   "01984477-59a9-7d20-9d97-e588769566c4",
+);
+const recentRevisionId = asConversationEventRevisionId(
+  "01984477-59a9-7d20-9d97-e588769566c9",
 );
 const generationCommandId = asGenerationCommandId(
   "01984477-59a9-7d20-9d97-e588769566c5",
@@ -78,8 +84,66 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
       compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
       contentHmacSecret: "time-aware-provider-chain-test-secret",
       rawEventTokenBudget: 4_000,
+      recentContext: {
+        policy: RECENT_CONTEXT_DEFAULT_POLICY,
+        source: {
+          async loadRecentContextSource(request) {
+            return {
+              candidateBytes: 30,
+              candidateRows: 1,
+              failure: null,
+              items: [
+                {
+                  actor: "user" as const,
+                  dailySessionId: asDailySessionId(
+                    "01984477-59a9-7d20-9d97-e588769566d0",
+                  ),
+                  exclusion: null,
+                  expressedAt: "2026-10-31T14:30:00.000Z",
+                  expressionTimezone: "Asia/Shanghai",
+                  expressionTimezoneSource: "request" as const,
+                  occurredAt: null,
+                  revisionId: recentRevisionId,
+                  sequence: 4,
+                  text: "I visited the garden yesterday.",
+                },
+              ],
+              perDate: [],
+              policyVersion: request.policyVersion,
+              readLatencyMs: 1,
+              selectorVersion: request.selectorVersion,
+              timezone: request.timezone,
+              truncated: false,
+              windowEndLocalDate: request.windowEndLocalDate,
+              windowStartLocalDate: request.windowStartLocalDate,
+            };
+          },
+        },
+      },
       repository: {
         async loadContextSource() {
+          const shortEvents = Array.from({ length: 100 }, (_, index) => ({
+            actor: "user" as const,
+            ...(index === 0
+              ? {}
+              : {
+                  expressedAt: new Date(
+                    Date.parse("2026-11-01T04:00:00.000Z") + index * 60_000,
+                  ).toISOString(),
+                }),
+            expressionTimezone:
+              index === 0 ? null : "America/Los_Angeles",
+            expressionTimezoneSource:
+              index === 0 ? ("unknown" as const) : ("request" as const),
+            locale: "en-US",
+            revisionId: asConversationEventRevisionId(
+              `01984477-59a9-7d20-9d97-e5887695${(0x700 + index)
+                .toString(16)
+                .padStart(4, "0")}`,
+            ),
+            sequence: index + 1,
+            text: "x",
+          }));
           return {
             commandCreatedAt: new Date("2026-11-01T09:30:00.000Z"),
             dailySession: {
@@ -90,7 +154,9 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
               timezone: "America/Los_Angeles",
             },
             dialogueRevision: 1,
+            expectedDataEpoch: 1,
             events: [
+              ...shortEvents,
               {
                 actor: "user" as const,
                 expressedAt: "2026-11-01T06:55:00.000Z",
@@ -98,7 +164,7 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
                 expressionTimezoneSource: "request" as const,
                 locale: "en-US",
                 revisionId: earlierUserRevisionId,
-                sequence: 7,
+                sequence: 107,
                 text: "I went to bed late.",
               },
               {
@@ -108,7 +174,7 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
                 expressionTimezoneSource: "request" as const,
                 locale: "en-US",
                 revisionId: earlierAssistantRevisionId,
-                sequence: 8,
+                sequence: 108,
                 text: "You said it was 1:30.",
               },
               {
@@ -118,7 +184,7 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
                 expressionTimezoneSource: "request" as const,
                 locale: "en-US",
                 revisionId: inputRevisionId,
-                sequence: 9,
+                sequence: 109,
                 text: "What did I say yesterday?",
               },
             ],
@@ -126,6 +192,22 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
             inputRevisionId,
             locale: "en-US",
             policyVersions,
+            recentContextPolicy: {
+              budgetTokens:
+                RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+              compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+              maxCandidateBytes:
+                RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes,
+              maxCandidateRows:
+                RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows,
+              maxSingleEventTokens:
+                RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens,
+              policyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+              readTimeoutMs:
+                RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs,
+              selectionPolicyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+              selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+            },
             requestTimezone: "America/Los_Angeles",
             sourceRevision: 3,
           };
@@ -255,34 +337,62 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
     expect(messages?.map((message) => message["role"])).toEqual([
       "system",
       "user",
+      ...Array.from({ length: 100 }, () => "user"),
+      "user",
       "assistant",
       "user",
     ]);
     expect(messages?.[0]?.["content"]).toContain(
-      "current request anchor instant=2026-11-01T09:30:00.000Z",
+      "current request anchor: instant=2026-11-01T09:30:00.000Z",
     );
     expect(messages?.[0]?.["content"]).toContain(
-      "local date=2026-11-01; local time=01:30:00 GMT-8",
+      "local=2026-11-01 01:30:00 GMT-8",
     );
     expect(messages?.[0]?.["content"]).toContain(
-      "local date=2026-10-31; local time=23:55:00 GMT-7",
+      "2026-10-31 23:55:00 GMT-7",
     );
     expect(messages?.[0]?.["content"]).toContain(
-      "local time=01:30:00 GMT-7",
+      "2026-11-01 01:30:00 GMT-7",
     );
     expect(messages?.[0]?.["content"]).toContain(
-      `provider_message=1; revision=${earlierUserRevisionId}; role=user`,
+      "1=2026-10-31 22:30:00 GMT+8;z=1;s=r",
     );
     expect(messages?.[0]?.["content"]).toContain(
-      `provider_message=2; revision=${earlierAssistantRevisionId}; role=assistant`,
+      "2=unknown;z=?;s=?",
     );
     expect(messages?.[0]?.["content"]).toContain(
-      `provider_message=3; revision=${inputRevisionId}; role=user`,
+      "3=2026-10-31 21:01:00 GMT-7;z=0;s=r",
     );
+    expect(messages?.[0]?.["content"]).toContain(
+      "102=2026-10-31 23:55:00 GMT-7;z=0;s=r",
+    );
+    expect(messages?.[0]?.["content"]).toContain(
+      `103=2026-11-01 01:30:00 GMT-7;z=0;s=r`,
+    );
+    expect(messages?.[0]?.["content"]).toContain(
+      `104=2026-11-01 01:30:00 GMT-8;z=0;s=r`,
+    );
+    expect(messages?.[0]?.["content"]).toContain("Expression time does not establish when a described event happened");
     expect(messages?.slice(1).map((message) => message["content"])).toEqual([
+      "I visited the garden yesterday.",
+      ...Array.from({ length: 100 }, () => "x"),
       "I went to bed late.",
       "You said it was 1:30.",
       "What did I say yesterday?",
     ]);
+    const timeSection = compiled.sections.find(
+      (section) => section.key === "time_context",
+    );
+    expect(timeSection?.selectedTokens).toBeLessThanOrEqual(
+      256 + 104 * 12 + 2 * 16,
+    );
+    expect(timeSection?.budgetTokens).toBe(256 + 104 * 12 + 2 * 16);
+    expect(compiled.totalTokens).toBe(
+      compiled.sections.reduce(
+        (total, section) => total + section.selectedTokens,
+        0,
+      ),
+    );
+    expect(compiled.totalTokens).toBeLessThanOrEqual(champion.contextLimit);
   });
 });
