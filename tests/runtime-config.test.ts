@@ -226,6 +226,22 @@ describe("runtime safety configuration", () => {
     expect(resolved?.gitCommit).toBe("a".repeat(40));
   });
 
+  it.each(["", "  "])(
+    "uses the explicit deployment SHA when Vercel supplies a blank Git SHA (%j)",
+    (vercelSha) => {
+      const manifest = buildActiveG1Manifest("a".repeat(40));
+      expect(
+        resolveOneA3bG1ReleaseManifest({
+          SAYHEAR_1A_3B_G1_RELEASE_MANIFEST: JSON.stringify(manifest),
+          VERCEL_GIT_COMMIT_SHA: vercelSha,
+          SAYHEAR_DEPLOYED_GIT_COMMIT_SHA: "c".repeat(40),
+          SAYHEAR_EPISODE_BUILD_ENABLED: "true",
+          SAYHEAR_REFLECTION_ENABLED: "true",
+        })?.gitCommit,
+      ).toBe(manifest.gitCommit);
+    },
+  );
+
   it("still requires a deployment identity before a G1 write switch can open", () => {
     const manifest = buildActiveG1Manifest("a".repeat(40));
     expect(() =>

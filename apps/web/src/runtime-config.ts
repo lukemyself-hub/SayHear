@@ -114,8 +114,8 @@ export function resolveOneA3bG1ReleaseManifest(
   }
   const manifest = parsed as OneA3bG1ReleaseManifest;
   const deployedCommit =
-    environment.VERCEL_GIT_COMMIT_SHA ??
-    environment.SAYHEAR_DEPLOYED_GIT_COMMIT_SHA;
+    environment.VERCEL_GIT_COMMIT_SHA?.trim() ||
+    environment.SAYHEAR_DEPLOYED_GIT_COMMIT_SHA?.trim();
   if (g1StageFullyRequested(environment) && !deployedCommit) {
     throw new Error(
       "SAYHEAR_DEPLOYED_GIT_COMMIT_SHA or VERCEL_GIT_COMMIT_SHA is required when the G1 write switches are enabled.",

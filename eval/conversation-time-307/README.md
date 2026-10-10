@@ -33,10 +33,14 @@ uses `context-compiler:time:v3`. v1 and v2 remain independently replayable; the
 v2 fixture was captured before the v3 change and compares the complete original
 payload in regression tests.
 
-Final local validation passed: 160 test files, 2,025 tests, type and boundary
+Final local validation passed: 160 test files, 2,027 tests, type and boundary
 checks, production build and server-credential bundle check. The report gate
 confirmed 40/40 system suites, 463 system tests and zero skipped tests. Standards
 review approved; Spec review approved with non-blocking comments.
+
+The final validation also covers the deployment identity fallback: a blank
+Vercel Git SHA uses the explicit deployment SHA. This fixes CLI deployment
+startup without changing the date compiler, release manifest or model pins.
 
 One sampled response establishes this fixed scenario's result, not statistical
 reliability. This run does not establish a production-browser conversation
