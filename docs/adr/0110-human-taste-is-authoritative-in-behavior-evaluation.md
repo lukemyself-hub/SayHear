@@ -5,6 +5,10 @@ date: 2026-08-22
 
 # Human Taste Is Authoritative in Behavior Evaluation
 
+> 2026-10-09：[ADR-0151](0151-continuity-requires-history-recall-and-response-acceptance.md)
+> 为新连续记忆合同增加小规模真实模型回答验收；共情、人格及语义争议保留人工裁定，
+> 不把下述首版例外延用到新能力，也不因此恢复无关的大型评测流程。
+
 > 2026-10-07：[ADR-0150](0150-recent-context-ships-after-deterministic-validation.md)
 > 明确近期背景首版不以正式人评为上线门槛，确定性验证后由 Luke 在正常聊天中验收
 > 体验。人工味觉裁定仍是权威；下文不应解释为每次近期背景迭代都必须先做盲评。

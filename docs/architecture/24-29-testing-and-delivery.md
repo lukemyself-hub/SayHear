@@ -16,7 +16,20 @@ Proposed
 
 ## 24. 测试与故障注入
 
+### 连续记忆体验的新增验收门槛
+
+[连续记忆体验 SPEC](https://github.com/lukemyself-hub/SayHear/issues/301)与
+[ADR-0151](../adr/0151-continuity-requires-history-recall-and-response-acceptance.md)
+要求确定性来源/出站/用户控制验证之外，增加小规模固定合成场景的真实模型回答验证。
+日期、主要话题覆盖、事实、更正、自然承接、人格和取消续答须有结果证据；核心失败
+不能被总体平均分掩盖。人工味觉权威保留，自动检查/judge 仅预筛。
+场景规则见[行为评测补充](../evaluation/01-behavior-contract-and-rubric.md#连续记忆验收补充)。
+数值延迟/成本门槛与重复运行策略由技术研究后的实测决策冻结；未定不等于无约束。
+本条是新能力的目标门槛，不代表其已实现或生产验收通过。
+
 ### 近期对话背景首版验收与回滚
+
+以下仅保留首版记录，不能作为新连续记忆能力跳过实际回复验收的依据。
 
 [#290](https://github.com/lukemyself-hub/SayHear/issues/290) 与
 [ADR-0150](../adr/0150-recent-context-ships-after-deterministic-validation.md) 定义本次

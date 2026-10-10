@@ -166,6 +166,14 @@ _Avoid_: Intake question, Question stack
 来自近期历史交流的有界背景，用于理解用户当前表达；它不等同于长期 Memory，也不表示其中内容已经通过长期记忆准入。
 _Avoid_: 短期 Memory Claim, 长期 Memory, Reflection
 
+**历史回顾**:
+用户明确询问过往交流或经历时，SayHear 根据仍保留且允许使用的历史作出的回忆与概括；它不以该经历已成为长期 Memory 为前提，也不限于近期对话背景的日期窗口。
+_Avoid_: 全量 Memory, 七天背景, 历史存在保证
+
+**话题接续**:
+用户聊到相关事情时，SayHear 结合过往交流理解并继续当前话题的体验；它不要求主动问进展，也不要求每次显式提及旧事。
+_Avoid_: Proactive Memory Follow-up, 记忆展示, 主动消息
+
 **DialogueState**:
 当前 Continuous Exchange 内、由已确认 Event 异步派生的非权威对话状态，包含 `current_topic`、`emotional_intensity`、`advice_explicitly_requested`、`current_request_requires_focus`、`close_intent` 与 `user_willing_to_elaborate` 六个语义字段；每个字段都带 source revision 与 confidence，证据不足时为 null。它只帮助当前对话理解和选择回应，不是 Safety Posture、Continuous Exchange End、Conversation Action 授权、Memory 或 Profile，也不能单独关闭交流或作出安全判断。
 _Avoid_: Model-decided closure, Safety Posture, Conversation Action authorization, Memory, Profile
