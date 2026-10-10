@@ -141,6 +141,8 @@ export type RunCaseInput = Readonly<{
   environment: AcceptanceEnvironment;
   fixture: CaseFixture;
   fixtureSha256: string;
+  /** An interactive session: unplayed steps are `not-run`, not an error. */
+  interactive?: boolean;
   mode: RunMode;
   /** Called after each observed step; the interactive chat prints from it. */
   onStep?: (step: ObservedStep) => void;
@@ -428,6 +430,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
           recentContextGovernance,
           runId: environment.runId,
         },
+        ...(input.interactive ? { interactive: true } : {}),
         mode: input.mode,
         scheduledScans,
         schemaVersion: OBSERVATION_SCHEMA_VERSION,
@@ -472,32 +475,37 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   };
 }
 
+/** Play one scripted fixture step in an open session. */
+export function playStep(
+  session: CaseSession,
+  step: CaseFixture["steps"][number],
+): Promise<ObservedStep> {
+  const at = new Date(step.at);
+  if (step.type === "say") {
+    return session.say({
+      at,
+      id: step.id,
+      text: step.text,
+      ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
+      ...(step.locale ? { locale: step.locale } : {}),
+      ...(step.providerFault ? { providerFault: step.providerFault } : {}),
+      ...(step.timezone ? { timezone: step.timezone } : {}),
+    });
+  }
+  if (step.type === "resend") return session.resend(step.id, step.of, at);
+  if (step.type === "correct") {
+    return session.correct(step.id, step.target, at, {
+      text: step.text,
+      ...(step.locale ? { locale: step.locale } : {}),
+    });
+  }
+  return session.restart(step.id, at);
+}
+
 /** Run a fixture's scripted steps end to end and return the observation. */
 export async function runCase(input: RunCaseInput): Promise<CaseObservation> {
   const session = await openCaseSession(input);
-  for (const step of input.fixture.steps) {
-    const at = new Date(step.at);
-    if (step.type === "say") {
-      await session.say({
-        at,
-        id: step.id,
-        text: step.text,
-        ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
-        ...(step.locale ? { locale: step.locale } : {}),
-        ...(step.providerFault ? { providerFault: step.providerFault } : {}),
-        ...(step.timezone ? { timezone: step.timezone } : {}),
-      });
-    } else if (step.type === "resend") {
-      await session.resend(step.id, step.of, at);
-    } else if (step.type === "correct") {
-      await session.correct(step.id, step.target, at, {
-        text: step.text,
-        ...(step.locale ? { locale: step.locale } : {}),
-      });
-    } else {
-      await session.restart(step.id, at);
-    }
-  }
+  for (const step of input.fixture.steps) await playStep(session, step);
   return session.finish();
 }
 

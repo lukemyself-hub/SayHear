@@ -31,7 +31,7 @@ import {
   renderMarkdown,
   suiteStatus,
 } from "./src/report";
-import { openCaseSession, reproducibilityDigest, runCase } from "./src/runner";
+import { openCaseSession, playStep, reproducibilityDigest, runCase } from "./src/runner";
 
 /**
  * Continuity acceptance CLI (T00 #313). See README.md in this directory.
@@ -305,6 +305,7 @@ async function commandChat(loaded: LoadedCase, runPlan: RunPlan, outDirectory: s
       environment,
       fixture: loaded.fixture,
       fixtureSha256: loaded.fixtureSha256,
+      interactive: true,
       mode: runPlan.mode,
       onStep(step) {
         if (step.type === "restart") return;
@@ -319,10 +320,11 @@ async function commandChat(loaded: LoadedCase, runPlan: RunPlan, outDirectory: s
   let abortNext: number | undefined;
   let counter = 0;
   let lastSaid: string | null = null;
+  let played = 0;
   console.log(
     `Seeded ${session.seed.turns.length} history turns for ${loaded.fixture.id}. Controlled time is ${now.toISOString()}.`,
   );
-  console.log("Type a message, or: /at ISO · /advance 2h30m|1d · /abort N · /resend · /restart · /history · /inspect · /reset · /report · /quit");
+  console.log("Type a message, or: /next (play the next scripted step) · /at ISO · /advance 2h30m|1d · /abort N · /resend · /restart · /history · /inspect · /reset · /report · /quit");
   const lines = createInterface({ input: process.stdin, terminal: false });
   let lastObservation: CaseObservation | null = null;
   try {
@@ -348,6 +350,16 @@ async function commandChat(loaded: LoadedCase, runPlan: RunPlan, outDirectory: s
       } else if (line.startsWith("/abort ")) {
         abortNext = Number(line.slice(7));
         console.log(`The next message will be cancelled after ${abortNext} delta(s).`);
+      } else if (line === "/next") {
+        const scripted = loaded.fixture.steps[played];
+        if (!scripted) console.log("The fixture has no further scripted step.");
+        else {
+          played += 1;
+          now = new Date(scripted.at);
+          await playStep(session, scripted);
+          if (scripted.type === "say") lastSaid = scripted.id;
+          console.log(`played scripted step ${scripted.id} at ${now.toISOString()}`);
+        }
       } else if (line === "/resend") {
         if (!lastSaid) console.log("Nothing to resend yet.");
         else await session.resend(`chat-${(counter += 1)}`, lastSaid, now);
@@ -382,6 +394,7 @@ async function commandChat(loaded: LoadedCase, runPlan: RunPlan, outDirectory: s
         session = await open();
         now = new Date(loaded.fixture.steps[0]!.at);
         lastSaid = null;
+        played = 0;
         console.log(`Reset to the seeded baseline. Controlled time is ${now.toISOString()}.`);
       } else if (line.startsWith("/")) {
         console.log("Unknown command.");

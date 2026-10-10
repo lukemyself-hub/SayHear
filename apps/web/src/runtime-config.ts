@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import {
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1ReleaseManifest,
@@ -266,6 +264,10 @@ export function loadRuntimeConfiguration(environment: Environment) {
   const readTestNowFile = (file: string): Date => {
     let instant: Date;
     try {
+      // Resolved at call time, only on this test-only path: this module is
+      // also loaded by `instrumentation.ts`, so it must not statically import
+      // a Node built-in that a non-Node bundle cannot provide.
+      const { readFileSync } = process.getBuiltinModule("node:fs");
       instant = new Date(readFileSync(file, "utf8").trim());
     } catch {
       throw new Error("SAYHEAR_TEST_NOW_FILE could not be read.");

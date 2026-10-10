@@ -20,7 +20,7 @@ function run(args: readonly string[], environment: Record<string, string> = {}) 
       HOME: process.env.HOME ?? "",
       PATH: process.env.PATH ?? "",
       ...environment,
-    },
+    } as unknown as NodeJS.ProcessEnv,
     timeout: 60_000,
   });
   return { code: result.status, output: `${result.stdout}\n${result.stderr}` };

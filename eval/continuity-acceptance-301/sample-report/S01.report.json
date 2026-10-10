@@ -1,0 +1,199 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 0,
+    "inputTokenUpperBound": 0,
+    "mode": "deterministic",
+    "model": "acceptance-deterministic-stub",
+    "outputTokenUpperBound": 0,
+    "paidRequestUpperBound": 0,
+    "remainingUsdMicros": 10000000,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 2,
+      "seedTurns": 2
+    },
+    "status": "ready",
+    "unknownCostEntries": 1
+  },
+  "case": {
+    "caseId": "S01",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 2 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 228 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "6 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The turn streams and commits.",
+        "evidence": [
+          "steps[t1].chat.httpStatus=200",
+          "steps[t1].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a0a2af-69c0-70c6-87fa-51790e821e84",
+          "next message: assistant \"(deterministic stub reply; not a model answer; do not score \""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Yesterday's user messages reach the Provider as default background.",
+        "evidence": [
+          "d1-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "d1-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-background",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Token usage is recorded for the attempt.",
+        "evidence": [
+          "steps[t1].inspection.inputTokens=0",
+          "steps[t1].inspection.outputTokens=0"
+        ],
+        "id": "O-usage",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Token usage is recorded for the attempt.",
+        "status": "pass"
+      },
+      {
+        "description": "First visible text within 3 s and the complete reply within 10 s (CLI network).",
+        "evidence": [],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": null,
+        "reason": "This check is only meaningful in real-model mode; the run used deterministic.",
+        "status": "not-run"
+      },
+      {
+        "description": "The reply addresses this morning's remark and neither advises nor forces yesterday in.",
+        "evidence": [],
+        "id": "S-reply",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "Deterministic mode replies with a fixed stub sentence, which is not a model answer and is never scored for meaning.",
+        "status": "not-run"
+      }
+    ],
+    "mode": "deterministic",
+    "reviewer": null,
+    "runId": "run-518d677d-b034-47a2-8483-7900b7bc233e",
+    "status": "not-run"
+  },
+  "identity": {
+    "fixtureSha256": "2d0e724ded65dab98ecb4811d40a016e555e901c1b6193980ac56bfa4d88b1bd",
+    "fixtureVersion": "dev-1",
+    "gitCommit": "e8c8944abe5c5f322ef452a7c1ed4c42d747c4a1",
+    "gitDirty": false,
+    "model": "acceptance-deterministic-stub",
+    "recentContextGovernance": "active",
+    "runId": "run-518d677d-b034-47a2-8483-7900b7bc233e",
+    "oracleSha256": "fb04e518b68a1b4735bb56ac004e20cecb87226062e556ceb9e50c7cd39cdc08",
+    "title": "Smoke: ordinary turn with yesterday in the default background"
+  },
+  "remainingRisks": [
+    "Deterministic mode: replies are a fixed stub sentence. Nothing here is evidence about what a real model would say.",
+    "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "d3c46b0eea975f9d0c1617c0951855d4c844574bbd66f213de16c9f18da317a3",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "d1-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "d1-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "d1-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "d1-b:assistant"
+        }
+      ],
+      "stepId": "t1"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 33.92991700000039,
+      "cliCommittedMs": 114.03220800000054,
+      "cliFirstVisibleTextMs": 101.03870800000004,
+      "cliStreamClosedMs": 114.12495800000033,
+      "providerLatencyMs": 0,
+      "stepId": "t1"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "(deterministic stub reply; not a model answer; do not score its wording.)",
+      "at": "2026-09-15T01:30:00.000Z",
+      "stepId": "t1",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "早上地铁特别挤，到公司的时候已经有点没力气了。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "paidCostUsdMicros": 0,
+    "providerRequests": 1
+  }
+}

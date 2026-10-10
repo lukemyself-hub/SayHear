@@ -135,6 +135,12 @@ export type CaseObservation = Readonly<{
     recentContextGovernance: string;
     runId: string;
   }>;
+  /**
+   * True for an interactive `chat` session, where a person or agent chose
+   * which steps to play. Criteria about steps that were not played are then
+   * `not-run` rather than a harness error.
+   */
+  interactive?: boolean;
   mode: RunMode;
   /**
    * Scheduled recovery scans the runner triggered to let idle time pass, with

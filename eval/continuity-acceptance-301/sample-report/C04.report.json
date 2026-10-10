@@ -1,0 +1,211 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 0,
+    "inputTokenUpperBound": 0,
+    "mode": "deterministic",
+    "model": "acceptance-deterministic-stub",
+    "outputTokenUpperBound": 0,
+    "paidRequestUpperBound": 0,
+    "remainingUsdMicros": 10000000,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 3,
+      "seedTurns": 4
+    },
+    "status": "ready",
+    "unknownCostEntries": 1
+  },
+  "case": {
+    "caseId": "C04",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 378 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "10 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The recall question streams and commits.",
+        "evidence": [
+          "steps[ask].chat.httpStatus=200",
+          "steps[ask].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds the question once, followed by exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a0a2d4-08c0-7dfa-bf36-97cb22e41f24",
+          "next message: assistant \"(deterministic stub reply; not a model answer; do not score \""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The three-month-old original messages reach the Provider when the person asks about that experience.",
+        "evidence": [
+          "piano:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "piano-after:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-old-source",
+        "kind": "objective",
+        "owner": "#316",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The retelling is grounded in the original words and placed about three months back.",
+        "evidence": [],
+        "id": "S-detail",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "Deterministic mode replies with a fixed stub sentence, which is not a model answer and is never scored for meaning.",
+        "status": "not-run"
+      },
+      {
+        "description": "No invented names and no confusion with the recent talk rehearsal.",
+        "evidence": [],
+        "id": "S-no-invention",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "Deterministic mode replies with a fixed stub sentence, which is not a model answer and is never scored for meaning.",
+        "status": "not-run"
+      }
+    ],
+    "mode": "deterministic",
+    "reviewer": null,
+    "runId": "run-f70cc003-ed1a-4908-a594-c5dc9934d702",
+    "status": "fail"
+  },
+  "identity": {
+    "fixtureSha256": "f909a97727f4415b815bad92924a952aa201902134aa61c3f2e6303c4b4dbc7d",
+    "fixtureVersion": "dev-1",
+    "gitCommit": "e8c8944abe5c5f322ef452a7c1ed4c42d747c4a1",
+    "gitDirty": false,
+    "model": "acceptance-deterministic-stub",
+    "recentContextGovernance": "active",
+    "runId": "run-f70cc003-ed1a-4908-a594-c5dc9934d702",
+    "oracleSha256": "02cc367dcb4df9e27a806eb829522091cfe15ad5c24f6c0f2f668900cb022d31",
+    "title": "C04 Ordinary experience from three months ago, never a Memory"
+  },
+  "remainingRisks": [
+    "Deterministic mode: replies are a fixed stub sentence. Nothing here is evidence about what a real model would say.",
+    "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "a1239f695b5876da3896f619b1c9e215ce1d38713ad784067e9d87dbd836250a",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "piano:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "piano:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "piano-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "piano-after:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "speech-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "speech-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "speech-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "speech-b:assistant"
+        }
+      ],
+      "stepId": "ask"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 30.811875000000327,
+      "cliCommittedMs": 103.91916700000002,
+      "cliFirstVisibleTextMs": 88.75783300000057,
+      "cliStreamClosedMs": 104.00587499999983,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "(deterministic stub reply; not a model answer; do not score its wording.)",
+      "at": "2026-09-15T02:10:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我之前是不是跟你说过有一回去弹琴？当时是什么情况来着，我有点记不清了。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "paidCostUsdMicros": 0,
+    "providerRequests": 1
+  }
+}

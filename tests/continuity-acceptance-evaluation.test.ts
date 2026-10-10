@@ -94,6 +94,19 @@ describe("continuity acceptance evaluation", () => {
     expect(wrong.evidence.join(" ")).toContain("memory_correction");
   });
 
+  it("treats a step that never ran as a harness error, unless a person chose not to play it", () => {
+    const withoutFirstStep = (interactive: boolean) => (observation: CaseObservation) => ({
+      ...observation,
+      ...(interactive ? { interactive: true } : {}),
+      steps: observation.steps.filter((step) => step.id !== "q1"),
+    });
+    const scripted = scoreWith({ step: "q1", type: "turn_committed" }, withoutFirstStep(false));
+    expect(scripted.status).toBe("environment-error");
+    const interactive = scoreWith({ step: "q1", type: "turn_committed" }, withoutFirstStep(true));
+    expect(interactive.status).toBe("not-run");
+    expect(interactive.reason).toContain("not played in this interactive session");
+  });
+
   it("checks that words said during the run reach the Provider for a later turn", () => {
     expect(scoreWith({ inputs: ["q1"], step: "q1", type: "outbound_includes_input" }).status).toBe("pass");
     expect(scoreWith({ inputs: ["q2"], step: "q1", type: "outbound_includes_input" }).status).toBe("fail");

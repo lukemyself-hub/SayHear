@@ -142,7 +142,14 @@ function findStep(observation: CaseObservation, id: string): ObservedStep | null
   return observation.steps.find((step) => step.id === id) ?? null;
 }
 
-function missingStep(id: string): Verdict {
+function missingStep(id: string, observation: CaseObservation): Verdict {
+  if (observation.interactive) {
+    return {
+      evidence: [],
+      reason: `Step ${id} was not played in this interactive session.`,
+      status: "not-run",
+    };
+  }
   return {
     evidence: [],
     reason: `Step ${id} was never observed, so the harness cannot judge it.`,
@@ -183,7 +190,7 @@ function evaluateObjective(
   }
 
   const step = findStep(observation, check.step);
-  if (!step) return missingStep(check.step);
+  if (!step) return missingStep(check.step, observation);
   const chat = step.chat;
   const pointer = `steps[${step.id}]`;
 
@@ -311,7 +318,7 @@ function evaluateObjective(
     }
     case "resend_is_idempotent": {
       const original = findStep(observation, check.of);
-      if (!original) return missingStep(check.of);
+      if (!original) return missingStep(check.of, observation);
       const originalId = original.chat?.userMessageId ?? null;
       const resentId = chat?.userMessageId ?? null;
       const copies = originalId
@@ -395,7 +402,7 @@ function evaluateReviewed(
     };
   }
   const step = findStep(observation, criterion.step);
-  if (!step) return missingStep(criterion.step);
+  if (!step) return missingStep(criterion.step, observation);
   const reply = step.chat?.streamedText ?? "";
   if (step.chat?.terminalEvent !== "assistant_committed" || !reply.trim()) {
     return {
