@@ -75,12 +75,19 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
   champion: ConversationTextChampion;
   conversationAdapter: TwinConversationAdapter;
 } {
-  const adapter =
-    environment.SAYHEAR_PROVIDER_ADAPTER === "openai"
-      ? "openai"
-      : environment.SAYHEAR_PROVIDER_ADAPTER === "opencode-go"
-        ? "opencode-go"
-        : "deepseek";
+  // The capture surface only supports deepseek and opencode-go. An unset
+  // adapter keeps the historical deepseek default, but any other value
+  // (including the retired "openai") fails closed rather than silently
+  // degrading to deepseek and mislabeling a capture's provider.
+  const adapterName = environment.SAYHEAR_PROVIDER_ADAPTER;
+  if (
+    adapterName !== undefined &&
+    adapterName !== "deepseek" &&
+    adapterName !== "opencode-go"
+  ) {
+    throw new Error(`Unsupported SAYHEAR_PROVIDER_ADAPTER: ${adapterName}.`);
+  }
+  const adapter = adapterName === "opencode-go" ? "opencode-go" : "deepseek";
   const profile =
     adapter === "deepseek"
       ? {
@@ -91,20 +98,12 @@ export function buildChampionAssembly(environment: NodeJS.ProcessEnv): {
           provider: "deepseek" as const,
           providerPolicyVersion: "deepseek-conversation-text:v1",
         }
-      : adapter === "opencode-go"
-        ? {
-            apiKey: requiredEnvironment("OPENCODE_GO_API_KEY"),
-            defaultModel: "deepseek-v4.1-flash",
-            provider: "opencode-go" as const,
-            providerPolicyVersion: "opencode-go-conversation-text:v1",
-          }
-        : {
-            apiKey: requiredEnvironment("OPENAI_API_KEY"),
-            baseUrl: "https://api.openai.com/v1",
-            defaultModel: "gpt-5.4",
-            provider: "openai" as const,
-            providerPolicyVersion: "openai-conversation-text:v1",
-          };
+      : {
+          apiKey: requiredEnvironment("OPENCODE_GO_API_KEY"),
+          defaultModel: "deepseek-v4.1-flash",
+          provider: "opencode-go" as const,
+          providerPolicyVersion: "opencode-go-conversation-text:v1",
+        };
   const model =
     environment.SAYHEAR_CONVERSATION_TEXT_MODEL ?? profile.defaultModel;
   const timeoutMs = Number(environment.SAYHEAR_PROVIDER_TIMEOUT_MS ?? "60000");
