@@ -1159,6 +1159,12 @@ export class PostgresConversationResponseRepository
         );
       }
       for (const [ordinal, event] of input.referencedEvents.entries()) {
+        // Migration 0068 reserves these columns for the recent-context
+        // references. Same-session and current-input expression times are
+        // frozen in the HMAC-protected time_context section instead, keeping
+        // legacy reference rows and the database section constraint intact.
+        const isRecentContextEvent =
+          event.section === "recent_conversation_context";
         await client.query(
           `
             INSERT INTO compiled_context_revision_refs (
@@ -1188,10 +1194,10 @@ export class PostgresConversationResponseRepository
             event.sequence,
             event.section,
             event.selectionOrder,
-            event.dailySessionId ?? null,
-            event.expressedAt ?? null,
-            event.occurredAt ?? null,
-            event.selectionReason ?? null,
+            isRecentContextEvent ? event.dailySessionId ?? null : null,
+            isRecentContextEvent ? event.expressedAt ?? null : null,
+            isRecentContextEvent ? event.occurredAt ?? null : null,
+            isRecentContextEvent ? event.selectionReason ?? null : null,
           ],
         );
       }

@@ -415,6 +415,9 @@ export const PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v1" as const;
 
 export const TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v3" as const;
+
+const COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v2" as const;
 
 /** Recent selection plus the time-aware frozen Context format. */
@@ -422,6 +425,9 @@ export const PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v1" as const;
 
 export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v3" as const;
+
+const COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v2" as const;
 
 const CONTEXT_TIME_BASE_TOKEN_BUDGET = 256;
@@ -811,13 +817,18 @@ export function createContextCompiler(dependencies: {
         source.compilerVersion === PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
         source.compilerVersion ===
           PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION;
+      const compactTimeFormat =
+        source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+        source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION;
       const versionAccepted =
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
-          source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+            source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION) &&
           hasTimeMetadata &&
           !hasRecentMetadata) ||
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
-          source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION &&
+          (source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+            source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION) &&
           hasTimeMetadata &&
           hasRecentMetadata) ||
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
@@ -929,6 +940,7 @@ export function createContextCompiler(dependencies: {
       if (
         (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
           source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+          compactTimeFormat ||
           previousTimeFormat) &&
         !timeContext
       ) {
@@ -995,7 +1007,11 @@ export function createContextCompiler(dependencies: {
           ? {}
           : {
               timeContext,
-              timeContextFormat: previousTimeFormat ? "legacy" : "compact",
+              timeContextFormat: previousTimeFormat
+                ? "legacy"
+                : compactTimeFormat
+                  ? "compact-v2"
+                  : "compact",
             }),
         history,
         locale: source.locale,
@@ -1421,6 +1437,9 @@ function contextTimeMetadataMatches(
   metadata: ContextTimeMetadata,
   events: readonly CompiledContextReferencedEvent[],
 ): boolean {
+  // The reference table only persists these time fields for the recent
+  // section; same-session and current-input times remain in the signed
+  // time_context section and are absent from persisted event references.
   return (
     metadata.entries.length === events.length &&
     metadata.entries.every((entry, index) => {
@@ -1430,14 +1449,19 @@ function contextTimeMetadataMatches(
         entry.messageIndex === index + 1 &&
         entry.revisionId === String(event.revisionId) &&
         entry.actor === event.actor &&
-        entry.expressedAt === (event.expressedAt ?? null) &&
-        entry.occurredAt === (event.occurredAt ?? null)
+        (event.expressedAt === undefined ||
+          entry.expressedAt === event.expressedAt) &&
+        (event.occurredAt === undefined ||
+          entry.occurredAt === event.occurredAt)
       );
     })
   );
 }
 
-function renderContextTimeMetadata(metadata: ContextTimeMetadata): string {
+function renderContextTimeMetadata(
+  metadata: ContextTimeMetadata,
+  includeRelativeDateRules: boolean,
+): string {
   const zones = [
     metadata.anchor.timezone,
     ...metadata.entries.map((entry) => entry.expressionTimezone),
@@ -1474,14 +1498,23 @@ function renderContextTimeMetadata(metadata: ContextTimeMetadata): string {
     }),
     "Expression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.",
   ];
+  if (includeRelativeDateRules) {
+    lines.push(
+      "For recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.",
+    );
+  }
   return lines.join("\n");
 }
 
 function createBoundedContextTimeMetadata(input: {
   metadata: ContextTimeMetadata;
   maximumMessageCount: number;
+  includeRelativeDateRules: boolean;
 }): Readonly<{ budgetTokens: number; content: string }> {
-  const content = renderContextTimeMetadata(input.metadata);
+  const content = renderContextTimeMetadata(
+    input.metadata,
+    input.includeRelativeDateRules,
+  );
   const zoneCount = new Set(
     [
       input.metadata.anchor.timezone,
@@ -1850,7 +1883,7 @@ function createSections(input: {
     reference: string;
   }>;
   timeContext?: ContextTimeMetadata;
-  timeContextFormat?: "compact" | "legacy";
+  timeContextFormat?: "compact" | "compact-v2" | "legacy";
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   // While the Safety Posture is active, enforcement is compilation: the
   // ordinary behavior anchors are swapped for the versioned reduced variant,
@@ -1881,6 +1914,7 @@ function createSections(input: {
         : {
             ...createBoundedContextTimeMetadata({
               metadata: input.timeContext,
+              includeRelativeDateRules: input.timeContextFormat !== "compact-v2",
               maximumMessageCount:
                 input.rawEventTokenBudget +
                 (input.recentContext?.budgetTokens ?? 0) +

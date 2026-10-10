@@ -373,6 +373,12 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
       `104=2026-11-01 01:30:00 GMT-8;z=0;s=r`,
     );
     expect(messages?.[0]?.["content"]).toContain("Expression time does not establish when a described event happened");
+    expect(messages?.[0]?.["content"]).toContain(
+      "A same-session message may be from yesterday; Session ownership never proves absence.",
+    );
+    expect(messages?.[0]?.["content"]).toContain(
+      "Resolve relative dates in historical text using that message's expression time.",
+    );
     expect(messages?.slice(1).map((message) => message["content"])).toEqual([
       "I visited the garden yesterday.",
       ...Array.from({ length: 100 }, () => "x"),

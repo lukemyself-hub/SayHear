@@ -47,7 +47,7 @@ import { createConversationResponseHandler } from "../apps/web/src/conversation-
  * Runs fully synthetic multi-turn scenarios through the highest authenticated
  * Text system seam — the production BFF NDJSON handler over the real
  * ConversationResponseService, Conversation Agent Harness, Action Gateway,
- * Context Compiler, and the real responses-api Provider Egress adapter — and
+ * Context Compiler, and the configured Provider Egress adapter — and
  * records outputs, versions, and mechanical behavior checks as a
  * non-authoritative eval artifact (Initial Replay semantics: ADR-0020, ADR-0073;
  * no product state is written — everything lands in a disposable isolated
@@ -289,6 +289,12 @@ type CapturedTurn = Readonly<{
   domainClockIso: string;
   finalEventType: string;
   input: Readonly<{ locale: string; text: string; timezone: string }>;
+  providerUsage: Readonly<{
+    attemptCount: number;
+    costMicros: number | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }> | null;
   receipt: Readonly<Record<string, unknown>> | null;
   sequenceInScenario: number;
   wallMs: number;
@@ -379,6 +385,12 @@ async function main(): Promise<void> {
 
   const databaseUrl = requiredEnvironment("DATABASE_URL");
   const { champion, providerTransport } = buildChampion(process.env);
+  const domainClockStartIso =
+    process.env.SAYHEAR_CAPTURE_CLOCK_START_ISO ?? DOMAIN_CLOCK_START_ISO;
+  const parsedDomainClockStart = new Date(domainClockStartIso);
+  if (!Number.isFinite(parsedDomainClockStart.getTime())) {
+    throw new Error("SAYHEAR_CAPTURE_CLOCK_START_ISO must be a valid ISO date.");
+  }
 
   // The single source of the frozen version cluster: the service assembly and
   // the recorded manifest both read these constants, so the manifest cannot
@@ -414,7 +426,7 @@ async function main(): Promise<void> {
     version: "continuous-exchange-inactivity:v1",
   } as const;
 
-  let domainNow = new Date(DOMAIN_CLOCK_START_ISO);
+  let domainNow = new Date(parsedDomainClockStart);
   const clock = () => domainNow;
 
   const runStartedAt = new Date();
@@ -518,7 +530,7 @@ async function main(): Promise<void> {
       // Every scenario starts from the same frozen domain clock so re-runs are
       // comparable; within-scenario gaps (including cross-day probes) are
       // applied between turns below.
-      domainNow = new Date(DOMAIN_CLOCK_START_ISO);
+      domainNow = new Date(parsedDomainClockStart);
       const scenarioClockStart = domainNow.toISOString();
       console.log(
         `[baseline] scenario ${scenario.id} (${scenario.turns.length} turns)`,
@@ -547,6 +559,47 @@ async function main(): Promise<void> {
         const events = await readNdjson(response);
         const wallMs = Math.round(performance.now() - wallStartedAt);
         const assistantText = joinDeltas(events);
+        const generationCommandId = events.find(
+          (event) => typeof event.generationCommandId === "string",
+        )?.generationCommandId;
+        const usage =
+          typeof generationCommandId === "string"
+            ? await database.pool.query<{
+                attempt_count: string;
+                cost_micros: string | null;
+                input_tokens: string | null;
+                output_tokens: string | null;
+              }>(
+                `
+                  SELECT
+                    COUNT(*)::text AS attempt_count,
+                    SUM(input_tokens)::text AS input_tokens,
+                    SUM(output_tokens)::text AS output_tokens,
+                    SUM(cost_micros)::text AS cost_micros
+                  FROM model_run_attempts
+                  WHERE generation_command_id = $1
+                `,
+                [generationCommandId],
+              )
+            : null;
+        const usageRow = usage?.rows[0];
+        const providerUsage = usageRow
+          ? {
+              attemptCount: Number(usageRow.attempt_count),
+              costMicros:
+                usageRow.cost_micros === null
+                  ? null
+                  : Number(usageRow.cost_micros),
+              inputTokens:
+                usageRow.input_tokens === null
+                  ? null
+                  : Number(usageRow.input_tokens),
+              outputTokens:
+                usageRow.output_tokens === null
+                  ? null
+                  : Number(usageRow.output_tokens),
+            }
+          : null;
         const receiptEvent = events.find((event) => event.type === "action_admitted");
         const receipt =
           receiptEvent && isRecord(receiptEvent.receipt)
@@ -572,6 +625,7 @@ async function main(): Promise<void> {
             text: turn.text,
             timezone: scenario.timezone,
           },
+          providerUsage,
           receipt,
           sequenceInScenario: turnIndex + 1,
           wallMs,
@@ -608,7 +662,7 @@ async function main(): Promise<void> {
     limitations: [
       "Model outputs are sampled, not bit-reproducible; the adapter sends no temperature override, so the Provider default applies. Reproduction means the same frozen inputs and versions, not identical text.",
       "Journal, Evidence, DialogueState, and RollingSummary projections never run in this harness: no outbox dispatcher is started, so multi-turn context relies only on in-budget committed raw events (the documented lagging behavior before those projections catch up).",
-      "No deterministic pre-model high-risk guard exists on the real responses-api path; high-risk scenarios measure prompt-level behavior only.",
+      "No deterministic pre-model high-risk guard is exercised by this synthetic harness; high-risk scenarios measure prompt-level behavior only.",
       "The Action Gateway runs against a fresh isolated schema, so regenerate_journal proposals cannot find an existing Journal; admission dispositions reflect that empty state.",
       "The BFF handler is invoked in-process with a fixed synthetic principal; the HTTP edge and Auth.js session validation are not exercised.",
       "A run always precedes the commit that contains it: gitCommit records the harness code state the run executed from, and the committed artifact gains its own provenance entry only afterwards.",
@@ -618,7 +672,7 @@ async function main(): Promise<void> {
       scenarioCount: scenarios.length,
       sha256: scenarioFileSha256,
     },
-    seam: "apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway + Context Compiler -> runtime responses-api Provider Egress Port",
+    seam: `apps/web conversation-response-handler (BFF NDJSON) -> ConversationResponseService -> Conversation Agent Harness + Action Gateway + Context Compiler -> runtime Provider Egress Port -> ${providerTransport.type} adapter`,
     systemVersions: {
       champion,
       conversationActionCatalog: {
@@ -631,11 +685,18 @@ async function main(): Promise<void> {
       generationPolicy,
       harnessPolicy: CATALOG_V2_CONVERSATION_HARNESS_POLICY,
       inactivityPolicy,
-      providerTransport: {
-        baseUrl: providerTransport.baseUrl,
-        timeoutMs: providerTransport.timeoutMs,
-        type: "responses-api",
-      },
+      providerTransport:
+        providerTransport.type === "opencode-go"
+          ? {
+              endpoint: "https://opencode.ai/zen/go/v1/chat/completions",
+              timeoutMs: providerTransport.timeoutMs,
+              type: "opencode-go",
+            }
+          : {
+              baseUrl: providerTransport.baseUrl,
+              timeoutMs: providerTransport.timeoutMs,
+              type: "responses-api",
+            },
     },
   };
 

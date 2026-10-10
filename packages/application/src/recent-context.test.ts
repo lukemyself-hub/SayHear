@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import {
   asCompiledContextId,
   asConversationEventRevisionId,
@@ -1130,7 +1131,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         occurredAt: "2026-08-12T18:00:00.000Z",
         revisionId: 0x601,
         sequence: 4,
-        text: "yesterday",
+        text: "I wrote this yesterday.",
       }),
     ]);
     await compiler.compile({ generationCommandId, interactionTurnId, userId });
@@ -1160,7 +1161,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       recentRevisionId,
       currentInputRevisionId,
     ]);
-    expect(payload.instructions).not.toContain("yesterday");
+    expect(payload.instructions).not.toContain("I wrote this yesterday.");
   });
 
   it("sends the current and per-message time anchors through the time-aware Context version", async () => {
@@ -1288,6 +1289,40 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
 
     expect(payload.instructions).toContain("timezone=unknown");
     expect(payload.instructions).toContain("1=unknown;z=?;s=?");
+  });
+
+  it("replays the frozen compact v2 request without adding v3 date rules", () => {
+    const fixture: {
+      manifest: Parameters<ContextCompilerRepository["saveCompiledContext"]>[0];
+      payload: ReturnType<
+        ReturnType<typeof createContextCompiler>["renderPermittedPayload"]
+      >;
+    } = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/time-context-v2.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    const compiler = createContextCompiler({
+      clock: () => new Date("2026-08-21T07:10:00.000Z"),
+      compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+      contentHmacSecret: "issue-307-synthetic-replay-secret",
+      rawEventTokenBudget: 4000,
+      repository: {
+        async loadContextSource() {
+          throw new Error("Replay must not compile new context");
+        },
+        async saveCompiledContext() {
+          throw new Error("Replay must not persist new context");
+        },
+      },
+    });
+    expect(
+      compiler.renderPermittedPayload({
+        ...fixture.manifest,
+        generationStage: "decision",
+      }),
+    ).toEqual(fixture.payload);
   });
 
   it("excludes events committed after the admitted command cutoff", async () => {

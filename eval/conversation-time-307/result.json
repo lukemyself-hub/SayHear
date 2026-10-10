@@ -1,0 +1,213 @@
+{
+  "synthetic": true,
+  "networkRequests": 1,
+  "live": true,
+  "compilerVersion": "context-compiler:time:v3",
+  "gitCommit": "15aeb9f0295a292846e206dab7ffac532c2c6dc9",
+  "contextCompilerSourceSha256": "7d3b7ad95fb00fe5f14737e28e8a9e29c9069ff821dddb37d06acbeef27c9e39",
+  "answer": "Yesterday you told me about the Kyoto trip with Maya, and that it left you excited about Portland but nervous too. That's everything I have from yesterday — just those few lines.\n\nAnd the visit date is the one you gave me: Sunday, August 16. I don't have any way to confirm it beyond what you said, so I'm taking your word for it.",
+  "events": [
+    {
+      "delta": "Yesterday",
+      "type": "delta"
+    },
+    {
+      "delta": " you",
+      "type": "delta"
+    },
+    {
+      "delta": " told",
+      "type": "delta"
+    },
+    {
+      "delta": " me",
+      "type": "delta"
+    },
+    {
+      "delta": " about",
+      "type": "delta"
+    },
+    {
+      "delta": " the",
+      "type": "delta"
+    },
+    {
+      "delta": " Kyoto trip",
+      "type": "delta"
+    },
+    {
+      "delta": " with",
+      "type": "delta"
+    },
+    {
+      "delta": " Maya, and",
+      "type": "delta"
+    },
+    {
+      "delta": " that",
+      "type": "delta"
+    },
+    {
+      "delta": " it",
+      "type": "delta"
+    },
+    {
+      "delta": " left",
+      "type": "delta"
+    },
+    {
+      "delta": " you",
+      "type": "delta"
+    },
+    {
+      "delta": " excited",
+      "type": "delta"
+    },
+    {
+      "delta": " about Portland",
+      "type": "delta"
+    },
+    {
+      "delta": " but",
+      "type": "delta"
+    },
+    {
+      "delta": " nervous too",
+      "type": "delta"
+    },
+    {
+      "delta": ". That",
+      "type": "delta"
+    },
+    {
+      "delta": "'s everything",
+      "type": "delta"
+    },
+    {
+      "delta": " I have",
+      "type": "delta"
+    },
+    {
+      "delta": " from yesterday —",
+      "type": "delta"
+    },
+    {
+      "delta": " just",
+      "type": "delta"
+    },
+    {
+      "delta": " those",
+      "type": "delta"
+    },
+    {
+      "delta": " few",
+      "type": "delta"
+    },
+    {
+      "delta": " lines.\n\nAnd",
+      "type": "delta"
+    },
+    {
+      "delta": " the visit",
+      "type": "delta"
+    },
+    {
+      "delta": " date is the",
+      "type": "delta"
+    },
+    {
+      "delta": " one",
+      "type": "delta"
+    },
+    {
+      "delta": " you gave",
+      "type": "delta"
+    },
+    {
+      "delta": " me",
+      "type": "delta"
+    },
+    {
+      "delta": ": Sunday,",
+      "type": "delta"
+    },
+    {
+      "delta": " August 16",
+      "type": "delta"
+    },
+    {
+      "delta": ". I",
+      "type": "delta"
+    },
+    {
+      "delta": " don't have",
+      "type": "delta"
+    },
+    {
+      "delta": " any way",
+      "type": "delta"
+    },
+    {
+      "delta": " to",
+      "type": "delta"
+    },
+    {
+      "delta": " confirm it beyond",
+      "type": "delta"
+    },
+    {
+      "delta": " what",
+      "type": "delta"
+    },
+    {
+      "delta": " you said",
+      "type": "delta"
+    },
+    {
+      "delta": ",",
+      "type": "delta"
+    },
+    {
+      "delta": " so I'm",
+      "type": "delta"
+    },
+    {
+      "delta": " taking",
+      "type": "delta"
+    },
+    {
+      "delta": " your",
+      "type": "delta"
+    },
+    {
+      "delta": " word",
+      "type": "delta"
+    },
+    {
+      "delta": " for",
+      "type": "delta"
+    },
+    {
+      "delta": " it.",
+      "type": "delta"
+    },
+    {
+      "costMicros": null,
+      "finishReason": "completed",
+      "inputTokens": 2131,
+      "modelSnapshot": "deepseek-v4.1-flash",
+      "outputTokens": 564,
+      "providerRequestId": "chatcmpl-a9a5e853",
+      "reasoningTokens": 486,
+      "cachedTokens": 0,
+      "totalTokens": 2695,
+      "type": "completed"
+    }
+  ],
+  "error": null,
+  "limitations": [
+    "One fixed synthetic scenario and one sampled answer do not establish statistical reliability.",
+    "In-memory admission fixture exercises compile -> render -> Provider Egress -> actual adapter; PostgreSQL admission and HTTP authentication are covered separately.",
+    "No elapsed-time collection."
+  ]
+}
