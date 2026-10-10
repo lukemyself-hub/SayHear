@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C04",
+  "title": "C04 Ordinary experience from three months ago, never a Memory",
+  "capability": "An ordinary experience told about three months earlier, for which no Claim was ever formed, is found again from the original words when the person asks about it. Recall is not limited to the seven-day default background, small details come from the source, and nothing is invented. A recent rehearsal of a talk shares surface features (practising, hands) and must not be mistaken for it.",
+  "spec": ["#301 R3", "ADR-0151"],
+  "ownerTickets": ["#316"],
+  "language": "zh",
+  "fixture": { "version": "dev-1", "sha256": "f909a97727f4415b815bad92924a952aa201902134aa61c3f2e6303c4b4dbc7d" },
+  "facts": {
+    "allowed": [
+      { "id": "a-place", "statement": "It happened in the shared activity room of the residential compound, on an old upright instrument nobody was using.", "sources": ["piano:user"] },
+      { "id": "a-duration", "statement": "The playing lasted roughly twenty minutes.", "sources": ["piano:user"] },
+      { "id": "a-rusty", "statement": "After several years away the left hand kept falling behind.", "sources": ["piano:user"] },
+      { "id": "a-boy", "statement": "A small boy watched from beside the instrument and held down a sheet-music clip that had sprung up.", "sources": ["piano:user"] },
+      { "id": "a-after", "statement": "Fingers ached afterwards but the mood on leaving was light.", "sources": ["piano-after:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-piece-name", "statement": "Any named piece, composer or song; none was ever mentioned.", "sources": [] },
+      { "id": "f-person-name", "statement": "A name or relationship for the boy; he was only described as a small boy.", "sources": [] },
+      { "id": "f-speech-mixup", "statement": "Presenting the mirror rehearsal of the departmental talk as the playing session, or blending the two.", "sources": ["speech-a:user", "speech-b:user"] },
+      { "id": "f-no-record", "statement": "Claiming it was never talked about, or asking the person to tell it again from scratch.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-when", "statement": "It was told on 13 June 2026 (Asia/Shanghai), about three months before the question, as something done that same afternoon.", "sources": ["piano:user"] }
+  ],
+  "expectedBehavior": [
+    "Confirm that it was talked about and retell it from the original words, including at least the place and one small detail.",
+    "Place it roughly three months back rather than in the recent week.",
+    "Invent no names; leave unknown what was never said."
+  ],
+  "failureSignals": [
+    "The June messages never reach the Provider because recall stops at seven days.",
+    "The reply says there is no record, or asks for the story again.",
+    "A piece title or a person's name appears.",
+    "The talk rehearsal is described as the playing session."
+  ],
+  "sourceEligibility": [
+    { "source": "piano:user", "eligibility": "allowed", "reason": "Retained original expression, never corrected, forgotten or purged; history recall is not limited to seven days." },
+    { "source": "piano-after:user", "eligibility": "allowed", "reason": "Retained original expression from the same exchange." },
+    { "source": "speech-a:user", "eligibility": "allowed", "reason": "Recent and inside the default background; a distractor, not a forbidden source." },
+    { "source": "speech-b:user", "eligibility": "allowed", "reason": "Recent and inside the default background; a distractor, not a forbidden source." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The recall question streams and commits.", "check": { "type": "turn_committed", "step": "ask" } },
+    { "id": "O-history", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Authoritative history holds the question once, followed by exactly the streamed reply.", "check": { "type": "history_matches_stream", "step": "ask" } },
+    { "id": "O-old-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#316", "description": "The three-month-old original messages reach the Provider when the person asks about that experience.", "check": { "type": "outbound_includes", "step": "ask", "sources": ["piano:user", "piano-after:user"] } },
+    { "id": "S-detail", "kind": "semantic", "owner": "#316", "description": "The retelling is grounded in the original words and placed about three months back.", "step": "ask", "required": ["a-place", "a-boy", "tm-when"], "forbidden": ["f-no-record"] },
+    { "id": "S-no-invention", "kind": "semantic", "owner": "#316", "description": "No invented names and no confusion with the recent talk rehearsal.", "step": "ask", "required": [], "forbidden": ["f-piece-name", "f-person-name", "f-speech-mixup"] }
+  ]
+}

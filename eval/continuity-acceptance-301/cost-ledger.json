@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "continuity-cost-ledger:v1",
+  "capUsdMicros": 10000000,
+  "model": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4.1-flash",
+    "inputUsdMicrosPerMillionTokens": null,
+    "outputUsdMicrosPerMillionTokens": null
+  },
+  "preconditions": [
+    {
+      "id": "issue-307-online-acceptance",
+      "description": "The #307 time-input fix is deployed to production and its online acceptance is recorded as complete (ADR-0151, 2026-10-09 addendum). Set to verified only with a link to that record.",
+      "status": "unverified",
+      "evidence": null
+    }
+  ],
+  "entries": [
+    {
+      "date": "2026-10-09",
+      "ticket": "#307",
+      "runId": "eval/conversation-time-307",
+      "requests": 1,
+      "inputTokens": 2131,
+      "outputTokens": 564,
+      "costUsdMicros": null,
+      "note": "One real DeepSeek V4.1 Flash request recorded in eval/conversation-time-307/README.md. The Provider reported no monetary cost, so the amount is kept as unknown rather than assumed to be zero."
+    }
+  ]
+}

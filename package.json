@@ -28,6 +28,7 @@
     "db:sync-predicate-registry": "tsx packages/data/src/cli/sync-predicate-registry.ts",
     "db:rebuild-relationship-hints": "tsx packages/data/src/cli/rebuild-relationship-hints.ts",
     "db:record-backup": "tsx packages/data/src/cli/record-backup-policy.ts",
+    "acceptance:continuity": "tsx eval/continuity-acceptance-301/cli.ts",
     "test": "vitest run",
     "test:system": "vitest run tests/system",
     "test:ci": "vitest run --maxWorkers=2 --hookTimeout=60000 --reporter=default --reporter=json --outputFile.json=artifacts/vitest-report.json",

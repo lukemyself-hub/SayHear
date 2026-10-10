@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import {
   verifyOneA3bG1ReleaseManifest,
   type OneA3bG1ReleaseManifest,
@@ -153,6 +155,7 @@ export function assertSafeRuntimeConfiguration(
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_CHUNKS ||
       environment.SAYHEAR_TEST_PROVIDER_FAIL_AFTER_COMPLETION ||
       environment.SAYHEAR_TEST_NOW ||
+      environment.SAYHEAR_TEST_NOW_FILE ||
       environment.SAYHEAR_TEST_PRINCIPAL_SUBJECT) &&
     deployment !== "test"
   ) {
@@ -249,6 +252,31 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (testNow && Number.isNaN(testNow.getTime())) {
     throw new Error("SAYHEAR_TEST_NOW must be a valid ISO timestamp.");
   }
+  // T00 #313: a scenario runner advances controlled time across turns and
+  // days without restarting the app. The instant lives in a file named by the
+  // test composition (never a client parameter) and is re-read on every clock
+  // call. The same test-only deployment guard as SAYHEAR_TEST_NOW applies, and
+  // an unreadable instant throws instead of falling back to the wall clock.
+  const testNowFile = environment.SAYHEAR_TEST_NOW_FILE?.trim() || null;
+  if (testNowFile && testNow) {
+    throw new Error(
+      "SAYHEAR_TEST_NOW_FILE and SAYHEAR_TEST_NOW cannot both be set.",
+    );
+  }
+  const readTestNowFile = (file: string): Date => {
+    let instant: Date;
+    try {
+      instant = new Date(readFileSync(file, "utf8").trim());
+    } catch {
+      throw new Error("SAYHEAR_TEST_NOW_FILE could not be read.");
+    }
+    if (Number.isNaN(instant.getTime())) {
+      throw new Error(
+        "SAYHEAR_TEST_NOW_FILE must contain a valid ISO timestamp.",
+      );
+    }
+    return instant;
+  };
 
   const adapter = resolveProviderAdapter(environment.SAYHEAR_PROVIDER_ADAPTER);
   const deterministicChunks =
@@ -475,7 +503,11 @@ export function loadRuntimeConfiguration(environment: Environment) {
       environment,
       "SAYHEAR_BACKUP_POLICY_VERSION",
     ),
-    clock: testNow ? () => new Date(testNow) : () => new Date(),
+    clock: testNowFile
+      ? () => readTestNowFile(testNowFile)
+      : testNow
+        ? () => new Date(testNow)
+        : () => new Date(),
     databaseUrl,
     deployment,
     ownerPurge: Object.freeze({

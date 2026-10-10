@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -154,6 +158,54 @@ describe("runtime safety configuration", () => {
         SAYHEAR_TEST_NOW: "2026-07-27T16:00:00.000Z",
       }),
     ).toBe("test");
+  });
+
+  it("allows a file-driven controlled clock only in the test deployment", () => {
+    expect(() =>
+      assertSafeRuntimeConfiguration({
+        SAYHEAR_DEPLOYMENT: "production",
+        SAYHEAR_TEST_NOW_FILE: "/tmp/acceptance-clock",
+      }),
+    ).toThrow("only in the test environment");
+  });
+
+  it("re-reads the controlled instant from the clock file on every call", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "sayhear-clock-"));
+    const clockFile = path.join(directory, "now");
+    const base = {
+      CRON_SECRET: "cron",
+      DATABASE_URL: "postgres://test",
+      GITHUB_CLIENT_ID: "id",
+      GITHUB_CLIENT_SECRET: "secret",
+      NEXTAUTH_SECRET: "auth",
+      PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+      SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint",
+      SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+      SAYHEAR_CONTEXT_HMAC_SECRET: "context",
+      SAYHEAR_DEPLOYMENT: "test",
+      SAYHEAR_PROVIDER_ADAPTER: "deterministic",
+      SAYHEAR_TEST_NOW_FILE: clockFile,
+      SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
+    };
+    try {
+      writeFileSync(clockFile, "2026-07-27T16:00:00.000Z\n");
+      const configuration = loadRuntimeConfiguration(base);
+      expect(configuration.clock().toISOString()).toBe("2026-07-27T16:00:00.000Z");
+      writeFileSync(clockFile, "2026-07-28T07:30:00.000Z");
+      expect(configuration.clock().toISOString()).toBe("2026-07-28T07:30:00.000Z");
+
+      // An unreadable instant never silently falls back to the wall clock.
+      writeFileSync(clockFile, "not-a-date");
+      expect(() => configuration.clock()).toThrow("SAYHEAR_TEST_NOW_FILE");
+      expect(() =>
+        loadRuntimeConfiguration({
+          ...base,
+          SAYHEAR_TEST_NOW: "2026-07-27T16:00:00.000Z",
+        }),
+      ).toThrow("SAYHEAR_TEST_NOW_FILE");
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
   });
 
   it("keeps deterministic completion faults test-only", () => {
