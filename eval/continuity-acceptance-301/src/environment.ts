@@ -68,6 +68,12 @@ export type AcceptanceEnvironment = Readonly<{
    */
   runScheduledScan(): Promise<Readonly<Record<string, unknown>>>;
   runId: string;
+  /**
+   * Connection string of the schema this run created. For the harness's own
+   * self-tests only: acceptance cases observe the product through HTTP and
+   * must never read or write it.
+   */
+  schemaConnectionString(): string;
   setNow(now: Date): void;
   stub: ProviderStub;
 }>;
@@ -277,6 +283,10 @@ export async function createAcceptanceEnvironment(input: {
       await startApp();
     },
     runId,
+    schemaConnectionString() {
+      if (!database) throw new Error("Environment is not provisioned.");
+      return database.connectionString;
+    },
     setNow(now) {
       writeControlledNow(clockFile, now);
     },

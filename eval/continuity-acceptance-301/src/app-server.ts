@@ -3,6 +3,8 @@ import { renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 
+import { acquireNextDevServerLock } from "@sayhear/test-support";
+
 /**
  * Starts the real SayHear web app (`next dev`) in its existing `test`
  * composition, pointed at an isolated schema and at the loopback Provider
@@ -119,6 +121,9 @@ export async function startAppServer(
   const origin = `http://127.0.0.1:${port}`;
   const webDirectory = path.join(repositoryRoot, "apps/web");
   const nextBinary = path.join(webDirectory, "node_modules/next/dist/bin/next");
+  // Next allows one `next dev` per project directory. Suites and CLI runs that
+  // start the real app wait for each other here instead of colliding.
+  const releaseDevServerLock = await acquireNextDevServerLock(webDirectory);
   const child: ChildProcess = spawn(
     process.execPath,
     [nextBinary, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
@@ -138,6 +143,7 @@ export async function startAppServer(
 
   for (let attempt = 0; attempt < 600; attempt += 1) {
     if (child.exitCode !== null) {
+      releaseDevServerLock();
       throw new Error(`SayHear app exited before becoming ready.\n${output}`);
     }
     try {
@@ -147,7 +153,10 @@ export async function startAppServer(
         return {
           origin,
           output: () => output,
-          stop: () => stopChild(child),
+          async stop() {
+            await stopChild(child);
+            releaseDevServerLock();
+          },
         };
       }
     } catch {
@@ -156,6 +165,7 @@ export async function startAppServer(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   await stopChild(child);
+  releaseDevServerLock();
   throw new Error(`SayHear app did not become ready.\n${output}`);
 }
 
