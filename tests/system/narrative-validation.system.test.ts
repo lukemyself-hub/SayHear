@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { asGenerationCommandId, asModelRunAttemptId } from "@sayhear/domain";
 
@@ -896,6 +896,137 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
 
     expect(result.outcome).toBe("completed");
     expect(result.usage).toEqual(reported);
+  });
+
+  it("settles a terminal failure and keeps the consumed usage when the result commit throws (#257)", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000257",
+    );
+    const reported: ModelRoleCallUsage = {
+      cachedTokens: null,
+      inputTokens: 470,
+      outputTokens: 3931,
+      reasoningTokens: 3600,
+      totalTokens: null,
+    };
+    let calls = 0;
+    const deps = dependencies(
+      providerFor(() => {
+        calls += 1;
+        return acceptedOutput();
+      }, reported),
+    );
+    const commitSpy = vi
+      .spyOn(deps.repository, "commitResult")
+      .mockRejectedValueOnce(new Error("domain commit exploded"));
+    let result: Awaited<ReturnType<typeof runNarrativeValidation>>;
+    try {
+      result = await runNarrativeValidation({
+        dependencies: deps,
+        command: { request, expectedDataEpoch: 1 },
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+
+    // Terminal `unknown`, not a Provider transport failure: no technical retry.
+    expect(result.outcome).toBe("failed");
+    expect(result.errorCode).toBe("unknown");
+    // The Provider ran exactly once; the failure added no second call.
+    expect(calls).toBe(1);
+
+    const attempt = await database!.pool.query<{
+      status: string;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      reasoning_tokens: number | null;
+      cached_tokens: number | null;
+      total_tokens: number | null;
+    }>(
+      `SELECT status, input_tokens, output_tokens, reasoning_tokens,
+              cached_tokens, total_tokens
+       FROM model_run_attempts WHERE model_run_attempt_id = $1`,
+      [result.modelRunAttemptId],
+    );
+    const row = attempt.rows[0]!;
+    expect(row.status).toBe("failed");
+    expect(Number(row.input_tokens)).toBe(470);
+    expect(Number(row.output_tokens)).toBe(3931);
+    expect(Number(row.reasoning_tokens)).toBe(3600);
+    expect(row.cached_tokens).toBeNull();
+    expect(row.total_tokens).toBeNull();
+
+    // No `running` residue: one terminal attempt, no retry row.
+    const attempts = await database!.pool.query<{ status: string; n: string }>(
+      `SELECT status, count(*)::text AS n FROM model_run_attempts
+       WHERE generation_command_id = $1 GROUP BY status`,
+      [result.generationCommandId],
+    );
+    expect(attempts.rows).toEqual([{ status: "failed", n: "1" }]);
+    const command = await database!.pool.query<{
+      status: string;
+      recovery_status: string;
+    }>(
+      `SELECT status, recovery_status FROM generation_commands
+       WHERE generation_command_id = $1`,
+      [result.generationCommandId],
+    );
+    expect(command.rows[0]).toMatchObject({
+      status: "failed",
+      recovery_status: "terminal",
+    });
+    // The thrown commit left no partial validator result behind.
+    expect(
+      (await database!.pool.query(
+        `SELECT count(*)::int AS count FROM narrative_validator_results
+         WHERE generation_command_id = $1`,
+        [result.generationCommandId],
+      )).rows[0]!.count,
+    ).toBe(0);
+  });
+
+  it("leaves the consumed usage null when the Provider reported none and the commit throws (#257)", async () => {
+    const request = cleanRequest(
+      "bio-version:01984477-1f9a-7b25-a5cc-000000000258",
+    );
+    // A Provider that never calls onUsage must leave usage unknown.
+    const deps = dependencies(providerFor(() => acceptedOutput()));
+    const commitSpy = vi
+      .spyOn(deps.repository, "commitResult")
+      .mockRejectedValueOnce(new Error("domain commit exploded"));
+    let result: Awaited<ReturnType<typeof runNarrativeValidation>>;
+    try {
+      result = await runNarrativeValidation({
+        dependencies: deps,
+        command: { request, expectedDataEpoch: 1 },
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+
+    expect(result.outcome).toBe("failed");
+    expect(result.errorCode).toBe("unknown");
+    const attempt = await database!.pool.query<{
+      status: string;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      reasoning_tokens: number | null;
+      cached_tokens: number | null;
+      total_tokens: number | null;
+    }>(
+      `SELECT status, input_tokens, output_tokens, reasoning_tokens,
+              cached_tokens, total_tokens
+       FROM model_run_attempts WHERE model_run_attempt_id = $1`,
+      [result.modelRunAttemptId],
+    );
+    expect(attempt.rows[0]).toMatchObject({
+      status: "failed",
+      input_tokens: null,
+      output_tokens: null,
+      reasoning_tokens: null,
+      cached_tokens: null,
+      total_tokens: null,
+    });
   });
 
   it("fences validation behind the owner epoch fence", async () => {

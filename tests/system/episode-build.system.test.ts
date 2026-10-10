@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { EPISODE_ADMISSION_POLICY_VERSION, episodeDedupeFingerprint, type EpisodeProposal, type ModelRoleConfigurationSnapshot } from "@sayhear/application";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { EPISODE_ADMISSION_POLICY_VERSION, episodeDedupeFingerprint, createModelRoleCommandService, createModelRoleProviderEgress, createModelRoleRegistry, runEpisodeBuild, type EpisodeBuildModelProvider, type EpisodeProposal, type ModelRoleCallUsage, type ModelRoleCommandService, type ModelRoleConfigurationSnapshot, type RecoveryGate } from "@sayhear/application";
 import { asDailySessionId, asEvidenceItemId, asGenerationCommandId, asModelRunAttemptId } from "@sayhear/domain";
-import { PostgresEpisodeRepository, PostgresReflectionRepository, runMigrations } from "@sayhear/data";
+import { PostgresEpisodeRepository, PostgresModelRoleCommandRepository, PostgresReflectionRepository, runMigrations } from "@sayhear/data";
 import { createIsolatedPostgresSchema, fixedInternalOwnerPrincipal, type IsolatedPostgresSchema } from "@sayhear/test-support";
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const systemDescribe = testDatabaseUrl ? describe : describe.skip;
@@ -13,7 +13,7 @@ const configuration: ModelRoleConfigurationSnapshot = {
   model: "synthetic-model", modelSnapshot: "synthetic-model@fixture",
   promptVersion: "episode-build:system-test:v1", schemaVersion: "episode-proposal:v1",
   rolePolicyVersion: "1a3b-model-role-policy:v1", providerPolicyVersion: "system-episode-egress:v1",
-  rolloutPin: "system-episode-pin:v1", freshnessPolicy: "exact_head:v1",
+  rolloutPin: "system-episode-pin:v1", freshnessPolicy: "source_valid:v1",
   fallbackMode: "disabled", maxTechnicalRetries: 1, maxSemanticRepairs: 0, parameterSnapshot: {},
 };
 async function seedRoleConfiguration(
@@ -79,13 +79,50 @@ async function seedRoleConfiguration(
 
 systemDescribe("Episode admission transaction", () => {
   let database: IsolatedPostgresSchema | undefined;
+  let commandService: ModelRoleCommandService | undefined;
   beforeAll(async () => {
     database = await createIsolatedPostgresSchema(testDatabaseUrl!);
     await runMigrations(database.pool);
     await database.pool.query(`INSERT INTO app_users (user_id, status, data_epoch, created_at, updated_at) VALUES ($1, 'active', 1, $2, $2)`, [OWNER, new Date(BASE_TIME)]);
     await seedRoleConfiguration(database.pool, configuration);
+    commandService = createModelRoleCommandService({
+      registry: createModelRoleRegistry([configuration]),
+      repository: new PostgresModelRoleCommandRepository(
+        database.pool,
+        undefined,
+        G1_FINGERPRINT,
+      ),
+    });
   }, 30_000);
   afterAll(async () => { await database?.dispose(); });
+
+  /** Production wires the shared egress port into the entrypoint. */
+  function testEgress() {
+    const gate: RecoveryGate = {
+      evaluate: async () => ({
+        status: "open" as const,
+        markerDataEpoch: null,
+        markerPurgedAt: null,
+        markerWrittenAt: null,
+        receiptDestinations: [],
+      }),
+      requireOpen: async () => ({
+        status: "open" as const,
+        markerDataEpoch: null,
+        markerPurgedAt: null,
+        markerWrittenAt: null,
+        receiptDestinations: [],
+      }),
+    };
+    return createModelRoleProviderEgress({
+      commandService: {
+        claimProviderDispatch: (input) =>
+          commandService!.claimProviderDispatch(input),
+        discardAttempt: (input) => commandService!.discardAttempt(input),
+      },
+      recoveryGate: gate,
+    });
+  }
   let sequence = 0;
   function seedId(): string {
     sequence += 1;
@@ -546,6 +583,117 @@ systemDescribe("Episode admission transaction", () => {
       policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
       secret: input.dedupeFingerprintSecret,
     }));
+  });
+
+  it("settles a terminal failure and keeps the consumed usage when the Episode commit throws (#257)", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-26" });
+    const reported: ModelRoleCallUsage = {
+      cachedTokens: 4,
+      inputTokens: 150,
+      outputTokens: 60,
+      reasoningTokens: 11,
+      totalTokens: 225,
+    };
+    let calls = 0;
+    const provider: EpisodeBuildModelProvider = {
+      role: "episode.build",
+      async buildProposals(_request, onUsage) {
+        calls += 1;
+        onUsage?.(reported);
+        return [
+          {
+            proposedKind: "sh.episode.trip",
+            label: "Tokyo business trip",
+            temporalAnchor: { start: { date: "2026-09-26", precision: "exact" } },
+            phase: "planned",
+            kindFields: { destination: "Tokyo" },
+            citedEvidenceItemIds: [session.evidenceItemId],
+            realWorldOccurrence: true,
+          },
+        ];
+      },
+    };
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    const commitSpy = vi
+      .spyOn(repository, "commitEpisodeAdmission")
+      .mockRejectedValueOnce(new Error("episode commit exploded"));
+    let result: Awaited<ReturnType<typeof runEpisodeBuild>>;
+    try {
+      result = await runEpisodeBuild({
+        clock: () => new Date(BASE_TIME),
+        repository,
+        modelRoleCommandService: commandService!,
+        episodeBuildProvider: provider,
+        dedupeFingerprintSecret: "synthetic-episode-secret",
+        workflowReceiptId: "wf-episode-failure-injection",
+        command: {
+          workflowCommandId: seedId(),
+          subjectId: session.dailySessionId,
+          sourceRevision: 1,
+          policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+          expectedDataEpoch: 1,
+        },
+        providerEgress: testEgress(),
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+
+    // Terminal `unknown`, not a Provider transport failure: no technical retry.
+    expect(result.outcome).toBe("failed");
+    expect(result.errorCode).toBe("unknown");
+    expect(calls).toBe(1);
+
+    const attempt = await database!.pool.query<{
+      generation_command_id: string;
+      status: string;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      reasoning_tokens: number | null;
+      cached_tokens: number | null;
+      total_tokens: number | null;
+    }>(
+      `SELECT a.generation_command_id::text, a.status, a.input_tokens,
+              a.output_tokens, a.reasoning_tokens, a.cached_tokens, a.total_tokens
+       FROM model_run_attempts a
+       INNER JOIN generation_commands c
+         ON c.generation_command_id = a.generation_command_id
+       WHERE c.subject_id = $1 AND c.operation_type = 'episode.build'
+       ORDER BY a.created_at DESC, a.model_run_attempt_id DESC LIMIT 1`,
+      [session.dailySessionId],
+    );
+    const row = attempt.rows[0]!;
+    expect(row.status).toBe("failed");
+    expect(Number(row.input_tokens)).toBe(150);
+    expect(Number(row.output_tokens)).toBe(60);
+    expect(Number(row.reasoning_tokens)).toBe(11);
+    expect(Number(row.cached_tokens)).toBe(4);
+    expect(Number(row.total_tokens)).toBe(225);
+
+    // No `running` residue and no retry row for the same command.
+    const siblings = await database!.pool.query<{ status: string; n: string }>(
+      `SELECT status, count(*)::text AS n FROM model_run_attempts
+       WHERE generation_command_id = $1 GROUP BY status`,
+      [row.generation_command_id],
+    );
+    expect(siblings.rows).toEqual([{ status: "failed", n: "1" }]);
+    const command = await database!.pool.query<{
+      status: string;
+      recovery_status: string;
+    }>(
+      `SELECT status, recovery_status FROM generation_commands
+       WHERE generation_command_id = $1`,
+      [row.generation_command_id],
+    );
+    expect(command.rows[0]).toMatchObject({
+      status: "failed",
+      recovery_status: "terminal",
+    });
+    // The thrown commit wrote no Candidate for the session's build.
+    expect((await database!.pool.query(
+      "SELECT count(*)::int AS count FROM episode_candidates WHERE daily_session_id = $1",
+      [session.dailySessionId],
+    )).rows[0]!.count).toBe(0);
   });
 
   it("persists owner Entity anchors on both the candidate and the created version", async () => {

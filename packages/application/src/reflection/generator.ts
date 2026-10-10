@@ -780,15 +780,223 @@ async function executeReflectionAttempt(input: Readonly<{
   }
   const output = generated.output;
 
-  // Tier-1 deterministic gate (all-or-nothing, before any draft is kept).
-  const plan = planReflectionVersion({
-    frozen: input.frozen,
-    output: {
-      statements: output.statements,
+  // Everything from the Tier-1 gate through the fenced domain commit runs
+  // under one guard (issue #257): a throw anywhere between the successful
+  // Provider call and attempt settlement must settle the attempt as a
+  // terminal failure and record the usage this call consumed, instead of
+  // leaving it `running`. Settlements deliberately stay outside the guard so
+  // a settlement failure can never relabel an already-committed domain
+  // result.
+  type ReflectionDomainOutcome =
+    | Readonly<{ kind: "tier1_rejected"; rejectionCode: string }>
+    | Readonly<{ kind: "persist_fenced"; reason: string }>
+    | Readonly<{
+        kind: "validator_failed";
+        errorCode: string;
+        outcome: "failed" | "retryable_failed";
+      }>
+    | Readonly<{ kind: "validator_blocked"; errorCode: string }>
+    | Readonly<{ kind: "commit_fenced"; reason: string }>
+    | Readonly<{ kind: "already_committed" }>
+    | Readonly<{
+        kind: "built";
+        statementCount: number;
+        candidateCount: number;
+      }>;
+
+  const runDomainPhase = async (): Promise<ReflectionDomainOutcome> => {
+    // Tier-1 deterministic gate (all-or-nothing, before any draft is kept).
+    const plan = planReflectionVersion({
+      frozen: input.frozen,
+      output: {
+        statements: output.statements,
+        candidateProposals: output.candidateProposals,
+      },
+    });
+    if (plan.action === "fail_version") {
+      await recordReflectionRunOutcome({
+        repository,
+        userId: input.userId,
+        frozen: input.frozen,
+        sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId,
+        modelRunAttemptId,
+        status: "failed",
+        outcomeDetail: plan.rejectionCode,
+        statementCount: 0,
+        candidateCount: 0,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+        errorCode: `tier1:${plan.rejectionCode}`,
+      });
+      return { kind: "tier1_rejected", rejectionCode: plan.rejectionCode };
+    }
+
+    const persisted = await repository.persistDraftVersion({
+      userId: input.userId,
+      scopeType: input.frozen.scopeType,
+      dailySessionId: input.frozen.dailySessionId,
+      weekIdentifier: input.frozen.weekIdentifier,
+      windowStartDate: input.frozen.windowStartDate,
+      windowEndDate: input.frozen.windowEndDate,
+      sourceRevision,
+      sourceDigest: input.frozen.sourceDigest,
+      claimBaselineDigest: input.frozen.claimBaselineDigest,
+      policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
+      schedulePolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
+      promptVersion,
+      schemaVersion: REFLECTION_OUTPUT_SCHEMA_VERSION,
+      locale,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      degradedEpisodeReason: input.degradedEpisodeReason,
+      statements: plan.statements,
+      now: input.dependencies.clock(),
+    });
+    if (persisted.outcome === "fenced") {
+      await recordReflectionRunOutcome({
+        repository,
+        userId: input.userId,
+        frozen: input.frozen,
+        sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId,
+        modelRunAttemptId,
+        status: "fenced",
+        outcomeDetail: persisted.reason,
+        statementCount: null,
+        candidateCount: null,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+        errorCode: persisted.reason,
+      });
+      return { kind: "persist_fenced", reason: persisted.reason };
+    }
+    const reflectionVersionId = persisted.reflectionVersionId;
+
+    // Shared validator (ADR-0132): the build may not commit current or derive
+    // a Candidate until a completed `narrative.validate` command exists.
+    const validated = await runNarrativeValidation({
+      dependencies: input.dependencies.narrativeValidation,
+      command: {
+        request: {
+          userId: input.userId,
+          artifactKind: "reflection",
+          draftRef: `reflection-version:${reflectionVersionId}`,
+          draftLocale: locale,
+          draftText: draftTextFor(plan.statements),
+          generatorManifest: generatorManifestFor(plan.statements),
+          sourceEntries: sourceEntriesFor(input.frozen),
+          plannedCoverageKeys: [],
+          validationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
+          promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
+          schemaVersion: NARRATIVE_FINDINGS_SCHEMA_VERSION,
+        },
+        expectedDataEpoch: input.expectedDataEpoch,
+      },
+    });
+    if (validated.outcome !== "completed" || !validated.verdict) {
+      const validatorError = `validator_${validated.outcome}`;
+      await recordReflectionRunOutcome({
+        repository,
+        userId: input.userId,
+        frozen: input.frozen,
+        sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId,
+        modelRunAttemptId,
+        status: "failed",
+        outcomeDetail: validatorError,
+        statementCount: null,
+        candidateCount: null,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+        errorCode: validatorError,
+      });
+      return {
+        kind: "validator_failed",
+        errorCode: validatorError,
+        outcome:
+          validated.outcome === "retryable_failed" ? "retryable_failed" : "failed",
+      };
+    }
+
+    const validationRead = await readNarrativeValidationOutcome({
+      repository: input.dependencies.narrativeValidation.repository,
+      userId: input.userId,
+      artifactKind: "reflection",
+      draftRef: `reflection-version:${reflectionVersionId}`,
+      now: input.dependencies.clock(),
+    });
+    if (
+      validationRead.outcome !== "ok"
+      || validationRead.result.result.outcome !== "accepted"
+    ) {
+      // `incomplete` (validator not finished), `content_expired`, and a
+      // blocked verdict all forbid the current commit and every Candidate
+      // (ADR-0132; a raised-to-blocking policy must never publish a
+      // Reflection).
+      const validatorError =
+        validationRead.outcome === "ok"
+          ? "validator_blocked"
+          : `validator_${validationRead.outcome}`;
+      await recordReflectionRunOutcome({
+        repository,
+        userId: input.userId,
+        frozen: input.frozen,
+        sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId,
+        modelRunAttemptId,
+        status: "failed",
+        outcomeDetail: validatorError,
+        statementCount: null,
+        candidateCount: null,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+        errorCode: validatorError,
+      });
+      return { kind: "validator_blocked", errorCode: validatorError };
+    }
+
+    const committed = await repository.commitReflection({
+      userId: input.userId,
+      reflectionVersionId,
+      frozen: input.frozen,
+      sourceRevision,
+      sourceDigest: input.frozen.sourceDigest,
+      claimBaselineDigest: input.frozen.claimBaselineDigest,
+      policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId,
+      modelRunAttemptId,
+      validatorRequestId: validationRead.result.narrativeValidatorRequestId,
+      validatorResultId: validationRead.result.narrativeValidatorResultId,
+      promptVersion,
+      locale,
+      statements: plan.statements,
       candidateProposals: output.candidateProposals,
-    },
-  });
-  if (plan.action === "fail_version") {
+      dedupeFingerprintSecret: input.dependencies.dedupeFingerprintSecret,
+    });
+    if (committed.outcome === "fenced") {
+      await recordReflectionRunOutcome({
+        repository,
+        userId: input.userId,
+        frozen: input.frozen,
+        sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId,
+        modelRunAttemptId,
+        status: "fenced",
+        outcomeDetail: committed.reason,
+        statementCount: null,
+        candidateCount: null,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+        errorCode: committed.reason,
+      });
+      return { kind: "commit_fenced", reason: committed.reason };
+    }
+    if (committed.outcome === "already_committed") {
+      return { kind: "already_committed" };
+    }
     await recordReflectionRunOutcome({
       repository,
       userId: input.userId,
@@ -797,253 +1005,137 @@ async function executeReflectionAttempt(input: Readonly<{
       expectedDataEpoch: input.expectedDataEpoch,
       generationCommandId,
       modelRunAttemptId,
-      status: "failed",
-      outcomeDetail: plan.rejectionCode,
-      statementCount: 0,
-      candidateCount: 0,
+      status: "built",
+      outcomeDetail: null,
+      statementCount: committed.statementCount,
+      candidateCount: committed.candidateCount,
       degradedEpisodeReason: input.degradedEpisodeReason,
-      errorCode: `tier1:${plan.rejectionCode}`,
+      errorCode: null,
     });
-    const recorded = await settleAttempt("succeeded");
-    if (recorded.outcome === "discarded") {
+    return {
+      kind: "built",
+      statementCount: committed.statementCount,
+      candidateCount: committed.candidateCount,
+    };
+  };
+
+  let domain: ReflectionDomainOutcome;
+  try {
+    domain = await runDomainPhase();
+  } catch (error) {
+    if (
+      error instanceof RecoveryGateClosedError &&
+      error.result.status === "unavailable"
+    ) {
+      throw error;
+    }
+    // The Provider call already succeeded and may have consumed tokens, but
+    // the post-Provider domain work threw. `unknown` is an existing terminal
+    // failure code (ADR-0132): it is not a Provider transport failure, so
+    // `planModelRoleRecovery` schedules no technical retry, and the issue
+    // decision adds no new code.
+    const settled = await settleAttempt("failed", "unknown");
+    const outcome: ReflectionBuildEntrypointResult["outcome"] =
+      settled.outcome === "discarded"
+        ? "fenced"
+        : settled.outcome === "retry_scheduled"
+          ? "retryable_failed"
+          : "failed";
+    return entrypointResult({
+      subjectId: String(subjectId),
+      scope: input.scope,
+      outcome,
+      errorCode: outcome === "fenced" ? (settled.reason ?? "unknown") : "unknown",
+    });
+  }
+
+  switch (domain.kind) {
+    case "tier1_rejected": {
+      const recorded = await settleAttempt("succeeded");
+      if (recorded.outcome === "discarded") {
+        return entrypointResult({
+          subjectId: String(subjectId),
+          scope: input.scope,
+          outcome: "fenced",
+          errorCode: recorded.reason ?? "already_settled",
+        });
+      }
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: "rejected",
+        rejectionCode: domain.rejectionCode,
+        errorCode: `tier1:${domain.rejectionCode}`,
+      });
+    }
+    case "persist_fenced": {
+      await settleAttempt("failed", "business_fence");
       return entrypointResult({
         subjectId: String(subjectId),
         scope: input.scope,
         outcome: "fenced",
-        errorCode: recorded.reason ?? "already_settled",
+        errorCode: domain.reason,
       });
     }
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "rejected",
-      rejectionCode: plan.rejectionCode,
-      errorCode: `tier1:${plan.rejectionCode}`,
-    });
+    case "validator_failed": {
+      await settleAttempt("failed", "semantic_rejection");
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: domain.outcome,
+        errorCode: domain.errorCode,
+      });
+    }
+    case "validator_blocked": {
+      await settleAttempt("failed", "semantic_rejection");
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: "failed",
+        errorCode: domain.errorCode,
+      });
+    }
+    case "commit_fenced": {
+      await settleAttempt("failed", "business_fence");
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: "fenced",
+        errorCode: domain.reason,
+      });
+    }
+    case "already_committed": {
+      const recorded = await settleAttempt("succeeded");
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: recorded.outcome === "discarded" ? "fenced" : "built",
+        errorCode:
+          recorded.outcome === "discarded"
+            ? recorded.reason ?? null
+            : "already_committed",
+      });
+    }
+    case "built": {
+      const recorded = await settleAttempt("succeeded");
+      if (recorded.outcome === "discarded") {
+        return entrypointResult({
+          subjectId: String(subjectId),
+          scope: input.scope,
+          outcome: "fenced",
+          errorCode: recorded.reason ?? "already_settled",
+        });
+      }
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome: "built",
+        statementCount: domain.statementCount,
+        candidateCount: domain.candidateCount,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+      });
+    }
   }
-
-  const persisted = await repository.persistDraftVersion({
-    userId: input.userId,
-    scopeType: input.frozen.scopeType,
-    dailySessionId: input.frozen.dailySessionId,
-    weekIdentifier: input.frozen.weekIdentifier,
-    windowStartDate: input.frozen.windowStartDate,
-    windowEndDate: input.frozen.windowEndDate,
-    sourceRevision,
-    sourceDigest: input.frozen.sourceDigest,
-    claimBaselineDigest: input.frozen.claimBaselineDigest,
-    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
-    schedulePolicyVersion: REFLECTION_READINESS_POLICY_VERSION,
-    promptVersion,
-    schemaVersion: REFLECTION_OUTPUT_SCHEMA_VERSION,
-    locale,
-    expectedDataEpoch: input.expectedDataEpoch,
-    generationCommandId,
-    modelRunAttemptId,
-    degradedEpisodeReason: input.degradedEpisodeReason,
-    statements: plan.statements,
-    now: input.dependencies.clock(),
-  });
-  if (persisted.outcome === "fenced") {
-    await recordReflectionRunOutcome({
-      repository,
-      userId: input.userId,
-      frozen: input.frozen,
-      sourceRevision,
-      expectedDataEpoch: input.expectedDataEpoch,
-      generationCommandId,
-      modelRunAttemptId,
-      status: "fenced",
-      outcomeDetail: persisted.reason,
-      statementCount: null,
-      candidateCount: null,
-      degradedEpisodeReason: input.degradedEpisodeReason,
-      errorCode: persisted.reason,
-    });
-    await settleAttempt("failed", "business_fence");
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "fenced",
-      errorCode: persisted.reason,
-    });
-  }
-  const reflectionVersionId = persisted.reflectionVersionId;
-
-  // Shared validator (ADR-0132): the build may not commit current or derive
-  // a Candidate until a completed `narrative.validate` command exists.
-  const validated = await runNarrativeValidation({
-    dependencies: input.dependencies.narrativeValidation,
-    command: {
-      request: {
-        userId: input.userId,
-        artifactKind: "reflection",
-        draftRef: `reflection-version:${reflectionVersionId}`,
-        draftLocale: locale,
-        draftText: draftTextFor(plan.statements),
-        generatorManifest: generatorManifestFor(plan.statements),
-        sourceEntries: sourceEntriesFor(input.frozen),
-        plannedCoverageKeys: [],
-        validationPolicyVersion: NARRATIVE_VALIDATION_POLICY_VERSION,
-        promptVersion: NARRATIVE_VALIDATOR_PROMPT_VERSION_REFLECTION,
-        schemaVersion: NARRATIVE_FINDINGS_SCHEMA_VERSION,
-      },
-      expectedDataEpoch: input.expectedDataEpoch,
-    },
-  });
-  if (validated.outcome !== "completed" || !validated.verdict) {
-    const validatorError = `validator_${validated.outcome}`;
-    await recordReflectionRunOutcome({
-      repository,
-      userId: input.userId,
-      frozen: input.frozen,
-      sourceRevision,
-      expectedDataEpoch: input.expectedDataEpoch,
-      generationCommandId,
-      modelRunAttemptId,
-      status: "failed",
-      outcomeDetail: validatorError,
-      statementCount: null,
-      candidateCount: null,
-      degradedEpisodeReason: input.degradedEpisodeReason,
-      errorCode: validatorError,
-    });
-    await settleAttempt("failed", "semantic_rejection");
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome:
-        validated.outcome === "retryable_failed" ? "retryable_failed" : "failed",
-      errorCode: validatorError,
-    });
-  }
-
-  const outcome = await readNarrativeValidationOutcome({
-    repository: input.dependencies.narrativeValidation.repository,
-    userId: input.userId,
-    artifactKind: "reflection",
-    draftRef: `reflection-version:${reflectionVersionId}`,
-    now: input.dependencies.clock(),
-  });
-  if (outcome.outcome !== "ok" || outcome.result.result.outcome !== "accepted") {
-    // `incomplete` (validator not finished), `content_expired`, and a blocked
-    // verdict all forbid the current commit and every Candidate (ADR-0132;
-    // a raised-to-blocking policy must never publish a Reflection).
-    const validatorError =
-      outcome.outcome === "ok"
-        ? "validator_blocked"
-        : `validator_${outcome.outcome}`;
-    await recordReflectionRunOutcome({
-      repository,
-      userId: input.userId,
-      frozen: input.frozen,
-      sourceRevision,
-      expectedDataEpoch: input.expectedDataEpoch,
-      generationCommandId,
-      modelRunAttemptId,
-      status: "failed",
-      outcomeDetail: validatorError,
-      statementCount: null,
-      candidateCount: null,
-      degradedEpisodeReason: input.degradedEpisodeReason,
-      errorCode: validatorError,
-    });
-    await settleAttempt("failed", "semantic_rejection");
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "failed",
-      errorCode: validatorError,
-    });
-  }
-
-  const committed = await repository.commitReflection({
-    userId: input.userId,
-    reflectionVersionId,
-    frozen: input.frozen,
-    sourceRevision,
-    sourceDigest: input.frozen.sourceDigest,
-    claimBaselineDigest: input.frozen.claimBaselineDigest,
-    policyVersion: REFLECTION_ADMISSION_POLICY_VERSION,
-    expectedDataEpoch: input.expectedDataEpoch,
-    generationCommandId,
-    modelRunAttemptId,
-    validatorRequestId: outcome.result.narrativeValidatorRequestId,
-    validatorResultId: outcome.result.narrativeValidatorResultId,
-    promptVersion,
-    locale,
-    statements: plan.statements,
-    candidateProposals: output.candidateProposals,
-    dedupeFingerprintSecret: input.dependencies.dedupeFingerprintSecret,
-  });
-  if (committed.outcome === "fenced") {
-    await recordReflectionRunOutcome({
-      repository,
-      userId: input.userId,
-      frozen: input.frozen,
-      sourceRevision,
-      expectedDataEpoch: input.expectedDataEpoch,
-      generationCommandId,
-      modelRunAttemptId,
-      status: "fenced",
-      outcomeDetail: committed.reason,
-      statementCount: null,
-      candidateCount: null,
-      degradedEpisodeReason: input.degradedEpisodeReason,
-      errorCode: committed.reason,
-    });
-    await settleAttempt("failed", "business_fence");
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "fenced",
-      errorCode: committed.reason,
-    });
-  }
-  if (committed.outcome === "already_committed") {
-    const recorded = await settleAttempt("succeeded");
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: recorded.outcome === "discarded" ? "fenced" : "built",
-      errorCode:
-        recorded.outcome === "discarded"
-          ? recorded.reason ?? null
-          : "already_committed",
-    });
-  }
-  await recordReflectionRunOutcome({
-    repository,
-    userId: input.userId,
-    frozen: input.frozen,
-    sourceRevision,
-    expectedDataEpoch: input.expectedDataEpoch,
-    generationCommandId,
-    modelRunAttemptId,
-    status: "built",
-    outcomeDetail: null,
-    statementCount: committed.statementCount,
-    candidateCount: committed.candidateCount,
-    degradedEpisodeReason: input.degradedEpisodeReason,
-    errorCode: null,
-  });
-  const recorded = await settleAttempt("succeeded");
-  if (recorded.outcome === "discarded") {
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome: "fenced",
-      errorCode: recorded.reason ?? "already_settled",
-    });
-  }
-  return entrypointResult({
-    subjectId: String(subjectId),
-    scope: input.scope,
-    outcome: "built",
-    statementCount: committed.statementCount,
-    candidateCount: committed.candidateCount,
-    degradedEpisodeReason: input.degradedEpisodeReason,
-  });
 }
 
 // ---- Scheduler scan service ------------------------------------------------------
