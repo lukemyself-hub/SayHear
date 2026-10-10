@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C11",
+  "title": "C11 Partly remembered, could not look it up, and verified nothing there",
+  "capability": "Three situations that must not collapse into one sentence. A date that was fully read and holds nothing may be called empty. A range that was only partly reachable must be answered as partial. A lookup that failed must be owned as not being able to recall right now. 'We never talked about that' and 'that was the first time' are claims that need a verified, complete read of the relevant range. None of this is said in system vocabulary.",
+  "spec": ["#301 R11", "#301 R2", "ADR-0151"],
+  "ownerTickets": ["#315", "#320"],
+  "language": "zh",
+  "fixture": { "version": "dev-1", "sha256": "de095942e355ea5baf55dc8a40af8f2aab43a8060249d6fc2b39946a893570b9" },
+  "facts": {
+    "allowed": [
+      { "id": "a-nothing-friday", "statement": "Nothing was said on Friday 11 September; the neighbouring days hold a printmaking evening class on the Thursday and a first test print on the Saturday.", "sources": ["sep-a:user", "sep-b:user"] },
+      { "id": "a-studio", "statement": "In late August the person gave up a small rented painting studio after three years and stored the easel and leftover paints on a sister's balcony.", "sources": ["aug-a:user", "aug-b:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-false-empty", "statement": "Saying nothing was discussed in late August, or that there is no record of it.", "sources": ["aug-a:user", "aug-b:user"] },
+      { "id": "f-false-first", "statement": "Naming the evening class on 10 September as the first mention of anything to do with art.", "sources": ["sep-a:user"] },
+      { "id": "f-internals", "statement": "Mentioning windows, context, retrieval, databases, limits or similar mechanisms as the reason.", "sources": [] },
+      { "id": "f-invent-friday", "statement": "Supplying content for the Friday on which nothing was said.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-first-art", "statement": "The earliest mention of art in the retained history is 25 August, when the studio was given up.", "sources": ["aug-a:user"] }
+  ],
+  "expectedBehavior": [
+    "Friday: say plainly that nothing was said that day, optionally offering the days either side.",
+    "Late August: retell the studio, or, if only part can be reached, say which part is remembered and that the rest is hazy.",
+    "First mention: 25 August, and only after the earlier range has actually been checked.",
+    "If a lookup fails: say it cannot be recalled right now, without blaming a mechanism and without claiming there is nothing."
+  ],
+  "failureSignals": [
+    "'No record' is claimed for a range that was never read.",
+    "A within-window date is given as the first mention.",
+    "All three situations get the same 'we have not talked about that' reply.",
+    "Internal mechanism words appear."
+  ],
+  "sourceEligibility": [
+    { "source": "aug-a:user", "eligibility": "allowed", "reason": "Retained original expression; history recall is not limited to seven days." },
+    { "source": "aug-b:user", "eligibility": "allowed", "reason": "Retained original expression; history recall is not limited to seven days." },
+    { "source": "sep-a:user", "eligibility": "allowed", "reason": "Recent and inside the default background." },
+    { "source": "sep-b:user", "eligibility": "allowed", "reason": "Recent and inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "empty" } },
+    { "id": "O-empty-verified", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The asked-about Friday is covered by a complete, unbounded read that found nothing.", "check": { "type": "date_coverage", "step": "empty", "localDate": "2026-09-11", "expect": { "empty": true, "readBounded": false } } },
+    { "id": "O-neighbours", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The days either side of the empty Friday reach the Provider.", "check": { "type": "outbound_includes", "step": "empty", "sources": ["sep-a:user", "sep-b:user"] } },
+    { "id": "O-range-read", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#315", "description": "The late-August date that was asked about is covered by a recorded read, so a statement about it can be verified.", "check": { "type": "date_coverage", "step": "older", "localDate": "2026-08-25", "expect": { "empty": false } } },
+    { "id": "O-older-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#315", "description": "The late-August messages reach the Provider when that range is asked about.", "check": { "type": "outbound_includes", "step": "older", "sources": ["aug-a:user", "aug-b:user"] } },
+    { "id": "O-earliest-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#315", "description": "The true earliest mention reaches the Provider before 'the first time' is answered.", "check": { "type": "outbound_includes", "step": "earliest", "sources": ["aug-a:user"] } },
+    { "id": "O-read-failure", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "A failed history read is distinguished from an empty one.", "check": { "type": "unsupported", "capability": "inject a history read failure or a partial read for a single turn" } },
+    { "id": "S-empty", "kind": "semantic", "owner": "#315", "description": "The verified empty day is called empty, naturally, with nothing invented.", "step": "empty", "required": ["a-nothing-friday"], "forbidden": ["f-invent-friday", "f-internals"] },
+    { "id": "S-older", "kind": "semantic", "owner": "#315", "description": "The older range is retold or honestly described as partly remembered, never denied.", "step": "older", "required": ["a-studio"], "forbidden": ["f-false-empty", "f-internals"] },
+    { "id": "S-earliest", "kind": "semantic", "owner": "#315", "description": "'The first time' is only claimed for the true earliest mention.", "step": "earliest", "required": ["tm-first-art"], "forbidden": ["f-false-first", "f-internals"] }
+  ]
+}

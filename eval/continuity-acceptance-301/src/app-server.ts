@@ -124,7 +124,7 @@ export async function startAppServer(
     [nextBinary, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
     {
       cwd: webDirectory,
-      env: buildAppEnvironment(input, origin),
+      env: buildAppEnvironment(input, origin) as NodeJS.ProcessEnv,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );

@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { estimateRecentContextTokens, localDateOf } from "@sayhear/application";
+
 /**
  * Case fixtures and their independent oracle ledgers (T00 #313).
  *
@@ -66,7 +68,21 @@ export type ResendStep = Readonly<{
 /** Restart the app process: a reconnect / recovery boundary. */
 export type RestartStep = Readonly<{ at: string; id: string; type: "restart" }>;
 
-export type CaseStep = SayStep | ResendStep | RestartStep;
+/**
+ * Correct a seeded user message through the real correction route. The
+ * original wording is superseded; `text` is what the person now says it was.
+ */
+export type CorrectStep = Readonly<{
+  at: string;
+  id: string;
+  locale?: string;
+  /** Key of the history turn whose user message is corrected. */
+  target: string;
+  text: string;
+  type: "correct";
+}>;
+
+export type CaseStep = SayStep | ResendStep | RestartStep | CorrectStep;
 
 export type CaseFixture = Readonly<{
   defaults: Readonly<{ locale: string; timezone: string }>;
@@ -102,6 +118,15 @@ export type ObjectiveCheck =
   | Readonly<{ step: string; type: "no_commit_after_abort" }>
   | Readonly<{ of: string; step: string; type: "resend_is_idempotent" }>
   | Readonly<{ step: string; type: "usage_recorded" }>
+  /** Words said or corrected during the run reach the Provider for `step`. */
+  | Readonly<{ inputs: readonly string[]; step: string; type: "outbound_includes_input" }>
+  | Readonly<{ actionKind: string; step: string; type: "action_admitted" }>
+  | Readonly<{ step: string; type: "no_action" }>
+  /**
+   * The runner cannot set up or observe this yet. Always `not-run`: a missing
+   * harness capability is neither a product failure nor a pass.
+   */
+  | Readonly<{ capability: string; type: "unsupported" }>
   | Readonly<{
       expect: Readonly<{ empty: boolean; readBounded?: boolean }>;
       localDate: string;
@@ -161,6 +186,20 @@ export type CaseOracle = Readonly<{
   id: string;
   language: string;
   ownerTickets: readonly string[];
+  /**
+   * Properties the fixture itself must have for the case to mean anything,
+   * for example "this day spans more than one history page". Checked by
+   * `validateCase`, so a fixture cannot quietly stop exercising its pressure.
+   */
+  preconditions?: readonly Readonly<{
+    description: string;
+    /** Local date, in each turn's own expression timezone. */
+    localDate: string;
+    /** User plus assistant messages expressed on that date. */
+    minMessages?: number;
+    /** The product's own recent-context token estimate of that date's user text. */
+    minUserContextTokens?: number;
+  }>[];
   schemaVersion: typeof ORACLE_SCHEMA_VERSION;
   sourceEligibility: readonly Readonly<{
     eligibility: "allowed" | "forbidden";
@@ -294,7 +333,11 @@ export function oracleStrings(oracle: CaseOracle): string[] {
 }
 
 const STRUCTURAL_ORACLE_KEYS = new Set([
+  // A product Action kind is a public identifier that legitimately appears in
+  // the tool definitions sent to the Provider.
+  "actionKind",
   "eligibility",
+  "inputs",
   "id",
   "kind",
   "language",
@@ -328,6 +371,10 @@ const KNOWN_CHECK_TYPES = new Set([
   "no_commit_after_abort",
   "resend_is_idempotent",
   "usage_recorded",
+  "outbound_includes_input",
+  "action_admitted",
+  "no_action",
+  "unsupported",
   "date_coverage",
   "deadline",
 ]);
@@ -434,6 +481,7 @@ export function validateCase(loaded: LoadedCase): string[] {
 
   const stepIds = new Set<string>();
   const sayStepIds = new Set<string>();
+  const correctStepIds = new Set<string>();
   for (const step of fixture.steps ?? []) {
     if (!step.id || stepIds.has(step.id)) problems.push(`step id ${JSON.stringify(step.id)} is missing or duplicated`);
     if (turnKeys.has(step.id)) problems.push(`step id ${step.id} collides with a history turn key`);
@@ -455,6 +503,10 @@ export function validateCase(loaded: LoadedCase): string[] {
       }
     } else if (step.type === "resend") {
       if (!sayStepIds.has(step.of)) problems.push(`step ${step.id} resends unknown or later step ${step.of}`);
+    } else if (step.type === "correct") {
+      correctStepIds.add(step.id);
+      if (!turnKeys.has(step.target)) problems.push(`step ${step.id} corrects unknown history turn ${step.target}`);
+      if (typeof step.text !== "string" || !step.text.trim()) problems.push(`step ${step.id} needs the corrected text`);
     } else if (step.type !== "restart") {
       problems.push(`step ${(step as { id: string }).id} has an unknown type`);
     }
@@ -468,7 +520,7 @@ export function validateCase(loaded: LoadedCase): string[] {
   const sources = new Set(sourceKeys(fixture));
   const groundings = new Set([
     ...sources,
-    ...[...sayStepIds].map((id) => `${id}:input`),
+    ...[...sayStepIds, ...correctStepIds].map((id) => `${id}:input`),
   ]);
   const factIds = new Set<string>();
   const checkSources = (
@@ -536,6 +588,16 @@ export function validateCase(loaded: LoadedCase): string[] {
           }
         }
       }
+      if (check.type === "outbound_includes_input") {
+        for (const id of check.inputs ?? []) {
+          if (!sayStepIds.has(id) && !correctStepIds.has(id)) {
+            problems.push(`criterion ${criterion.id} references unknown input step ${id}`);
+          }
+        }
+      }
+      if (check.type === "unsupported" && !check.capability?.trim()) {
+        problems.push(`criterion ${criterion.id} must name the missing capability`);
+      }
       if (check.type === "session_ownership") {
         checkSources(`criterion ${criterion.id}`, check.expect.map((entry) => entry.source));
       }
@@ -554,11 +616,40 @@ export function validateCase(loaded: LoadedCase): string[] {
     }
   }
 
+  for (const precondition of oracle.preconditions ?? []) {
+    const turns = fixture.history.filter(
+      (turn) =>
+        isUtcInstant(turn.at) &&
+        localDateOf(new Date(turn.at), turn.timezone ?? fixture.defaults.timezone) ===
+          precondition.localDate,
+    );
+    const messages = turns.length * 2;
+    const userTokens = turns.reduce(
+      (total, turn) => total + estimateRecentContextTokens(turn.user),
+      0,
+    );
+    if (precondition.minMessages !== undefined && messages < precondition.minMessages) {
+      problems.push(
+        `precondition not met (${precondition.description}): ${precondition.localDate} has ${messages} messages, needs at least ${precondition.minMessages}`,
+      );
+    }
+    if (
+      precondition.minUserContextTokens !== undefined &&
+      userTokens < precondition.minUserContextTokens
+    ) {
+      problems.push(
+        `precondition not met (${precondition.description}): ${precondition.localDate} has ${userTokens} estimated user tokens, needs at least ${precondition.minUserContextTokens}`,
+      );
+    }
+  }
+
   // Independence: expectation prose must not be recoverable from the inputs,
   // and scenario naming must not ride along in the model-visible half.
   const fixtureProse = [
     ...fixture.history.flatMap((turn) => [turn.user, turn.assistant]),
-    ...fixture.steps.flatMap((step) => (step.type === "say" ? [step.text] : [])),
+    ...fixture.steps.flatMap((step) =>
+      step.type === "say" || step.type === "correct" ? [step.text] : [],
+    ),
   ];
   for (const oracleString of oracleStrings(oracle)) {
     if (oracleString.length < ORACLE_LEAK_MIN_LENGTH) continue;

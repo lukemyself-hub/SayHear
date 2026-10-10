@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C10",
+  "title": "C10 Supplement, cancel, change of subject, resend, reconnect and recovery",
+  "capability": "While a history answer is being looked up or generated, the person may add to the question, cancel, move to another subject, re-send, lose the connection and come back. A supplement is folded into the answer; an abandoned answer never arrives late; nothing is stored twice; and a single-segment reply that was cut off never becomes a successful Assistant Event.",
+  "spec": ["#301 R10", "ADR-0151", "#312"],
+  "ownerTickets": ["#319"],
+  "language": "en",
+  "fixture": { "version": "dev-1", "sha256": "ffcd2452d6cc6263ef2c659371aaa76a3e68960ae62c42d467728b0b2fafaf8a" },
+  "facts": {
+    "allowed": [
+      { "id": "a-companions", "statement": "Two people joined the paddling weekend: a friend and that friend's brother, who capsized almost immediately.", "sources": ["trip-a:user"] },
+      { "id": "a-lease-today", "statement": "The renewal decision, not the outing, is what weighs on the person right now.", "sources": ["switch:input", "lease:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-whole-trip", "statement": "Retelling the windy second night and early return when only the companions were asked for.", "sources": ["trip-b:user"] },
+      { "id": "f-stale-continuation", "statement": "Carrying on with the abandoned outing answer after the person moved on to the tenancy.", "sources": ["trip-a:user", "trip-b:user"] },
+      { "id": "f-technical-talk", "statement": "Describing the interruption in system terms such as retries, streams or lookups.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "After the first cancel, answer the narrowed question about companions only.",
+    "After the second cancel and the change of subject, stay with the tenancy worry.",
+    "A re-sent message, before or after a restart, resolves to the original and generates nothing new.",
+    "Cancelled replies leave no committed Assistant Event."
+  ],
+  "failureSignals": [
+    "An assistant reply appears in history for a cancelled turn.",
+    "A re-sent message is stored or answered twice.",
+    "The narrowed question is ignored and the whole outing is retold.",
+    "The reply to the change of subject goes back to the outing."
+  ],
+  "sourceEligibility": [
+    { "source": "trip-a:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." },
+    { "source": "trip-b:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." },
+    { "source": "lease:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-cancel-1", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first cancelled reply is never committed.", "check": { "type": "no_commit_after_abort", "step": "ask" } },
+    { "id": "O-supplement-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The narrowed question commits normally after the cancel.", "check": { "type": "turn_committed", "step": "supplement" } },
+    { "id": "O-supplement-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The original account of the outing reaches the Provider for the narrowed question.", "check": { "type": "outbound_includes", "step": "supplement", "sources": ["trip-a:user"] } },
+    { "id": "O-cancel-2", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The second cancelled reply is never committed.", "check": { "type": "no_commit_after_abort", "step": "ask-again" } },
+    { "id": "O-switch-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The change of subject commits and history matches the stream.", "check": { "type": "history_matches_stream", "step": "switch" } },
+    { "id": "O-resend", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Re-sending the same message creates no second message and no second generation.", "check": { "type": "resend_is_idempotent", "step": "resend", "of": "switch" } },
+    { "id": "O-reconnect", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Re-sending after an app restart still resolves to the original message.", "check": { "type": "resend_is_idempotent", "step": "reconnect", "of": "switch" } },
+    { "id": "O-after-restart", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation continues normally after the restart.", "check": { "type": "history_matches_stream", "step": "after" } },
+    { "id": "S-supplement", "kind": "semantic", "owner": "#319", "description": "The narrowed question is answered as narrowed.", "step": "supplement", "required": ["a-companions"], "forbidden": ["f-whole-trip", "f-technical-talk"] },
+    { "id": "S-switch", "kind": "semantic", "owner": "#319", "description": "After the change of subject the reply stays with the tenancy and adds no stale continuation.", "step": "switch", "required": ["a-lease-today"], "forbidden": ["f-stale-continuation", "f-technical-talk"] }
+  ]
+}

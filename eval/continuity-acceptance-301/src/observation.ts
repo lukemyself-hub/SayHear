@@ -30,6 +30,7 @@ export type ObservedSeedTurn = Readonly<{
   dailySessionId: string | null;
   key: string;
   terminalEvent: string | null;
+  userEventId: string | null;
   userRevisionId: string | null;
 }>;
 
@@ -71,6 +72,8 @@ export type ObservedStreamEvent = Readonly<{
 export type ObservedStep = Readonly<{
   at: string;
   chat: Readonly<{
+    /** Action kinds admitted on the stream for this turn, in order. */
+    actions: readonly string[];
     assistantRevisionId: string | null;
     clientAborted: boolean;
     events: readonly ObservedStreamEvent[];
@@ -110,7 +113,7 @@ export type ObservedStep = Readonly<{
     sequence: number;
     strings: readonly string[];
   }>[];
-  type: "say" | "resend" | "restart";
+  type: "say" | "resend" | "restart" | "correct";
 }>;
 
 export type CaseObservation = Readonly<{

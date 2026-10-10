@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C08",
+  "title": "C08 Praised for efficiency and feeling flat: use what the person said matters to them",
+  "capability": "A month ago the person said that deciding things for themselves matters more to them than being fast. Today they are praised in public for speed and feel deflated. History is used to understand the present feeling: the earlier statement is the relevant meaning, the unrelated camping trip is not. The reply does not guess the manager's motives, does not slide into advice, and does not turn one feeling into a fixed description of who the person is.",
+  "spec": ["#301 R6", "#301 R8", "ADR-0108", "ADR-0110", "ADR-0151"],
+  "ownerTickets": ["#318"],
+  "language": "en",
+  "fixture": { "version": "dev-1", "sha256": "5cd59a970f9a6687ba06710f76893cffcfa61d93e7caf4d87f55f27aa4ad1639" },
+  "facts": {
+    "allowed": [
+      { "id": "a-own-decision", "statement": "The person earlier said they would rather be slow at something they chose than fast at executing another person's idea.", "sources": ["choice-b:user"] },
+      { "id": "a-flat-now", "statement": "Public praise for speed left the person feeling empty rather than pleased.", "sources": ["praise:input"] }
+    ],
+    "forbidden": [
+      { "id": "f-manager-motive", "statement": "Asserting why the manager said it, for example that she undervalues or is managing the person.", "sources": [] },
+      { "id": "f-advice", "statement": "Recommending a course of action such as talking to the manager or asking for different work.", "sources": [] },
+      { "id": "f-fixed-trait", "statement": "Declaring a permanent trait, such as that the person is someone who can never accept praise.", "sources": [] },
+      { "id": "f-camping", "statement": "Bringing up the rainy lake weekend.", "sources": ["camping:user"] },
+      { "id": "f-cheerlead", "statement": "Telling the person they ought to be proud or should enjoy the recognition.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "Receive the flatness first.",
+    "Offer, tentatively and as the assistant's own reading, the link to what the person said about choosing their own way.",
+    "Leave the manager's intent and any next step to the person."
+  ],
+  "failureSignals": [
+    "The month-old statement never reaches the Provider.",
+    "The reply explains the manager, prescribes a step, or labels the person.",
+    "The unrelated trip is pulled in to show memory."
+  ],
+  "sourceEligibility": [
+    { "source": "choice-a:user", "eligibility": "allowed", "reason": "Retained original expression; relevant earlier background is not limited to seven days." },
+    { "source": "choice-b:user", "eligibility": "allowed", "reason": "Retained original expression; relevant earlier background is not limited to seven days." },
+    { "source": "camping:user", "eligibility": "allowed", "reason": "Retained and permitted, simply irrelevant; a relevance judgement, not a source control." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The turn streams and commits.", "check": { "type": "turn_committed", "step": "praise" } },
+    { "id": "O-meaning-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#318", "description": "The month-old statement about choosing one's own way reaches the Provider.", "check": { "type": "outbound_includes", "step": "praise", "sources": ["choice-a:user", "choice-b:user"] } },
+    { "id": "S-meaning", "kind": "semantic", "owner": "#318", "description": "The reply connects the feeling to what the person said matters, as the assistant's reading, and stays inside the facts.", "step": "praise", "required": ["a-flat-now", "a-own-decision"], "forbidden": ["f-manager-motive", "f-camping"] },
+    { "id": "P-stance", "kind": "subjective", "owner": "#318", "description": "Persona and empathy: no advice, no cheerleading, no fixed label. Advisory until a human decides (ADR-0110).", "step": "praise", "required": ["a-flat-now"], "forbidden": ["f-advice", "f-fixed-trait", "f-cheerlead"] }
+  ]
+}

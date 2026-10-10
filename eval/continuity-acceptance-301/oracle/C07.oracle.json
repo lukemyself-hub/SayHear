@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C07",
+  "title": "C07 Old employer to new employer, a corrected start date, and a plan that was cancelled",
+  "capability": "The person left one employer for another, explicitly corrected the start date they had first given, and planned a trip that they later cancelled. Asked about the present, SayHear keeps past and current apart, uses the corrected date and never the superseded one, and does not report a cancelled plan as something that happened.",
+  "spec": ["#301 R5", "#301 R7", "ADR-0151"],
+  "ownerTickets": ["#318"],
+  "language": "zh",
+  "fixture": { "version": "dev-1", "sha256": "294186212de3ec301daf8f6ef0a8c611a80c50226a9466df0386df55e6c45391" },
+  "facts": {
+    "allowed": [
+      { "id": "a-current-employer", "statement": "The person now works at the technology company in an operations-analysis role, having left the freight firm where they scheduled vehicles for four years.", "sources": ["offer:user", "first-week:user", "old-job:user"] },
+      { "id": "a-trip-cancelled", "statement": "The solo five-day break in Yunnan was called off because the person's mother hurt her back; the flight was refunded.", "sources": ["trip-plan:user", "trip-cancel:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-old-date", "statement": "Giving 8 October as the start date, or presenting both dates as equally possible.", "sources": ["offer:user"] },
+      { "id": "f-still-old-employer", "statement": "Saying the person currently works at the freight firm.", "sources": ["old-job:user"] },
+      { "id": "f-trip-happened", "statement": "Describing the break as taken, or asking how it went.", "sources": ["trip-plan:user"] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-start", "statement": "The start date is 15 October 2026, as corrected by the person on 27 September.", "sources": ["date-fix:user"] }
+  ],
+  "expectedBehavior": [
+    "Name the current employer and the corrected start date, mentioning the former employer only as the past.",
+    "Say the trip was planned and then cancelled, and why.",
+    "Do not surface the superseded date."
+  ],
+  "failureSignals": [
+    "The correction or the cancellation never reaches the Provider because both are older than seven days.",
+    "The superseded date is given.",
+    "The cancelled trip is treated as completed."
+  ],
+  "sourceEligibility": [
+    { "source": "old-job:user", "eligibility": "allowed", "reason": "Retained original expression; valid as a description of the past." },
+    { "source": "offer:user", "eligibility": "allowed", "reason": "Retained original expression; its date is superseded by the person's later correction, which must accompany it." },
+    { "source": "trip-plan:user", "eligibility": "allowed", "reason": "Retained original expression; valid only as a plan." },
+    { "source": "date-fix:user", "eligibility": "allowed", "reason": "The person's own explicit correction." },
+    { "source": "trip-cancel:user", "eligibility": "allowed", "reason": "The person's own later statement." },
+    { "source": "first-week:user", "eligibility": "allowed", "reason": "Retained original expression." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "where" } },
+    { "id": "O-correction-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#318", "description": "The month-old offer and its explicit date correction both reach the Provider when the person asks where they work and since when.", "check": { "type": "outbound_includes", "step": "where", "sources": ["offer:user", "date-fix:user"] } },
+    { "id": "O-cancel-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#318", "description": "The plan and its cancellation both reach the Provider when the person asks what became of the trip.", "check": { "type": "outbound_includes", "step": "trip", "sources": ["trip-plan:user", "trip-cancel:user"] } },
+    { "id": "S-current", "kind": "semantic", "owner": "#318", "description": "Current employer and corrected date, with the past kept as the past.", "step": "where", "required": ["a-current-employer", "tm-start"], "forbidden": ["f-old-date", "f-still-old-employer"] },
+    { "id": "S-plan", "kind": "semantic", "owner": "#318", "description": "A cancelled plan is reported as cancelled.", "step": "trip", "required": ["a-trip-cancelled"], "forbidden": ["f-trip-happened"] }
+  ]
+}

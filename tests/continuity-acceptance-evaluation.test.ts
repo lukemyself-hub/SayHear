@@ -9,7 +9,11 @@ import {
   evaluateCase,
   exitCodeForStatus,
 } from "../eval/continuity-acceptance-301/src/evaluate";
-import { validateCase } from "../eval/continuity-acceptance-301/src/fixture";
+import {
+  validateCase,
+  type ObjectiveCheck,
+} from "../eval/continuity-acceptance-301/src/fixture";
+import type { CaseObservation } from "../eval/continuity-acceptance-301/src/observation";
 
 /**
  * T00 #313 checker calibration: each prefabricated transcript carries the
@@ -43,6 +47,57 @@ describe("continuity acceptance evaluation", () => {
       }
     });
   }
+
+  function scoreWith(
+    check: ObjectiveCheck,
+    change: (observation: CaseObservation) => CaseObservation = (observation) => observation,
+  ) {
+    const good = calibrationSamples()[0]!;
+    const report = evaluateCase({
+      loaded: {
+        ...calibrationCase,
+        oracle: {
+          ...calibrationCase.oracle,
+          criteria: [
+            { check, description: "probe", id: "PROBE", kind: "objective", modes: ["real-model"], owner: "#999" },
+          ],
+        },
+      },
+      observation: change(good.observation),
+      review: null,
+    });
+    return report.criteria.find((criterion) => criterion.id === "PROBE")!;
+  }
+
+  it("reports a criterion the runner cannot exercise yet as not-run, never as red or green", () => {
+    const result = scoreWith({ capability: "seed a Forget request", type: "unsupported" });
+    expect(result.status).toBe("not-run");
+    expect(result.reason).toContain("seed a Forget request");
+    expect(result.owner).toBe("#999");
+  });
+
+  it("judges Trust Actions from the admitted Action on the stream, not from the wording", () => {
+    const withAction = (kinds: string[]) => (observation: CaseObservation) => ({
+      ...observation,
+      steps: observation.steps.map((step) =>
+        step.id === "q1" && step.chat ? { ...step, chat: { ...step.chat, actions: kinds } } : step,
+      ),
+    });
+    expect(scoreWith({ actionKind: "memory_forget", step: "q1", type: "action_admitted" }).status).toBe("fail");
+    expect(
+      scoreWith({ actionKind: "memory_forget", step: "q1", type: "action_admitted" }, withAction(["memory_forget"])).status,
+    ).toBe("pass");
+    // The #312 clue: a plain recap must not trigger a correction Action.
+    expect(scoreWith({ step: "q1", type: "no_action" }).status).toBe("pass");
+    const wrong = scoreWith({ step: "q1", type: "no_action" }, withAction(["memory_correction"]));
+    expect(wrong.status).toBe("fail");
+    expect(wrong.evidence.join(" ")).toContain("memory_correction");
+  });
+
+  it("checks that words said during the run reach the Provider for a later turn", () => {
+    expect(scoreWith({ inputs: ["q1"], step: "q1", type: "outbound_includes_input" }).status).toBe("pass");
+    expect(scoreWith({ inputs: ["q2"], step: "q1", type: "outbound_includes_input" }).status).toBe("fail");
+  });
 
   it("never reports a run as complete unless every required criterion passed", () => {
     expect(aggregateStatus(["pass", "pass"])).toBe("pass");

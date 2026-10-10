@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "C08",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/Chicago" },
+  "history": [
+    {
+      "key": "choice-a",
+      "at": "2026-08-18T23:30:00.000Z",
+      "user": "My manager Renata wanted me to use the vendor's template for the onboarding redesign. I said no and built the flow my own way, and it took me twice as long.",
+      "assistant": "Twice as long, and yours. It sounds like that mattered to you."
+    },
+    {
+      "key": "choice-b",
+      "at": "2026-08-18T23:36:00.000Z",
+      "user": "It did. I would rather be slow and have it be something I actually decided than be quick at carrying out someone else's idea.",
+      "assistant": "Deciding it yourself is the part you would not trade away."
+    },
+    {
+      "key": "camping",
+      "at": "2026-09-06T01:15:00.000Z",
+      "user": "Back from three nights at Devil's Lake. It rained the whole second day and we played cards in the tent.",
+      "assistant": "A full day of rain and a deck of cards. There are worse ways to be stuck."
+    }
+  ],
+  "steps": [
+    {
+      "id": "praise",
+      "type": "say",
+      "at": "2026-09-16T22:40:00.000Z",
+      "text": "Renata told the whole team today that I am the most efficient person she has. Everyone clapped. I should be happy and I just feel flat."
+    }
+  ]
+}

@@ -179,6 +179,7 @@ function correctObservation(reply: string): CaseObservation {
   const q1: ObservedStep = {
     at: "2026-03-25T15:00:00.000Z",
     chat: {
+      actions: [],
       assistantRevisionId: "q1-a-rev",
       clientAborted: false,
       events: [
@@ -226,6 +227,7 @@ function correctObservation(reply: string): CaseObservation {
   const q2: ObservedStep = {
     at: "2026-03-25T15:05:00.000Z",
     chat: {
+      actions: [],
       assistantRevisionId: null,
       clientAborted: true,
       events: [
@@ -250,6 +252,7 @@ function correctObservation(reply: string): CaseObservation {
   const q3: ObservedStep = {
     at: "2026-03-25T15:06:00.000Z",
     chat: {
+      actions: [],
       assistantRevisionId: "q1-a-rev",
       clientAborted: false,
       events: [
@@ -304,6 +307,7 @@ function correctObservation(reply: string): CaseObservation {
         dailySessionId: turn.key === "k0" ? "session-0302" : "session-0324",
         key: turn.key,
         terminalEvent: "assistant_committed",
+        userEventId: `${turn.key}-u`,
         userRevisionId: `${turn.key}-u-rev`,
       })),
     },

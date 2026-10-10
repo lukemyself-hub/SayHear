@@ -148,6 +148,12 @@ export type RunCaseInput = Readonly<{
 
 /** A live conversation over one seeded case; `runCase` and `chat` share it. */
 export type CaseSession = Readonly<{
+  correct(
+    id: string,
+    target: string,
+    at: Date,
+    corrected: { locale?: string; text: string },
+  ): Promise<ObservedStep>;
   finish(): Promise<CaseObservation>;
   restart(id: string, at: Date): Promise<ObservedStep>;
   resend(id: string, of: string, at: Date): Promise<ObservedStep>;
@@ -255,6 +261,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       dailySessionId: inspection?.dailySessionId ?? null,
       key: turn.key,
       terminalEvent: chat.terminalEvent,
+      userEventId: eventField(chat, "user_committed", "message", "id"),
       userRevisionId: eventField(chat, "user_committed", "message", "revisionId"),
     });
   }
@@ -313,6 +320,9 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       at: at.toISOString(),
       chat: chat
         ? {
+            actions: chat.events
+              .filter((entry) => entry.event["type"] === "action_admitted")
+              .map((entry) => String(record(entry.event["receipt"])?.["actionKind"] ?? "unknown")),
             assistantRevisionId: eventField(chat, "assistant_committed", "revisionId"),
             clientAborted: chat.clientAborted,
             events: chat.events.map((entry) => ({
@@ -364,6 +374,39 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   }
 
   return {
+    async correct(id, target, at, corrected) {
+      await arriveAt(at);
+      const problems: string[] = [];
+      const locale = corrected.locale ?? fixture.defaults.locale;
+      const eventId = seedTurns.find((turn) => turn.key === target)?.userEventId ?? null;
+      if (!eventId) {
+        problems.push(`History turn ${target} has no committed user event to correct.`);
+      } else {
+        const result = await client.correct({ eventId, locale, text: corrected.text });
+        if (result.httpStatus !== 200) {
+          problems.push(`Correction route answered HTTP ${result.httpStatus}.`);
+        }
+      }
+      const step: ObservedStep = {
+        at: at.toISOString(),
+        chat: null,
+        id,
+        input: {
+          clientEventId: "",
+          clientTurnId: "",
+          locale,
+          text: corrected.text,
+          timezone: fixture.defaults.timezone,
+        },
+        inspection: null,
+        problems,
+        providerRequests: [],
+        type: "correct",
+      };
+      steps.push(step);
+      input.onStep?.(step);
+      return step;
+    },
     async finish() {
       if (aborted) await new Promise((resolve) => setTimeout(resolve, 500));
       const identity = gitIdentity();
@@ -446,6 +489,11 @@ export async function runCase(input: RunCaseInput): Promise<CaseObservation> {
       });
     } else if (step.type === "resend") {
       await session.resend(step.id, step.of, at);
+    } else if (step.type === "correct") {
+      await session.correct(step.id, step.target, at, {
+        text: step.text,
+        ...(step.locale ? { locale: step.locale } : {}),
+      });
     } else {
       await session.restart(step.id, at);
     }

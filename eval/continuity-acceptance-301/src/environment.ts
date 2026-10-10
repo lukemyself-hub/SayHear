@@ -204,6 +204,7 @@ export async function createAcceptanceEnvironment(input: {
   // session and the data do not.
   const client: AcceptanceClient = {
     chat: (submission) => current().chat(submission),
+    correct: (correction) => current().correct(correction),
     dates: () => current().dates(),
     inspect: (id) => current().inspect(id),
     messages: (id) => current().messages(id),

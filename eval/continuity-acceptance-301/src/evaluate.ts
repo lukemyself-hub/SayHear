@@ -174,12 +174,50 @@ function evaluateObjective(
       : { evidence, reason: "Every message is owned by the expected Daily Session date.", status: "pass" };
   }
 
+  if (check.type === "unsupported") {
+    return {
+      evidence: [],
+      reason: `Not exercised: the runner cannot yet ${check.capability}. This is a missing harness capability, not a product verdict.`,
+      status: "not-run",
+    };
+  }
+
   const step = findStep(observation, check.step);
   if (!step) return missingStep(check.step);
   const chat = step.chat;
   const pointer = `steps[${step.id}]`;
 
   switch (check.type) {
+    case "outbound_includes_input": {
+      const strings = step.providerRequests
+        .filter((request) => request.conversationTurn)
+        .flatMap((request) => request.strings);
+      const evidence: string[] = [];
+      let all = true;
+      for (const id of check.inputs) {
+        const said = findStep(observation, id)?.input?.text ?? null;
+        const present = said !== null && strings.some((value) => value.includes(said));
+        evidence.push(`steps[${id}].input.text: providerRequest=${present ? "present" : "absent"}`);
+        if (!present) all = false;
+      }
+      return all
+        ? { evidence, reason: "Everything said earlier in the run reached the Provider for this turn.", status: "pass" }
+        : { evidence, reason: "Something said earlier in the run did not reach the Provider for this turn.", status: "fail" };
+    }
+    case "action_admitted": {
+      const actions = chat?.actions ?? [];
+      const evidence = [`${pointer}.chat.actions=${JSON.stringify(actions)}`];
+      return actions.includes(check.actionKind)
+        ? { evidence, reason: `The ${check.actionKind} Action was admitted for this turn.`, status: "pass" }
+        : { evidence, reason: `No ${check.actionKind} Action was admitted for this turn.`, status: "fail" };
+    }
+    case "no_action": {
+      const actions = chat?.actions ?? [];
+      const evidence = [`${pointer}.chat.actions=${JSON.stringify(actions)}`];
+      return actions.length === 0
+        ? { evidence, reason: "No Action was admitted for this turn.", status: "pass" }
+        : { evidence, reason: "An Action was admitted for a turn that asked for none.", status: "fail" };
+    }
     case "turn_committed": {
       const evidence = [
         `${pointer}.chat.httpStatus=${chat?.httpStatus ?? "none"}`,

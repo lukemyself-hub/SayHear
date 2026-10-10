@@ -65,6 +65,12 @@ export type HistoryDate = Readonly<{
 
 export type AcceptanceClient = Readonly<{
   chat(submission: ChatSubmission): Promise<ChatObservation>;
+  /** Correct one of the person's own messages through the real route. */
+  correct(input: {
+    eventId: string;
+    locale: string;
+    text: string;
+  }): Promise<Readonly<{ body: Readonly<Record<string, unknown>>; httpStatus: number }>>;
   dates(): Promise<readonly HistoryDate[]>;
   inspect(generationCommandId: string): Promise<Readonly<Record<string, unknown>>>;
   messages(dailySessionId: string): Promise<readonly HistoryMessage[]>;
@@ -226,6 +232,19 @@ export function createAcceptanceClient(input: {
           streamClosedMs: performance.now() - started,
         },
       };
+    },
+    async correct(correction) {
+      const response = await fetch(
+        new URL("/api/internal/conversation/corrections", input.origin),
+        {
+          body: JSON.stringify(correction),
+          headers,
+          method: "POST",
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+      const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      return { body, httpStatus: response.status };
     },
     dates: () => pages<HistoryDate>("/api/internal/conversation/dates", "entries", {}),
     inspect: (generationCommandId) =>
