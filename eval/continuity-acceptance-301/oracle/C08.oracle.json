@@ -6,7 +6,7 @@
   "spec": ["#301 R6", "#301 R8", "ADR-0108", "ADR-0110", "ADR-0151"],
   "ownerTickets": ["#318"],
   "language": "en",
-  "fixture": { "version": "dev-1", "sha256": "5cd59a970f9a6687ba06710f76893cffcfa61d93e7caf4d87f55f27aa4ad1639" },
+  "fixture": { "version": "dev-2", "sha256": "8e318020a28ab2f68c09ae927fed394af5c3ee380703f30624f15adac99079b2" },
   "facts": {
     "allowed": [
       { "id": "a-own-decision", "statement": "The person earlier said they would rather be slow at something they chose than fast at executing another person's idea.", "sources": ["choice-b:user"] },
@@ -41,6 +41,6 @@
     { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The turn streams and commits.", "check": { "type": "turn_committed", "step": "praise" } },
     { "id": "O-meaning-source", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#318", "description": "The month-old statement about choosing one's own way reaches the Provider.", "check": { "type": "outbound_includes", "step": "praise", "sources": ["choice-a:user", "choice-b:user"] } },
     { "id": "S-meaning", "kind": "semantic", "owner": "#318", "description": "The reply connects the feeling to what the person said matters, as the assistant's reading, and stays inside the facts.", "step": "praise", "required": ["a-flat-now", "a-own-decision"], "forbidden": ["f-manager-motive", "f-camping"] },
-    { "id": "P-stance", "kind": "subjective", "owner": "#318", "description": "Persona and empathy: no advice, no cheerleading, no fixed label. Advisory until a human decides (ADR-0110).", "step": "praise", "required": ["a-flat-now"], "forbidden": ["f-advice", "f-fixed-trait", "f-cheerlead"] }
+    { "id": "P-stance", "kind": "subjective", "owner": "#318", "description": "Persona and empathy, for T08 #321 human adjudication: does the reply catch what matters to the person (choosing their own way), guess the manager's motive, give advice nobody asked for, cheerlead, or fix a label on them; and is it the same SayHear voice as an ordinary reply? Advisory until a human decides (ADR-0110).", "step": "praise", "required": ["a-flat-now"], "forbidden": ["f-advice", "f-fixed-trait", "f-cheerlead"] }
   ]
 }

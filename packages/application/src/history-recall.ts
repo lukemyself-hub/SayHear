@@ -181,7 +181,7 @@ export type HistoryQueryProposal =
 export const HISTORY_REVIEW_FUNCTION: ConversationFunctionDefinition =
   Object.freeze({
     description:
-      "Look back at the user's own saved original messages from before today. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions). Do not use it for today's conversation, or for a greeting, small talk, a new subject or an unrelated remark. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes. Resolve dates yourself from the time context into YYYY-MM-DD in the user's timezone. Two ways to ask. (1) By date: when the user names or points to a past calendar date or period (up to about three months), for example 'what did I tell you on August 20', 'what did we talk about yesterday', 'go over last week', or 'when did I first mention painting' (use a wide range from the far past), give start_date (and end_date for a run of dates). Also use it, with time_basis experienced_date, when they ask what HAPPENED or what they DID on a past day ('what did I do yesterday'). A follow-up asking for a detail of a period you already recapped should call it again for that period so the answer comes from the original words, not from your earlier summary. (2) By search: when the user asks about an ordinary thing, experience or person they told you about some time ago (weeks or months back) without a date you can resolve, for example 'did I ever tell you about playing the piano?', give search_terms: 2 to 5 short keywords or phrases exactly as they would literally appear in the user's own messages, including close synonyms and, when the user mixes languages, the forms in each language. Optionally add people (names or relationship words as the user would have written them) and a start_date/end_date range if the user gave a period. (3) By continuation: when the user does NOT ask about the past but their current message only makes sense with something they told you earlier (a pronoun or omission such as 'they finally wrote back', 'she called again', 'it went better this time') and the current message, the user's last few messages or the DialogueState topic give enough clues to say what the earlier thing was likely about, search with search_terms taken from those clues (never from your own earlier replies) and set continuation_basis to the signals you used: current_input, adjacent_user (the user's recent messages) and/or dialogue_state (only if a DialogueState section is present). Do not use it when the earlier context is already in the conversation, when nothing in the current talk points to an earlier matter, or just to be thorough. Search terms are only clues for finding the messages; they are not facts about the user.",
+      "Look back at the user's own saved original messages from before today. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions). Do not use it for today's conversation, or for a greeting, small talk, a new subject or an unrelated remark. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes. Resolve dates yourself from the time context into YYYY-MM-DD in the user's timezone. Two ways to ask. (1) By date: when the user names or points to a past calendar date or period (up to about three months), for example 'what did I tell you on August 20', 'what did we talk about yesterday', 'go over last week', or 'when did I first mention painting' (use a wide range from the far past), give start_date (and end_date for a run of dates). Also use it, with time_basis experienced_date, when they ask what HAPPENED or what they DID on a past day ('what did I do yesterday'). A follow-up asking for a detail of a period you already recapped should call it again for that period so the answer comes from the original words, not from your earlier summary. (2) By search: when the user asks about an ordinary thing, experience or person they told you about some time ago (weeks or months back) without a date you can resolve, for example 'did I ever tell you about playing the piano?', give search_terms: 2 to 5 short keywords or phrases exactly as they would literally appear in the user's own messages, including close synonyms and, when the user mixes languages, the forms in each language. Optionally add people (names or relationship words as the user would have written them) and a start_date/end_date range if the user gave a period. (3) By continuation: when the user does NOT ask about the past but their current message only makes sense with something they told you earlier (a pronoun or omission such as 'they finally wrote back', 'she called again', 'it went better this time') and the current message, the user's last few messages or the DialogueState topic give enough clues to say what the earlier thing was likely about, search with search_terms taken from those clues (never from your own earlier replies) and set continuation_basis to the signals you used: current_input, adjacent_user (the user's recent messages) and/or dialogue_state (only if a DialogueState section is present). Use continuation also when the person tells you how they feel about something specific (a person, project, decision or plan) and what the person told you before matters to understanding what they actually care about here: take search_terms from words that literally appear in the current message (a name, a project, the thing itself) and set continuation_basis to current_input. The result is background; it is used only if it bears on what they just said. Never search merely because another topic is related, and never to bring up an unrelated trip or event to show you remember. Do not use it when the earlier context is already in the conversation, when nothing in the current talk points to an earlier matter, or just to be thorough. Search terms are only clues for finding the messages; they are not facts about the user.",
     name: HISTORY_REVIEW_FUNCTION_NAME,
     parameters: Object.freeze({
       additionalProperties: false,
@@ -1179,6 +1179,40 @@ function historyAnswerGuidance(
   return lines;
 }
 
+/**
+ * The reading contract shared by every path that quotes older messages
+ * (issue #318, SPEC #301 R5-R8, ADR-0009/0039/0040/0045/0108). It types what
+ * the quotes are (the person's own words at the time they were said), keeps
+ * past and present apart, lets only the person's own later words correct
+ * their earlier ones, and keeps inference, motives and one-off feelings out
+ * of what is stated about them. Identity, voice and advice limits stay with
+ * the Canonical Persona; this block never restates or replaces them.
+ */
+export const HISTORY_READING_RULES_VERSION = "history-reading:v1";
+
+export function renderHistoryReadingRules(): string {
+  return [
+    `History reading rules (${HISTORY_READING_RULES_VERSION}), the same on every reply that uses earlier messages:`,
+    "- Time: each quoted message carries when it was said, not necessarily when the thing happened. Do not turn a message's time into an event date; if their words give no date, leave it undated.",
+    "- Past and present: when they later said something different about the same matter, the latest statement is how it is now and the earlier one is how it was then. Speak of the earlier one in the past tense and never as current.",
+    "- Corrections: if they themselves later corrected a date, number or name, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said.",
+    "- Plans: a plan they later called off did not happen: do not ask how it went. A plan with no later word is still only a plan: do not say how it turned out.",
+    "- Their words only: assistant lines are your own earlier replies; they never prove what the person said, felt or meant. Add no reasons, no other people's motives, and no details they did not give, for example why someone left or why someone said something.",
+    "- One moment is not a trait: a feeling or remark from one time describes that time. Do not present it as who they are, as a lasting pattern, or as a label such as a diagnosis, orientation, belief or trauma.",
+    "- Relevance: use an earlier message only when it helps with what they are saying now. Do not bring up an unrelated earlier thing just because it was found, and do not mention history in every reply. If you connect an earlier statement to how they feel now, offer it as your own tentative reading, not as a fact about them.",
+    "- Same you: keep your usual voice and limits. Receive what they said now first; give no advice or verdict unless they ask.",
+  ].join("\n");
+}
+
+function withReadingRules(
+  lines: readonly string[],
+  snapshot: HistoryRecallReceiptSnapshot,
+): string {
+  return snapshot.injectedRows > 0
+    ? [...lines, renderHistoryReadingRules()].join("\n")
+    : lines.join("\n");
+}
+
 /** The answer stage's model-facing rendering of the frozen result. */
 export function renderHistoryRecallReceipt(
   snapshot: HistoryRecallReceiptSnapshot,
@@ -1201,7 +1235,7 @@ export function renderHistoryRecallReceipt(
     lines.push(
       "Rules for the reply: use only the earlier messages that appear in the conversation before the user's current message (each has its own time in the Times list); invent nothing else, no names, titles or details they do not contain. Reply to the current message as one natural reply. Never mention internal terms such as policy, receipt, section, token, coverage, status, search, lookup or background.",
     );
-    return lines.join("\n");
+    return withReadingRules(lines, snapshot);
   }
   if (result.proposal.kind === "search_experience") {
     lines.push(...renderExperienceSearchReceiptLines(snapshot));
@@ -1213,7 +1247,7 @@ export function renderHistoryRecallReceipt(
     lines.push(
       "Rules for the reply: quote and describe only the messages that appear in the conversation before the user's current message (each has its own time in the Times list); do not invent anything else, no names, titles or details they do not contain. Mention roughly when each thing was said using those times. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status, search or lookup.",
     );
-    return lines.join("\n");
+    return withReadingRules(lines, snapshot);
   }
   const plan = result.plan as HistoryQueryPlan | null;
   if (plan === null) {
@@ -1261,5 +1295,5 @@ export function renderHistoryRecallReceipt(
     "Rules for the reply: quote and describe only the messages that appear in the conversation before the user's current message (each has its own time in the Times list); do not invent anything else. Mention when each thing was said using those times. Assistant lines there are only your earlier replies for understanding and are never evidence of what the person said. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status or limits.",
     ...historyAnswerGuidance(snapshot),
   );
-  return lines.join("\n");
+  return withReadingRules(lines, snapshot);
 }

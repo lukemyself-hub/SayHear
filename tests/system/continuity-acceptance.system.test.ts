@@ -55,7 +55,7 @@ function statuses(observation: CaseObservation, caseId: string) {
 describe("Continuity acceptance over the real chat path", () => {
   const smoke = loadCase("S01");
   const older = loadCase("C04");
-  const meaning = loadCase("C08");
+  const controls = loadCase("C12");
   let environment: AcceptanceEnvironment;
   let first: CaseObservation;
 
@@ -187,31 +187,31 @@ describe("Continuity acceptance over the real chat path", () => {
     expect(comparison.unexpectedGreen).toEqual([]);
   });
 
-  it("gives an explainable red, on the real path, for a month-old statement not yet recalled", async () => {
+  it("gives an explainable red, on the real path, for a restatement of a corrected figure that still leaves", async () => {
     await environment.reset();
     const observation = await runCase({
       environment,
-      fixture: meaning.fixture,
-      fixtureSha256: meaning.fixtureSha256,
+      fixture: controls.fixture,
+      fixtureSha256: controls.fixtureSha256,
       mode: "deterministic",
     });
-    const { byId, report } = statuses(observation, "C08");
+    const { byId, report } = statuses(observation, "C12");
 
     expect(observation.environmentErrors).toEqual([]);
     expect(byId["INV-seed-readback"]?.status).toBe("pass");
-    expect(byId["O-commit"]?.status).toBe("pass");
+    expect(byId["O-superseded-out"]?.status).toBe("pass");
+    expect(byId["O-corrected-in"]?.status).toBe("pass");
 
     // The product really compiled a Context and really called the Provider;
-    // the month-old words are simply not in it.
-    const red = byId["O-meaning-source"]!;
+    // the person's own adjacent restatement is still in it.
+    const red = byId["O-user-echo-out"]!;
     expect(red.status).toBe("fail");
-    expect(red.owner).toBe("#318");
+    expect(red.owner).toBe("#320");
     expect(red.evidence).toEqual([
-      "choice-a:user: providerRequest=absent, inspector.referencedEvents=absent",
-      "choice-b:user: providerRequest=absent, inspector.referencedEvents=absent",
+      "offer-echo:user: providerRequest=present, inspector.referencedEvents=present",
     ]);
-    const ask = observation.steps[0]!;
-    expect(ask.providerRequests.some((request) => request.conversationTurn)).toBe(true);
+    const work = observation.steps.find((step) => step.id === "work")!;
+    expect(work.providerRequests.some((request) => request.conversationTurn)).toBe(true);
     expect(report.status).toBe("fail");
 
     // Red is exactly the declared red: nothing else failed, and the entry is

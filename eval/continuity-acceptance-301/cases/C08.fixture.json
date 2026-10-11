@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C08",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "en",
   "defaults": { "locale": "en-US", "timezone": "America/Chicago" },
@@ -30,7 +30,8 @@
       "id": "praise",
       "type": "say",
       "at": "2026-09-16T22:40:00.000Z",
-      "text": "Renata told the whole team today that I am the most efficient person she has. Everyone clapped. I should be happy and I just feel flat."
+      "text": "Renata told the whole team today that I am the most efficient person she has. Everyone clapped. I should be happy and I just feel flat.",
+      "historyReview": { "searchTerms": ["Renata"], "continuationBasis": ["current_input"] }
     }
   ]
 }

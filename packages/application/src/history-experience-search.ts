@@ -346,6 +346,26 @@ export function buildExperienceGroups(
       omittedHits += 1;
     }
   }
+  // Issue #318: when a matter changed over time, the person's newest
+  // statement about it is the present state. Ranking by clue count must not
+  // push it out in favour of older, fuller matches: it takes the weakest
+  // slot, and what it displaces is counted as omitted.
+  const newest = ranked.reduce<ExperienceHit | null>(
+    (best, hit) =>
+      best === null || hit.expressedAt.localeCompare(best.expressedAt) > 0
+        ? hit
+        : best,
+    null,
+  );
+  if (
+    newest !== null &&
+    drafts.length >= policy.search.maxGroups &&
+    !drafts.some((draft) => draft.hits.includes(newest))
+  ) {
+    const displaced = drafts.pop()!;
+    omittedHits += displaced.hits.length - 1;
+    drafts.push({ dailySessionId: newest.dailySessionId, hits: [newest] });
+  }
   return {
     groups: drafts.map((draft) => {
       const times = draft.hits.map((hit) => Date.parse(hit.expressedAt));

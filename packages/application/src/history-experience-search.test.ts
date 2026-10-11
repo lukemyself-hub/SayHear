@@ -308,3 +308,46 @@ describe("experience groups and selection", () => {
     };
   }
 });
+
+describe("latest statement of a changing matter (issue #318)", () => {
+  const planResult = resolveExperienceSearchPlan({
+    cutoff,
+    policy,
+    proposal: {
+      endDate: null,
+      kind: "search_experience",
+      people: [],
+      sourceScope: "conversation_text",
+      startDate: null,
+      terms: ["入职", "offer"],
+      timeBasis: "expressed_date",
+    },
+    timezone: "Asia/Shanghai",
+  });
+  if (!planResult.ok) throw new Error("plan");
+  const plan = planResult.plan;
+  const session = (n: number) =>
+    asDailySessionId(`00000000-0000-7000-8000-0000000001${String(n).padStart(2, "0")}`);
+
+  it("keeps the person's newest statement even when older ones match more clues and fill every slot", () => {
+    const older = [1, 2, 3, 4].map((n) =>
+      event(`2026-0${n + 1}-10T08:40:00.000Z`, "user", `offer 入职 ${n}`, {
+        dailySessionId: session(n),
+        matchedGroups: [0, 1],
+      }),
+    );
+    const newest = event("2026-08-10T08:40:00.000Z", "user", "入职日期改了", {
+      dailySessionId: session(9),
+      matchedGroups: [0],
+    });
+    const ranked = rankExperienceHits(plan, { hits: [...older, newest] });
+    const built = buildExperienceGroups(ranked.eligible, policy);
+    expect(built.groups).toHaveLength(policy.search.maxGroups);
+    expect(
+      built.groups.some((group) =>
+        group.hits.some((hit) => hit.revisionId === newest.revisionId),
+      ),
+    ).toBe(true);
+    expect(built.omittedHits).toBe(2);
+  });
+});

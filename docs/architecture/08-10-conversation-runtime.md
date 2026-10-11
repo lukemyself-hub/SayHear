@@ -293,6 +293,22 @@ insufficient_coverage / channel_failed）；回执只用这些事实：无匹配
 - **诊断分层**：选择（basis/锚定/verdict/occasions 支持度）、误召回（引用来源与 group）、澄清（verdict=tied 的回执）与最终生成
   （既有 Provider/Event 记录）分别可见。真实模型的自然度与打扰感判据归 T08 #321。
 
+#### 8.4.6 用历史理解当前变化：阅读合同与同一人格（#318）
+
+不新增阶段、表、迁移或人格。日期回顾、较早查询与自然接续三条路径只要引用了原文，回执（`history_recall_receipt`）末尾都带同一段
+`History reading rules (history-reading:v1)`（`renderHistoryReadingRules`，无引用时不带）：引用是用户当时的原话，时间是表达时间；
+同一事上后说的才是现在、先说的只作过去；只有用户自己的更正能改写其先前说法，没有更正含义的新说法不改变其他原话，也不触发排除；
+被取消/无后文的计划不当作已发生；Assistant 行不是用户陈述；不补离职原因、他人动机；一时感受不固化为人格或标签；与当下无关的
+旧事不因“检索到了”而提起，联系只作为助手自己的试探性理解；不给建议。身份、语气与安全仍只来自 Canonical Persona / Safety
+Posture / 关系边界各 section——三条路径与普通回复由同一个 `createSections` 编译，History Answer 命令从 Decision 命令复制
+全部 persona/safety/relationship 版本，系统测试逐项断言它们相同。已有的资格排除（Correction/Forget 关联来源整条排除）不变。
+
+检索侧一处变化：`buildExperienceGroups` 在候选事情超过 `maxGroups` 时，保证“用户最新一次提到”的那件事占一个名额（替换
+排名最弱的一件，被替换的计入 `candidate_limit`），避免按线索数排序把现在的状态挤出去而只剩旧状态。函数描述新增用法：用户
+讲述对某具体人/事的感受，而较早所述有助于理解其在意处时，用当前表达里**字面出现**的词作接续线索（`current_input`）。
+**已知局限**：用户之后反复问同一话题的问句本身也含线索词，会占用名额（见 #318 交接笔记）。共情与人格的主观品质不由本节任何
+机械检查宣称达标，按 ADR-0110 由 T08 人评裁定。
+
 #### 8.4.1 Action Capability 元模型
 
 Catalog 中每个 ActionDefinition 声明：

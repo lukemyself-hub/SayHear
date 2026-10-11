@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C07",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "zh",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
@@ -48,13 +48,22 @@
       "id": "where",
       "type": "say",
       "at": "2026-10-28T12:00:00.000Z",
-      "text": "我有点恍惚，我现在是在哪儿上班、哪天入职的来着？"
+      "text": "我有点恍惚，我现在是在哪儿上班、哪天入职的来着？",
+      "historyReview": { "searchTerms": ["入职", "offer", "上班"] }
     },
     {
       "id": "trip",
       "type": "say",
       "at": "2026-10-28T12:03:00.000Z",
-      "text": "那我之前说的那趟旅行呢，后来怎么样了？"
+      "text": "那我之前说的那趟旅行呢，后来怎么样了？",
+      "historyReview": { "searchTerms": ["大理", "旅行", "机票"] }
+    },
+    {
+      "id": "august",
+      "type": "say",
+      "at": "2026-10-28T12:06:00.000Z",
+      "text": "对了，八月的时候我是在哪儿做什么的来着？跟现在比呢？",
+      "historyReview": { "searchTerms": ["调度", "明川", "新公司"] }
     }
   ]
 }

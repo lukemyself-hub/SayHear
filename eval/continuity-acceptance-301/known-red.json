@@ -2,24 +2,6 @@
   "schemaVersion": "continuity-known-red:v1",
   "entries": [
     {
-      "caseId": "C07",
-      "criterionId": "O-correction-source",
-      "owner": "#318",
-      "reason": "The offer and the person's explicit date correction are older than seven days and are not recalled."
-    },
-    {
-      "caseId": "C07",
-      "criterionId": "O-cancel-source",
-      "owner": "#318",
-      "reason": "The plan and its cancellation are older than seven days and are not recalled."
-    },
-    {
-      "caseId": "C08",
-      "criterionId": "O-meaning-source",
-      "owner": "#318",
-      "reason": "The month-old statement of what matters to the person is outside the default background."
-    },
-    {
       "caseId": "C12",
       "criterionId": "O-user-echo-out",
       "owner": "#320",
