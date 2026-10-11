@@ -50,7 +50,10 @@ import {
   type ProviderDispatchErrorCategory,
   type ProviderEgressPort,
 } from "./conversation-model";
-import type { RequestDeadline } from "./request-deadline";
+import {
+  createRequestInterrupt,
+  type RequestDeadline,
+} from "./request-deadline";
 
 /**
  * The application-owned Conversation Agent Harness (ADR-0093, ADR-0094).
@@ -262,7 +265,7 @@ export function createConversationAgentHarness(dependencies: {
     let historySuppressed = false;
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
-    const interrupt = createInterrupt(signal, command.deadline);
+    const interrupt = createRequestInterrupt(signal, command.deadline);
     // One read-only, idempotent probe, bounded by the request's own deadline
     // and cancellation and by a short timeout of its own.
     const probeFreshness = () =>
@@ -835,8 +838,6 @@ async function* streamExistingDecision(
   yield { category: "unavailable", interrupted: false, type: "decision_failed" };
 }
 
-const INTERRUPTED = Symbol("interrupted");
-
 const FRESHNESS_PROBE_TIMEOUT_MS = 1_500;
 
 /** Reject when the work takes longer than `ms`; the timer never keeps the process alive. */
@@ -860,78 +861,3 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/**
- * Combines the consumer's cancellation and the request deadline (issue #319).
- * `race` lets the Harness stop waiting on a Provider call that ignores its
- * abort signal, so the deadline holds even when cancellation cannot be
- * delivered; `throwIfInterrupted` keeps new steps from starting afterwards.
- */
-function createInterrupt(
-  signal: AbortSignal | undefined,
-  deadline: RequestDeadline | undefined,
-) {
-  const parts = [signal, deadline?.signal].filter(
-    (part): part is AbortSignal => part !== undefined,
-  );
-  const combined = parts.length === 0 ? undefined : AbortSignal.any(parts);
-  const reason = (): ProviderDispatchErrorCategory | null =>
-    deadline?.expired()
-      ? "timeout"
-      : combined?.aborted
-        ? "aborted"
-        : null;
-  const interrupted: Promise<typeof INTERRUPTED> =
-    combined === undefined
-      ? new Promise<never>(() => undefined)
-      : new Promise((resolve) => {
-          if (combined.aborted) resolve(INTERRUPTED);
-          else
-            combined.addEventListener("abort", () => resolve(INTERRUPTED), {
-              once: true,
-            });
-        });
-  function throwIfInterrupted(): void {
-    const category = reason();
-    if (category !== null) throw new ProviderDispatchError(category);
-  }
-  return {
-    ended: () => reason() !== null,
-    signal: combined,
-    throwIfInterrupted,
-    async sleep(
-      delay: (ms: number) => Promise<void>,
-      ms: number,
-    ): Promise<void> {
-      const waited = delay(ms);
-      waited.catch(() => undefined);
-      await Promise.race([waited, interrupted]);
-      throwIfInterrupted();
-    },
-    /** Wait for one piece of work, but never past the end of the request. */
-    async guard<T>(work: Promise<T>): Promise<T> {
-      work.catch(() => undefined);
-      const next = await Promise.race([work, interrupted]);
-      if (next === INTERRUPTED) {
-        throwIfInterrupted();
-        throw new ProviderDispatchError("aborted");
-      }
-      return next;
-    },
-    async *race<T>(source: AsyncIterable<T>): AsyncIterable<T> {
-      const iterator = source[Symbol.asyncIterator]();
-      for (;;) {
-        const pending = iterator.next();
-        pending.catch(() => undefined);
-        const next = await Promise.race([pending, interrupted]);
-        if (next === INTERRUPTED) {
-          // Never await this: a call that ignores cancellation never returns.
-          void Promise.resolve(iterator.return?.()).catch(() => undefined);
-          throwIfInterrupted();
-          throw new ProviderDispatchError("aborted");
-        }
-        if (next.done === true) return;
-        yield next.value;
-      }
-    },
-  };
-}

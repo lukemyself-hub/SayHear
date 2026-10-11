@@ -646,7 +646,8 @@ export class PostgresExperienceSearchSource implements ExperienceSearchSourcePor
   }
 }
 
-const SETTLE_TERMINAL_STATUSES = ["prepared", "compiling", "running", "retry_pending"];
+/** Statuses of a command that has not been settled yet. */
+const UNSETTLED_COMMAND_STATUSES = ["prepared", "compiling", "running", "retry_pending"];
 
 export class PostgresHistoryRecallRepository implements HistoryRecallRepository {
   public constructor(private readonly pool: Pool) {}
@@ -1042,7 +1043,7 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
          AND turn.status IN ('open', 'responding')
        ORDER BY command.created_at, command.generation_command_id
        LIMIT $1`,
-      [input.limit, SETTLE_TERMINAL_STATUSES],
+      [input.limit, UNSETTLED_COMMAND_STATUSES],
     );
     return result.rows.map((row) => ({
       generationCommandId: asGenerationCommandId(row.generation_command_id),

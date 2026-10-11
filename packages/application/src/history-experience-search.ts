@@ -380,22 +380,24 @@ export function buildExperienceGroups(
   };
 }
 
-const EMPTY_BASE_COVERAGE = {
-  blocks: 0,
-  blocksCovered: 0,
-  enumeratedRows: 0,
-  limits: [] as HistoryRecallCoverage["limits"],
-  readThrough: null as string | null,
-  timeBasis: "expressed_date" as const,
-  currentConversationRows: 0,
-  enumerationComplete: false,
-  omitted: {} as HistoryRecallCoverage["omitted"],
-  pages: 0,
-  perDate: [] as HistoryRecallCoverage["perDate"],
-  readLatencyMs: 0,
-  selectedRows: 0,
-  selectedTokens: 0,
-};
+/** The coverage of a review that read nothing; every result starts from it. */
+export const EMPTY_HISTORY_RECALL_COVERAGE: HistoryRecallCoverage =
+  Object.freeze({
+    blocks: 0,
+    blocksCovered: 0,
+    currentConversationRows: 0,
+    enumeratedRows: 0,
+    enumerationComplete: false,
+    limits: Object.freeze([]),
+    omitted: Object.freeze({}),
+    pages: 0,
+    perDate: Object.freeze([]),
+    readLatencyMs: 0,
+    readThrough: null,
+    selectedRows: 0,
+    selectedTokens: 0,
+    timeBasis: "expressed_date" as const,
+  });
 
 /** What the continuation already knows before the groups are scored. */
 export type ContinuationAccounting = Readonly<{
@@ -621,7 +623,7 @@ export function selectExperienceSearch(input: {
       : undefined;
   return {
     coverage: {
-      ...EMPTY_BASE_COVERAGE,
+      ...EMPTY_HISTORY_RECALL_COVERAGE,
       ...(continuationCoverage ? { continuation: continuationCoverage } : {}),
       currentConversationRows: 0,
       enumeratedRows: input.hits.scannedRows,
@@ -678,7 +680,7 @@ export async function runExperienceSearch(input: {
     readLatencyMs = 0,
   ): HistoryRecallResult => ({
     coverage: {
-      ...EMPTY_BASE_COVERAGE,
+      ...EMPTY_HISTORY_RECALL_COVERAGE,
       readLatencyMs,
       ...(proposal.continuation
         ? {

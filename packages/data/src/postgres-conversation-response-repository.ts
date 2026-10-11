@@ -172,6 +172,27 @@ type DispatchRow = Readonly<{
   user_status: string;
 }>;
 
+/**
+ * Whether the command's Daily Session holds an active user message newer than
+ * the command's own Turn input (the latest-user-input fence, ADR-0083). Expects
+ * the aliases `command` (generation_commands) and `turn` (interaction_turns).
+ */
+const SUPERSEDED_BY_NEWER_USER_INPUT_SQL = `EXISTS (
+  SELECT 1
+  FROM conversation_events newer
+  WHERE newer.user_id = command.user_id
+    AND newer.daily_session_id = turn.daily_session_id
+    AND newer.actor = 'user'
+    AND newer.lifecycle_status = 'active'
+    AND newer.sequence_no > (
+      SELECT MAX(own.sequence_no)
+      FROM conversation_events own
+      WHERE own.interaction_turn_id = turn.interaction_turn_id
+        AND own.user_id = turn.user_id
+        AND own.actor = 'user'
+    )
+)`;
+
 export class PostgresConversationResponseRepository
   implements
     ContextCompilerRepository,
@@ -278,21 +299,7 @@ export class PostgresConversationResponseRepository
           ) AS deadline_exceeded,
           (
             command.latest_input_fence_version = $4
-            AND EXISTS (
-              SELECT 1
-              FROM conversation_events newer
-              WHERE newer.user_id = command.user_id
-                AND newer.daily_session_id = turn.daily_session_id
-                AND newer.actor = 'user'
-                AND newer.lifecycle_status = 'active'
-                AND newer.sequence_no > (
-                  SELECT MAX(own.sequence_no)
-                  FROM conversation_events own
-                  WHERE own.interaction_turn_id = turn.interaction_turn_id
-                    AND own.user_id = turn.user_id
-                    AND own.actor = 'user'
-                )
-            )
+            AND ${SUPERSEDED_BY_NEWER_USER_INPUT_SQL}
           ) AS superseded
         FROM generation_commands command
         INNER JOIN interaction_turns turn
@@ -502,21 +509,7 @@ export class PostgresConversationResponseRepository
             command.status AS command_status,
             command.request_deadline_at,
             command.latest_input_fence_version,
-            EXISTS (
-              SELECT 1
-              FROM conversation_events newer
-              WHERE newer.user_id = command.user_id
-                AND newer.daily_session_id = turn.daily_session_id
-                AND newer.actor = 'user'
-                AND newer.lifecycle_status = 'active'
-                AND newer.sequence_no > (
-                  SELECT MAX(own.sequence_no)
-                  FROM conversation_events own
-                  WHERE own.interaction_turn_id = turn.interaction_turn_id
-                    AND own.user_id = turn.user_id
-                    AND own.actor = 'user'
-                )
-            ) AS superseded,
+            ${SUPERSEDED_BY_NEWER_USER_INPUT_SQL} AS superseded,
             command.interaction_turn_id,
             turn.status AS turn_status,
             attempt.model_run_attempt_id,
@@ -2209,21 +2202,7 @@ export class PostgresConversationResponseRepository
             command.freshness_policy,
             command.request_deadline_at,
             command.latest_input_fence_version,
-            EXISTS (
-              SELECT 1
-              FROM conversation_events newer
-              WHERE newer.user_id = command.user_id
-                AND newer.daily_session_id = turn.daily_session_id
-                AND newer.actor = 'user'
-                AND newer.lifecycle_status = 'active'
-                AND newer.sequence_no > (
-                  SELECT MAX(own.sequence_no)
-                  FROM conversation_events own
-                  WHERE own.interaction_turn_id = turn.interaction_turn_id
-                    AND own.user_id = turn.user_id
-                    AND own.actor = 'user'
-                )
-            ) AS superseded,
+            ${SUPERSEDED_BY_NEWER_USER_INPUT_SQL} AS superseded,
             policy.status AS provider_policy_status,
             (
               policy.consent_policy_version IS NULL

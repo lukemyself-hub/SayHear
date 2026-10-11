@@ -29,7 +29,11 @@ import {
   ProviderDispatchError,
   type ProviderDispatchErrorCategory,
 } from "./conversation-model";
-import { createRequestDeadline, type RequestDeadline } from "./request-deadline";
+import {
+  createRequestDeadline,
+  createRequestInterrupt,
+  type RequestDeadline,
+} from "./request-deadline";
 import type {
   ConversationRetryTurn,
   UserTextConversationService,
@@ -818,26 +822,9 @@ async function interruptible<T>(
   signal: AbortSignal | undefined,
   deadline: RequestDeadline | undefined,
 ): Promise<T> {
-  const parts = [signal, deadline?.signal].filter(
-    (part): part is AbortSignal => part !== undefined,
-  );
-  if (parts.length === 0) return work;
-  const combined = AbortSignal.any(parts);
-  const category = (): ProviderDispatchErrorCategory =>
-    deadline?.expired() ? "timeout" : "aborted";
+  const interrupt = createRequestInterrupt(signal, deadline);
   work.catch(() => undefined);
-  if (combined.aborted) {
-    throw new ProviderDispatchError(category());
-  }
-  let onAbort: () => void = () => undefined;
-  const interrupted = new Promise<never>((_, reject) => {
-    onAbort = () => reject(new ProviderDispatchError(category()));
-    combined.addEventListener("abort", onAbort, { once: true });
-  });
-  interrupted.catch(() => undefined);
-  try {
-    return await Promise.race([work, interrupted]);
-  } finally {
-    combined.removeEventListener("abort", onAbort);
-  }
+  // A request that already ended never gets the result, even a ready one.
+  interrupt.throwIfInterrupted();
+  return interrupt.guard(work);
 }

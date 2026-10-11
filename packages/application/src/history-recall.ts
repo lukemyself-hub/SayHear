@@ -29,11 +29,14 @@ import type {
   HistoryContinuationSignals,
 } from "./history-continuation";
 import {
+  EMPTY_HISTORY_RECALL_COVERAGE,
   renderExperienceSearchReceiptLines,
   runExperienceSearch,
   type ExperienceSearchSourcePort,
   type HistoryExperienceSearchPlan,
 } from "./history-experience-search";
+
+export { EMPTY_HISTORY_RECALL_COVERAGE };
 import {
   estimateRecentContextTokens,
   localDateOf,
@@ -651,24 +654,6 @@ export type HistoryRecallResult = Readonly<{
   proposal: HistoryQueryProposal;
   status: "completed" | "failed" | "partial";
 }>;
-
-export const EMPTY_HISTORY_RECALL_COVERAGE: HistoryRecallCoverage =
-  Object.freeze({
-    blocks: 0,
-    blocksCovered: 0,
-    currentConversationRows: 0,
-    enumeratedRows: 0,
-    enumerationComplete: false,
-    limits: Object.freeze([]),
-    omitted: Object.freeze({}),
-    pages: 0,
-    perDate: Object.freeze([]),
-    readLatencyMs: 0,
-    readThrough: null,
-    selectedRows: 0,
-    selectedTokens: 0,
-    timeBasis: "expressed_date" as const,
-  });
 
 export function failedHistoryRecallResult(
   proposal: HistoryQueryProposal,
