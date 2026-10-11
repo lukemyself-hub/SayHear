@@ -1664,6 +1664,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         endDate: windowEndDate,
         dailySessionId,
       });
+      // The Weekly retry must reconstruct the exact week identity the first
+      // attempt froze. `reflection_runs` has no week_identifier column, but the
+      // stored window start is always the week Monday the identifier was
+      // derived from, so recompute it here. An empty string would change the
+      // `reflection-week-window:v2` digest and the retry would be discarded as
+      // `source_changed` forever (issue #274).
+      const weekIdentifier = dailySessionId
+        ? null
+        : isoWeekIdentifierOf(windowStartDate);
       const frozen = await this.freezeWindowInputWithin(client, {
         userId: commandRow.user_id,
         scopeType: dailySessionId ? "daily_session" : "date_range",
@@ -1674,7 +1683,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         },
         dayRows,
         sourceDigest: dailySessionId ? null : run.source_digest,
-        weekIdentifier: dailySessionId ? null : "",
+        weekIdentifier,
         windowStartDate,
         windowEndDate,
         setDayHead: Boolean(dailySessionId),
