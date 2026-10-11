@@ -88,6 +88,9 @@ Entity 和 Memory 等消费者，1A.3b 再增加 Reflection 消费者。
 | Provider 429 / 5xx | 受控退避与 jitter；不产生部分领域状态 |
 | Schema 非法 | 有限次数修复；随后 `needs_review` |
 | 用户删除与生成并发 | `data_epoch` / fencing token 阻止结果提交 |
+| 请求超过整体 30 秒（ADR-0151） | 截止时刻在受理时冻结并由所有步骤共用；超过后不开始新步骤，进行中的调用被取消（取消不了的不再等待），迟到结果不展示、不提交；无 token 展示为 failed(timeout)，已展示为 `interrupted`；技术重试不会越过截止 |
+| 新用户消息到达时旧回答仍在途 | 旧回答失去展示与提交资格（同一 Session 存在更新的用户消息，数据库围栏）；进程内另取消其 Provider 调用；新消息是新 Turn，冻结上下文含前一个有效用户问题 |
+| Decision 转为 Action 提案后 | 无论受理结果，Decision 的 command/attempt 都被结算；已报告的 Provider 用量无论完成与否入账，未知保持 NULL |
 
 自动重试只允许发生在“没有任何 token 可能展示给用户”时。其余情况显式告诉用户
 回答被中断；不能让新生成内容伪装成用户刚才已经看到的原回答。
@@ -659,6 +662,12 @@ Provider Adapter 序列化之后仍可验证。经历时间只能来自支持它
 选择遗漏、时间投影丢失与模型生成错误，不新增默认私人正文日志。聊天只呈现自然
 回答和适当的不确定性；数据路径成功不等于体验验收成功。实际模型场景门槛见
 [行为评测规则](../evaluation/01-behavior-contract-and-rubric.md)。
+
+**实现状态（issue #319）。** 整体请求预算 `SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS`（默认且最大 30 000）与对话
+Provider 超时 `SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS` 已与后台角色共用的 `SAYHEAR_PROVIDER_TIMEOUT_MS`
+分开，只能收紧不能放宽；截止由受理时冻结在命令上的绝对时刻保证（见 ADR-0083 修订），BFF 在预算后另设兜底。
+Portal 在回答准备期间允许继续输入（取代旧回答）或停止，客户端 32 秒后自行停止等待。以上由确定性桩与
+真实 BFF/HTTP 边界证明；**实际模型下的 3/10/30 秒表现仍由 T08 复验**，本节不构成时延证据。
 
 **首轮采用单段交付并限制整体等待。** 先取得允许历史，再自然回答，暂缓两段式阶段。
 从应用接受输入到可见首个有意义回应不超过3秒，完整回答不超过10秒，整体请求30秒

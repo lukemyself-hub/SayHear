@@ -258,6 +258,18 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
     return rows.rows.map((row) => row.text);
   }
 
+  async function userTexts(): Promise<string[]> {
+    const rows = await database.pool.query<{ text: string }>(`
+      SELECT revision.canonical_text AS text
+      FROM conversation_events event
+      INNER JOIN conversation_event_revisions revision
+        ON revision.conversation_event_id = event.conversation_event_id
+      WHERE event.actor = 'user' AND event.event_type = 'message'
+      ORDER BY event.sequence_no
+    `);
+    return rows.rows.map((row) => row.text);
+  }
+
   async function commandStates(): Promise<
     Array<{ attempt: string; category: string | null; command: string }>
   > {
@@ -388,6 +400,11 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
     expect(firstEvents.at(-1)?.type).toBe("response_failed");
     expect(await assistantTexts()).toEqual([
       "fresh answer to: Never mind, the lease is on my mind.",
+    ]);
+    // Racing requests never lose a valid user input.
+    expect(await userTexts()).toEqual([
+      "Tell me about the kayak trip.",
+      "Never mind, the lease is on my mind.",
     ]);
     expect((await commandStates()).map((state) => state.command)).toEqual([
       "failed",
@@ -521,6 +538,130 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
     await chat(service, "commit-fault", "hello there");
     await chat(service, "commit-fault", "hello there");
     expect((await assistantTexts()).length).toBeLessThanOrEqual(1);
+  });
+
+  it("never auto-retries or hides a reply once a token may have been shown; the person's explicit Retry is a separate new turn", async () => {
+    let calls = 0;
+    const { service } = createApp(async function* () {
+      calls += 1;
+      if (calls === 1) {
+        yield { delta: "I was saying that", type: "delta" };
+        throw new ProviderDispatchError("unavailable");
+      }
+      yield { delta: "A fresh complete answer.", type: "delta" };
+      yield completed();
+    });
+    const first = await chat(service, "cut", "Tell me something.");
+    expect(first.map((event) => event.type)).toEqual([
+      "user_committed",
+      "assistant_delta",
+      "response_interrupted",
+    ]);
+    // One Provider call: no silent second attempt or model switch after tokens.
+    expect(calls).toBe(1);
+    expect(await assistantTexts()).toEqual([]);
+    expect((await commandStates())[0]).toMatchObject({ command: "interrupted" });
+
+    const turn = await database.pool.query<{ interaction_turn_id: string }>(
+      "SELECT interaction_turn_id FROM interaction_turns",
+    );
+    const retried: ConversationResponseStreamEvent[] = [];
+    for await (const event of service.retry(fixedInternalOwnerPrincipal.userId, {
+      originalTurnId: turn.rows[0]!.interaction_turn_id,
+      retryRequestId: "retry-1",
+    })) {
+      retried.push(event);
+    }
+    expect(retried.at(-1)?.type).toBe("assistant_committed");
+    expect(calls).toBe(2);
+    // The same Retry request sent again creates nothing new.
+    for await (const event of service.retry(fixedInternalOwnerPrincipal.userId, {
+      originalTurnId: turn.rows[0]!.interaction_turn_id,
+      retryRequestId: "retry-1",
+    })) {
+      void event;
+    }
+    expect(await assistantTexts()).toEqual(["A fresh complete answer."]);
+  });
+
+  it("yields one Assistant Event for a resend after the commit succeeded but the connection was lost, and for two simultaneous sends", async () => {
+    let calls = 0;
+    const { service } = createApp(async function* () {
+      calls += 1;
+      await wait(150);
+      yield { delta: "the one answer", type: "delta" };
+      yield completed();
+    });
+    // The first request commits; its client never hears about it and resends.
+    const original = await chat(service, "lost", "Hello again.");
+    expect(original.at(-1)?.type).toBe("assistant_committed");
+    const resent = await chat(service, "lost", "Hello again.");
+    expect(resent.at(-1)?.type).toBe("assistant_committed");
+    expect(
+      (resent.at(-1) as { eventId?: string }).eventId,
+    ).toBe((original.at(-1) as { eventId?: string }).eventId);
+
+    // Two sends of one message at the same time (a double tap, a flaky retry).
+    const [left, right] = await Promise.all([
+      chat(service, "double", "Same words."),
+      chat(service, "double", "Same words."),
+    ]);
+    void left;
+    void right;
+    await wait(400);
+    expect(await userTexts()).toEqual(["Hello again.", "Same words."]);
+    expect(await assistantTexts()).toEqual(["the one answer", "the one answer"]);
+    // One Provider call per distinct message, however often it was sent.
+    expect(calls).toBe(2);
+  });
+
+  it("repeated and concurrent recovery of a command from before the deadline column existed produces exactly one answer", async () => {
+    let calls = 0;
+    const { conversationService, service } = createApp(async function* () {
+      calls += 1;
+      await wait(100);
+      yield { delta: "recovered answer", type: "delta" };
+      yield completed();
+    });
+    // Accepted by an older build: no frozen deadline, then the process died.
+    await conversationService.submit(fixedInternalOwnerPrincipal.userId, {
+      clientEventId: "old-event",
+      clientTurnId: "old-turn",
+      locale: "en-US",
+      text: "Anyone there?",
+      timezone: "America/Denver",
+    });
+    await database.pool.query(
+      "UPDATE generation_commands SET request_deadline_at = NULL, latest_input_fence_version = NULL",
+    );
+    now = T0 + 10 * 60_000;
+    await Promise.all([service.scanStaleResponses(), service.scanStaleResponses()]);
+    await service.scanStaleResponses();
+    expect(await assistantTexts()).toEqual(["recovered answer"]);
+    expect(calls).toBe(1);
+  });
+
+  it("keeps a late answer out when a Full Purge (data epoch change) lands at the same time as the deadline", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { service } = createApp(
+      async function* () {
+        await gate;
+        yield { delta: "answer that must not survive", type: "delta" };
+        yield completed();
+      },
+      { requestBudgetMs: 500 },
+    );
+    const running = chat(service, "purge", "Something private.");
+    await wait(150);
+    await database.pool.query("UPDATE app_users SET data_epoch = data_epoch + 1");
+    await wait(600); // the deadline passes while the epoch has already moved
+    release();
+    const events = await running;
+    expect(events.map((event) => event.type)).not.toContain("assistant_committed");
+    expect(await assistantTexts()).toEqual([]);
+    const states = await commandStates();
+    expect(states.every((state) => state.command !== "running" && state.attempt !== "running")).toBe(true);
   });
 
   it("serves the BFF boundary: the stream closes with a timeout even if the service never ends", async () => {

@@ -13,3 +13,22 @@ Journal publish、current Reflection 等要求 exact head；只要原 Evidence �
 追加的派生物使用 source valid；Summary、DialogueState 等投影只能单调推进 coverage。
 任何删除、epoch 变化或 source invalidation 都优先 fail closed，旧 command 不能覆盖
 新 revision 或复活数据。
+
+## 修订（2026-10，issue #319，ADR-0151）：对话响应的请求截止与最新输入围栏
+
+对话响应链上的 GenerationCommand（`decision`、`action_finalization`、`history_answer`）在
+`source_valid:v1` 之外，冻结两条**具名**规则；`freshness_policy` 本身与它的 CHECK 约束不变，
+规则记在两个新增的可空列上（迁移 0080），旧命令为 NULL 并保持旧行为：
+
+- **`request_deadline_at`**：请求被接受时冻结的绝对截止时刻（整体请求 30 秒，ADR-0151）。各阶段共用
+  剩余时间，不重新领取：截止后不再开始新步骤（Provider 派发、技术重试与退避、历史回答、提交），不展示、
+  不提交迟到结果。Finalization 与 History Answer 从 Decision 命令复制该列。技术重试只在重试时刻早于
+  截止时才被安排；请求已结束（截止或取消）永不重试。恢复扫描遇到截止已过的未结算命令直接终止它，
+  不续跑，也不等待长恢复窗口。
+- **`latest_input_fence_version = latest_user_input:v1`**：回答只有在其输入仍是所属 Daily Session 最新的用户
+  文本消息（含显式 Retry 动作）时才可保留。更新的用户消息一经接受，旧待完成回答即失去展示与提交资格。
+
+检查点各自独立：首个可见 token 前的探针（尽力，使被取代的回答不上屏）、`claimDispatch`（不派发）、
+`commitCompleteResponse`（正确性围栏，同一 SERIALIZABLE 事务内重验）、恢复扫描。**取消信号只是优化而不是
+正确性来源**：进程内新消息会取消旧请求，但跨进程时数据库围栏单独保证旧结果不展示、不提交。围栏冲突产生的
+可串行化失败（40001）在这些事务上重跑，因为新消息与旧回答的结算并发是预期情形。

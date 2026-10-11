@@ -38,6 +38,7 @@
     { "id": "O-addition-keeps-earlier-question", "kind": "objective", "modes": ["deterministic"], "description": "The earlier question the person replaced still reaches the Provider with the addition, so nothing they said is lost.", "check": { "type": "outbound_includes_input", "step": "supplement", "inputs": ["ask"] } },
     { "id": "O-addition-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The original account of the outing reaches the Provider for the addition.", "check": { "type": "outbound_includes", "step": "supplement", "sources": ["market:user"] } },
     { "id": "O-stall-stops", "kind": "objective", "modes": ["deterministic"], "description": "A stalled Provider ends with a timeout inside the budget, commits nothing late and leaves no command running.", "check": { "type": "stopped_at_deadline", "step": "stall", "maxMs": 9000 } },
-    { "id": "O-after-stall", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation continues normally after the stopped request.", "check": { "type": "history_matches_stream", "step": "after" } }
+    { "id": "O-after-stall", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation continues normally after the stopped request.", "check": { "type": "history_matches_stream", "step": "after" } },
+    { "id": "S-addition", "kind": "semantic", "owner": "#319", "description": "The reply to the addition answers the narrowed question and does not describe the interruption in system terms.", "step": "supplement", "required": ["a-companion"], "forbidden": ["f-technical"] }
   ]
 }

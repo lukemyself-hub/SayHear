@@ -112,6 +112,87 @@ describe("continuity acceptance evaluation", () => {
     expect(scoreWith({ inputs: ["q2"], step: "q1", type: "outbound_includes_input" }).status).toBe("fail");
   });
 
+  // --- #319: request lifecycle checks --------------------------------------
+  const withoutAssistantReplies = (observation: CaseObservation): CaseObservation => ({
+    ...observation,
+    finalHistory: observation.finalHistory.map((session) => ({
+      ...session,
+      messages: session.messages.filter((message) => message.actor !== "assistant"),
+    })),
+  });
+  const withChat =
+    (change: (chat: NonNullable<CaseObservation["steps"][number]["chat"]>) => unknown) =>
+    (observation: CaseObservation): CaseObservation => ({
+      ...observation,
+      steps: observation.steps.map((step) =>
+        step.id === "q1" && step.chat ? ({ ...step, chat: change(step.chat) } as never) : step,
+      ),
+    });
+  const stoppedStream = (closedMs: number, category: string | null = "timeout") =>
+    withChat((chat) => ({
+      ...chat,
+      events: [
+        { category: null, delta: null, elapsedMs: 5, type: "user_committed" },
+        { category, delta: null, elapsedMs: closedMs, type: "response_failed" },
+      ],
+      streamedText: "",
+      terminalEvent: "response_failed",
+      timing: { ...chat.timing, committedMs: null, streamClosedMs: closedMs },
+    }));
+  const withInspection =
+    (commandStatus: string, attemptStatus: string) =>
+    (observation: CaseObservation): CaseObservation => ({
+      ...observation,
+      steps: observation.steps.map((step) =>
+        step.id === "q1" && step.inspection
+          ? ({ ...step, inspection: { ...step.inspection, attemptStatus, commandStatus } } as never)
+          : step,
+      ),
+    });
+  const compose =
+    (...changes: Array<(observation: CaseObservation) => CaseObservation>) =>
+    (observation: CaseObservation) =>
+      changes.reduce((current, change) => change(current), observation);
+
+  it("fails a reply that a newer message had retired when it was shown or stored, and passes when it was neither", () => {
+    const check = { step: "q1", type: "replaced_reply_never_shown" } as const;
+    // The calibration transcript's q1 streams and stores a reply.
+    expect(scoreWith(check).status).toBe("fail");
+    const retired = compose(
+      stoppedStream(900, "aborted"),
+      withoutAssistantReplies,
+    );
+    expect(scoreWith(check, retired).status).toBe("pass");
+    // Hidden from the stream but still stored: still a failure.
+    expect(scoreWith(check, stoppedStream(900, "aborted")).status).toBe("fail");
+  });
+
+  it("passes a stalled request only when it ended with a timeout inside the limit, committed nothing and left nothing running", () => {
+    const check = { maxMs: 9_000, step: "q1", type: "stopped_at_deadline" } as const;
+    const stopped = compose(
+      stoppedStream(6_020),
+      withoutAssistantReplies,
+      withInspection("failed", "failed"),
+    );
+    expect(scoreWith(check, stopped).status).toBe("pass");
+    // Waited past the limit.
+    expect(
+      scoreWith(check, compose(stoppedStream(31_000), withoutAssistantReplies, withInspection("failed", "failed"))).status,
+    ).toBe("fail");
+    // Ended, but not as a timeout.
+    expect(
+      scoreWith(check, compose(stoppedStream(6_000, "unknown"), withoutAssistantReplies, withInspection("failed", "failed"))).status,
+    ).toBe("fail");
+    // Ended on time but the command was left running.
+    expect(
+      scoreWith(check, compose(stoppedStream(6_000), withoutAssistantReplies, withInspection("running", "running"))).status,
+    ).toBe("fail");
+    // A late answer was committed anyway.
+    expect(
+      scoreWith(check, compose(stoppedStream(6_000), withInspection("failed", "failed"))).status,
+    ).toBe("fail");
+  });
+
   it("never reports a run as complete unless every required criterion passed", () => {
     expect(aggregateStatus(["pass", "pass"])).toBe("pass");
     expect(aggregateStatus(["pass", "not-run"])).toBe("not-run");

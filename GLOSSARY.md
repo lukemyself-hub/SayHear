@@ -92,6 +92,14 @@ _Avoid_: Cached search result, Memory, Summary
 Decision 以历史查询提案结束并冻结 History Recall Result 后创建的独立第二阶段 GenerationCommand；它冻结新的 CompiledContext、结果引用与版本，强制 tools disabled，沿完整 Response 接受点提交唯一的 Assistant Event。它不是 ModelRunAttempt 重试，也不是已退役的 Proactive Follow-up。
 _Avoid_: Technical retry, Action Finalization Command, Proactive Follow-up Segment Command
 
+**Request Deadline**:
+一次聊天请求被接受时冻结在 GenerationCommand 上的绝对截止时刻（整体 30 秒，ADR-0151）。所有后续步骤共用剩余时间而不重新领取；截止后不再开始新步骤，迟到结果不展示、不提交，恢复扫描也不续跑。它与 Provider 传输超时是两个独立配置。
+_Avoid_: Provider timeout, Step timeout, Retry budget
+
+**Superseded Answer**:
+同一 Daily Session 出现更新的用户消息后，仍在准备中的旧回答。它失去展示与提交资格（由数据库围栏保证，取消信号只是优化）；新消息是新的 Turn，不追加进旧 Command。已展示的局部内容按 interrupted 保存并保留显式 Retry，不成为成功的历史事实。
+_Avoid_: Cancelled reply, Merged supplement, Appended Command
+
 ## 对话行为
 
 **Canonical Persona**:
