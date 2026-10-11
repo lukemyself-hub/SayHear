@@ -79,6 +79,59 @@ describe("continuity acceptance isolation gate", () => {
     }
   });
 
+  it("judges the host the driver will really connect to, not the one written before the path", () => {
+    // PostgreSQL connection strings let a query parameter replace the host or
+    // port; the URL below reads as localhost and connects to a remote server.
+    for (const url of [
+      "postgresql://localhost/sayhear_test?host=db.prod.example.com",
+      "postgresql://localhost:5432/sayhear_test?host=db.prod.example.com&sslmode=require",
+      "postgresql://localhost/sayhear_test?hostaddr=10.0.0.7",
+      "postgresql://localhost/sayhear_test?port=6543",
+      "postgresql://localhost/sayhear_test?HOST=db.prod.example.com",
+      "postgresql://localhost/sayhear_test?service=production",
+      // No host at all: the driver would take it from PGHOST.
+      "postgresql:///sayhear_test",
+      // A socket directory is not the loopback PostgreSQL this runner expects.
+      "postgresql://%2Fvar%2Frun%2Fpostgresql/sayhear_test",
+    ]) {
+      expect(
+        () =>
+          resolveIsolationTarget({
+            TEST_DATABASE_URL: url,
+            TEST_PURGE_MARKER_DATABASE_URL: LOCAL_MARKER,
+          }),
+        url,
+      ).toThrow(IsolationError);
+      expect(
+        () =>
+          resolveIsolationTarget({
+            TEST_DATABASE_URL: LOCAL,
+            TEST_PURGE_MARKER_DATABASE_URL: url.replace("sayhear_test", "sayhear_marker_x"),
+          }),
+        `marker ${url}`,
+      ).toThrow(IsolationError);
+    }
+  });
+
+  it("still accepts harmless connection options on a loopback target", () => {
+    expect(
+      resolveIsolationTarget({
+        TEST_DATABASE_URL: "postgresql://localhost:5432/sayhear_test_t00?sslmode=disable&application_name=acceptance",
+        TEST_PURGE_MARKER_DATABASE_URL: "postgresql://[::1]:5432/sayhear_marker_t00",
+      }).databaseName,
+    ).toBe("sayhear_test_t00");
+  });
+
+  it("recognises the application database even when it is written with a host parameter", () => {
+    expect(() =>
+      resolveIsolationTarget({
+        DATABASE_URL: "postgresql://placeholder/sayhear_test_t00?host=localhost",
+        TEST_DATABASE_URL: LOCAL,
+        TEST_PURGE_MARKER_DATABASE_URL: LOCAL_MARKER,
+      }),
+    ).toThrow(/application database/);
+  });
+
   it("is not satisfied by a hand-typed confirmation flag", () => {
     expect(() =>
       resolveIsolationTarget({

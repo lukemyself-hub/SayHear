@@ -5,5 +5,6 @@ export {
 export {
   createIsolatedPostgresSchema,
   fixedInternalOwnerPrincipal,
+  resolvePostgresConnectionTarget,
   type IsolatedPostgresSchema,
 } from "./postgres";
