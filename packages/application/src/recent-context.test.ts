@@ -1231,6 +1231,19 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       generationStage: "decision",
     });
 
+    // The ordinary turn is byte for byte what the integration baseline
+    // (84adc42, before the SPEC #301 review fixes) compiled and sent for the
+    // same input: history work must not change ordinary chat or its
+    // seven-day background, whether the history branch is on or off.
+    const baseline: unknown = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/ordinary-turn-context-84adc42.json", import.meta.url),
+        "utf8",
+      ),
+    );
+    expect(manifest.compilerVersion).toBe("context-compiler:recent-time:v3");
+    expect(JSON.parse(JSON.stringify({ manifest, payload }))).toEqual(baseline);
+
     expect(payload.instructions).toContain("current request anchor");
     expect(payload.instructions).toContain("local=2026-11-01 01:30:00 GMT-8");
     expect(payload.instructions).toContain("0=America/Los_Angeles");

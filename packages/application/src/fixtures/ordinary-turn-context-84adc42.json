@@ -1,0 +1,244 @@
+{
+  "manifest": {
+    "compilerVersion": "context-compiler:recent-time:v3",
+    "degradedReason": null,
+    "dialogueRevision": 1,
+    "generationCommandId": "01984477-59a9-7d20-9d97-000000000063",
+    "integrity": {
+      "algorithm": "hmac-sha256",
+      "contentHmac": "804cde701230b65b13dec1283e66799aa2aa5b91bf31134b1d02b0eae7918f04",
+      "keyVersion": "context-integrity:v1"
+    },
+    "locale": "en-US",
+    "now": "2026-08-14T09:00:00.000Z",
+    "policyVersions": {
+      "canonicalPersonaVersion": "canonical-persona:v1",
+      "localePolicyVersion": "locale-pack-en:v1",
+      "outputFormatVersion": "conversation-output:v1",
+      "personaBehaviorAnchorsVersion": "persona-behavior-anchors:v1",
+      "personaContractInvariantVersion": "persona-contract-invariant:v1",
+      "productPolicyVersion": "product-policy:v1",
+      "relationshipPolicyVersion": "relationship-boundary:v1",
+      "safetyPolicyVersion": "minimum-high-risk-response:v1",
+      "taskInstructionVersion": "task-instruction-decision:v1",
+      "recentContextPolicyVersion": "recent-context-governance:test-active"
+    },
+    "rollingSummary": null,
+    "referencedEvents": [
+      {
+        "actor": "user",
+        "dailySessionId": "01984477-59a9-7d20-9d97-000000000062",
+        "estimatedTokens": 8,
+        "expressedAt": "2026-10-31T14:30:00.000Z",
+        "expressionTimezone": "Asia/Shanghai",
+        "expressionTimezoneSource": "request",
+        "locale": "en-US",
+        "occurredAt": null,
+        "revisionId": "01984477-59a9-7d20-9d97-000000000601",
+        "section": "recent_conversation_context",
+        "selectionOrder": 0,
+        "selectionReason": "day_representation",
+        "sequence": 4,
+        "text": "I visited the garden yesterday."
+      },
+      {
+        "actor": "user",
+        "expressedAt": "2026-11-01T06:55:00.000Z",
+        "expressionTimezone": "America/Los_Angeles",
+        "expressionTimezoneSource": "request",
+        "locale": "en-US",
+        "revisionId": "01984477-59a9-7d20-9d97-000000000602",
+        "sequence": 7,
+        "text": "I went to bed late.",
+        "estimatedTokens": 5,
+        "section": "committed_raw_events",
+        "selectionOrder": 1
+      },
+      {
+        "actor": "assistant",
+        "expressedAt": "2026-11-01T08:30:00.000Z",
+        "expressionTimezone": "America/Los_Angeles",
+        "expressionTimezoneSource": "request",
+        "locale": "en-US",
+        "revisionId": "01984477-59a9-7d20-9d97-000000000603",
+        "sequence": 8,
+        "text": "You said it was 1:30.",
+        "estimatedTokens": 6,
+        "section": "committed_raw_events",
+        "selectionOrder": 0
+      },
+      {
+        "actor": "user",
+        "expressedAt": "2026-11-01T09:30:00.000Z",
+        "expressionTimezone": "America/Los_Angeles",
+        "expressionTimezoneSource": "request",
+        "locale": "en-US",
+        "revisionId": "01984477-59a9-7d20-9d97-000000000600",
+        "sequence": 9,
+        "text": "What did I say yesterday?",
+        "estimatedTokens": 7,
+        "section": "current_user_input",
+        "selectionOrder": null
+      }
+    ],
+    "sectionBudgets": {
+      "committedRawEvents": 4000
+    },
+    "sections": [
+      {
+        "budgetTokens": null,
+        "contentHmac": "8a197a4b1d1da176b49889cfd7178986f5aa14e1f596000aa29048fda8cdcfb1",
+        "key": "product_policy",
+        "ordinal": 0,
+        "reference": "product-policy:v1",
+        "selectedTokens": 19,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "765f625a79beafb336ca92d219293a795e495b47a4e3a8a409889b7f773cdf8c",
+        "key": "safety_policy",
+        "ordinal": 1,
+        "reference": "minimum-high-risk-response:v1",
+        "selectedTokens": 54,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "2020e52da8c4a49fe17c6039711722efa0278d32ee3adabea6254c94bea7016f",
+        "key": "relationship_boundary",
+        "ordinal": 2,
+        "reference": "relationship-boundary:v1",
+        "selectedTokens": 27,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "e094f9274dc835edb3f3392889da6de2e51b27de5e7eccaecc0c7d13750f3dea",
+        "key": "persona_contract_invariant",
+        "ordinal": 3,
+        "reference": "persona-contract-invariant:v1",
+        "selectedTokens": 92,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "20cb22bd4b7b05a93a74a65bfeba2663d863ed6e6f6c3d22f50831ffc49d6c7d",
+        "key": "canonical_persona",
+        "ordinal": 4,
+        "reference": "canonical-persona:v1",
+        "selectedTokens": 28,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "cc472bff0d65f7d22b04bed36401b96f6797ec6172e0928963b04cfc471a6bbc",
+        "key": "persona_behavior_anchors",
+        "ordinal": 5,
+        "reference": "persona-behavior-anchors:v1",
+        "selectedTokens": 161,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "de846a65c63b2889462797b46785fa46bd5612b185c95f8d22f029ee86fd0cb5",
+        "key": "task_instruction",
+        "ordinal": 6,
+        "reference": "task-instruction-decision:v1",
+        "selectedTokens": 28,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "f5077e247aa540e6ea0727daf93692cbf73217ec3c99a449c26a30253e8bc584",
+        "key": "output_format",
+        "ordinal": 7,
+        "reference": "conversation-output:v1",
+        "selectedTokens": 24,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "8dfbb2c51232641ab4e6cd810153897dedb4fa3dee76fb04431bfae4c517a566",
+        "key": "locale_pack",
+        "ordinal": 8,
+        "reference": "locale-pack-en:v1",
+        "selectedTokens": 38,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "34527d8bb17144d7b3b3fe3dd9443e352bc5c0b4acecc69af068f5b0a087e292",
+        "key": "daily_session",
+        "ordinal": 9,
+        "reference": "01984477-59a9-7d20-9d97-000000000061:activity:active:closure:daily-session-inactivity:v1:dialogue:1:exchange:1",
+        "selectedTokens": 31,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": 336,
+        "contentHmac": "beab433f065b4a0e6c970cd864a52ee994b05c46b6bb2a838ceeac51bae94fe6",
+        "key": "time_context",
+        "ordinal": 10,
+        "reference": "{\"anchor\":{\"expressedAt\":\"2026-11-01T09:30:00.000Z\",\"instantSource\":\"event\",\"revisionId\":\"01984477-59a9-7d20-9d97-000000000600\",\"timezone\":\"America/Los_Angeles\"},\"entries\":[{\"actor\":\"user\",\"expressedAt\":\"2026-10-31T14:30:00.000Z\",\"expressionTimezone\":\"Asia/Shanghai\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":1,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-000000000601\"},{\"actor\":\"user\",\"expressedAt\":\"2026-11-01T06:55:00.000Z\",\"expressionTimezone\":\"America/Los_Angeles\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":2,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-000000000602\"},{\"actor\":\"assistant\",\"expressedAt\":\"2026-11-01T08:30:00.000Z\",\"expressionTimezone\":\"America/Los_Angeles\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":3,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-000000000603\"},{\"actor\":\"user\",\"expressedAt\":\"2026-11-01T09:30:00.000Z\",\"expressionTimezone\":\"America/Los_Angeles\",\"expressionTimezoneSource\":\"request\",\"messageIndex\":4,\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-000000000600\"}],\"version\":1}",
+        "selectedTokens": 261,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": 400,
+        "contentHmac": "e8a23d6bff262e98b80def19dadc1399145b078f6c4fb9a7dd4f5984159e4aa1",
+        "key": "recent_conversation_context",
+        "ordinal": 11,
+        "reference": "recent-context:{\"budgetTokens\":400,\"budgets\":{\"maxCandidateBytes\":1000000,\"maxCandidateRows\":1000,\"maxContextTokens\":400,\"maxSingleEventTokens\":100,\"readTimeoutMs\":1000},\"counts\":{\"candidateBytes\":31,\"candidateRows\":1,\"selectedCount\":1,\"truncated\":false},\"cutoff\":{\"currentInputRevisionId\":\"01984477-59a9-7d20-9d97-000000000600\",\"currentInputSequence\":9,\"dailySessionId\":\"01984477-59a9-7d20-9d97-000000000061\",\"expressedAt\":\"2026-11-01T09:30:00.000Z\"},\"excludedRevisionIds\":[\"01984477-59a9-7d20-9d97-000000000602\",\"01984477-59a9-7d20-9d97-000000000603\",\"01984477-59a9-7d20-9d97-000000000600\"],\"failure\":null,\"omitted\":[],\"perDate\":[],\"policyVersion\":\"recent-context-selection-policy:v1\",\"readLatencyMs\":null,\"selected\":[{\"actor\":\"user\",\"dailySessionId\":\"01984477-59a9-7d20-9d97-000000000062\",\"expressedAt\":\"2026-10-31T14:30:00.000Z\",\"occurredAt\":null,\"revisionId\":\"01984477-59a9-7d20-9d97-000000000601\",\"selectionOrder\":0,\"selectionReason\":\"day_representation\"}],\"selectedTokens\":8,\"selectorVersion\":\"recent-context-selection:v2\",\"timezone\":\"America/Los_Angeles\",\"version\":4,\"windowDays\":7,\"windowEndLocalDate\":\"2026-11-01\",\"windowStartLocalDate\":\"2026-10-26\"}",
+        "selectedTokens": 8,
+        "truncatable": false
+      },
+      {
+        "budgetTokens": 4000,
+        "contentHmac": "070a4a56b875138eeca3653fb2bfa9ad8424dedf88475b053a7cce9e92356014",
+        "key": "committed_raw_events",
+        "ordinal": 12,
+        "reference": "event-revisions:01984477-59a9-7d20-9d97-000000000602,01984477-59a9-7d20-9d97-000000000603",
+        "selectedTokens": 11,
+        "truncatable": true
+      },
+      {
+        "budgetTokens": null,
+        "contentHmac": "05aa5d31f71916225212fc30f821c37033ed6cc9ad4970f644934dfd4f3c027e",
+        "key": "current_user_input",
+        "ordinal": 13,
+        "reference": "01984477-59a9-7d20-9d97-000000000600",
+        "selectedTokens": 7,
+        "truncatable": false
+      }
+    ],
+    "sourceRevision": 2,
+    "totalTokens": 789,
+    "userId": "01984477-59a9-7d20-9d97-000000000060"
+  },
+  "payload": {
+    "instructions": "Listen and understand by default. Do not give advice unless the user asks.\nFor explicit self-harm, harm-to-others, or imminent danger, pause ordinary listening and encourage immediate real-world support without diagnosing, impersonating a therapist, or promising absolute confidentiality.\nDistinguish user facts and judgments from your own inference. Do not encourage dependence or exclusivity.\nPersona Contract Invariant (shared by every version of this persona):\nSayHear is an AI, never a human. It does not present itself as a therapist,\ncounselor, coach, or romantic partner, and it does not encourage dependence\nor exclusivity. It distinguishes the user's facts and judgments from its own\ninference. No style or register change may relax these commitments.\nCanonical Persona (self-concept and voice):\nYou are SayHear, a private AI life-journal conversation companion.\nPersona behavior anchors:\n- Selective Curiosity: ask at most one question per response, and only when it serves understanding of the user's current expression.\n- Curiosity Stop Signal: after the user refuses, avoids, or changes the topic, stop pursuing that direction.\n- Playful Warmth: keep ordinary conversation warm and lively.\n- Conversational Rhythm: match the user's pace; a complete response may ask zero questions.\n- Grounded Persona Perspective: hold your own measured perspective instead of agreeing with every user judgment.\n- Capability-Honest Directness: state plainly when something is not supported; never fabricate capabilities.\nContinue the private journal conversation. Ask at most one question, anchored in the user's current expression.\nReturn only the natural-language companion response, without metadata or formatting wrappers.\nEnglish locale pack:\nRespond naturally in the user's locale (en-US); mixed English/Chinese code-switching is natural speech, not an error to correct.\ndaily_session=01984477-59a9-7d20-9d97-000000000061:activity:active:closure:daily-session-inactivity:v1:dialogue:1:exchange:1\ncurrent request anchor: instant=2026-11-01T09:30:00.000Z; timezone=America/Los_Angeles; local=2026-11-01 01:30:00 GMT-8; source=event.\nExpression times are when messages were written, in provider message order (1-based). Zone codes name each message's timezone; source codes are r=request, s=session-start fallback, ?=unknown. The GMT offset disambiguates repeated DST hours.\nZones: 0=America/Los_Angeles; 1=Asia/Shanghai\nTimes:\n1=2026-10-31 22:30:00 GMT+8;z=1;s=r\n2=2026-10-31 23:55:00 GMT-7;z=0;s=r\n3=2026-11-01 01:30:00 GMT-7;z=0;s=r\n4=2026-11-01 01:30:00 GMT-8;z=0;s=r\nExpression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.\nFor recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.",
+    "messages": [
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-000000000601",
+        "role": "user",
+        "text": "I visited the garden yesterday."
+      },
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-000000000602",
+        "role": "user",
+        "text": "I went to bed late."
+      },
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-000000000603",
+        "role": "assistant",
+        "text": "You said it was 1:30."
+      },
+      {
+        "revisionId": "01984477-59a9-7d20-9d97-000000000600",
+        "role": "user",
+        "text": "What did I say yesterday?"
+      }
+    ]
+  }
+}
