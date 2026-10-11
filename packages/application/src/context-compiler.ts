@@ -450,49 +450,21 @@ export const RECENT_CONTEXT_COMPILER_VERSION =
 export const PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v1" as const;
 
-/**
- * v4 adds ORDINARY_BACKGROUND_HONESTY_RULE to every ordinary (non History
- * Answer) time-aware Context. v1-v3 payloads replay exactly as frozen.
- */
 export const TIME_AWARE_CONTEXT_COMPILER_VERSION =
-  "context-compiler:time:v4" as const;
+  "context-compiler:time:v3" as const;
 
 const COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v2" as const;
-
-/** v3: relative-date rules (#307), without the v4 background rule. */
-const RELATIVE_DATE_TIME_AWARE_CONTEXT_COMPILER_VERSION =
-  "context-compiler:time:v3" as const;
 
 /** Recent selection plus the time-aware frozen Context format. */
 export const PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v1" as const;
 
 export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
-  "context-compiler:recent-time:v4" as const;
+  "context-compiler:recent-time:v3" as const;
 
 const COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v2" as const;
-
-const RELATIVE_DATE_RECENT_CONTEXT_TIME_COMPILER_VERSION =
-  "context-compiler:recent-time:v3" as const;
-
-/**
- * What an ordinary reply is told about the limits of what it can see (review
- * fix D, SPEC #301 R12). An ordinary reply has no lookup result: it sees the
- * current conversation and, at most, a bounded recent background. Without this
- * rule it could answer "we never talked about that" or imply it had checked,
- * for example when the history branch is closed or a Retry falls back to an
- * ordinary reply. The wording names no mechanism. It is part of the frozen
- * Context format (time:v4 / recent-time:v4) and is the same whether the history
- * branch is open, closed or not deployed; a History Answer is governed by its
- * own review result instead and never carries it.
- */
-export const ORDINARY_BACKGROUND_HONESTY_RULE_VERSION =
-  "ordinary-background-honesty:v1" as const;
-
-export const ORDINARY_BACKGROUND_HONESTY_RULE =
-  "The messages you can see here are only part of what the person has told you over time. If something they ask about is not among them, do not say they never mentioned it and do not say you checked; say you do not see it in what you have in front of you.";
 
 /**
  * The frozen Context format of a History Answer command (issue #314). It is
@@ -506,7 +478,6 @@ export const HISTORY_RECALL_CONTEXT_SECTION_KEY =
   "history_recall_context" as const;
 
 const CONTEXT_TIME_BASE_TOKEN_BUDGET = 256;
-const CONTEXT_TIME_BACKGROUND_RULE_TOKEN_BUDGET = 72;
 const CONTEXT_TIME_ENTRY_TOKEN_BUDGET = 12;
 const CONTEXT_TIME_ZONE_TOKEN_BUDGET = 16;
 
@@ -988,11 +959,6 @@ export function createContextCompiler(dependencies: {
       const compactTimeFormat =
         source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
         source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION;
-      const relativeDateTimeFormat =
-        source.compilerVersion ===
-          RELATIVE_DATE_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
-        source.compilerVersion ===
-          RELATIVE_DATE_RECENT_CONTEXT_TIME_COMPILER_VERSION;
       const versionAccepted =
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           source.compilerVersion === HISTORY_RECALL_TIME_COMPILER_VERSION &&
@@ -1004,15 +970,11 @@ export function createContextCompiler(dependencies: {
           source.compilerVersion !== HISTORY_RECALL_TIME_COMPILER_VERSION &&
           ((dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
-            source.compilerVersion ===
-              RELATIVE_DATE_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
             source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION) &&
           hasTimeMetadata &&
           !hasRecentMetadata) ||
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           (source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
-            source.compilerVersion ===
-              RELATIVE_DATE_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
             source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION) &&
           hasTimeMetadata &&
           hasRecentMetadata) ||
@@ -1176,7 +1138,6 @@ export function createContextCompiler(dependencies: {
       if (
         (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
           source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
-          relativeDateTimeFormat ||
           compactTimeFormat ||
           previousTimeFormat) &&
         !timeContext
@@ -1248,9 +1209,7 @@ export function createContextCompiler(dependencies: {
                 ? "legacy"
                 : compactTimeFormat
                   ? "compact-v2"
-                  : relativeDateTimeFormat
-                    ? "compact-v3"
-                    : "compact",
+                  : "compact",
             }),
         history,
         locale: source.locale,
@@ -1703,7 +1662,6 @@ function contextTimeMetadataMatches(
 function renderContextTimeMetadata(
   metadata: ContextTimeMetadata,
   includeRelativeDateRules: boolean,
-  includeBackgroundHonestyRule: boolean,
 ): string {
   const zones = [
     metadata.anchor.timezone,
@@ -1746,20 +1704,17 @@ function renderContextTimeMetadata(
       "For recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.",
     );
   }
-  if (includeBackgroundHonestyRule) lines.push(ORDINARY_BACKGROUND_HONESTY_RULE);
   return lines.join("\n");
 }
 
 function createBoundedContextTimeMetadata(input: {
   metadata: ContextTimeMetadata;
   maximumMessageCount: number;
-  includeBackgroundHonestyRule: boolean;
   includeRelativeDateRules: boolean;
 }): Readonly<{ budgetTokens: number; content: string }> {
   const content = renderContextTimeMetadata(
     input.metadata,
     input.includeRelativeDateRules,
-    input.includeBackgroundHonestyRule,
   );
   const zoneCount = new Set(
     [
@@ -1769,9 +1724,6 @@ function createBoundedContextTimeMetadata(input: {
   ).size;
   const budget =
     CONTEXT_TIME_BASE_TOKEN_BUDGET +
-    (input.includeBackgroundHonestyRule
-      ? CONTEXT_TIME_BACKGROUND_RULE_TOKEN_BUDGET
-      : 0) +
     input.metadata.entries.length * CONTEXT_TIME_ENTRY_TOKEN_BUDGET +
     zoneCount * CONTEXT_TIME_ZONE_TOKEN_BUDGET;
   const actualTokens = estimateTokens(content);
@@ -2166,7 +2118,7 @@ function createSections(input: {
     reference: string;
   }>;
   timeContext?: ContextTimeMetadata;
-  timeContextFormat?: "compact" | "compact-v2" | "compact-v3" | "legacy";
+  timeContextFormat?: "compact" | "compact-v2" | "legacy";
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   // While the Safety Posture is active, enforcement is compilation: the
   // ordinary behavior anchors are swapped for the versioned reduced variant,
@@ -2198,11 +2150,6 @@ function createSections(input: {
             ...createBoundedContextTimeMetadata({
               metadata: input.timeContext,
               includeRelativeDateRules: input.timeContextFormat !== "compact-v2",
-              // The current format only, and never a History Answer: its
-              // review result says what may be claimed about earlier times.
-              includeBackgroundHonestyRule:
-                (input.timeContextFormat ?? "compact") === "compact" &&
-                input.historyRecall === undefined,
               maximumMessageCount:
                 input.rawEventTokenBudget +
                 (input.recentContext?.budgetTokens ?? 0) +

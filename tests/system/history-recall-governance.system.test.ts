@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  HISTORY_REVIEW_FUNCTION_NAME,
-  ORDINARY_BACKGROUND_HONESTY_RULE,
-  ProviderDispatchError,
-} from "@sayhear/application";
+import { HISTORY_REVIEW_FUNCTION_NAME, ProviderDispatchError } from "@sayhear/application";
 import { PostgresInternalInspectionRepository } from "@sayhear/data";
 import { asGenerationCommandId } from "@sayhear/domain";
 
@@ -78,9 +74,6 @@ describe("closing the history branch leaves ordinary chat and the seven-day back
     expect(only.functionNames).not.toContain(HISTORY_REVIEW_FUNCTION_NAME);
     // The recent background is still carried exactly as before.
     expect(only.messages.join("\n")).toContain(RECENT_TEXT);
-    // The ordinary reply is told that what it sees is not everything, so it
-    // cannot answer "we never talked about that" or claim it checked.
-    expect(only.instructions).toContain(ORDINARY_BACKGROUND_HONESTY_RULE);
     // Nothing pretends the older day was looked up.
     expect(outboundText()).not.toContain("History review result");
     expect(outboundText()).not.toContain(U_BAG);

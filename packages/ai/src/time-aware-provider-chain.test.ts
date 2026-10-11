@@ -390,10 +390,9 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
       (section) => section.key === "time_context",
     );
     expect(timeSection?.selectedTokens).toBeLessThanOrEqual(
-      256 + 72 + 104 * 12 + 2 * 16,
+      256 + 104 * 12 + 2 * 16,
     );
-    // 72: the ordinary-background honesty rule of the v4 format.
-    expect(timeSection?.budgetTokens).toBe(256 + 72 + 104 * 12 + 2 * 16);
+    expect(timeSection?.budgetTokens).toBe(256 + 104 * 12 + 2 * 16);
     expect(compiled.totalTokens).toBe(
       compiled.sections.reduce(
         (total, section) => total + section.selectedTokens,

@@ -14,7 +14,6 @@ import {
   createContextCompiler,
   LEGACY_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_COMPILER_VERSION,
-  ORDINARY_BACKGROUND_HONESTY_RULE,
   RECENT_CONTEXT_TIME_COMPILER_VERSION,
   TIME_AWARE_CONTEXT_COMPILER_VERSION,
   type ContextCompilerRepository,
@@ -1232,15 +1231,6 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       generationStage: "decision",
     });
 
-    // An ordinary reply carries no lookup result: it is told that what it can
-    // see is not everything, so it cannot deny an earlier conversation or
-    // claim to have checked.
-    expect(manifest.compilerVersion).toBe("context-compiler:recent-time:v4");
-    expect(payload.instructions).toContain(ORDINARY_BACKGROUND_HONESTY_RULE);
-    expect(ORDINARY_BACKGROUND_HONESTY_RULE).toMatch(/only part of what the person has told you/);
-    expect(ORDINARY_BACKGROUND_HONESTY_RULE).not.toMatch(
-      /policy|receipt|section|token|coverage|lookup|search|function|tool|history review|seven|window/i,
-    );
     expect(payload.instructions).toContain("current request anchor");
     expect(payload.instructions).toContain("local=2026-11-01 01:30:00 GMT-8");
     expect(payload.instructions).toContain("0=America/Los_Angeles");
@@ -1333,41 +1323,6 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         generationStage: "decision",
       }),
     ).toEqual(fixture.payload);
-  });
-
-  it("replays a frozen v3 request byte for byte, without the v4 background rule", () => {
-    const fixture: {
-      manifest: Parameters<ContextCompilerRepository["saveCompiledContext"]>[0];
-      payload: ReturnType<
-        ReturnType<typeof createContextCompiler>["renderPermittedPayload"]
-      >;
-    } = JSON.parse(
-      readFileSync(
-        new URL("./fixtures/time-context-v3.json", import.meta.url),
-        "utf8",
-      ),
-    );
-    expect(fixture.manifest.compilerVersion).toBe("context-compiler:recent-time:v3");
-    const compiler = createContextCompiler({
-      clock: () => new Date("2026-11-01T09:30:00.000Z"),
-      compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
-      contentHmacSecret: "recent-context-integrity-secret",
-      rawEventTokenBudget: 4000,
-      repository: {
-        async loadContextSource() {
-          throw new Error("Replay must not compile new context");
-        },
-        async saveCompiledContext() {
-          throw new Error("Replay must not persist new context");
-        },
-      },
-    });
-    const replayed = compiler.renderPermittedPayload({
-      ...fixture.manifest,
-      generationStage: "decision",
-    });
-    expect(replayed).toEqual(fixture.payload);
-    expect(replayed.instructions).not.toContain(ORDINARY_BACKGROUND_HONESTY_RULE);
   });
 
   it("excludes events committed after the admitted command cutoff", async () => {
