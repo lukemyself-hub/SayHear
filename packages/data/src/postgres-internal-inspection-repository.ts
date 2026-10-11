@@ -19,6 +19,7 @@ import {
   type CurrentSafetyPosture,
   type HistoryRecallInspection,
   type HistoryExperienceSearchPlan,
+  decodeHistoryRecallReceipt,
   type HistoryQueryPlan,
   type MemorySectionKey,
   type SafetyPostureContent,
@@ -355,7 +356,10 @@ export class PostgresInternalInspectionRepository
           })),
           sectionBudgets: row.context_section_budgets,
           sections: row.context_sections.map(
-            ({ contentHmac: _contentHmac, ...section }) => section,
+            ({ contentHmac: _contentHmac, ...section }) =>
+              section.key === "history_recall_receipt"
+                ? { ...section, reference: inspectableReceiptReference(section.reference) }
+                : section,
           ),
           retrievalManifest: row.context_retrieval_manifest,
           safetyPosture: {
@@ -897,6 +901,36 @@ function inspectablePlan(
     };
   }
   return stored as HistoryQueryPlan;
+}
+
+/**
+ * The frozen receipt reference carries the model's proposal (search clues,
+ * people) and the plan's term variants: private text that reaches the model
+ * but must never reach the panel. The panel gets the same manifest with the
+ * clues replaced by counts, and an unreadable reference is reported as such.
+ */
+function inspectableReceiptReference(reference: string): string {
+  try {
+    const snapshot = decodeHistoryRecallReceipt(reference);
+    const proposal = snapshot.result.proposal;
+    return JSON.stringify({
+      droppedAtCompile: snapshot.droppedAtCompile,
+      injectedRows: snapshot.injectedRows,
+      policyVersion: snapshot.policyVersion,
+      result: {
+        coverage: snapshot.result.coverage,
+        failureCode: snapshot.result.failureCode,
+        plan: inspectablePlan(
+          snapshot.result.plan as HistoryQueryPlan | HistoryExperienceSearchPlan | null,
+        ),
+        proposalKind: proposal.kind,
+        status: snapshot.result.status,
+      },
+      version: snapshot.version,
+    });
+  } catch {
+    return "unreadable";
+  }
 }
 
 async function loadHistoryRecallInspection(

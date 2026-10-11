@@ -13,6 +13,7 @@
  * an object permission, a cursor or a second query.
  */
 
+import type { HistoryRecallGovernancePort } from "./history-recall-governance";
 import type {
   ConversationEventRevisionId,
   DailySessionId,
@@ -943,6 +944,11 @@ export type HistoryRecallRepository = Readonly<{
   commitHistoryRecall(input: {
     decisionAttemptId: ModelRunAttemptId;
     decisionCommandId: GenerationCommandId;
+    /**
+     * The history-recall governance identity the result is frozen under
+     * (#320); null only when no governance is wired (legacy replay, tests).
+     */
+    governancePolicyVersion?: string | null;
     now: Date;
     policyVersion: string;
     result: HistoryRecallResult;
@@ -969,6 +975,11 @@ export type HistoryAnswerCommandRef = Readonly<{
 }>;
 
 export type HistoryRecallGateway = Readonly<{
+  /**
+   * Whether the function may be offered to a Decision right now. False when a
+   * governance port is wired and has no active identity for this runtime.
+   */
+  isEnabled?(): Promise<boolean>;
   admit(input: {
     context: Readonly<{
       decisionCommandId: GenerationCommandId;
@@ -987,15 +998,36 @@ export function createHistoryRecallGateway(dependencies: {
   clock: () => Date;
   /** Original-text experience search; without it a search fails closed. */
   experienceSource?: ExperienceSearchSourcePort;
+  /** Independent operator governance (#320); absent means ungoverned. */
+  governance?: HistoryRecallGovernancePort;
   policy?: HistoryRecallPolicy;
   repository: HistoryRecallRepository;
   source: HistoryRecallSourcePort;
 }): HistoryRecallGateway {
   const policy = dependencies.policy ?? HISTORY_RECALL_DEFAULT_POLICY;
+  /** The identity to freeze, null when ungoverned, undefined when refused. */
+  async function governanceIdentity(): Promise<string | null | undefined> {
+    if (dependencies.governance === undefined) return null;
+    const active = await dependencies.governance.findActivePolicy();
+    // A row that names a different budget identity than the one wired does not
+    // authorize this runtime.
+    if (active === null || active.historyPolicyVersion !== policy.version) {
+      return undefined;
+    }
+    return active.policyVersion;
+  }
   return {
+    async isEnabled() {
+      return (await governanceIdentity()) !== undefined;
+    },
     listPendingAnswers: (input) =>
       dependencies.repository.listPendingHistoryAnswers(input),
     async admit({ context, proposal }) {
+      const governancePolicyVersion = await governanceIdentity();
+      if (governancePolicyVersion === undefined) {
+        // Disabled while the Decision was running: nothing is read.
+        return { outcome: "fence_rejected" };
+      }
       // The owner comes from the frozen Decision Command, never from the
       // proposal. Another owner's command resolves to nothing and fails closed.
       const facts = await dependencies.repository.loadDecisionFacts({
@@ -1067,6 +1099,7 @@ export function createHistoryRecallGateway(dependencies: {
       const committed = await dependencies.repository.commitHistoryRecall({
         decisionAttemptId: context.modelRunAttemptId,
         decisionCommandId: context.decisionCommandId,
+        governancePolicyVersion,
         now: dependencies.clock(),
         policyVersion: policy.version,
         result,

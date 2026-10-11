@@ -39,6 +39,7 @@ export {
   PostgresHistoryRecallSource,
 } from "./postgres-history-recall";
 export { PostgresRecentContextPolicyRepository } from "./postgres-recent-context-policy-repository";
+export { PostgresHistoryRecallPolicyRepository } from "./postgres-history-recall-policy-repository";
 export {
   PostgresConversationActionRepository,
   PostgresJournalRegenerationActionRepository,

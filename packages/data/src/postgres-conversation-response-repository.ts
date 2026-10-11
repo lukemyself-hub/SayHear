@@ -1765,11 +1765,21 @@ export class PostgresConversationResponseRepository
     modelRunAttemptId: ModelRunAttemptId;
     now: Date;
   }): Promise<boolean> {
-    const recorded = await this.pool.query(
-      `
+    // Issue #320: the first visible token is the last point before the person
+    // can see anything, so the source, governance and epoch fences are
+    // re-checked here too. A control that landed after dispatch refuses the
+    // token; nothing from this answer is shown or committed.
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const recorded = await client.query<{
+        generation_command_id: string;
+      }>(
+        `
         UPDATE model_run_attempts attempt
         SET first_token_at = COALESCE(first_token_at, $1)
         FROM generation_commands command
+        INNER JOIN app_users owner ON owner.user_id = command.user_id
         WHERE attempt.model_run_attempt_id = $2
           AND attempt.status = 'running'
           AND command.generation_command_id =
@@ -1777,6 +1787,8 @@ export class PostgresConversationResponseRepository
           AND command.user_id = attempt.user_id
           AND command.status = 'running'
           AND command.authoritative_result_id IS NULL
+          AND owner.status = 'active'
+          AND owner.data_epoch = command.expected_data_epoch
           AND attempt.attempt_no = (
             SELECT MAX(latest.attempt_no)
             FROM model_run_attempts latest
@@ -1784,10 +1796,29 @@ export class PostgresConversationResponseRepository
               command.generation_command_id
               AND latest.user_id = command.user_id
           )
+        RETURNING command.generation_command_id::text AS generation_command_id
       `,
-      [input.now, input.modelRunAttemptId],
-    );
-    return recorded.rowCount === 1;
+        [input.now, input.modelRunAttemptId],
+      );
+      const row = recorded.rows[0];
+      if (
+        !row ||
+        !(await contextReferencesAreCurrentForCommand(
+          client,
+          asGenerationCommandId(row.generation_command_id),
+        ))
+      ) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   public async recordProviderUsage(input: {
@@ -1913,6 +1944,15 @@ export class PostgresConversationResponseRepository
         !(await recentContextSelectionAuthorized(
           client,
           asCompiledContextId(compiledContextId),
+        ))
+      ) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+      if (
+        !(await historyRecallGovernanceAuthorizedForAttempt(
+          client,
+          input.modelRunAttemptId,
         ))
       ) {
         await client.query("ROLLBACK");
@@ -2890,7 +2930,41 @@ async function contextReferencesAreCurrent(
   // a recognized *active* immutable governance identity; the lock is held for
   // the rest of this transaction so a concurrent disable serializes with
   // dispatch / result / commit in either ordering.
-  return recentContextSelectionAuthorized(client, compiledContextId);
+  if (!(await recentContextSelectionAuthorized(client, compiledContextId))) {
+    return false;
+  }
+  return historyRecallGovernanceAuthorized(client, generationCommandId);
+}
+
+/**
+ * #320 independent history-recall governance fence.
+ *
+ * A History Answer whose result was frozen under a governance identity may
+ * only run while that exact identity is still active. The row is locked
+ * `FOR SHARE`; the operator revocation takes it `FOR UPDATE`, so a disable
+ * serializes with dispatch / first token / result / commit in either order.
+ * A command that is not a governed History Answer (ordinary turns, legacy
+ * results written before the governance existed) passes untouched.
+ */
+async function historyRecallGovernanceAuthorized(
+  client: PoolClient,
+  generationCommandId: GenerationCommandId,
+): Promise<boolean> {
+  const frozen = await client.query<{ governance_policy_version: string | null }>(
+    `SELECT governance_policy_version
+     FROM history_recall_results
+     WHERE answer_command_id = $1`,
+    [generationCommandId],
+  );
+  const version = frozen.rows[0]?.governance_policy_version;
+  if (version === null || version === undefined) return true;
+  const active = await client.query(
+    `SELECT 1 FROM history_recall_policies
+     WHERE policy_version = $1 AND status = 'active'
+     FOR SHARE`,
+    [version],
+  );
+  return (active.rowCount ?? 0) === 1;
 }
 
 /**
@@ -2974,6 +3048,21 @@ function mapRecentContextPolicy(
     selectionPolicyVersion: row.selection_policy_version,
     selectorPolicyVersion: row.selector_policy_version,
   };
+}
+
+async function historyRecallGovernanceAuthorizedForAttempt(
+  client: PoolClient,
+  modelRunAttemptId: ModelRunAttemptId,
+): Promise<boolean> {
+  const command = await client.query<{ generation_command_id: string }>(
+    `SELECT generation_command_id::text AS generation_command_id
+     FROM model_run_attempts WHERE model_run_attempt_id = $1`,
+    [modelRunAttemptId],
+  );
+  const id = command.rows[0]?.generation_command_id;
+  return id === undefined
+    ? true
+    : historyRecallGovernanceAuthorized(client, asGenerationCommandId(id));
 }
 
 async function contextReferencesAreCurrentForCommand(

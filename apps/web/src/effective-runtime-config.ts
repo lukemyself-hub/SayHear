@@ -18,10 +18,13 @@
 import {
   ONE_A_3B_G1_ENABLED_ROLES,
   ONE_A_3B_ROLE_POLICIES,
+  HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
+  HISTORY_RECALL_DEFAULT_POLICY,
   RECENT_CONTEXT_COMPILER_VERSION,
   RECENT_CONTEXT_DEFAULT_POLICY,
   RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   sha256Hex,
+  type HistoryRecallGovernanceEffectiveState,
   type RecentContextGovernanceEffectiveState,
 } from "@sayhear/application";
 
@@ -106,6 +109,8 @@ export function buildEffectiveRuntimeConfiguration(
      * probe as equal.
      */
     recentContextGovernance?: RecentContextGovernanceEffectiveState | null;
+    /** #320: content-free history-recall governance snapshot; null = unverified. */
+    historyRecallGovernance?: HistoryRecallGovernanceEffectiveState | null;
   } = {},
 ): EffectiveRuntimeConfigurationSnapshot {
   const runtime = loadRuntimeConfiguration(environment);
@@ -412,6 +417,34 @@ export function buildEffectiveRuntimeConfiguration(
     key: "parameters.recent_context.read_timeout_ms",
     source: policySource,
     value: governanceMatchesRuntime ? activeGovernance.readTimeoutMs : null,
+  });
+
+  // History-recall governance (#320): the deployment switch alone does not
+  // enable the path; an active immutable governance version that names the
+  // budget identity wired here must also exist.
+  const historyGovernance = options.historyRecallGovernance ?? null;
+  const activeHistoryGovernance = historyGovernance?.active ?? null;
+  const historyGovernanceMatches =
+    activeHistoryGovernance !== null &&
+    activeHistoryGovernance.historyPolicyVersion ===
+      HISTORY_RECALL_DEFAULT_POLICY.version &&
+    activeHistoryGovernance.harnessPolicyVersion ===
+      HISTORY_RECALL_CONVERSATION_HARNESS_POLICY.version;
+  add({
+    category: "roles-switches",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "switch.history_recall_governance_enabled",
+    source: historyGovernance ? "override" : "unverified",
+    value: historyGovernance ? historyGovernanceMatches : null,
+  });
+  add({
+    category: "prompt-schema-policy",
+    critical: false,
+    inManifestFingerprint: false,
+    key: "policy.history_recall_governance_version",
+    source: historyGovernanceMatches ? "override" : "unverified",
+    value: historyGovernanceMatches ? activeHistoryGovernance.policyVersion : null,
   });
 
   // Runtime / hosted identity.
@@ -758,6 +791,7 @@ export type EffectiveRuntimeConfigHandlerDependencies = Readonly<{
    * instead of guessing; it never fails the whole report.
    */
   loadRecentContextGovernance?: () => Promise<RecentContextGovernanceEffectiveState | null>;
+  loadHistoryRecallGovernance?: () => Promise<HistoryRecallGovernanceEffectiveState | null>;
 }>;
 
 /**
@@ -788,9 +822,20 @@ export async function handleEffectiveRuntimeConfigRequest(
         recentContextGovernance = null;
       }
     }
+    let historyRecallGovernance: HistoryRecallGovernanceEffectiveState | null =
+      null;
+    if (dependencies.loadHistoryRecallGovernance) {
+      try {
+        historyRecallGovernance =
+          await dependencies.loadHistoryRecallGovernance();
+      } catch {
+        historyRecallGovernance = null;
+      }
+    }
     return Response.json(
       buildEffectiveRuntimeConfiguration(dependencies.environment, {
         ...(dependencies.now ? { now: dependencies.now } : {}),
+        historyRecallGovernance,
         recentContextGovernance,
       }),
       { headers: { "Cache-Control": "no-store" } },

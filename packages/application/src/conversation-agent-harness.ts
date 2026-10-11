@@ -298,7 +298,10 @@ export function createConversationAgentHarness(dependencies: {
         command.harnessPolicy.toolsDisabled !== true &&
         command.harnessPolicy.maxHistoryQueries === 1 &&
         command.requestEventRevisionId !== undefined &&
-        dependencies.historyRecall !== undefined;
+        dependencies.historyRecall !== undefined &&
+        // Independent operator governance (#320): disabled means the function
+        // is never offered and the turn is an ordinary reply.
+        (await dependencies.historyRecall.isEnabled?.() ?? true);
       for await (const event of interrupt.race(dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
         ...(command.requestEventRevisionId

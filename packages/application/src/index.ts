@@ -1329,6 +1329,7 @@ export {
   type HistoryRecallSourceSnapshot,
 } from "./history-recall";
 export * from "./request-deadline";
+export * from "./history-recall-governance";
 export {
   buildExperienceGroups,
   expandPersonGroupsWithVerifiedAliases,

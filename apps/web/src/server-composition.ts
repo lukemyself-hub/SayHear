@@ -119,6 +119,7 @@ import {
   selectPendingRemapCandidates,
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
+  PostgresHistoryRecallPolicyRepository,
   PostgresRecentContextPolicyRepository,
   PostgresHistoryRecallRepository,
   PostgresExperienceSearchSource,
@@ -870,9 +871,12 @@ export function createServerComposition() {
   // Issue #314: the controlled read-only history review. Wired only when the
   // explicit switch is on; otherwise the Harness never offers the function and
   // the response service keeps the Catalog v2 policy exactly as before.
+  const historyRecallGovernanceRepository =
+    new PostgresHistoryRecallPolicyRepository(pool);
   const historyRecallGateway = configuration.writeSwitches.historyRecallEnabled
     ? createHistoryRecallGateway({
         clock: configuration.clock,
+        governance: historyRecallGovernanceRepository,
         repository: new PostgresHistoryRecallRepository(pool),
         experienceSource: new PostgresExperienceSearchSource(pool),
         source: new PostgresHistoryRecallSource(pool),
@@ -1001,6 +1005,7 @@ export function createServerComposition() {
     oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     recentContextGovernanceRepository,
+    historyRecallGovernanceRepository,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };
 }

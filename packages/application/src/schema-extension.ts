@@ -126,6 +126,13 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
       justification:
         "Adds two nullable columns to generation_commands: request_deadline_at (the end-to-end deadline frozen at acceptance) and latest_input_fence_version (the named newest-user-input freshness rule), issue #319. Additive ADD COLUMN only; freshness_policy and every existing constraint are untouched.",
     }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0081_history_recall_governance.sql",
+      sha256: "ecc1de93c1642241c0612223d38f72a5b6c398fe9a81b76e559d7a9c21033c71",
+      justification:
+        "Creates the content-free, non-owner-scoped history_recall_policies governance table (issue #320; no user_id, outside the owner Full Purge Surface Registry like recent_context_policies) and adds the nullable history_recall_results.governance_policy_version column (a version identity, no content; registered as a non-private column). It names no protected relation.",
+    }),
   ]);
 
 /** Registered extension pins for one store, in registry order. */

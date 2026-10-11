@@ -777,6 +777,7 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
   public async commitHistoryRecall(input: {
     decisionAttemptId: ModelRunAttemptId;
     decisionCommandId: GenerationCommandId;
+    governancePolicyVersion?: string | null;
     now: Date;
     policyVersion: string;
     result: HistoryRecallResult;
@@ -849,6 +850,24 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
       if (fence.rows[0]?.ok !== true) {
         await client.query("ROLLBACK");
         return { outcome: "fence_rejected" };
+      }
+      // #320: the governance identity must still be active at the moment the
+      // result is frozen (shared lock; the operator revocation takes the same
+      // row FOR UPDATE, so the two orderings serialize).
+      if (
+        input.governancePolicyVersion !== undefined &&
+        input.governancePolicyVersion !== null
+      ) {
+        const active = await client.query(
+          `SELECT 1 FROM history_recall_policies
+           WHERE policy_version = $1 AND status = 'active'
+           FOR SHARE`,
+          [input.governancePolicyVersion],
+        );
+        if ((active.rowCount ?? 0) !== 1) {
+          await client.query("ROLLBACK");
+          return { outcome: "fence_rejected" };
+        }
       }
       // Settle the Decision: a history query is a legitimate terminal outcome of
       // the Decision stage, so neither the command nor its attempt may stay
@@ -937,8 +956,9 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
         `INSERT INTO history_recall_results (
            history_recall_result_id, user_id, interaction_turn_id,
            decision_command_id, answer_command_id, policy_version, status,
-           failure_code, plan, coverage, item_refs, expected_data_epoch, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13)`,
+           failure_code, plan, coverage, item_refs, expected_data_epoch, created_at,
+           governance_policy_version
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14)`,
         [
           createUuidV7(input.now),
           input.userId,
@@ -953,6 +973,7 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
           JSON.stringify(input.result.itemRefs),
           commandRow.expected_data_epoch,
           input.now,
+          input.governancePolicyVersion ?? null,
         ],
       );
       await client.query("COMMIT");
