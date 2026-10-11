@@ -18,6 +18,7 @@ import {
   type ExperienceHitsSnapshot,
   type ExperienceSearchSourcePort,
   type HistoryExperienceSearchPlan,
+  type HistoryContinuationSignals,
   type VerifiedLabel,
   searchPatternsOf,
 } from "@sayhear/application";
@@ -694,6 +695,81 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
       interactionTurnId: asInteractionTurnId(row.interaction_turn_id),
       requestTimezone: row.request_timezone,
       sessionTimezone: row.timezone_at_start,
+      signals: await this.loadContinuationSignals({
+        decisionCommandId: input.decisionCommandId,
+        inputRevisionId: row.input_revision_id,
+        userId: input.userId,
+      }),
+    };
+  }
+
+  /**
+   * What the Decision itself was shown (issue #317): the current input, the
+   * user's other messages in its frozen context that are still the current,
+   * un-purged revision of an active event, and a DialogueState section only
+   * if the compiler judged it source-valid. Text stays in memory.
+   */
+  private async loadContinuationSignals(input: {
+    decisionCommandId: GenerationCommandId;
+    inputRevisionId: string;
+    userId: UserId;
+  }): Promise<HistoryContinuationSignals> {
+    const current = await this.pool.query<{ canonical_text: string }>(
+      `SELECT canonical_text
+       FROM conversation_event_revisions
+       WHERE conversation_event_revision_id = $1
+         AND user_id = $2
+         AND content_purged_at IS NULL`,
+      [input.inputRevisionId, input.userId],
+    );
+    const adjacent = await this.pool.query<{ canonical_text: string }>(
+      `SELECT revision.canonical_text
+       FROM compiled_contexts context
+       INNER JOIN compiled_context_revision_refs ref
+         ON ref.compiled_context_id = context.compiled_context_id
+        AND ref.user_id = context.user_id
+       INNER JOIN conversation_events event
+         ON event.current_revision_id = ref.conversation_event_revision_id
+        AND event.user_id = ref.user_id
+       INNER JOIN conversation_event_revisions revision
+         ON revision.conversation_event_revision_id = ref.conversation_event_revision_id
+        AND revision.user_id = ref.user_id
+       WHERE context.generation_command_id = $1
+         AND context.user_id = $2
+         AND ref.actor = 'user'
+         AND event.actor = 'user'
+         AND event.lifecycle_status = 'active'
+         AND revision.content_purged_at IS NULL
+         AND ref.conversation_event_revision_id <> $3
+       ORDER BY event.created_at DESC, event.sequence_no DESC
+       LIMIT 5`,
+      [input.decisionCommandId, input.userId, input.inputRevisionId],
+    );
+    const sections = await this.pool.query<{ reference: string | null }>(
+      `SELECT section.value ->> 'reference' AS reference
+       FROM compiled_contexts context
+       CROSS JOIN LATERAL jsonb_array_elements(context.sections) AS section(value)
+       WHERE context.generation_command_id = $1
+         AND context.user_id = $2
+         AND section.value ->> 'key' = 'dialogue_state'`,
+      [input.decisionCommandId, input.userId],
+    );
+    const reference = sections.rows[0]?.reference ?? null;
+    let dialogueState: HistoryContinuationSignals["dialogueState"] = null;
+    if (reference !== null) {
+      const status = /status=(current|lagging)/.exec(reference)?.[1];
+      const topic = /^Current topic: (.*) \(confidence=/m.exec(reference)?.[1];
+      if (status === "current" || status === "lagging") {
+        dialogueState = {
+          status,
+          topic: topic === undefined || topic === "none" ? null : topic,
+        };
+      }
+    }
+    return {
+      adjacentUserTexts: adjacent.rows.map((row) => row.canonical_text),
+      currentInputText: current.rows[0]?.canonical_text ?? "",
+      dialogueState,
     };
   }
 

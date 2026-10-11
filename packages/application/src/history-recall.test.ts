@@ -252,6 +252,11 @@ describe("history recall gateway", () => {
     interactionTurnId: asInteractionTurnId("00000000-0000-7000-8000-0000000000b1"),
     requestTimezone: "Asia/Shanghai" as string | null,
     sessionTimezone: null,
+    signals: {
+      adjacentUserTexts: [] as string[],
+      currentInputText: "",
+      dialogueState: null,
+    },
   };
   const answer = {
     generationCommandId: asGenerationCommandId("00000000-0000-7000-8000-0000000000d2"),

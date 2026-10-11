@@ -23,6 +23,10 @@ import type {
 } from "@sayhear/domain";
 
 import type { ConversationFunctionDefinition } from "./conversation-action-catalog";
+import type {
+  HistoryContinuationCoverage,
+  HistoryContinuationSignals,
+} from "./history-continuation";
 import {
   renderExperienceSearchReceiptLines,
   runExperienceSearch,
@@ -35,7 +39,7 @@ import {
   shiftLocalDate,
 } from "./recent-context";
 
-export const HISTORY_RECALL_POLICY_VERSION = "history-recall:v3";
+export const HISTORY_RECALL_POLICY_VERSION = "history-recall:v4";
 export const HISTORY_REVIEW_FUNCTION_NAME = "review_conversation_history";
 export const HISTORY_RECALL_RESULT_VERSION = 1;
 
@@ -143,7 +147,24 @@ export type HistoryDateReviewProposal = Readonly<{
  * Find an ordinary older experience from the original words (issue #316). The
  * terms are only clues for looking: equivalent keywords, never user facts.
  */
+/** The only signals a continuation may be derived from (issue #317). */
+export const HISTORY_CONTINUATION_BASES = [
+  "current_input",
+  "adjacent_user",
+  "dialogue_state",
+] as const;
+export type HistoryContinuationBasis = (typeof HISTORY_CONTINUATION_BASES)[number];
+export type HistoryContinuationClaim = Readonly<{
+  basis: readonly HistoryContinuationBasis[];
+}>;
+
 export type HistoryExperienceSearchProposal = Readonly<{
+  /**
+   * Present when the search is not an answer to "what did I tell you" but the
+   * natural continuation of the current talk (issue #317): which valid
+   * signals of this turn the clues were taken from. Recorded, never a fact.
+   */
+  continuation?: HistoryContinuationClaim;
   endDate: string | null;
   kind: "search_experience";
   people: readonly string[];
@@ -160,11 +181,20 @@ export type HistoryQueryProposal =
 export const HISTORY_REVIEW_FUNCTION: ConversationFunctionDefinition =
   Object.freeze({
     description:
-      "Look back at the user's own saved original messages from before today. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions). Do not use it for today's conversation, or when the user does not ask about something they said earlier. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes. Resolve dates yourself from the time context into YYYY-MM-DD in the user's timezone. Two ways to ask. (1) By date: when the user names or points to a past calendar date or period (up to about three months), for example 'what did I tell you on August 20', 'what did we talk about yesterday', 'go over last week', or 'when did I first mention painting' (use a wide range from the far past), give start_date (and end_date for a run of dates). Also use it, with time_basis experienced_date, when they ask what HAPPENED or what they DID on a past day ('what did I do yesterday'). A follow-up asking for a detail of a period you already recapped should call it again for that period so the answer comes from the original words, not from your earlier summary. (2) By search: when the user asks about an ordinary thing, experience or person they told you about some time ago (weeks or months back) without a date you can resolve, for example 'did I ever tell you about playing the piano?', give search_terms: 2 to 5 short keywords or phrases exactly as they would literally appear in the user's own messages, including close synonyms and, when the user mixes languages, the forms in each language. Optionally add people (names or relationship words as the user would have written them) and a start_date/end_date range if the user gave a period. Search terms are only clues for finding the messages; they are not facts about the user.",
+      "Look back at the user's own saved original messages from before today. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions). Do not use it for today's conversation, or for a greeting, small talk, a new subject or an unrelated remark. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes. Resolve dates yourself from the time context into YYYY-MM-DD in the user's timezone. Two ways to ask. (1) By date: when the user names or points to a past calendar date or period (up to about three months), for example 'what did I tell you on August 20', 'what did we talk about yesterday', 'go over last week', or 'when did I first mention painting' (use a wide range from the far past), give start_date (and end_date for a run of dates). Also use it, with time_basis experienced_date, when they ask what HAPPENED or what they DID on a past day ('what did I do yesterday'). A follow-up asking for a detail of a period you already recapped should call it again for that period so the answer comes from the original words, not from your earlier summary. (2) By search: when the user asks about an ordinary thing, experience or person they told you about some time ago (weeks or months back) without a date you can resolve, for example 'did I ever tell you about playing the piano?', give search_terms: 2 to 5 short keywords or phrases exactly as they would literally appear in the user's own messages, including close synonyms and, when the user mixes languages, the forms in each language. Optionally add people (names or relationship words as the user would have written them) and a start_date/end_date range if the user gave a period. (3) By continuation: when the user does NOT ask about the past but their current message only makes sense with something they told you earlier (a pronoun or omission such as 'they finally wrote back', 'she called again', 'it went better this time') and the current message, the user's last few messages or the DialogueState topic give enough clues to say what the earlier thing was likely about, search with search_terms taken from those clues (never from your own earlier replies) and set continuation_basis to the signals you used: current_input, adjacent_user (the user's recent messages) and/or dialogue_state (only if a DialogueState section is present). Do not use it when the earlier context is already in the conversation, when nothing in the current talk points to an earlier matter, or just to be thorough. Search terms are only clues for finding the messages; they are not facts about the user.",
     name: HISTORY_REVIEW_FUNCTION_NAME,
     parameters: Object.freeze({
       additionalProperties: false,
       properties: Object.freeze({
+        continuation_basis: Object.freeze({
+          description:
+            "Search only, for a continuation of the current talk (not a question about the past): the signals the clues came from, one or more of current_input, adjacent_user, dialogue_state.",
+          items: Object.freeze({
+            enum: Object.freeze(["current_input", "adjacent_user", "dialogue_state"]),
+            type: "string",
+          }),
+          type: "array",
+        }),
         end_date: Object.freeze({
           description:
             "Last local date to review or search, YYYY-MM-DD. Omit for a single date.",
@@ -268,6 +298,7 @@ export function normalizeHistoryReviewCall(input: {
   }
   const record = parsed as Record<string, unknown>;
   const allowed = new Set([
+    "continuation_basis",
     "end_date",
     "people",
     "search_terms",
@@ -278,7 +309,27 @@ export function normalizeHistoryReviewCall(input: {
   if (Object.keys(record).some((key) => !allowed.has(key))) {
     return { invalid: true };
   }
+  if (record["continuation_basis"] !== undefined && record["search_terms"] === undefined) {
+    return { invalid: true };
+  }
   if (record["search_terms"] !== undefined) {
+    let continuation: HistoryContinuationClaim | undefined;
+    if (record["continuation_basis"] !== undefined) {
+      const raw = record["continuation_basis"];
+      if (
+        !Array.isArray(raw) ||
+        raw.length === 0 ||
+        raw.some(
+          (entry) =>
+            !(HISTORY_CONTINUATION_BASES as readonly unknown[]).includes(entry),
+        )
+      ) {
+        return { invalid: true };
+      }
+      continuation = {
+        basis: HISTORY_CONTINUATION_BASES.filter((basis) => raw.includes(basis)),
+      };
+    }
     if (
       (record["time_basis"] !== undefined &&
         record["time_basis"] !== "expressed_date") ||
@@ -303,6 +354,7 @@ export function normalizeHistoryReviewCall(input: {
     if (searchEnd !== null && !isRealLocalDate(searchEnd)) return { invalid: true };
     return {
       proposal: {
+        ...(continuation ? { continuation } : {}),
         endDate: searchEnd,
         kind: "search_experience",
         people,
@@ -352,6 +404,7 @@ export type HistoryRecallFailureCode =
   | "source_read_threw"
   | "owner_inactive"
   | "expected_data_epoch_mismatch"
+  | "continuation_basis_unavailable"
   | "search_terms_unusable"
   | "search_unavailable";
 
@@ -513,6 +566,8 @@ export type HistoryRecallCoverage = Readonly<{
   /** Instant of the last enumerated message when the read did not finish. */
   readThrough: string | null;
   readLatencyMs: number;
+  /** Continuation accounting (issue #317); only for a continuation. */
+  continuation?: HistoryContinuationCoverage;
   /** Experience search accounting (issue #316); absent for date reviews. */
   search?: HistoryExperienceSearchCoverage;
   selectedRows: number;
@@ -869,6 +924,8 @@ export type HistoryRecallDecisionFacts = Readonly<{
   interactionTurnId: InteractionTurnId;
   requestTimezone: string | null;
   sessionTimezone: string | null;
+  /** What the Decision could see this turn; memory-only, never persisted. */
+  signals: HistoryContinuationSignals;
 }>;
 
 export type HistoryRecallRepository = Readonly<{
@@ -958,6 +1015,7 @@ export function createHistoryRecallGateway(dependencies: {
               policy,
               proposal,
               requestRevisionId: context.requestEventRevisionId,
+              signals: facts.signals,
               source: dependencies.experienceSource,
               timezone,
               userId: context.userId,
@@ -1129,6 +1187,21 @@ export function renderHistoryRecallReceipt(
   const lines = [
     `History review result (read-only lookup of the user's own saved messages; policy ${snapshot.policyVersion}):`,
   ];
+  if (
+    result.proposal.kind === "search_experience" &&
+    result.proposal.continuation
+  ) {
+    lines.push(...renderExperienceSearchReceiptLines(snapshot));
+    if (snapshot.droppedAtCompile > 0) {
+      lines.push(
+        `Some of the earlier messages are no longer available (no_longer_eligible x${snapshot.droppedAtCompile}) and are not quoted: do not guess or reconstruct them.`,
+      );
+    }
+    lines.push(
+      "Rules for the reply: use only the earlier messages that appear in the conversation before the user's current message (each has its own time in the Times list); invent nothing else, no names, titles or details they do not contain. Reply to the current message as one natural reply. Never mention internal terms such as policy, receipt, section, token, coverage, status, search, lookup or background.",
+    );
+    return lines.join("\n");
+  }
   if (result.proposal.kind === "search_experience") {
     lines.push(...renderExperienceSearchReceiptLines(snapshot));
     if (snapshot.droppedAtCompile > 0) {

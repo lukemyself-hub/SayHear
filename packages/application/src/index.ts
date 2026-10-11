@@ -1343,3 +1343,14 @@ export {
   type HistoryExperienceSearchPlan,
   type VerifiedLabel,
 } from "./history-experience-search";
+export {
+  assessContinuation,
+  anchoredClueGroups,
+  HISTORY_CONTINUATION_POLICY_VERSION,
+  isLowInformationClue,
+  NO_CONTINUATION_SIGNALS,
+  validateContinuationBasis,
+  type HistoryContinuationCoverage,
+  type HistoryContinuationSignals,
+  type HistoryContinuationVerdict,
+} from "./history-continuation";
