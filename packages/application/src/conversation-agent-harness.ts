@@ -83,6 +83,7 @@ import type { RequestDeadline } from "./request-deadline";
 export type ConversationAgentHarnessRepository = Pick<
   ConversationResponseRepository,
   | "claimResponseExecution"
+  | "checkResponseFreshness"
   | "claimStaleResponseExecution"
   | "commitActionDecision"
   | "commitCompleteResponse"
@@ -257,6 +258,21 @@ export function createConversationAgentHarness(dependencies: {
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
     const interrupt = createInterrupt(signal, command.deadline);
+    async function assertStillCurrent(): Promise<void> {
+      let freshness: "current" | "deadline_exceeded" | "superseded" = "current";
+      try {
+        freshness =
+          (await dependencies.repository.checkResponseFreshness?.({
+            generationCommandId: command.generationCommandId,
+            now: dependencies.clock(),
+            userId: command.userId,
+          })) ?? "current";
+      } catch {
+        // A failed probe never blocks a reply; the commit fence still holds.
+      }
+      if (freshness === "superseded") throw new ProviderDispatchError("aborted");
+      if (freshness === "deadline_exceeded") throw new ProviderDispatchError("timeout");
+    }
     try {
       interrupt.throwIfInterrupted();
       if (!validateConversationActionCatalog(command.catalog).valid) {
@@ -309,6 +325,11 @@ export function createConversationAgentHarness(dependencies: {
         if (event.type === "delta") {
           if (pendingActionProposal || pendingHistoryProposal) {
             throw new ProviderDispatchError("invalid_response");
+          }
+          if (!possiblyVisible) {
+            // The first visible token is the point of no return: a retired
+            // answer must not reach the screen (issue #319).
+            await assertStillCurrent();
           }
           possiblyVisible = true;
           completeText += event.delta;
@@ -456,7 +477,13 @@ export function createConversationAgentHarness(dependencies: {
         userId: command.userId,
       });
       if (committed.outcome === "fence_rejected") {
-        throw new ProviderDispatchError("policy_blocked");
+        throw new ProviderDispatchError(
+          committed.reason === "superseded"
+            ? "aborted"
+            : committed.reason === "deadline_exceeded"
+              ? "timeout"
+              : "policy_blocked",
+        );
       }
       yield {
         assistantCreatedAt: committed.createdAt,
@@ -489,23 +516,49 @@ export function createConversationAgentHarness(dependencies: {
       const category =
         error instanceof ProviderDispatchError ? error.category : "unknown";
       const interrupted = possiblyVisible || category === "unknown";
+      // A request that ended (deadline or cancel) is never retried (#319).
+      const requestEnded = interrupt.ended();
       const failure = await dependencies.repository.settleResponseFailure({
         category,
         generationCommandId: command.generationCommandId,
         interrupted,
         jitter: normalizedJitter(jitter()),
         modelRunAttemptId: command.modelRunAttemptId,
+        ...(requestEnded ? { noRetry: true } : {}),
         settledAt: dependencies.clock(),
         userId: command.userId,
       });
       if (failure.outcome === "retry_scheduled") {
-        await interrupt.sleep(
-          delay,
-          Math.max(
-            0,
-            failure.retryAt.getTime() - dependencies.clock().getTime(),
-          ),
-        );
+        try {
+          await interrupt.sleep(
+            delay,
+            Math.max(
+              0,
+              failure.retryAt.getTime() - dependencies.clock().getTime(),
+            ),
+          );
+        } catch (sleepError) {
+          if (!(sleepError instanceof ProviderDispatchError)) throw sleepError;
+          // The request ended while waiting to retry: close the pending retry
+          // instead of resuming it later.
+          const closed = await dependencies.repository.settleResponseFailure({
+            category: sleepError.category,
+            generationCommandId: command.generationCommandId,
+            interrupted,
+            jitter: normalizedJitter(jitter()),
+            modelRunAttemptId: command.modelRunAttemptId,
+            noRetry: true,
+            settledAt: dependencies.clock(),
+            userId: command.userId,
+          });
+          yield {
+            category: closed.outcome === "settled" ? closed.category : sleepError.category,
+            interrupted:
+              closed.outcome === "settled" ? closed.status === "interrupted" : interrupted,
+            type: "decision_failed",
+          };
+          return;
+        }
         const recovery =
           await dependencies.repository.claimStaleResponseExecution({
             expectedModelRunAttemptId: command.modelRunAttemptId,
@@ -768,6 +821,7 @@ function createInterrupt(
     if (category !== null) throw new ProviderDispatchError(category);
   }
   return {
+    ended: () => reason() !== null,
     signal: combined,
     throwIfInterrupted,
     async sleep(

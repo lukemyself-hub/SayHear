@@ -5,10 +5,20 @@ import {
   type UserId,
 } from "@sayhear/application";
 
+/** Slack after the budget before the boundary gives up on the service. */
+const WATCHDOG_GRACE_MS = 500;
+
 type AuthenticatedPrincipal = Readonly<{ userId: UserId }>;
 
 export function createConversationResponseHandler(dependencies: {
   authenticate(request: Request): Promise<AuthenticatedPrincipal | null>;
+  /**
+   * End-to-end request budget (ADR-0151: 30 seconds). The service enforces it
+   * at every step; this is the boundary's own last line of defense: if the
+   * service still has not finished shortly after the budget, the stream ends
+   * with an explicit timeout instead of staying open (issue #319).
+   */
+  requestBudgetMs?: number;
   service: ConversationResponseService;
 }): (request: Request) => Promise<Response> {
   return async (request) => {
@@ -42,11 +52,33 @@ export function createConversationResponseHandler(dependencies: {
     };
     const abortController = new AbortController();
     const encoder = new TextEncoder();
+    let closed = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
     const stream = new ReadableStream<Uint8Array>({
       cancel() {
+        closed = true;
+        clearTimeout(watchdog);
         abortController.abort();
       },
       start(controller) {
+        if (dependencies.requestBudgetMs !== undefined) {
+          watchdog = setTimeout(() => {
+            if (closed) return;
+            closed = true;
+            abortController.abort();
+            try {
+              controller.enqueue(
+                encoder.encode(
+                  serializeEvent({ category: "timeout", type: "response_failed" }),
+                ),
+              );
+              controller.close();
+            } catch {
+              // The client may already have gone away.
+            }
+          }, dependencies.requestBudgetMs + WATCHDOG_GRACE_MS);
+          watchdog.unref?.();
+        }
         void (async () => {
           try {
             for await (const event of dependencies.service.respond(
@@ -54,6 +86,7 @@ export function createConversationResponseHandler(dependencies: {
               input,
               abortController.signal,
             )) {
+              if (closed) break;
               controller.enqueue(encoder.encode(serializeEvent(event)));
             }
           } catch (error) {
@@ -89,10 +122,14 @@ export function createConversationResponseHandler(dependencies: {
               // Cancellation may already have closed the response stream.
             }
           } finally {
-            try {
-              controller.close();
-            } catch {
-              // The client may already have canceled the stream.
+            clearTimeout(watchdog);
+            if (!closed) {
+              closed = true;
+              try {
+                controller.close();
+              } catch {
+                // The client may already have canceled the stream.
+              }
             }
           }
         })();
