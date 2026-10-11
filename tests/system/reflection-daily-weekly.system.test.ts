@@ -2168,6 +2168,101 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     expect(disposition.rows[0]!.outcome).toBe("created");
   });
 
+  it("does not fail a committed Reflection if commit acknowledgement throws (#257)", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-10" });
+    await seedDateOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "journal_available",
+    });
+    await seedJournalOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "published",
+    });
+    const digest = await reflectionRepository!.readDailyBaselineDigest({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+    });
+    const queued = await reflectionRepository!.queueDailyReflection({
+      dailySessionId: session.dailySessionId,
+      sourceRevision: 1,
+      claimBaselineDigest: digest!,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") throw new Error("unreachable");
+    narrativeScript = () => ({ propositions: [], coverageKeys: [] });
+    const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
+    const commitSpy = vi
+      .spyOn(reflectionRepository!, "commitReflection")
+      .mockImplementationOnce(async (input) => {
+        await commit(input);
+        throw new Error("commit acknowledgement lost");
+      });
+    let result: Awaited<ReturnType<typeof runReflectionDailyBuild>>;
+    try {
+      result = await runReflectionDailyBuild({
+        dependencies: reflectionDependencies(async () => ({
+          statements: [{
+            statementKey: "statement:ledger-failure",
+            text: "You have been repairing radios.",
+            statementKind: "day_observation",
+            propositions: [{
+              propositionKey: "proposition:ledger-failure",
+              normalizedProposition: "user repairs radios",
+              propositionKind: "fact",
+              epistemicRendering: "confirmed",
+              supportEvidenceItemIds: [session.evidenceItemId],
+              baselineClaimIds: [],
+            }],
+          }],
+          candidateProposals: [],
+        })),
+        command: {
+          workflowCommandId: queued.workflowCommandId,
+          subjectId: session.dailySessionId,
+          sourceRevision: 1,
+          claimBaselineDigest: digest!,
+          policyVersion: READINESS_POLICY,
+          expectedDataEpoch: queued.expectedDataEpoch,
+          scope: "daily",
+          weekIdentifier: null,
+          windowStartDate: null,
+          windowEndDate: null,
+          sourceDigest: null,
+        },
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+
+    expect(result.outcome).toBe("failed");
+    const attempt = await database!.pool.query<{ status: string }>(
+      `SELECT a.status FROM model_run_attempts a
+       INNER JOIN generation_commands c ON c.generation_command_id = a.generation_command_id
+       WHERE c.subject_id = $1 AND a.operation_type = 'reflection.daily'
+       ORDER BY a.created_at DESC, a.model_run_attempt_id DESC LIMIT 1`,
+      [session.dailySessionId],
+    );
+    expect(attempt.rows[0]!.status).toBe("failed");
+    const current = await database!.pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM reflections r
+       INNER JOIN reflection_versions v ON v.reflection_version_id = r.current_version_id
+       WHERE r.user_id = $1 AND r.daily_session_id = $2 AND v.status = 'committed'`,
+      [OWNER, session.dailySessionId],
+    );
+    expect(current.rows[0]!.n).toBe("1");
+    const run = await database!.pool.query<{ status: string }>(
+      `SELECT status FROM reflection_runs r
+       INNER JOIN model_run_attempts a ON a.model_run_attempt_id = r.model_run_attempt_id
+       INNER JOIN generation_commands c ON c.generation_command_id = a.generation_command_id
+       WHERE c.subject_id = $1 AND a.operation_type = 'reflection.daily'
+       ORDER BY a.created_at DESC, a.model_run_attempt_id DESC LIMIT 1`,
+      [session.dailySessionId],
+    );
+    // The transaction committed both rows before its acknowledgement failed.
+    // The catch may fail the attempt, but must preserve built run history.
+    expect(run.rows[0]!.status).toBe("built");
+  });
+
   it("settles a terminal failure and keeps the consumed usage when the daily Reflection commit throws (#257)", async () => {
     const session = await seedSession({ logicalDate: "2026-09-09" });
     await seedDateOutcome({
@@ -2333,6 +2428,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       status: "failed",
       recovery_status: "terminal",
     });
+    const run = await database!.pool.query<{ status: string; error_code: string | null }>(
+      "SELECT status, error_code FROM reflection_runs WHERE model_run_attempt_id = $1",
+      [row.model_run_attempt_id],
+    );
+    expect(run.rows[0]).toMatchObject({ status: "failed", error_code: "unknown" });
 
     // The failed commit left no committed current version, Candidate or
     // proposal behind (the pre-commit draft from persistDraftVersion is not a

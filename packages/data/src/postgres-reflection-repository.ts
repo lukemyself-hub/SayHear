@@ -2555,8 +2555,12 @@ export class PostgresReflectionRepository implements ReflectionRepository {
              WHEN reflection_runs.status = 'built' THEN 'built'
              ELSE EXCLUDED.status
            END,
-           outcome_detail = COALESCE(EXCLUDED.outcome_detail, reflection_runs.outcome_detail),
-           error_code = COALESCE(EXCLUDED.error_code, reflection_runs.error_code),
+           outcome_detail = CASE WHEN reflection_runs.status = 'built'
+              THEN reflection_runs.outcome_detail
+              ELSE COALESCE(EXCLUDED.outcome_detail, reflection_runs.outcome_detail) END,
+           error_code = CASE WHEN reflection_runs.status = 'built'
+              THEN reflection_runs.error_code
+              ELSE COALESCE(EXCLUDED.error_code, reflection_runs.error_code) END,
            updated_at = EXCLUDED.updated_at`,
         [
           createUuidV7(new Date()),

@@ -997,21 +997,6 @@ async function executeReflectionAttempt(input: Readonly<{
     if (committed.outcome === "already_committed") {
       return { kind: "already_committed" };
     }
-    await recordReflectionRunOutcome({
-      repository,
-      userId: input.userId,
-      frozen: input.frozen,
-      sourceRevision,
-      expectedDataEpoch: input.expectedDataEpoch,
-      generationCommandId,
-      modelRunAttemptId,
-      status: "built",
-      outcomeDetail: null,
-      statementCount: committed.statementCount,
-      candidateCount: committed.candidateCount,
-      degradedEpisodeReason: input.degradedEpisodeReason,
-      errorCode: null,
-    });
     return {
       kind: "built",
       statementCount: committed.statementCount,
@@ -1034,6 +1019,25 @@ async function executeReflectionAttempt(input: Readonly<{
     // failure code (ADR-0132): it is not a Provider transport failure, so
     // `planModelRoleRecovery` schedules no technical retry, and the issue
     // decision adds no new code.
+    try {
+      await recordReflectionRunOutcome({
+        repository,
+        userId: input.userId,
+        frozen: input.frozen,
+        sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId,
+        modelRunAttemptId,
+        status: "failed",
+        outcomeDetail: "unknown",
+        statementCount: null,
+        candidateCount: null,
+        degradedEpisodeReason: input.degradedEpisodeReason,
+        errorCode: "unknown",
+      });
+    } catch {
+      // The independent run ledger must not mask the original domain failure.
+    }
     const settled = await settleAttempt("failed", "unknown");
     const outcome: ReflectionBuildEntrypointResult["outcome"] =
       settled.outcome === "discarded"
@@ -1126,6 +1130,8 @@ async function executeReflectionAttempt(input: Readonly<{
           errorCode: recorded.reason ?? "already_settled",
         });
       }
+      // commitReflection writes the built run projection in the same transaction
+      // as the authoritative current version and Candidates.
       return entrypointResult({
         subjectId: String(subjectId),
         scope: input.scope,
