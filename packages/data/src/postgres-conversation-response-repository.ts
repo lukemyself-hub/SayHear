@@ -52,6 +52,11 @@ import {
 import type { Pool, PoolClient } from "pg";
 
 import { createUuidV7 } from "./uuid-v7";
+import { loadHistoryRecallForContext } from "./postgres-history-recall";
+import {
+  controlExclusionSql,
+  generatingUserRevisionIsCurrentSql,
+} from "./postgres-source-eligibility";
 import { loadActionFinalizationReceiptSnapshot } from "./postgres-memory-trust-action-repository";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 import { FAST_PATH_PENDING_REVISIONS_SQL } from "./postgres-fast-path-extraction-repository";
@@ -72,7 +77,7 @@ type ContextHeadRow = Readonly<{
   current_journal_source_revision: string | null;
   current_journal_version_status: "published" | "stale" | "validation_failed" | "needs_review" | null;
   dialogue_revision: string;
-  generation_stage: "decision" | "action_finalization";
+  generation_stage: "decision" | "action_finalization" | "history_answer";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -137,7 +142,7 @@ type DispatchRow = Readonly<{
   data_epoch: string;
   expected_data_epoch: string;
   freshness_policy: string;
-  generation_stage: "decision" | "action_finalization";
+  generation_stage: "decision" | "action_finalization" | "history_answer";
   input_revision_id: string;
   locale: string;
   locale_policy_version: string;
@@ -657,7 +662,7 @@ export class PostgresConversationResponseRepository
         INNER JOIN conversation_response_recovery_policies policy
           ON policy.policy_version = command.recovery_policy_version
         WHERE command.authoritative_result_id IS NULL
-          AND command.generation_stage <> 'action_finalization'
+          AND command.generation_stage NOT IN ('action_finalization', 'history_answer')
           AND turn.status IN ('open', 'responding')
           AND (
             (
@@ -961,8 +966,16 @@ export class PostgresConversationResponseRepository
         ...memoryActionTargets,
       ];
 
+      const historyRecall =
+        row.generation_stage === "history_answer"
+          ? await loadHistoryRecallForContext(client, {
+              answerCommandId: input.generationCommandId,
+              userId: input.userId,
+            })
+          : null;
       await client.query("COMMIT");
       return {
+        ...(historyRecall === null ? {} : { historyRecall }),
         ...(row.action_execution_id !== null &&
         row.action_receipt_sequence !== null &&
         row.action_execution_status !== null &&
@@ -1164,7 +1177,8 @@ export class PostgresConversationResponseRepository
         // frozen in the HMAC-protected time_context section instead, keeping
         // legacy reference rows and the database section constraint intact.
         const isRecentContextEvent =
-          event.section === "recent_conversation_context";
+          event.section === "recent_conversation_context" ||
+          event.section === "history_recall_context";
         await client.query(
           `
             INSERT INTO compiled_context_revision_refs (
@@ -2582,34 +2596,26 @@ async function contextReferencesAreCurrent(
           -- stale and the command fails closed through the existing
           -- policy_blocked freshness path instead of shipping old background.
           AND NOT (
-            ref.section = 'recent_conversation_context'
+            ref.section IN ('recent_conversation_context', 'history_recall_context')
             AND (
-              EXISTS (
-                SELECT 1
-                FROM evidence_items item
-                INNER JOIN memory_forget_evidence_exclusions exclusion
-                  ON exclusion.evidence_item_id = item.evidence_item_id
-                 AND exclusion.user_id = item.user_id
-                WHERE item.user_id = ref.user_id
-                  AND item.source_revision_id =
-                    ref.conversation_event_revision_id
-                  AND item.status = 'active'
-                  AND exclusion.status = 'active'
-              )
-              OR EXISTS (
-                SELECT 1
-                FROM claim_evidence_links link
-                INNER JOIN evidence_items item
-                  ON item.evidence_item_id = link.evidence_item_id
-                 AND item.user_id = link.user_id
-                INNER JOIN memory_claim_corrections correction
-                  ON correction.deactivated_claim_version_id =
-                    link.memory_claim_version_id
-                 AND correction.user_id = link.user_id
-                WHERE link.user_id = ref.user_id
-                  AND link.status = 'active'
-                  AND item.source_revision_id =
-                    ref.conversation_event_revision_id
+              ${controlExclusionSql({
+                revisionId: "ref.conversation_event_revision_id",
+                userId: "ref.user_id",
+              })} IS NOT NULL
+              OR (
+                ref.section = 'history_recall_context'
+                AND ref.actor = 'assistant'
+                AND (
+                  generating_command.input_revision_id IS NULL
+                  OR NOT ${generatingUserRevisionIsCurrentSql({
+                    generatingRevisionId: "generating_command.input_revision_id",
+                    userId: "ref.user_id",
+                  })}
+                  OR ${controlExclusionSql({
+                    revisionId: "generating_command.input_revision_id",
+                    userId: "ref.user_id",
+                  })} IS NOT NULL
+                )
               )
             )
           )
@@ -2627,6 +2633,9 @@ async function contextReferencesAreCurrent(
       INNER JOIN conversation_events event
         ON event.conversation_event_id = revision.conversation_event_id
         AND event.user_id = revision.user_id
+      LEFT JOIN generation_commands generating_command
+        ON generating_command.generation_command_id = event.generation_command_id
+        AND generating_command.user_id = event.user_id
       WHERE command.generation_command_id = $2
       GROUP BY command.generation_command_id
     `,
@@ -3245,7 +3254,8 @@ async function loadContextReferencedEvents(
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selection_order: string | null;
     selection_reason: string | null;
     sequence_no: string;

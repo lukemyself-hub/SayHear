@@ -289,6 +289,7 @@ export function buildEffectiveRuntimeConfiguration(
     ["switch.journal_publish_enabled", runtime.writeSwitches.journalPublishEnabled],
     ["switch.episode_build_enabled", runtime.writeSwitches.episodeBuildEnabled],
     ["switch.reflection_enabled", runtime.writeSwitches.reflectionEnabled],
+    ["switch.history_recall_enabled", runtime.writeSwitches.historyRecallEnabled],
   ] as const) {
     add({
       category: "roles-switches",

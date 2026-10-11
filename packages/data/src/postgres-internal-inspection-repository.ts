@@ -17,6 +17,7 @@ import {
   RecentContextReferenceError,
   validateSafetyPostureContent,
   type CurrentSafetyPosture,
+  type HistoryRecallInspection,
   type MemorySectionKey,
   type SafetyPostureContent,
 } from "@sayhear/application";
@@ -27,6 +28,7 @@ import type { Pool, PoolClient } from "pg";
 import { createUuidV7 } from "./uuid-v7";
 
 type GenerationMetadataRow = Readonly<{
+  generation_stage: string;
   attempt_status: string;
   checked_at: Date;
   command_status: string;
@@ -51,7 +53,8 @@ type GenerationMetadataRow = Readonly<{
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selectionOrder: number | null;
     selectionReason: string | null;
     sequence: number;
@@ -155,6 +158,7 @@ export class PostgresInternalInspectionRepository
           command.consent_policy_version,
           command.harness_policy_version,
           command.conversation_action_catalog_version,
+          command.generation_stage,
           command.status AS command_status,
           command.recovery_policy_version,
           command.recovery_status,
@@ -313,6 +317,10 @@ export class PostgresInternalInspectionRepository
         referencedEvents: row.context_referenced_events,
         sections: row.context_sections,
       });
+      const historyRecall = await loadHistoryRecallInspection(client, {
+        commandId: input.generationCommandId,
+        userId: input.userId,
+      });
       await client.query("COMMIT");
       return {
         attemptStatus: row.attempt_status,
@@ -367,7 +375,9 @@ export class PostgresInternalInspectionRepository
         generationCommandId: asGenerationCommandId(
           row.generation_command_id,
         ),
+        generationStage: row.generation_stage,
         harnessPolicyVersion: row.harness_policy_version,
+        historyRecall,
         inputTokens: optionalNumber(row.input_tokens),
         model: row.model,
         modelRunAttemptId: asModelRunAttemptId(
@@ -862,4 +872,48 @@ async function insertSensitiveAccessAudit(
       input.now,
     ],
   );
+}
+
+/**
+ * Content-free account of a controlled history review, readable from either
+ * end (the Decision command or the History Answer command). Owner scoped.
+ */
+async function loadHistoryRecallInspection(
+  client: PoolClient,
+  input: { commandId: string; userId: string },
+): Promise<HistoryRecallInspection | null> {
+  const result = await client.query<{
+    answer_command_id: string;
+    coverage: HistoryRecallInspection["coverage"];
+    decision_command_id: string;
+    failure_code: string | null;
+    item_refs: Array<{ actor: "user" | "assistant"; expressedAt: string; revisionId: string }>;
+    plan: { plan: HistoryRecallInspection["plan"] };
+    policy_version: string;
+    status: HistoryRecallInspection["status"];
+  }>(
+    `SELECT decision_command_id::text, answer_command_id::text, policy_version,
+            status, failure_code, plan, coverage, item_refs
+     FROM history_recall_results
+     WHERE user_id = $1
+       AND (decision_command_id = $2 OR answer_command_id = $2)`,
+    [input.userId, input.commandId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    answerCommandId: row.answer_command_id,
+    coverage: row.coverage,
+    decisionCommandId: row.decision_command_id,
+    failureCode: row.failure_code,
+    plan: row.plan.plan,
+    policyVersion: row.policy_version,
+    role: row.answer_command_id === input.commandId ? "answer" : "decision",
+    sources: row.item_refs.map((ref) => ({
+      actor: ref.actor,
+      expressedAt: ref.expressedAt,
+      revisionId: ref.revisionId,
+    })),
+    status: row.status,
+  };
 }

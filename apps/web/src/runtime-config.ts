@@ -460,6 +460,12 @@ export function loadRuntimeConfiguration(environment: Environment) {
     );
   }
   const writeSwitches = Object.freeze({
+    // Issue #314: the controlled read-only history review. Default off; only
+    // an explicit true offers the function and wires the answer stage.
+    historyRecallEnabled: explicitSwitch(
+      environment,
+      "SAYHEAR_HISTORY_RECALL_ENABLED",
+    ),
     evidenceExtractionEnabled: enabledSwitch(
       environment,
       "SAYHEAR_EVIDENCE_EXTRACTION_ENABLED",

@@ -12,6 +12,7 @@ import type {
   ContextPolicyVersions,
 } from "./context-compiler";
 import type { CurrentDialogueState } from "./dialogue-state";
+import type { HistoryQueryPlan, HistoryRecallCoverage } from "./history-recall";
 import type { MemorySectionKey } from "./memory-retrieval/memory-compilation";
 import type {
   RankComponents,
@@ -100,6 +101,28 @@ export type RetrievalCandidateInspection = Readonly<{
   trustFenceResults: readonly TrustFenceResult[];
 }>;
 
+/**
+ * Issue #314: the minimal, content-free account of a controlled history
+ * review, readable from either the Decision command (which branch it took) or
+ * the History Answer command (what it was compiled from). No message text.
+ */
+export type HistoryRecallInspection = Readonly<{
+  answerCommandId: string;
+  coverage: HistoryRecallCoverage;
+  decisionCommandId: string;
+  failureCode: string | null;
+  plan: HistoryQueryPlan | null;
+  policyVersion: string;
+  /** Which end of the review this inspected command is. */
+  role: "answer" | "decision";
+  sources: readonly Readonly<{
+    actor: "user" | "assistant";
+    expressedAt: string;
+    revisionId: string;
+  }>[];
+  status: "completed" | "failed" | "partial";
+}>;
+
 export type CompiledContextInspection = Readonly<{
   compilerVersion: string;
   degradedReason: CompiledContextDegradedReason;
@@ -127,7 +150,8 @@ export type CompiledContextInspection = Readonly<{
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selectionOrder: number | null;
     selectionReason: string | null;
     sequence: number;
@@ -167,7 +191,11 @@ export type GenerationInspectionMetadata = Readonly<{
   disposition: string;
   freshnessPolicy: string;
   generationCommandId: GenerationCommandId;
+  /** The GenerationCommand stage this command executed (issue #314). */
+  generationStage: string;
   harnessPolicyVersion: string;
+  /** Set when this command is either end of a controlled history review. */
+  historyRecall: HistoryRecallInspection | null;
   inputTokens: number | null;
   model: string;
   modelRunAttemptId: ModelRunAttemptId;

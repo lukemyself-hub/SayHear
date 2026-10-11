@@ -327,13 +327,13 @@ describe("runtime safety configuration", () => {
       SAYHEAR_CONTEXT_HMAC_SECRET: "context", SAYHEAR_DEPLOYMENT: "test", SAYHEAR_PROVIDER_ADAPTER: "deterministic",
       SAYHEAR_TEST_PROVIDER_CHUNKS: '["ok"]',
     };
-    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
+    expect(loadRuntimeConfiguration(base).writeSwitches).toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_EVIDENCE_EXTRACTION_ENABLED: "false" }).writeSwitches)
-      .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: false, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
+      .toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: false, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false" }).writeSwitches)
-      .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: false, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
+      .toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: false, memoryConsolidationEnabled: true, memoryRetrievalEnabled: true, reflectionEnabled: false });
     expect(loadRuntimeConfiguration({ ...base, SAYHEAR_MEMORY_CONSOLIDATION_ENABLED: "false" }).writeSwitches)
-      .toEqual({ episodeBuildEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: false, memoryRetrievalEnabled: true, reflectionEnabled: false });
+      .toEqual({ episodeBuildEnabled: false, historyRecallEnabled: false, evidenceExtractionEnabled: true, fastPathExtractionEnabled: true, journalPublishEnabled: true, memoryConsolidationEnabled: false, memoryRetrievalEnabled: true, reflectionEnabled: false });
   });
 
   it("configures OpenCode Go as an exact honest identity with no baseUrl and no silent rename", () => {

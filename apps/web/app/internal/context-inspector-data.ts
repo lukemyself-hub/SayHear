@@ -276,6 +276,14 @@ export function sectionVersionLabel(
       return /^receipt:\d+$/.test(section.reference)
         ? section.reference
         : "receipt";
+    case "history_recall_receipt":
+      // Issue #314: the frozen review result names its policy identity.
+      return (
+        section.reference.match(/"policyVersion":"([^"]+)"/)?.[1] ??
+        "history-recall:unavailable"
+      );
+    case "history_recall_context":
+      return "history-recall-revisions";
     case "committed_raw_events":
       return "event-revisions";
     case "current_user_input":

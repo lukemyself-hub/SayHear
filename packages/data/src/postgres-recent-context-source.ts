@@ -8,6 +8,7 @@ import type {
   RecentContextSourceRequest,
   RecentContextSourceSnapshot,
 } from "@sayhear/application";
+import { controlExclusionSql } from "./postgres-source-eligibility";
 import {
   asConversationEventRevisionId,
   asDailySessionId,
@@ -122,45 +123,10 @@ export const RECENT_CONTEXT_CANDIDATE_SQL = `
           WHEN session.timezone_at_start IS NOT NULL
             THEN 'session_start_fallback'
         END AS expression_timezone_source,
-        COALESCE(
-          (
-            SELECT jsonb_build_object(
-              'controlId', exclusion.memory_forget_request_id::text,
-              'reason', 'forget_association'
-            )
-            FROM evidence_items item
-            INNER JOIN memory_forget_evidence_exclusions exclusion
-              ON exclusion.evidence_item_id = item.evidence_item_id
-             AND exclusion.user_id = item.user_id
-            WHERE item.user_id = event.user_id
-              AND item.source_revision_id =
-                revision.conversation_event_revision_id
-              AND item.status = 'active'
-              AND exclusion.status = 'active'
-            ORDER BY exclusion.created_at
-            LIMIT 1
-          ),
-          (
-            SELECT jsonb_build_object(
-              'controlId', correction.memory_claim_correction_id::text,
-              'reason', 'correction_association'
-            )
-            FROM claim_evidence_links link
-            INNER JOIN evidence_items item
-              ON item.evidence_item_id = link.evidence_item_id
-             AND item.user_id = link.user_id
-            INNER JOIN memory_claim_corrections correction
-              ON correction.deactivated_claim_version_id =
-                link.memory_claim_version_id
-             AND correction.user_id = link.user_id
-            WHERE link.user_id = event.user_id
-              AND link.status = 'active'
-              AND item.source_revision_id =
-                revision.conversation_event_revision_id
-            ORDER BY correction.created_at
-            LIMIT 1
-          )
-        ) AS exclusion
+        ${controlExclusionSql({
+          revisionId: "revision.conversation_event_revision_id",
+          userId: "event.user_id",
+        })} AS exclusion
       FROM conversation_events event
       INNER JOIN conversation_event_revisions revision
         ON revision.conversation_event_revision_id =

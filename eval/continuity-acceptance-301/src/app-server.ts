@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 
@@ -93,6 +93,9 @@ export function buildAppEnvironment(
     // compilation, recent context and memory *retrieval* run unchanged.
     SAYHEAR_EVIDENCE_EXTRACTION_ENABLED: "false",
     SAYHEAR_FAST_PATH_EXTRACTION_ENABLED: "false",
+    // Issue 314: the controlled read-only history review is what the history
+    // cases exercise; it is default-off in every other deployment.
+    SAYHEAR_HISTORY_RECALL_ENABLED: "true",
     SAYHEAR_INACTIVITY_TIMEOUT_MS: String(ACCEPTANCE_INACTIVITY_TIMEOUT_MS),
     SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false",
     SAYHEAR_MEMORY_CONSOLIDATION_ENABLED: "false",
@@ -155,6 +158,10 @@ export async function startAppServer(
           output: () => output,
           async stop() {
             await stopChild(child);
+            // Debug aid: keep the app process output (content-free server logs).
+            if (process.env["SAYHEAR_ACCEPTANCE_APP_LOG"]) {
+              appendFileSync(process.env["SAYHEAR_ACCEPTANCE_APP_LOG"], output);
+            }
             releaseDevServerLock();
           },
         };

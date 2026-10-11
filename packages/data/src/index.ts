@@ -30,6 +30,11 @@ export {
   PostgresRecentContextSource,
   RECENT_CONTEXT_CANDIDATE_SQL,
 } from "./postgres-recent-context-source";
+export {
+  HISTORY_RECALL_PAGE_SQL,
+  PostgresHistoryRecallRepository,
+  PostgresHistoryRecallSource,
+} from "./postgres-history-recall";
 export { PostgresRecentContextPolicyRepository } from "./postgres-recent-context-policy-repository";
 export {
   PostgresConversationActionRepository,

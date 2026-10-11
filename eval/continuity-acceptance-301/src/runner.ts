@@ -64,7 +64,24 @@ export function summarizeInspection(raw: Record<string, unknown>): ObservedInspe
     .find((section) => section?.["key"] === "daily_session");
   const sessionId = text(dailySession?.["reference"])?.split(":")[0] ?? null;
   const failure = record(recent?.["failure"]);
+  const history = record(raw["historyRecall"]);
+  const historyPlan = record(history?.["plan"]);
   return {
+    generationStage: text(raw["generationStage"]),
+    historyRecall: history
+      ? {
+          answerCommandId: String(history["answerCommandId"]),
+          decisionCommandId: String(history["decisionCommandId"]),
+          failureCode: text(history["failureCode"]),
+          planDates: historyPlan
+            ? `${String(historyPlan["startDate"])}..${String(historyPlan["endDate"])} ${String(historyPlan["timezone"])}`
+            : null,
+          policyVersion: String(history["policyVersion"]),
+          role: String(history["role"]),
+          sourceCount: Array.isArray(history["sources"]) ? history["sources"].length : 0,
+          status: String(history["status"]),
+        }
+      : null,
     attemptStatus: text(raw["attemptStatus"]),
     commandStatus: text(raw["commandStatus"]),
     compilerVersion: text(context["compilerVersion"]),
@@ -189,7 +206,16 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   ): Promise<ObservedInspection | null> {
     if (!generationCommandId) return null;
     try {
-      const inspection = summarizeInspection(await client.inspect(generationCommandId));
+      let inspection = summarizeInspection(await client.inspect(generationCommandId));
+      // A Decision that took the history review branch did not produce the
+      // reply: the independent History Answer command did. Follow the link so
+      // the sources the answer was actually compiled from are what is judged.
+      if (inspection.historyRecall?.role === "decision") {
+        const answer = summarizeInspection(
+          await client.inspect(inspection.historyRecall.answerCommandId),
+        );
+        inspection = { ...answer, historyRecall: inspection.historyRecall };
+      }
       if (inspection.dailySessionId) sessionIds.add(inspection.dailySessionId);
       return inspection;
     } catch (error) {

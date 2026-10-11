@@ -48,8 +48,23 @@ export type ObservedDateCoverage = Readonly<{
   readBounded: boolean;
 }>;
 
+/** Content-free account of the controlled history review branch (issue #314). */
+export type ObservedHistoryRecall = Readonly<{
+  answerCommandId: string;
+  decisionCommandId: string;
+  failureCode: string | null;
+  planDates: string | null;
+  policyVersion: string;
+  role: string;
+  sourceCount: number;
+  status: string;
+}>;
+
 export type ObservedInspection = Readonly<{
   attemptStatus: string | null;
+  /** Which branch the Decision took; null for an ordinary reply. */
+  historyRecall?: ObservedHistoryRecall | null;
+  generationStage?: string | null;
   commandStatus: string | null;
   compilerVersion: string | null;
   dailySessionId: string | null;

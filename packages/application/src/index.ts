@@ -640,6 +640,7 @@ export {
   type CompiledContextSafetyPostureInspection,
   type ConversationContentInspection,
   type GenerationInspectionMetadata,
+  type HistoryRecallInspection,
   type InternalInspectionRepository,
   type InternalInspectionService,
   type RecentContextInspection,

@@ -32,6 +32,8 @@ import {
   type JournalEligibilityRepository,
   MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG,
   CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+  createHistoryRecallGateway,
+  HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
   planTrustActionTargetResolution,
   RETRIEVAL_BROAD_TERM_STOP_LIST,
   normalizeRetrievalTerm,
@@ -118,6 +120,8 @@ import {
   PostgresNarrativeValidationRepository,
   PostgresReflectionRepository,
   PostgresRecentContextPolicyRepository,
+  PostgresHistoryRecallRepository,
+  PostgresHistoryRecallSource,
   PostgresRecentContextSource,
 } from "@sayhear/data";
 
@@ -635,7 +639,9 @@ export function createServerComposition() {
       freshnessPolicy: "source_valid:v1",
       chineseLocalePackVersion: CHINESE_LOCALE_PACK_VERSION,
       englishLocalePackVersion: ENGLISH_LOCALE_PACK_VERSION,
-      harnessPolicyVersion: CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
+      harnessPolicyVersion: configuration.writeSwitches.historyRecallEnabled
+        ? HISTORY_RECALL_CONVERSATION_HARNESS_POLICY.version
+        : CATALOG_V2_CONVERSATION_HARNESS_POLICY.version,
       conversationActionCatalogVersion:
         MEMORY_TRUST_ACTIONS_CONVERSATION_ACTION_CATALOG.version,
       model: configuration.provider.champion.model,
@@ -858,8 +864,19 @@ export function createServerComposition() {
       entityIdentityCorrectionTargetSource,
     trustActionTargetResolver,
   });
+  // Issue #314: the controlled read-only history review. Wired only when the
+  // explicit switch is on; otherwise the Harness never offers the function and
+  // the response service keeps the Catalog v2 policy exactly as before.
+  const historyRecallGateway = configuration.writeSwitches.historyRecallEnabled
+    ? createHistoryRecallGateway({
+        clock: configuration.clock,
+        repository: new PostgresHistoryRecallRepository(pool),
+        source: new PostgresHistoryRecallSource(pool),
+      })
+    : undefined;
   const conversationAgentHarness = createConversationAgentHarness({
     actionGateway,
+    ...(historyRecallGateway ? { historyRecall: historyRecallGateway } : {}),
     clock: configuration.clock,
     egressPort,
     contextCompiler,
@@ -939,7 +956,10 @@ export function createServerComposition() {
       contextCompiler,
       conversationService,
       harness: conversationAgentHarness,
-      harnessPolicy: CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+      harnessPolicy: historyRecallGateway
+        ? HISTORY_RECALL_CONVERSATION_HARNESS_POLICY
+        : CATALOG_V2_CONVERSATION_HARNESS_POLICY,
+      ...(historyRecallGateway ? { historyRecall: historyRecallGateway } : {}),
       repository: responseRepository,
       recoveryGate,
     }),
