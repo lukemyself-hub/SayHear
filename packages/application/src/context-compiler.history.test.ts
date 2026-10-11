@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   CompiledContextIntegrityError,
   HISTORY_RECALL_TIME_COMPILER_VERSION,
+  ORDINARY_BACKGROUND_HONESTY_RULE,
   TIME_AWARE_CONTEXT_COMPILER_VERSION,
   createContextCompiler,
   type ContextCompilerRepository,
@@ -196,6 +197,8 @@ describe("Context Compiler History Answer (issue #314)", () => {
     ]);
     expect(payload.instructions).toContain("History review result");
     expect(payload.instructions).toContain("2026-08-20");
+    // The answer is governed by the review result, not by the ordinary rule.
+    expect(payload.instructions).not.toContain(ORDINARY_BACKGROUND_HONESTY_RULE);
     // Times of the quoted messages are in the signed time context, in message order.
     expect(payload.instructions).toMatch(/1=2026-08-20 18:30/);
     expect(payload.instructions).not.toContain("老师傅教我缝帆布包");
