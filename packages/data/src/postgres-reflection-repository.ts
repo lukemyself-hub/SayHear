@@ -359,6 +359,12 @@ export class PostgresReflectionRepository implements ReflectionRepository {
            SELECT status FROM reflection_runs run
            WHERE run.daily_session_id = s.daily_session_id
              AND run.source_revision = s.source_revision
+             AND run.policy_version = (
+               SELECT policy.policy_version
+               FROM reflection_policies policy
+               ORDER BY policy.created_at DESC
+               LIMIT 1
+             )
              AND run.scope_type = 'daily_session'
              AND run.status = 'built'
            ORDER BY run.updated_at DESC LIMIT 1

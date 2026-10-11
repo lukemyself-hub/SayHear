@@ -678,6 +678,36 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     });
   });
 
+  it("keeps derived latency pending when only an old-policy Reflection is built", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-09" });
+    await seedDateOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "journal_available",
+    });
+    await seedJournalOutcome({
+      dailySessionId: session.dailySessionId,
+      outcome: "published",
+    });
+    await database!.pool.query(
+      `INSERT INTO reflection_runs (
+         reflection_run_id, user_id, scope_type, daily_session_id,
+         source_revision, claim_baseline_digest, policy_version,
+         expected_data_epoch, status, created_at, updated_at
+       ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
+      [seedId(), OWNER, session.dailySessionId, "reflection-readiness:old", new Date(BASE_TIME)],
+    );
+
+    expect(await reflectionRepository!.listDueDailySessions({
+      now: new Date(BASE_TIME + INTERVAL_MS + 1),
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    })).toHaveLength(1);
+    expect(await reflectionRepository!.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000))).toEqual({
+      oldestPendingSeconds: 7200,
+      pendingSessions: 1,
+    });
+  });
+
   it("Q2: a journal-published day becomes due only after the Episode interval", async () => {
     const session = await seedSession({ logicalDate: "2026-09-09" });
     await seedDateOutcome({
