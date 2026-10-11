@@ -41,6 +41,7 @@ import {
   ELIGIBLE_TRANSCRIPT_STATUSES_SQL,
   generatingUserRevisionIsCurrentSql,
 } from "./postgres-source-eligibility";
+import { retryOnSerializationFailure } from "./serialization-retry";
 import { createUuidV7 } from "./uuid-v7";
 
 type SourceRow = Readonly<{
@@ -774,7 +775,19 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
     };
   }
 
-  public async commitHistoryRecall(input: {
+  /**
+   * Freezing the result races the same rows a newer message or a settling
+   * request touches, so a serialization conflict (40001 / 40P01) re-runs the
+   * whole transaction like its siblings on the response path instead of
+   * ending the Turn (issue #319).
+   */
+  public commitHistoryRecall(
+    input: Parameters<PostgresHistoryRecallRepository["commitHistoryRecallOnce"]>[0],
+  ): ReturnType<HistoryRecallRepository["commitHistoryRecall"]> {
+    return retryOnSerializationFailure(() => this.commitHistoryRecallOnce(input));
+  }
+
+  public async commitHistoryRecallOnce(input: {
     decisionAttemptId: ModelRunAttemptId;
     decisionCommandId: GenerationCommandId;
     governancePolicyVersion?: string | null;

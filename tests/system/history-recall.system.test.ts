@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import type { Pool } from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -179,6 +180,8 @@ function build(overrides: {
   policy?: HistoryRecallPolicy;
   afterAdmit?: () => Promise<void>;
   afterCompile?: () => Promise<void>;
+  /** The pool the history repository commits through (fault injection). */
+  historyRepositoryPool?: Pool;
   /** End-to-end request budget (ADR-0151); unset keeps the request unbounded. */
   requestBudgetMs?: number;
   source?: (inner: HistoryRecallSourcePort) => HistoryRecallSourcePort;
@@ -211,7 +214,9 @@ function build(overrides: {
   const gatewayBase = createHistoryRecallGateway({
     clock,
     ...(overrides.policy ? { policy: overrides.policy } : {}),
-    repository: new PostgresHistoryRecallRepository(database.pool),
+    repository: new PostgresHistoryRecallRepository(
+      overrides.historyRepositoryPool ?? database.pool,
+    ),
     source: overrides.source ? overrides.source(countingSource) : countingSource,
   });
   const historyRecall = overrides.afterAdmit
@@ -633,6 +638,46 @@ describe("controlled history review through the real conversation path", () => {
     const [result] = await rows<{ coverage: { omitted: Record<string, number> }; status: string }>("SELECT coverage, status FROM history_recall_results");
     expect(result!.status).toBe("completed");
     expect(result!.coverage.omitted).toEqual({ forget_association: 4 });
+  });
+
+  it("retries the freeze transaction when PostgreSQL aborts it for a serialization conflict", async () => {
+    await seedHistory();
+    // A concurrent writer wins once: the first attempt to freeze the result
+    // is aborted with SQLSTATE 40001 after it began.
+    let conflicts = 1;
+    const flaky = new Proxy(database.pool, {
+      get(target, property) {
+        if (property !== "connect") {
+          const value = Reflect.get(target, property) as unknown;
+          return typeof value === "function" ? value.bind(target) : value;
+        }
+        return async () => {
+          const client = await target.connect();
+          return new Proxy(client, {
+            get(inner, key) {
+              if (key !== "query") {
+                const value = Reflect.get(inner, key) as unknown;
+                return typeof value === "function" ? value.bind(inner) : value;
+              }
+              return (sql: unknown, ...rest: unknown[]) => {
+                if (conflicts > 0 && typeof sql === "string" && sql.includes("INSERT INTO history_recall_results")) {
+                  conflicts -= 1;
+                  return Promise.reject(Object.assign(new Error("could not serialize access"), { code: "40001" }));
+                }
+                return (inner.query as (...args: unknown[]) => unknown)(sql, ...rest);
+              };
+            },
+          });
+        };
+      },
+    }) as Pool;
+    built = build({ historyRepositoryPool: flaky });
+    const events = await ask();
+    expect(terminal(events)).toBe("assistant_committed");
+    expect(conflicts).toBe(0);
+    // Frozen exactly once, with exactly one answer command.
+    expect(await rows("SELECT 1 FROM history_recall_results")).toHaveLength(1);
+    expect(await rows("SELECT 1 FROM generation_commands WHERE generation_stage = 'history_answer'")).toHaveLength(1);
   });
 
   it("stops waiting for a stalled lookup when the request deadline arrives, and a late finish cannot commit", async () => {
