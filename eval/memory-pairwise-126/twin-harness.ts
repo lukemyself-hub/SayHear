@@ -582,6 +582,7 @@ export async function runTwinCapture(input: {
   champion: ConversationTextChampion;
   conversationAdapter: TwinConversationAdapter;
   domainClockStartIso?: string;
+  retrievalMonotonicNow?: () => number;
   log?: (line: string) => void;
   pool: Pool;
   roleRegistry: TwinRoleRegistry;
@@ -917,6 +918,9 @@ export async function runTwinCapture(input: {
 
   const memoryRetrievalPort = memoryOn
     ? createMemoryRetrievalService({
+        ...(input.retrievalMonotonicNow
+          ? { monotonicNow: input.retrievalMonotonicNow }
+          : {}),
         repository: new PostgresMemoryRetrievalRepository(pool),
         registry: {
           registryVersion: predicateRegistrySnapshot.registryVersion,
