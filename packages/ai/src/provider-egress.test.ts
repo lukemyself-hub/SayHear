@@ -10,6 +10,7 @@ import {
   asGenerationCommandId,
   asModelRunAttemptId,
   asUserId,
+  HISTORY_REVIEW_FUNCTION,
   type ContextCompiler,
   type ConversationTextChampion,
   type ProviderEgressClaim,
@@ -510,6 +511,74 @@ describe("Provider Egress", () => {
     expect(joined).toBe("我是 AI，不是人。这个我接不住，也不能");
     expect(events.filter((event) => event.type === "completed")).toHaveLength(1);
     expect(events.at(-1)).toEqual(PUNCTUATION_COMPLETION);
+  });
+});
+
+describe("Provider Egress history review proposal (issue #314)", () => {
+  async function runCall(input: {
+    offered: boolean;
+    rawArguments: string;
+    toolsDisabled?: boolean;
+  }): Promise<ProviderEgressStreamEvent[]> {
+    const port = createProviderEgressPort({
+      champion: testChampion(),
+      clock: () => new Date("2026-07-29T12:00:00.000Z"),
+      contextCompiler: {
+        async compile() {
+          throw new Error("Compilation does not run inside Egress.");
+        },
+        renderPermittedPayload() {
+          return { instructions: "Ordinary instructions.", locale: "zh-CN", messages: [] };
+        },
+      } satisfies ContextCompiler,
+      model: {
+        async *stream() {
+          yield {
+            type: "tool_call" as const,
+            rawFunctionName: "review_conversation_history",
+            rawArguments: input.rawArguments,
+          };
+          yield PUNCTUATION_COMPLETION;
+        },
+      } satisfies ConversationTextModel,
+      repository: baseRepository("conversation-output:v2"),
+    });
+    const events: ProviderEgressStreamEvent[] = [];
+    for await (const event of port.stream({
+      compiledContextId: asCompiledContextId("01984477-59a9-7d20-9d97-e588769566c1"),
+      functions: input.offered ? [HISTORY_REVIEW_FUNCTION] : [],
+      generationCommandId: asGenerationCommandId("01984477-59a9-7d20-9d97-e588769566c2"),
+      modelRunAttemptId: asModelRunAttemptId("01984477-59a9-7d20-9d97-e588769566c3"),
+      requestEventRevisionId: asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566c4"),
+      ...(input.toolsDisabled ? { toolsDisabled: true } : {}),
+      userId,
+    })) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  it("normalizes an offered review call into its own proposal event", async () => {
+    const events = await runCall({ offered: true, rawArguments: '{"start_date":"2026-08-20"}' });
+    expect(events[0]).toEqual({
+      proposal: {
+        endDate: "2026-08-20",
+        kind: "review_dates",
+        sourceScope: "conversation_text",
+        startDate: "2026-08-20",
+        timeBasis: "expressed_date",
+      },
+      type: "history_query_proposal",
+    });
+  });
+
+  it("fails closed on invalid arguments, an unoffered function or disabled tools", async () => {
+    await expect(runCall({ offered: true, rawArguments: '{"start_date":"2026-08-20","user_id":"u"}' })).rejects.toMatchObject({ category: "invalid_response" });
+    // Not offered / disabled: it is never normalized into a proposal.
+    const unoffered = await runCall({ offered: false, rawArguments: '{"start_date":"2026-08-20"}' }).catch(() => []);
+    expect(unoffered.some((event) => event.type === "history_query_proposal")).toBe(false);
+    const disabled = await runCall({ offered: true, rawArguments: '{"start_date":"2026-08-20"}', toolsDisabled: true }).catch(() => []);
+    expect(disabled.some((event) => event.type === "history_query_proposal")).toBe(false);
   });
 });
 

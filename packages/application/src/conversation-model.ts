@@ -13,6 +13,7 @@ import type {
   ConversationFunctionDefinition,
 } from "./conversation-action-catalog";
 import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
+import type { HistoryQueryProposal } from "./history-recall";
 
 /**
  * The Provider identity recorded on a Conversation Text Champion and frozen on
@@ -126,6 +127,10 @@ export type ProviderEgressStreamEvent =
   | Readonly<{
       proposals: readonly CuriosityStopSignalProposal[];
       type: "stop_signal_proposal";
+    }>
+  | Readonly<{
+      proposal: HistoryQueryProposal;
+      type: "history_query_proposal";
     }>;
 
 export type ProviderEgressPort = Readonly<{

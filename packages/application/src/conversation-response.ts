@@ -19,7 +19,11 @@ import type {
 } from "./conversation-action-catalog";
 import type { ConversationActionReceipt } from "./conversation-action-gateway";
 import type { ConversationActionGateway } from "./conversation-action-gateway";
-import type { ConversationAgentHarness } from "./conversation-agent-harness";
+import type {
+  ConversationAgentHarness,
+  ConversationHarnessEvent,
+} from "./conversation-agent-harness";
+import type { HistoryRecallGateway } from "./history-recall";
 import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
 import { type ProviderDispatchErrorCategory } from "./conversation-model";
 import type {
@@ -207,6 +211,8 @@ export type ConversationResponseService = Readonly<{
     }>
   >;
   scanPendingActionFinalizations?(): Promise<number>;
+  /** Answer History Answer commands whose request never finished (#314). */
+  scanPendingHistoryAnswers?(): Promise<number>;
 }>;
 
 export function createConversationResponseService(dependencies: {
@@ -217,6 +223,8 @@ export function createConversationResponseService(dependencies: {
   conversationService: UserTextConversationService;
   harness: ConversationAgentHarness;
   harnessPolicy: ConversationHarnessPolicy;
+  /** Lists History Answer commands that still need to be answered (#314). */
+  historyRecall?: HistoryRecallGateway;
   jitter?: () => number;
   recoveryScanLimit?: number;
   recoveryGate?: RecoveryGate;
@@ -232,6 +240,17 @@ export function createConversationResponseService(dependencies: {
     throw new Error(
       "recoveryScanLimit must be an integer from 1 through 1000.",
     );
+  }
+  function historyAnswerInput() {
+    return {
+      catalog: dependencies.catalog,
+      harnessPolicy: {
+        ...dependencies.harnessPolicy,
+        maxHistoryQueries: 0 as const,
+        maxStateChangingActions: 0 as const,
+        toolsDisabled: true,
+      },
+    };
   }
   async function* streamResponse(
     userId: UserId,
@@ -266,6 +285,40 @@ export function createConversationResponseService(dependencies: {
     // Framework sessions never cross back through this seam (issue #24 AC6).
     let possiblyVisible = false;
     let settled = ownership === "shared";
+    // Forward a later stage (Action Finalization or History Answer) onto the
+    // public stream. The wire contract is unchanged: more deltas, then one
+    // committed or failed event.
+    async function* forwardStage(
+      stageEvents: AsyncIterable<
+        ConversationHarnessEvent
+      >,
+    ): AsyncIterable<ConversationResponseStreamEvent> {
+      for await (const stageEvent of stageEvents) {
+        if (stageEvent.type === "decision_delta") {
+          possiblyVisible = true;
+          yield { delta: stageEvent.delta, type: "assistant_delta" };
+        } else if (stageEvent.type === "decision_committed") {
+          settled = true;
+          yield {
+            createdAt: stageEvent.assistantCreatedAt,
+            eventId: stageEvent.assistantEventId,
+            revisionId: stageEvent.assistantEventRevisionId,
+            type: "assistant_committed",
+          };
+        } else if (stageEvent.type === "decision_failed") {
+          settled = true;
+          yield {
+            category: stageEvent.category,
+            type: stageEvent.interrupted
+              ? "response_interrupted"
+              : "response_failed",
+          };
+        } else {
+          settled = true;
+          yield { category: "invalid_response", type: "response_failed" };
+        }
+      }
+    }
     try {
       if (initialEvent) {
         yield initialEvent;
@@ -341,64 +394,56 @@ export function createConversationResponseService(dependencies: {
             if (!dependencies.harness.runFinalizationCommand) {
               throw new Error("Action Finalization orchestration is unavailable.");
             }
-            for await (const finalizationEvent of dependencies.harness.runFinalizationCommand(
-              {
-                actionExecutionId: event.receipt.actionExecutionId,
-                generationCommandId: finalizationCommandId,
-                interactionTurnId: turn.turn.id,
-                modelRunAttemptId: finalizationAttemptId,
-                requestEventRevisionId: requestEventRevisionId!,
-                receipt: {
-                  admission: event.receipt.admission,
-                  disposition: event.receipt.disposition,
-                  execution: event.receipt.execution,
-                  sequence: event.receipt.receiptSequence,
+            yield* forwardStage(
+              dependencies.harness.runFinalizationCommand(
+                {
+                  actionExecutionId: event.receipt.actionExecutionId,
+                  generationCommandId: finalizationCommandId,
+                  interactionTurnId: turn.turn.id,
+                  modelRunAttemptId: finalizationAttemptId,
+                  requestEventRevisionId: requestEventRevisionId!,
+                  receipt: {
+                    admission: event.receipt.admission,
+                    disposition: event.receipt.disposition,
+                    execution: event.receipt.execution,
+                    sequence: event.receipt.receiptSequence,
+                  },
+                  userId,
                 },
-                userId,
-              },
-              {
-                catalog: dependencies.catalog,
-                harnessPolicy: {
-                  ...dependencies.harnessPolicy,
-                  maxStateChangingActions: 0,
-                  toolsDisabled: true,
+                {
+                  catalog: dependencies.catalog,
+                  harnessPolicy: {
+                    ...dependencies.harnessPolicy,
+                    maxStateChangingActions: 0,
+                    toolsDisabled: true,
+                  },
                 },
-              },
-              signal,
-            )) {
-              if (finalizationEvent.type === "decision_delta") {
-                possiblyVisible = true;
-                yield {
-                  delta: finalizationEvent.delta,
-                  type: "assistant_delta",
-                };
-              } else if (finalizationEvent.type === "decision_committed") {
-                settled = true;
-                yield {
-                  createdAt: finalizationEvent.assistantCreatedAt,
-                  eventId: finalizationEvent.assistantEventId,
-                  revisionId: finalizationEvent.assistantEventRevisionId,
-                  type: "assistant_committed",
-                };
-              } else if (finalizationEvent.type === "decision_failed") {
-                settled = true;
-                yield {
-                  category: finalizationEvent.category,
-                  type: finalizationEvent.interrupted
-                    ? "response_interrupted"
-                    : "response_failed",
-                };
-              } else {
-                settled = true;
-                yield {
-                  category: "invalid_response",
-                  type: "response_failed",
-                };
-              }
-            }
+                signal,
+              ),
+            );
           } else {
             settled = true;
           }
+        } else if (event.type === "history_recall_admitted") {
+          // Issue #314: the Decision ended in a controlled read-only history
+          // query that is already executed and frozen. The independent History
+          // Answer command now produces the one complete response.
+          if (!dependencies.harness.runHistoryAnswerCommand) {
+            throw new Error("History Answer orchestration is unavailable.");
+          }
+          yield* forwardStage(
+            dependencies.harness.runHistoryAnswerCommand(
+              {
+                generationCommandId: event.receipt.answer.generationCommandId,
+                interactionTurnId: turn.turn.id,
+                modelRunAttemptId: event.receipt.answer.modelRunAttemptId,
+                requestEventRevisionId: requestEventRevisionId!,
+                userId,
+              },
+              historyAnswerInput(),
+              signal,
+            ),
+          );
         } else {
           settled = true;
           yield {
@@ -562,6 +607,28 @@ export function createConversationResponseService(dependencies: {
               toolsDisabled: true,
             },
           },
+        )) {
+          if (
+            event.type === "decision_committed" ||
+            event.type === "decision_failed"
+          ) {
+            processed += 1;
+            break;
+          }
+        }
+      }
+      return processed;
+    },
+    async scanPendingHistoryAnswers() {
+      const pending = await dependencies.historyRecall?.listPendingAnswers({
+        limit: recoveryScanLimit,
+      });
+      if (!pending || !dependencies.harness.runHistoryAnswerCommand) return 0;
+      let processed = 0;
+      for (const command of pending) {
+        for await (const event of dependencies.harness.runHistoryAnswerCommand(
+          command,
+          historyAnswerInput(),
         )) {
           if (
             event.type === "decision_committed" ||

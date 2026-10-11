@@ -1,9 +1,11 @@
 import {
   CompiledContextIntegrityError,
   CONVERSATION_OUTPUT_FORMAT_VERSION,
+  HISTORY_REVIEW_FUNCTION_NAME,
   isWhitelistedSafetyResourceNumber,
   minimumHighRiskSafetyPostureDetector,
   normalizeCuriosityStopSignalCall,
+  normalizeHistoryReviewCall,
   normalizeProviderActionProposal,
   ProviderDispatchError,
   renderSafetyPostureResponseAnchor,
@@ -216,6 +218,28 @@ export function createProviderEgressPort(dependencies: {
             yield {
               proposals: normalized.proposals,
               type: "stop_signal_proposal",
+            };
+          } else if (
+            event.rawFunctionName === HISTORY_REVIEW_FUNCTION_NAME &&
+            input.toolsDisabled !== true &&
+            input.requestEventRevisionId &&
+            (input.functions ?? []).some(
+              (definition) => definition.name === HISTORY_REVIEW_FUNCTION_NAME,
+            )
+          ) {
+            // A history review is a controlled read-only proposal, not a
+            // Conversation Action: it gets its own event kind so only the
+            // Harness deterministic path can execute it (issue 314). It is
+            // accepted only if this Decision actually offered the function.
+            const normalized = normalizeHistoryReviewCall({
+              rawArguments: event.rawArguments,
+            });
+            if ("invalid" in normalized) {
+              throw new ProviderDispatchError("invalid_response");
+            }
+            yield {
+              proposal: normalized.proposal,
+              type: "history_query_proposal",
             };
           } else if (
             input.definitions &&

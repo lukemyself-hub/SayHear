@@ -39,6 +39,13 @@ import {
   type CuriosityStopSignalProposal,
 } from "./curiosity-stop-signal";
 import {
+  HISTORY_REVIEW_FUNCTION,
+  type HistoryAnswerCommandRef,
+  type HistoryQueryProposal,
+  type HistoryRecallGateway,
+  type HistoryRecallReceipt,
+} from "./history-recall";
+import {
   ProviderDispatchError,
   type ProviderDispatchErrorCategory,
   type ProviderEgressPort,
@@ -148,6 +155,14 @@ export type ConversationHarnessEvent =
   | Readonly<{
       receipt: ConversationActionReceipt;
       type: "action_admitted";
+    }>
+  | Readonly<{
+      /**
+       * The Decision ended in a controlled read-only history query that was
+       * executed and frozen; the caller now runs the History Answer command.
+       */
+      receipt: HistoryRecallReceipt;
+      type: "history_recall_admitted";
     }>;
 
 export type ConversationAgentHarness = Readonly<{
@@ -167,6 +182,18 @@ export type ConversationAgentHarness = Readonly<{
     command: ConversationDecisionCommand,
     signal?: AbortSignal,
   ): AsyncIterable<ConversationHarnessEvent>;
+  /**
+   * Run the independent History Answer command (issue #314): its own frozen
+   * Context, tools disabled, the ordinary Complete Response acceptance point.
+   */
+  runHistoryAnswerCommand?(
+    command: HistoryAnswerCommandRef,
+    input: Readonly<{
+      catalog: ConversationActionCatalog;
+      harnessPolicy: ConversationHarnessPolicy;
+    }>,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent>;
   runFinalizationCommand?(
     command: ConversationActionFinalizationCommand,
     input: Readonly<{
@@ -182,10 +209,20 @@ export function createConversationAgentHarness(dependencies: {
   delay?: (delayMs: number) => Promise<void>;
   actionGateway?: ConversationActionGateway;
   egressPort: ProviderEgressPort;
+  /** Executes the controlled read-only history query (issue #314). */
+  historyRecall?: HistoryRecallGateway;
+  /**
+   * Content-free note that a history proposal was dropped because a
+   * Trust-Control Action won the same Decision (ADR-0092).
+   */
+  onHistoryQuerySuppressed?: (info: Readonly<{
+    generationCommandId: string;
+    reason: "trust_control_priority";
+  }>) => void;
   jitter?: () => number;
   onUnexpectedFailure?: (failure: Readonly<{
     generationCommandId: string;
-    stage: "provider" | "action_admission" | "action_commit" | "response_commit";
+    stage: "provider" | "action_admission" | "action_commit" | "response_commit" | "history_admission";
     databaseErrorCode: string | null;
   }>) => void;
   contextCompiler?: Pick<ContextCompiler, "compile">;
@@ -205,7 +242,9 @@ export function createConversationAgentHarness(dependencies: {
     let completeText = "";
     let completion: CompleteResponseMetadata | null = null;
     let pendingActionProposal: ConversationActionProposal | null = null;
-    let stage: "provider" | "action_admission" | "action_commit" | "response_commit" = "provider";
+    let stage: "provider" | "action_admission" | "action_commit" | "response_commit" | "history_admission" = "provider";
+    let pendingHistoryProposal: HistoryQueryProposal | null = null;
+    let historySuppressed = false;
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
     try {
@@ -225,6 +264,14 @@ export function createConversationAgentHarness(dependencies: {
               command.catalog,
               command.actionReferenceHandles,
             );
+      // The read-only history review is offered only when this Decision can
+      // actually execute it: a history-enabled policy, a request revision to
+      // fence on (not on Retry/recovery turns) and an execution gateway.
+      const historyReviewOffered =
+        command.harnessPolicy.toolsDisabled !== true &&
+        command.harnessPolicy.maxHistoryQueries === 1 &&
+        command.requestEventRevisionId !== undefined &&
+        dependencies.historyRecall !== undefined;
       for await (const event of dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
         ...(command.requestEventRevisionId
@@ -239,6 +286,7 @@ export function createConversationAgentHarness(dependencies: {
                   eligibleDefinitions,
                 ),
                 CURIOSITY_STOP_SIGNAL_FUNCTION,
+                ...(historyReviewOffered ? [HISTORY_REVIEW_FUNCTION] : []),
               ],
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
@@ -247,7 +295,7 @@ export function createConversationAgentHarness(dependencies: {
         toolsDisabled: command.harnessPolicy.toolsDisabled === true,
       })) {
         if (event.type === "delta") {
-          if (pendingActionProposal) {
+          if (pendingActionProposal || pendingHistoryProposal) {
             throw new ProviderDispatchError("invalid_response");
           }
           possiblyVisible = true;
@@ -269,6 +317,11 @@ export function createConversationAgentHarness(dependencies: {
             throw new ProviderDispatchError("invalid_response");
           }
           actionSeen = true;
+          if (pendingHistoryProposal !== null) {
+            // ADR-0092: the Trust-Control Action wins deterministically.
+            pendingHistoryProposal = null;
+            historySuppressed = true;
+          }
           const proposal = event.proposal;
           if (
             proposal.requestEventRevisionId !== command.requestEventRevisionId ||
@@ -279,10 +332,28 @@ export function createConversationAgentHarness(dependencies: {
             throw new ProviderDispatchError("invalid_response");
           }
           pendingActionProposal = proposal;
+        } else if (event.type === "history_query_proposal") {
+          if (actionSeen || pendingActionProposal !== null) {
+            // A Trust-Control Action already won this Decision; the read-only
+            // proposal is dropped, never executed (ADR-0092).
+            historySuppressed = true;
+            continue;
+          }
+          if (
+            !historyReviewOffered ||
+            pendingHistoryProposal !== null ||
+            completeText.length > 0 ||
+            stopSignalProposals.length > 0 ||
+            completion !== null
+          ) {
+            throw new ProviderDispatchError("invalid_response");
+          }
+          pendingHistoryProposal = event.proposal;
         } else if (event.type === "stop_signal_proposal") {
           if (
             actionSeen ||
             pendingActionProposal !== null ||
+            pendingHistoryProposal !== null ||
             completion !== null ||
             command.harnessPolicy.toolsDisabled === true ||
             stopSignalProposals.length + event.proposals.length >
@@ -292,10 +363,23 @@ export function createConversationAgentHarness(dependencies: {
           }
           stopSignalProposals.push(...event.proposals);
         } else {
-          if (pendingActionProposal && event.type !== "completed") {
+          if (
+            (pendingActionProposal || pendingHistoryProposal) &&
+            event.type !== "completed"
+          ) {
             throw new ProviderDispatchError("invalid_response");
           }
           completion = event;
+        }
+      }
+      if (historySuppressed) {
+        try {
+          dependencies.onHistoryQuerySuppressed?.({
+            generationCommandId: command.generationCommandId,
+            reason: "trust_control_priority",
+          });
+        } catch {
+          // Observability cannot change the Decision.
         }
       }
       if (pendingActionProposal) {
@@ -320,6 +404,25 @@ export function createConversationAgentHarness(dependencies: {
           });
         }
         yield { receipt, type: "action_admitted" };
+        return;
+      }
+      if (pendingHistoryProposal !== null) {
+        stage = "history_admission";
+        const receipt = await dependencies.historyRecall!.admit({
+          context: {
+            decisionCommandId: command.generationCommandId,
+            modelRunAttemptId: command.modelRunAttemptId,
+            requestEventRevisionId: command.requestEventRevisionId!,
+            userId: command.userId,
+          },
+          proposal: pendingHistoryProposal,
+        });
+        if ("outcome" in receipt) {
+          // The owner, epoch, request revision or Decision state no longer
+          // permit the review: fail closed through the ordinary settlement.
+          throw new ProviderDispatchError("policy_blocked");
+        }
+        yield { receipt, type: "history_recall_admitted" };
         return;
       }
       if (completion === null || completeText.length === 0) {
@@ -440,7 +543,7 @@ export function createConversationAgentHarness(dependencies: {
     }
   }
 
-  return {
+  const harnessApi: ConversationAgentHarness = {
     runDecision(command, signal) {
       return runDecisionAttempt(command, signal);
     },
@@ -450,12 +553,57 @@ export function createConversationAgentHarness(dependencies: {
       }
       return runDecisionAttempt(command, signal);
     },
+    async *runHistoryAnswerCommand(command, input, signal) {
+      if (input.harnessPolicy.toolsDisabled !== true) {
+        throw new Error("History Answer must disable tools.");
+      }
+      yield* runStageCommand(
+        {
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        },
+        input,
+        signal,
+      );
+    },
     async *runFinalizationCommand(command, input, signal) {
       if (input.harnessPolicy.toolsDisabled !== true) {
         throw new Error("Action Finalization must disable tools.");
       }
+      yield* runStageCommand(
+        {
+          generationCommandId: asGenerationCommandId(command.generationCommandId),
+          interactionTurnId: command.interactionTurnId,
+          modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
+          requestEventRevisionId: command.requestEventRevisionId,
+          userId: command.userId,
+        },
+        input,
+        signal,
+      );
+    },
+  };
+
+  async function* runStageCommand(
+    command: Readonly<{
+      generationCommandId: GenerationCommandId;
+      interactionTurnId: InteractionTurnId;
+      modelRunAttemptId: ModelRunAttemptId;
+      requestEventRevisionId: ConversationEventRevisionId;
+      userId: UserId;
+    }>,
+    input: Readonly<{
+      catalog: ConversationActionCatalog;
+      harnessPolicy: ConversationHarnessPolicy;
+    }>,
+    signal?: AbortSignal,
+  ): AsyncIterable<ConversationHarnessEvent> {
+    {
       if (!dependencies.contextCompiler) {
-        throw new Error("Action Finalization requires a Context Compiler.");
+        throw new Error("A stage command requires a Context Compiler.");
       }
       const ownership = await dependencies.repository.claimResponseExecution({
         generationCommandId: asGenerationCommandId(command.generationCommandId),
@@ -530,8 +678,9 @@ export function createConversationAgentHarness(dependencies: {
         },
         signal,
       );
-    },
-  };
+    }
+  }
+  return harnessApi;
 }
 
 function normalizedJitter(value: number): number {
