@@ -116,6 +116,7 @@ Issue 是唯一执行真源；[`specs/README.md`](specs/README.md) 只维护发�
 - GitHub Issue / SPEC 操作、实现 Agent 提交 PR 审核及接续修改：[`agents/issue-tracker.md`](agents/issue-tracker.md)
 - PR 自动审批 gate 与启用前置条件：[`agents/pr-auto-approval.md`](agents/pr-auto-approval.md)
 - Issue 分诊标签：[`agents/triage-labels.md`](agents/triage-labels.md)
+- 本地配置 profile 与安全加载：[`agents/local-environment.md`](agents/local-environment.md)
 - 历史快照说明：[`archive/README.md`](archive/README.md)
 
 ## 文档状态
