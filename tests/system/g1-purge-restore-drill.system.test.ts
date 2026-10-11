@@ -504,6 +504,24 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     // Simulate restoring the pre-purge backup: the snapshot rows replay into
     // the purged database, including the canary content as a new revision.
     await seedCanaryChainRestored();
+    // Issue 320: the backup also held a frozen history review (search clue,
+    // governance identity). Replaying it must not survive the marker gate.
+    await database.pool.query(
+      `INSERT INTO history_recall_results (
+         history_recall_result_id, user_id, interaction_turn_id,
+         decision_command_id, answer_command_id, policy_version, status,
+         plan, coverage, item_refs, expected_data_epoch, created_at,
+         governance_policy_version
+       ) VALUES (
+         '01984477-31e1-7595-92c6-06889cb0fa11', '${OWNER}', '${N1}',
+         '01984477-31e1-7595-92c6-06889cb0fa12',
+         '01984477-31e1-7595-92c6-06889cb0fa13', 'history-recall:v4',
+         'completed',
+         '{"plan":null,"proposal":{"kind":"search_experience","terms":["canary-restored-clue"]}}'::jsonb,
+         '{}'::jsonb, '[]'::jsonb, 1, now(), 'history-recall-governance:restored'
+       )`,
+    );
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(1);
     const restored = await database.pool.query<{ canonical_text: string }>(
       "SELECT canonical_text FROM conversation_event_revisions WHERE conversation_event_revision_id = $1",
       [R_RESTORED],
@@ -539,6 +557,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     ).resolves.toEqual({ outcome: "reapplied" });
     const reopened = await purgeRepository.findLatestOrder({ userId: OWNER });
     expect(reopened?.status).toBe("retention_pending");
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(0);
 
     // The restored canary content did not resurrect: rows are cleared again
     // and every revision (original and restored) is a content-free tombstone.

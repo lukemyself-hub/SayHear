@@ -117,6 +117,10 @@ describe("a control that lands at any point of a history request is honoured by 
         }
         const events = await askVia(harness, entrance);
         const outbound = outboundText();
+        // Whatever the control did, no attempt is left hanging as running.
+        expect(
+          await harness.rows("SELECT 1 FROM model_run_attempts WHERE status = 'running'"),
+        ).toHaveLength(0);
         const answerRequests = harness.state.requests.filter((request) => request.toolsDisabled);
 
         // The forbidden source, and the reply that was generated for it, are

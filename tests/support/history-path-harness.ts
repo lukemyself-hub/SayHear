@@ -11,6 +11,9 @@ import {
   HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
   HISTORY_RECALL_DEFAULT_POLICY,
   HISTORY_REVIEW_FUNCTION_NAME,
+  RECENT_CONTEXT_COMPILER_VERSION,
+  RECENT_CONTEXT_DEFAULT_POLICY,
+  RECENT_CONTEXT_SELECTION_POLICY_VERSION,
   TIME_AWARE_CONTEXT_COMPILER_VERSION,
   type ConversationResponseStreamEvent,
   type ConversationTextModel,
@@ -27,6 +30,8 @@ import {
   PostgresHistoryRecallRepository,
   PostgresHistoryRecallSource,
   PostgresInternalOwnerAccessRepository,
+  PostgresRecentContextPolicyRepository,
+  PostgresRecentContextSource,
   PostgresUserTextConversationRepository,
   runMigrations,
 } from "@sayhear/data";
@@ -96,6 +101,8 @@ export type CapturedRequest = Readonly<{
 }>;
 
 export type Hooks = {
+  /** Runs inside the Decision stream, before the history call is emitted. */
+  duringDecision?: () => Promise<void>;
   /** Runs once, after the source has been read, before the result is frozen. */
   afterRead?: () => Promise<void>;
   /** Runs once, after the result was frozen, before the answer is compiled. */
@@ -114,6 +121,8 @@ export type HarnessOptions = {
   policy?: HistoryRecallPolicy;
   /** Offer no history gateway at all (the deployment switch is off). */
   noGateway?: boolean;
+  /** Wire the seven-day recent background (and its governance row). */
+  recentContext?: boolean;
 };
 
 export function uuidV7(at: Date): string {
@@ -160,6 +169,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
         (definition) => definition.name === HISTORY_REVIEW_FUNCTION_NAME,
       );
       if (offered && state.review) {
+        await takeHook("duringDecision");
         yield {
           rawArguments: JSON.stringify(state.review),
           rawFunctionName: HISTORY_REVIEW_FUNCTION_NAME,
@@ -209,6 +219,14 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
       contentHmacSecret: "history-path-system-secret",
       rawEventTokenBudget: 4_000,
       repository: responseRepository,
+      ...(options.recentContext
+        ? {
+            recentContext: {
+              policy: RECENT_CONTEXT_DEFAULT_POLICY,
+              source: new PostgresRecentContextSource(database.pool),
+            },
+          }
+        : {}),
     });
     const contextCompiler = {
       ...baseCompiler,
@@ -322,19 +340,31 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     text: string,
     at: string,
     reply?: string,
+    options: { tolerateThrow?: boolean } = {},
   ): Promise<ConversationResponseStreamEvent[]> {
     now = iso(at);
     if (reply !== undefined) state.replyChunks = [reply];
     counter += 1;
     const events: ConversationResponseStreamEvent[] = [];
-    for await (const event of built.service.respond(OWNER, {
-      clientEventId: `p-event-${counter}`,
-      clientTurnId: `p-turn-${counter}`,
-      locale: "zh-CN",
-      text,
-      timezone: ZONE,
-    })) {
-      events.push(event);
+    try {
+      for await (const event of built.service.respond(OWNER, {
+        clientEventId: `p-event-${counter}`,
+        clientTurnId: `p-turn-${counter}`,
+        locale: "zh-CN",
+        text,
+        timezone: ZONE,
+      })) {
+        events.push(event);
+      }
+    } catch (error) {
+      // The BFF turns a thrown error into a graceful `response_failed` line;
+      // a suite that expects the owner's rows to vanish mid-request opts in.
+      if (!options.tolerateThrow) throw error;
+      events.push({
+        category: "unavailable",
+        interrupted: false,
+        type: "response_failed",
+      } as ConversationResponseStreamEvent);
     }
     return events;
   }
@@ -465,6 +495,20 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     hookArmed = { afterAnswerCompile: false };
     built = build(options);
     if (options.governed !== false) await enableGovernance();
+    if (options.recentContext) {
+      await new PostgresRecentContextPolicyRepository(database.pool).insertActivePolicy({
+        budgetTokens: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxContextTokens,
+        changedBy: String(OWNER),
+        compilerVersion: RECENT_CONTEXT_COMPILER_VERSION,
+        maxCandidateBytes: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateBytes,
+        maxCandidateRows: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxCandidateRows,
+        maxSingleEventTokens: RECENT_CONTEXT_DEFAULT_POLICY.budgets.maxSingleEventTokens,
+        now,
+        readTimeoutMs: RECENT_CONTEXT_DEFAULT_POLICY.budgets.readTimeoutMs,
+        selectionPolicyVersion: RECENT_CONTEXT_DEFAULT_POLICY.version,
+        selectorPolicyVersion: RECENT_CONTEXT_SELECTION_POLICY_VERSION,
+      });
+    }
   }
 
   async function teardown(): Promise<void> {
@@ -550,7 +594,8 @@ export type EntranceName = keyof typeof ENTRANCES;
 export async function askVia(
   harness: ReturnType<typeof createHistoryPathHarness>,
   entrance: EntranceName,
+  options: { tolerateThrow?: boolean } = {},
 ): Promise<ConversationResponseStreamEvent[]> {
   harness.state.review = ENTRANCES[entrance].review as unknown as Record<string, unknown>;
-  return harness.say(ENTRANCES[entrance].ask, ASK_AT);
+  return harness.say(ENTRANCES[entrance].ask, ASK_AT, undefined, options);
 }

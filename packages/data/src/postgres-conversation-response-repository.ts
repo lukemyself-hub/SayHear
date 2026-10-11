@@ -1774,6 +1774,7 @@ export class PostgresConversationResponseRepository
       await client.query("BEGIN");
       const recorded = await client.query<{
         generation_command_id: string;
+        owner_ok: boolean;
       }>(
         `
         UPDATE model_run_attempts attempt
@@ -1787,8 +1788,6 @@ export class PostgresConversationResponseRepository
           AND command.user_id = attempt.user_id
           AND command.status = 'running'
           AND command.authoritative_result_id IS NULL
-          AND owner.status = 'active'
-          AND owner.data_epoch = command.expected_data_epoch
           AND attempt.attempt_no = (
             SELECT MAX(latest.attempt_no)
             FROM model_run_attempts latest
@@ -1796,19 +1795,28 @@ export class PostgresConversationResponseRepository
               command.generation_command_id
               AND latest.user_id = command.user_id
           )
-        RETURNING command.generation_command_id::text AS generation_command_id
+        RETURNING command.generation_command_id::text AS generation_command_id,
+          (owner.status = 'active'
+            AND owner.data_epoch = command.expected_data_epoch) AS owner_ok
       `,
         [input.now, input.modelRunAttemptId],
       );
       const row = recorded.rows[0];
+      if (!row) {
+        await client.query("ROLLBACK");
+        return false;
+      }
       if (
-        !row ||
+        !row.owner_ok ||
         !(await contextReferencesAreCurrentForCommand(
           client,
           asGenerationCommandId(row.generation_command_id),
         ))
       ) {
         await client.query("ROLLBACK");
+        // Nothing was shown yet; the attempt ends as blocked instead of
+        // hanging until a recovery scan finds it.
+        await this.settleFenceRefusal(input.modelRunAttemptId, false, input.now);
         return false;
       }
       await client.query("COMMIT");
@@ -1819,6 +1827,39 @@ export class PostgresConversationResponseRepository
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * A source, governance or epoch fence refused a result that was already
+   * running: end the attempt as blocked now. `interrupted` is true when text
+   * may already have been shown, so the person keeps it with an explicit Retry
+   * instead of seeing a clean failure.
+   */
+  private async settleFenceRefusal(
+    modelRunAttemptId: ModelRunAttemptId,
+    interrupted: boolean,
+    now: Date,
+  ): Promise<void> {
+    const found = await this.pool.query<{
+      generation_command_id: string;
+      user_id: string;
+    }>(
+      `SELECT generation_command_id::text AS generation_command_id, user_id::text AS user_id
+       FROM model_run_attempts WHERE model_run_attempt_id = $1`,
+      [modelRunAttemptId],
+    );
+    const row = found.rows[0];
+    if (!row) return;
+    await this.settleResponseFailure({
+      category: "policy_blocked",
+      generationCommandId: asGenerationCommandId(row.generation_command_id),
+      interrupted,
+      jitter: 0,
+      modelRunAttemptId,
+      noRetry: true,
+      settledAt: now,
+      userId: asUserId(row.user_id),
+    });
   }
 
   public async recordProviderUsage(input: {
@@ -1947,6 +1988,7 @@ export class PostgresConversationResponseRepository
         ))
       ) {
         await client.query("ROLLBACK");
+        await this.settleFenceRefusal(input.modelRunAttemptId, true, input.now);
         return false;
       }
       if (
@@ -1956,6 +1998,7 @@ export class PostgresConversationResponseRepository
         ))
       ) {
         await client.query("ROLLBACK");
+        await this.settleFenceRefusal(input.modelRunAttemptId, true, input.now);
         return false;
       }
       await client.query(
