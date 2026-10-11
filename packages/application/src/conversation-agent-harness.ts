@@ -428,12 +428,30 @@ export function createConversationAgentHarness(dependencies: {
           },
           proposal: pendingActionProposal,
         });
-        if (receipt.admission === "accepted") {
+        if (receipt.admission === "accepted" || receipt.finalization) {
+          // The Decision produced a valid proposal that was evaluated; its
+          // command and attempt end here whatever the admission was, so a
+          // clarification or an honest "not found" reply (issue #312) cannot
+          // leave the Decision running forever.
           stage = "action_commit";
           await dependencies.repository.commitActionDecision?.({
             completedAt: dependencies.clock(),
             generationCommandId: command.generationCommandId,
             modelRunAttemptId: command.modelRunAttemptId,
+            userId: command.userId,
+          });
+        } else {
+          // Turned down with no reply owed: nothing will ever answer this turn,
+          // so settle it now instead of leaving it for the recovery window.
+          stage = "action_commit";
+          await dependencies.repository.settleResponseFailure({
+            category: "policy_blocked",
+            generationCommandId: command.generationCommandId,
+            interrupted: false,
+            jitter: normalizedJitter(jitter()),
+            modelRunAttemptId: command.modelRunAttemptId,
+            noRetry: true,
+            settledAt: dependencies.clock(),
             userId: command.userId,
           });
         }
