@@ -179,6 +179,8 @@ function build(overrides: {
   policy?: HistoryRecallPolicy;
   afterAdmit?: () => Promise<void>;
   afterCompile?: () => Promise<void>;
+  /** End-to-end request budget (ADR-0151); unset keeps the request unbounded. */
+  requestBudgetMs?: number;
   source?: (inner: HistoryRecallSourcePort) => HistoryRecallSourcePort;
 } = {}) {
   const responseRepository = new PostgresConversationResponseRepository(database.pool);
@@ -254,6 +256,7 @@ function build(overrides: {
     harnessPolicy: HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
     historyRecall,
     jitter: () => 0,
+    ...(overrides.requestBudgetMs ? { requestBudgetMs: overrides.requestBudgetMs } : {}),
     repository: responseRepository,
   });
   const exchange = createContinuousExchangeService({
@@ -630,6 +633,37 @@ describe("controlled history review through the real conversation path", () => {
     const [result] = await rows<{ coverage: { omitted: Record<string, number> }; status: string }>("SELECT coverage, status FROM history_recall_results");
     expect(result!.status).toBe("completed");
     expect(result!.coverage.omitted).toEqual({ forget_association: 4 });
+  });
+
+  it("stops waiting for a stalled lookup when the request deadline arrives, and a late finish cannot commit", async () => {
+    await seedHistory();
+    let release: () => void = () => undefined;
+    const stalled = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    built = build({
+      requestBudgetMs: 300,
+      source: (inner) => ({
+        async readHistoryRange(request) {
+          await stalled;
+          return inner.readHistoryRange(request);
+        },
+      }),
+    });
+    const events = await ask();
+    // The Decision's own model call had finished, so the settlement is an
+    // interruption, never a reply.
+    expect(["response_failed", "response_interrupted"]).toContain(terminal(events));
+    expect(assistantText(events)).toBe("");
+    expect(requests.filter((request) => request.toolsDisabled)).toHaveLength(0);
+
+    // The stalled read finally returns: the Decision was already settled, so
+    // the fence refuses to freeze a result or start an answer.
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(await rows("SELECT 1 FROM history_recall_results")).toHaveLength(0);
+    expect(await rows("SELECT 1 FROM generation_commands WHERE generation_stage = 'history_answer'")).toHaveLength(0);
+    expect(await rows("SELECT 1 FROM conversation_events WHERE actor = 'assistant' AND created_at >= $1", [iso(ASK_AT)])).toHaveLength(0);
   });
 
   it("drops a source that stopped qualifying between the query and the compile", async () => {

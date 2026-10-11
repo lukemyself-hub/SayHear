@@ -39,6 +39,7 @@ import {
   localDateOf,
   shiftLocalDate,
 } from "./recent-context";
+import type { RequestDeadline } from "./request-deadline";
 
 export const HISTORY_RECALL_POLICY_VERSION = "history-recall:v4";
 export const HISTORY_REVIEW_FUNCTION_NAME = "review_conversation_history";
@@ -1021,6 +1022,12 @@ export type HistoryRecallGateway = Readonly<{
       requestEventRevisionId: ConversationEventRevisionId;
       userId: UserId;
     }>;
+    /**
+     * The request's absolute end-to-end deadline (ADR-0151). The lookup runs
+     * for no longer than the fixed policy bound or what remains of it,
+     * whichever is smaller; once it is reached the lookup is a failure.
+     */
+    deadline?: RequestDeadline;
     proposal: HistoryQueryProposal;
   }): Promise<HistoryRecallReceipt | { outcome: "fence_rejected" }>;
   listPendingAnswers(input: {
@@ -1056,7 +1063,7 @@ export function createHistoryRecallGateway(dependencies: {
     },
     listPendingAnswers: (input) =>
       dependencies.repository.listPendingHistoryAnswers(input),
-    async admit({ context, proposal }) {
+    async admit({ context, deadline, proposal }) {
       const governancePolicyVersion = await governanceIdentity();
       if (governancePolicyVersion === undefined) {
         // Disabled while the Decision was running: nothing is read.
@@ -1072,12 +1079,28 @@ export function createHistoryRecallGateway(dependencies: {
         return { outcome: "fence_rejected" };
       }
       const timezone = facts.requestTimezone ?? facts.sessionTimezone;
+      // What is left of the request when the lookup starts: the lookup never
+      // gets a fresh budget of its own beyond that.
+      const remainingMs = deadline
+        ? deadline.expired()
+          ? 0
+          : Math.max(
+              0,
+              deadline.deadlineAt.getTime() - dependencies.clock().getTime(),
+            )
+        : Number.POSITIVE_INFINITY;
       let result: HistoryRecallResult;
-      if (proposal.kind === "search_experience") {
+      if (remainingMs < 1) {
+        // The request has already run out of time: nothing is read, and the
+        // honest failure is frozen so the Decision still settles through the
+        // same fenced commit.
+        result = failedHistoryRecallResult(proposal, null, "source_read_timeout");
+      } else if (proposal.kind === "search_experience") {
         result = dependencies.experienceSource
           ? await runExperienceSearch({
               cutoff: facts.cutoff,
               expectedDataEpoch: facts.expectedDataEpoch,
+              maxDurationMs: remainingMs,
               policy,
               proposal,
               requestRevisionId: context.requestEventRevisionId,
@@ -1105,7 +1128,10 @@ export function createHistoryRecallGateway(dependencies: {
               maxPages: policy.maxPages,
               maxSourceRows: policy.maxSourceRows,
               pageSize: policy.pageSize,
-              readTimeoutMs: policy.readTimeoutMs,
+              readTimeoutMs: Math.max(
+                1,
+                Math.min(policy.readTimeoutMs, Math.floor(remainingMs)),
+              ),
             },
             requestRevisionId: context.requestEventRevisionId,
             expectedDataEpoch: facts.expectedDataEpoch,

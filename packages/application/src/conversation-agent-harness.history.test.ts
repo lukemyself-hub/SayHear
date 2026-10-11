@@ -28,6 +28,7 @@ import {
   type HistoryQueryProposal,
   type HistoryRecallGateway,
 } from "./history-recall";
+import { createRequestDeadline, type RequestDeadline } from "./request-deadline";
 
 const userId = asUserId("01984477-1f9a-7d25-9d97-e588769566c0");
 const generationCommandId = asGenerationCommandId("01984477-1f9a-7d25-9d97-e588769566c2");
@@ -60,7 +61,16 @@ const actionProposal = {
   schemaVersion: "v1",
 } as never;
 
-function build(events: readonly ProviderEgressStreamEvent[], options: { policy?: typeof HISTORY_RECALL_CONVERSATION_HARNESS_POLICY; request?: boolean } = {}) {
+function build(
+  events: readonly ProviderEgressStreamEvent[],
+  options: {
+    /** Replaces the gateway's admit (a lookup that hangs or fails). */
+    admit?: HistoryRecallGateway["admit"];
+    deadline?: RequestDeadline;
+    policy?: typeof HISTORY_RECALL_CONVERSATION_HARNESS_POLICY;
+    request?: boolean;
+  } = {},
+) {
   const offered: string[][] = [];
   const settlements: string[] = [];
   const admitted: unknown[] = [];
@@ -85,6 +95,7 @@ function build(events: readonly ProviderEgressStreamEvent[], options: { policy?:
   const historyRecall: HistoryRecallGateway = {
     async admit(input) {
       historyAdmits.push(input);
+      if (options.admit) return options.admit(input);
       return {
         answer,
         coverage: { blocks: 0, blocksCovered: 0, limits: [], readThrough: null, timeBasis: "expressed_date", currentConversationRows: 0, enumeratedRows: 0, enumerationComplete: true, omitted: {}, pages: 1, perDate: [], readLatencyMs: 0, selectedRows: 0, selectedTokens: 0 },
@@ -120,6 +131,7 @@ function build(events: readonly ProviderEgressStreamEvent[], options: { policy?:
       harnessPolicy: options.policy ?? HISTORY_RECALL_CONVERSATION_HARNESS_POLICY,
       interactionTurnId: asInteractionTurnId("01984477-1f9a-7d25-9d97-e588769566c1"),
       modelRunAttemptId,
+      ...(options.deadline ? { deadline: options.deadline } : {}),
       ...(options.request === false ? {} : { requestEventRevisionId }),
       userId,
     })) collected.push(event);
@@ -156,6 +168,31 @@ describe("Harness history review proposal (issue #314)", () => {
     ]);
     expect(t.admitted).toEqual([]);
   });
+
+  it("hands the request deadline to the lookup and stops waiting for it when the deadline arrives", async () => {
+    const deadline = createRequestDeadline({
+      clock: () => new Date(),
+      deadlineAt: new Date(Date.now() + 40),
+    });
+    try {
+      const t = build([{ proposal, type: "history_query_proposal" }, completed], {
+        // A lookup that never comes back (a stalled database).
+        admit: () => new Promise(() => undefined),
+        deadline,
+      });
+      const events = await t.run();
+      expect(t.historyAdmits).toEqual([expect.objectContaining({ deadline })]);
+      expect(events.at(-1)).toMatchObject({
+        category: "timeout",
+        interrupted: false,
+        type: "decision_failed",
+      });
+      // Settled once as a timeout that is not retried.
+      expect(t.settlements).toEqual(["timeout"]);
+    } finally {
+      deadline.release();
+    }
+  }, 3_000);
 
   it("fails closed when reply text precedes the proposal, and never reads", async () => {
     const t = build([{ delta: "let me look", type: "delta" }, { proposal, type: "history_query_proposal" }, completed]);

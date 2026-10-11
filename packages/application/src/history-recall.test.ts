@@ -8,6 +8,7 @@ import {
   asUserId,
 } from "@sayhear/domain";
 
+import { createRequestDeadline, type RequestDeadline } from "./request-deadline";
 import {
   HISTORY_RECALL_DEFAULT_POLICY,
   createHistoryRecallGateway,
@@ -331,6 +332,7 @@ describe("history recall gateway", () => {
 
   function build(
     overrides: {
+      experienceCalls?: { deadlineMs: number }[];
       facts?: typeof facts | null;
       read?: () => Promise<HistoryRecallSourceSnapshot>;
     } = {},
@@ -346,8 +348,31 @@ describe("history recall gateway", () => {
       loadDecisionFacts: async () =>
         overrides.facts === undefined ? facts : overrides.facts,
     };
+    const experienceCalls = overrides.experienceCalls;
     const gateway = createHistoryRecallGateway({
       clock: () => new Date("2026-09-15T02:10:05.000Z"),
+      ...(experienceCalls
+        ? {
+            experienceSource: {
+              lookupVerifiedAliases: async (request: { deadlineMs: number }) => {
+                experienceCalls.push({ deadlineMs: request.deadlineMs });
+                return [];
+              },
+              readContext: async () => ({ failure: null, items: [] }),
+              searchHits: async (request: { deadlineMs: number }) => {
+                experienceCalls.push({ deadlineMs: request.deadlineMs });
+                return {
+                  failure: null,
+                  hits: [],
+                  oldestScannedAt: null,
+                  readLatencyMs: 1,
+                  scanComplete: true,
+                  scannedRows: 0,
+                };
+              },
+            },
+          }
+        : {}),
       repository,
       source: {
         readHistoryRange: async (request) => {
@@ -358,7 +383,10 @@ describe("history recall gateway", () => {
         },
       },
     });
-    const admit = () =>
+    const admit = (
+      deadline?: RequestDeadline,
+      searchTerms?: readonly string[],
+    ) =>
       gateway.admit({
         context: {
           decisionCommandId,
@@ -366,7 +394,18 @@ describe("history recall gateway", () => {
           requestEventRevisionId: requestRevision,
           userId,
         },
-        proposal: proposal("2026-08-20"),
+        ...(deadline ? { deadline } : {}),
+        proposal: searchTerms
+          ? {
+              endDate: null,
+              kind: "search_experience" as const,
+              people: [],
+              sourceScope: "conversation_text" as const,
+              startDate: null,
+              terms: searchTerms,
+              timeBasis: "expressed_date" as const,
+            }
+          : proposal("2026-08-20"),
       });
     return { admit, commits, reads };
   }
@@ -400,5 +439,50 @@ describe("history recall gateway", () => {
     expect(await admit()).toMatchObject({ failureCode: "timezone_unavailable", status: "failed" });
     expect(reads).toHaveLength(0);
     expect(commits).toHaveLength(1);
+  });
+  describe("the request deadline bounds the lookup (SPEC #301 R10, ADR-0151)", () => {
+    const deadlineIn = (ms: number): RequestDeadline =>
+      createRequestDeadline({
+        clock: () => new Date("2026-09-15T02:10:05.000Z"),
+        deadlineAt: new Date(Date.parse("2026-09-15T02:10:05.000Z") + ms),
+        setTimer: () => () => undefined,
+      });
+
+    it("reads for no longer than the time left on the request", async () => {
+      const { admit, reads } = build();
+      await admit(deadlineIn(700));
+      expect(reads).toEqual([
+        expect.objectContaining({
+          budgets: expect.objectContaining({ readTimeoutMs: 700 }),
+        }),
+      ]);
+    });
+
+    it("keeps the fixed bound when the request has more time than that", async () => {
+      const { admit, reads } = build();
+      await admit(deadlineIn(25_000));
+      expect(reads[0]).toMatchObject({ budgets: { readTimeoutMs: 2_000 } });
+      const unbounded = build();
+      await unbounded.admit();
+      expect(unbounded.reads[0]).toMatchObject({ budgets: { readTimeoutMs: 2_000 } });
+    });
+
+    it("shares the time left with an experience search", async () => {
+      const experienceCalls: { deadlineMs: number }[] = [];
+      const { admit } = build({ experienceCalls });
+      await admit(deadlineIn(900), ["帆布包"]);
+      expect(experienceCalls.length).toBeGreaterThan(0);
+      for (const call of experienceCalls) expect(call.deadlineMs).toBeLessThanOrEqual(900);
+    });
+
+    it("does not read once the deadline is reached and freezes the failure as a timeout", async () => {
+      const { admit, commits, reads } = build();
+      expect(await admit(deadlineIn(0))).toMatchObject({
+        failureCode: "source_read_timeout",
+        status: "failed",
+      });
+      expect(reads).toHaveLength(0);
+      expect(commits).toHaveLength(1);
+    });
   });
 });

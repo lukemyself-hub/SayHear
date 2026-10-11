@@ -655,6 +655,11 @@ export async function runExperienceSearch(input: {
   /** What this turn's Decision could see; used only for a continuation. */
   signals?: HistoryContinuationSignals;
   expectedDataEpoch: number;
+  /**
+   * The most this search may take, when the request has less time left than
+   * the policy's own bound (the smaller of the two applies).
+   */
+  maxDurationMs?: number;
   policy: HistoryRecallPolicy;
   proposal: HistoryExperienceSearchProposal;
   requestRevisionId: ConversationEventRevisionId;
@@ -740,8 +745,12 @@ export async function runExperienceSearch(input: {
     };
   }
   const startedAt = performance.now();
+  const totalMs = Math.min(
+    policy.search.deadlineMs,
+    input.maxDurationMs ?? Number.POSITIVE_INFINITY,
+  );
   const remaining = () =>
-    Math.max(1, policy.search.deadlineMs - Math.round(performance.now() - startedAt));
+    Math.max(1, Math.floor(totalMs - Math.round(performance.now() - startedAt)));
 
   let aliasChannel: HistoryExperienceChannelState = "skipped";
   let aliasesAdded = 0;

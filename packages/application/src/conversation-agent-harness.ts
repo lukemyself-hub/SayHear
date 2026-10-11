@@ -463,15 +463,22 @@ export function createConversationAgentHarness(dependencies: {
       }
       if (pendingHistoryProposal !== null) {
         stage = "history_admission";
-        const receipt = await dependencies.historyRecall!.admit({
-          context: {
-            decisionCommandId: command.generationCommandId,
-            modelRunAttemptId: command.modelRunAttemptId,
-            requestEventRevisionId: command.requestEventRevisionId!,
-            userId: command.userId,
-          },
-          proposal: pendingHistoryProposal,
-        });
+        // The lookup shares the request's deadline: it is bounded by what is
+        // left of it, and the Harness stops waiting the moment it is reached.
+        // A lookup that finishes later still meets the commit fence, which no
+        // longer accepts a Decision that was settled as failed.
+        const receipt = await interrupt.guard(
+          dependencies.historyRecall!.admit({
+            context: {
+              decisionCommandId: command.generationCommandId,
+              modelRunAttemptId: command.modelRunAttemptId,
+              requestEventRevisionId: command.requestEventRevisionId!,
+              userId: command.userId,
+            },
+            ...(command.deadline ? { deadline: command.deadline } : {}),
+            proposal: pendingHistoryProposal,
+          }),
+        );
         if ("outcome" in receipt) {
           // The owner, epoch, request revision or Decision state no longer
           // permit the review: fail closed through the ordinary settlement.
@@ -853,6 +860,16 @@ function createInterrupt(
       waited.catch(() => undefined);
       await Promise.race([waited, interrupted]);
       throwIfInterrupted();
+    },
+    /** Wait for one piece of work, but never past the end of the request. */
+    async guard<T>(work: Promise<T>): Promise<T> {
+      work.catch(() => undefined);
+      const next = await Promise.race([work, interrupted]);
+      if (next === INTERRUPTED) {
+        throwIfInterrupted();
+        throw new ProviderDispatchError("aborted");
+      }
+      return next;
     },
     async *race<T>(source: AsyncIterable<T>): AsyncIterable<T> {
       const iterator = source[Symbol.asyncIterator]();
