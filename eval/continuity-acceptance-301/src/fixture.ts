@@ -30,6 +30,8 @@ export type ProviderFaultSpec = Readonly<{
 
 export type HistoryReviewScript = Readonly<{ endDate: string; startDate: string }>;
 
+export type ToolCallScript = Readonly<{ argumentsJson: string; name: string }>;
+
 /** One seeded exchange: the user's words and the reply that was given then. */
 export type HistoryTurn = Readonly<{
   assistant: string;
@@ -69,6 +71,11 @@ export type SayStep = Readonly<{
   providerFault?: ProviderFaultSpec;
   text: string;
   timezone?: string;
+  /**
+   * Make the stand-in Provider's Decision select this Function when SayHear
+   * offers it (reproduces a Trust Action selection for latency work, #319).
+   */
+  toolCall?: ToolCallScript;
   type: "say";
 }>;
 

@@ -23,6 +23,7 @@ import {
   type LoadedCase,
 } from "./src/fixture";
 import { IsolationError, resolveIsolationTarget } from "./src/isolation";
+import { renderLatencyMarkdown, runLatencyProfiles } from "./src/latency";
 import type { CaseObservation } from "./src/observation";
 import {
   buildRunReport,
@@ -54,6 +55,8 @@ const HELP = `Continuity acceptance CLI (T00 #313)
   report    --run DIR [--review FILE]          re-score a stored run (for example with a review)
   rebind    [--case ID ...]                  re-point oracles at deliberately changed development fixtures
   calibrate                                    prove the checker catches prefabricated bad transcripts
+  latency   [--repeats N] [--provider-delay-ms N] [--stall-ms N] [--budget-ms N] [--out DIR]
+                                               same-method chat latency profiles against the stand-in Provider (#319)
 
 MODE is deterministic (default) or real-model. Any command accepts --dry-run
 to stop after planning. Database: SAYHEAR_ACCEPTANCE_DATABASE_URL and
@@ -423,7 +426,11 @@ async function main(): Promise<number> {
       case: { multiple: true, type: "string" },
       "dry-run": { type: "boolean" },
       "expect-known-red": { type: "boolean" },
+      "budget-ms": { type: "string" },
       help: { type: "boolean" },
+      "provider-delay-ms": { type: "string" },
+      repeats: { type: "string" },
+      "stall-ms": { type: "string" },
       mode: { type: "string" },
       out: { type: "string" },
       review: { type: "string" },
@@ -510,6 +517,33 @@ async function main(): Promise<number> {
     });
     printCase(report);
     return exitCodeForStatus(report.status);
+  }
+
+  if (command === "latency") {
+    const integer = (value: string | undefined, fallback: number, name: string): number => {
+      if (value === undefined) return fallback;
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        throw new UsageError(`--${name} must be a non-negative integer.`);
+      }
+      return parsed;
+    };
+    const report = await runLatencyProfiles({
+      providerDelayMs: integer(values["provider-delay-ms"], 0, "provider-delay-ms"),
+      repeats: integer(values.repeats, 2, "repeats"),
+      stallMs: integer(values["stall-ms"], 0, "stall-ms"),
+      target: resolveIsolationTarget(process.env),
+      ...(values["budget-ms"] === undefined
+        ? {}
+        : { requestBudgetMs: integer(values["budget-ms"], 0, "budget-ms") }),
+    });
+    const directory = values.out ? path.resolve(values.out) : defaultOutDirectory();
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(path.join(directory, "latency.json"), `${JSON.stringify(report, null, 2)}\n`);
+    writeFileSync(path.join(directory, "latency.md"), renderLatencyMarkdown(report));
+    console.log(renderLatencyMarkdown(report));
+    console.log(`Wrote ${directory}`);
+    return 0;
   }
 
   const ids =

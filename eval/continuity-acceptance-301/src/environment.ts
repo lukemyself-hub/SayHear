@@ -117,6 +117,8 @@ async function readOwnership(
 
 export async function createAcceptanceEnvironment(input: {
   initialNow: Date;
+  /** Overrides the deterministic request budget (latency measurements, #319). */
+  requestBudgetMs?: number;
   target: IsolationTarget;
 }): Promise<AcceptanceEnvironment> {
   const runId = `run-${randomUUID()}`;
@@ -182,7 +184,7 @@ export async function createAcceptanceEnvironment(input: {
       // The deterministic stub can stall on purpose; a short budget shows the
       // request deadline working without a 30 second wait. Real-model runs keep
       // the product's own 30 seconds (#319).
-      requestBudgetMs: DETERMINISTIC_REQUEST_BUDGET_MS,
+      requestBudgetMs: input.requestBudgetMs ?? DETERMINISTIC_REQUEST_BUDGET_MS,
       databaseUrl: database.connectionString,
       markerDatabaseUrl: markerDatabase.connectionString,
       provider: {

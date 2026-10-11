@@ -7,7 +7,13 @@ import type { AcceptanceEnvironment } from "./environment";
 // The runner drives a conversation from the model-visible fixture alone. It
 // must never import the oracle loader: what the scorer knows cannot be allowed
 // anywhere near the request path.
-import type { CaseFixture, HistoryReviewScript, ProviderFaultSpec, RunMode } from "./fixture";
+import type {
+  CaseFixture,
+  HistoryReviewScript,
+  ProviderFaultSpec,
+  RunMode,
+  ToolCallScript,
+} from "./fixture";
 import {
   OBSERVATION_SCHEMA_VERSION,
   type CaseObservation,
@@ -186,6 +192,7 @@ export type CaseSession = Readonly<{
     providerFault?: ProviderFaultSpec;
     text: string;
     timezone?: string;
+    toolCall?: ToolCallScript;
   }): Promise<ObservedStep>;
   seed: CaseObservation["seed"];
 }>;
@@ -327,6 +334,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       providerFault?: Parameters<typeof stub.setFault>[0];
       text: string;
       timezone: string;
+      toolCall?: ToolCallScript;
     },
   ): Promise<ObservedStep> {
     await arriveAt(at);
@@ -334,6 +342,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
     stub.setStepLabel(id);
     stub.setFault(submission.providerFault ?? null);
     stub.setHistoryReview(submission.historyReview ?? null);
+    stub.setToolCall(submission.toolCall ?? null);
     const problems: string[] = [];
     const chatPromise: Promise<ChatObservation | null> = client
       .chat({
@@ -427,6 +436,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       }
       stub.setFault(null);
       stub.setHistoryReview(null);
+      stub.setToolCall(null);
       stub.setStepLabel(null);
       const placeholder: ObservedStep = {
         at: at.toISOString(),
@@ -450,6 +460,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
     const chat = await chatPromise;
     stub.setFault(null);
     stub.setHistoryReview(null);
+    stub.setToolCall(null);
     stub.setStepLabel(null);
     const step = await finalize(chat);
     steps.push(step);
@@ -555,6 +566,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         ...(step.continueInBackground ? { background: true } : {}),
         ...(step.providerFault ? { providerFault: step.providerFault } : {}),
         ...(step.historyReview ? { historyReview: step.historyReview } : {}),
+        ...(step.toolCall ? { toolCall: step.toolCall } : {}),
       });
     },
     seed,
@@ -577,6 +589,7 @@ export function playStep(
       ...(step.locale ? { locale: step.locale } : {}),
       ...(step.providerFault ? { providerFault: step.providerFault } : {}),
       ...(step.historyReview ? { historyReview: step.historyReview } : {}),
+      ...(step.toolCall ? { toolCall: step.toolCall } : {}),
       ...(step.timezone ? { timezone: step.timezone } : {}),
     });
   }

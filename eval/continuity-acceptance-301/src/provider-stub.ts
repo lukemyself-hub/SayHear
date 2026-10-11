@@ -42,6 +42,13 @@ export type ProviderFault = Readonly<{
 
 export type CapturedProviderRequest = Readonly<{
   body: unknown;
+  /**
+   * How long the stub held this request open, in real milliseconds (arrival to
+   * the response closing), including any fault delay. It is the stand-in
+   * Provider's own time, which lets a latency report separate it from
+   * SayHear's. Null while the request is still open.
+   */
+  durationMs: number | null;
   /** Raw request text, kept so oracle-leak scans cannot be defeated by escaping. */
   rawBody: string;
   receivedAtMonotonicMs: number;
@@ -66,6 +73,12 @@ export type ProviderStub = Readonly<{
    */
   setHistoryReview(script: Readonly<{ endDate: string; startDate: string }> | null): void;
   setStepLabel(label: string | null): void;
+  /**
+   * Script the next Decision: if (and only if) the request offers a Function
+   * with this name, answer with a call to it carrying these JSON arguments
+   * instead of text. Used to reproduce a Trust Action selection (#312).
+   */
+  setToolCall(script: Readonly<{ argumentsJson: string; name: string }> | null): void;
   stop(): Promise<void>;
 }>;
 
@@ -94,6 +107,7 @@ export async function startProviderStub(): Promise<ProviderStub> {
   let stepLabel: string | null = null;
   let historicalReply: string | null = null;
   let historyReview: Readonly<{ endDate: string; startDate: string }> | null = null;
+  let toolCall: Readonly<{ argumentsJson: string; name: string }> | null = null;
 
   const server: Server = createServer((request, response) => {
     void (async () => {
@@ -109,12 +123,18 @@ export async function startProviderStub(): Promise<ProviderStub> {
         body = null;
       }
       const sequence = captured.length + 1;
-      captured.push({
+      const entry: { -readonly [K in keyof CapturedProviderRequest]: CapturedProviderRequest[K] } = {
         body,
+        durationMs: null,
         rawBody,
         receivedAtMonotonicMs: performance.now(),
         sequence,
         stepLabel,
+      };
+      captured.push(entry);
+      const arrived = entry.receivedAtMonotonicMs;
+      response.on("close", () => {
+        entry.durationMs = performance.now() - arrived;
       });
       const active = fault;
       if (active?.httpStatus !== undefined) {
@@ -146,6 +166,25 @@ export async function startProviderStub(): Promise<ProviderStub> {
           type: "response.output_item.added",
         });
         send({ arguments: args, type: "response.function_call_arguments.done" });
+        send({
+          response: { id: `stub-response-${sequence}`, model: DETERMINISTIC_STUB_MODEL, usage: USAGE },
+          type: "response.completed",
+        });
+        response.end();
+        return;
+      }
+      const offersToolCall =
+        toolCall !== null &&
+        Array.isArray((body as { tools?: unknown } | null)?.tools) &&
+        ((body as { tools: Array<{ name?: unknown }> }).tools).some(
+          (tool) => tool?.name === toolCall!.name,
+        );
+      if (toolCall !== null && offersToolCall) {
+        send({
+          item: { arguments: "", call_id: `stub-call-${sequence}`, name: toolCall.name, type: "function_call" },
+          type: "response.output_item.added",
+        });
+        send({ arguments: toolCall.argumentsJson, type: "response.function_call_arguments.done" });
         send({
           response: { id: `stub-response-${sequence}`, model: DETERMINISTIC_STUB_MODEL, usage: USAGE },
           type: "response.completed",
@@ -197,6 +236,9 @@ export async function startProviderStub(): Promise<ProviderStub> {
     },
     setHistoryReview(script) {
       historyReview = script;
+    },
+    setToolCall(script) {
+      toolCall = script;
     },
     setStepLabel(label) {
       stepLabel = label;
