@@ -13,6 +13,11 @@
  *     nullable column to, or create an index on, a protected relation. Anything
  *     that drops, truncates, deletes, updates, renames, or otherwise mutates a
  *     protected relation fails closed.
+ *   - one exact exception (ADR-0094): migration 0071 may replace the
+ *     `generation_commands.generation_stage` CHECK, and only as a DROP that is
+ *     immediately followed, in that same file, by an ADD listing exactly the
+ *     frozen stages plus `history_answer`. A DROP on its own, any other value
+ *     set, and the same statements in any other file are refused.
  *
  * Precise scope: the guarantee covers only the registered extension files, and
  * only statements that name one of the listed relations. An unregistered
@@ -65,14 +70,23 @@ export const PROTECTED_SCHEMA_RELATIONS: readonly string[] = Object.freeze([
 
 /**
  * The one admitted rewrite of a protected relation (ADR-0094, issue #314): the
- * `generation_commands.generation_stage` CHECK may be widened by exactly the
- * values below, because a new GenerationCommand stage needs a new CHECK member.
- * The DROP is only admitted for that named constraint, and the re-ADD must
- * list every pre-existing stage plus no value outside this set, so the
- * exception can only ever widen toward an ADR-registered stage.
+ * `generation_commands.generation_stage` CHECK is replaced once, because a new
+ * GenerationCommand stage needs a new CHECK member. The exception is exact and
+ * is checked per file:
+ *
+ *   - it is bound to the registered migration file(s) named below; the same
+ *     statements in any other file are refused;
+ *   - the DROP of that named constraint is admitted only when the very next
+ *     statement of the same file is the qualifying ADD, so the constraint can
+ *     never be left dropped;
+ *   - the ADD must list exactly the frozen stages plus the ADR-registered new
+ *     ones: no value missing (a narrower CHECK would reject rows the released
+ *     application writes), none extra, none repeated.
  */
 export const GENERATION_STAGE_CHECK_CONSTRAINT =
   "generation_commands_generation_stage_check";
+export const GENERATION_STAGE_CHECK_EXCEPTION_FILES: readonly string[] =
+  Object.freeze(["0071_history_answer_generation_stage.sql"]);
 const FROZEN_GENERATION_STAGES = [
   "decision",
   "action_finalization",
@@ -88,20 +102,37 @@ const STAGE_CHECK_ADD = new RegExp(
   "i",
 );
 
-function isAdmittedStageCheckWidening(statement: string): boolean {
-  if (STAGE_CHECK_DROP.test(statement)) return true;
-  const match = STAGE_CHECK_ADD.exec(statement);
+function isQualifyingStageCheckAdd(statement: string | undefined): boolean {
+  const match = statement === undefined ? null : STAGE_CHECK_ADD.exec(statement);
   if (!match) return false;
   const values = (match[1] ?? "")
     .split(",")
     .map((value) => value.trim().replace(/^'|'$/g, ""));
-  const allowed = new Set<string>([
-    ...FROZEN_GENERATION_STAGES,
-    ...ADMITTED_NEW_GENERATION_STAGES,
-  ]);
+  const required = [...FROZEN_GENERATION_STAGES, ...ADMITTED_NEW_GENERATION_STAGES];
   return (
-    values.every((value) => allowed.has(value)) &&
-    FROZEN_GENERATION_STAGES.every((value) => values.includes(value))
+    values.length === required.length &&
+    required.every((value) => values.includes(value))
+  );
+}
+
+/**
+ * Whether statement `index` is one half of the admitted DROP + ADD pair in a
+ * file the exception is registered for.
+ */
+function isAdmittedStageCheckReplacement(
+  fileName: string,
+  statements: readonly string[],
+  index: number,
+): boolean {
+  if (!GENERATION_STAGE_CHECK_EXCEPTION_FILES.includes(fileName)) return false;
+  const statement = statements[index]!;
+  if (STAGE_CHECK_DROP.test(statement)) {
+    return isQualifyingStageCheckAdd(statements[index + 1]);
+  }
+  return (
+    isQualifyingStageCheckAdd(statement) &&
+    index > 0 &&
+    STAGE_CHECK_DROP.test(statements[index - 1]!)
   );
 }
 
@@ -149,13 +180,13 @@ export function protectedSurfaceDdlViolations(
     .map((statement) => statement.replace(/\s+/g, " ").trim())
     .filter((statement) => statement.length > 0);
 
-  for (const statement of statements) {
+  for (const [index, statement] of statements.entries()) {
     const touched = PROTECTED_SCHEMA_RELATIONS.filter((relation) =>
       referencesProtectedRelation(statement, relation),
     );
     if (touched.length === 0) continue;
 
-    if (isAdmittedStageCheckWidening(statement)) continue;
+    if (isAdmittedStageCheckReplacement(fileName, statements, index)) continue;
     const targets = touched.join(", ");
     if (DESTRUCTIVE_KEYWORDS.test(statement)) {
       violations.push(
