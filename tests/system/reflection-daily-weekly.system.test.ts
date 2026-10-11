@@ -2079,6 +2079,93 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     expect(run.rows[0]!.status).toBe("built");
   });
 
+  it("fails closed when a Weekly retry run is missing its window start, without writing domain rows", async () => {
+    await seedWeekActivity(["2026-09-07", "2026-09-08"]);
+    const weeks = await reflectionRepository!.listDueWeekWindows({
+      now: new Date(Date.parse("2026-09-14T06:00:00.000Z")),
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    const week = weeks[0]!;
+    const queued = await reflectionRepository!.queueWeeklyReflection({
+      userId: OWNER as never,
+      weekIdentifier: week.weekIdentifier,
+      windowStartDate: week.windowStartDate,
+      windowEndDate: week.windowEndDate,
+      sourceDigest: week.sourceDigest,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") throw new Error("unreachable");
+    const first = await runReflectionWeeklyBuild({
+      dependencies: reflectionDependencies(async () => {
+        const error = new Error("weekly provider timeout");
+        (error as { category?: string }).category = "timeout";
+        throw error;
+      }),
+      command: {
+        workflowCommandId: queued.workflowCommandId,
+        subjectId: OWNER,
+        sourceRevision: dateOrdinal(week.windowStartDate),
+        claimBaselineDigest: "",
+        policyVersion: READINESS_POLICY,
+        expectedDataEpoch: queued.expectedDataEpoch,
+        scope: "weekly",
+        weekIdentifier: week.weekIdentifier,
+        windowStartDate: week.windowStartDate,
+        windowEndDate: week.windowEndDate,
+        sourceDigest: week.sourceDigest,
+      },
+    });
+    expect(first.outcome).toBe("retryable_failed");
+    const run = await database!.pool.query<{ generation_command_id: string }>(
+      "SELECT generation_command_id FROM reflection_runs WHERE user_id = $1",
+      [OWNER],
+    );
+    const generationCommandId = run.rows[0]!.generation_command_id;
+    await database!.pool.query(
+      "UPDATE reflection_runs SET window_start_date = '2026-09-09' WHERE generation_command_id = $1",
+      [generationCommandId],
+    );
+    const attempt = await database!.pool.query<{ model_run_attempt_id: string }>(
+      "SELECT model_run_attempt_id FROM model_run_attempts WHERE generation_command_id = $1 AND attempt_no = 2",
+      [generationCommandId],
+    );
+    const before = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM reflections WHERE user_id = $1",
+      [OWNER],
+    );
+    const context = await reflectionRepository!.readAttemptContext({
+      generationCommandId: asGenerationCommandId(generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(attempt.rows[0]!.model_run_attempt_id),
+    });
+    expect(context.outcome).toBe("not_found");
+    const prepareResult = await reflectionRepository!.prepareAttempt({
+      userId: OWNER as never,
+      scopeType: "date_range",
+      dailySessionId: null,
+      weekIdentifier: null,
+      windowStartDate: week.windowStartDate,
+      windowEndDate: week.windowEndDate,
+      sourceRevision: 0,
+      sourceDigest: week.sourceDigest,
+      claimBaselineDigest: "",
+      policyVersion: READINESS_POLICY,
+      expectedDataEpoch: queued.expectedDataEpoch,
+      generationCommandId: asGenerationCommandId(generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(attempt.rows[0]!.model_run_attempt_id),
+      now: new Date(),
+    });
+    expect(prepareResult).toEqual({
+      outcome: "fenced",
+      reason: "missing_week_window",
+    });
+    const after = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM reflections WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(after.rows[0]!.count).toBe(before.rows[0]!.count);
+  });
+
   it("rejects a claimVersionId cited as a baseline claim before any draft, current, candidate, or validator call", async () => {
     const session = await seedSession({ logicalDate: "2026-09-09" });
     await seedDateOutcome({
