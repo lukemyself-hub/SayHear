@@ -97,7 +97,7 @@ describe("matchFrozenPrefixSchemaContract", () => {
 });
 
 describe("registered G1 schema extensions", () => {
-  it("is versioned and registers the three additive recent-context migrations", () => {
+  it("is versioned and registers the additive recent-context and history-recall migrations", () => {
     expect(ONE_A_3B_G1_SCHEMA_EXTENSION_REGISTRY_VERSION).toBe(
       "1a3b-g1-schema-extensions:v1",
     );
@@ -105,6 +105,8 @@ describe("registered G1 schema extensions", () => {
       "0068_recent_conversation_context_refs.sql",
       "0069_recent_context_request_timezone.sql",
       "0070_recent_context_governance.sql",
+      "0071_history_answer_generation_stage.sql",
+      "0072_history_recall_results.sql",
     ]);
     expect(registeredSchemaExtensions("business")).toEqual(
       ONE_A_3B_G1_SCHEMA_EXTENSIONS,

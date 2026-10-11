@@ -204,6 +204,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
         internal_diagnostic_access_grants,
         provider_egress_consents,
         provider_egress_dispositions,
+        history_recall_results,
         compiled_context_revision_refs,
         compiled_contexts,
         model_run_attempts,
@@ -583,6 +584,21 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
 
   it("AC-L02 drill new recent-context surfaces: purge clears the owner-scoped freeze and cannot revive global governance", async () => {
     await seedCanaryChain();
+    // Issue 314: a frozen history review result (references only) is an
+    // owner-scoped surface and must be cleared by the same purge.
+    await database.pool.query(
+      `INSERT INTO history_recall_results (
+         history_recall_result_id, user_id, interaction_turn_id,
+         decision_command_id, answer_command_id, policy_version, status,
+         plan, coverage, item_refs, expected_data_epoch, created_at
+       )
+       SELECT '01984477-31e1-7595-92c6-06889cb0fa01', turn.user_id,
+              turn.interaction_turn_id, '01984477-31e1-7595-92c6-06889cb0fa02',
+              '01984477-31e1-7595-92c6-06889cb0fa03', 'history-recall:v1',
+              'completed', '{}'::jsonb, '{}'::jsonb, '[]'::jsonb, 1, now()
+       FROM interaction_turns turn LIMIT 1`,
+    );
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(1);
     await database.pool.query(`
       INSERT INTO recent_context_policies (
         policy_version, status, compiler_version, selector_policy_version,
@@ -609,6 +625,7 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
     expect(
       await countRows("SELECT 1 FROM compiled_context_revision_refs"),
     ).toBe(0);
+    expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(0);
     expect(await countRows("SELECT 1 FROM compiled_contexts")).toBe(0);
     expect(await countRows("SELECT 1 FROM generation_commands")).toBe(0);
 

@@ -108,7 +108,7 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
     Object.freeze({
       store: "business" as const,
       name: "0072_history_recall_results.sql",
-      sha256: "cc64988f190e569e8be9fadbd8ef143a55d5c2ba8624e9e2a641ee4fdd33c6de",
+      sha256: "fca7455ab3fbd289889f4879929f308e1f6e10c8c0c1439af060c863f71306f4",
       justification:
         "Creates the owner-scoped history_recall_results table (references and content-free coverage only, no message bodies, no foreign key to a protected relation) and extends the compiled_context_revision_refs section and metadata constraints and lineage trigger for the history_recall_context section (issue #314). It names no protected relation; the table is registered in the Purge Surface Registry.",
     }),

@@ -80,6 +80,18 @@ _Avoid_: Technical retry, Action execution, Second tool round
 Conversation Decision 的主回应已经完成、当前 Event 的 DialogueState 已就绪且确定性门禁选中 target 后，创建的可选 GenerationCommand；它只根据冻结的主回应、target 与 framing 生成一个隔离的 Proactive Memory Follow-up 片段，不能调用工具、改写主回应或产生独立 Assistant Event。
 _Avoid_: Conversation Decision Command, Action Finalization Command, Background message
 
+**History Query Proposal**:
+Conversation Decision 可以提出的第三种互斥结果：一个受控只读历史查询提案，只描述查询意图、时间依据（消息何时写下）、来源范围和本地日期范围。它不是 Conversation Action，不改变任何状态；日期/时区解析、owner 与权限核验、读取和资格检查都由确定性代码完成，模型不能提供 SQL、owner、游标或第二次查询。
+_Avoid_: Conversation Action, Search tool, Agent query loop
+
+**History Recall Result**:
+一次历史查询的冻结结果：确定性计划、读取状态（completed、partial、failed）、内容无关的覆盖统计（枚举覆盖与实际注入覆盖分开）和有序的 revision 引用，不含消息正文。零条命中不自动等于该日没有记录。
+_Avoid_: Cached search result, Memory, Summary
+
+**History Answer Command**:
+Decision 以历史查询提案结束并冻结 History Recall Result 后创建的独立第二阶段 GenerationCommand；它冻结新的 CompiledContext、结果引用与版本，强制 tools disabled，沿完整 Response 接受点提交唯一的 Assistant Event。它不是 ModelRunAttempt 重试，也不是已退役的 Proactive Follow-up。
+_Avoid_: Technical retry, Action Finalization Command, Proactive Follow-up Segment Command
+
 ## 对话行为
 
 **Canonical Persona**:

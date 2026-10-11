@@ -41,3 +41,26 @@ Conversation Action、receipt、Evidence、幂等、删除 fencing 或长期状�
 该决定保留未来 Framework 选择权，但不以提前引入依赖、通用 Session store、内部 CRUD
 工具箱或多层 pass-through wrapper 购买“扩展性”。扩展通过稳定 Interface、版本化
 Harness Policy、Adapter conformance 与领域不变量测试实现。
+
+## 修订（2026-10，issue #314，ADR-0151）：受控只读历史查询是第三种互斥结果
+
+- Decision 的结果现在是三选一且互斥：普通 Final Response、恰好一个 Conversation Action
+  Proposal、或恰好一个**受控只读历史查询提案**。查询提案不是 Conversation Action：它不进
+  Catalog、不经 Action Gateway、不占用也不扩大“最多一次改变状态的 Action”，不写任何领域
+  状态。提案只描述查询意图、时间依据（`expressed_date`，消息何时写下）与来源范围
+  （`conversation_text`）及本地日期范围；不接受模型 SQL、owner、对象权限、游标或第二次查询。
+  本轮最多一次查询计划，不形成自主工具循环。
+- 互斥由 Harness 确定性执行，不靠提示词：回复文本与提案、提案与提案、提案与 tools-disabled
+  都互斥（fail closed 为 `invalid_response`）。**ADR-0092 的 Trust-Control 优先由此首次获得
+  确定性保证**：同一 Decision 中出现 Trust Action 提案与历史查询提案时，无论顺序，Trust Action
+  胜出，历史查询提案被丢弃且不执行（只记录内容无关的 `trust_control_priority` 通知），因此历史查询
+  不会暴露刚要求忘记的内容，也不会产生第二次状态 Action。
+- 提案只在 Harness Policy `conversation-harness:v4`（`maxHistoryQueries: 1`）、存在请求 revision
+  （Retry 与恢复路径没有，故退化为普通回复）且运行时开关 `SAYHEAR_HISTORY_RECALL_ENABLED=true`
+  时提供给模型；默认关闭。回滚重新 pin `conversation-harness:v3`。
+- 确定性代码解析日期与时区（请求时区优先，其次 Session 起始时区）、核验当前输入 revision、owner
+  与 Data Epoch，再通过有界原文查询服务读取；读取、资格检查与覆盖统计见 architecture 08-10 §8.4.2。
+- 仍然遵守：ADR-0068（Provider session 不是记忆）、0077、0083（freshness 仍为 `source_valid:v1`，
+  本票不引入新的 freshness 语义）、0111、0131、0149。
+- 退役注记：本文上方所述 Proactive Follow-up Segment 例外已被 ADR-0141 随 G2 退役，运行时拒绝
+  相关开关，应用层 `GenerationCommandStage` 不含它；它**不是**新阶段的前身或借用对象。

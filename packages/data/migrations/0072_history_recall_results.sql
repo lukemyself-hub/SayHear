@@ -94,12 +94,14 @@ ALTER TABLE compiled_context_revision_refs
       section = 'recent_conversation_context'
       AND daily_session_id IS NOT NULL
       AND expressed_at IS NOT NULL
+      AND selection_reason IS NOT NULL
       AND selection_reason IN ('today', 'day_representation', 'budget_fill')
     )
     OR (
       section = 'history_recall_context'
       AND daily_session_id IS NOT NULL
       AND expressed_at IS NOT NULL
+      AND selection_reason IS NOT NULL
       AND selection_reason = 'history_date_range'
     )
     OR (

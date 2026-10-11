@@ -20,6 +20,8 @@ const REGISTERED_EXTENSION_NAMES = [
   "0068_recent_conversation_context_refs.sql",
   "0069_recent_context_request_timezone.sql",
   "0070_recent_context_governance.sql",
+  "0071_history_answer_generation_stage.sql",
+  "0072_history_recall_results.sql",
 ] as const;
 const schemaFingerprint = `sha256:${"a".repeat(64)}`;
 

@@ -152,17 +152,20 @@ GenerationCommand；只有新回答完整成功后才创建 Assistant Event，UI
 ### 8.4 Conversation Action 契约
 
 当 User Event 同时包含普通表达和用户控制意图时，Conversation Model 仍只能产生
-以下两类结果之一：
+以下结果之一（互斥，由 Harness 确定性执行）：
 
-1. 一个普通 Final Response；或
-2. 恰好一个 typed Conversation Action proposal。
+1. 一个普通 Final Response；
+2. 恰好一个 typed Conversation Action proposal；或
+3. 恰好一个受控只读历史查询提案（#314，见 §8.4.2）。它不是 Conversation Action。
+
+同一 Decision 同时出现 Trust Action 与历史查询提案时，Trust Action 确定性胜出（ADR-0092）。
 
 这两种结果由 Conversation Agent Harness 组织，但执行权限不属于 Harness 或模型。
 当前冻结的 Conversation Harness Policy 的第一阶段返回普通主回应或一个 Action proposal。
 Action 路径只有在 Action Gateway 已返回 receipt 时，才允许一个 tools-disabled 的 Finalization
-判断。普通回应路径只有在 1A.3b 当前状态与主动关心门禁通过时，才允许一个 tools-disabled 的
-Proactive Follow-up Segment 判断；两条第二阶段路径互斥，普通回应没有合格 target 时不产生第二次
-调用。技术重试仍只增加各自 Command 下的 ModelRunAttempt，不增加 Action 或自主 step。
+判断。历史查询路径在确定性查询完成并冻结结果后，才允许一个 tools-disabled 的 History Answer
+判断（§8.4.2）。普通回应路径的 Proactive Follow-up Segment 已随 G2 退役（ADR-0141），不再是现行
+第二阶段；Action 与历史查询两条第二阶段路径互斥，普通回应不产生第二次调用。技术重试仍只增加各自 Command 下的 ModelRunAttempt，不增加 Action 或自主 step。
 
 这些不同生成意图不能共享一个 GenerationCommand：
 
@@ -171,7 +174,9 @@ Proactive Follow-up Segment 判断；两条第二阶段路径互斥，普通回�
   新增 source，使用不同 Prompt / Schema 并冻结 `tools_disabled=true`；
 - Proactive Follow-up Segment Command 以冻结主回应、current DialogueState、target 与 reservation
   为 source，使用窄 Prompt / Schema 并冻结 `tools_disabled=true`；
-- 两个 Command 都引用同一 InteractionTurn，各自拥有 ModelRunAttempt；
+- History Answer Command 以 Decision 冻结的历史查询结果引用与版本为新增 source，使用独立
+  Prompt、冻结 `tools_disabled=true`，并有自己的预算与 ModelRunAttempt；
+- 各 Command 都引用同一 InteractionTurn，各自拥有 ModelRunAttempt；
 - Finalization 不得伪装成 Decision 的 technical retry、schema repair 或 fallback；
 - Action 已提交但 Finalization 中断时，从 receipt 恢复，不重新执行 Action。
 
@@ -179,6 +184,34 @@ Conversation Action 必须来自当前已发布的 `Conversation Action Catalog`
 按产品阶段、用户 capability、运行状态和 Action policy 过滤，只包含用户真正可以
 请求的高层产品能力；`update_claim`、`rewrite_journal`、`invalidate_profile`、
 `delete_embedding` 或 `start_workflow` 等内部传播机制不向模型暴露。
+
+#### 8.4.2 受控只读历史查询与 History Answer（#314）
+
+**提案**：函数 `review_conversation_history`（`start_date`、可选 `end_date`、`time_basis`、`source_scope`），
+由 Harness 加入 `functions`，不进 Catalog。Egress 把它归一化为独立事件 `history_query_proposal`；
+未提供该函数、工具被禁用或参数含任何额外键都 fail closed。
+
+**确定性计划**：`resolveHistoryQueryPlan`——日期范围 ≤ `maxDateSpanDays`（v1 为 3）、不得晚于请求
+本地日期；时区取冻结命令的请求时区，缺失则回退 Session 起始时区，再缺失则 `timezone_unavailable`。
+日期转换为 UTC 半开区间在 SQL 内完成（DST 安全）；截止时刻为受理请求的输入事件时刻，之后的消息、
+当前 Daily Session 的消息（已在原文窗口内）不进入本次读取。
+
+**读取与资格**：`PostgresHistoryRecallSource` 在只读 REPEATABLE READ 事务内读取，先核验 owner 与
+Data Epoch；稳定游标 `(created_at, daily_session_id, sequence_no)` 分页，受 `maxPages/pageSize/
+maxSourceRows` 约束；资格谓词（active、当前 revision、未 purge、final/corrected、Correction/Forget
+明确关联、Assistant 依附于其生成请求）与近期背景共用 `postgres-source-eligibility.ts`。被排除行的
+正文不越过读取端口。预算 `maxContextTokens`（v1 为 3,000）与单条上限决定实际注入；未枚举完/未注入的
+部分使结果为 `partial`。
+
+**冻结与阶段**：见 ADR-0094 修订。History Answer 编译时重新读取并重验每个引用（失效者丢弃并计入
+`droppedAtCompile`）；发送前与提交前的 `contextReferencesAreCurrent` 对 `history_recall_context` 同样
+重查 Correction/Forget 与 revision 当前性。**所有路径的来源资格检查在提交前仍完整执行。**
+
+**Inspector**：`GenerationInspectionMetadata` 增加 `generationStage` 与 `historyRecall`（角色、状态、
+失败码、计划日期、枚举/注入覆盖、来源 revision 引用与时间），两端命令互相可达；无正文。
+
+**已知边界**：Retry 与恢复路径没有请求 revision，不提供该函数，历史问题退化为普通回复；首片只支持明确日期的
+小范围原文读取，词法检索、经历时间、跨页大日回顾由 T02/T03 扩展计划能力。
 
 #### 8.4.1 Action Capability 元模型
 
@@ -226,8 +259,10 @@ Action Gateway 的固定执行顺序是：
 
 一个 enabled Definition 缺少 handler、绑定多个 handler、contract version 不兼容或
 要求 Harness 解释领域规则时，Catalog 不得发布；runtime 遇到漂移必须 fail closed。
-新增正常能力不得修改 Harness loop、Provider Adapter、ActionProposal envelope、
-GenerationCommand stages 或 Finalization。
+新增正常 Conversation Action 不得修改 Harness loop、Provider Adapter、ActionProposal envelope、
+GenerationCommand stages 或 Finalization。（#314 的受控只读历史查询不是 Conversation Action：它
+按 ADR-0093/0094 修订显式新增了一个 Decision 结果与一个 History Answer stage；这不是 Action 扩展，
+也不放宽该约束对 Action 的适用。）
 
 Decision Command 的模型侧 Interface 由 Harness 从冻结 Catalog 生成：
 

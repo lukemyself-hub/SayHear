@@ -39,8 +39,8 @@ Accepted
 - [`0129`](adr/0129-reflection-prose-uses-owner-auth-and-evidence-excerpts-require-step-up.md)：Reflection Inspector 正文使用 owner session 与专门 capability，底层 Evidence 原话仍需 step-up 与访问审计
 - [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md)：真实私人数据写入前核验最长备份窗口
 - [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
-- [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework
-- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision 与 Action Finalization 使用独立 GenerationCommand
+- [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework（2026-10 修订：新增受控只读历史查询为第三种互斥 Decision 结果，Trust-Control 确定性优先）
+- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision、Action Finalization 与 History Answer 使用独立 GenerationCommand（2026-10 修订含 G1 stage CHECK 守卫的窄例外）
 - [`0133`](adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)：Bio 写作与验证使用独立 GenerationCommand 和可计算的 attempt 预算，repair 后必须重新验证
 - [`0136`](adr/0136-1a3b-model-pins-are-evidence-outputs.md)：1A.3b SPEC 固定角色评测合同，生产模型 pin 由冻结验收证据产生而不是提前指定
 - [`0140`](adr/0140-g1-deepseek-model-alias-is-pinned-evidence.md)：G1 接受 DeepSeek 可变 alias 作为有界例外，以完整 pin、运行时快照比对与 AC-M01 调用证据为前提

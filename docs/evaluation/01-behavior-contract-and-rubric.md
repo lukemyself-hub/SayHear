@@ -42,7 +42,7 @@ Accepted（2026-08-22，issue #63 grilling 定案）
   [路线决议](https://github.com/lukemyself-hub/SayHear/issues/306#issuecomment-6093970042)
   已确认首个有意义回应≤3秒、完整回答≤10秒、端到端请求30秒停止。不能以占位文案
   或平均耗时抵消超时；计时包括查找、排队、生成与传输。尚未实测，不能宣称已达标。
-- 首轮验证12个合成场景，8开发/4独立最终验证，每路线3次独立重复，最多一轮调优。
+- 首轮验证12个合成场景，8开发/4独立最终验证，3次独立重复，最多一轮调优。按 [#308](https://github.com/lukemyself-hub/SayHear/issues/308) 最新范围，只有自建迭代一条路线；旧“双路线 8+4 全量场景实验”（含向量路线）已被取代，不再按“每路线”重复。开发 fixture 在 `eval/continuity-acceptance-301/` 冻结（T00 #313），独立最终 fixture 在调优前冻结并由 T08 #321 执行；两者冲突时以 Issue 为准。
   正确答案不进入模型输入，具体fixture及判据在运行前冻结；最终验证输出不参与调优。
   单例可包含多日、多回合及必要故障分支，不能以固定数量限制关键能力覆盖。
   完整设计与执行顺序见[验证任务](https://github.com/lukemyself-hub/SayHear/issues/308)。
