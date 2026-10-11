@@ -615,6 +615,23 @@ describe("controlled history review through the real conversation path", () => {
     expect(result!.coverage.omitted).toEqual({ forget_association: 2 });
   });
 
+  it("tells the reply a day with only forgotten messages has nothing to quote, without exposing the Forget", async () => {
+    await seedHistory();
+    await seedForgetExclusion("路过修鞋摊，师傅教我缝了帆布包。");
+    await seedForgetExclusion("回家后决定以后东西坏了先自己补。");
+    const events = await ask();
+    expect(terminal(events)).toBe("assistant_committed");
+    const answer = requests[1]!;
+    expect(answer.messages).toEqual(["user:八月二十号那天我跟你说了什么？"]);
+    expect(answer.instructions).toContain("2026-08-20: empty; 0 message(s) found, 0 quoted.");
+    expect(answer.instructions).toContain("did not find saved messages from that date");
+    expect(answer.instructions).not.toMatch(/forget|_association|Not quoted|every saved message/i);
+    // The operator still sees why: the reason lives only in the frozen result.
+    const [result] = await rows<{ coverage: { omitted: Record<string, number> }; status: string }>("SELECT coverage, status FROM history_recall_results");
+    expect(result!.status).toBe("completed");
+    expect(result!.coverage.omitted).toEqual({ forget_association: 4 });
+  });
+
   it("drops a source that stopped qualifying between the query and the compile", async () => {
     await seedHistory();
     built = build({

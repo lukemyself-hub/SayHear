@@ -539,6 +539,17 @@ const MISSED_SOURCE_REASONS: ReadonlySet<HistoryRecallOmissionReason> = new Set(
   "single_event_over_budget",
 ]);
 
+/**
+ * Omissions caused by the person's own Correction / Forget. They are for the
+ * operator only: whatever they removed must read to the reply as if it were not
+ * there to be found, so neither the count nor the reason is ever rendered for
+ * the model.
+ */
+const CONTROL_EXCLUSION_REASONS: ReadonlySet<string> = new Set([
+  "correction_association",
+  "forget_association",
+]);
+
 /** Why a review can never be called complete however much was read. */
 export type HistoryRecallLimit = "experience_time_not_recorded";
 
@@ -553,6 +564,14 @@ export type HistoryRecallDateCoverage = Readonly<{
 
 /** Content-free accounting of one review. Enumerated and injected differ. */
 export type HistoryRecallCoverage = Readonly<{
+  /**
+   * Rows found among the sources this review may use: control-excluded rows
+   * (an explicit Correction / Forget association) and the replies generated for
+   * them are not counted. This is the only row count the reply is ever told
+   * about; `enumeratedRows` is the operator's count of everything read. Absent
+   * in results frozen before the field existed.
+   */
+  allowedRows?: number;
   /** Time blocks (runs of messages without a long pause) among eligible rows. */
   blocks: number;
   /** Blocks that still have at least one quoted message. */
@@ -754,12 +773,18 @@ export function selectHistoryRecall(input: {
     if (MISSED_SOURCE_REASONS.has(reason)) missedRows.add(item);
   };
   const droppedUserRevisions = new Set<string>();
+  // Rows the person's own Correction / Forget removed, and the replies that
+  // were generated for them: invisible to everything the reply is told.
+  const controlHidden = new Set<HistoryRecallSourceItem>();
+  const controlHiddenRevisions = new Set<string>();
   const seenUserText = new Set<string>();
   const candidates: Candidate[] = [];
   for (const item of ordered) {
     if (item.exclusion !== null) {
       omit(item.exclusion.reason, item);
       droppedUserRevisions.add(item.revisionId);
+      controlHidden.add(item);
+      controlHiddenRevisions.add(item.revisionId);
       continue;
     }
     if (
@@ -769,6 +794,10 @@ export function selectHistoryRecall(input: {
     ) {
       // A companion of a dropped user message: not a budget miss, not counted.
       droppedUserRevisions.add(item.revisionId);
+      if (controlHiddenRevisions.has(item.generatingUserRevisionId)) {
+        controlHidden.add(item);
+        controlHiddenRevisions.add(item.revisionId);
+      }
       continue;
     }
     const itemTokens = estimateRecentContextTokens(item.text);
@@ -839,12 +868,16 @@ export function selectHistoryRecall(input: {
     }
   }
   const selectedItems = new Set(selected.map((candidate) => candidate.item));
+  // What the reply is told counts only the sources this review may use: a day
+  // that held nothing but removed messages reads as a day with nothing to
+  // quote, never as a day with hidden content.
+  const usable = ordered.filter((entry) => !controlHidden.has(entry));
   const reportedDates =
     plan.localDates.length > 0
       ? plan.localDates
-      : [...new Set(ordered.map((entry) => entry.localDate))].toSorted();
+      : [...new Set(usable.map((entry) => entry.localDate))].toSorted();
   const perDate = reportedDates.map((localDate): HistoryRecallDateCoverage => {
-    const rows = ordered.filter((entry) => entry.localDate === localDate);
+    const rows = usable.filter((entry) => entry.localDate === localDate);
     const selectedRows = rows.filter((entry) => selectedItems.has(entry)).length;
     const missed = rows.some((entry) => missedRows.has(entry));
     const state: HistoryRecallDateState =
@@ -871,6 +904,7 @@ export function selectHistoryRecall(input: {
   );
   return {
     coverage: {
+      allowedRows: usable.length,
       blocks: blocks.length,
       blocksCovered: blocks.filter((block) =>
         block.some((candidate) => selectedItems.has(candidate.item)),
@@ -884,9 +918,9 @@ export function selectHistoryRecall(input: {
       perDate,
       readLatencyMs: snapshot.readLatencyMs,
       readThrough:
-        snapshot.enumerationComplete || ordered.length === 0
+        snapshot.enumerationComplete || usable.length === 0
           ? null
-          : ordered.at(-1)!.expressedAt,
+          : usable.at(-1)!.expressedAt,
       selectedRows: chronological.length,
       selectedTokens: chronological.reduce((sum, c) => sum + c.tokens, 0),
       timeBasis: input.proposal.timeBasis,
@@ -1183,7 +1217,7 @@ function historyAnswerGuidance(
   const noMessages =
     coverage.selectedRows === 0 &&
     coverage.enumerationComplete &&
-    coverage.enumeratedRows === 0;
+    (coverage.allowedRows ?? coverage.enumeratedRows) === 0;
   if (experienced) {
     lines.push(
       "Answer guidance (event date): the saved messages show when things were said, and when something happened is not recorded. Place an event on a day only when the person's own words give it, relative to when they said it (for example 'last Sunday'); otherwise say its date was not given and keep it undated. Say this is what they told you and do not claim it is everything that happened that day.",
@@ -1313,7 +1347,9 @@ export function renderHistoryRecallReceipt(
       `Read through ${formatLocalMinute(coverage.readThrough, plan.timezone)} (${plan.timezone}); later messages in the range were not read.`,
     );
   }
-  const omitted = Object.entries(coverage.omitted);
+  const omitted = Object.entries(coverage.omitted).filter(
+    ([reason]) => !CONTROL_EXCLUSION_REASONS.has(reason),
+  );
   if (omitted.length > 0 || snapshot.droppedAtCompile > 0) {
     lines.push(
       `Not quoted: ${[

@@ -12,6 +12,7 @@ import {
   HISTORY_RECALL_DEFAULT_POLICY,
   createHistoryRecallGateway,
   normalizeHistoryReviewCall,
+  renderHistoryRecallReceipt,
   resolveHistoryQueryPlan,
   selectHistoryRecall,
   type HistoryDateReviewProposal,
@@ -228,6 +229,71 @@ describe("history recall selection and coverage", () => {
     expect(result.itemRefs.map((ref) => ref.revisionId)).toEqual([keep.revisionId]);
     expect(result.coverage.omitted).toEqual({ forget_association: 1 });
     expect(result.status).toBe("completed");
+  });
+
+  describe("what the reply is told when sources are control-excluded (SPEC #301 R12)", () => {
+    const receiptText = (result: ReturnType<typeof select>, dates = ["2026-08-20"]) =>
+      renderHistoryRecallReceipt({
+        droppedAtCompile: 0,
+        injectedRows: result.coverage.selectedRows,
+        policyVersion: "history-recall:v4",
+        result: {
+          coverage: result.coverage,
+          failureCode: result.failureCode,
+          plan: planFor(dates),
+          proposal: proposal(dates[0]!, dates.at(-1)!),
+          status: result.status,
+        },
+        version: 1,
+      });
+    const forgotten = (localDate: string) => {
+      const user = item(localDate, "user", "", {
+        exclusion: { controlId: "c1", reason: "forget_association" },
+      });
+      const reply = item(localDate, "assistant", "", {
+        exclusion: { controlId: "c1", reason: "forget_association" },
+        generatingUserRevisionId: user.revisionId,
+      });
+      return [user, reply];
+    };
+
+    it("reads a day that holds only forgotten messages as nothing found, without naming the exclusion", () => {
+      const result = select(snapshot(forgotten("2026-08-20")));
+      const text = receiptText(result);
+      expect(text).toContain("2026-08-20: empty; 0 message(s) found, 0 quoted.");
+      expect(text).toContain("did not find saved messages from that date");
+      expect(text).not.toMatch(/forget|_association|Not quoted/i);
+      expect(text).not.toContain("every saved message");
+      // The operator view keeps the reason: only the model-facing text hides it.
+      expect(result.coverage.omitted).toEqual({ forget_association: 2 });
+      expect(result.status).toBe("completed");
+    });
+
+    it("does not count control-excluded rows among the messages found on a day that has others", () => {
+      const keep = item("2026-08-20", "user", "an independent remark");
+      const result = select(snapshot([...forgotten("2026-08-20"), keep]));
+      const text = receiptText(result);
+      expect(text).toContain("2026-08-20: complete; 1 message(s) found, 1 quoted.");
+      expect(text).not.toMatch(/forget|_association|Not quoted/i);
+    });
+
+    it("reads every date of a range as nothing found when only forgotten messages exist across it", () => {
+      const rows = [...forgotten("2026-08-20"), ...forgotten("2026-08-21")];
+      const result = select(snapshot(rows), ["2026-08-20", "2026-08-21"]);
+      const text = receiptText(result, ["2026-08-20", "2026-08-21"]);
+      expect(text).toContain("2026-08-20: empty; 0 message(s) found, 0 quoted.");
+      expect(text).toContain("2026-08-21: empty; 0 message(s) found, 0 quoted.");
+      expect(text).toContain("did not find saved messages");
+      expect(text).not.toMatch(/forget|_association/i);
+    });
+
+    it("does not let an unfinished read reveal when its last forgotten message was said", () => {
+      const early = item("2026-08-20", "user", "early remark");
+      const result = select(
+        snapshot([early, ...forgotten("2026-08-20")], { enumerationComplete: false }),
+      );
+      expect(result.coverage.readThrough).toBe(early.expressedAt);
+    });
   });
 
   it("turns a source failure into a failed result with a content-free code", () => {
