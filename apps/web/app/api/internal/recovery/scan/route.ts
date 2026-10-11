@@ -33,6 +33,9 @@ export async function GET(request: Request): Promise<Response> {
     outboxDispatcherService: composition.outboxDispatcherService,
     scannerSecret: composition.recoveryScannerSecret,
     readDerivedLatency: () =>
-      composition.reflectionRepository.readDerivedLatency(composition.clock()),
+      composition.reflectionRepository.readDerivedLatency(
+        composition.clock(),
+        composition.reflectionReadinessPolicyVersion,
+      ),
   })(request);
 }

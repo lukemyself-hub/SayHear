@@ -655,11 +655,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         predicateId === "sh.memory.hobby" ? { predicateId } : null,
       registryVersion: () => 1,
     });
-    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000))).toEqual({
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000), READINESS_POLICY)).toEqual({
       oldestPendingSeconds: 7200,
       pendingSessions: 3,
     });
-    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000))).toEqual({
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000), READINESS_POLICY)).toEqual({
       oldestPendingSeconds: 7201,
       pendingSessions: 3,
     });
@@ -672,7 +672,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
        ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
       [seedId(), OWNER, oldSession.dailySessionId, READINESS_POLICY, new Date(BASE_TIME + 2 * 60 * 60 * 1000)],
     );
-    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000))).toEqual({
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000), READINESS_POLICY)).toEqual({
       oldestPendingSeconds: 7200,
       pendingSessions: 2,
     });
@@ -702,9 +702,23 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       policyVersion: READINESS_POLICY,
       limit: 10,
     })).toHaveLength(1);
-    expect(await reflectionRepository!.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000))).toEqual({
+    const now = new Date(BASE_TIME + 2 * 60 * 60 * 1000);
+    expect(await reflectionRepository!.readDerivedLatency(now, READINESS_POLICY)).toEqual({
       oldestPendingSeconds: 7200,
       pendingSessions: 1,
+    });
+
+    await database!.pool.query(
+      `INSERT INTO reflection_runs (
+         reflection_run_id, user_id, scope_type, daily_session_id,
+         source_revision, claim_baseline_digest, policy_version,
+         expected_data_epoch, status, created_at, updated_at
+       ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
+      [seedId(), OWNER, session.dailySessionId, READINESS_POLICY, now],
+    );
+    expect(await reflectionRepository!.readDerivedLatency(now, READINESS_POLICY)).toEqual({
+      oldestPendingSeconds: 0,
+      pendingSessions: 0,
     });
   });
 

@@ -342,7 +342,10 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     private readonly registry: ReflectionRegistryLookup,
   ) {}
 
-  public async readDerivedLatency(now: Date): Promise<RecoveryDerivedLatency> {
+  public async readDerivedLatency(
+    now: Date,
+    policyVersion: string,
+  ): Promise<RecoveryDerivedLatency> {
     const result = await this.pool.query<{
       oldest_pending_seconds: number | null;
       pending_sessions: number;
@@ -359,12 +362,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
            SELECT status FROM reflection_runs run
            WHERE run.daily_session_id = s.daily_session_id
              AND run.source_revision = s.source_revision
-             AND run.policy_version = (
-               SELECT policy.policy_version
-               FROM reflection_policies policy
-               ORDER BY policy.created_at DESC
-               LIMIT 1
-             )
+             AND run.policy_version = $2
              AND run.scope_type = 'daily_session'
              AND run.status = 'built'
            ORDER BY run.updated_at DESC LIMIT 1
@@ -386,7 +384,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
        SELECT MAX(pending_seconds)::int AS oldest_pending_seconds,
               COUNT(*)::int AS pending_sessions
        FROM pending_sessions`,
-      [now],
+      [now, policyVersion],
     );
     return {
       oldestPendingSeconds: result.rows[0]?.oldest_pending_seconds ?? 0,
