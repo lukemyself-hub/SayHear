@@ -622,6 +622,62 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     return { claimId, claimVersionId };
   }
 
+  it("tracks pending derived work and excludes blank, evidence-free, and stale sessions", async () => {
+    const oldSession = await seedSession({ logicalDate: "2026-09-08" });
+    await seedDateOutcome({ dailySessionId: oldSession.dailySessionId, outcome: "journal_available" });
+    await seedJournalOutcome({ dailySessionId: oldSession.dailySessionId, outcome: "published" });
+    const recentSession = await seedSession({ logicalDate: "2026-09-09" });
+    await seedDateOutcome({ dailySessionId: recentSession.dailySessionId, outcome: "journal_available" });
+    await seedJournalOutcome({ dailySessionId: recentSession.dailySessionId, outcome: "retryable_failed" });
+    const insufficientSession = await seedSession({ logicalDate: "2026-09-10" });
+    await seedDateOutcome({ dailySessionId: insufficientSession.dailySessionId, outcome: "insufficient_expression" });
+    const blankSession = await seedSession({ logicalDate: "2026-09-11" });
+    await seedDateOutcome({ dailySessionId: blankSession.dailySessionId, outcome: "no_activity" });
+    const noEvidenceSessionId = seedId();
+    await database!.pool.query(
+      `INSERT INTO daily_sessions (
+         daily_session_id, user_id, logical_date, timezone_at_start, started_at,
+         last_activity_at, activity_state, current_continuous_exchange_no,
+         dialogue_revision, source_revision, next_turn_sequence_no,
+         next_event_sequence_no, quiescent_at, created_at, updated_at
+       ) VALUES ($1, $2, '2026-09-12', 'UTC', $3, $3, 'quiescent', 1, 0, 1, 1, 1, $3, $3, $3)`,
+      [noEvidenceSessionId, OWNER, new Date(BASE_TIME)],
+    );
+    const staleHeadSession = await seedSession({ logicalDate: "2026-09-13" });
+    await seedDateOutcome({ dailySessionId: staleHeadSession.dailySessionId, outcome: "journal_available" });
+    await database!.pool.query(
+      "UPDATE daily_sessions SET source_revision = 2 WHERE daily_session_id = $1",
+      [staleHeadSession.dailySessionId],
+    );
+
+    const repository = new PostgresReflectionRepository(database!.pool, {
+      entryFor: (predicateId) =>
+        predicateId === "sh.memory.hobby" ? { predicateId } : null,
+      registryVersion: () => 1,
+    });
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000))).toEqual({
+      oldestPendingSeconds: 7200,
+      pendingSessions: 3,
+    });
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000 + 1_000))).toEqual({
+      oldestPendingSeconds: 7201,
+      pendingSessions: 3,
+    });
+
+    await database!.pool.query(
+      `INSERT INTO reflection_runs (
+         reflection_run_id, user_id, scope_type, daily_session_id,
+         source_revision, claim_baseline_digest, policy_version,
+         expected_data_epoch, status, created_at, updated_at
+       ) VALUES ($1, $2, 'daily_session', $3, 1, 'baseline', $4, 1, 'built', $5, $5)`,
+      [seedId(), OWNER, oldSession.dailySessionId, READINESS_POLICY, new Date(BASE_TIME + 2 * 60 * 60 * 1000)],
+    );
+    expect(await repository.readDerivedLatency(new Date(BASE_TIME + 2 * 60 * 60 * 1000))).toEqual({
+      oldestPendingSeconds: 7200,
+      pendingSessions: 2,
+    });
+  });
+
   it("Q2: a journal-published day becomes due only after the Episode interval", async () => {
     const session = await seedSession({ logicalDate: "2026-09-09" });
     await seedDateOutcome({

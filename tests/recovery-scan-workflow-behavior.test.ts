@@ -80,7 +80,7 @@ type RecordedRequest = {
   authorization: string | null;
 };
 
-async function startHttpFixture(handler: () => { status: number }): Promise<{
+async function startHttpFixture(handler: () => { status: number; body?: unknown }): Promise<{
   origin: string;
   requests: RecordedRequest[];
   close: () => Promise<void>;
@@ -92,9 +92,9 @@ async function startHttpFixture(handler: () => { status: number }): Promise<{
       method: request.method ?? "",
       authorization: request.headers.authorization ?? null,
     });
-    const { status } = handler();
+    const { status, body = {} } = handler();
     response.statusCode = status;
-    response.end("{}");
+    response.end(JSON.stringify(body));
   });
   await new Promise<void>((resolve) =>
     server.listen(0, "127.0.0.1", resolve),
@@ -127,6 +127,7 @@ globalThis.fetch = async (url, init) => {
     error.name = "TimeoutError";
     throw error;
   }
+  if (process.env.FIXTURE_STATUS === "404") return new Response("{}", { status: 200 });
   return new Response(process.env.FIXTURE_BODY ?? "{}", {
     status: Number(process.env.FIXTURE_STATUS ?? "200"),
   });
@@ -189,7 +190,23 @@ const recoveryEndpoint =
 
 describe("Internal recovery scan workflow behavior", () => {
   it("runs schedule and empty-url dispatch against the configured recovery scan target", async () => {
-    const fixture = await startHttpFixture(() => ({ status: 200 }));
+    const fixture = await startHttpFixture(() => ({
+      status: 200,
+      body: {
+        responses: {},
+        inactivity: {},
+        eligibility: {},
+        dialogueState: {},
+        rollingSummary: {},
+        purge: {},
+        consolidation: {},
+        episode: {},
+        reflection: {},
+        candidateRemaps: {},
+        derivedLatency: { oldestPendingSeconds: 0, pendingSessions: 0 },
+        outbox: {},
+      },
+    }));
     try {
       const script = extractRunBlock(
         await readFile(recoveryWorkflowPath, "utf8"),
@@ -207,6 +224,7 @@ describe("Internal recovery scan workflow behavior", () => {
         });
         expect(result.exitCode, `${trigger.trigger}: ${result.stderr}`).toBe(0);
         expect(result.stdout).toContain("status=200");
+        expect(result.stdout).toContain("derived_latency_oldest_pending_seconds=0 pending_sessions=0");
         expect(result.stdout).not.toContain(cronSecret);
       }
       expect(fixture.requests).toHaveLength(2);
@@ -220,8 +238,109 @@ describe("Internal recovery scan workflow behavior", () => {
     }
   }, 20_000);
 
+  it("fails the scheduled step when derived latency exceeds two hours", async () => {
+    const fixture = await startHttpFixture(() => ({
+      status: 200,
+      body: {
+        responses: {},
+        inactivity: {},
+        eligibility: {},
+        dialogueState: {},
+        rollingSummary: {},
+        purge: {},
+        consolidation: {},
+        episode: {},
+        reflection: {},
+        candidateRemaps: {},
+        derivedLatency: { oldestPendingSeconds: 7201, pendingSessions: 1 },
+        outbox: {},
+      },
+    }));
+    try {
+      const result = await runBash(
+        extractRunBlock(
+          await readFile(recoveryWorkflowPath, "utf8"),
+          "Call recovery scan endpoint",
+        ),
+        {
+          CRON_SECRET: cronSecret,
+          CONFIGURED_URL: `${fixture.origin}/api/internal/recovery/scan`,
+          OVERRIDE_URL: "",
+        },
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stdout).toContain("derived_latency_oldest_pending_seconds=7201 pending_sessions=1");
+      expect(`${result.stdout}${result.stderr}`).toContain("derived latency exceeds the 2-hour window");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("fails the scheduled step when a derived-latency metric is malformed", async () => {
+    const fixture = await startHttpFixture(() => ({
+      status: 200,
+      body: {
+        derivedLatency: { oldestPendingSeconds: 7200.5, pendingSessions: 1 },
+      },
+    }));
+    try {
+      const result = await runBash(
+        extractRunBlock(
+          await readFile(recoveryWorkflowPath, "utf8"),
+          "Call recovery scan endpoint",
+        ),
+        {
+          CRON_SECRET: cronSecret,
+          CONFIGURED_URL: `${fixture.origin}/api/internal/recovery/scan`,
+          OVERRIDE_URL: "",
+        },
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(`${result.stdout}${result.stderr}`).toContain("missing or invalid derived-latency metrics");
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it("fails the scheduled step when the derived-latency metric is missing", async () => {
+    const fixture = await startHttpFixture(() => ({ status: 200, body: {} }));
+    try {
+      const result = await runBash(
+        extractRunBlock(
+          await readFile(recoveryWorkflowPath, "utf8"),
+          "Call recovery scan endpoint",
+        ),
+        {
+          CRON_SECRET: cronSecret,
+          CONFIGURED_URL: `${fixture.origin}/api/internal/recovery/scan`,
+          OVERRIDE_URL: "",
+        },
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(`${result.stdout}${result.stderr}`).toContain("missing or invalid derived-latency metrics");
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it("fails the original recovery scan on a non-200 response", async () => {
-    const fixture = await startHttpFixture(() => ({ status: 401 }));
+    const fixture = await startHttpFixture(() => ({
+      status: 401,
+      body: {
+        responses: {},
+        inactivity: {},
+        eligibility: {},
+        dialogueState: {},
+        rollingSummary: {},
+        purge: {},
+        consolidation: {},
+        episode: {},
+        reflection: {},
+        candidateRemaps: {},
+        derivedLatency: { oldestPendingSeconds: 0, pendingSessions: 0 },
+        outbox: {},
+      },
+    }));
     try {
       const result = await runBash(
         extractRunBlock(
@@ -270,6 +389,20 @@ describe("Internal recovery scan workflow behavior", () => {
           CRON_SECRET: cronSecret,
           CONFIGURED_URL: `http://127.0.0.1:${address.port}/api/internal/recovery/scan`,
           OVERRIDE_URL: "",
+          FIXTURE_BODY: JSON.stringify({
+            responses: {},
+            inactivity: {},
+            eligibility: {},
+            dialogueState: {},
+            rollingSummary: {},
+            purge: {},
+            consolidation: {},
+            episode: {},
+            reflection: {},
+            candidateRemaps: {},
+            derivedLatency: { oldestPendingSeconds: 0, pendingSessions: 0 },
+            outbox: {},
+          }),
         });
         expect(result.exitCode).not.toBe(0);
       } finally {

@@ -101,6 +101,15 @@ describe("Scheduled workflow trigger contracts", () => {
     expect(result.output).toContain('hourly schedule cron "13 * * * *"');
   });
 
+  it("requires the two-hour derived-latency gate in the original scan step", async () => {
+    const result = await runFixture(({ recovery }) => ({
+      recovery: recovery.replace("if (latency > 7200)", "if (latency > 9000)"),
+    }));
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain("derived-latency gate must fail above 7200 seconds");
+  });
+
   it("rejects an identity-only trigger that drops the original scan step", async () => {
     const result = await runFixture(({ recovery }) => {
       const start = recovery.indexOf(
