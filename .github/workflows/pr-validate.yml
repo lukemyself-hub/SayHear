@@ -111,7 +111,7 @@ jobs:
       - name: Unit and system tests
         run: pnpm test:ci
 
-      # Asserts the expected 41 system suites (the `expectedSystemSuiteCount`
+      # Asserts the expected 42 system suites (the `expectedSystemSuiteCount`
       # constant in scripts/ci/system-suite-execution.ts; a test fails if this
       # comment drifts from it) actually executed with no skipped test, so an
       # environment-caused skip cannot read as a pass.

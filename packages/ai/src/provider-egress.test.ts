@@ -524,13 +524,10 @@ describe("Provider Egress history review proposal (issue #314)", () => {
       champion: testChampion(),
       clock: () => new Date("2026-07-29T12:00:00.000Z"),
       contextCompiler: {
-        async compile() {
-          throw new Error("Compilation does not run inside Egress.");
-        },
         renderPermittedPayload() {
           return { instructions: "Ordinary instructions.", locale: "zh-CN", messages: [] };
         },
-      } satisfies ContextCompiler,
+      },
       model: {
         async *stream() {
           yield {

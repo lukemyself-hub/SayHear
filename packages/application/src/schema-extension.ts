@@ -98,6 +98,20 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
       justification:
         "Creates the content-free, non-owner-scoped recent_context_policies governance table (migration #295). It carries no user_id and is outside the owner Full Purge Surface Registry.",
     }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0071_history_answer_generation_stage.sql",
+      sha256: "781b17348c5ca58714e00c9f8bbb2ca1eec587e0319d45da7bd7b779a894b30f",
+      justification:
+        "Widens the generation_commands.generation_stage CHECK by exactly the history_answer value (issue #314, ADR-0094). The only admitted protected-surface rewrite: scripts/check-schema-extensions.ts accepts this single DROP/ADD of that named constraint when the re-added set is the frozen stages plus history_answer, and nothing else; every pre-existing stage stays valid.",
+    }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0072_history_recall_results.sql",
+      sha256: "cc64988f190e569e8be9fadbd8ef143a55d5c2ba8624e9e2a641ee4fdd33c6de",
+      justification:
+        "Creates the owner-scoped history_recall_results table (references and content-free coverage only, no message bodies, no foreign key to a protected relation) and extends the compiled_context_revision_refs section and metadata constraints and lineage trigger for the history_recall_context section (issue #314). It names no protected relation; the table is registered in the Purge Surface Registry.",
+    }),
   ]);
 
 /** Registered extension pins for one store, in registry order. */
