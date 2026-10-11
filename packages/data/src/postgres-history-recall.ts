@@ -891,7 +891,7 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
            model_config_version, provider_policy_version, consent_policy_version,
            freshness_policy, harness_policy_version, conversation_action_catalog_version,
            expected_data_epoch, generation_stage, status, created_at,
-           request_timezone
+           request_timezone, request_deadline_at, latest_input_fence_version
          )
          SELECT $1, command.user_id, command.interaction_turn_id, command.operation_type,
            $2, command.subject_type, command.subject_id, command.input_revision_kind,
@@ -904,7 +904,8 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
            command.provider_policy_version, command.consent_policy_version, command.freshness_policy,
            command.harness_policy_version, command.conversation_action_catalog_version,
            command.expected_data_epoch, 'history_answer', 'prepared', $5,
-           command.request_timezone
+           command.request_timezone, command.request_deadline_at,
+           command.latest_input_fence_version
          FROM generation_commands command
          WHERE command.generation_command_id = $3 AND command.user_id = $6`,
         [

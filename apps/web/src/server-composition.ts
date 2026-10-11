@@ -719,13 +719,15 @@ export function createServerComposition() {
         : configuration.provider.adapter === "opencode-go"
           ? {
               apiKey: configuration.provider.apiKey!,
-              timeoutMs: configuration.provider.timeoutMs,
+              // The chat path's own Provider timeout (issue #319), never the
+              // background roles' shared one.
+              timeoutMs: configuration.conversationRequest.providerTimeoutMs,
               type: "opencode-go",
             }
           : {
               apiKey: configuration.provider.apiKey!,
               baseUrl: configuration.provider.baseUrl!,
-              timeoutMs: configuration.provider.timeoutMs,
+              timeoutMs: configuration.conversationRequest.providerTimeoutMs,
               type: "responses-api",
             },
     champion: configuration.provider.champion,
@@ -921,6 +923,7 @@ export function createServerComposition() {
       repository: purgeRepository,
     }),
     authOptions: createAuthOptions({ configuration, pool }),
+    conversationRequestBudgetMs: configuration.conversationRequest.budgetMs,
     clock: configuration.clock,
     journalEligibilityRepository,
     actionRepository,
@@ -964,6 +967,7 @@ export function createServerComposition() {
       ...(historyRecallGateway ? { historyRecall: historyRecallGateway } : {}),
       repository: responseRepository,
       recoveryGate,
+      requestBudgetMs: configuration.conversationRequest.budgetMs,
     }),
     continuousExchangeService: createContinuousExchangeService({
       clock: configuration.clock,

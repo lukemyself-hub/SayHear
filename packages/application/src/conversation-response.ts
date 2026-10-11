@@ -25,7 +25,11 @@ import type {
 } from "./conversation-agent-harness";
 import type { HistoryRecallGateway } from "./history-recall";
 import type { CuriosityStopSignalProposal } from "./curiosity-stop-signal";
-import { type ProviderDispatchErrorCategory } from "./conversation-model";
+import {
+  ProviderDispatchError,
+  type ProviderDispatchErrorCategory,
+} from "./conversation-model";
+import { createRequestDeadline, type RequestDeadline } from "./request-deadline";
 import type {
   ConversationRetryTurn,
   UserTextConversationService,
@@ -161,14 +165,35 @@ export type ConversationResponseRepository = Readonly<{
         outcome: "committed";
         revisionId: ConversationEventRevisionId;
       }>
-    | Readonly<{ outcome: "fence_rejected" }>
+    | Readonly<{
+        outcome: "fence_rejected";
+        /**
+         * Why the answer lost its eligibility, when the reason is one of the
+         * request-lifecycle fences (issue #319): a newer user message exists, or
+         * the request's frozen deadline has passed.
+         */
+        reason?: "deadline_exceeded" | "superseded";
+      }>
   >;
+  /**
+   * Cheap, read-only probe used before the first token becomes visible: is
+   * this command's answer still allowed to be shown? A newer user message
+   * retires it; so does its deadline (issue #319). The commit fence stays the
+   * correctness boundary; this only keeps a retired answer off the screen.
+   */
+  checkResponseFreshness?(input: {
+    generationCommandId: GenerationCommandId;
+    now: Date;
+    userId: UserId;
+  }): Promise<"current" | "deadline_exceeded" | "superseded">;
   settleResponseFailure(input: {
     category: ProviderDispatchErrorCategory;
     generationCommandId: GenerationCommandId;
     interrupted: boolean;
     jitter: number;
     modelRunAttemptId: ModelRunAttemptId;
+    /** The request ended (deadline or cancel): never schedule a retry (#319). */
+    noRetry?: boolean;
     settledAt: Date;
     userId: UserId;
   }): Promise<
@@ -228,8 +253,33 @@ export function createConversationResponseService(dependencies: {
   jitter?: () => number;
   recoveryScanLimit?: number;
   recoveryGate?: RecoveryGate;
+  /**
+   * End-to-end budget of one chat request in milliseconds (ADR-0151: 30000).
+   * It is frozen as an absolute deadline when the request is accepted and
+   * shared by every step; unset keeps the legacy unbounded behavior (issue
+   * #319). It is separate from the Provider transport timeout.
+   */
+  requestBudgetMs?: number;
   repository: ConversationResponseRepository;
 }): ConversationResponseService {
+  const requestBudgetMs = dependencies.requestBudgetMs;
+  if (
+    requestBudgetMs !== undefined &&
+    (!Number.isInteger(requestBudgetMs) || requestBudgetMs <= 0)
+  ) {
+    throw new Error("requestBudgetMs must be a positive integer.");
+  }
+  // The newest accepted request per owner in this process. A newer user message
+  // retires the older in-flight request at once; across processes the database
+  // commit fence does the same (issue #319).
+  const inFlightByUser = new Map<string, AbortController>();
+  function beginRequest(): RequestDeadline | undefined {
+    if (requestBudgetMs === undefined) return undefined;
+    return createRequestDeadline({
+      clock: dependencies.clock,
+      deadlineAt: new Date(dependencies.clock().getTime() + requestBudgetMs),
+    });
+  }
   const recoveryScanLimit = dependencies.recoveryScanLimit ?? 100;
   const jitter = dependencies.jitter ?? Math.random;
   if (
@@ -241,9 +291,10 @@ export function createConversationResponseService(dependencies: {
       "recoveryScanLimit must be an integer from 1 through 1000.",
     );
   }
-  function historyAnswerInput() {
+  function historyAnswerInput(deadline?: RequestDeadline) {
     return {
       catalog: dependencies.catalog,
+      ...(deadline ? { deadline } : {}),
       harnessPolicy: {
         ...dependencies.harnessPolicy,
         maxHistoryQueries: 0 as const,
@@ -263,6 +314,7 @@ export function createConversationResponseService(dependencies: {
         >
       | null,
     signal?: AbortSignal,
+    deadline?: RequestDeadline,
   ): AsyncIterable<ConversationResponseStreamEvent> {
     // Claim request-lifecycle ownership of the Decision Command before emitting
     // any stream event, so a consumer that cancels immediately after the
@@ -340,13 +392,37 @@ export function createConversationResponseService(dependencies: {
       // The Service compiles request-lifecycle Context and hands the
       // already-compiled CompiledContext reference to the Harness (ADR-0093,
       // architecture 08-10 §8.1).
-      const context = await dependencies.contextCompiler.compile({
-        generationCommandId: turn.generation.commandId,
-        interactionTurnId: turn.turn.id,
-        userId,
-      });
+      let context: Awaited<ReturnType<ContextCompiler["compile"]>>;
+      try {
+        context = await interruptible(
+          dependencies.contextCompiler.compile({
+            generationCommandId: turn.generation.commandId,
+            interactionTurnId: turn.turn.id,
+            userId,
+          }),
+          signal,
+          deadline,
+        );
+      } catch (error) {
+        if (!(error instanceof ProviderDispatchError)) throw error;
+        // The request ended (deadline or cancel) while the Context was being
+        // read: settle honestly and say so, without starting anything new.
+        await dependencies.repository.settleResponseFailure({
+          category: error.category,
+          generationCommandId: turn.generation.commandId,
+          interrupted: false,
+          jitter: normalizedJitter(jitter()),
+          modelRunAttemptId: turn.generation.attemptId,
+          settledAt: dependencies.clock(),
+          userId,
+        });
+        settled = true;
+        yield { category: error.category, type: "response_failed" };
+        return;
+      }
       for await (const event of dependencies.harness.runDecision(
         {
+          ...(deadline ? { deadline } : {}),
           ...(context.actionReferenceHandles === undefined
             ? {}
             : { actionReferenceHandles: context.actionReferenceHandles }),
@@ -412,6 +488,7 @@ export function createConversationResponseService(dependencies: {
                 },
                 {
                   catalog: dependencies.catalog,
+                  ...(deadline ? { deadline } : {}),
                   harnessPolicy: {
                     ...dependencies.harnessPolicy,
                     maxStateChangingActions: 0,
@@ -440,7 +517,7 @@ export function createConversationResponseService(dependencies: {
                 requestEventRevisionId: requestEventRevisionId!,
                 userId,
               },
-              historyAnswerInput(),
+              historyAnswerInput(deadline),
               signal,
             ),
           );
@@ -469,42 +546,75 @@ export function createConversationResponseService(dependencies: {
 
   return {
     async *respond(userId, input, signal) {
-      await dependencies.recoveryGate?.requireOpen(userId);
-      const turn = await dependencies.conversationService.submit(userId, input);
-      yield* streamResponse(
-        userId,
-        turn,
-        turn.message.revisionId,
-        {
-          generationCommandId: turn.generation.commandId,
-          message: turn.message,
-          modelRunAttemptId: turn.generation.attemptId,
-          turnId: turn.turn.id,
-          type: "user_committed",
-          userEventRevisionId: turn.message.revisionId,
-        },
-        signal,
-      );
+      const deadline = beginRequest();
+      const mine = new AbortController();
+      try {
+        await dependencies.recoveryGate?.requireOpen(userId);
+        const turn = await dependencies.conversationService.submit(
+          userId,
+          input,
+          deadline ? { requestDeadlineAt: deadline.deadlineAt } : undefined,
+        );
+        if (!turn.replayed) {
+          // Accepting a newer message retires the older in-flight answer: its
+          // Provider call is cancelled, and the database fence rejects it even
+          // if the cancel never lands.
+          inFlightByUser.get(userId)?.abort();
+          inFlightByUser.set(userId, mine);
+        }
+        yield* streamResponse(
+          userId,
+          turn,
+          turn.message.revisionId,
+          {
+            generationCommandId: turn.generation.commandId,
+            message: turn.message,
+            modelRunAttemptId: turn.generation.attemptId,
+            turnId: turn.turn.id,
+            type: "user_committed",
+            userEventRevisionId: turn.message.revisionId,
+          },
+          signal ? AbortSignal.any([signal, mine.signal]) : mine.signal,
+          deadline,
+        );
+      } finally {
+        deadline?.release();
+        if (inFlightByUser.get(userId) === mine) inFlightByUser.delete(userId);
+      }
     },
     async *retry(userId, input, signal) {
-      await dependencies.recoveryGate?.requireOpen(userId);
-      const retry: ConversationRetryTurn =
-        await dependencies.conversationService.retry(userId, input);
-      yield* streamResponse(
-        userId,
-        retry,
-        null,
-        {
-          generationCommandId: retry.generation.commandId,
-          modelRunAttemptId: retry.generation.attemptId,
-          originalTurnId: retry.originalTurnId,
-          retryActionEventId: retry.retryActionEventId,
-          retryRequestId: retry.retryRequestId,
-          turnId: retry.turn.id,
-          type: "retry_committed",
-        },
-        signal,
-      );
+      const deadline = beginRequest();
+      const mine = new AbortController();
+      try {
+        await dependencies.recoveryGate?.requireOpen(userId);
+        const retry: ConversationRetryTurn =
+          await dependencies.conversationService.retry(
+            userId,
+            input,
+            deadline ? { requestDeadlineAt: deadline.deadlineAt } : undefined,
+          );
+        inFlightByUser.get(userId)?.abort();
+        inFlightByUser.set(userId, mine);
+        yield* streamResponse(
+          userId,
+          retry,
+          null,
+          {
+            generationCommandId: retry.generation.commandId,
+            modelRunAttemptId: retry.generation.attemptId,
+            originalTurnId: retry.originalTurnId,
+            retryActionEventId: retry.retryActionEventId,
+            retryRequestId: retry.retryRequestId,
+            turnId: retry.turn.id,
+            type: "retry_committed",
+          },
+          signal ? AbortSignal.any([signal, mine.signal]) : mine.signal,
+          deadline,
+        );
+      } finally {
+        deadline?.release();
+        if (inFlightByUser.get(userId) === mine) inFlightByUser.delete(userId);
+      }
     },
     async scanStaleResponses() {
       const now = dependencies.clock();
@@ -675,4 +785,38 @@ async function* streamExistingResponse(
     return;
   }
   yield { category: "unavailable", type: "response_failed" };
+}
+
+/**
+ * Waits for `work` but gives up as soon as the request is cancelled or its
+ * deadline passes, so a database read that cannot be cancelled still cannot
+ * hold the request past its budget (issue #319).
+ */
+async function interruptible<T>(
+  work: Promise<T>,
+  signal: AbortSignal | undefined,
+  deadline: RequestDeadline | undefined,
+): Promise<T> {
+  const parts = [signal, deadline?.signal].filter(
+    (part): part is AbortSignal => part !== undefined,
+  );
+  if (parts.length === 0) return work;
+  const combined = AbortSignal.any(parts);
+  const category = (): ProviderDispatchErrorCategory =>
+    deadline?.expired() ? "timeout" : "aborted";
+  work.catch(() => undefined);
+  if (combined.aborted) {
+    throw new ProviderDispatchError(category());
+  }
+  let onAbort: () => void = () => undefined;
+  const interrupted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new ProviderDispatchError(category()));
+    combined.addEventListener("abort", onAbort, { once: true });
+  });
+  interrupted.catch(() => undefined);
+  try {
+    return await Promise.race([work, interrupted]);
+  } finally {
+    combined.removeEventListener("abort", onAbort);
+  }
 }

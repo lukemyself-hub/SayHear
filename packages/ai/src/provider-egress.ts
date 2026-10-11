@@ -11,6 +11,7 @@ import {
   renderSafetyPostureResponseAnchor,
   SAFETY_POSTURE_ACTIVE_MARKER,
   type ContextCompiler,
+  type ModelRoleCallUsage,
   type ConversationTextChampion,
   type ConversationTextModel,
   type ProviderEgressPort,
@@ -102,7 +103,17 @@ export function createProviderEgressPort(dependencies: {
           : null;
       let streamedText = "";
       let anchorCompleted = false;
+      // Spend the Provider reports is settled whether or not the call goes on
+      // to complete: a call cut off by a timeout, an abort or a fence was still
+      // billed (issue #319). A completed call records its own usage with the
+      // completion, so this only covers the other outcomes.
+      let reportedUsage: ModelRoleCallUsage | null = null;
+      let completionRecorded = false;
+      try {
       for await (const event of dependencies.model.stream({
+        onUsage: (usage) => {
+          reportedUsage = usage;
+        },
         instructions: payload.instructions,
         locale: claim.context.locale,
         messages: payload.messages,
@@ -190,6 +201,7 @@ export function createProviderEgressPort(dependencies: {
               modelRunAttemptId: input.modelRunAttemptId,
               now: dependencies.clock(),
             });
+          completionRecorded = accepted;
           if (!accepted) {
             throw new ProviderDispatchError(
               "unavailable",
@@ -273,6 +285,19 @@ export function createProviderEgressPort(dependencies: {
           continue;
         }
         yield event;
+      }
+      } finally {
+        if (reportedUsage !== null && !completionRecorded) {
+          try {
+            await dependencies.repository.recordProviderUsage?.({
+              modelRunAttemptId: input.modelRunAttemptId,
+              now: dependencies.clock(),
+              usage: reportedUsage,
+            });
+          } catch {
+            // Settling usage must never mask the failure that ended the call.
+          }
+        }
       }
     },
   };

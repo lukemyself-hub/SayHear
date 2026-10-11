@@ -46,8 +46,22 @@ import {
  * owner/backup/session provisioning the system suites already rely on.
  */
 
+/**
+ * Request budget of the app under test in deterministic runs (#319). The
+ * product's own value is 30 seconds; the stub can stall on purpose, so the
+ * suite shortens it to show the deadline working in seconds, not half a minute.
+ * A real-model run must NOT use this: it keeps the product's 30 second budget.
+ */
+export const DETERMINISTIC_REQUEST_BUDGET_MS = 6_000;
+
 export type AcceptanceEnvironment = Readonly<{
   client: AcceptanceClient;
+  /**
+   * Where the running app listens and the session cookie that signs in as the
+   * synthetic owner. For looking at the real Portal in a browser by hand
+   * (UI verification); acceptance cases never use it.
+   */
+  connection(): Readonly<{ origin: string; sessionCookie: string; sessionToken: string }>;
   /** Enable the seven-day recent context through the real operator route. */
   enableRecentContext(): Promise<string>;
   /** Checks run identity, owner identity and seed capability, or throws. */
@@ -109,6 +123,8 @@ async function readOwnership(
 
 export async function createAcceptanceEnvironment(input: {
   initialNow: Date;
+  /** Overrides the deterministic request budget (latency measurements, #319). */
+  requestBudgetMs?: number;
   target: IsolationTarget;
 }): Promise<AcceptanceEnvironment> {
   const runId = `run-${randomUUID()}`;
@@ -171,6 +187,10 @@ export async function createAcceptanceEnvironment(input: {
     if (!database || !markerDatabase) throw new Error("Environment is not provisioned.");
     app = await startAppServer({
       clockFile,
+      // The deterministic stub can stall on purpose; a short budget shows the
+      // request deadline working without a 30 second wait. Real-model runs keep
+      // the product's own 30 seconds (#319).
+      requestBudgetMs: input.requestBudgetMs ?? DETERMINISTIC_REQUEST_BUDGET_MS,
       databaseUrl: database.connectionString,
       markerDatabaseUrl: markerDatabase.connectionString,
       provider: {
@@ -254,6 +274,10 @@ export async function createAcceptanceEnvironment(input: {
         throw new Error(`Enabling recent context failed with HTTP ${response.status}.`);
       }
       return "active";
+    },
+    connection() {
+      if (!app) throw new Error("The SayHear app is not running.");
+      return { origin: app.origin, sessionCookie: SESSION_COOKIE_NAME, sessionToken };
     },
     model: DETERMINISTIC_STUB_MODEL,
     async runScheduledScan() {

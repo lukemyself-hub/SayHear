@@ -1355,6 +1355,27 @@ describe("Trust actions core (issue #119)", () => {
     const sections = await finalizationContextSections();
     expect(sections.degradedReason).not.toBe("trust_action_memory_fenced");
     expect(replyText.length).toBeGreaterThan(0);
+
+    // #312/#319: the Decision that proposed the misfired Action is settled, not
+    // left running forever beside a committed reply.
+    const decision = await database.pool.query<{
+      attempt_completed_at: Date | null;
+      attempt_status: string;
+      command_status: string;
+    }>(
+      `SELECT command.status AS command_status, attempt.status AS attempt_status,
+              attempt.completed_at AS attempt_completed_at
+       FROM generation_commands command
+       INNER JOIN model_run_attempts attempt
+         ON attempt.generation_command_id = command.generation_command_id
+       WHERE command.generation_stage = 'decision'
+       ORDER BY command.created_at DESC LIMIT 1`,
+    );
+    expect(decision.rows[0]).toMatchObject({
+      attempt_status: "succeeded",
+      command_status: "succeeded",
+    });
+    expect(decision.rows[0]!.attempt_completed_at).not.toBeNull();
   });
 
   it("converges a repeated correction on the same logical claim (succeeded_noop)", async () => {

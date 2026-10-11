@@ -149,6 +149,8 @@ describe("Provider Egress", () => {
         },
       ],
       model: "gpt-5.4",
+      // Usage reporting is a callback, never payload (issue #319).
+      onUsage: expect.any(Function),
     });
     // A claim without a Daily Session carries no Provider session identity:
     // the per-command fallback is gone, so the Go transport fails closed

@@ -13,6 +13,7 @@ import type {
   ConversationResponseRepository,
   ConversationTextChampion,
   CuriosityStopSignalProposal,
+  ModelRoleCallUsage,
   ProviderDispatchErrorCategory,
   ProviderEgressClaim,
   ProviderEgressRepository,
@@ -22,6 +23,7 @@ import {
   countFollowUpQuestions,
   CURIOSITY_STOP_SIGNAL_POLICY_VERSION,
   EMPTY_CURIOSITY_STOP_SIGNAL_CONTENT,
+  LATEST_USER_INPUT_FENCE_VERSION,
   minimumHighRiskSafetyPostureDetector,
   SAFETY_POSTURE_CLEAN_TURNS_TO_RELEASE,
   SAFETY_POSTURE_POLICY_VERSION,
@@ -51,6 +53,7 @@ import {
 } from "@sayhear/domain";
 import type { Pool, PoolClient } from "pg";
 
+import { retryOnSerializationFailure } from "./serialization-retry";
 import { createUuidV7 } from "./uuid-v7";
 import { loadHistoryRecallForContext } from "./postgres-history-recall";
 import {
@@ -119,6 +122,7 @@ type ContextEventRow = Readonly<{
 }>;
 
 type DispatchRow = Readonly<{
+  request_deadline_at: Date | null;
   action_execution_id: string | null;
   action_execution_status: ActionFinalizationReceiptSnapshot["execution"] | null;
   action_receipt_admission: ActionFinalizationReceiptSnapshot["admission"] | null;
@@ -227,6 +231,87 @@ export class PostgresConversationResponseRepository
     } finally {
       client.release();
     }
+  }
+
+  /** Retries the transaction when a concurrent request conflicts (issue #319). */
+  public claimDispatch(
+    input: Parameters<PostgresConversationResponseRepository["claimDispatchOnce"]>[0],
+  ): ReturnType<PostgresConversationResponseRepository["claimDispatchOnce"]> {
+    return retryOnSerializationFailure(() => this.claimDispatchOnce(input));
+  }
+
+  /** Retries the transaction when a concurrent request conflicts (issue #319). */
+  public commitCompleteResponse(
+    input: Parameters<PostgresConversationResponseRepository["commitCompleteResponseOnce"]>[0],
+  ): ReturnType<PostgresConversationResponseRepository["commitCompleteResponseOnce"]> {
+    return retryOnSerializationFailure(() => this.commitCompleteResponseOnce(input));
+  }
+
+  /** Retries the transaction when a concurrent request conflicts (issue #319). */
+  public settleResponseFailure(
+    input: Parameters<PostgresConversationResponseRepository["settleResponseFailureOnce"]>[0],
+  ): ReturnType<PostgresConversationResponseRepository["settleResponseFailureOnce"]> {
+    return retryOnSerializationFailure(() => this.settleResponseFailureOnce(input));
+  }
+
+  /** Retries the transaction when a concurrent request conflicts (issue #319). */
+  public claimStaleResponseExecution(
+    input: Parameters<PostgresConversationResponseRepository["claimStaleResponseExecutionOnce"]>[0],
+  ): ReturnType<PostgresConversationResponseRepository["claimStaleResponseExecutionOnce"]> {
+    return retryOnSerializationFailure(() => this.claimStaleResponseExecutionOnce(input));
+  }
+
+  public async checkResponseFreshness(input: {
+    generationCommandId: GenerationCommandId;
+    now: Date;
+    userId: UserId;
+  }): ReturnType<NonNullable<ConversationResponseRepository["checkResponseFreshness"]>> {
+    const result = await this.pool.query<{
+      deadline_exceeded: boolean;
+      superseded: boolean;
+    }>(
+      `
+        SELECT
+          (
+            command.request_deadline_at IS NOT NULL
+            AND $3::timestamptz > command.request_deadline_at
+          ) AS deadline_exceeded,
+          (
+            command.latest_input_fence_version = $4
+            AND EXISTS (
+              SELECT 1
+              FROM conversation_events newer
+              WHERE newer.user_id = command.user_id
+                AND newer.daily_session_id = turn.daily_session_id
+                AND newer.actor = 'user'
+                AND newer.lifecycle_status = 'active'
+                AND newer.sequence_no > (
+                  SELECT MAX(own.sequence_no)
+                  FROM conversation_events own
+                  WHERE own.interaction_turn_id = turn.interaction_turn_id
+                    AND own.user_id = turn.user_id
+                    AND own.actor = 'user'
+                )
+            )
+          ) AS superseded
+        FROM generation_commands command
+        INNER JOIN interaction_turns turn
+          ON turn.interaction_turn_id = command.interaction_turn_id
+          AND turn.user_id = command.user_id
+        WHERE command.generation_command_id = $1
+          AND command.user_id = $2
+      `,
+      [
+        input.generationCommandId,
+        input.userId,
+        input.now,
+        LATEST_USER_INPUT_FENCE_VERSION,
+      ],
+    );
+    const row = result.rows[0];
+    if (row?.superseded) return "superseded";
+    if (row?.deadline_exceeded) return "deadline_exceeded";
+    return "current";
   }
 
   public async claimResponseExecution(input: {
@@ -367,7 +452,7 @@ export class PostgresConversationResponseRepository
     };
   }
 
-  public async claimStaleResponseExecution(input: {
+  public async claimStaleResponseExecutionOnce(input: {
     expectedModelRunAttemptId: ModelRunAttemptId;
     generationCommandId: GenerationCommandId;
     now: Date;
@@ -394,13 +479,33 @@ export class PostgresConversationResponseRepository
         provider_completed_at: Date | null;
         recovery_claimed_at: Date | null;
         recovery_window_ms: string;
+        latest_input_fence_version: string | null;
+        request_deadline_at: Date | null;
         retry_not_before: Date | null;
         started_at: Date | null;
+        superseded: boolean;
         turn_status: string;
       }>(
         `
           SELECT
             command.status AS command_status,
+            command.request_deadline_at,
+            command.latest_input_fence_version,
+            EXISTS (
+              SELECT 1
+              FROM conversation_events newer
+              WHERE newer.user_id = command.user_id
+                AND newer.daily_session_id = turn.daily_session_id
+                AND newer.actor = 'user'
+                AND newer.lifecycle_status = 'active'
+                AND newer.sequence_no > (
+                  SELECT MAX(own.sequence_no)
+                  FROM conversation_events own
+                  WHERE own.interaction_turn_id = turn.interaction_turn_id
+                    AND own.user_id = turn.user_id
+                    AND own.actor = 'user'
+                )
+            ) AS superseded,
             command.interaction_turn_id,
             turn.status AS turn_status,
             attempt.model_run_attempt_id,
@@ -472,7 +577,25 @@ export class PostgresConversationResponseRepository
         row.retry_not_before !== null &&
         row.retry_not_before <= input.now &&
         recoveryClaimExpired;
-      if (!preparedDue && !runningDue && !retryDue) {
+      // Issue #319: a request past its frozen deadline, or retired by a newer
+      // user message, is never resumed. It is swept as soon as a scan sees it
+      // rather than after the long recovery window.
+      const deadlineExpired =
+        row.request_deadline_at !== null &&
+        input.now.getTime() >= row.request_deadline_at.getTime();
+      const supersededByNewerInput =
+        row.latest_input_fence_version === LATEST_USER_INPUT_FENCE_VERSION &&
+        row.superseded;
+      const unsettled =
+        row.command_status === "prepared" ||
+        row.command_status === "compiling" ||
+        row.command_status === "running" ||
+        row.command_status === "retry_pending";
+      const retiredDue =
+        unsettled &&
+        (deadlineExpired || supersededByNewerInput) &&
+        recoveryClaimExpired;
+      if (!preparedDue && !runningDue && !retryDue && !retiredDue) {
         await client.query("COMMIT");
         return { outcome: "not_due" };
       }
@@ -490,6 +613,18 @@ export class PostgresConversationResponseRepository
         });
         await client.query("COMMIT");
         return { outcome: "interrupted" };
+      }
+
+      if (deadlineExpired || supersededByNewerInput) {
+        await settleRecoveredTerminal(client, {
+          category: deadlineExpired ? "timeout" : "aborted",
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: input.expectedModelRunAttemptId,
+          now: input.now,
+          userId: input.userId,
+        });
+        await client.query("COMMIT");
+        return { outcome: "terminal" };
       }
 
       if (!preparedDue && row.attempt_no >= row.max_attempts) {
@@ -682,6 +817,13 @@ export class PostgresConversationResponseRepository
               command.status = 'retry_pending'
               AND attempt.retry_not_before IS NOT NULL
               AND attempt.retry_not_before <= $1
+            )
+            OR (
+              command.request_deadline_at IS NOT NULL
+              AND command.request_deadline_at <= $1
+              AND command.status IN (
+                'prepared', 'compiling', 'running', 'retry_pending'
+              )
             )
           )
           AND (
@@ -1306,7 +1448,7 @@ export class PostgresConversationResponseRepository
     }
   }
 
-  public async claimDispatch(input: {
+  public async claimDispatchOnce(input: {
     champion: ConversationTextChampion;
     compiledContextId: CompiledContextId;
     generationCommandId: GenerationCommandId;
@@ -1340,6 +1482,7 @@ export class PostgresConversationResponseRepository
             command.provider_policy_version,
             command.consent_policy_version,
             command.freshness_policy,
+            command.request_deadline_at,
             command.generation_stage,
             command.action_execution_id::text AS action_execution_id,
             command.action_execution_status,
@@ -1480,12 +1623,18 @@ export class PostgresConversationResponseRepository
         row.context_policy_versions.taskInstructionVersion ===
           row.prompt_version &&
         row.context_dialogue_revision === row.session_dialogue_revision &&
-        row.context_source_revision === row.session_source_revision;
+        row.context_source_revision === row.session_source_revision &&
+        // Issue #319: no new Provider call starts after the request deadline.
+        (row.request_deadline_at === null ||
+          input.now.getTime() <= row.request_deadline_at.getTime());
 
       if (!row || !permitted) {
+        const deadlineBlocked =
+          row?.request_deadline_at != null &&
+          input.now.getTime() > row.request_deadline_at.getTime();
         if (row) {
           await insertEgressDisposition(client, {
-            category: "policy_blocked",
+            category: deadlineBlocked ? "timeout" : "policy_blocked",
             champion: input.champion,
             expectedDataEpoch: row.expected_data_epoch,
             modelRunAttemptId: input.modelRunAttemptId,
@@ -1495,7 +1644,10 @@ export class PostgresConversationResponseRepository
           });
         }
         await client.query("COMMIT");
-        return { category: "policy_blocked", outcome: "blocked" };
+        return {
+          category: deadlineBlocked ? "timeout" : "policy_blocked",
+          outcome: "blocked",
+        };
       }
 
       await insertEgressDisposition(client, {
@@ -1638,14 +1790,46 @@ export class PostgresConversationResponseRepository
     return recorded.rowCount === 1;
   }
 
+  public async recordProviderUsage(input: {
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+    usage: ModelRoleCallUsage;
+  }): Promise<void> {
+    // Only fills counters that are still unknown, so a value recorded at
+    // completion is never overwritten and an unreported counter stays NULL.
+    await this.pool.query(
+      `
+        UPDATE model_run_attempts
+        SET
+          input_tokens = COALESCE(input_tokens, $2),
+          output_tokens = COALESCE(output_tokens, $3),
+          reasoning_tokens = COALESCE(reasoning_tokens, $4),
+          cached_tokens = COALESCE(cached_tokens, $5),
+          total_tokens = COALESCE(total_tokens, $6)
+        WHERE model_run_attempt_id = $1
+      `,
+      [
+        input.modelRunAttemptId,
+        input.usage.inputTokens,
+        input.usage.outputTokens,
+        input.usage.reasoningTokens,
+        input.usage.cachedTokens,
+        input.usage.totalTokens,
+      ],
+    );
+  }
+
   public async recordProviderCompletion(input: {
     completion: {
+      cachedTokens?: number | null;
       costMicros: number | null;
       finishReason: string;
       inputTokens: number | null;
       modelSnapshot: string;
       outputTokens: number | null;
       providerRequestId: string | null;
+      reasoningTokens?: number | null;
+      totalTokens?: number | null;
       type: "completed";
     };
     modelRunAttemptId: ModelRunAttemptId;
@@ -1666,7 +1850,10 @@ export class PostgresConversationResponseRepository
             input_tokens = $4,
             output_tokens = $5,
             cost_micros = $6,
-            finish_reason = $7
+            finish_reason = $7,
+            reasoning_tokens = $9,
+            cached_tokens = $10,
+            total_tokens = $11
           FROM generation_commands command
           WHERE attempt.model_run_attempt_id = $8
             AND attempt.status = 'running'
@@ -1692,6 +1879,10 @@ export class PostgresConversationResponseRepository
           input.completion.costMicros,
           input.completion.finishReason,
           input.modelRunAttemptId,
+          // Only what the Provider reported; absent stays unknown (NULL).
+          input.completion.reasoningTokens ?? null,
+          input.completion.cachedTokens ?? null,
+          input.completion.totalTokens ?? null,
         ],
       );
       if (recorded.rowCount !== 1) {
@@ -1746,7 +1937,7 @@ export class PostgresConversationResponseRepository
     }
   }
 
-  public async commitCompleteResponse(input: {
+  public async commitCompleteResponseOnce(input: {
     completedAt: Date;
     generationCommandId: GenerationCommandId;
     metadata: CompleteResponseMetadata;
@@ -1761,6 +1952,9 @@ export class PostgresConversationResponseRepository
       const locked = await client.query<{
         consent_active: boolean;
         daily_session_id: string;
+        latest_input_fence_version: string | null;
+        request_deadline_at: Date | null;
+        superseded: boolean;
         data_epoch: string;
         expected_data_epoch: string;
         freshness_policy: string;
@@ -1784,6 +1978,23 @@ export class PostgresConversationResponseRepository
             command.input_revision_id,
             command.locale,
             command.freshness_policy,
+            command.request_deadline_at,
+            command.latest_input_fence_version,
+            EXISTS (
+              SELECT 1
+              FROM conversation_events newer
+              WHERE newer.user_id = command.user_id
+                AND newer.daily_session_id = turn.daily_session_id
+                AND newer.actor = 'user'
+                AND newer.lifecycle_status = 'active'
+                AND newer.sequence_no > (
+                  SELECT MAX(own.sequence_no)
+                  FROM conversation_events own
+                  WHERE own.interaction_turn_id = turn.interaction_turn_id
+                    AND own.user_id = turn.user_id
+                    AND own.actor = 'user'
+                )
+            ) AS superseded,
             policy.status AS provider_policy_status,
             (
               policy.consent_policy_version IS NULL
@@ -1870,6 +2081,16 @@ export class PostgresConversationResponseRepository
             input.generationCommandId,
           )
         : false;
+      // Issue #319: the answer must not outlive its request or its input. The
+      // deadline is the instant frozen at acceptance; supersession means a
+      // newer user message now exists in the session. Both are database
+      // fences, so they hold when the in-process cancel never arrived.
+      const deadlinePassed =
+        row?.request_deadline_at != null &&
+        input.completedAt.getTime() > row.request_deadline_at.getTime();
+      const superseded =
+        row?.latest_input_fence_version === LATEST_USER_INPUT_FENCE_VERSION &&
+        row.superseded;
       if (
         !row ||
         row.user_status !== "active" ||
@@ -1878,10 +2099,19 @@ export class PostgresConversationResponseRepository
         !referencesAreCurrent ||
         row.freshness_policy !== "source_valid:v1" ||
         row.provider_policy_status !== "active" ||
-        !row.consent_active
+        !row.consent_active ||
+        deadlinePassed ||
+        superseded
       ) {
         await client.query("ROLLBACK");
-        return { outcome: "fence_rejected" };
+        return {
+          outcome: "fence_rejected",
+          ...(superseded
+            ? { reason: "superseded" as const }
+            : deadlinePassed
+              ? { reason: "deadline_exceeded" as const }
+              : {}),
+        };
       }
 
       const eventId = createUuidV7(input.completedAt);
@@ -2129,12 +2359,13 @@ export class PostgresConversationResponseRepository
     }
   }
 
-  public async settleResponseFailure(input: {
+  public async settleResponseFailureOnce(input: {
     category: ProviderDispatchErrorCategory;
     generationCommandId: GenerationCommandId;
     interrupted: boolean;
     jitter: number;
     modelRunAttemptId: ModelRunAttemptId;
+    noRetry?: boolean;
     settledAt: Date;
     userId: UserId;
   }): ReturnType<ConversationResponseRepository["settleResponseFailure"]> {
@@ -2151,10 +2382,12 @@ export class PostgresConversationResponseRepository
         max_attempts: number;
         max_retry_delay_ms: string;
         provider_completed_at: Date | null;
+        request_deadline_at: Date | null;
       }>(
         `
           SELECT
             command.status AS command_status,
+            command.request_deadline_at,
             command.authoritative_result_id,
             attempt.attempt_no,
             attempt.provider_completed_at,
@@ -2209,26 +2442,35 @@ export class PostgresConversationResponseRepository
       }
       const providerCompleted = recoveryRow.provider_completed_at !== null;
       const interrupted = input.interrupted || providerCompleted;
+      const exponentialDelay = Math.min(
+        Number(recoveryRow.max_retry_delay_ms),
+        Number(recoveryRow.base_retry_delay_ms) *
+          2 ** (recoveryRow.attempt_no - 1),
+      );
+      const jitterMultiplier =
+        1 -
+        recoveryRow.jitter_ratio +
+        2 * recoveryRow.jitter_ratio * input.jitter;
+      const retryAt = new Date(
+        input.settledAt.getTime() +
+          Math.round(exponentialDelay * jitterMultiplier),
+      );
+      // Issue #319: a technical retry shares the request's one deadline. A
+      // retry that could not start before it is not scheduled at all, so a
+      // later scan can never resume the request and answer it late.
+      const retryFitsDeadline =
+        recoveryRow.request_deadline_at === null ||
+        retryAt.getTime() < recoveryRow.request_deadline_at.getTime();
       const retryable =
         !interrupted &&
+        input.noRetry !== true &&
+        input.category !== "aborted" &&
+        retryFitsDeadline &&
         (input.category === "rate_limited" ||
           input.category === "timeout" ||
           input.category === "unavailable") &&
         recoveryRow.attempt_no < recoveryRow.max_attempts;
       if (retryable) {
-        const exponentialDelay = Math.min(
-          Number(recoveryRow.max_retry_delay_ms),
-          Number(recoveryRow.base_retry_delay_ms) *
-            2 ** (recoveryRow.attempt_no - 1),
-        );
-        const jitterMultiplier =
-          1 -
-          recoveryRow.jitter_ratio +
-          2 * recoveryRow.jitter_ratio * input.jitter;
-        const retryAt = new Date(
-          input.settledAt.getTime() +
-            Math.round(exponentialDelay * jitterMultiplier),
-        );
         await client.query(
           `
             UPDATE generation_commands
@@ -2339,7 +2581,7 @@ export class PostgresConversationResponseRepository
           WHERE generation_command_id = $3
             AND user_id = $4
             AND authoritative_result_id IS NULL
-            AND status IN ('prepared', 'compiling', 'running')
+            AND status IN ('prepared', 'compiling', 'running', 'retry_pending')
         `,
         [
           commandStatus,
@@ -2514,6 +2756,7 @@ async function settleRecoveredInterruption(
 async function settleRecoveredTerminal(
   client: PoolClient,
   input: {
+    category?: ProviderDispatchErrorCategory;
     generationCommandId: GenerationCommandId;
     modelRunAttemptId: ModelRunAttemptId;
     now: Date;
@@ -2543,11 +2786,11 @@ async function settleRecoveredTerminal(
         recovery_status = 'terminal',
         recovery_claimed_at = NULL,
         completed_at = COALESCE(completed_at, $1),
-        error_category = COALESCE(error_category, 'timeout')
+        error_category = COALESCE(error_category, $4)
       WHERE model_run_attempt_id = $2
         AND user_id = $3
     `,
-    [input.now, input.modelRunAttemptId, input.userId],
+    [input.now, input.modelRunAttemptId, input.userId, input.category ?? "timeout"],
   );
   await client.query(
     `
@@ -2555,12 +2798,12 @@ async function settleRecoveredTerminal(
       SET
         status = CASE WHEN status = 'blocked' THEN 'blocked' ELSE 'failed' END,
         completed_at = COALESCE(completed_at, $1),
-        error_category = COALESCE(error_category, 'timeout')
+        error_category = COALESCE(error_category, $4)
       WHERE model_run_attempt_id = $2
         AND user_id = $3
         AND status IN ('blocked', 'dispatched')
     `,
-    [input.now, input.modelRunAttemptId, input.userId],
+    [input.now, input.modelRunAttemptId, input.userId, input.category ?? "timeout"],
   );
   await client.query(
     `

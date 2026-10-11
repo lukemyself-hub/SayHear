@@ -50,6 +50,8 @@ export type HistoryReviewScript =
       startDate?: string;
     }>;
 
+export type ToolCallScript = Readonly<{ argumentsJson: string; name: string }>;
+
 /** One seeded exchange: the user's words and the reply that was given then. */
 export type HistoryTurn = Readonly<{
   assistant: string;
@@ -71,6 +73,12 @@ export type SayStep = Readonly<{
   /** Abort the client connection after this many assistant deltas. */
   abortAfterDeltas?: number;
   at: string;
+  /**
+   * Start the request and move on to the next step without waiting for it, as
+   * a person does who keeps typing while a reply is being prepared (#319). The
+   * request's outcome is observed when the run finishes or the next step ends.
+   */
+  continueInBackground?: boolean;
   id: string;
   locale?: string;
   /**
@@ -83,6 +91,11 @@ export type SayStep = Readonly<{
   providerFault?: ProviderFaultSpec;
   text: string;
   timezone?: string;
+  /**
+   * Make the stand-in Provider's Decision select this Function when SayHear
+   * offers it (reproduces a Trust Action selection for latency work, #319).
+   */
+  toolCall?: ToolCallScript;
   type: "say";
 }>;
 
@@ -145,6 +158,18 @@ export type ObjectiveCheck =
       type: "session_ownership";
     }>
   | Readonly<{ step: string; type: "no_commit_after_abort" }>
+  /**
+   * A reply that a newer message retired is never shown and never stored: its
+   * stream carried no assistant text and the person's next message is the next
+   * thing in history, not an Assistant Event (#319).
+   */
+  | Readonly<{ step: string; type: "replaced_reply_never_shown" }>
+  /**
+   * A request whose Provider stalls is stopped by the request deadline: the
+   * stream ends with a timeout well inside `maxMs`, nothing is committed late
+   * and no command is left running (#319).
+   */
+  | Readonly<{ maxMs: number; step: string; type: "stopped_at_deadline" }>
   | Readonly<{ of: string; step: string; type: "resend_is_idempotent" }>
   | Readonly<{ step: string; type: "usage_recorded" }>
   /** Words said or corrected during the run reach the Provider for `step`. */
@@ -398,6 +423,8 @@ const KNOWN_CHECK_TYPES = new Set([
   "outbound_excludes",
   "session_ownership",
   "no_commit_after_abort",
+  "replaced_reply_never_shown",
+  "stopped_at_deadline",
   "resend_is_idempotent",
   "usage_recorded",
   "outbound_includes_input",

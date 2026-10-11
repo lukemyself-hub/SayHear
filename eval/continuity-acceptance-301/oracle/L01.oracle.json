@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "L01",
+  "title": "L01 Request lifecycle: a newer message retires a reply in preparation, and a stalled reply stops at the deadline",
+  "capability": "While a reply is still being prepared the person may keep typing: the newer message is taken as an addition or a new subject, the older reply is never shown and never stored, and nothing the person said is lost. A reply whose Provider stalls is stopped at the request deadline with an honest timeout, commits nothing late and leaves nothing running, and the conversation carries on normally afterwards.",
+  "spec": ["#301 R10", "#319", "ADR-0151", "ADR-0059", "ADR-0077", "ADR-0083"],
+  "ownerTickets": ["#319"],
+  "language": "en",
+  "fixture": { "version": "dev-1", "sha256": "5ddbe2352c8c6ff280ab88c304eba0ba974fca496e1a2792e82a0f9e7b16eae2" },
+  "facts": {
+    "allowed": [
+      { "id": "a-companion", "statement": "The person's sibling joined the outing to the stalls and they shared a dessert on the kerb.", "sources": ["market:user"] },
+      { "id": "a-plan", "statement": "The person and the sibling floated a long autumn ridge walk that a parent used to lead.", "sources": ["hike:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-technical", "statement": "Explaining the delay or the stopped request in system terms such as timeouts, streams or retries.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "The reply to the addition answers the narrowed question and the earlier question is not lost.",
+    "The superseded reply never appears in history.",
+    "The stalled request ends with a plain timeout well inside the budget and the next message is answered normally."
+  ],
+  "failureSignals": [
+    "A reply to a message the person already replaced appears on the screen or in history.",
+    "A stalled request keeps the person waiting past the budget or is answered late.",
+    "A command or attempt stays running after the request ended."
+  ],
+  "sourceEligibility": [
+    { "source": "market:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." },
+    { "source": "hike:user", "eligibility": "allowed", "reason": "Retained original expression inside the default background." }
+  ],
+  "criteria": [
+    { "id": "O-replaced-never-shown", "kind": "objective", "modes": ["deterministic"], "description": "The reply to the message the person replaced is neither shown nor stored.", "check": { "type": "replaced_reply_never_shown", "step": "ask" } },
+    { "id": "O-addition-commits", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The addition commits as one complete reply and history matches the stream.", "check": { "type": "history_matches_stream", "step": "supplement" } },
+    { "id": "O-addition-keeps-earlier-question", "kind": "objective", "modes": ["deterministic"], "description": "The earlier question the person replaced still reaches the Provider with the addition, so nothing they said is lost.", "check": { "type": "outbound_includes_input", "step": "supplement", "inputs": ["ask"] } },
+    { "id": "O-addition-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The original account of the outing reaches the Provider for the addition.", "check": { "type": "outbound_includes", "step": "supplement", "sources": ["market:user"] } },
+    { "id": "O-stall-stops", "kind": "objective", "modes": ["deterministic"], "description": "A stalled Provider ends with a timeout inside the budget, commits nothing late and leaves no command running.", "check": { "type": "stopped_at_deadline", "step": "stall", "maxMs": 9000 } },
+    { "id": "O-after-stall", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The conversation continues normally after the stopped request.", "check": { "type": "history_matches_stream", "step": "after" } },
+    { "id": "S-addition", "kind": "semantic", "owner": "#319", "description": "The reply to the addition answers the narrowed question and does not describe the interruption in system terms.", "step": "supplement", "required": ["a-companion"], "forbidden": ["f-technical"] }
+  ]
+}

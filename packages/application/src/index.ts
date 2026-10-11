@@ -347,6 +347,7 @@ export {
   ConversationRetryNotAllowedError,
   createUserTextConversationService,
   InvalidUserTextTurnError,
+  LATEST_USER_INPUT_FENCE_VERSION,
   localDateAt,
   CONVERSATION_DATE_PAGE_LIMIT,
   ConversationSessionNotFoundError,
@@ -1325,6 +1326,7 @@ export {
   type HistoryRecallSourceRequest,
   type HistoryRecallSourceSnapshot,
 } from "./history-recall";
+export * from "./request-deadline";
 export {
   buildExperienceGroups,
   expandPersonGroupsWithVerifiedAliases,

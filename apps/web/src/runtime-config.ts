@@ -314,6 +314,20 @@ export function loadRuntimeConfiguration(environment: Environment) {
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
     throw new Error("SAYHEAR_PROVIDER_TIMEOUT_MS must be a positive integer.");
   }
+  // Issue #319: a chat request has its own end-to-end budget and its own
+  // Provider timeout, separate from SAYHEAR_PROVIDER_TIMEOUT_MS, which the
+  // background roles share (memory extraction legitimately needs minutes).
+  // Both can only be tightened below the ADR-0151 stop condition (30 s).
+  const conversationRequestBudgetMs = boundedMilliseconds(
+    environment,
+    "SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS",
+    CONVERSATION_REQUEST_MAX_MS,
+  );
+  const conversationProviderTimeoutMs = boundedMilliseconds(
+    environment,
+    "SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS",
+    CONVERSATION_REQUEST_MAX_MS,
+  );
   const deepseekBaseUrl =
     environment.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
   if (deepseekBaseUrl.length === 0) {
@@ -538,6 +552,10 @@ export function loadRuntimeConfiguration(environment: Environment) {
       leaseOwner: "sayhear-cron",
     }),
     recoveryScannerSecret: required(environment, "CRON_SECRET"),
+    conversationRequest: Object.freeze({
+      budgetMs: conversationRequestBudgetMs,
+      providerTimeoutMs: conversationProviderTimeoutMs,
+    }),
     provider: Object.freeze({
       adapter,
       apiKey: liveProviderCredentials?.apiKey ?? null,
@@ -595,4 +613,22 @@ function parseDeterministicChunks(value: string): readonly string[] {
     throw new Error("SAYHEAR_TEST_PROVIDER_CHUNKS must be a JSON string array.");
   }
   return parsed;
+}
+
+/** ADR-0151: a chat request is stopped end to end after 30 seconds. */
+export const CONVERSATION_REQUEST_MAX_MS = 30_000;
+
+function boundedMilliseconds(
+  environment: Readonly<Record<string, string | undefined>>,
+  name: string,
+  maximum: number,
+): number {
+  const raw = environment[name];
+  const value = raw === undefined ? maximum : Number(raw);
+  if (!Number.isInteger(value) || value <= 0 || value > maximum) {
+    throw new Error(
+      `${name} must be a positive integer of at most ${maximum} milliseconds.`,
+    );
+  }
+  return value;
 }

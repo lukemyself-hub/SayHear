@@ -108,12 +108,20 @@ pnpm acceptance:continuity validate                 # 核验 fixture、oracle、
 pnpm acceptance:continuity plan [--mode real-model] # dry run：模式、请求/token/费用上界、剩余预算
 pnpm acceptance:continuity run-case S01 --verify-reset
 pnpm acceptance:continuity run-case C04 --out artifacts/my-run
-pnpm acceptance:continuity suite --expect-known-red # 全部 15 案例；失败必须恰好等于 known-red
+pnpm acceptance:continuity suite --expect-known-red # 全部案例；失败必须恰好等于 known-red
 pnpm acceptance:continuity chat C01                 # 装载后交互对话
 pnpm acceptance:continuity report --run artifacts/my-run/C04 --review review.json
 pnpm acceptance:continuity calibrate                # 用预制正/反例 transcript 校准检查器
 pnpm acceptance:continuity rebind --case C04        # 有意修改开发 fixture 后重新绑定 oracle
+pnpm acceptance:continuity latency --repeats 10 --out DIR            # 同口径聊天时延画像（桩 Provider，#319）
+pnpm acceptance:continuity latency --repeats 0 --stall-ms 40000 --budget-ms 30000   # Provider 卡住时是否在预算内停止
 ```
+
+`latency` 对 ordinary / cross_day_recall / trust_action / recall_with_correction_in_history（以及可选的
+stalled_provider）各跑 1 次首轮 + N 次暖轮，输出每次的客户端首段文本、提交、流关闭时间，桩 Provider 自身耗时
+（逐请求记录）和 SayHear 自身开销（流关闭 − 桩耗时），并给出暖轮的中位数与最大值，不用平均数掩盖慢样本。
+它只说明 SayHear 管线本身的耗时，**不是**真实模型的 3/10 秒证据（T08 #321）。比较改动前后时，用同一
+fixture、同一桩延迟参数在两个提交上各跑一次。
 
 任何运行命令都接受 `--dry-run`（只做计划）。输出默认写到
 `artifacts/continuity-acceptance/<时间戳>/<案例>/`（已 gitignore）：
@@ -178,6 +186,16 @@ pnpm acceptance:continuity rebind --case C04        # 有意修改开发 fixture
 
 runner 尚不能布置或观测的东西，用 `{"type": "unsupported", "capability": "..."}`
 声明为 `not-run`，不要写成会永久失败的判据。
+
+## 请求生命周期案例 L01（#319）
+
+L01 是 #319 的垂直验收：回答准备期间用户继续输入（`continueInBackground` 步骤让请求在后台继续，下一步即刻发出），
+旧回答不得展示/保存（`replaced_reply_never_shown`），新输入仍带着被取代的前一问进入 Provider
+（`outbound_includes_input`），以及 Provider 卡住时请求在预算内以 timeout 结束、不迟到提交、不留 running
+（`stopped_at_deadline`）。deterministic 运行把被测应用的整体请求预算缩短为
+`DETERMINISTIC_REQUEST_BUDGET_MS`（6 秒，`src/environment.ts`），避免真等 30 秒；产品默认仍是 30 秒。
+**real-model 运行（T08）不得使用这个缩短值。** CLI 观察上限 `CHAT_OBSERVATION_LIMIT_MS` 为 33 秒，略大于 30 秒预算和
+Portal 自身的 32 秒客户端停止，否则 CLI 会抢在服务端之前放弃。
 
 ## 已知限制
 

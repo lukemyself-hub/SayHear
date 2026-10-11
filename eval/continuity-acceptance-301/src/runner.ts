@@ -7,7 +7,13 @@ import type { AcceptanceEnvironment } from "./environment";
 // The runner drives a conversation from the model-visible fixture alone. It
 // must never import the oracle loader: what the scorer knows cannot be allowed
 // anywhere near the request path.
-import type { CaseFixture, HistoryReviewScript, ProviderFaultSpec, RunMode } from "./fixture";
+import type {
+  CaseFixture,
+  HistoryReviewScript,
+  ProviderFaultSpec,
+  RunMode,
+  ToolCallScript,
+} from "./fixture";
 import {
   OBSERVATION_SCHEMA_VERSION,
   type CaseObservation,
@@ -223,12 +229,14 @@ export type CaseSession = Readonly<{
   say(step: {
     abortAfterDeltas?: number;
     at: Date;
+    continueInBackground?: boolean;
     id: string;
     historyReview?: HistoryReviewScript;
     locale?: string;
     providerFault?: ProviderFaultSpec;
     text: string;
     timezone?: string;
+    toolCall?: ToolCallScript;
   }): Promise<ObservedStep>;
   seed: CaseObservation["seed"];
 }>;
@@ -347,12 +355,22 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   // The seed is verified through the normal read API, not by trusting writes.
   const seed = { providerStrings: seedProviderStrings, readback: await readSessions(), turns: seedTurns };
 
+  // Requests the person left running while they kept typing (#319). Each entry
+  // settles one background step into its final observation.
+  const pendingBackground: Array<() => Promise<void>> = [];
+  async function settleBackground(): Promise<void> {
+    while (pendingBackground.length > 0) {
+      await pendingBackground.shift()!();
+    }
+  }
+
   async function submit(
     id: string,
     type: "say" | "resend",
     at: Date,
     submission: {
       abortAfterDeltas?: number;
+      background?: boolean;
       clientEventId: string;
       clientTurnId: string;
       locale: string;
@@ -360,16 +378,18 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       providerFault?: Parameters<typeof stub.setFault>[0];
       text: string;
       timezone: string;
+      toolCall?: ToolCallScript;
     },
   ): Promise<ObservedStep> {
     await arriveAt(at);
+    const requestsBeforeStep = stub.requests().length;
     stub.setStepLabel(id);
     stub.setFault(submission.providerFault ?? null);
     stub.setHistoryReview(submission.historyReview ?? null);
+    stub.setToolCall(submission.toolCall ?? null);
     const problems: string[] = [];
-    let chat: ChatObservation | null = null;
-    try {
-      chat = await client.chat({
+    const chatPromise: Promise<ChatObservation | null> = client
+      .chat({
         clientEventId: submission.clientEventId,
         clientTurnId: submission.clientTurnId,
         locale: submission.locale,
@@ -378,74 +398,118 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         ...(submission.abortAfterDeltas === undefined
           ? {}
           : { abortAfterDeltas: submission.abortAfterDeltas }),
+      })
+      .catch((error) => {
+        problems.push(`Chat request failed: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
       });
-    } catch (error) {
-      problems.push(`Chat request failed: ${error instanceof Error ? error.message : String(error)}`);
+
+    const stepInput = {
+      clientEventId: submission.clientEventId,
+      clientTurnId: submission.clientTurnId,
+      locale: submission.locale,
+      text: submission.text,
+      timezone: submission.timezone,
+    };
+    async function finalize(chat: ChatObservation | null): Promise<ObservedStep> {
+      if (chat?.clientAborted) {
+        aborted = true;
+        // Give a wrongly surviving generation the chance to commit late, so the
+        // final history read can catch it.
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
+      const inspection = await inspect(chat?.generationCommandId ?? null, problems);
+      return {
+        at: at.toISOString(),
+        chat: chat
+          ? {
+              actions: chat.events
+                .filter((entry) => entry.event["type"] === "action_admitted")
+                .map((entry) => String(record(entry.event["receipt"])?.["actionKind"] ?? "unknown")),
+              assistantRevisionId: eventField(chat, "assistant_committed", "revisionId"),
+              clientAborted: chat.clientAborted,
+              events: chat.events.map((entry) => ({
+                category: text(entry.event["category"]),
+                delta: text(entry.event["delta"]),
+                elapsedMs: Math.round(entry.elapsedMs * 10) / 10,
+                type: String(entry.event["type"]),
+              })),
+              generationCommandId: chat.generationCommandId,
+              httpStatus: chat.httpStatus,
+              streamedText: chat.streamedText,
+              terminalEvent: chat.terminalEvent,
+              timing: chat.timing,
+              userMessageId: eventField(chat, "user_committed", "message", "id"),
+              userRevisionId: eventField(chat, "user_committed", "message", "revisionId"),
+            }
+          : null,
+        id,
+        input: stepInput,
+        inspection,
+        problems,
+        providerRequests: stub
+          .requests()
+          // Only this session's requests: after a reset the same step ids recur.
+          .slice(seedRequestsBefore)
+          .filter((request) => request.stepLabel === id)
+          .map((request) => {
+            const strings: string[] = [];
+            collectStrings(request.body, strings);
+            const messages = record(request.body)?.["input"];
+            const last = Array.isArray(messages) ? record(messages.at(-1)) : null;
+            return {
+              conversationTurn:
+                last?.["role"] === "user" && last["content"] === submission.text,
+              sequence: request.sequence,
+              strings,
+            };
+          }),
+        type,
+      };
     }
-    if (chat?.clientAborted) {
-      aborted = true;
-      // Give a wrongly surviving generation the chance to commit late, so the
-      // final history read can catch it.
-      await new Promise((resolve) => setTimeout(resolve, 1_500));
+
+    if (submission.background) {
+      // Wait until the request has reached the Provider, so the fault and the
+      // label this step set belong to it and not to the next step.
+      for (
+        let waited = 0;
+        stub.requests().length === requestsBeforeStep && waited < 5_000;
+        waited += 50
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      stub.setFault(null);
+      stub.setHistoryReview(null);
+      stub.setToolCall(null);
+      stub.setStepLabel(null);
+      const placeholder: ObservedStep = {
+        at: at.toISOString(),
+        chat: null,
+        id,
+        input: stepInput,
+        inspection: null,
+        problems,
+        providerRequests: [],
+        type,
+      };
+      const index = steps.push(placeholder) - 1;
+      pendingBackground.push(async () => {
+        const settled = await finalize(await chatPromise);
+        steps[index] = settled;
+        input.onStep?.(settled);
+      });
+      return placeholder;
     }
+
+    const chat = await chatPromise;
     stub.setFault(null);
     stub.setHistoryReview(null);
+    stub.setToolCall(null);
     stub.setStepLabel(null);
-    const inspection = await inspect(chat?.generationCommandId ?? null, problems);
-    const step: ObservedStep = {
-      at: at.toISOString(),
-      chat: chat
-        ? {
-            actions: chat.events
-              .filter((entry) => entry.event["type"] === "action_admitted")
-              .map((entry) => String(record(entry.event["receipt"])?.["actionKind"] ?? "unknown")),
-            assistantRevisionId: eventField(chat, "assistant_committed", "revisionId"),
-            clientAborted: chat.clientAborted,
-            events: chat.events.map((entry) => ({
-              delta: text(entry.event["delta"]),
-              elapsedMs: Math.round(entry.elapsedMs * 10) / 10,
-              type: String(entry.event["type"]),
-            })),
-            generationCommandId: chat.generationCommandId,
-            httpStatus: chat.httpStatus,
-            streamedText: chat.streamedText,
-            terminalEvent: chat.terminalEvent,
-            timing: chat.timing,
-            userMessageId: eventField(chat, "user_committed", "message", "id"),
-            userRevisionId: eventField(chat, "user_committed", "message", "revisionId"),
-          }
-        : null,
-      id,
-      input: {
-        clientEventId: submission.clientEventId,
-        clientTurnId: submission.clientTurnId,
-        locale: submission.locale,
-        text: submission.text,
-        timezone: submission.timezone,
-      },
-      inspection,
-      problems,
-      providerRequests: stub
-        .requests()
-        // Only this session's requests: after a reset the same step ids recur.
-        .slice(seedRequestsBefore)
-        .filter((request) => request.stepLabel === id)
-        .map((request) => {
-          const strings: string[] = [];
-          collectStrings(request.body, strings);
-          const messages = record(request.body)?.["input"];
-          const last = Array.isArray(messages) ? record(messages.at(-1)) : null;
-          return {
-            conversationTurn:
-              last?.["role"] === "user" && last["content"] === submission.text,
-            sequence: request.sequence,
-            strings,
-          };
-        }),
-      type,
-    };
+    const step = await finalize(chat);
     steps.push(step);
     input.onStep?.(step);
+    await settleBackground();
     return step;
   }
 
@@ -484,6 +548,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       return step;
     },
     async finish() {
+      await settleBackground();
       if (aborted) await new Promise((resolve) => setTimeout(resolve, 500));
       const identity = gitIdentity();
       const backgroundProviderStrings: string[] = [];
@@ -542,8 +607,10 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         text: step.text,
         timezone: step.timezone ?? fixture.defaults.timezone,
         ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
+        ...(step.continueInBackground ? { background: true } : {}),
         ...(step.providerFault ? { providerFault: step.providerFault } : {}),
         ...(step.historyReview ? { historyReview: step.historyReview } : {}),
+        ...(step.toolCall ? { toolCall: step.toolCall } : {}),
       });
     },
     seed,
@@ -562,9 +629,11 @@ export function playStep(
       id: step.id,
       text: step.text,
       ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
+      ...(step.continueInBackground ? { continueInBackground: true } : {}),
       ...(step.locale ? { locale: step.locale } : {}),
       ...(step.providerFault ? { providerFault: step.providerFault } : {}),
       ...(step.historyReview ? { historyReview: step.historyReview } : {}),
+      ...(step.toolCall ? { toolCall: step.toolCall } : {}),
       ...(step.timezone ? { timezone: step.timezone } : {}),
     });
   }

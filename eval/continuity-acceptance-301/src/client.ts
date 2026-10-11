@@ -7,6 +7,14 @@
 
 export const SESSION_COOKIE_NAME = "sayhear.session-token";
 
+/**
+ * How long the CLI watches one chat request before giving up. It is a client
+ * observation limit, not a product behavior: it sits just above the 30 second
+ * request budget (and the Portal's own 32 second client stop) so a server that
+ * honors its deadline is seen ending the request itself (#319).
+ */
+export const CHAT_OBSERVATION_LIMIT_MS = 33_000;
+
 export type StreamEventRecord = Readonly<{
   elapsedMs: number;
   event: Readonly<Record<string, unknown>>;
@@ -134,7 +142,7 @@ export function createAcceptanceClient(input: {
       const controller = new AbortController();
       const timeout = setTimeout(
         () => controller.abort(),
-        submission.timeoutMs ?? 30_000,
+        submission.timeoutMs ?? CHAT_OBSERVATION_LIMIT_MS,
       );
       // Timing starts before the request leaves this process.
       const started = performance.now();

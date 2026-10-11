@@ -30,7 +30,10 @@ import {
   buildHostedReleaseIdentity,
   normalizeDatabaseIdentity,
 } from "./release-identity";
-import { loadRuntimeConfiguration } from "./runtime-config";
+import {
+  CONVERSATION_REQUEST_MAX_MS,
+  loadRuntimeConfiguration,
+} from "./runtime-config";
 
 export const EFFECTIVE_RUNTIME_CONFIG_VERSION =
   "1a3b-g1-effective-runtime-config:v1";
@@ -664,6 +667,26 @@ export function buildEffectiveRuntimeConfiguration(
     source: overrideSource(environment, "SAYHEAR_PROVIDER_TIMEOUT_MS"),
     value: runtime.provider.timeoutMs,
     defaultValue: PROVIDER_DEFAULT_TIMEOUT_MS,
+  });
+  // Issue #319: the chat path's own budget and Provider timeout, separate from
+  // the background roles' shared deadline above (ADR-0151: 30 s stop).
+  add({
+    category: "deadline-budgets",
+    critical: true,
+    inManifestFingerprint: false,
+    key: "deadline.conversation_request_ms",
+    source: overrideSource(environment, "SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS"),
+    value: runtime.conversationRequest.budgetMs,
+    defaultValue: CONVERSATION_REQUEST_MAX_MS,
+  });
+  add({
+    category: "deadline-budgets",
+    critical: true,
+    inManifestFingerprint: false,
+    key: "deadline.conversation_provider_ms",
+    source: overrideSource(environment, "SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS"),
+    value: runtime.conversationRequest.providerTimeoutMs,
+    defaultValue: CONVERSATION_REQUEST_MAX_MS,
   });
   for (const key of [
     "deadline.gateway_limit_ms",

@@ -316,6 +316,56 @@ function evaluateObjective(
         ? { evidence, reason: "An assistant reply was committed after the client cancelled.", status: "fail" }
         : { evidence, reason: "No assistant reply was committed for the cancelled turn.", status: "pass" };
     }
+    case "replaced_reply_never_shown": {
+      const types = (chat?.events ?? []).map((event) => event.type);
+      const shown = types.includes("assistant_delta") || types.includes("assistant_committed");
+      const next = chat?.userMessageId
+        ? following(observation.finalHistory, chat.userMessageId)
+        : undefined;
+      const evidence = [
+        `${pointer}.chat.events types=${JSON.stringify([...new Set(types)])}`,
+        `message following ${chat?.userMessageId ?? "?"}: ${next ? next.actor : next === null ? "none" : "unknown"}`,
+      ];
+      if (!chat?.userMessageId || next === undefined) {
+        return { evidence, reason: "The replaced turn's user message was not observed.", status: "environment-error" };
+      }
+      return shown || next?.actor === "assistant"
+        ? { evidence, reason: "A reply that a newer message had retired was shown or stored.", status: "fail" }
+        : { evidence, reason: "The retired reply was neither shown nor stored.", status: "pass" };
+    }
+    case "stopped_at_deadline": {
+      const last = chat?.events.at(-1);
+      const next = chat?.userMessageId
+        ? following(observation.finalHistory, chat.userMessageId)
+        : undefined;
+      const closedMs = chat?.timing.streamClosedMs ?? null;
+      const evidence = [
+        `${pointer}.chat last event=${last?.type ?? "none"} category=${last?.category ?? "none"}`,
+        `${pointer}.chat.timing.streamClosedMs=${closedMs} (CLI network, limit ${check.maxMs})`,
+        `${pointer}.inspection.commandStatus=${step.inspection?.commandStatus ?? "null"} attemptStatus=${step.inspection?.attemptStatus ?? "null"}`,
+        `message following ${chat?.userMessageId ?? "?"}: ${next ? next.actor : next === null ? "none" : "unknown"}`,
+      ];
+      const stopped =
+        last?.type === "response_failed" &&
+        last.category === "timeout" &&
+        closedMs !== null &&
+        closedMs <= check.maxMs;
+      const settled =
+        step.inspection !== null &&
+        step.inspection.commandStatus !== "running" &&
+        step.inspection.commandStatus !== "prepared" &&
+        step.inspection.commandStatus !== "compiling" &&
+        step.inspection.attemptStatus !== "running";
+      if (!stopped) {
+        return { evidence, reason: "The stalled request was not stopped with a timeout inside the limit.", status: "fail" };
+      }
+      if (next?.actor === "assistant") {
+        return { evidence, reason: "A late answer was committed after the request deadline.", status: "fail" };
+      }
+      return settled
+        ? { evidence, reason: "The request ended with a timeout inside the limit, committed nothing late and left nothing running.", status: "pass" }
+        : { evidence, reason: "The request ended but its command or attempt was left unsettled.", status: "fail" };
+    }
     case "resend_is_idempotent": {
       const original = findStep(observation, check.of);
       if (!original) return missingStep(check.of, observation);

@@ -32,6 +32,12 @@ export type AppServerInput = Readonly<{
   /** File holding the controlled instant; see `writeControlledNow`. */
   clockFile: string;
   markerDatabaseUrl: string;
+  /**
+   * End-to-end chat request budget for this run. Omitted keeps the product
+   * default (30 s); the deterministic mode shortens it so a stalled Provider
+   * can be shown to stop without a 30 second wait (#319).
+   */
+  requestBudgetMs?: number;
   provider: Readonly<{
     apiKey: string;
     baseUrl: string;
@@ -82,6 +88,9 @@ export function buildAppEnvironment(
     SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: ACCEPTANCE_BACKUP_FINGERPRINT,
     SAYHEAR_BACKUP_POLICY_VERSION: ACCEPTANCE_BACKUP_POLICY_VERSION,
     SAYHEAR_CONTEXT_HMAC_SECRET: "continuity-acceptance-context-integrity-secret",
+    ...(input.requestBudgetMs === undefined
+      ? {}
+      : { SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS: String(input.requestBudgetMs) }),
     SAYHEAR_CONVERSATION_TEXT_MODEL: input.provider.model,
     SAYHEAR_CONVERSATION_TEXT_MODEL_SNAPSHOT: input.provider.model,
     SAYHEAR_DEEPSEEK_BASE_URL: input.provider.baseUrl,

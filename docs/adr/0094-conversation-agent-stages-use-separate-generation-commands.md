@@ -66,3 +66,18 @@ Command 开始，重新取得状态、选择和 reservation。
 `history_recall_results` 与同一冻结/重验/恢复路径，不新增 stage 或 Command kind；它只在冻结结果中增加
 检索计划（线索组，私人字段）、按次经历分组的引用与检索覆盖统计，并在 Context 引用上增加
 `history_lexical_match/history_lexical_context` 两个选择原因（迁移 0075，不涉及受保护关系）。
+## 修订（2026-10，issue #319，ADR-0151）：新输入、取代与 Decision 结算
+
+- **新输入是新的 User Event / Turn**。“再补充一点”“换个话题”都不追加进旧 Command：新一轮的冻结上下文
+  包含前一个有效用户问题与新输入，由新一轮结合当前表达理解。不新增“补充”按钮或另一套意图状态机。
+- **取代（supersede）不写旧命令的状态**。“同 Session 存在更新的用户消息”这一事实由新 User Event 在其
+  接受事务中本身构成；旧命令的提交围栏（ADR-0083 修订）读取它。因此新输入的接受与旧结果的失效在同一数据库
+  事实上原子成立，不依赖客户端隐藏、也不依赖取消信号送达；进程内另会取消旧请求的 Provider 调用。被取代的
+  命令以 `aborted` 结算（未展示任何 token 时为 failed，已展示则 interrupted 并保留显式 Retry）。
+- **Decision 转为提案后必须结算**。任何已评估的 Conversation Action 提案，无论受理结果，都结算 Decision
+  的 command/attempt（#312：误触发的 Trust Action 以 `clarification_required / target_not_found` 结束时
+  Decision 曾永久停在 running）。未受理且没有回复可发（无 Finalization）时，同一动作把 Turn 也结算为
+  failed，而不是留给恢复窗口。
+- **Finalization 与 History Answer 继承请求截止与最新输入围栏**；它们不是 Decision 的技术重试，截止后
+  不开始。已知 Provider 用量（含 reasoning/cached/total）无论调用是否完成、提交是否成功都入账；未知保持
+  NULL，不填零。

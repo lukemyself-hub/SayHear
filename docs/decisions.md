@@ -40,7 +40,7 @@ Accepted
 - [`0080`](adr/0080-backup-window-is-verified-before-private-data-writes.md)：真实私人数据写入前核验最长备份窗口
 - [`0081`](adr/0081-domain-transactions-use-node-and-pooled-postgresql-connections.md)：领域事务使用 Node runtime 与 pooled PostgreSQL interactive connection
 - [`0093`](adr/0093-conversation-runtime-uses-a-replaceable-bounded-agent-harness.md)：Conversation Runtime 使用可替换的受限 Agent Harness，暂不引入通用 Framework（2026-10 修订：新增受控只读历史查询为第三种互斥 Decision 结果，Trust-Control 确定性优先）
-- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision、Action Finalization 与 History Answer 使用独立 GenerationCommand（2026-10 修订含 G1 stage CHECK 守卫的窄例外）
+- [`0094`](adr/0094-conversation-agent-stages-use-separate-generation-commands.md)：Conversation Decision、Action Finalization 与 History Answer 使用独立 GenerationCommand（2026-10 修订含 G1 stage CHECK 守卫的窄例外；#319 修订新输入取代旧回答与 Decision 结算）
 - [`0133`](adr/0133-bio-writing-and-validation-have-separate-command-budgets.md)：Bio 写作与验证使用独立 GenerationCommand 和可计算的 attempt 预算，repair 后必须重新验证
 - [`0136`](adr/0136-1a3b-model-pins-are-evidence-outputs.md)：1A.3b SPEC 固定角色评测合同，生产模型 pin 由冻结验收证据产生而不是提前指定
 - [`0140`](adr/0140-g1-deepseek-model-alias-is-pinned-evidence.md)：G1 接受 DeepSeek 可变 alias 作为有界例外，以完整 pin、运行时快照比对与 AC-M01 调用证据为前提
@@ -172,7 +172,7 @@ Accepted
 
 - [`0074`](adr/0074-versioned-domain-artifacts-require-lineage.md)：版本化领域产物必须保留 revision 与 lineage
 - [`0077`](adr/0077-generation-command-is-separate-from-model-run-attempt.md)：逻辑 GenerationCommand 与每次 ModelRunAttempt 分离
-- [`0083`](adr/0083-generation-commands-use-versioned-freshness-policies.md)：Command 使用版本化 exact-head、source-valid 或 monotonic freshness policy
+- [`0083`](adr/0083-generation-commands-use-versioned-freshness-policies.md)：Command 使用版本化 exact-head、source-valid 或 monotonic freshness policy（#319 修订：对话响应冻结请求截止与最新输入围栏）
 - [`0085`](adr/0085-persistent-ids-are-opaque-and-semantic-ids-are-versioned.md)：持久实例使用 opaque UUIDv7，语义 ID 使用版本化 `sh.*` namespace
 - [`0086`](adr/0086-interaction-voice-and-event-identities-are-distinct.md)：InteractionTurn、VoiceTurn 与 Event Revision 使用独立身份和职责
 - [`0087`](adr/0087-evidence-item-is-a-typed-reference-to-user-event-revisions.md)：EvidenceItem 是指向 final / corrected User Event Revision 的一等类型化引用

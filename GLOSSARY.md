@@ -95,6 +95,13 @@ _Avoid_: Technical retry, Action Finalization Command, Proactive Follow-up Segme
 **Experience Search**:
 History Query Proposal 的第二种形态：用几个等价关键词、可选的人物线索和日期范围，在 owner 仍允许使用的 User 原文里确定性地找回未形成 Memory 的较早普通经历。关键词只是寻找线索，不是用户事实，也不创建 Claim、Entity 或别名；结果按“次经历”分组，覆盖不足或无匹配只说明“在可看范围里没找到”，不证明没聊过，也不证明是最早一次。
 _Avoid_: Memory retrieval, Claim search, Semantic search, Fuzzy match
+**Request Deadline**:
+一次聊天请求被接受时冻结在 GenerationCommand 上的绝对截止时刻（整体 30 秒，ADR-0151）。所有后续步骤共用剩余时间而不重新领取；截止后不再开始新步骤，迟到结果不展示、不提交，恢复扫描也不续跑。它与 Provider 传输超时是两个独立配置。
+_Avoid_: Provider timeout, Step timeout, Retry budget
+
+**Superseded Answer**:
+同一 Daily Session 出现更新的用户消息后，仍在准备中的旧回答。它失去展示与提交资格（由数据库围栏保证，取消信号只是优化）；新消息是新的 Turn，不追加进旧 Command。已展示的局部内容按 interrupted 保存并保留显式 Retry，不成为成功的历史事实。
+_Avoid_: Cancelled reply, Merged supplement, Appended Command
 
 ## 对话行为
 
