@@ -30,6 +30,12 @@ export type SystemSuiteExecution = Readonly<{
 export const expectedSystemSuiteCount = 41;
 
 const SYSTEM_SUITE_DIRECTORY = "tests/system";
+const SKIPPED_STATUSES = new Set([
+  "disabled",
+  "pending",
+  "skipped",
+  "todo",
+]);
 
 /**
  * Repo-relative suite key. vitest reports a resolved absolute path while the
@@ -47,7 +53,8 @@ function suiteKey(path: string): string {
  * independent databases. Several system suites degrade to `describe.skip` when
  * a test database variable is missing, so a run that reports success can still
  * have executed no coverage at all. Missing, skipped, and failing suites are
- * therefore reported as failures instead of being counted as a pass.
+ * therefore reported as failures instead of being counted as a pass, while
+ * skips remain distinct from failed assertions.
  */
 export function assertSystemSuitesExecuted(
   input: SystemSuiteExecutionInput,
@@ -56,6 +63,7 @@ export function assertSystemSuitesExecuted(
     input.report.testResults.map((result) => [suiteKey(result.name), result]),
   );
   const missing: string[] = [];
+  const empty: string[] = [];
   const skipped: string[] = [];
   const failed: string[] = [];
   let executedSystemSuites = 0;
@@ -70,26 +78,38 @@ export function assertSystemSuitesExecuted(
       continue;
     }
     executedSystemSuites += 1;
-    const skippedHere = result.assertionResults.filter(
-      (assertion) => assertion.status !== "passed",
+    if (result.assertionResults.length === 0) {
+      empty.push(suite);
+    }
+    const skippedHere = result.assertionResults.filter((assertion) =>
+      SKIPPED_STATUSES.has(assertion.status),
     );
+    const hasFailedAssertions = result.assertionResults.some(
+      (assertion) =>
+        assertion.status !== "passed" && !SKIPPED_STATUSES.has(assertion.status),
+    );
+    const skippedSuiteStatus = SKIPPED_STATUSES.has(result.status);
     systemTests += result.assertionResults.length;
     skippedSystemTests += skippedHere.length;
-    if (skippedHere.length > 0) {
+    if (skippedSuiteStatus || skippedHere.length > 0) {
       skipped.push(suite);
     }
-    if (result.status !== "passed") {
+    if (
+      (result.status !== "passed" && !skippedSuiteStatus) ||
+      hasFailedAssertions
+    ) {
       failed.push(suite);
     }
   }
 
   const problems = [
     ...missing.map((suite) => `${suite} did not run`),
+    ...empty.map((suite) => `${suite} reported no tests`),
     ...skipped.map(
       (suite) =>
-        `${suite} reported non-passing tests, most likely a missing or shared test database`,
+        `${suite} reported skipped tests; check suite skip conditions and test database configuration`,
     ),
-    ...failed.map((suite) => `${suite} did not pass`),
+    ...failed.map((suite) => `${suite} reported failed tests`),
   ];
   if (problems.length > 0) {
     throw new Error(
