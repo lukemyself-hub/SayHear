@@ -9,7 +9,9 @@ import {
   INITIAL_CONVERSATION_HARNESS_POLICY,
   type ConversationResponseStreamEvent,
   type ConversationTextChampion,
+  ProviderDispatchError,
   type ConversationTextModel,
+  type ConversationTextModelRequest,
   type ConversationTextModelStreamEvent,
 } from "@sayhear/application";
 import { createProviderEgressPort } from "@sayhear/ai/testing";
@@ -93,6 +95,7 @@ const completed = (outputTokens = 3): ConversationTextModelStreamEvent => ({
 });
 
 type Script = (input: {
+  onUsage: ConversationTextModelRequest["onUsage"];
   signal: AbortSignal | undefined;
   text: string;
 }) => AsyncIterable<ConversationTextModelStreamEvent>;
@@ -149,8 +152,28 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
     await database?.dispose();
   }, 10_000);
 
-  function createApp(script: Script, options: { requestBudgetMs?: number } = {}) {
+  function createApp(
+    script: Script,
+    options: {
+      commitFault?: () => Error | null;
+      requestBudgetMs?: number;
+    } = {},
+  ) {
     const clock = () => new Date(now);
+    // Optionally make the acceptance commit fail after the Provider succeeded.
+    const harnessRepository = new Proxy(responseRepository, {
+      get(target, property, receiver) {
+        if (property === "commitCompleteResponse" && options.commitFault) {
+          return async (...args: unknown[]) => {
+            const fault = options.commitFault?.();
+            if (fault) throw fault;
+            return (target.commitCompleteResponse as (...a: unknown[]) => unknown)(...args);
+          };
+        }
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
     const contextCompiler = createContextCompiler({
       clock,
       compilerVersion: "context-compiler:v1",
@@ -160,7 +183,11 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
     });
     const model: ConversationTextModel = {
       stream: (request) =>
-        script({ signal: request.signal, text: lastUserText(request.messages) }),
+        script({
+          onUsage: request.onUsage,
+          signal: request.signal,
+          text: lastUserText(request.messages),
+        }),
     };
     const conversationService = createUserTextConversationService({
       clock,
@@ -185,7 +212,7 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
           model,
           repository: responseRepository,
         }),
-        repository: responseRepository,
+        repository: harnessRepository,
       }),
       harnessPolicy: INITIAL_CONVERSATION_HARNESS_POLICY,
       ...(options.requestBudgetMs === undefined
@@ -419,6 +446,81 @@ describe("Conversation request lifecycle — deadline, supersession and settleme
     expect(calls).toBe(0);
     expect(await assistantTexts()).toEqual([]);
     expect((await commandStates())[0]).toMatchObject({ command: "failed", category: "timeout" });
+  });
+
+  it("keeps the spend the Provider reported even when the call then fails, and records the reasoning split on success", async () => {
+    const failing = createApp(async function* ({ onUsage }) {
+      onUsage?.({
+        cachedTokens: null,
+        inputTokens: 6_430,
+        outputTokens: 11_919,
+        reasoningTokens: 11_000,
+        totalTokens: null,
+      });
+      yield* [];
+      throw new ProviderDispatchError("authentication");
+    });
+    await chat(failing.service, "fail", "first question");
+    const succeeding = createApp(async function* () {
+      yield { delta: "fine", type: "delta" };
+      yield { ...(completed() as object), reasoningTokens: 7, totalTokens: 15 } as ConversationTextModelStreamEvent;
+    });
+    await chat(succeeding.service, "ok", "second question");
+    const rows = await database.pool.query<{
+      input_tokens: string | null;
+      output_tokens: string | null;
+      reasoning_tokens: string | null;
+      status: string;
+      total_tokens: string | null;
+    }>(`
+      SELECT attempt.status, attempt.input_tokens, attempt.output_tokens,
+             attempt.reasoning_tokens, attempt.total_tokens
+      FROM model_run_attempts attempt
+      INNER JOIN generation_commands command
+        ON command.generation_command_id = attempt.generation_command_id
+      INNER JOIN interaction_turns turn
+        ON turn.interaction_turn_id = command.interaction_turn_id
+      ORDER BY turn.turn_sequence_no
+    `);
+    expect(rows.rows).toEqual([
+      // Billed but failed: the reported spend survives; the unreported total is unknown, not zero.
+      { input_tokens: "6430", output_tokens: "11919", reasoning_tokens: "11000", status: "failed", total_tokens: null },
+      { input_tokens: "5", output_tokens: "3", reasoning_tokens: "7", status: "succeeded", total_tokens: "15" },
+    ]);
+  });
+
+  it("settles the attempt and its spend when the Provider succeeded but the database commit failed, and a resend yields one answer", async () => {
+    let failCommit = true;
+    const { service } = createApp(
+      async function* () {
+        yield { delta: "an answer", type: "delta" };
+        yield completed(9);
+      },
+      {
+        commitFault: () =>
+          failCommit
+            ? Object.assign(new Error("connection terminated"), { code: "08006" })
+            : null,
+      },
+    );
+    const first = await chat(service, "commit-fault", "hello there");
+    expect(first.at(-1)).toEqual({ category: "unknown", type: "response_interrupted" });
+    // Nothing is left running; the Provider's spend is on the ledger.
+    expect(await commandStates()).toEqual([
+      { attempt: "result_unknown", category: "unknown", command: "interrupted" },
+    ]);
+    const spend = await database.pool.query<{ output_tokens: string | null }>(
+      "SELECT output_tokens FROM model_run_attempts",
+    );
+    expect(spend.rows[0]?.output_tokens).toBe("9");
+    expect(await assistantTexts()).toEqual([]);
+
+    // The person (or a reconnecting client) sends the same message again: it
+    // resolves to the original turn and still never makes two answers.
+    failCommit = false;
+    await chat(service, "commit-fault", "hello there");
+    await chat(service, "commit-fault", "hello there");
+    expect((await assistantTexts()).length).toBeLessThanOrEqual(1);
   });
 
   it("serves the BFF boundary: the stream closes with a timeout even if the service never ends", async () => {

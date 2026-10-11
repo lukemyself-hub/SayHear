@@ -13,6 +13,7 @@ import type {
   ConversationResponseRepository,
   ConversationTextChampion,
   CuriosityStopSignalProposal,
+  ModelRoleCallUsage,
   ProviderDispatchErrorCategory,
   ProviderEgressClaim,
   ProviderEgressRepository,
@@ -1789,14 +1790,46 @@ export class PostgresConversationResponseRepository
     return recorded.rowCount === 1;
   }
 
+  public async recordProviderUsage(input: {
+    modelRunAttemptId: ModelRunAttemptId;
+    now: Date;
+    usage: ModelRoleCallUsage;
+  }): Promise<void> {
+    // Only fills counters that are still unknown, so a value recorded at
+    // completion is never overwritten and an unreported counter stays NULL.
+    await this.pool.query(
+      `
+        UPDATE model_run_attempts
+        SET
+          input_tokens = COALESCE(input_tokens, $2),
+          output_tokens = COALESCE(output_tokens, $3),
+          reasoning_tokens = COALESCE(reasoning_tokens, $4),
+          cached_tokens = COALESCE(cached_tokens, $5),
+          total_tokens = COALESCE(total_tokens, $6)
+        WHERE model_run_attempt_id = $1
+      `,
+      [
+        input.modelRunAttemptId,
+        input.usage.inputTokens,
+        input.usage.outputTokens,
+        input.usage.reasoningTokens,
+        input.usage.cachedTokens,
+        input.usage.totalTokens,
+      ],
+    );
+  }
+
   public async recordProviderCompletion(input: {
     completion: {
+      cachedTokens?: number | null;
       costMicros: number | null;
       finishReason: string;
       inputTokens: number | null;
       modelSnapshot: string;
       outputTokens: number | null;
       providerRequestId: string | null;
+      reasoningTokens?: number | null;
+      totalTokens?: number | null;
       type: "completed";
     };
     modelRunAttemptId: ModelRunAttemptId;
@@ -1817,7 +1850,10 @@ export class PostgresConversationResponseRepository
             input_tokens = $4,
             output_tokens = $5,
             cost_micros = $6,
-            finish_reason = $7
+            finish_reason = $7,
+            reasoning_tokens = $9,
+            cached_tokens = $10,
+            total_tokens = $11
           FROM generation_commands command
           WHERE attempt.model_run_attempt_id = $8
             AND attempt.status = 'running'
@@ -1843,6 +1879,10 @@ export class PostgresConversationResponseRepository
           input.completion.costMicros,
           input.completion.finishReason,
           input.modelRunAttemptId,
+          // Only what the Provider reported; absent stays unknown (NULL).
+          input.completion.reasoningTokens ?? null,
+          input.completion.cachedTokens ?? null,
+          input.completion.totalTokens ?? null,
         ],
       );
       if (recorded.rowCount !== 1) {
