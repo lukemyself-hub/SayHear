@@ -76,6 +76,20 @@ export type HistoryRecallGovernanceRepository = Readonly<{
   >;
 }>;
 
+/**
+ * Deterministic drain of unsettled History Answer commands. An application
+ * release that predates the history branch treats an unsettled
+ * `history_answer` command as an ordinary Decision and would run it again, so
+ * rolling back to one requires the branch to be closed and this count to be 0
+ * first. Draining ends every unsettled command fail closed: nothing is shown,
+ * nothing is committed, the Turn reaches a final state.
+ */
+export type HistoryAnswerDrainPort = Readonly<{
+  countUnsettledHistoryAnswers(): Promise<number>;
+  /** Returns how many commands this call ended. */
+  drainHistoryAnswers(input: { now: Date }): Promise<number>;
+}>;
+
 /** What the gateway needs: the active identity, if any. */
 export type HistoryRecallGovernancePort = Pick<
   HistoryRecallGovernanceRepository,

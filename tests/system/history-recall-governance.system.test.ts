@@ -311,6 +311,56 @@ describe("a History Answer left pending by a dead process is settled when the br
     expect(await harness.built.service.scanPendingHistoryAnswers?.()).toBe(0);
   });
 
+  it("sweeps it at its request deadline, without waiting for the recovery window, when the deployment no longer runs the history branch", async () => {
+    await start();
+    await seedLife(harness);
+    await leaveAnswerPending();
+    // The request froze a 30 second deadline; the process died before it.
+    await harness.database.pool.query(
+      "UPDATE generation_commands SET request_deadline_at = $1 WHERE generation_stage = 'history_answer'",
+      [new Date("2026-09-15T02:10:30.000Z")],
+    );
+    harness.rebuild({ noGateway: true });
+    const sent = harness.state.requests.length;
+
+    harness.setNow("2026-09-15T02:10:20.000Z");
+    expect(await harness.built.service.scanPendingHistoryAnswers?.()).toBe(0);
+    // Well inside the recovery window, but past the deadline.
+    harness.setNow("2026-09-15T02:10:31.000Z");
+    expect(await harness.built.service.scanPendingHistoryAnswers?.()).toBe(1);
+    expect(await pendingState()).toEqual([
+      { attempt_status: "failed", command_status: "failed", turn_status: "failed" },
+    ]);
+    const [attempt] = await harness.rows<{ error_category: string }>(
+      `SELECT attempt.error_category FROM model_run_attempts attempt
+       INNER JOIN generation_commands command ON command.generation_command_id = attempt.generation_command_id
+       WHERE command.generation_stage = 'history_answer'`,
+    );
+    expect(attempt!.error_category).toBe("timeout");
+    expect(harness.state.requests.length).toBe(sent);
+    expect(await assistantEventsFromAsk()).toBe(0);
+  });
+
+  it("sweeps it at its request deadline when the operator closed the branch", async () => {
+    await start();
+    await seedLife(harness);
+    await leaveAnswerPending();
+    await harness.database.pool.query(
+      "UPDATE generation_commands SET request_deadline_at = $1 WHERE generation_stage = 'history_answer'",
+      [new Date("2026-09-15T02:10:30.000Z")],
+    );
+    harness.rebuild();
+    await harness.disableGovernance();
+    const sent = harness.state.requests.length;
+    harness.setNow("2026-09-15T02:10:31.000Z");
+    await harness.built.service.scanPendingHistoryAnswers?.();
+    expect(await pendingState()).toEqual([
+      { attempt_status: "failed", command_status: "failed", turn_status: "failed" },
+    ]);
+    expect(harness.state.requests.length).toBe(sent);
+    expect(await assistantEventsFromAsk()).toBe(0);
+  });
+
   it("still finds and answers a command whose technical retry was in flight when the process died", async () => {
     await start();
     await seedLife(harness);
@@ -352,5 +402,84 @@ describe("a History Answer left pending by a dead process is settled when the br
     ]);
     expect(harness.state.requests.length).toBe(sent);
     expect(await assistantEventsFromAsk()).toBe(0);
+  });
+});
+
+/**
+ * An application release from before the history branch would claim an
+ * unsettled `history_answer` command as an ordinary Decision and run it again.
+ * Before rolling back to one, the operator closes the branch and drains: every
+ * unsettled command ends at once (no recovery window), and the count reads 0.
+ */
+describe("draining unsettled History Answer commands before a rollback", () => {
+  async function leavePending(): Promise<void> {
+    (harness.built.harness as { runHistoryAnswerCommand: unknown }).runHistoryAnswerCommand =
+      // eslint-disable-next-line require-yield
+      async function* () {
+        await new Promise<never>(() => undefined);
+      };
+    void askVia(harness, "date").catch(() => undefined);
+    for (let waited = 0; waited < 200; waited += 1) {
+      if (
+        (await harness.rows("SELECT 1 FROM generation_commands WHERE generation_stage = 'history_answer'"))
+          .length > 0
+      ) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error("The History Answer command was never created.");
+  }
+
+  it("ends every unsettled command fail closed and reads the remaining count back as 0", async () => {
+    await start();
+    await seedLife(harness);
+    await leavePending();
+    const repository = harness.built.responseRepository;
+    expect(await repository.countUnsettledHistoryAnswers()).toBe(1);
+    const sent = harness.state.requests.length;
+
+    await harness.disableGovernance();
+    // Seconds after the crash: nothing is due for the ordinary recovery scan.
+    const drained = await repository.drainHistoryAnswers({ now: new Date("2026-09-15T02:10:05.000Z") });
+
+    expect(drained).toBe(1);
+    expect(await repository.countUnsettledHistoryAnswers()).toBe(0);
+    expect(
+      await harness.rows(
+        `SELECT command.status AS command_status, attempt.status AS attempt_status,
+                attempt.error_category, turn.status AS turn_status
+         FROM generation_commands command
+         INNER JOIN model_run_attempts attempt ON attempt.generation_command_id = command.generation_command_id
+         INNER JOIN interaction_turns turn ON turn.interaction_turn_id = command.interaction_turn_id
+         WHERE command.generation_stage = 'history_answer'`,
+      ),
+    ).toEqual([
+      { attempt_status: "failed", command_status: "failed", error_category: "policy_blocked", turn_status: "failed" },
+    ]);
+    expect(harness.state.requests.length).toBe(sent);
+    expect(await assistantEventsFromAsk()).toBe(0);
+    // Draining again finds nothing.
+    expect(await repository.drainHistoryAnswers({ now: new Date("2026-09-15T02:10:06.000Z") })).toBe(0);
+    // Nothing is left for a release that would treat the command as a Decision.
+    expect(
+      await repository.listStaleResponseExecutions({ dueAt: new Date("2026-09-16T00:00:00.000Z"), limit: 10 }),
+    ).toEqual([]);
+  });
+
+  it("leaves a settled answer and other stages untouched", async () => {
+    await start();
+    await seedLife(harness);
+    expect(terminal(await askVia(harness, "date"))).toBe("assistant_committed");
+    const before = JSON.stringify(
+      await harness.rows("SELECT generation_command_id, status, settled_at FROM generation_commands ORDER BY created_at"),
+    );
+    await harness.disableGovernance();
+    expect(await harness.built.responseRepository.drainHistoryAnswers({ now: new Date(ASK_AT) })).toBe(0);
+    expect(
+      JSON.stringify(
+        await harness.rows("SELECT generation_command_id, status, settled_at FROM generation_commands ORDER BY created_at"),
+      ),
+    ).toBe(before);
   });
 });

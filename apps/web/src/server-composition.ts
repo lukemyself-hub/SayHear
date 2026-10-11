@@ -1005,6 +1005,7 @@ export function createServerComposition() {
     oneA3bG1ReleaseManifest: configuration.oneA3bG1.releaseManifest,
     dedupeFingerprintSecret: configuration.contextHmacSecret,
     recentContextGovernanceRepository,
+    historyAnswerDrain: responseRepository,
     historyRecallGovernanceRepository,
     recoveryScannerSecret: configuration.recoveryScannerSecret,
   };

@@ -457,9 +457,14 @@ export class PostgresConversationResponseRepository
     generationCommandId: GenerationCommandId;
     now: Date;
     /**
+     * True for the operator drain: an unsettled command is ended now, whether
+     * or not it is due for recovery yet.
+     */
+    force?: boolean;
+    /**
      * False when this runtime can never run the command again (the History
-     * Answer branch is not deployed): a due command ends fail closed instead
-     * of being re-prepared.
+     * Answer branch is not deployed, or it is being drained): a due command
+     * ends fail closed instead of being re-prepared.
      */
     resume?: boolean;
     userId: UserId;
@@ -601,7 +606,8 @@ export class PostgresConversationResponseRepository
         unsettled &&
         (deadlineExpired || supersededByNewerInput) &&
         recoveryClaimExpired;
-      if (!preparedDue && !runningDue && !retryDue && !retiredDue) {
+      const forcedDue = input.force === true && unsettled;
+      if (!preparedDue && !runningDue && !retryDue && !retiredDue && !forcedDue) {
         await client.query("COMMIT");
         return { outcome: "not_due" };
       }
@@ -816,6 +822,87 @@ export class PostgresConversationResponseRepository
       }
     }
     return settled;
+  }
+
+  public async countUnsettledHistoryAnswers(): Promise<number> {
+    const result = await this.pool.query<{ unsettled: string }>(
+      `
+        SELECT COUNT(*)::text AS unsettled
+        FROM generation_commands command
+        WHERE command.generation_stage = 'history_answer'
+          AND command.authoritative_result_id IS NULL
+          AND command.status IN (
+            'prepared', 'compiling', 'running', 'retry_pending'
+          )
+      `,
+    );
+    return Number(result.rows[0]?.unsettled ?? 0);
+  }
+
+  /**
+   * Operator drain (after the history branch was closed): every unsettled
+   * History Answer command ends now, fail closed, through the same settlement
+   * the recovery scan uses, so that an application release without the
+   * history branch finds nothing it would re-run as a Decision. Returns how
+   * many commands this call ended.
+   */
+  public async drainHistoryAnswers(input: { now: Date }): Promise<number> {
+    let drained = 0;
+    const seen = new Set<string>();
+    for (;;) {
+      const batch = await this.pool.query<{
+        generation_command_id: string;
+        model_run_attempt_id: string;
+        user_id: string;
+      }>(
+        `
+          SELECT
+            command.generation_command_id,
+            attempt.model_run_attempt_id,
+            command.user_id
+          FROM generation_commands command
+          INNER JOIN LATERAL (
+            SELECT latest.model_run_attempt_id
+            FROM model_run_attempts latest
+            WHERE latest.generation_command_id =
+              command.generation_command_id
+              AND latest.user_id = command.user_id
+            ORDER BY latest.attempt_no DESC
+            LIMIT 1
+          ) attempt ON TRUE
+          WHERE command.generation_stage = 'history_answer'
+            AND command.authoritative_result_id IS NULL
+            AND command.status IN (
+              'prepared', 'compiling', 'running', 'retry_pending'
+            )
+            AND NOT (command.generation_command_id::text = ANY($1::text[]))
+          ORDER BY command.created_at, command.generation_command_id
+          LIMIT 100
+        `,
+        [[...seen]],
+      );
+      if (batch.rows.length === 0) return drained;
+      for (const row of batch.rows) {
+        seen.add(row.generation_command_id);
+        const claim = await retryOnSerializationFailure(() =>
+          this.claimStaleResponseExecutionOnce({
+            expectedModelRunAttemptId: asModelRunAttemptId(
+              row.model_run_attempt_id,
+            ),
+            force: true,
+            generationCommandId: asGenerationCommandId(
+              row.generation_command_id,
+            ),
+            now: input.now,
+            resume: false,
+            userId: asUserId(row.user_id),
+          }),
+        );
+        if (claim.outcome === "terminal" || claim.outcome === "interrupted") {
+          drained += 1;
+        }
+      }
+    }
   }
 
   private async listStaleExecutions(

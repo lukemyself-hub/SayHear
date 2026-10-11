@@ -7,6 +7,7 @@ import {
   InternalOwnerAccessDeniedError,
   asUserId,
   type HistoryRecallGovernancePolicy,
+  type HistoryAnswerDrainPort,
   type HistoryRecallGovernanceRepository,
   type InternalOwnerAccessService,
 } from "@sayhear/application";
@@ -67,12 +68,38 @@ const deniedAccess = {
   },
 } as unknown as InternalOwnerAccessService;
 
-function handler(options: { access?: InternalOwnerAccessService; authenticated?: boolean } = {}) {
+/** A store of unsettled History Answer commands that a drain can empty. */
+function answers(initial: number): HistoryAnswerDrainPort & { calls: string[] } {
+  let unsettled = initial;
+  const calls: string[] = [];
+  return {
+    calls,
+    async countUnsettledHistoryAnswers() {
+      calls.push("count");
+      return unsettled;
+    },
+    async drainHistoryAnswers() {
+      calls.push("drain");
+      const settled = unsettled;
+      unsettled = 0;
+      return settled;
+    },
+  };
+}
+
+function handler(
+  options: {
+    access?: InternalOwnerAccessService;
+    authenticated?: boolean;
+    historyAnswers?: HistoryAnswerDrainPort;
+  } = {},
+) {
   const repo = repository();
   return {
     handle: createOperatorHistoryRecallHandler({
       accessService: options.access ?? allowedAccess,
       authenticate: async () => (options.authenticated === false ? null : { userId: OWNER }),
+      ...(options.historyAnswers ? { historyAnswers: options.historyAnswers } : {}),
       now: () => new Date("2026-10-11T10:00:00.000Z"),
       repository: repo,
     }),
@@ -115,6 +142,42 @@ describe("operator history-recall governance endpoint", () => {
     await handle(post("disable"));
     const second = (await (await handle(post("enable"))).json()) as { policy: { policyVersion: string } };
     expect(second.policy.policyVersion).not.toBe(first.policy.policyVersion);
+  });
+
+  it("closing the branch drains every unsettled History Answer and reads the remaining count back", async () => {
+    const store = answers(3);
+    const { handle } = handler({ historyAnswers: store });
+    await handle(post("enable"));
+    const closed = (await (await handle(post("disable"))).json()) as {
+      effective: { enabled: boolean };
+      historyAnswers: { drained: number; unsettled: number };
+    };
+    expect(closed.effective.enabled).toBe(false);
+    expect(closed.historyAnswers).toEqual({ drained: 3, unsettled: 0 });
+    // Disabling again is safe and still drains whatever a straggler left.
+    const again = (await (await handle(post("disable"))).json()) as {
+      historyAnswers: { drained: number; unsettled: number };
+      outcome: string;
+    };
+    expect(again).toMatchObject({ historyAnswers: { drained: 0, unsettled: 0 }, outcome: "already_disabled" });
+  });
+
+  it("reports the unsettled count on read, and drains on request only while the branch is closed", async () => {
+    const store = answers(2);
+    const { handle } = handler({ historyAnswers: store });
+    const get = () => handle(new Request("http://localhost/api/internal/operator/history-recall", { method: "GET" }));
+    expect(((await (await get()).json()) as { historyAnswers: { unsettled: number } }).historyAnswers.unsettled).toBe(2);
+
+    await handle(post("enable"));
+    // A running branch is never drained out from under its requests.
+    expect((await handle(post("drain"))).status).toBe(409);
+    expect(store.calls.filter((call) => call === "drain")).toHaveLength(0);
+
+    await handle(post("disable"));
+    const drained = (await (await handle(post("drain"))).json()) as {
+      historyAnswers: { drained: number; unsettled: number };
+    };
+    expect(drained.historyAnswers).toEqual({ drained: 0, unsettled: 0 });
   });
 
   it("rejects an unknown action and a non-POST/GET method", async () => {
