@@ -7,6 +7,8 @@ import {
   isInFlight,
   isNearBottom,
   reduceScrollFollow,
+  requestEndedPlan,
+  CLIENT_REQUEST_DEADLINE_MS,
   reduceWaitState,
   SCROLL_FOLLOW_THRESHOLD_PX,
   streamingText,
@@ -80,7 +82,9 @@ describe("composer send decision", () => {
     ).toBe("ignore");
   });
 
-  it("does not start a second send while one is in flight", () => {
+  it("lets a new message through while a reply is still being prepared (issue #319)", () => {
+    // The person may add to the question or change the subject; the older
+    // answer is retired by the newer message, so sending is never blocked.
     expect(
       decideSend({
         composing: false,
@@ -88,6 +92,16 @@ describe("composer send decision", () => {
         shiftKey: false,
         submitting: true,
         text: "hello",
+      }),
+    ).toBe("send");
+    // A blank message still never sends, in flight or not.
+    expect(
+      decideSend({
+        composing: false,
+        key: "Enter",
+        shiftKey: false,
+        submitting: true,
+        text: "   ",
       }),
     ).toBe("ignore");
   });
@@ -316,5 +330,64 @@ describe("submission failure recovery matrix", () => {
     expect(plan.preserveDraft).toBe(false);
     expect(plan.preservesSubmissionIdentity).toBe(false);
     expect(plan.focus).toBe("error");
+  });
+});
+
+describe("stopping and superseding a reply (issue #319)", () => {
+  it("stops waiting when the person presses stop, without calling it a failure", () => {
+    const state = apply([
+      { type: "submit" },
+      { type: "user_committed" },
+      { type: "assistant_delta", delta: "partial" },
+      { type: "stop" },
+    ]);
+    expect(state.phase).toBe("stopped");
+    expect(isInFlight(state)).toBe(false);
+    expect(streamingText(state)).toBeNull();
+    expect(waitingDotsVisible(state)).toBe(false);
+    expect(waitAnnouncement(state)).toBe("已停止");
+  });
+
+  it("keeps a stopped reply's visible words as a read-only interrupted partial with no error banner", () => {
+    expect(
+      requestEndedPlan({ endedBy: "stop", hasPartialText: true, userCommitted: true }),
+    ).toEqual({
+      hasPartialText: true,
+      kind: "stopped",
+      preserveDraft: false,
+      preservesSubmissionIdentity: false,
+      showError: false,
+    });
+  });
+
+  it("lets a stop before the message was confirmed be sent again with the same identity", () => {
+    expect(
+      requestEndedPlan({ endedBy: "stop", hasPartialText: false, userCommitted: false }),
+    ).toMatchObject({ preserveDraft: true, preservesSubmissionIdentity: true, showError: false });
+  });
+
+  it("does not put the older text back when a newer message replaced it", () => {
+    expect(
+      requestEndedPlan({ endedBy: "superseded", hasPartialText: true, userCommitted: true }),
+    ).toEqual({
+      hasPartialText: true,
+      kind: "superseded",
+      preserveDraft: false,
+      preservesSubmissionIdentity: false,
+      showError: false,
+    });
+    expect(
+      requestEndedPlan({ endedBy: "superseded", hasPartialText: false, userCommitted: false }),
+    ).toMatchObject({ preserveDraft: false, showError: false });
+  });
+
+  it("tells the person plainly when the 30 second stop condition ended the request", () => {
+    expect(CLIENT_REQUEST_DEADLINE_MS).toBe(32_000);
+    expect(
+      requestEndedPlan({ endedBy: "timeout", hasPartialText: false, userCommitted: true }),
+    ).toMatchObject({ kind: "timeout", showError: true, preserveDraft: false });
+    expect(
+      requestEndedPlan({ endedBy: "timeout", hasPartialText: false, userCommitted: false }),
+    ).toMatchObject({ preserveDraft: true, preservesSubmissionIdentity: true, showError: true });
   });
 });
