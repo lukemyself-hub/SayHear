@@ -78,6 +78,8 @@ export type ObservedInspection = Readonly<{
 }>;
 
 export type ObservedStreamEvent = Readonly<{
+  /** Failure category carried by a terminal failure event, when present. */
+  category?: string | null;
   elapsedMs: number;
   /** Assistant delta text, when the event carried one. */
   delta: string | null;

@@ -46,6 +46,14 @@ import {
  * owner/backup/session provisioning the system suites already rely on.
  */
 
+/**
+ * Request budget of the app under test in deterministic runs (#319). The
+ * product's own value is 30 seconds; the stub can stall on purpose, so the
+ * suite shortens it to show the deadline working in seconds, not half a minute.
+ * A real-model run must NOT use this: it keeps the product's 30 second budget.
+ */
+export const DETERMINISTIC_REQUEST_BUDGET_MS = 6_000;
+
 export type AcceptanceEnvironment = Readonly<{
   client: AcceptanceClient;
   /** Enable the seven-day recent context through the real operator route. */
@@ -171,6 +179,10 @@ export async function createAcceptanceEnvironment(input: {
     if (!database || !markerDatabase) throw new Error("Environment is not provisioned.");
     app = await startAppServer({
       clockFile,
+      // The deterministic stub can stall on purpose; a short budget shows the
+      // request deadline working without a 30 second wait. Real-model runs keep
+      // the product's own 30 seconds (#319).
+      requestBudgetMs: DETERMINISTIC_REQUEST_BUDGET_MS,
       databaseUrl: database.connectionString,
       markerDatabaseUrl: markerDatabase.connectionString,
       provider: {

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "L01",
+  "fixtureVersion": "dev-1",
+  "stage": "development",
+  "languageVariant": "en",
+  "defaults": { "locale": "en-US", "timezone": "America/Denver" },
+  "history": [
+    {
+      "key": "market",
+      "at": "2026-09-09T22:10:00.000Z",
+      "user": "I went to the farmers market with my sister Dani and we split a huge peach pie on the curb.",
+      "assistant": "Pie on the curb with your sister sounds like the best part of the day."
+    },
+    {
+      "key": "hike",
+      "at": "2026-09-09T22:20:00.000Z",
+      "user": "Then we talked about doing the long ridge hike in October, the one our dad used to take us on.",
+      "assistant": "A hike your dad used to take you on carries a lot with it."
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-09-12T16:00:00.000Z",
+      "text": "What did I tell you about the farmers market?",
+      "providerFault": { "delayBeforeFirstChunkMs": 20000 },
+      "continueInBackground": true
+    },
+    {
+      "id": "supplement",
+      "type": "say",
+      "at": "2026-09-12T16:00:10.000Z",
+      "text": "Sorry, I only want to know who came along with me."
+    },
+    {
+      "id": "stall",
+      "type": "say",
+      "at": "2026-09-12T16:02:00.000Z",
+      "text": "And what did we say about the hike?",
+      "providerFault": { "delayBeforeFirstChunkMs": 30000 }
+    },
+    {
+      "id": "after",
+      "type": "say",
+      "at": "2026-09-12T16:04:00.000Z",
+      "text": "Never mind that. Is it too early to plan the October trip?"
+    }
+  ]
+}
