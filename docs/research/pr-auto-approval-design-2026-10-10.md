@@ -211,4 +211,3 @@ Luke 同时要求把实现 Agent 的要求写入 repo。已同步到 [Issue trac
 - [定时任务限制](https://docs.github.com/en/actions/tutorials/manage-your-work/close-inactive-issues)：schedule 可能延迟或丢弃，不能承诺准点审批。
 
 2026-10-11，Luke 纠正七个存量 PR 的归属：它们是需要自动处理的待批准 PR，旧实现交接中的“等人工审核合入”不代表持续保留。调度 prompt 已同步。#309 的旧合入保留及两处关联 Issue 歧义已修正，相关 Issue 已恢复 ongoing；按最新 main、独立审查和 CI 逐个处理，不能免除实质门禁。
-
