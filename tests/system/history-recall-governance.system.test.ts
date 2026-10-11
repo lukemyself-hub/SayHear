@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { HISTORY_REVIEW_FUNCTION_NAME } from "@sayhear/application";
+import { HISTORY_REVIEW_FUNCTION_NAME, ProviderDispatchError } from "@sayhear/application";
 import { PostgresInternalInspectionRepository } from "@sayhear/data";
 import { asGenerationCommandId } from "@sayhear/domain";
 
@@ -309,6 +309,32 @@ describe("a History Answer left pending by a dead process is settled when the br
     expect(await assistantEventsFromAsk()).toBe(0);
     // Settled once: the next scan finds nothing.
     expect(await harness.built.service.scanPendingHistoryAnswers?.()).toBe(0);
+  });
+
+  it("still finds and answers a command whose technical retry was in flight when the process died", async () => {
+    await start();
+    await seedLife(harness);
+    // The first answer attempt times out and is retried; the process dies while
+    // the second attempt is on the wire.
+    harness.state.hooks.beforeFirstDelta = async () => {
+      harness.state.hooks.beforeFirstDelta = () => new Promise<never>(() => undefined);
+      throw new ProviderDispatchError("timeout");
+    };
+    void askVia(harness, "date").catch(() => undefined);
+    for (let waited = 0; waited < 200; waited += 1) {
+      const attempts = await harness.rows(
+        `SELECT 1 FROM model_run_attempts attempt
+         INNER JOIN generation_commands command ON command.generation_command_id = attempt.generation_command_id
+         WHERE command.generation_stage = 'history_answer' AND attempt.attempt_no = 2`,
+      );
+      if (attempts.length > 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    harness.rebuild();
+    harness.setNow("2026-09-15T02:20:00.000Z");
+    expect(await harness.built.service.scanPendingHistoryAnswers?.()).toBe(1);
+    expect(await assistantEventsFromAsk()).toBe(1);
+    expect((await pendingState())[0]).toMatchObject({ command_status: "succeeded", turn_status: "settled" });
   });
 
   it("settles it fail closed when the operator closed the branch", async () => {

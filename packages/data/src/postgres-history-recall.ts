@@ -1026,10 +1026,16 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
        INNER JOIN interaction_turns turn
          ON turn.interaction_turn_id = command.interaction_turn_id
         AND turn.user_id = command.user_id
-       INNER JOIN model_run_attempts attempt
-         ON attempt.generation_command_id = command.generation_command_id
-        AND attempt.attempt_no = 1
-        AND attempt.status IN ('prepared', 'running')
+       -- The latest attempt, not the first: a technical retry adds attempts
+       -- under the same command, and recovery must continue from the newest.
+       INNER JOIN LATERAL (
+         SELECT latest.model_run_attempt_id
+         FROM model_run_attempts latest
+         WHERE latest.generation_command_id = command.generation_command_id
+           AND latest.user_id = command.user_id
+         ORDER BY latest.attempt_no DESC
+         LIMIT 1
+       ) attempt ON TRUE
        WHERE command.generation_stage = 'history_answer'
          AND command.authoritative_result_id IS NULL
          AND command.status = ANY($2::text[])
