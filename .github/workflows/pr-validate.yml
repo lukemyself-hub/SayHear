@@ -90,12 +90,18 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
+        id: install_dependencies
         run: pnpm install --frozen-lockfile
 
+      # Explicit conditions keep independent diagnostics running after failures.
+      # Database-backed tests require verified databases, and cancellation stops
+      # the remaining steps in a superseded run.
       # Fail before the suite when a database is missing, unreachable, or shared
       # by both roles. Several system suites degrade to `describe.skip` in that
       # state and would otherwise report a pass with no coverage.
       - name: Verify the two test databases
+        id: verify_test_databases
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm ci:verify-test-databases
 
       # `test:ci` bounds the database-backed concurrency instead of inheriting it from
@@ -109,6 +115,7 @@ jobs:
       # from the 10s default because a `beforeAll` hook runs 75 migrations before
       # any assertion, and it is still a finite bound.
       - name: Unit and system tests
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' && steps.verify_test_databases.outcome == 'success' }}
         run: pnpm test:ci
 
       # Asserts the expected 41 system suites (the `expectedSystemSuiteCount`
@@ -116,32 +123,39 @@ jobs:
       # comment drifts from it) actually executed with no skipped test, so an
       # environment-caused skip cannot read as a pass.
       - name: Assert the expected system suites ran
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' && steps.verify_test_databases.outcome == 'success' }}
         run: pnpm ci:assert-system-suites artifacts/vitest-report.json
 
       - name: Typecheck
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm typecheck
 
       - name: Purge surface inventory
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm check:purge-surfaces
 
       - name: Schema extensions
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm check:schema-extensions
 
       - name: Module boundaries
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm check:boundaries
 
       - name: Runtime version
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm check:runtime
 
       # Includes `validate-startup` and `scripts/check-browser-bundle.mjs`, so the
       # build and the browser bundle check share one job.
       - name: Build
+        if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}
         run: pnpm build
 
       # The JSON report is the one artifact worth keeping: it names each failing
       # suite. Everything else stays in the step log for on-demand reading.
       - name: Upload the vitest report
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: vitest-report-${{ github.event.pull_request.number }}
