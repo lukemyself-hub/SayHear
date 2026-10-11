@@ -1,14 +1,26 @@
+/**
+ * F3 role-provider call capture for the 1A.3b G1 gate.
+ *
+ * Provider support is limited to the pinned `deepseek` / `opencode-go`
+ * adapters; any other pinned provider fails closed. Adapters come from
+ * `resolveF3RoleAdapter`, which pins the capture timeout
+ * (`F3_ROLE_TIMEOUT_MS`, deliberately wider than the runtime
+ * `SAYHEAR_PROVIDER_TIMEOUT_MS` default so a frozen evaluation is not killed
+ * mid-call) and reads the deepseek baseUrl only from
+ * `SAYHEAR_DEEPSEEK_BASE_URL`.
+ */
 import { randomUUID, randomUUIDv7 } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createRuntimeOneA3bRoleProviders, type OneA3bProviderAdapter } from "@sayhear/ai";
+import { createRuntimeOneA3bRoleProviders } from "@sayhear/ai";
 import { createModelRoleRegistry, createModelRoleCommandService, createModelRoleProviderEgress, EPISODE_KIND_CATALOG_V1, ProviderDispatchError, type RecoveryGate, type ModelRoleCallUsage } from "@sayhear/application";
 import { asDailySessionId, asEvidenceItemId } from "@sayhear/domain";
 import { runMigrations, PostgresModelRoleCommandRepository } from "@sayhear/data";
 import { createIsolatedPostgresSchema, fixedInternalOwnerPrincipal } from "@sayhear/test-support";
 import { snapshotFor, type PinsFile } from "../eval/continuation-acceptance-1a3b/run-validator-capture";
+import { resolveF3RoleAdapter } from "../eval/continuation-acceptance-1a3b/role-provider-provisioning";
 import { verifyManifest, type AcceptanceManifest } from "../eval/continuation-acceptance-1a3b/manifest";
 import { sha256 } from "../eval/continuation-acceptance-1a3b/protocol";
 import { buildValidatorRequestBundle } from "../eval/continuation-acceptance-1a3b/validator-inputs";
@@ -59,23 +71,7 @@ async function main() {
   const roles = ["episode.build", "reflection.daily", "reflection.weekly", "narrative.validate"] as const;
   const configurations = roles.map(role => snapshotFor(role, pins));
   const providersPresent = new Set(configurations.map(configuration => configuration.provider));
-  const adapters: OneA3bProviderAdapter[] = [];
-  if (providersPresent.has("deepseek")) {
-    const key = process.env.DEEPSEEK_API_KEY;
-    if (!key) throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
-    adapters.push({ provider: "deepseek", apiKey: key, baseUrl: process.env.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com", timeoutMs: 120000 });
-  }
-  if (providersPresent.has("openai")) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) throw new Error("OPENAI_API_KEY is required for the selected openai provider.");
-    adapters.push({ provider: "openai", apiKey: key, baseUrl: "https://api.openai.com/v1", timeoutMs: 120000 });
-  }
-  if (providersPresent.has("opencode-go")) {
-    const key = process.env.OPENCODE_GO_API_KEY;
-    if (!key) throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
-    adapters.push({ provider: "opencode-go", apiKey: key, timeoutMs: 120000 });
-  }
-  if (adapters.length !== providersPresent.size) throw new Error("Provider capture could not provision every configured provider.");
+  const adapters = [...providersPresent].map(provider => resolveF3RoleAdapter(provider));
   console.log("[g1-provider-capture] frozen inputs verified");
   const usage = new Map<string, ModelRoleCallUsage>();
   const providers = createRuntimeOneA3bRoleProviders({
