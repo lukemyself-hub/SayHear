@@ -63,6 +63,48 @@ export const PROTECTED_SCHEMA_RELATIONS: readonly string[] = Object.freeze([
   "schema_migrations",
 ]);
 
+/**
+ * The one admitted rewrite of a protected relation (ADR-0094, issue #314): the
+ * `generation_commands.generation_stage` CHECK may be widened by exactly the
+ * values below, because a new GenerationCommand stage needs a new CHECK member.
+ * The DROP is only admitted for that named constraint, and the re-ADD must
+ * list every pre-existing stage plus no value outside this set, so the
+ * exception can only ever widen toward an ADR-registered stage.
+ */
+export const GENERATION_STAGE_CHECK_CONSTRAINT =
+  "generation_commands_generation_stage_check";
+const FROZEN_GENERATION_STAGES = [
+  "decision",
+  "action_finalization",
+  "proactive_followup",
+] as const;
+const ADMITTED_NEW_GENERATION_STAGES = ["history_answer"] as const;
+const STAGE_CHECK_DROP = new RegExp(
+  `^alter table generation_commands drop constraint (?:if exists )?${GENERATION_STAGE_CHECK_CONSTRAINT}$`,
+  "i",
+);
+const STAGE_CHECK_ADD = new RegExp(
+  `^alter table generation_commands add constraint ${GENERATION_STAGE_CHECK_CONSTRAINT} check \\( ?generation_stage in \\(([^()]*)\\) ?\\)$`,
+  "i",
+);
+
+function isAdmittedStageCheckWidening(statement: string): boolean {
+  if (STAGE_CHECK_DROP.test(statement)) return true;
+  const match = STAGE_CHECK_ADD.exec(statement);
+  if (!match) return false;
+  const values = (match[1] ?? "")
+    .split(",")
+    .map((value) => value.trim().replace(/^'|'$/g, ""));
+  const allowed = new Set<string>([
+    ...FROZEN_GENERATION_STAGES,
+    ...ADMITTED_NEW_GENERATION_STAGES,
+  ]);
+  return (
+    values.every((value) => allowed.has(value)) &&
+    FROZEN_GENERATION_STAGES.every((value) => values.includes(value))
+  );
+}
+
 const DESTRUCTIVE_KEYWORDS = /\b(drop|truncate|delete|update|insert|rename)\b/i;
 const ADD_COLUMN =
   /^alter\s+table\s+(?:only\s+)?([a-z_][a-z0-9_]*)\s+add\s+column\s+/i;
@@ -113,6 +155,7 @@ export function protectedSurfaceDdlViolations(
     );
     if (touched.length === 0) continue;
 
+    if (isAdmittedStageCheckWidening(statement)) continue;
     const targets = touched.join(", ");
     if (DESTRUCTIVE_KEYWORDS.test(statement)) {
       violations.push(

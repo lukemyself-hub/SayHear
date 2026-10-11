@@ -132,6 +132,40 @@ describe("protected-surface DDL deny-list", () => {
   });
 });
 
+describe("generation stage CHECK widening exception (#314, ADR-0094)", () => {
+  const drop =
+    "ALTER TABLE generation_commands DROP CONSTRAINT generation_commands_generation_stage_check;";
+  const add = (values: string) =>
+    `ALTER TABLE generation_commands ADD CONSTRAINT generation_commands_generation_stage_check CHECK (generation_stage IN (${values}));`;
+  const existing = "'decision', 'action_finalization', 'proactive_followup'";
+
+  it("admits widening the stage CHECK by exactly the history_answer value", () => {
+    const sql = [drop, add(`${existing}, 'history_answer'`)].join("\n");
+    expect(protectedSurfaceDdlViolations("0071.sql", sql)).toEqual([]);
+  });
+
+  it("rejects narrowing, an unknown value, or any other generation_commands constraint", () => {
+    expect(
+      protectedSurfaceDdlViolations("bad.sql", add("'decision', 'history_answer'")),
+    ).toHaveLength(1);
+    expect(
+      protectedSurfaceDdlViolations("bad.sql", add(`${existing}, 'history_answer', 'surprise'`)),
+    ).toHaveLength(1);
+    expect(
+      protectedSurfaceDdlViolations(
+        "bad.sql",
+        "ALTER TABLE generation_commands DROP CONSTRAINT generation_commands_action_receipt_snapshot_check;",
+      ),
+    ).toHaveLength(1);
+    expect(
+      protectedSurfaceDdlViolations(
+        "bad.sql",
+        "ALTER TABLE generation_commands DROP CONSTRAINT generation_commands_generation_stage_check, DROP COLUMN status;",
+      ),
+    ).toHaveLength(1);
+  });
+});
+
 describe("schema-extension file guard", () => {
   const registry = [
     {
