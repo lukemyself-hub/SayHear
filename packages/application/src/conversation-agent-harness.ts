@@ -268,7 +268,7 @@ export function createConversationAgentHarness(dependencies: {
     const probeFreshness = () =>
       interrupt.guard(
         withTimeout(
-          Promise.resolve(
+          Promise.resolve<"current" | "deadline_exceeded" | "superseded">(
             dependencies.repository.checkResponseFreshness?.({
               generationCommandId: command.generationCommandId,
               now: dependencies.clock(),
