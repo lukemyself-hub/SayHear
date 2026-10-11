@@ -56,6 +56,12 @@ export const DETERMINISTIC_REQUEST_BUDGET_MS = 6_000;
 
 export type AcceptanceEnvironment = Readonly<{
   client: AcceptanceClient;
+  /**
+   * Where the running app listens and the session cookie that signs in as the
+   * synthetic owner. For looking at the real Portal in a browser by hand
+   * (UI verification); acceptance cases never use it.
+   */
+  connection(): Readonly<{ origin: string; sessionCookie: string; sessionToken: string }>;
   /** Enable the seven-day recent context through the real operator route. */
   enableRecentContext(): Promise<string>;
   /** Checks run identity, owner identity and seed capability, or throws. */
@@ -268,6 +274,10 @@ export async function createAcceptanceEnvironment(input: {
         throw new Error(`Enabling recent context failed with HTTP ${response.status}.`);
       }
       return "active";
+    },
+    connection() {
+      if (!app) throw new Error("The SayHear app is not running.");
+      return { origin: app.origin, sessionCookie: SESSION_COOKIE_NAME, sessionToken };
     },
     model: DETERMINISTIC_STUB_MODEL,
     async runScheduledScan() {
