@@ -97,6 +97,8 @@ export type CapturedRequest = Readonly<{
   functionNames: readonly string[];
   instructions: string;
   messages: readonly string[];
+  /** The id this stand-in Provider answers the request with. */
+  providerResponseId: string;
   toolsDisabled: boolean;
 }>;
 
@@ -123,6 +125,8 @@ export type HarnessOptions = {
   noGateway?: boolean;
   /** Wire the seven-day recent background (and its governance row). */
   recentContext?: boolean;
+  /** Replace the date-review source (fault injection). */
+  sourceOverride?: (inner: HistoryRecallSourcePort) => HistoryRecallSourcePort;
 };
 
 export function uuidV7(at: Date): string {
@@ -155,14 +159,18 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     sourceReads: 0,
   };
   let hookArmed = { afterAnswerCompile: false };
+  let sequence = 0;
   const clock = () => now;
 
   const model: ConversationTextModel = {
     async *stream(request) {
+      sequence += 1;
+      const providerResponseId = `history-path-request-${sequence}`;
       state.requests.push({
         functionNames: (request.functions ?? []).map((definition) => definition.name),
         instructions: request.instructions,
         messages: request.messages.map((message) => `${message.role}:${message.text}`),
+        providerResponseId,
         toolsDisabled: request.toolsDisabled === true,
       });
       const offered = (request.functions ?? []).some(
@@ -175,7 +183,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
           rawFunctionName: HISTORY_REVIEW_FUNCTION_NAME,
           type: "tool_call" as const,
         };
-        yield completion(request.model, 5);
+        yield completion(request.model, 5, providerResponseId);
         return;
       }
       const answerStage = request.toolsDisabled === true;
@@ -188,7 +196,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
           await takeHook("afterFirstDelta");
         }
       }
-      yield completion(request.model, 9);
+      yield completion(request.model, 9, providerResponseId);
     },
   };
 
@@ -199,14 +207,14 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     await hook();
   }
 
-  function completion(modelName: string, outputTokens: number) {
+  function completion(modelName: string, outputTokens: number, providerRequestId: string) {
     return {
       costMicros: 0,
       finishReason: "completed",
       inputTokens: 10,
       modelSnapshot: modelName,
       outputTokens,
-      providerRequestId: "history-path-request",
+      providerRequestId,
       type: "completed" as const,
     };
   }
@@ -240,7 +248,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
       },
     };
     const innerSource = new PostgresHistoryRecallSource(database.pool);
-    const source: HistoryRecallSourcePort = {
+    const countingSource: HistoryRecallSourcePort = {
       async readHistoryRange(request) {
         state.sourceReads += 1;
         const snapshot = await innerSource.readHistoryRange(request);
@@ -248,6 +256,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
         return snapshot;
       },
     };
+    const source = options.sourceOverride ? options.sourceOverride(countingSource) : countingSource;
     const innerExperience = new PostgresExperienceSearchSource(database.pool);
     const experienceSource: ExperienceSearchSourcePort = {
       lookupVerifiedAliases: (request) => innerExperience.lookupVerifiedAliases(request),
@@ -493,6 +502,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     state.sourceReads = 0;
     state.replyChunks = ["我看了", "你之前说的。"];
     hookArmed = { afterAnswerCompile: false };
+    sequence = 0;
     built = build(options);
     if (options.governed !== false) await enableGovernance();
     if (options.recentContext) {

@@ -1,11 +1,4 @@
 {
   "schemaVersion": "continuity-known-red:v1",
-  "entries": [
-    {
-      "caseId": "C12",
-      "criterionId": "O-user-echo-out",
-      "owner": "#320",
-      "reason": "The person's own adjacent restatement of a corrected figure still reaches the Provider; only the corrected message and the assistant's adjacent reply are excluded today."
-    }
-  ]
+  "entries": []
 }

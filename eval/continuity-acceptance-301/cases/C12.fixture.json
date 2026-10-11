@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C12",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "code-switch",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
@@ -46,10 +46,17 @@
       "text": "跟你说个事，猎头今天给我透了底，那家做 SaaS 的 startup 给的 base 是 38k，外加 sign-on bonus。"
     },
     {
+      "id": "forget-friend",
+      "type": "forget",
+      "at": "2026-09-13T09:00:00.000Z",
+      "targets": ["mei", "mei-echo"]
+    },
+    {
       "id": "work",
       "type": "say",
       "at": "2026-09-14T12:00:00.000Z",
-      "text": "帮我回忆一下，上周我都跟你讲了哪些跟工作有关的事？"
+      "text": "帮我回忆一下，上周我都跟你讲了哪些跟工作有关的事？",
+      "historyReview": { "startDate": "2026-09-07", "endDate": "2026-09-13" }
     }
   ]
 }

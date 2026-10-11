@@ -124,7 +124,23 @@ export type CorrectStep = Readonly<{
   type: "correct";
 }>;
 
-export type CaseStep = SayStep | ResendStep | RestartStep | CorrectStep;
+/**
+ * The person asked SayHear to forget what these seeded messages were about: an
+ * active Forget request whose exclusions explicitly name the messages' Evidence
+ * (the association ADR-0149 excludes by). Set up as fixture state through the
+ * run's own schema because the Trust Action that normally creates it is a model
+ * decision the deterministic stub cannot make; the history path under test
+ * then has to honour it.
+ */
+export type ForgetStep = Readonly<{
+  at: string;
+  id: string;
+  /** Keys of history turns whose user messages the request names. */
+  targets: readonly string[];
+  type: "forget";
+}>;
+
+export type CaseStep = SayStep | ResendStep | RestartStep | CorrectStep | ForgetStep;
 
 export type CaseFixture = Readonly<{
   defaults: Readonly<{ locale: string; timezone: string }>;
@@ -563,6 +579,13 @@ export function validateCase(loaded: LoadedCase): string[] {
       correctStepIds.add(step.id);
       if (!turnKeys.has(step.target)) problems.push(`step ${step.id} corrects unknown history turn ${step.target}`);
       if (typeof step.text !== "string" || !step.text.trim()) problems.push(`step ${step.id} needs the corrected text`);
+    } else if (step.type === "forget") {
+      if (!Array.isArray(step.targets) || step.targets.length === 0) {
+        problems.push(`step ${step.id} needs at least one target`);
+      }
+      for (const target of step.targets ?? []) {
+        if (!turnKeys.has(target)) problems.push(`step ${step.id} forgets unknown history turn ${target}`);
+      }
     } else if (step.type !== "restart") {
       problems.push(`step ${(step as { id: string }).id} has an unknown type`);
     }

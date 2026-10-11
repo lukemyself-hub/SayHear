@@ -136,6 +136,40 @@ export type HistoryRecallInspection = Readonly<{
   status: "completed" | "failed" | "partial";
 }>;
 
+/**
+ * Issue #320: one Turn seen as a whole, content-free. It joins every command of
+ * the Turn (Decision, History Answer, Finalization) with its attempt, Provider
+ * Egress disposition and the Provider's own request id, and states how the
+ * Turn finally ended. The request id is the join key to what was actually
+ * sent: it names the Provider call whose payload this Context produced.
+ */
+export type TurnInspectionCommand = Readonly<{
+  attemptStatus: string | null;
+  commandStatus: string;
+  completedAt: string | null;
+  egressDisposition: string | null;
+  errorCategory: string | null;
+  firstTokenAt: string | null;
+  generationCommandId: string;
+  providerRequestId: string | null;
+  stage: string;
+}>;
+
+export type TurnFinalDisposition =
+  | "committed"
+  | "failed"
+  | "in_progress"
+  | "interrupted"
+  | "settled_without_reply";
+
+export type TurnInspection = Readonly<{
+  assistantEventCommitted: boolean;
+  commands: readonly TurnInspectionCommand[];
+  finalDisposition: TurnFinalDisposition;
+  interactionTurnId: string;
+  turnStatus: string;
+}>;
+
 export type CompiledContextInspection = Readonly<{
   compilerVersion: string;
   degradedReason: CompiledContextDegradedReason;
@@ -209,6 +243,8 @@ export type GenerationInspectionMetadata = Readonly<{
   harnessPolicyVersion: string;
   /** Set when this command is either end of a controlled history review. */
   historyRecall: HistoryRecallInspection | null;
+  /** The whole Turn this command belongs to (issue #320). */
+  turn: TurnInspection | null;
   inputTokens: number | null;
   model: string;
   modelRunAttemptId: ModelRunAttemptId;

@@ -170,7 +170,8 @@ describe("continuity acceptance known-red ledger", () => {
   const ledger = loadKnownRed();
 
   it("only lists real deterministic criteria, each with an owning ticket", () => {
-    expect(ledger.entries.length).toBeGreaterThan(0);
+    // Empty once every owner ticket has turned its entry green (T07 closed the last).
+    expect(ledger.entries.length).toBeGreaterThanOrEqual(0);
     for (const entry of ledger.entries) {
       const loaded = cases.find((candidate) => candidate.fixture.id === entry.caseId);
       const criterion = loaded?.oracle.criteria.find((candidate) => candidate.id === entry.criterionId);

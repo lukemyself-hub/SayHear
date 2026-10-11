@@ -6,7 +6,7 @@
   "spec": ["#301 R12", "ADR-0151"],
   "ownerTickets": ["#320"],
   "language": "code-switch (zh with en terms)",
-  "fixture": { "version": "dev-1", "sha256": "027c1e7aa698702104e99618768730915c0f2a1f07640ad0b389e7e1795c1d4f" },
+  "fixture": { "version": "dev-2", "sha256": "b16778616e3476ea9f6f86156583bef1412cbb70cf2cf838099693aea82a6578" },
   "facts": {
     "allowed": [
       { "id": "a-offer-corrected", "statement": "A recruiter disclosed that a software startup offers a monthly base of thirty-eight thousand plus a joining bonus.", "sources": ["fix:input"] },
@@ -36,8 +36,10 @@
     { "source": "offer:user", "eligibility": "forbidden", "reason": "Superseded by the person's own correction." },
     { "source": "offer:assistant", "eligibility": "forbidden", "reason": "Adjacent assistant repetition of the superseded figure (correction association)." },
     { "source": "offer-echo:user", "eligibility": "allowed", "reason": "The person's own later restatement has no explicit Correction association. ADR-0149 and SPEC #301 do not widen Correction or Forget to similar wording, so it stays an ordinary dated message; the correction supersedes it and the answer is judged semantically (accepted limitation)." },
-    { "source": "mei:user", "eligibility": "forbidden", "reason": "To be forgotten at the person's request once a Forget can be seeded." },
-    { "source": "mei-echo:user", "eligibility": "forbidden", "reason": "Adjacent restatement of the content to be forgotten." },
+    { "source": "mei:user", "eligibility": "forbidden", "reason": "Named by the Forget request seeded by step forget-friend." },
+    { "source": "mei-echo:user", "eligibility": "forbidden", "reason": "Named by the same Forget request as its Evidence." },
+    { "source": "mei:assistant", "eligibility": "forbidden", "reason": "The reply generated for a message with an explicit Forget association." },
+    { "source": "mei-echo:assistant", "eligibility": "forbidden", "reason": "The reply generated for a message with an explicit Forget association." },
     { "source": "reorg:user", "eligibility": "allowed", "reason": "An independent experience of the person's own; similar theme, not associated with any control." }
   ],
   "criteria": [
@@ -45,8 +47,8 @@
     { "id": "O-corrected-in", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The corrected wording reaches the Provider.", "check": { "type": "outbound_includes_input", "step": "work", "inputs": ["fix"] } },
     { "id": "O-superseded-out", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The superseded message and the assistant's adjacent repetition of it never reach the Provider.", "check": { "type": "outbound_excludes", "step": "work", "sources": ["offer:user", "offer:assistant"] } },
     { "id": "O-independent-in", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The independent, permitted experience still reaches the Provider.", "check": { "type": "outbound_includes", "step": "work", "sources": ["reorg:user"] } },
-    { "id": "O-forget-out", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "Forgotten content and its adjacent restatement never reach the Provider.", "check": { "type": "unsupported", "capability": "seed a Forget request with its source association (it is created by a model-decided Trust Action, which the deterministic stub cannot make)" } },
-    { "id": "O-purge-race", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "A Full Purge racing a history turn, followed by recovery, brings nothing back.", "check": { "type": "unsupported", "capability": "run an Owner Full Purge concurrently with a history turn and then exercise recovery and caches" } },
+    { "id": "O-forget-out", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "Content named by the Forget request, and the replies generated for it, never reach the Provider.", "check": { "type": "outbound_excludes", "step": "work", "sources": ["mei:user", "mei-echo:user", "mei:assistant", "mei-echo:assistant"] } },
+    { "id": "O-purge-race", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "A Full Purge racing a history turn, followed by recovery, brings nothing back.", "check": { "type": "unsupported", "capability": "run an Owner Full Purge concurrently with a history turn over HTTP (the purge revokes the owner's web sessions, so the run cannot read its own result back). Proven in-process against the real stack instead: tests/system/history-purge-recovery.system.test.ts and the restore drill in g1-purge-restore-drill.system.test.ts" } },
     { "id": "S-controls", "kind": "semantic", "owner": "#320", "description": "The answer uses the corrected figure and the independent experience and reintroduces nothing excluded.", "step": "work", "required": ["a-offer-corrected", "a-reorg"], "forbidden": ["f-old-figure", "f-friend", "f-point-at-gap"] }
   ]
 }

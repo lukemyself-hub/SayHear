@@ -187,7 +187,7 @@ describe("Continuity acceptance over the real chat path", () => {
     expect(comparison.unexpectedGreen).toEqual([]);
   });
 
-  it("gives an explainable red, on the real path, for a restatement of a corrected figure that still leaves", async () => {
+  it("keeps corrected and forgotten sources out of the history path, on the real path, and explains where each source went", async () => {
     await environment.reset();
     const observation = await runCase({
       environment,
@@ -201,21 +201,25 @@ describe("Continuity acceptance over the real chat path", () => {
     expect(byId["INV-seed-readback"]?.status).toBe("pass");
     expect(byId["O-superseded-out"]?.status).toBe("pass");
     expect(byId["O-corrected-in"]?.status).toBe("pass");
+    expect(byId["O-independent-in"]?.status).toBe("pass");
+    // The Forget request seeded as fixture state is honoured with its replies.
+    expect(byId["O-forget-out"]?.status).toBe("pass");
+    // A Purge racing a turn cannot be run over HTTP (it revokes the sessions
+    // the run reads back with); it is proven in-process, and stays not-run here.
+    expect(byId["O-purge-race"]?.status).toBe("not-run");
+    expect(report.status).toBe("not-run");
 
-    // The product really compiled a Context and really called the Provider;
-    // the person's own adjacent restatement is still in it.
-    const red = byId["O-user-echo-out"]!;
-    expect(red.status).toBe("fail");
-    expect(red.owner).toBe("#320");
-    expect(red.evidence).toEqual([
-      "offer-echo:user: providerRequest=present, inspector.referencedEvents=present",
-    ]);
+    // The turn really took the controlled history branch, not just the background.
     const work = observation.steps.find((step) => step.id === "work")!;
+    expect(work.inspection?.historyRecall?.status).toBe("completed");
+    expect(work.inspection?.turn?.finalDisposition).toBe("committed");
     expect(work.providerRequests.some((request) => request.conversationTurn)).toBe(true);
-    expect(report.status).toBe("fail");
 
-    // Red is exactly the declared red: nothing else failed, and the entry is
-    // still needed.
+    // The person's own later restatement has no explicit association and is an
+    // ordinary dated message (ADR-0149); the oracle documents this limit.
+    const outbound = work.providerRequests.flatMap((request) => request.strings);
+    expect(outbound.some((value) => value.includes(controls.fixture.history[1]!.user))).toBe(true);
+
     const comparison = compareWithKnownRed([report], loadKnownRed());
     expect(comparison.unexpectedRed).toEqual([]);
     expect(comparison.unexpectedGreen).toEqual([]);

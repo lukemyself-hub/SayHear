@@ -70,7 +70,6 @@ async function fullPurge(): Promise<void> {
     confirmation: "PURGE",
     now: harness.clock(),
     policyVersion: "owner-full-purge:v1",
-    status: "retention_pending",
     userId: OWNER,
   });
   if (started.outcome !== "started") throw new Error(`purge start: ${started.outcome}`);

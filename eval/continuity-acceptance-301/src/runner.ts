@@ -113,13 +113,43 @@ export function summarizeInspection(raw: Record<string, unknown>): ObservedInspe
   const failure = record(recent?.["failure"]);
   const history = record(raw["historyRecall"]);
   const historyPlan = record(history?.["plan"]);
+  const turn = record(raw["turn"]);
   return {
+    providerRequestId: text(raw["providerRequestId"]),
+    turn: turn
+      ? {
+          assistantEventCommitted: turn["assistantEventCommitted"] === true,
+          commands: (Array.isArray(turn["commands"]) ? turn["commands"] : [])
+            .map(record)
+            .filter((entry): entry is Record<string, unknown> => entry !== null)
+            .map((entry) => ({
+              egressDisposition: text(entry["egressDisposition"]),
+              errorCategory: text(entry["errorCategory"]),
+              providerRequestId: text(entry["providerRequestId"]),
+              stage: String(entry["stage"]),
+            })),
+          finalDisposition: String(turn["finalDisposition"]),
+        }
+      : null,
     generationStage: text(raw["generationStage"]),
     historyRecall: history
       ? {
           answerCommandId: String(history["answerCommandId"]),
           decisionCommandId: String(history["decisionCommandId"]),
+          enumerationComplete:
+            typeof record(history["coverage"])?.["enumerationComplete"] === "boolean"
+              ? (record(history["coverage"])!["enumerationComplete"] as boolean)
+              : null,
           failureCode: text(history["failureCode"]),
+          omitted: Object.fromEntries(
+            Object.entries(record(record(history["coverage"])?.["omitted"]) ?? {}).filter(
+              (entry): entry is [string, number] => typeof entry[1] === "number",
+            ),
+          ),
+          searchOutcome: text(record(record(history["coverage"])?.["search"])?.["outcome"]),
+          sourceRevisionIds: (Array.isArray(history["sources"]) ? history["sources"] : [])
+            .map((entry) => text(record(entry)?.["revisionId"]))
+            .filter((entry): entry is string => entry !== null),
           planDates: historyPlan
             ? `${String(historyPlan["startDate"])}..${String(historyPlan["endDate"])} ${String(historyPlan["timezone"])}`
             : null,
@@ -224,6 +254,7 @@ export type CaseSession = Readonly<{
     corrected: { locale?: string; text: string },
   ): Promise<ObservedStep>;
   finish(): Promise<CaseObservation>;
+  forget(id: string, targets: readonly string[], at: Date): Promise<ObservedStep>;
   restart(id: string, at: Date): Promise<ObservedStep>;
   resend(id: string, of: string, at: Date): Promise<ObservedStep>;
   say(step: {
@@ -251,6 +282,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   // Seeding is destructive to this schema's baseline: prove ownership first.
   await environment.assertOwned();
   const recentContextGovernance = await environment.enableRecentContext();
+  await environment.enableHistoryRecall();
 
   async function inspect(
     generationCommandId: string | null,
@@ -457,11 +489,24 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
             collectStrings(request.body, strings);
             const messages = record(request.body)?.["input"];
             const last = Array.isArray(messages) ? record(messages.at(-1)) : null;
+            const tools = record(request.body)?.["tools"];
             return {
               conversationTurn:
                 last?.["role"] === "user" && last["content"] === submission.text,
+              instructions: text(record(request.body)?.["instructions"]) ?? "",
+              messages: (Array.isArray(messages) ? messages : [])
+                .map(record)
+                .filter((entry): entry is Record<string, unknown> => entry !== null)
+                .map((entry) => ({
+                  role: String(entry["role"]),
+                  text: typeof entry["content"] === "string" ? entry["content"] : JSON.stringify(entry["content"]),
+                })),
+              providerResponseId: `stub-response-${request.sequence}`,
               sequence: request.sequence,
               strings,
+              toolsOffered: (Array.isArray(tools) ? tools : [])
+                .map((tool) => text(record(tool)?.["name"]))
+                .filter((entry): entry is string => entry !== null),
             };
           }),
         type,
@@ -542,6 +587,31 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         problems,
         providerRequests: [],
         type: "correct",
+      };
+      steps.push(step);
+      input.onStep?.(step);
+      return step;
+    },
+    async forget(id, targets, at) {
+      await arriveAt(at);
+      const problems: string[] = [];
+      const revisionIds = targets.map(
+        (key) => seedTurns.find((turn) => turn.key === key)?.userRevisionId ?? null,
+      );
+      if (revisionIds.some((revisionId) => revisionId === null)) {
+        problems.push("A forgotten history turn has no committed user revision.");
+      } else {
+        await environment.seedForget(revisionIds as string[], at);
+      }
+      const step: ObservedStep = {
+        at: at.toISOString(),
+        chat: null,
+        id,
+        input: null,
+        inspection: null,
+        problems,
+        providerRequests: [],
+        type: "forget",
       };
       steps.push(step);
       input.onStep?.(step);
@@ -638,6 +708,7 @@ export function playStep(
     });
   }
   if (step.type === "resend") return session.resend(step.id, step.of, at);
+  if (step.type === "forget") return session.forget(step.id, step.targets, at);
   if (step.type === "correct") {
     return session.correct(step.id, step.target, at, {
       text: step.text,

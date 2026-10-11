@@ -21,6 +21,7 @@ import {
   type HistoryExperienceSearchPlan,
   decodeHistoryRecallReceipt,
   type HistoryQueryPlan,
+  type TurnInspection,
   type MemorySectionKey,
   type SafetyPostureContent,
 } from "@sayhear/application";
@@ -324,6 +325,10 @@ export class PostgresInternalInspectionRepository
         commandId: input.generationCommandId,
         userId: input.userId,
       });
+      const turn = await loadTurnInspection(client, {
+        commandId: input.generationCommandId,
+        userId: input.userId,
+      });
       await client.query("COMMIT");
       return {
         attemptStatus: row.attempt_status,
@@ -384,6 +389,7 @@ export class PostgresInternalInspectionRepository
         generationStage: row.generation_stage,
         harnessPolicyVersion: row.harness_policy_version,
         historyRecall,
+        turn,
         inputTokens: optionalNumber(row.input_tokens),
         model: row.model,
         modelRunAttemptId: asModelRunAttemptId(
@@ -931,6 +937,94 @@ function inspectableReceiptReference(reference: string): string {
   } catch {
     return "unreadable";
   }
+}
+
+async function loadTurnInspection(
+  client: PoolClient,
+  input: { commandId: string; userId: string },
+): Promise<TurnInspection | null> {
+  const turn = await client.query<{
+    interaction_turn_id: string;
+    status: string;
+  }>(
+    `SELECT turn.interaction_turn_id::text, turn.status
+     FROM generation_commands command
+     INNER JOIN interaction_turns turn
+       ON turn.interaction_turn_id = command.interaction_turn_id
+      AND turn.user_id = command.user_id
+     WHERE command.user_id = $1 AND command.generation_command_id = $2`,
+    [input.userId, input.commandId],
+  );
+  const turnRow = turn.rows[0];
+  if (!turnRow) return null;
+  const commands = await client.query<{
+    attempt_status: string | null;
+    command_status: string;
+    completed_at: Date | null;
+    egress_status: string | null;
+    error_category: string | null;
+    first_token_at: Date | null;
+    generation_command_id: string;
+    generation_stage: string;
+    provider_request_id: string | null;
+  }>(
+    `SELECT command.generation_command_id::text, command.generation_stage,
+            command.status AS command_status,
+            attempt.status AS attempt_status, attempt.error_category,
+            attempt.provider_request_id, attempt.first_token_at,
+            attempt.completed_at, egress.status AS egress_status
+     FROM generation_commands command
+     LEFT JOIN LATERAL (
+       SELECT latest.* FROM model_run_attempts latest
+       WHERE latest.generation_command_id = command.generation_command_id
+         AND latest.user_id = command.user_id
+       ORDER BY latest.attempt_no DESC LIMIT 1
+     ) attempt ON TRUE
+     LEFT JOIN provider_egress_dispositions egress
+       ON egress.model_run_attempt_id = attempt.model_run_attempt_id
+      AND egress.user_id = command.user_id
+     WHERE command.user_id = $1 AND command.interaction_turn_id = $2
+     ORDER BY command.created_at,
+       (command.generation_stage <> 'decision'),
+       command.generation_command_id`,
+    [input.userId, turnRow.interaction_turn_id],
+  );
+  const committed = await client.query(
+    `SELECT 1 FROM conversation_events event
+     WHERE event.user_id = $1 AND event.actor = 'assistant'
+       AND event.lifecycle_status = 'active'
+       AND event.generation_command_id = ANY($2::uuid[])
+     LIMIT 1`,
+    [input.userId, commands.rows.map((row) => row.generation_command_id)],
+  );
+  const assistantEventCommitted = (committed.rowCount ?? 0) > 0;
+  const finalDisposition: TurnInspection["finalDisposition"] =
+    assistantEventCommitted
+      ? "committed"
+      : turnRow.status === "failed"
+        ? "failed"
+        : turnRow.status === "interrupted"
+          ? "interrupted"
+          : turnRow.status === "settled"
+            ? "settled_without_reply"
+            : "in_progress";
+  return {
+    assistantEventCommitted,
+    commands: commands.rows.map((row) => ({
+      attemptStatus: row.attempt_status,
+      commandStatus: row.command_status,
+      completedAt: row.completed_at?.toISOString() ?? null,
+      egressDisposition: row.egress_status,
+      errorCategory: row.error_category,
+      firstTokenAt: row.first_token_at?.toISOString() ?? null,
+      generationCommandId: row.generation_command_id,
+      providerRequestId: row.provider_request_id,
+      stage: row.generation_stage,
+    })),
+    finalDisposition,
+    interactionTurnId: turnRow.interaction_turn_id,
+    turnStatus: turnRow.status,
+  };
 }
 
 async function loadHistoryRecallInspection(

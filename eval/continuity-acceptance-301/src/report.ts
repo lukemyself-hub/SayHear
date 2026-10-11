@@ -8,6 +8,11 @@ import {
   type CriterionStatus,
 } from "./evaluate";
 import { packRoot, sourceKeys, sourceText, type LoadedCase } from "./fixture";
+import {
+  diagnoseStep,
+  type DiagnosticEvidence,
+  type StepDiagnosis,
+} from "./diagnose";
 import type { CaseObservation, ObservedStep } from "./observation";
 
 /**
@@ -59,6 +64,12 @@ export type StepTiming = Readonly<{
 export type RunReport = Readonly<{
   budget: RunPlan;
   case: CaseReport;
+  /**
+   * Where a required source was lost, per step (T07 #320): decided from the
+   * authoritative history, the Inspector and the Provider request that left,
+   * and only a semantic verdict can yield a generation error.
+   */
+  diagnosis: readonly Readonly<{ diagnosis: StepDiagnosis; stepId: string }>[];
   identity: CaseObservation["identity"] &
     Readonly<{ oracleSha256: string; title: string }>;
   remainingRisks: readonly string[];
@@ -105,6 +116,87 @@ function manifestFor(
       source,
     };
   });
+}
+
+function localDateIn(instant: string, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: timezone,
+    year: "numeric",
+  }).formatToParts(new Date(instant));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** One diagnosis per step whose criteria require seeded sources to arrive. */
+function diagnoseSteps(
+  loaded: LoadedCase,
+  observation: CaseObservation,
+  caseReport: CaseReport,
+): RunReport["diagnosis"] {
+  const result: Array<{ diagnosis: StepDiagnosis; stepId: string }> = [];
+  const authoritativeTexts = observation.finalHistory.flatMap((session) =>
+    session.messages.map((message) => message.text),
+  );
+  for (const step of observation.steps) {
+    if (step.chat === null) continue;
+    const required = loaded.oracle.criteria.flatMap((criterion) => {
+      const check = (criterion as { check?: { sources?: readonly string[]; step?: string; type?: string } }).check;
+      return check?.type === "outbound_includes" && check.step === step.id ? (check.sources ?? []) : [];
+    });
+    if (required.length === 0) continue;
+    const verdicts = loaded.oracle.criteria
+      .filter((criterion) => criterion.kind === "semantic" && (criterion as { step?: string }).step === step.id)
+      .map((criterion) => caseReport.criteria.find((entry) => entry.id === criterion.id)?.status);
+    const semanticVerdict: DiagnosticEvidence["semanticVerdict"] = verdicts.includes("fail")
+      ? "fail"
+      : verdicts.length > 0 && verdicts.every((status) => status === "pass")
+        ? "pass"
+        : null;
+    const recall = step.inspection?.historyRecall ?? null;
+    const evidence: DiagnosticEvidence = {
+      authoritativeTexts,
+      recall: recall
+        ? {
+            answerCommandId: recall.answerCommandId,
+            enumerationComplete: recall.enumerationComplete,
+            failureCode: recall.failureCode,
+            omitted: recall.omitted,
+            role: recall.role,
+            searchOutcome: recall.searchOutcome,
+            sourceRevisionIds: recall.sourceRevisionIds,
+            status: recall.status,
+          }
+        : null,
+      requests: step.providerRequests
+        .filter((request) => request.conversationTurn && request.messages !== undefined)
+        .map((request) => ({
+          instructions: request.instructions ?? "",
+          messages: request.messages ?? [],
+          providerResponseId: request.providerResponseId ?? "",
+          sequence: request.sequence,
+          toolsOffered: request.toolsOffered ?? [],
+        })),
+      semanticVerdict,
+      sources: required.map((source) => {
+        const [key, actor] = source.split(":");
+        const seeded = observation.seed.turns.find((candidate) => candidate.key === key);
+        const turn = loaded.fixture.history.find((candidate) => candidate.key === key);
+        return {
+          expectedLocalDate: turn
+            ? localDateIn(turn.at, turn.timezone ?? loaded.fixture.defaults.timezone)
+            : null,
+          revisionId: (actor === "user" ? seeded?.userRevisionId : seeded?.assistantRevisionId) ?? null,
+          source,
+          text: sourceText(loaded.fixture, source) ?? "",
+        };
+      }),
+      turn: step.inspection?.turn ?? null,
+    };
+    result.push({ diagnosis: diagnoseStep(evidence), stepId: step.id });
+  }
+  return result;
 }
 
 export function buildRunReport(input: {
@@ -162,6 +254,7 @@ export function buildRunReport(input: {
   return {
     budget: plan,
     case: caseReport,
+    diagnosis: diagnoseSteps(loaded, observation, caseReport),
     identity: {
       ...observation.identity,
       oracleSha256: loaded.oracleSha256,
@@ -249,6 +342,26 @@ export function renderMarkdown(report: RunReport): string {
       for (const item of criterion.evidence) lines.push(`- ${item}`);
       lines.push("");
     }
+  }
+  if (report.diagnosis.length > 0) {
+    lines.push("## Diagnosis (where a required source was lost)");
+    lines.push("");
+    for (const { diagnosis, stepId } of report.diagnosis) {
+      lines.push(
+        `- \`${stepId}\`: read state \`${diagnosis.readState}\`, payload told the model \`${diagnosis.payloadReadStatus ?? "nothing"}\``,
+      );
+      for (const item of diagnosis.disagreements) lines.push(`  - DISAGREEMENT: ${item}`);
+      for (const source of diagnosis.sources) {
+        lines.push(
+          `  - \`${source.source}\` → **${source.fault}**` +
+            (source.trace
+              ? ` (Provider call \`${source.trace.providerResponseId}\`, request #${source.trace.requestSequence}, ${source.trace.commandStage ?? "unknown stage"})`
+              : ""),
+        );
+        for (const note of source.evidence) lines.push(`    - ${note}`);
+      }
+    }
+    lines.push("");
   }
   lines.push("## Transcript");
   lines.push("");

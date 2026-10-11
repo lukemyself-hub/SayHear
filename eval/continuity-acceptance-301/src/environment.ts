@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   PostgresInternalOwnerAccessRepository,
   createPostgresAuthAdapter,
+  createUuidV7,
   runMigrations,
 } from "@sayhear/data";
 import {
@@ -64,6 +65,8 @@ export type AcceptanceEnvironment = Readonly<{
   connection(): Readonly<{ origin: string; sessionCookie: string; sessionToken: string }>;
   /** Enable the seven-day recent context through the real operator route. */
   enableRecentContext(): Promise<string>;
+  /** Enable the history-recall governance through the real operator route (#320). */
+  enableHistoryRecall(): Promise<string>;
   /** Checks run identity, owner identity and seed capability, or throws. */
   assertOwned(): Promise<void>;
   dispose(): Promise<void>;
@@ -72,6 +75,11 @@ export type AcceptanceEnvironment = Readonly<{
   model: string;
   /** Drop this run's schemas and start again from an empty, stamped baseline. */
   reset(): Promise<void>;
+  /**
+   * Fixture state: an active Forget request whose exclusions name the Evidence
+   * of these user revisions (see `ForgetStep`). Owned-schema only.
+   */
+  seedForget(revisionIds: readonly string[], at: Date): Promise<void>;
   /** Restart the app process: a reconnect / recovery boundary. */
   restartApp(): Promise<void>;
   /**
@@ -258,6 +266,23 @@ export async function createAcceptanceEnvironment(input: {
       await stub.stop();
       rmSync(scratch, { force: true, recursive: true });
     },
+    async enableHistoryRecall() {
+      if (!app) throw new Error("The SayHear app is not running.");
+      const response = await fetch(`${app.origin}/api/internal/operator/history-recall`, {
+        body: JSON.stringify({ action: "enable" }),
+        headers: {
+          "content-type": "application/json",
+          cookie: `${SESSION_COOKIE_NAME}=${sessionToken}`,
+        },
+        method: "POST",
+      });
+      const body = (await response.json()) as { error?: string };
+      if (response.status === 409 && body.error === "already_enabled") return "active";
+      if (!response.ok) {
+        throw new Error(`Enabling history recall failed with HTTP ${response.status}.`);
+      }
+      return "active";
+    },
     async enableRecentContext() {
       if (!app) throw new Error("The SayHear app is not running.");
       const response = await fetch(`${app.origin}/api/internal/operator/recent-context`, {
@@ -300,6 +325,66 @@ export async function createAcceptanceEnvironment(input: {
       await dropSchemas();
       await provision();
       await startApp();
+    },
+    async seedForget(revisionIds, at) {
+      await assertOwned();
+      const pool = database!.pool;
+      const owner = fixedInternalOwnerPrincipal.userId;
+      const forgetRequestId = createUuidV7(at);
+      for (const [index, revisionId] of revisionIds.entries()) {
+        const found = await pool.query<{
+          conversation_event_id: string;
+          daily_session_id: string;
+          sequence_no: string;
+        }>(
+          `SELECT revision.conversation_event_id::text, event.daily_session_id::text,
+                  event.sequence_no::text
+           FROM conversation_event_revisions revision
+           INNER JOIN conversation_events event
+             ON event.conversation_event_id = revision.conversation_event_id
+           WHERE revision.conversation_event_revision_id = $1`,
+          [revisionId],
+        );
+        const row = found.rows[0];
+        if (!row) throw new Error("A forgotten revision was not found in the run's schema.");
+        const snapshotId = createUuidV7(at);
+        const itemId = createUuidV7(at);
+        await pool.query(
+          `INSERT INTO evidence_source_snapshots (
+             evidence_source_snapshot_id, user_id, daily_session_id, source_revision,
+             extraction_policy_version, command_id, attempt_id, champion_config_version,
+             champion_provider, champion_model, champion_snapshot,
+             champion_provider_policy_version, created_at
+           ) VALUES ($1, $2, $3, $4, 'evidence-extraction:v2', 'acceptance-seed', 'acceptance-seed', 'test', 'openai', 'test', 'test', 'test', $5)`,
+          [snapshotId, owner, row.daily_session_id, row.sequence_no, at],
+        );
+        await pool.query(
+          `INSERT INTO evidence_items (
+             evidence_item_id, user_id, evidence_source_snapshot_id, source_event_id,
+             source_revision_id, source_actor, source_status, locator_type,
+             locator_key, extraction_policy_version, evidence_role, created_at
+           ) VALUES ($1, $2, $3, $4, $5, 'user', 'final', 'whole_revision', $6, 'evidence-extraction:v2', 'factual_support', $7)`,
+          [itemId, owner, snapshotId, row.conversation_event_id, revisionId, `revision:${revisionId}`, at],
+        );
+        if (index === 0) {
+          await pool.query(
+            `INSERT INTO memory_forget_requests (
+               memory_forget_request_id, user_id, request_event_revision_id,
+               target_claim_id, target_scope, canonical_side, qualifier_key,
+               qualifier_typed_value, status, applied_claim_version_id,
+               forget_policy_version, created_at
+             ) VALUES ($1, $2, $3, NULL, 'whole_claim', NULL, NULL, NULL, 'pending_scope', NULL, 'memory-forget:v1', $4)`,
+            [forgetRequestId, owner, revisionId, at],
+          );
+        }
+        await pool.query(
+          `INSERT INTO memory_forget_evidence_exclusions (
+             memory_forget_evidence_exclusion_id, user_id, memory_forget_request_id,
+             evidence_item_id, exclusion_scope, canonical_side, qualifier_key, status, created_at
+           ) VALUES ($1, $2, $3, $4, 'whole_claim', NULL, NULL, 'active', $5)`,
+          [createUuidV7(at), owner, forgetRequestId, itemId, at],
+        );
+      }
     },
     async restartApp() {
       await app?.stop();

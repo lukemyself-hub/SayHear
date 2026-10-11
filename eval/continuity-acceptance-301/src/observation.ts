@@ -52,7 +52,14 @@ export type ObservedDateCoverage = Readonly<{
 export type ObservedHistoryRecall = Readonly<{
   answerCommandId: string;
   decisionCommandId: string;
+  /** Source enumeration reached the end of the requested range (date review). */
+  enumerationComplete: boolean | null;
   failureCode: string | null;
+  /** Why eligible rows were left out, by reason (content-free counts). */
+  omitted: Readonly<Record<string, number>>;
+  /** Outcome of an original-text search, when the branch was a search. */
+  searchOutcome: string | null;
+  sourceRevisionIds: readonly string[];
   planDates: string | null;
   policyVersion: string;
   role: string;
@@ -60,7 +67,22 @@ export type ObservedHistoryRecall = Readonly<{
   status: string;
 }>;
 
+/** The whole Turn as the controlled Inspector records it (issue #320). */
+export type ObservedTurn = Readonly<{
+  assistantEventCommitted: boolean;
+  commands: readonly Readonly<{
+    egressDisposition: string | null;
+    errorCategory: string | null;
+    providerRequestId: string | null;
+    stage: string;
+  }>[];
+  finalDisposition: string;
+}>;
+
 export type ObservedInspection = Readonly<{
+  /** The id the Provider answered with; the join key to the actual request. */
+  providerRequestId?: string | null;
+  turn?: ObservedTurn | null;
   attemptStatus: string | null;
   /** Which branch the Decision took; null for an ordinary reply. */
   historyRecall?: ObservedHistoryRecall | null;
@@ -127,10 +149,16 @@ export type ObservedStep = Readonly<{
      * Both are real egress and both are scanned for leaks and exclusions.
      */
     conversationTurn: boolean;
+    /** The instructions and messages exactly as they left, for diagnosis. */
+    instructions?: string;
+    messages?: readonly Readonly<{ role: string; text: string }>[];
+    /** What the stand-in Provider answered this request with. */
+    providerResponseId?: string;
     sequence: number;
     strings: readonly string[];
+    toolsOffered?: readonly string[];
   }>[];
-  type: "say" | "resend" | "restart" | "correct";
+  type: "say" | "resend" | "restart" | "correct" | "forget";
 }>;
 
 export type CaseObservation = Readonly<{
