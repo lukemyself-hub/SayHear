@@ -50,6 +50,7 @@ import {
   type ProviderDispatchErrorCategory,
   type ProviderEgressPort,
 } from "./conversation-model";
+import type { RequestDeadline } from "./request-deadline";
 
 /**
  * The application-owned Conversation Agent Harness (ADR-0093, ADR-0094).
@@ -120,6 +121,12 @@ export type ConversationDecisionCommand = Readonly<{
   catalog: ConversationActionCatalog;
   catalogVersion: string;
   compiledContextId: CompiledContextId;
+  /**
+   * The request's absolute deadline (issue #319). Every step the Harness
+   * starts, including backoff and the acceptance commit, shares what is left;
+   * after it passes nothing new starts and no late result is shown or kept.
+   */
+  deadline?: RequestDeadline;
   generationCommandId: GenerationCommandId;
   harnessPolicy: ConversationHarnessPolicy;
   interactionTurnId: InteractionTurnId;
@@ -190,6 +197,7 @@ export type ConversationAgentHarness = Readonly<{
     command: HistoryAnswerCommandRef,
     input: Readonly<{
       catalog: ConversationActionCatalog;
+      deadline?: RequestDeadline;
       harnessPolicy: ConversationHarnessPolicy;
     }>,
     signal?: AbortSignal,
@@ -198,6 +206,7 @@ export type ConversationAgentHarness = Readonly<{
     command: ConversationActionFinalizationCommand,
     input: Readonly<{
       catalog: ConversationActionCatalog;
+      deadline?: RequestDeadline;
       harnessPolicy: ConversationHarnessPolicy;
     }>,
     signal?: AbortSignal,
@@ -247,7 +256,9 @@ export function createConversationAgentHarness(dependencies: {
     let historySuppressed = false;
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
+    const interrupt = createInterrupt(signal, command.deadline);
     try {
+      interrupt.throwIfInterrupted();
       if (!validateConversationActionCatalog(command.catalog).valid) {
         throw new ProviderDispatchError("invalid_response");
       }
@@ -272,7 +283,7 @@ export function createConversationAgentHarness(dependencies: {
         command.harnessPolicy.maxHistoryQueries === 1 &&
         command.requestEventRevisionId !== undefined &&
         dependencies.historyRecall !== undefined;
-      for await (const event of dependencies.egressPort.stream({
+      for await (const event of interrupt.race(dependencies.egressPort.stream({
         compiledContextId: command.compiledContextId,
         ...(command.requestEventRevisionId
           ? { requestEventRevisionId: command.requestEventRevisionId }
@@ -291,9 +302,10 @@ export function createConversationAgentHarness(dependencies: {
         generationCommandId: command.generationCommandId,
         modelRunAttemptId: command.modelRunAttemptId,
         userId: command.userId,
-        ...(signal ? { signal } : {}),
+        ...(interrupt.signal ? { signal: interrupt.signal } : {}),
         toolsDisabled: command.harnessPolicy.toolsDisabled === true,
-      })) {
+      }))) {
+        interrupt.throwIfInterrupted();
         if (event.type === "delta") {
           if (pendingActionProposal || pendingHistoryProposal) {
             throw new ProviderDispatchError("invalid_response");
@@ -382,6 +394,7 @@ export function createConversationAgentHarness(dependencies: {
           // Observability cannot change the Decision.
         }
       }
+      interrupt.throwIfInterrupted();
       if (pendingActionProposal) {
         stage = "action_admission";
         const receipt = await dependencies.actionGateway!.admit({
@@ -429,6 +442,7 @@ export function createConversationAgentHarness(dependencies: {
         throw new ProviderDispatchError("invalid_response");
       }
 
+      interrupt.throwIfInterrupted();
       stage = "response_commit";
       const committed = await dependencies.repository.commitCompleteResponse({
         completedAt: dependencies.clock(),
@@ -485,7 +499,8 @@ export function createConversationAgentHarness(dependencies: {
         userId: command.userId,
       });
       if (failure.outcome === "retry_scheduled") {
-        await delay(
+        await interrupt.sleep(
+          delay,
           Math.max(
             0,
             failure.retryAt.getTime() - dependencies.clock().getTime(),
@@ -597,6 +612,7 @@ export function createConversationAgentHarness(dependencies: {
     }>,
     input: Readonly<{
       catalog: ConversationActionCatalog;
+      deadline?: RequestDeadline;
       harnessPolicy: ConversationHarnessPolicy;
     }>,
     signal?: AbortSignal,
@@ -674,6 +690,7 @@ export function createConversationAgentHarness(dependencies: {
           interactionTurnId: command.interactionTurnId,
           modelRunAttemptId: asModelRunAttemptId(command.modelRunAttemptId),
           requestEventRevisionId: command.requestEventRevisionId,
+          ...(input.deadline ? { deadline: input.deadline } : {}),
           userId: command.userId,
         },
         signal,
@@ -712,4 +729,71 @@ async function* streamExistingDecision(
     return;
   }
   yield { category: "unavailable", interrupted: false, type: "decision_failed" };
+}
+
+const INTERRUPTED = Symbol("interrupted");
+
+/**
+ * Combines the consumer's cancellation and the request deadline (issue #319).
+ * `race` lets the Harness stop waiting on a Provider call that ignores its
+ * abort signal, so the deadline holds even when cancellation cannot be
+ * delivered; `throwIfInterrupted` keeps new steps from starting afterwards.
+ */
+function createInterrupt(
+  signal: AbortSignal | undefined,
+  deadline: RequestDeadline | undefined,
+) {
+  const parts = [signal, deadline?.signal].filter(
+    (part): part is AbortSignal => part !== undefined,
+  );
+  const combined = parts.length === 0 ? undefined : AbortSignal.any(parts);
+  const reason = (): ProviderDispatchErrorCategory | null =>
+    deadline?.expired()
+      ? "timeout"
+      : combined?.aborted
+        ? "aborted"
+        : null;
+  const interrupted: Promise<typeof INTERRUPTED> =
+    combined === undefined
+      ? new Promise<never>(() => undefined)
+      : new Promise((resolve) => {
+          if (combined.aborted) resolve(INTERRUPTED);
+          else
+            combined.addEventListener("abort", () => resolve(INTERRUPTED), {
+              once: true,
+            });
+        });
+  function throwIfInterrupted(): void {
+    const category = reason();
+    if (category !== null) throw new ProviderDispatchError(category);
+  }
+  return {
+    signal: combined,
+    throwIfInterrupted,
+    async sleep(
+      delay: (ms: number) => Promise<void>,
+      ms: number,
+    ): Promise<void> {
+      const waited = delay(ms);
+      waited.catch(() => undefined);
+      await Promise.race([waited, interrupted]);
+      throwIfInterrupted();
+    },
+    async *race<T>(source: AsyncIterable<T>): AsyncIterable<T> {
+      const iterator = source[Symbol.asyncIterator]();
+      for (;;) {
+        const pending = iterator.next();
+        pending.catch(() => undefined);
+        const next = await Promise.race([pending, interrupted]);
+        if (next === INTERRUPTED) {
+          // Never await this: a call that ignores cancellation never returns.
+          void Promise.resolve(iterator.return?.()).catch(() => undefined);
+          throwIfInterrupted();
+          throw new ProviderDispatchError("aborted");
+        }
+        if (next.done === true) return;
+        yield next.value;
+      }
+    },
+  };
 }
