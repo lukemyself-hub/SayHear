@@ -7,7 +7,7 @@ import type { AcceptanceEnvironment } from "./environment";
 // The runner drives a conversation from the model-visible fixture alone. It
 // must never import the oracle loader: what the scorer knows cannot be allowed
 // anywhere near the request path.
-import type { CaseFixture, ProviderFaultSpec, RunMode } from "./fixture";
+import type { CaseFixture, HistoryReviewScript, ProviderFaultSpec, RunMode } from "./fixture";
 import {
   OBSERVATION_SCHEMA_VERSION,
   type CaseObservation,
@@ -163,6 +163,7 @@ export type CaseSession = Readonly<{
     abortAfterDeltas?: number;
     at: Date;
     id: string;
+    historyReview?: HistoryReviewScript;
     locale?: string;
     providerFault?: ProviderFaultSpec;
     text: string;
@@ -285,6 +286,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       clientEventId: string;
       clientTurnId: string;
       locale: string;
+      historyReview?: HistoryReviewScript;
       providerFault?: Parameters<typeof stub.setFault>[0];
       text: string;
       timezone: string;
@@ -293,6 +295,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
     await arriveAt(at);
     stub.setStepLabel(id);
     stub.setFault(submission.providerFault ?? null);
+    stub.setHistoryReview(submission.historyReview ?? null);
     const problems: string[] = [];
     let chat: ChatObservation | null = null;
     try {
@@ -316,6 +319,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       await new Promise((resolve) => setTimeout(resolve, 1_500));
     }
     stub.setFault(null);
+    stub.setHistoryReview(null);
     stub.setStepLabel(null);
     const inspection = await inspect(chat?.generationCommandId ?? null, problems);
     const step: ObservedStep = {
@@ -469,6 +473,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         timezone: step.timezone ?? fixture.defaults.timezone,
         ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
         ...(step.providerFault ? { providerFault: step.providerFault } : {}),
+        ...(step.historyReview ? { historyReview: step.historyReview } : {}),
       });
     },
     seed,
@@ -489,6 +494,7 @@ export function playStep(
       ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
       ...(step.locale ? { locale: step.locale } : {}),
       ...(step.providerFault ? { providerFault: step.providerFault } : {}),
+      ...(step.historyReview ? { historyReview: step.historyReview } : {}),
       ...(step.timezone ? { timezone: step.timezone } : {}),
     });
   }

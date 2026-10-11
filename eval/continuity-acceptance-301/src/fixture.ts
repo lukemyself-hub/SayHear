@@ -28,6 +28,8 @@ export type ProviderFaultSpec = Readonly<{
   httpStatus?: number;
 }>;
 
+export type HistoryReviewScript = Readonly<{ endDate: string; startDate: string }>;
+
 /** One seeded exchange: the user's words and the reply that was given then. */
 export type HistoryTurn = Readonly<{
   assistant: string;
@@ -51,6 +53,13 @@ export type SayStep = Readonly<{
   at: string;
   id: string;
   locale?: string;
+  /**
+   * What the stand-in Provider's Decision should select when (and only when)
+   * SayHear offers it the read-only history review function. The stub never
+   * invents the call: if the product does not offer the function the reply
+   * is ordinary text, which is the red signal for a missing capability.
+   */
+  historyReview?: HistoryReviewScript;
   providerFault?: ProviderFaultSpec;
   text: string;
   timezone?: string;

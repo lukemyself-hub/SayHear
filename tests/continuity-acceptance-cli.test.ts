@@ -29,7 +29,7 @@ function run(args: readonly string[], environment: Record<string, string> = {}) 
 describe("continuity acceptance CLI", { timeout: 120_000 }, () => {
   it("validates the whole pack without any database or model configured", () => {
     const result = run(["validate"]);
-    expect(result.output).toContain("15 case(s) valid.");
+    expect(result.output).toContain("16 case(s) valid.");
     expect(result.code).toBe(0);
   });
 

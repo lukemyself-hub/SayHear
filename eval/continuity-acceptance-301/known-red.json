@@ -3,6 +3,7 @@
   "entries": [
     { "caseId": "C01", "criterionId": "O-topic-coverage", "owner": "#315", "reason": "A long final subject crowds the day's early subjects out of the 2,000-token default background, so a day recap cannot cover them." },
     { "caseId": "C01", "criterionId": "O-detail-source", "owner": "#315", "reason": "The same crowding removes the messages that hold the asked-for work detail." },
+    { "caseId": "C13", "criterionId": "O-date-source", "owner": "#314", "reason": "No read-only history review exists: the messages of an explicitly named older date never reach the Provider." },
     { "caseId": "C04", "criterionId": "O-old-source", "owner": "#316", "reason": "An ordinary experience from three months ago is outside the seven-day default background and there is no history recall yet." },
     { "caseId": "C05", "criterionId": "O-bare-older", "owner": "#317", "reason": "The older pending matter is outside the default background, so the ambiguity of a bare announcement cannot be seen." },
     { "caseId": "C05", "criterionId": "O-cued-older", "owner": "#317", "reason": "A current cue does not yet pull in the related three-month-old background." },
