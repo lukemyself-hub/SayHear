@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C11",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "zh",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
@@ -36,19 +36,19 @@
       "id": "empty",
       "type": "say",
       "at": "2026-09-15T12:00:00.000Z",
-      "text": "上周五，就是十一号那天，我跟你聊过什么吗？"
+      "historyReview": {"startDate": "2026-09-11", "endDate": "2026-09-11"}, "text": "上周五，就是十一号那天，我跟你聊过什么吗？"
     },
     {
       "id": "older",
       "type": "say",
       "at": "2026-09-15T12:03:00.000Z",
-      "text": "那八月底那几天呢，我们聊了些什么？"
+      "historyReview": {"startDate": "2026-08-25", "endDate": "2026-08-31"}, "text": "那八月底那几天呢，我们聊了些什么？"
     },
     {
       "id": "earliest",
       "type": "say",
       "at": "2026-09-15T12:06:00.000Z",
-      "text": "我第一次跟你提画画相关的事是什么时候？"
+      "historyReview": {"startDate": "2026-07-01", "endDate": "2026-09-12"}, "text": "我第一次跟你提画画相关的事是什么时候？"
     }
   ]
 }

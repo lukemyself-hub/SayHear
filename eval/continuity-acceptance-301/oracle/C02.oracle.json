@@ -6,7 +6,7 @@
   "spec": ["#301 R1", "#301 R2", "#307", "ADR-0151"],
   "ownerTickets": ["#314", "#315"],
   "language": "zh",
-  "fixture": { "version": "dev-1", "sha256": "38602c8e73ad36bddd4c6b3570ce707c86ab690ca5d2e5e5ecb743baa7eda631" },
+  "fixture": { "version": "dev-2", "sha256": "35bc798b5d2b52e3070a6d9d3f59817552da3d134dc2dd8184c0ab982d41a9a9" },
   "facts": {
     "allowed": [
       { "id": "a-repair-done", "statement": "Yesterday after work the person fixed a kitchen wall-cupboard door by tightening a loose hinge.", "sources": ["cabinet:user"] }

@@ -681,8 +681,12 @@ export function createContextCompiler(dependencies: {
               ),
             };
 
+      const recalledRevisionIds = new Set<string>(
+        (source.historyRecall?.events ?? []).map((event) => event.revisionId),
+      );
       const historyNewestFirst = source.events
         .filter((event) => {
+          if (recalledRevisionIds.has(event.revisionId)) return false;
           const dialogueCoverage = dialogueState?.coveredThroughSequence ?? 0;
           const summaryCoverage = source.rollingSummary?.coveredThrough ?? 0;
           return event.revisionId !== source.inputRevisionId &&

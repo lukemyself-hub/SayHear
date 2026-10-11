@@ -150,6 +150,7 @@ export async function startProviderStub(): Promise<ProviderStub> {
             : {
                 end_date: historyReview.endDate,
                 start_date: historyReview.startDate,
+                ...(historyReview.timeBasis ? { time_basis: historyReview.timeBasis } : {}),
               },
         );
         send({

@@ -210,23 +210,43 @@ maxSourceRows` 约束；资格谓词（active、当前 revision、未 purge、fi
 **Inspector**：`GenerationInspectionMetadata` 增加 `generationStage` 与 `historyRecall`（角色、状态、
 失败码、计划日期、枚举/注入覆盖、来源 revision 引用与时间），两端命令互相可达；无正文。
 
-**已知边界**：Retry 与恢复路径没有请求 revision，不提供该函数，历史问题退化为普通回复；经历时间、跨页大日回顾由
-T02 扩展计划能力。原文词法检索见下一节（#316）。
+**已知边界**：Retry 与恢复路径没有请求 revision，不提供该函数，历史问题退化为普通回复；原文词法检索见 8.4.4（#316）。
 
-##### 8.4.2a 原文经历检索（#316）
+#### 8.4.3 按日期回顾主要话题（#315，`history-recall:v2`）
 
-同一函数增加第二种提案 `search_experience`：`search_terms`（≤ 6 个短词/短语，每个 2–32 字符，含近义与
+在 8.4.2 的计划与读取上扩展，不改变阶段、冻结与资格结构：
+
+- **两种时间基准**：`time_basis` = `expressed_date`（默认，消息何时说）或 `experienced_date`（经历何时发生）。
+  经历时间目前没有任何有来源的列，所以经历日期查询读取 `[开始日, min(结束日+14 天, 请求本地日)]` 内“说过的话”作为
+  线索，**结果恒为 `partial`**（`coverage.limits = ["experience_time_not_recorded"]`），回答指引要求只采用原话里
+  相对表达时间的说法、否则保持“日期未给出”。表达日期与经历日期的结果从不混用。
+- **范围与读取**：日期范围上限 `maxDateSpanDays`（v2 为 92）；≤14 个日期逐日列出，更宽的只列有消息的日期。
+  v2 预算：每页 50 行、最多 8 页、400 行、3,000 token、单条 600 token、读取超时 2 秒，版本号
+  `history-recall:v2`。读取包含当前 Daily Session 中属于该范围的消息（跨午夜的同一会话仍含“昨天”），只排除
+  请求本身；编译时以 revision 去重，同一条不会在原文窗口里再出现一次。截止时刻与游标语义同 8.4.2。
+- **覆盖优先的选取**（`selectHistoryRecall`）：先以相邻消息间隔 >30 分钟切成时间块；总量超预算时按“小块先足额、
+  大块均分余量”分配每块预算（水位填充），块内先放弃 Assistant 行，再放弃较长的用户行，块的开头一条最后才放弃；
+  完全相同的重复用户文本只保留一条。这样最新或最长的话题不能挤掉当天更早的话题。最终仍按时间顺序注入。
+- **覆盖记录**（内容无关）：`enumerationComplete`、`readThrough`（未读完时读到哪一刻）、`blocks/blocksCovered`、
+  逐日 `state`（empty/complete/partial/unread）、`omitted`（含 `assistant_context_trimmed`、`duplicate_text`，这两类
+  不算漏读来源）、`limits`、`timeBasis`。`partial` 当且仅当读取未枚举完、用户来源被预算裁掉或存在 `limits`。
+- **回答指引**：完整、完整空日、部分（预算 / 读取提前停止）、读取失败、经历日期各有不同的指引句；均不含内部术语。
+  细节追问由 Decision 再次调用同一函数，答案取自原文而不是上一轮助手摘要。
+
+#### 8.4.4 原文经历检索（#316，`history-recall:v3`）
+
+8.4.2/8.4.3 的同一函数增加第二种提案 `search_experience`：`search_terms`（≤ 6 个短词/短语，每个 2–32 字符，含近义与
 中英两种写法）、可选 `people`（≤ 3）、可选 `start_date/end_date`。词只是**寻找线索**，不是用户事实，不形成
 Claim、Entity 或别名；未知键、控制字符、只给 `people` 一律 fail closed。一轮仍只有一个查询（`maxHistoryQueries: 1`），
 模型生成的改写就在这个 Decision 内，没有额外的检索前模型。
 
 **确定性计划**（`resolveExperienceSearchPlan`）：NFKC、小写、空白折叠；每个线索附带有限的繁/简变体
-（`maxVariantsPerGroup`）；日期范围 ≤ `maxSpanDays`（v1 为 400），起点不得晚于请求本地日期。person 线索只在
+（`maxVariantsPerGroup`）；日期范围 ≤ `maxSpanDays`（search 策略 `history-experience-search:v1` 为 400），起点不得晚于请求本地日期。与日期回顾一样只排除请求本身（不再排除当前 Daily Session，编译时按 revision 去重）。person 线索只在
 **恰好命中一个 Entity 的已验证标签/别名**时才用该 Entity 的其他已验证标签扩词；命中多个 Entity 则不扩词
 （同名不合并），不创建或关联任何 Entity。**person 线索单独不能选中消息**，必须同时命中至少一个主题词。
 
 **读取**（`PostgresExperienceSearchSource`，无投影、无索引、无新表）：在只读 REPEATABLE READ 事务内，对 owner
-最近的 `scanLimit`（v1 为 6,000）条仍有资格的 **User** 原文按 `created_at` 倒序扫描，CJK 线索按子串、ASCII 线索按
+最近的 `scanLimit`（search 策略 v1 为 6,000）条仍有资格的 **User** 原文按 `created_at` 倒序扫描，CJK 线索按子串、ASCII 线索按
 单词边界匹配；Assistant 文本永不作为命中。共享截止时间 `deadlineMs`（别名、命中、上下文三次读取共用，
 作为各事务的 statement_timeout）。资格谓词与 §8.4.2 完全共用（`postgres-source-eligibility.ts`）：Correction/Forget
 明确关联的命中被排除并只计数，其文本不越过端口。

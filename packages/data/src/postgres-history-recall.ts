@@ -28,7 +28,7 @@ import {
   asInteractionTurnId,
   asModelRunAttemptId,
   asUserId,
-  type DailySessionId,
+  type ConversationEventRevisionId,
   type GenerationCommandId,
   type ModelRunAttemptId,
   type UserId,
@@ -141,13 +141,15 @@ const EVENT_ROW_JOINS_SQL = `
  * One keyset page of retained original messages whose expression instant falls
  * inside the plan local-date range (half-open UTC bounds computed in SQL from
  * the IANA zone, so DST days are 23/25 hours long and correct), up to the
- * frozen cutoff, excluding the current Daily Session. Rows with an explicit
+ * frozen cutoff, including the current Daily Session (a conversation that
+ * crosses midnight still holds yesterday's messages) but never the request
+ * itself. Rows with an explicit
  * control association come back with their text blanked: the text never
  * crosses the port. The Assistant is bound to the user revision that
  * generated it; a superseded or controlled request makes the reply ineligible.
  *
  * Parameters: $1 user, $2 timezone, $3 start local date, $4 end local date,
- * $5 cutoff, $6 current session, $7 page size + 1, $8 cursor instant (text or
+ * $5 cutoff, $6 request revision, $7 page size + 1, $8 cursor instant (text or
  * NULL), $9 cursor session, $10 cursor sequence.
  */
 export const HISTORY_RECALL_PAGE_SQL = `
@@ -169,7 +171,7 @@ export const HISTORY_RECALL_PAGE_SQL = `
     AND event.created_at >= bounds.start_utc
     AND event.created_at < bounds.end_utc
     AND event.created_at <= $5::timestamptz
-    AND event.daily_session_id <> $6::uuid
+    AND revision.conversation_event_revision_id <> $6::uuid
     AND (
       $8::timestamptz IS NULL
       OR (event.created_at, event.daily_session_id::text, event.sequence_no) >
@@ -182,13 +184,13 @@ export const HISTORY_RECALL_PAGE_SQL = `
 /**
  * Experience search, step one: scan the owner's newest retained User messages
  * (bounded by the policy scan limit, optionally by a local-date range and the
- * frozen cutoff, never the current Daily Session) and return the ones that
+ * frozen cutoff, never the request itself) and return the ones that
  * match any clue pattern, with the number of rows really scanned. Matching is
  * on NFKC-folded, lower-cased, whitespace-collapsed text: CJK clues by
  * substring, ASCII clues on word boundaries. Only User text is searched.
  *
  * Parameters: $1 user, $2 timezone, $3 start date|NULL, $4 end date|NULL,
- * $5 cutoff, $6 current session, $7 scan limit + 1, $8 scan limit,
+ * $5 cutoff, $6 request revision, $7 scan limit + 1, $8 scan limit,
  * $9 pattern groups, $10 pattern kinds, $11 pattern values, $12 hit rows.
  */
 export const EXPERIENCE_SEARCH_HITS_SQL = `
@@ -214,7 +216,7 @@ export const EXPERIENCE_SEARCH_HITS_SQL = `
       AND revision.content_purged_at IS NULL
       AND revision.transcript_status IN ${ELIGIBLE_TRANSCRIPT_STATUSES_SQL}
       AND event.created_at <= $5::timestamptz
-      AND event.daily_session_id <> $6::uuid
+      AND revision.conversation_event_revision_id <> $6::uuid
       AND (bounds.start_utc IS NULL OR event.created_at >= bounds.start_utc)
       AND (bounds.end_utc IS NULL OR event.created_at < bounds.end_utc)
     ORDER BY event.created_at DESC, event.sequence_no DESC
@@ -271,7 +273,8 @@ export const EXPERIENCE_SEARCH_HITS_SQL = `
 /**
  * Experience search, step two: the eligible messages of the chosen occasions,
  * limited to the occasion's session and time window. $3 sessions, $4 window
- * starts, $5 window ends, $6 cutoff, $7 row limit.
+ * starts, $5 window ends, $6 cutoff, $7 row limit, $8 request revision (the
+ * request itself is never context).
  */
 export const EXPERIENCE_SEARCH_CONTEXT_SQL = `
   SELECT ${EVENT_ROW_COLUMNS_SQL}
@@ -286,6 +289,7 @@ export const EXPERIENCE_SEARCH_CONTEXT_SQL = `
     AND revision.content_purged_at IS NULL
     AND revision.transcript_status IN ${ELIGIBLE_TRANSCRIPT_STATUSES_SQL}
     AND event.created_at <= $6::timestamptz
+    AND revision.conversation_event_revision_id <> $8::uuid
     AND EXISTS (
       SELECT 1
       FROM unnest($3::uuid[], $4::timestamptz[], $5::timestamptz[])
@@ -295,21 +299,6 @@ export const EXPERIENCE_SEARCH_CONTEXT_SQL = `
     )
   ORDER BY event.created_at, event.daily_session_id::text, event.sequence_no
   LIMIT $7
-`;
-
-const CURRENT_CONVERSATION_COUNT_SQL = `
-  WITH bounds AS (
-    SELECT ($3::date)::timestamp AT TIME ZONE $2 AS start_utc,
-           (($4::date) + 1)::timestamp AT TIME ZONE $2 AS end_utc
-  )
-  SELECT COUNT(*)::text AS rows
-  FROM bounds, conversation_events event
-  WHERE event.user_id = $1
-    AND event.daily_session_id = $5::uuid
-    AND event.actor IN ('user', 'assistant')
-    AND event.lifecycle_status = 'active'
-    AND event.created_at >= bounds.start_utc
-    AND event.created_at < bounds.end_utc
 `;
 
 const REASONS = ["correction_association", "forget_association"] as const;
@@ -378,10 +367,10 @@ export class PostgresHistoryRecallSource implements HistoryRecallSourcePort {
           [
             request.userId,
             plan.timezone,
-            plan.startDate,
-            plan.endDate,
+            plan.readStartDate,
+            plan.readEndDate,
             plan.cutoff,
-            request.currentDailySessionId,
+            request.requestRevisionId,
             limit + 1,
             cursor?.at ?? null,
             cursor?.session ?? "",
@@ -417,12 +406,8 @@ export class PostgresHistoryRecallSource implements HistoryRecallSourcePort {
         const last = rows.at(-1)!;
         cursor = { at: last.cursor_at, sequence: last.sequence_no, session: last.daily_session_id };
       }
-      const current = await client.query<{ rows: string }>(
-        CURRENT_CONVERSATION_COUNT_SQL,
-        [request.userId, plan.timezone, plan.startDate, plan.endDate, request.currentDailySessionId],
-      );
       return {
-        currentConversationRows: Number(current.rows[0]?.rows ?? 0),
+        currentConversationRows: 0,
         enumerationComplete: !more,
         failure: null,
         items,
@@ -568,10 +553,10 @@ export class PostgresExperienceSearchSource implements ExperienceSearchSourcePor
   }
 
   public async searchHits(input: {
-    currentDailySessionId: DailySessionId;
     deadlineMs: number;
     expectedDataEpoch: number;
     maxHitRows: number;
+    requestRevisionId: ConversationEventRevisionId;
     plan: HistoryExperienceSearchPlan;
     scanLimit: number;
     userId: UserId;
@@ -593,7 +578,7 @@ export class PostgresExperienceSearchSource implements ExperienceSearchSourcePor
         input.plan.startDate,
         input.plan.endDate,
         input.plan.cutoff,
-        input.currentDailySessionId,
+        input.requestRevisionId,
         input.scanLimit + 1,
         input.scanLimit,
         patterns.map((pattern) => pattern.group),
@@ -633,6 +618,7 @@ export class PostgresExperienceSearchSource implements ExperienceSearchSourcePor
     deadlineMs: number;
     expectedDataEpoch: number;
     maxRowsPerWindow: number;
+    requestRevisionId: ConversationEventRevisionId;
     timezone: string;
     userId: UserId;
     windows: readonly ExperienceContextWindow[];
@@ -649,6 +635,7 @@ export class PostgresExperienceSearchSource implements ExperienceSearchSourcePor
         input.windows.map((window) => window.toAt),
         input.cutoff,
         input.maxRowsPerWindow * Math.max(1, input.windows.length),
+        input.requestRevisionId,
       ]),
     );
     if (!read.ok) return { failure: { code: read.failure }, items: [] };

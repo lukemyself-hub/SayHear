@@ -16,7 +16,11 @@
  * was not said, or that a match is the earliest one.
  */
 
-import type { DailySessionId, UserId } from "@sayhear/domain";
+import type {
+  ConversationEventRevisionId,
+  DailySessionId,
+  UserId,
+} from "@sayhear/domain";
 
 import {
   expandSimplifiedToTraditional,
@@ -240,10 +244,10 @@ export type ExperienceSearchSourcePort = Readonly<{
     userId: UserId;
   }): Promise<readonly VerifiedLabel[]>;
   searchHits(input: {
-    currentDailySessionId: DailySessionId;
     deadlineMs: number;
     expectedDataEpoch: number;
     maxHitRows: number;
+    requestRevisionId: ConversationEventRevisionId;
     plan: HistoryExperienceSearchPlan;
     scanLimit: number;
     userId: UserId;
@@ -253,6 +257,7 @@ export type ExperienceSearchSourcePort = Readonly<{
     deadlineMs: number;
     expectedDataEpoch: number;
     maxRowsPerWindow: number;
+    requestRevisionId: ConversationEventRevisionId;
     timezone: string;
     userId: UserId;
     windows: readonly ExperienceContextWindow[];
@@ -345,7 +350,12 @@ export function buildExperienceGroups(
 }
 
 const EMPTY_BASE_COVERAGE = {
+  blocks: 0,
+  blocksCovered: 0,
   enumeratedRows: 0,
+  limits: [] as HistoryRecallCoverage["limits"],
+  readThrough: null as string | null,
+  timeBasis: "expressed_date" as const,
   currentConversationRows: 0,
   enumerationComplete: false,
   omitted: {} as HistoryRecallCoverage["omitted"],
@@ -570,11 +580,11 @@ export function selectExperienceSearch(input: {
 
 /** Deterministic orchestration of one search against the source port. */
 export async function runExperienceSearch(input: {
-  currentDailySessionId: DailySessionId;
   cutoff: Date;
   expectedDataEpoch: number;
   policy: HistoryRecallPolicy;
   proposal: HistoryExperienceSearchProposal;
+  requestRevisionId: ConversationEventRevisionId;
   source: ExperienceSearchSourcePort;
   timezone: string | null;
   userId: UserId;
@@ -630,11 +640,11 @@ export async function runExperienceSearch(input: {
   let hits: ExperienceHitsSnapshot;
   try {
     hits = await input.source.searchHits({
-      currentDailySessionId: input.currentDailySessionId,
       deadlineMs: remaining(),
       expectedDataEpoch: input.expectedDataEpoch,
       maxHitRows: policy.search.maxHitRows,
       plan,
+      requestRevisionId: input.requestRevisionId,
       scanLimit: policy.search.scanLimit,
       userId: input.userId,
     });
@@ -655,6 +665,7 @@ export async function runExperienceSearch(input: {
         deadlineMs: remaining(),
         expectedDataEpoch: input.expectedDataEpoch,
         maxRowsPerWindow: policy.search.contextRowsPerGroup * 2,
+        requestRevisionId: input.requestRevisionId,
         timezone: plan.timezone,
         userId: input.userId,
         windows: grouped.groups.map((group) => ({
