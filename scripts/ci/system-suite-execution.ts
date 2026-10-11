@@ -27,7 +27,7 @@ export type SystemSuiteExecution = Readonly<{
  * change to the coverage of the two-database contract, so the pinned number
  * turns a silent deletion into a failed check instead of a green run.
  */
-export const expectedSystemSuiteCount = 47;
+export const expectedSystemSuiteCount = 51;
 
 const SYSTEM_SUITE_DIRECTORY = "tests/system";
 

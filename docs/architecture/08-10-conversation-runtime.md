@@ -309,6 +309,27 @@ Posture / 关系边界各 section——三条路径与普通回复由同一个 `
 **已知局限**：用户之后反复问同一话题的问句本身也含线索词，会占用名额（见 #318 交接笔记）。共情与人格的主观品质不由本节任何
 机械检查宣称达标，按 ADR-0110 由 T08 人评裁定。
 
+#### 8.4.7 历史路径的来源控制、诊断与独立关闭（#320）
+
+**来源控制围栏。**同一批用户控制（Correction 的新 revision / Forget 排除 / Data Epoch 与 Purge）对日期回顾、较早检索、自然接续三个入口
+一致生效，围栏点依次为：读取前、读取后冻结前、冻结后编译前（编译时重验引用）、编译后发送前（`claimDispatch`）、发送后首个
+可见 token 前（`recordFirstToken`，本票新增：来源引用、Data Epoch、治理再核对一次，失败即结算为 `policy_blocked`，不展示）、
+Provider 结果落定（`recordProviderCompletion`）与提交（`commitCompleteResponse`）。**无法撤回**：首个 token 之后才到达的控制只能阻止
+提交，已展示的文字不撤回，Turn 记 `interrupted`，用户显式 Retry（见 8.2）。独立允许来源（同日其他消息）不因一个来源被排除而被整体关闭。
+范围不变：只排除明确关联的整条消息及绑定的 Assistant 回复；用户自己此后对旧说法的不相关复述不被排除（ADR-0149）。
+
+**独立关闭。**`history_recall_policies`（0081）与 `history_recall_results.governance_policy_version`；操作入口
+`/api/internal/operator/history-recall`（GET 状态、POST enable/disable，鉴权与 recent-context 入口一致）。规则见 ADR-0093 的 #320 修订。
+`effective-runtime-config` 增加 `switch.history_recall_governance_enabled` / `policy.history_recall_governance_version`，探针缺失时报 `unverified`。
+
+**诊断。**受控 Inspector 增加 `turn`（同一 Turn 全部 command 的阶段、状态、Provider Egress 处置、Provider 请求 id，以及最终处置
+`committed|failed|interrupted|in_progress|settled_without_reply`）；History Answer 的回执 reference 对 Inspector 去掉查询线索与人物，仅留计数
+（编译冻结的 reference 仍含线索，在已登记的私人面 `compiled_contexts` / `history_recall_results` 内，随 Purge 清除，系统测试按整库扫描证明）。
+原文展开沿用 `conversation_content:read` + 近期 step-up：`GET /api/internal/inspection/conversation-content` 对历史 command 额外返回
+`historySources`（按模型所见顺序，仅返回当前仍允许的来源；被排除/清除的不返回）；拒绝只给固定原因码，不含查询、人物或范围。
+验收 harness 的 `diagnose` 用三处真实边界判定五类问题（无来源 / 选漏 / 时间丢失 / 读取失败 / 生成错误）：权威历史、Inspector、实际出站请求
+（含其 `Times:` 列表）；Provider 请求 id 把 Inspector 的 command 与实际 payload 对上；生成错误只能由语义裁定产生，缺裁定为 `undetermined`。
+
 #### 8.4.1 Action Capability 元模型
 
 Catalog 中每个 ActionDefinition 声明：

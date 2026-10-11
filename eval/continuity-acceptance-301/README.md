@@ -223,3 +223,17 @@ deterministic 不评分语义与人格；以下输出由人按 ADR-0110 裁定�
 - `next dev` 每个项目目录只允许一个实例；启动应用的套件和本 CLI 通过
   `apps/web/node_modules/.cache/sayhear-next-dev.lock` 串行。运行本 CLI 时不要同时
   手动开着 `apps/web` 的 dev server。
+
+## T07 #320：来源控制、诊断与独立关闭
+
+- **`pnpm acceptance:continuity versions`**：历史路径的组合版本与指纹（提交、迁移摘要、全部策略/提示/Compiler 版本、fixture 摘要）。T08 每次运行记录它。
+- **故障矩阵**：[`fault-matrix.md`](fault-matrix.md)，由 `tests/continuity-fault-matrix.test.ts` 核对其引用的测试仍存在。
+- **`forget` step**：`{"type":"forget","targets":["<turn key>", ...]}`。把这些种子消息的 Evidence 记为一个 active Forget 请求的排除（fixture setup，
+  只写本次运行自建的 schema）；之后的历史回合必须遵守。C12 的 `O-forget-out` 用它，已由 red/not-run 变为真实 pass。
+- **验收环境启用 history-recall 治理**：经真实操作路由 `POST /api/internal/operator/history-recall`。没有它，Decision 不提供历史函数、所有历史案例退化为普通回复。
+- **C12 的 `O-user-echo-out` 已删除**（known-red 现为空）：它要求排除“用户自己此后对旧数字的相邻复述”，而 ADR-0149 与 SPEC #301 只排除与既有 Correction/Forget
+  明确关联的整条消息及其绑定的 Assistant 回复，不做语义匹配，也不扩大普通经历 Forget。该复述现记为 `allowed`（已接受的局限，`S-controls` 由语义裁定判断
+  旧数字不被当作现在）。C12 同时升到 `dev-2`：`work` 步骤带 `historyReview` 脚本，使它真正走历史分支。
+- **报告里的 Diagnosis 段**（`report.md` / `report.json`）：对每个要求来源到达的步骤，给出 `none | undetermined | no_source | selection_omitted | time_lost | read_failed | generation_error`，
+  依据权威历史、Inspector 和实际出站请求（含其 `Times:` 列表），并给出对应的 Provider 请求 id。`generation_error` 只来自语义裁定；没有裁定时是 `undetermined`。
+- `O-purge-race` 仍是 `not-run`：Full Purge 会撤销该 owner 的 Web 会话，CLI 无法读回；进程内证明见 `tests/system/history-purge-recovery.system.test.ts`。

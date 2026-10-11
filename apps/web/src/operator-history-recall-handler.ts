@@ -3,7 +3,7 @@ import {
   HISTORY_RECALL_DEFAULT_POLICY,
   HistoryRecallGovernanceConflictError,
   InternalOwnerAccessDeniedError,
-  TIME_AWARE_CONTEXT_COMPILER_VERSION,
+  HISTORY_RECALL_TIME_COMPILER_VERSION,
   type HistoryRecallGovernanceEffectiveState,
   type HistoryRecallGovernancePolicy,
   type HistoryRecallGovernanceRepository,
@@ -91,7 +91,7 @@ export function createOperatorHistoryRecallHandler(dependencies: {
       }
       const policy = await dependencies.repository.insertActivePolicy({
         changedBy: principal.userId,
-        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+        compilerVersion: HISTORY_RECALL_TIME_COMPILER_VERSION,
         harnessPolicyVersion: HISTORY_RECALL_CONVERSATION_HARNESS_POLICY.version,
         historyPolicyVersion: HISTORY_RECALL_DEFAULT_POLICY.version,
         now: now(),

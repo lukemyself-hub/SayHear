@@ -74,3 +74,16 @@ Harness Policy、Adapter conformance 与领域不变量测试实现。
 - 日期范围上限、读取页数/行数/token 预算与时间块覆盖选取随 `history-recall:v2` 版本化（architecture 08-10
   §8.4.3）。仍是一次只读查询、不进 Catalog、不扩大 Action；细节追问重新调用同一函数，不依赖助手上一轮摘要。
 - 读取范围包含当前 Daily Session 中属于该范围的消息（跨午夜会话），仅排除请求本身，编译时按 revision 去重。
+
+## 修订（2026-10，issue #320，ADR-0151）：历史分支有独立的版本化关闭与运行中停止规则
+
+- 历史分支（受控只读历史查询与 History Answer）除部署开关 `SAYHEAR_HISTORY_RECALL_ENABLED` 外，增加与近期背景治理（ADR-0149 / #295）
+  同模式的独立治理：全局、无 `user_id`、无内容的 `history_recall_policies`，最多一个 active 版本；关闭 = 撤销该行，重新启用 =
+  新插入一个版本，已撤销版本永不复活。两个开关互相独立：关闭历史分支不触碰七天背景，反之亦然。
+- 停止规则：Decision 在无 active 治理时不提供历史函数（回复退化为普通回复，不声称查过历史）；已发出的提案在受理冻结时被拒；History
+  Answer 冻结在某一治理版本下，该版本被撤销后，发送前、首个可见 token 前、Provider 结果落定与提交四处围栏都拒绝它（行锁，与撤销串行化）。
+  **已经展示给用户的文字无法撤回**：它不会被提交为 Assistant Event，Turn 记为 `interrupted`，由用户显式 Retry；Retry 无历史函数，按普通回复处理。
+- 关闭或重开不改写既有 Context、引用与结果；失效来源由来源状态（Correction/Forget/Purge）决定，不由开关决定。
+- 同一变更把“首个可见 token 前”并入围栏：来源引用、Data Epoch、治理在展示前再核对一次。
+- 这不改变 ADR-0149 的排除范围：只排除与既有 Correction/Forget 明确关联的整条消息及其绑定的 Assistant 回复，不做语义匹配，
+  不为用户自己此后对旧说法的不相关复述另设排除。

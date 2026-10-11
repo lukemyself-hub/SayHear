@@ -32,6 +32,7 @@ import {
   renderMarkdown,
   suiteStatus,
 } from "./src/report";
+import { combinedVersion } from "./src/versions";
 import { openCaseSession, playStep, reproducibilityDigest, runCase } from "./src/runner";
 
 /**
@@ -55,6 +56,7 @@ const HELP = `Continuity acceptance CLI (T00 #313)
   report    --run DIR [--review FILE]          re-score a stored run (for example with a review)
   rebind    [--case ID ...]                  re-point oracles at deliberately changed development fixtures
   calibrate                                    prove the checker catches prefabricated bad transcripts
+  versions                                     the combined version of the continuity stack, with a fingerprint (#320)
   latency   [--repeats N] [--provider-delay-ms N] [--stall-ms N] [--budget-ms N] [--out DIR]
                                                same-method chat latency profiles against the stand-in Provider (#319)
 
@@ -442,6 +444,11 @@ async function main(): Promise<number> {
   if (values.help || !command) {
     console.log(HELP);
     return command ? 0 : EXIT_USAGE;
+  }
+
+  if (command === "versions") {
+    console.log(JSON.stringify(combinedVersion(), null, 2));
+    return 0;
   }
 
   if (command === "calibrate") {
