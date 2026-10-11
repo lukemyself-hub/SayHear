@@ -642,6 +642,7 @@ export {
   type ConversationContentInspection,
   type GenerationInspectionMetadata,
   type HistoryRecallInspection,
+  type HistorySearchPlanInspection,
   type InternalInspectionRepository,
   type InternalInspectionService,
   type RecentContextInspection,
@@ -1283,6 +1284,7 @@ export {
 
 export {
   EMPTY_HISTORY_RECALL_COVERAGE,
+  HISTORY_EXPERIENCE_SEARCH_POLICY_VERSION,
   HISTORY_RECALL_DEFAULT_POLICY,
   HISTORY_RECALL_POLICY_VERSION,
   HISTORY_RECALL_RESULT_VERSION,
@@ -1298,6 +1300,12 @@ export {
   resolveHistoryQueryPlan,
   selectHistoryRecall,
   type HistoryAnswerCommandRef,
+  type HistoryDateReviewProposal,
+  type HistoryExperienceChannelState,
+  type HistoryExperienceSearchCoverage,
+  type HistoryExperienceSearchOutcome,
+  type HistoryExperienceSearchPolicy,
+  type HistoryExperienceSearchProposal,
   type HistoryQueryPlan,
   type HistoryQueryProposal,
   type HistoryRecallCoverage,
@@ -1318,3 +1326,22 @@ export {
   type HistoryRecallSourceSnapshot,
 } from "./history-recall";
 export * from "./request-deadline";
+export {
+  buildExperienceGroups,
+  expandPersonGroupsWithVerifiedAliases,
+  rankExperienceHits,
+  renderExperienceSearchReceiptLines,
+  resolveExperienceSearchPlan,
+  runExperienceSearch,
+  searchPatternsOf,
+  selectExperienceSearch,
+  type ExperienceContextWindow,
+  type ExperienceGroupDraft,
+  type ExperienceHit,
+  type ExperienceHitsSnapshot,
+  type ExperienceSearchPattern,
+  type ExperienceSearchSourcePort,
+  type ExperienceTermGroup,
+  type HistoryExperienceSearchPlan,
+  type VerifiedLabel,
+} from "./history-experience-search";

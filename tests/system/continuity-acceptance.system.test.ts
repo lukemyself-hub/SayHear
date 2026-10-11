@@ -55,6 +55,7 @@ function statuses(observation: CaseObservation, caseId: string) {
 describe("Continuity acceptance over the real chat path", () => {
   const smoke = loadCase("S01");
   const older = loadCase("C04");
+  const meaning = loadCase("C08");
   let environment: AcceptanceEnvironment;
   let first: CaseObservation;
 
@@ -155,7 +156,7 @@ describe("Continuity acceptance over the real chat path", () => {
     expect(reproducibilityDigest(again, smoke.fixture)).toBe(before);
   });
 
-  it("gives an explainable red, on the real path, for an experience older than seven days", async () => {
+  it("finds an unclaimed experience older than seven days from its original words (T03 #316)", async () => {
     await environment.reset();
     const observation = await runCase({
       environment,
@@ -165,30 +166,52 @@ describe("Continuity acceptance over the real chat path", () => {
     });
     const { byId, report } = statuses(observation, "C04");
 
-    // The precondition holds and the turn itself works: this is not an
-    // environment error and not a skipped check.
     expect(observation.environmentErrors).toEqual([]);
     expect(byId["INV-seed-readback"]?.status).toBe("pass");
     expect(byId["O-commit"]?.status).toBe("pass");
     expect(byId["O-history"]?.status).toBe("pass");
+    // The three-month-old words and their adjacent message reached the
+    // Provider and are recorded by the controlled Inspector.
+    const found = byId["O-old-source"]!;
+    expect(found.status).toBe("pass");
+    expect(found.owner).toBe("#316");
+    // Nothing semantic is scored from the fixed stub reply.
+    expect(byId["S-detail"]?.status).toBe("not-run");
+    expect(byId["S-no-invention"]?.status).toBe("not-run");
+    expect(report.status).toBe("not-run");
+
+    // The entry left the ledger in the same change: no unexpected red, and no
+    // stale entry for these criteria.
+    const comparison = compareWithKnownRed([report], loadKnownRed());
+    expect(comparison.unexpectedRed).toEqual([]);
+    expect(comparison.unexpectedGreen).toEqual([]);
+  });
+
+  it("gives an explainable red, on the real path, for a month-old statement not yet recalled", async () => {
+    await environment.reset();
+    const observation = await runCase({
+      environment,
+      fixture: meaning.fixture,
+      fixtureSha256: meaning.fixtureSha256,
+      mode: "deterministic",
+    });
+    const { byId, report } = statuses(observation, "C08");
+
+    expect(observation.environmentErrors).toEqual([]);
+    expect(byId["INV-seed-readback"]?.status).toBe("pass");
+    expect(byId["O-commit"]?.status).toBe("pass");
 
     // The product really compiled a Context and really called the Provider;
-    // the three-month-old words are simply not in it.
-    const red = byId["O-old-source"]!;
+    // the month-old words are simply not in it.
+    const red = byId["O-meaning-source"]!;
     expect(red.status).toBe("fail");
-    expect(red.owner).toBe("#316");
+    expect(red.owner).toBe("#318");
     expect(red.evidence).toEqual([
-      "piano:user: providerRequest=absent, inspector.referencedEvents=absent",
-      "piano-after:user: providerRequest=absent, inspector.referencedEvents=absent",
+      "choice-a:user: providerRequest=absent, inspector.referencedEvents=absent",
+      "choice-b:user: providerRequest=absent, inspector.referencedEvents=absent",
     ]);
     const ask = observation.steps[0]!;
-    expect(ask.inspection?.recentContextWindow).toEqual({ end: "2026-09-15", start: "2026-09-09" });
-    // The recent distractor did reach the Provider, so the request was real.
-    expect(
-      ask.providerRequests.some(
-        (request) => request.conversationTurn && request.strings.includes(older.fixture.history[2]!.user),
-      ),
-    ).toBe(true);
+    expect(ask.providerRequests.some((request) => request.conversationTurn)).toBe(true);
     expect(report.status).toBe("fail");
 
     // Red is exactly the declared red: nothing else failed, and the entry is

@@ -106,19 +106,32 @@ export type RetrievalCandidateInspection = Readonly<{
  * review, readable from either the Decision command (which branch it took) or
  * the History Answer command (what it was compiled from). No message text.
  */
+export type HistorySearchPlanInspection = Readonly<{
+  endDate: string | null;
+  kind: "search_experience";
+  personGroups: number;
+  searchPolicyVersion: string;
+  startDate: string | null;
+  termGroups: number;
+  timezone: string;
+  variants: number;
+}>;
+
 export type HistoryRecallInspection = Readonly<{
   answerCommandId: string;
   coverage: HistoryRecallCoverage;
   decisionCommandId: string;
   failureCode: string | null;
-  plan: HistoryQueryPlan | null;
+  plan: HistoryQueryPlan | HistorySearchPlanInspection | null;
   policyVersion: string;
   /** Which end of the review this inspected command is. */
   role: "answer" | "decision";
   sources: readonly Readonly<{
     actor: "user" | "assistant";
     expressedAt: string;
+    group?: number;
     revisionId: string;
+    role?: "match" | "context";
   }>[];
   status: "completed" | "failed" | "partial";
 }>;

@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
+import type { HistoryReviewScript } from "./fixture";
+
 /**
  * Deterministic stand-in for the external Conversation Provider (T00 #313).
  *
@@ -71,7 +73,7 @@ export type ProviderStub = Readonly<{
    * read-only history review function, answer with a call to it carrying
    * these local dates instead of text.
    */
-  setHistoryReview(script: Readonly<{ endDate: string; startDate: string }> | null): void;
+  setHistoryReview(script: HistoryReviewScript | null): void;
   setStepLabel(label: string | null): void;
   /**
    * Script the next Decision: if (and only if) the request offers a Function
@@ -106,7 +108,7 @@ export async function startProviderStub(): Promise<ProviderStub> {
   let fault: ProviderFault | null = null;
   let stepLabel: string | null = null;
   let historicalReply: string | null = null;
-  let historyReview: Readonly<{ endDate: string; startDate: string }> | null = null;
+  let historyReview: HistoryReviewScript | null = null;
   let toolCall: Readonly<{ argumentsJson: string; name: string }> | null = null;
 
   const server: Server = createServer((request, response) => {
@@ -157,10 +159,20 @@ export async function startProviderStub(): Promise<ProviderStub> {
           (tool) => tool?.name === HISTORY_REVIEW_FUNCTION_NAME,
         );
       if (historyReview !== null && offersHistoryReview) {
-        const args = JSON.stringify({
-          end_date: historyReview.endDate,
-          start_date: historyReview.startDate,
-        });
+        const args = JSON.stringify(
+          "searchTerms" in historyReview
+            ? {
+                ...(historyReview.endDate ? { end_date: historyReview.endDate } : {}),
+                ...(historyReview.people ? { people: historyReview.people } : {}),
+                search_terms: historyReview.searchTerms,
+                ...(historyReview.startDate ? { start_date: historyReview.startDate } : {}),
+              }
+            : {
+                end_date: historyReview.endDate,
+                start_date: historyReview.startDate,
+                ...(historyReview.timeBasis ? { time_basis: historyReview.timeBasis } : {}),
+              },
+        );
         send({
           item: { arguments: "", call_id: `stub-call-${sequence}`, name: HISTORY_REVIEW_FUNCTION_NAME, type: "function_call" },
           type: "response.output_item.added",

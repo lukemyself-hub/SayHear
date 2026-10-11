@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C09",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "zh",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
@@ -36,7 +36,8 @@
       "id": "recall",
       "type": "say",
       "at": "2026-09-15T04:03:00.000Z",
-      "text": "对了，我前阵子跟你讲过一件开会时候的糗事，是什么来着？"
+      "text": "对了，我前阵子跟你讲过一件开会时候的糗事，是什么来着？",
+      "historyReview": { "searchTerms": ["开会", "全员会", "哈欠"] }
     },
     {
       "id": "turn",

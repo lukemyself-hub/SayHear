@@ -18,6 +18,8 @@ import {
   validateSafetyPostureContent,
   type CurrentSafetyPosture,
   type HistoryRecallInspection,
+  type HistoryExperienceSearchPlan,
+  type HistoryQueryPlan,
   type MemorySectionKey,
   type SafetyPostureContent,
 } from "@sayhear/application";
@@ -878,6 +880,25 @@ async function insertSensitiveAccessAudit(
  * Content-free account of a controlled history review, readable from either
  * end (the Decision command or the History Answer command). Owner scoped.
  */
+function inspectablePlan(
+  stored: HistoryQueryPlan | HistoryExperienceSearchPlan | null,
+): HistoryRecallInspection["plan"] {
+  if (stored === null) return null;
+  if ("kind" in stored && stored.kind === "search_experience") {
+    return {
+      endDate: stored.endDate,
+      kind: "search_experience",
+      personGroups: stored.groups.filter((group) => group.role === "person").length,
+      searchPolicyVersion: stored.searchPolicyVersion,
+      startDate: stored.startDate,
+      termGroups: stored.groups.filter((group) => group.role === "term").length,
+      timezone: stored.timezone,
+      variants: stored.groups.reduce((total, group) => total + group.variants.length, 0),
+    };
+  }
+  return stored as HistoryQueryPlan;
+}
+
 async function loadHistoryRecallInspection(
   client: PoolClient,
   input: { commandId: string; userId: string },
@@ -887,8 +908,14 @@ async function loadHistoryRecallInspection(
     coverage: HistoryRecallInspection["coverage"];
     decision_command_id: string;
     failure_code: string | null;
-    item_refs: Array<{ actor: "user" | "assistant"; expressedAt: string; revisionId: string }>;
-    plan: { plan: HistoryRecallInspection["plan"] };
+    item_refs: Array<{
+      actor: "user" | "assistant";
+      expressedAt: string;
+      group?: number;
+      revisionId: string;
+      role?: "match" | "context";
+    }>;
+    plan: { plan: HistoryQueryPlan | HistoryExperienceSearchPlan | null };
     policy_version: string;
     status: HistoryRecallInspection["status"];
   }>(
@@ -906,13 +933,16 @@ async function loadHistoryRecallInspection(
     coverage: row.coverage,
     decisionCommandId: row.decision_command_id,
     failureCode: row.failure_code,
-    plan: row.plan.plan,
+    // The search clues are private text: only their counts are inspectable.
+    plan: inspectablePlan(row.plan.plan),
     policyVersion: row.policy_version,
     role: row.answer_command_id === input.commandId ? "answer" : "decision",
     sources: row.item_refs.map((ref) => ({
       actor: ref.actor,
       expressedAt: ref.expressedAt,
+      ...(ref.group === undefined ? {} : { group: ref.group }),
       revisionId: ref.revisionId,
+      ...(ref.role === undefined ? {} : { role: ref.role }),
     })),
     status: row.status,
   };

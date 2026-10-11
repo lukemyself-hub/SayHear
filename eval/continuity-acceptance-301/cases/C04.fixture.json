@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C04",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "zh",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
@@ -36,7 +36,8 @@
       "id": "ask",
       "type": "say",
       "at": "2026-09-15T02:10:00.000Z",
-      "text": "我之前是不是跟你说过有一回去弹琴？当时是什么情况来着，我有点记不清了。"
+      "text": "我之前是不是跟你说过有一回去弹琴？当时是什么情况来着，我有点记不清了。",
+      "historyReview": { "searchTerms": ["弹琴", "钢琴", "弹钢琴"] }
     }
   ]
 }

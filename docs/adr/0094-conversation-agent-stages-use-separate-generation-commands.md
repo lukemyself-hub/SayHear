@@ -62,6 +62,10 @@ Command 开始，重新取得状态、选择和 reservation。
   并以 SHA-256 登记；0072 不提及任何受保护关系。不复用已退役的 `proactive_followup`，也不借用
   `action_finalization`。
 
+补充（#316）：原文经历检索（`search_experience` 提案）使用同一个 History Answer stage、同一张
+`history_recall_results` 与同一冻结/重验/恢复路径，不新增 stage 或 Command kind；它只在冻结结果中增加
+检索计划（线索组，私人字段）、按次经历分组的引用与检索覆盖统计，并在 Context 引用上增加
+`history_lexical_match/history_lexical_context` 两个选择原因（迁移 0075，不涉及受保护关系）。
 ## 修订（2026-10，issue #319，ADR-0151）：新输入、取代与 Decision 结算
 
 - **新输入是新的 User Event / Turn**。“再补充一点”“换个话题”都不追加进旧 Command：新一轮的冻结上下文

@@ -6,7 +6,7 @@
   "spec": ["#301 R11", "#301 R2", "ADR-0151"],
   "ownerTickets": ["#315", "#320"],
   "language": "zh",
-  "fixture": { "version": "dev-1", "sha256": "de095942e355ea5baf55dc8a40af8f2aab43a8060249d6fc2b39946a893570b9" },
+  "fixture": { "version": "dev-2", "sha256": "230b6a130d407dcab25591787016bbb353b20e4b79afbb3a3c948ade0e47b999" },
   "facts": {
     "allowed": [
       { "id": "a-nothing-friday", "statement": "Nothing was said on Friday 11 September; the neighbouring days hold a printmaking evening class on the Thursday and a first test print on the Saturday.", "sources": ["sep-a:user", "sep-b:user"] },

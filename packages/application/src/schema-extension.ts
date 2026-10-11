@@ -114,6 +114,13 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
     }),
     Object.freeze({
       store: "business" as const,
+      name: "0075_history_experience_search_refs.sql",
+      sha256: "18e6b466b827c637006548ea3ca7d350d57adbe18186311e01f6d87815ef6ecf",
+      justification:
+        "Widens the compiled_context_revision_refs history selection reasons for the original-text experience search (issue #316). It adds no table, index or projection (the search scans retained User text in place, so there is no second private copy to rebuild or purge) and names no protected relation.",
+    }),
+    Object.freeze({
+      store: "business" as const,
       name: "0080_conversation_request_lifecycle.sql",
       sha256: "94b6e1da6f6c2a8fbaf383d582b41109afa3f4ff3e7cfdb3661be0a6038b616e",
       justification:

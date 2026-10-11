@@ -107,6 +107,7 @@ describe("registered G1 schema extensions", () => {
       "0070_recent_context_governance.sql",
       "0071_history_answer_generation_stage.sql",
       "0072_history_recall_results.sql",
+      "0075_history_experience_search_refs.sql",
       "0080_conversation_request_lifecycle.sql",
     ]);
     expect(registeredSchemaExtensions("business")).toEqual(

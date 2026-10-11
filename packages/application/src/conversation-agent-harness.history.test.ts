@@ -87,7 +87,7 @@ function build(events: readonly ProviderEgressStreamEvent[], options: { policy?:
       historyAdmits.push(input);
       return {
         answer,
-        coverage: { currentConversationRows: 0, enumeratedRows: 0, enumerationComplete: true, omitted: {}, pages: 1, perDate: [], readLatencyMs: 0, selectedRows: 0, selectedTokens: 0 },
+        coverage: { blocks: 0, blocksCovered: 0, limits: [], readThrough: null, timeBasis: "expressed_date", currentConversationRows: 0, enumeratedRows: 0, enumerationComplete: true, omitted: {}, pages: 1, perDate: [], readLatencyMs: 0, selectedRows: 0, selectedTokens: 0 },
         failureCode: null,
         status: "completed",
       };

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "C16",
+  "title": "C16 Two similar older experiences and a same-named person, in English and code-switch",
+  "capability": "A person asks about an ordinary activity they once told about. Two separate occasions months apart (one written in English, one mixing Chinese and English) are found again from the original words and kept as two occasions. A different person who merely shares a first name is not pulled in, and the answer is limited to what the search actually examined: it does not turn a bounded lookup into 'the first time ever' or 'only twice'.",
+  "spec": ["#301 R3", "#316", "ADR-0115", "ADR-0151"],
+  "ownerTickets": ["#316"],
+  "language": "code-switch",
+  "fixture": { "version": "dev-1", "sha256": "20d91f265b914bcd74f07914ebecc3e4fe8d0dcbb9ca36004e2d4e9b31a00d3b" },
+  "facts": {
+    "allowed": [
+      { "id": "a-first", "statement": "The first occasion was early May: a wall-climbing session with a coworker where the person came off the blue route twice and completed the yellow route.", "sources": ["climb-a:user"] },
+      { "id": "a-first-after", "statement": "After that session the person's forearms were exhausted and the coworker suggested going again the next week.", "sources": ["climb-a-after:user"] },
+      { "id": "a-second", "statement": "The second occasion was in July, a separate outing with a cousin where the red route was completed on the first attempt; it was written partly in Chinese.", "sources": ["climb-b:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-sister-merge", "statement": "Treating the sister who got engaged as the climbing partner, or mentioning the venue search.", "sources": ["dana-sister:user"] },
+      { "id": "f-blend", "statement": "Blending the two outings into one story, e.g. putting the cousin on the first outing or the coworker on the second.", "sources": ["climb-a:user", "climb-b:user"] },
+      { "id": "f-absolute", "statement": "Asserting that these were the only two times or that the first one was the very first time the person ever climbed, beyond what the found messages say.", "sources": [] }
+    ]
+  },
+  "topics": [],
+  "time": [
+    { "id": "tm-first", "statement": "The first outing was written on 2 May 2026 and the second on 11 July 2026 (America/Los_Angeles), both months before the question.", "sources": ["climb-a:user", "climb-b:user"] }
+  ],
+  "expectedBehavior": [
+    "Say that there were two separate outings and describe each from its own message, in the order they happened.",
+    "Do not merge them and do not bring in the sister with the same first name.",
+    "Do not claim more than the lookup supports about 'first' or 'only'."
+  ],
+  "failureSignals": [
+    "Either outing never reaches the Provider.",
+    "The sister's engagement message reaches the Provider because of the shared first name.",
+    "The reply fuses the two outings or the two Danas."
+  ],
+  "sourceEligibility": [
+    { "source": "climb-a:user", "eligibility": "allowed", "reason": "Retained original expression; matches the activity clue." },
+    { "source": "climb-a-after:user", "eligibility": "allowed", "reason": "Retained original expression adjacent to the first outing in the same exchange." },
+    { "source": "climb-b:user", "eligibility": "allowed", "reason": "Retained original expression; matches the activity clue in mixed Chinese and English." },
+    { "source": "dana-sister:user", "eligibility": "forbidden", "reason": "Matches only the first-name clue of a different person; a person clue alone never selects a message." },
+    { "source": "recent:user", "eligibility": "allowed", "reason": "Inside the seven-day default background; a distractor, not a forbidden source." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The question streams and commits as one reply.", "check": { "type": "turn_committed", "step": "ask" } },
+    { "id": "O-history", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "Authoritative history holds the question once, followed by exactly the streamed reply.", "check": { "type": "history_matches_stream", "step": "ask" } },
+    { "id": "O-both-occasions", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#316", "description": "Both outings, with the message adjacent to the first, reach the Provider.", "check": { "type": "outbound_includes", "step": "ask", "sources": ["climb-a:user", "climb-a-after:user", "climb-b:user"] } },
+    { "id": "O-name-not-merged", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#316", "description": "A different person with the same first name is not pulled in by the name alone.", "check": { "type": "outbound_excludes", "step": "ask", "sources": ["dana-sister:user"] } },
+    { "id": "S-two-occasions", "kind": "semantic", "owner": "#316", "description": "Two separate outings, each told from its own message, in order, without fusing them.", "step": "ask", "required": ["a-first", "a-second", "tm-first"], "forbidden": ["f-sister-merge", "f-blend"] },
+    { "id": "S-bounded-claims", "kind": "semantic", "owner": "#316", "description": "No absolute 'only' or 'very first time' claim beyond what the found messages say.", "step": "ask", "required": [], "forbidden": ["f-absolute"] }
+  ]
+}

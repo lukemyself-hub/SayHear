@@ -176,7 +176,11 @@ export type ContextSourceRecentContextPolicy = Readonly<{
 export type ContextSourceHistoryRecall = Readonly<{
   droppedAtCompile: number;
   events: readonly (ContextSourceEvent &
-    Readonly<{ dailySessionId: DailySessionId; expressedAt: string }>)[];
+    Readonly<{
+      dailySessionId: DailySessionId;
+      expressedAt: string;
+      selectionReason?: string;
+    }>)[];
   policyVersion: string;
   result: HistoryRecallReceiptSnapshot["result"];
   resultId: string;
@@ -655,7 +659,7 @@ export function createContextCompiler(dependencies: {
               revisionId: event.revisionId,
               section: "history_recall_context",
               selectionOrder: index,
-              selectionReason: "history_date_range",
+              selectionReason: event.selectionReason ?? "history_date_range",
               sequence: event.sequence,
               text: event.text,
             }));
@@ -677,8 +681,12 @@ export function createContextCompiler(dependencies: {
               ),
             };
 
+      const recalledRevisionIds = new Set<string>(
+        (source.historyRecall?.events ?? []).map((event) => event.revisionId),
+      );
       const historyNewestFirst = source.events
         .filter((event) => {
+          if (recalledRevisionIds.has(event.revisionId)) return false;
           const dialogueCoverage = dialogueState?.coveredThroughSequence ?? 0;
           const summaryCoverage = source.rollingSummary?.coveredThrough ?? 0;
           return event.revisionId !== source.inputRevisionId &&
