@@ -26,6 +26,10 @@ import {
   type SafetyPostureContent,
 } from "@sayhear/application";
 
+import {
+  controlExclusionSql,
+  generatingUserRevisionIsCurrentSql,
+} from "./postgres-source-eligibility";
 import { loadDialogueStateForContext } from "./postgres-dialogue-state-repository";
 import type { Pool, PoolClient } from "pg";
 
@@ -528,6 +532,73 @@ export class PostgresInternalInspectionRepository
         `,
         [input.userId, row.daily_session_id],
       );
+      // Issue #320: the history review's frozen sources, re-qualified now. The
+      // Decision command resolves to its History Answer command.
+      const historySources = await client.query<{
+        actor: "assistant" | "user";
+        expressed_at: Date | null;
+        revision_id: string;
+        selection_order: number;
+        text: string;
+      }>(
+        `
+          SELECT
+            ref.actor,
+            ref.expressed_at,
+            ref.conversation_event_revision_id::text AS revision_id,
+            ref.selection_order,
+            revision.canonical_text AS text
+          FROM generation_commands command
+          INNER JOIN compiled_contexts context
+            ON context.generation_command_id = COALESCE(
+              (SELECT result.answer_command_id
+               FROM history_recall_results result
+               WHERE result.decision_command_id = command.generation_command_id
+                 AND result.user_id = command.user_id),
+              command.generation_command_id
+            )
+           AND context.user_id = command.user_id
+          INNER JOIN compiled_context_revision_refs ref
+            ON ref.compiled_context_id = context.compiled_context_id
+           AND ref.user_id = context.user_id
+           AND ref.section = 'history_recall_context'
+          INNER JOIN conversation_event_revisions revision
+            ON revision.conversation_event_revision_id =
+              ref.conversation_event_revision_id
+           AND revision.user_id = ref.user_id
+          INNER JOIN conversation_events event
+            ON event.conversation_event_id = revision.conversation_event_id
+           AND event.user_id = revision.user_id
+          LEFT JOIN generation_commands generating_command
+            ON generating_command.generation_command_id = event.generation_command_id
+           AND generating_command.user_id = event.user_id
+          WHERE command.user_id = $1
+            AND command.generation_command_id = $2
+            AND event.lifecycle_status = 'active'
+            AND event.current_revision_id = ref.conversation_event_revision_id
+            AND revision.content_purged_at IS NULL
+            AND ${controlExclusionSql({
+              revisionId: "ref.conversation_event_revision_id",
+              userId: "ref.user_id",
+            })} IS NULL
+            AND (
+              ref.actor <> 'assistant'
+              OR (
+                generating_command.input_revision_id IS NOT NULL
+                AND ${generatingUserRevisionIsCurrentSql({
+                  generatingRevisionId: "generating_command.input_revision_id",
+                  userId: "ref.user_id",
+                })}
+                AND ${controlExclusionSql({
+                  revisionId: "generating_command.input_revision_id",
+                  userId: "ref.user_id",
+                })} IS NULL
+              )
+            )
+          ORDER BY ref.selection_order
+        `,
+        [input.userId, input.generationCommandId],
+      );
       await insertSensitiveAccessAudit(client, {
         ...input,
         disposition: "allowed",
@@ -536,6 +607,13 @@ export class PostgresInternalInspectionRepository
       await client.query("COMMIT");
       return {
         content: {
+          historySources: historySources.rows.map((source) => ({
+            actor: source.actor,
+            expressedAt: source.expressed_at?.toISOString() ?? null,
+            revisionId: asConversationEventRevisionId(source.revision_id),
+            selectionOrder: Number(source.selection_order),
+            text: source.text,
+          })),
           events: content.rows.map((event) => ({
             actor: event.actor,
             revisionId: asConversationEventRevisionId(

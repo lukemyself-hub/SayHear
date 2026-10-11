@@ -290,6 +290,19 @@ export type SensitiveInspectionDenialReason =
   | "recent_step_up_required";
 
 export type ConversationContentInspection = Readonly<{
+  /**
+   * Issue #320: the original words a controlled history review put in front of
+   * the model, in the order it did, limited to what is still allowed (a source
+   * a Correction, Forget or Purge has since excluded is not returned). Empty
+   * for commands that carried no history review.
+   */
+  historySources: readonly Readonly<{
+    actor: "assistant" | "user";
+    expressedAt: string | null;
+    revisionId: ConversationEventRevisionId;
+    selectionOrder: number;
+    text: string;
+  }>[];
   events: readonly Readonly<{
     actor: "assistant" | "system" | "user";
     revisionId: ConversationEventRevisionId;

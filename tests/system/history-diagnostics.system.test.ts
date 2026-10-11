@@ -1,6 +1,11 @@
+import { createHash } from "node:crypto";
+
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PostgresInternalInspectionRepository } from "@sayhear/data";
+import {
+  PostgresInternalInspectionRepository,
+  createPostgresAuthAdapter,
+} from "@sayhear/data";
 import { asGenerationCommandId } from "@sayhear/domain";
 import { HISTORY_RECALL_DEFAULT_POLICY } from "@sayhear/application";
 
@@ -251,5 +256,99 @@ describe("the Turn view states how a turn really ended", () => {
     expect(answer.providerRequestId).toBeNull();
     // Nothing of the blocked answer left: only the Decision's request exists.
     expect(harness.state.requests).toHaveLength(1);
+  });
+});
+
+describe("opening the original words behind a history answer follows the existing capability and step-up rules", () => {
+  const SESSION_TOKEN = "history-inspection-session-token";
+  const authSessionId = createHash("sha256").update(SESSION_TOKEN, "utf8").digest("hex");
+
+  async function expand(stepUpAt: string | null | "none") {
+    const pool = harness.database.pool;
+    if (stepUpAt !== "none") {
+      await createPostgresAuthAdapter(pool).createSession({
+        expires: new Date("2099-01-01T00:00:00.000Z"),
+        sessionToken: SESSION_TOKEN,
+        userId: OWNER,
+      });
+      await pool.query(
+        `INSERT INTO internal_diagnostic_access_grants (
+           session_token_hash, capability, status, step_up_authenticated_at, updated_at
+         ) VALUES (decode($1, 'hex'), 'conversation_content:read', 'active', $2, $3)`,
+        [authSessionId, stepUpAt, harness.now],
+      );
+    } else {
+      await createPostgresAuthAdapter(pool).createSession({
+        expires: new Date("2099-01-01T00:00:00.000Z"),
+        sessionToken: SESSION_TOKEN,
+        userId: OWNER,
+      });
+    }
+    const [command] = await harness.rows<{ generation_command_id: string }>(
+      `SELECT generation_command_id::text FROM generation_commands
+       WHERE generation_stage = 'decision' AND created_at >= $1 LIMIT 1`,
+      [new Date(ASK_AT)],
+    );
+    return new PostgresInternalInspectionRepository(pool).inspectConversationContent({
+      authSessionId,
+      capability: "conversation_content:read",
+      generationCommandId: asGenerationCommandId(command!.generation_command_id),
+      now: new Date("2026-09-15T02:10:30.000Z"),
+      policyVersion: "sensitive-inspection:v1",
+      stepUpMaxAgeMs: 10 * 60 * 1_000,
+      userId: OWNER,
+    });
+  }
+
+  it("denies without the capability and reveals neither the query, the people nor the range", async () => {
+    await start();
+    await askVia(harness, "search");
+    const result = await expand("none");
+    expect(result).toEqual({ outcome: "denied", reason: "elevated_capability_required" });
+    expect(JSON.stringify(result)).not.toContain("帆布包");
+  });
+
+  it("denies a stale step-up the same way", async () => {
+    await start();
+    await askVia(harness, "search");
+    const result = await expand("2026-09-15T01:00:00.000Z");
+    expect(result).toEqual({ outcome: "denied", reason: "recent_step_up_required" });
+  });
+
+  it("returns the original words in the order the model saw them, and leaves out a source excluded since", async () => {
+    await start();
+    await askVia(harness, "date");
+    const allowed = await expand("2026-09-15T02:09:00.000Z");
+    if (allowed.outcome !== "allowed") throw new Error("expected the expansion to be allowed");
+    expect(allowed.content.historySources.map((source) => `${source.actor}:${source.text}`)).toEqual([
+      `user:${U_BAG}`,
+      "assistant:缝帆布包这件事听起来很有成就感。",
+      `user:${U_REPAIR}`,
+      "assistant:先自己补的想法挺踏实。",
+    ]);
+    await harness.seedForget(U_BAG);
+    const afterForget = await new PostgresInternalInspectionRepository(
+      harness.database.pool,
+    ).inspectConversationContent({
+      authSessionId,
+      capability: "conversation_content:read",
+      generationCommandId: asGenerationCommandId(
+        (
+          await harness.rows<{ generation_command_id: string }>(
+            "SELECT generation_command_id::text FROM generation_commands WHERE generation_stage = 'decision' AND created_at >= $1 LIMIT 1",
+            [new Date(ASK_AT)],
+          )
+        )[0]!.generation_command_id,
+      ),
+      now: new Date("2026-09-15T02:10:30.000Z"),
+      policyVersion: "sensitive-inspection:v1",
+      stepUpMaxAgeMs: 10 * 60 * 1_000,
+      userId: OWNER,
+    });
+    if (afterForget.outcome !== "allowed") throw new Error("expected the expansion to be allowed");
+    expect(afterForget.content.historySources.map((source) => source.text)).toEqual([
+      U_REPAIR,
+      "先自己补的想法挺踏实。",
+    ]);
   });
 });

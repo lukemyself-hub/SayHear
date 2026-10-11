@@ -1,3 +1,7 @@
+import { readFileSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { createPostgresPool } from "@sayhear/data";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +17,7 @@ import {
 } from "../../eval/continuity-acceptance-301/src/isolation";
 import type { CaseObservation } from "../../eval/continuity-acceptance-301/src/observation";
 import {
+  buildRunReport,
   compareWithKnownRed,
   loadKnownRed,
 } from "../../eval/continuity-acceptance-301/src/report";
@@ -220,9 +225,45 @@ describe("Continuity acceptance over the real chat path", () => {
     const outbound = work.providerRequests.flatMap((request) => request.strings);
     expect(outbound.some((value) => value.includes(controls.fixture.history[1]!.user))).toBe(true);
 
+    // The diagnosis names the very Provider call whose payload it inspected: the
+    // id the Inspector recorded for the History Answer attempt.
+    const diagnosed = buildRunReport({
+      caseReport: report,
+      loaded: controls,
+      observation,
+      plan: {} as never,
+      reproducibilityDigest: "test",
+    }).diagnosis.find((entry) => entry.stepId === "work")!;
+    const answerCommand = work.inspection!.turn!.commands.find((command) => command.stage === "history_answer")!;
+    expect(diagnosed.diagnosis.sources[0]!.trace!.providerResponseId).toBe(answerCommand.providerRequestId);
+    expect(diagnosed.diagnosis.readState).toBe("complete");
+    expect(diagnosed.diagnosis.disagreements).toEqual([]);
+
     const comparison = compareWithKnownRed([report], loadKnownRed());
     expect(comparison.unexpectedRed).toEqual([]);
     expect(comparison.unexpectedGreen).toEqual([]);
+
+    // The app's own output for the whole history turn holds no message text,
+    // clue or person: logs stay content-free (#320).
+    const logFile = path.join(os.tmpdir(), `sayhear-history-app-log-${process.pid}-${Date.now()}.txt`);
+    process.env["SAYHEAR_ACCEPTANCE_APP_LOG"] = logFile;
+    try {
+      await environment.restartApp();
+      const log = readFileSync(logFile, "utf8");
+      expect(log.length).toBeGreaterThan(0);
+      const everything = [
+        ...controls.fixture.history.flatMap((turn) => [turn.user, turn.assistant]),
+        ...controls.fixture.steps.flatMap((step) => ("text" in step ? [step.text] : [])),
+      ];
+      for (const text of everything) {
+        expect(log, `app output must not contain: ${text.slice(0, 12)}`).not.toContain(text);
+        // Not even a recognisable fragment of a message.
+        expect(log).not.toContain(text.slice(0, 12));
+      }
+    } finally {
+      delete process.env["SAYHEAR_ACCEPTANCE_APP_LOG"];
+      rmSync(logFile, { force: true });
+    }
   });
 
   it("refuses to seed or reset a schema it cannot prove it owns", async () => {

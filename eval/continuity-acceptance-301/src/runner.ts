@@ -501,7 +501,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
                   role: String(entry["role"]),
                   text: typeof entry["content"] === "string" ? entry["content"] : JSON.stringify(entry["content"]),
                 })),
-              providerResponseId: `stub-response-${request.sequence}`,
+              providerResponseId: `stub-request-${request.sequence}`,
               sequence: request.sequence,
               strings,
               toolsOffered: (Array.isArray(tools) ? tools : [])
