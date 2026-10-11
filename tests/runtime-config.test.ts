@@ -386,6 +386,67 @@ describe("runtime safety configuration", () => {
     expect(explicit.provider.champion.provider).toBe("opencode-go");
   });
 
+  it("bounds a chat request at 30 seconds independently of the background-role Provider timeout (issue #319)", () => {
+    const base = {
+      CRON_SECRET: "cron",
+      DATABASE_URL: "postgres://test",
+      GITHUB_CLIENT_ID: "id",
+      GITHUB_CLIENT_SECRET: "secret",
+      NEXTAUTH_SECRET: "auth",
+      OPENCODE_GO_API_KEY: "go-key",
+      PURGE_MARKER_DATABASE_URL: "postgres://test-marker",
+      SAYHEAR_BACKUP_CONFIGURATION_FINGERPRINT: "fingerprint",
+      SAYHEAR_BACKUP_POLICY_VERSION: "backup:v1",
+      SAYHEAR_CONTEXT_HMAC_SECRET: "context",
+      SAYHEAR_DEPLOYMENT: "test",
+      SAYHEAR_PROVIDER_ADAPTER: "opencode-go",
+    };
+    const defaults = loadRuntimeConfiguration(base);
+    expect(defaults.conversationRequest).toEqual({
+      budgetMs: 30_000,
+      providerTimeoutMs: 30_000,
+    });
+    // The shared role timeout is untouched by the conversation path.
+    expect(defaults.provider.timeoutMs).toBe(60_000);
+
+    // A slow background role (memory extraction needs minutes) must never
+    // loosen the chat stop condition, and the reverse holds too.
+    const longRoles = loadRuntimeConfiguration({
+      ...base,
+      SAYHEAR_PROVIDER_TIMEOUT_MS: "180000",
+    });
+    expect(longRoles.provider.timeoutMs).toBe(180_000);
+    expect(longRoles.provider.roleAdapters["opencode-go"]?.timeoutMs).toBe(180_000);
+    expect(longRoles.conversationRequest.providerTimeoutMs).toBe(30_000);
+
+    const tighter = loadRuntimeConfiguration({
+      ...base,
+      SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS: "20000",
+      SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS: "25000",
+    });
+    expect(tighter.conversationRequest).toEqual({
+      budgetMs: 25_000,
+      providerTimeoutMs: 20_000,
+    });
+    expect(tighter.provider.timeoutMs).toBe(60_000);
+
+    // The product stop condition can be tightened, never loosened.
+    for (const value of ["30001", "0", "-5", "1.5", "abc"]) {
+      expect(() =>
+        loadRuntimeConfiguration({
+          ...base,
+          SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS: value,
+        }),
+      ).toThrow("SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS");
+    }
+    expect(() =>
+      loadRuntimeConfiguration({
+        ...base,
+        SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS: "60000",
+      }),
+    ).toThrow("SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS");
+  });
+
   it("accepts only the four known Provider adapters and keeps the unset openai default", () => {
     const base: Record<string, string> = {
       CRON_SECRET: "cron",

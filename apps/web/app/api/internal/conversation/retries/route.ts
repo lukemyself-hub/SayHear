@@ -17,6 +17,7 @@ export async function POST(request: Request): Promise<Response> {
         ? { userId: asUserId(session.user.id) }
         : null;
     },
+    requestBudgetMs: composition.conversationRequestBudgetMs,
     service: composition.conversationResponseService,
   })(request);
 }
