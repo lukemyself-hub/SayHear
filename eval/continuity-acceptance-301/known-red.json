@@ -3,7 +3,6 @@
   "entries": [
     { "caseId": "C01", "criterionId": "O-topic-coverage", "owner": "#315", "reason": "A long final subject crowds the day's early subjects out of the 2,000-token default background, so a day recap cannot cover them." },
     { "caseId": "C01", "criterionId": "O-detail-source", "owner": "#315", "reason": "The same crowding removes the messages that hold the asked-for work detail." },
-    { "caseId": "C04", "criterionId": "O-old-source", "owner": "#316", "reason": "An ordinary experience from three months ago is outside the seven-day default background and there is no history recall yet." },
     { "caseId": "C05", "criterionId": "O-bare-older", "owner": "#317", "reason": "The older pending matter is outside the default background, so the ambiguity of a bare announcement cannot be seen." },
     { "caseId": "C05", "criterionId": "O-cued-older", "owner": "#317", "reason": "A current cue does not yet pull in the related three-month-old background." },
     { "caseId": "C06", "criterionId": "O-cousin-source", "owner": "#317", "reason": "Four-week-old messages about the same-named relative are outside the default background." },
@@ -11,7 +10,6 @@
     { "caseId": "C07", "criterionId": "O-correction-source", "owner": "#318", "reason": "The offer and the person's explicit date correction are older than seven days and are not recalled." },
     { "caseId": "C07", "criterionId": "O-cancel-source", "owner": "#318", "reason": "The plan and its cancellation are older than seven days and are not recalled." },
     { "caseId": "C08", "criterionId": "O-meaning-source", "owner": "#318", "reason": "The month-old statement of what matters to the person is outside the default background." },
-    { "caseId": "C09", "criterionId": "O-old-source", "owner": "#316", "reason": "A ten-day-old anecdote is outside the default background and there is no history recall yet." },
     { "caseId": "C11", "criterionId": "O-range-read", "owner": "#315", "reason": "A date outside the seven-day window is never read, so nothing about it can be verified." },
     { "caseId": "C11", "criterionId": "O-older-source", "owner": "#315", "reason": "Late-August messages are outside the default background and are not recalled when that range is asked about." },
     { "caseId": "C11", "criterionId": "O-earliest-source", "owner": "#315", "reason": "The true earliest mention is outside the default background, so 'the first time' cannot be answered truthfully." },

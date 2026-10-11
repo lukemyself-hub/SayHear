@@ -112,6 +112,13 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
       justification:
         "Creates the owner-scoped history_recall_results table (references and content-free coverage only, no message bodies, no foreign key to a protected relation) and extends the compiled_context_revision_refs section and metadata constraints and lineage trigger for the history_recall_context section (issue #314). It names no protected relation; the table is registered in the Purge Surface Registry.",
     }),
+    Object.freeze({
+      store: "business" as const,
+      name: "0075_history_experience_search_refs.sql",
+      sha256: "18e6b466b827c637006548ea3ca7d350d57adbe18186311e01f6d87815ef6ecf",
+      justification:
+        "Widens the compiled_context_revision_refs history selection reasons for the original-text experience search (issue #316). It adds no table, index or projection (the search scans retained User text in place, so there is no second private copy to rebuild or purge) and names no protected relation.",
+    }),
   ]);
 
 /** Registered extension pins for one store, in registry order. */

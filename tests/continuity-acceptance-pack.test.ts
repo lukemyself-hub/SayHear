@@ -50,9 +50,9 @@ function withOracle(loaded: LoadedCase, change: (oracle: CaseOracle) => CaseOrac
 }
 
 describe("continuity acceptance case pack", () => {
-  it("ships the thirteen continuity cases and the three smoke cases", () => {
+  it("ships the continuity cases (C01-C13 and C16) and the three smoke cases", () => {
     expect(listCaseIds()).toEqual([
-      "C01", "C02", "C03", "C04", "C05", "C06", "C07", "C08", "C09", "C10", "C11", "C12", "C13",
+      "C01", "C02", "C03", "C04", "C05", "C06", "C07", "C08", "C09", "C10", "C11", "C12", "C13", "C16",
       "S01", "S02", "S03",
     ]);
   });

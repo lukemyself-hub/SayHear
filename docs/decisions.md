@@ -29,7 +29,7 @@ Accepted
 
 - [`0063`](adr/0063-typescript-modular-monolith-is-the-domain-kernel.md)：TypeScript 模块化单体承载领域内核
 - [`0064`](adr/0064-postgresql-is-the-system-of-record-and-pgvector-is-rebuildable.md)：PostgreSQL 是 System of Record，pgvector 是可重建索引
-- [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级
+- [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级（2026-10 补充：未形成 Claim 的普通原文经历用独立的有界原位词法检索，无投影、无 embedding）
 - [`0065`](adr/0065-vercel-hosts-web-bff-and-durable-workflows.md)：Vercel 承载 Web、BFF 与 Durable Workflow
 - [`0066`](adr/0066-vercel-workflows-v4-runs-durable-asynchronous-work.md)：1A.2 起由 Vercel Workflows v4 承载持久异步任务
 - [`0068`](adr/0068-agent-frameworks-do-not-own-long-term-product-state.md)：Agent Framework 不保存产品长期状态

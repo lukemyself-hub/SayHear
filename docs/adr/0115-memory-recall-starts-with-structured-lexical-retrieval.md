@@ -28,3 +28,21 @@ semantic-recall failure that structured and lexical paths cannot solve, an autho
 prototype improves that failure without increasing incorrect recall, and the selected Provider
 passes SayHear's privacy checks. Until then, `embedding` has no active Champion and runtime does
 not silently switch to a vector Provider.
+
+## Amendment (2026-10, issue #316, ADR-0151): original-text lookup is a separate, in-place lexical path
+
+This ADR covers recall of **admitted Claims** only. Finding an ordinary older experience that
+never became a Claim is a different mechanism and does not change the Claim retrieval baseline:
+the Decision may propose a bounded read-only search (a few equivalent keywords, optional people
+clues, optional date range) over the owner's retained User text. It runs in PostgreSQL by
+deterministic substring / word-boundary matching over normalized text, with no embedding, no
+pgvector and no `pg_trgm`/fuzzy extension, and without a rebuildable lexical projection: the
+bounded in-place scan avoids a second private copy of the text (so no new Purge surface, index or
+rebuild path), and the search clues live only in the already registered private
+`history_recall_results.plan`. Clues are not user facts and never create a Claim, Entity or
+alias. A person clue widens only through the verified labels of exactly one Entity and never
+selects a message on its own. Result coverage is reported honestly (scanned rows, whether the
+requested range was reached, groups omitted): a lexical miss, a top-k cut or a finished bounded
+scan never proves that something was not said or that a match is the earliest. A rebuildable
+projection may be introduced only when measured scan latency requires it, together with its
+Purge registration, invalidation and rebuild regressions.

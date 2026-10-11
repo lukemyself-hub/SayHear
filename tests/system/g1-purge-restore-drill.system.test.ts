@@ -595,7 +595,9 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
        SELECT '01984477-31e1-7595-92c6-06889cb0fa01', turn.user_id,
               turn.interaction_turn_id, '01984477-31e1-7595-92c6-06889cb0fa02',
               '01984477-31e1-7595-92c6-06889cb0fa03', 'history-recall:v1',
-              'completed', '{}'::jsonb, '{}'::jsonb, '[]'::jsonb, 1, now()
+              'completed',
+              '{"plan":{"kind":"search_experience","groups":[{"id":0,"role":"term","variants":["canary-search-clue"]}]},"proposal":{"kind":"search_experience","terms":["canary-search-clue"]}}'::jsonb,
+              '{}'::jsonb, '[]'::jsonb, 1, now()
        FROM interaction_turns turn LIMIT 1`,
     );
     expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(1);
@@ -626,6 +628,12 @@ systemDescribe("G1 AC-L02 purge-before-backup restore drill", () => {
       await countRows("SELECT 1 FROM compiled_context_revision_refs"),
     ).toBe(0);
     expect(await countRows("SELECT 1 FROM history_recall_results")).toBe(0);
+    // Issue 316: the search clues lived only in that row; nothing else keeps them.
+    expect(
+      await countRows(
+        "SELECT 1 FROM history_recall_results WHERE plan::text LIKE '%canary-search-clue%'",
+      ),
+    ).toBe(0);
     expect(await countRows("SELECT 1 FROM compiled_contexts")).toBe(0);
     expect(await countRows("SELECT 1 FROM generation_commands")).toBe(0);
 

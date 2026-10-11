@@ -28,7 +28,19 @@ export type ProviderFaultSpec = Readonly<{
   httpStatus?: number;
 }>;
 
-export type HistoryReviewScript = Readonly<{ endDate: string; startDate: string }>;
+/**
+ * What the scripted Decision asks the read-only history review for: a local
+ * date range (#314) or an original-text experience search (#316). It stands in
+ * for the model's choice; everything after it is the real SayHear path.
+ */
+export type HistoryReviewScript =
+  | Readonly<{ endDate: string; startDate: string }>
+  | Readonly<{
+      endDate?: string;
+      people?: readonly string[];
+      searchTerms: readonly string[];
+      startDate?: string;
+    }>;
 
 /** One seeded exchange: the user's words and the reply that was given then. */
 export type HistoryTurn = Readonly<{

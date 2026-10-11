@@ -6,7 +6,7 @@
   "spec": ["#301 R3", "ADR-0151"],
   "ownerTickets": ["#316"],
   "language": "zh",
-  "fixture": { "version": "dev-1", "sha256": "f909a97727f4415b815bad92924a952aa201902134aa61c3f2e6303c4b4dbc7d" },
+  "fixture": { "version": "dev-2", "sha256": "66e21a939b1aa3691035be268ff3552c5b6d81f2b993d78496a46ee7be289c35" },
   "facts": {
     "allowed": [
       { "id": "a-place", "statement": "It happened in the shared activity room of the residential compound, on an old upright instrument nobody was using.", "sources": ["piano:user"] },
