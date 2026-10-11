@@ -145,6 +145,16 @@ export type ConversationResponseRepository = Readonly<{
       userId: UserId;
     }>[]
   >;
+  /**
+   * Settle History Answer commands that are due for recovery in a runtime that
+   * has no history branch (the deployment switch is off): they can never be
+   * run, so they end fail closed (nothing shown, nothing committed, the Turn
+   * reaches a final state and the person can Retry). Returns how many ended.
+   */
+  settleStaleHistoryAnswers?(input: {
+    dueAt: Date;
+    limit: number;
+  }): Promise<number>;
   commitCompleteResponse(input: {
     completedAt: Date;
     generationCommandId: GenerationCommandId;
@@ -730,10 +740,21 @@ export function createConversationResponseService(dependencies: {
       return processed;
     },
     async scanPendingHistoryAnswers() {
-      const pending = await dependencies.historyRecall?.listPendingAnswers({
+      if (!dependencies.historyRecall) {
+        // The history branch is not part of this runtime (switch off): a
+        // command a crashed process left behind can never be answered, so it
+        // is closed instead of leaving its Turn responding forever.
+        return (
+          (await dependencies.repository.settleStaleHistoryAnswers?.({
+            dueAt: dependencies.clock(),
+            limit: recoveryScanLimit,
+          })) ?? 0
+        );
+      }
+      const pending = await dependencies.historyRecall.listPendingAnswers({
         limit: recoveryScanLimit,
       });
-      if (!pending || !dependencies.harness.runHistoryAnswerCommand) return 0;
+      if (!dependencies.harness.runHistoryAnswerCommand) return 0;
       let processed = 0;
       for (const command of pending) {
         for await (const event of dependencies.harness.runHistoryAnswerCommand(

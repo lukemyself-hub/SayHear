@@ -456,6 +456,12 @@ export class PostgresConversationResponseRepository
     expectedModelRunAttemptId: ModelRunAttemptId;
     generationCommandId: GenerationCommandId;
     now: Date;
+    /**
+     * False when this runtime can never run the command again (the History
+     * Answer branch is not deployed): a due command ends fail closed instead
+     * of being re-prepared.
+     */
+    resume?: boolean;
     userId: UserId;
   }): ReturnType<
     ConversationResponseRepository["claimStaleResponseExecution"]
@@ -627,6 +633,18 @@ export class PostgresConversationResponseRepository
         return { outcome: "terminal" };
       }
 
+      if (input.resume === false) {
+        await settleRecoveredTerminal(client, {
+          category: "policy_blocked",
+          generationCommandId: input.generationCommandId,
+          modelRunAttemptId: input.expectedModelRunAttemptId,
+          now: input.now,
+          userId: input.userId,
+        });
+        await client.query("COMMIT");
+        return { outcome: "terminal" };
+      }
+
       if (!preparedDue && row.attempt_no >= row.max_attempts) {
         await settleRecoveredTerminal(client, {
           generationCommandId: input.generationCommandId,
@@ -769,6 +787,47 @@ export class PostgresConversationResponseRepository
   }): ReturnType<
     ConversationResponseRepository["listStaleResponseExecutions"]
   > {
+    return this.listStaleExecutions(input, "ordinary");
+  }
+
+  /**
+   * History Answer commands that are due for recovery while this runtime has
+   * no history branch end here, fail closed and without a reply (the stages
+   * that do have a runner are recovered by their own pending scans).
+   */
+  public async settleStaleHistoryAnswers(input: {
+    dueAt: Date;
+    limit: number;
+  }): Promise<number> {
+    const due = await this.listStaleExecutions(input, "history_answer");
+    let settled = 0;
+    for (const candidate of due) {
+      const claim = await retryOnSerializationFailure(() =>
+        this.claimStaleResponseExecutionOnce({
+          expectedModelRunAttemptId: candidate.modelRunAttemptId,
+          generationCommandId: candidate.generationCommandId,
+          now: input.dueAt,
+          resume: false,
+          userId: candidate.userId,
+        }),
+      );
+      if (claim.outcome === "terminal" || claim.outcome === "interrupted") {
+        settled += 1;
+      }
+    }
+    return settled;
+  }
+
+  private async listStaleExecutions(
+    input: { dueAt: Date; limit: number },
+    stages: "history_answer" | "ordinary",
+  ): ReturnType<
+    ConversationResponseRepository["listStaleResponseExecutions"]
+  > {
+    const stagePredicate =
+      stages === "history_answer"
+        ? "command.generation_stage = 'history_answer'"
+        : "command.generation_stage NOT IN ('action_finalization', 'history_answer')";
     const result = await this.pool.query<{
       generation_command_id: string;
       interaction_turn_id: string;
@@ -797,7 +856,7 @@ export class PostgresConversationResponseRepository
         INNER JOIN conversation_response_recovery_policies policy
           ON policy.policy_version = command.recovery_policy_version
         WHERE command.authoritative_result_id IS NULL
-          AND command.generation_stage NOT IN ('action_finalization', 'history_answer')
+          AND ${stagePredicate}
           AND turn.status IN ('open', 'responding')
           AND (
             (
