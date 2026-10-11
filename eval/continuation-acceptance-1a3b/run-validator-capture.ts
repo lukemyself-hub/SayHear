@@ -1,3 +1,14 @@
+/**
+ * F3 `narrative.validate` capture for the 1A.3b G1 gate.
+ *
+ * Provider support is limited to the pinned `deepseek` / `opencode-go`
+ * adapters; any other pinned provider fails closed. Role adapters are built
+ * through `resolveF3RoleAdapter` (role-provider-provisioning.ts), which pins
+ * the capture timeout (`F3_ROLE_TIMEOUT_MS`, wider than the runtime
+ * `SAYHEAR_PROVIDER_TIMEOUT_MS` default so a frozen evaluation is not killed
+ * mid-call) and reads the deepseek baseUrl only from `SAYHEAR_DEEPSEEK_BASE_URL`
+ * so the champion and role sides cannot point at different endpoints.
+ */
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
@@ -32,11 +43,9 @@ import {
   createIsolatedPostgresSchema,
   fixedInternalOwnerPrincipal,
 } from "@sayhear/test-support";
-import {
-  createRuntimeOneA3bRoleProviders,
-  type OneA3bProviderAdapter,
-} from "@sayhear/ai";
+import { createRuntimeOneA3bRoleProviders } from "@sayhear/ai";
 
+import { resolveF3RoleAdapter } from "./role-provider-provisioning";
 import {
   buildValidatorRequestBundle,
   loadValidatorCatalog,
@@ -276,35 +285,9 @@ async function main(): Promise<void> {
   const providersPresent = new Set(
     configurations.map((configuration) => configuration.provider),
   );
-  const adapters: OneA3bProviderAdapter[] = [];
-  for (const provider of providersPresent) {
-    if (provider === "deepseek") {
-      const apiKey = process.env.DEEPSEEK_API_KEY;
-      if (!apiKey) {
-        throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
-      }
-      adapters.push({
-        provider: "deepseek",
-        apiKey,
-        baseUrl:
-          process.env.SAYHEAR_DEEPSEEK_BASE_URL ??
-          process.env.DEEPSEEK_BASE_URL ??
-          "https://api.deepseek.com",
-        timeoutMs: 120_000,
-      });
-    } else if (provider === "opencode-go") {
-      const apiKey = process.env.OPENCODE_GO_API_KEY;
-      if (!apiKey) {
-        throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
-      }
-      adapters.push({ provider: "opencode-go", apiKey, timeoutMs: 120_000 });
-    } else {
-      throw new Error(`Capture does not support the pinned provider ${provider}.`);
-    }
-  }
-  if (adapters.length !== providersPresent.size) {
-    throw new Error("Capture could not provision every configured provider.");
-  }
+  const adapters = [...providersPresent].map((provider) =>
+    resolveF3RoleAdapter(provider, process.env),
+  );
   const narrativeConfiguration = configurations.find(
     (configuration) => configuration.role === "narrative.validate",
   )!;
