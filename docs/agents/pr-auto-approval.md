@@ -36,7 +36,13 @@ Luke 的人工审核决定因此通过本机管理员写入的 `humanReviewAutho
 4. 用固定 `submit` 提交报告。controller 重新验证所有检查、需求、版本与保护规则，
    合格时由 App 提交 `APPROVED` 和成功的 gate，按既有生产授权执行受保护合入。
 
-人工授权只解除匹配的路径门禁。失败 CI、P0–P2 发现、未解决的审核线程、风险标记、
+本机审批工具、测试、文档和根配置没有生产业务影响时，人工记录可另声明
+`noRuntimeImpact: true`。只有完整 diff 与需求摘要匹配、每个改动路径都在记录中，
+且路径均属于 scripts/tests/docs 或明确的根配置时，该决定才定位原本未知的影响，
+要求完整 CI 基线；不伪装成生产业务专项。apps/packages/eval 与未知路径不能使用
+该出口，已有路径提示所要求的专项仍然执行。模型报告不能设置这个字段。
+
+其余人工授权只解除匹配的路径门禁。失败 CI、P0–P2 发现、未解决的审核线程、风险标记、
 能力发布、暂停与生产证据要求仍会阻断。代码或需求改变后重新审核与绑定。
 已有绑定记录在只同步 main 且 diff 与需求摘要均未改变时可继续使用。
 安装助手不得读取私钥，也不得取消分支保护、修改 App 权限或把模型报告当人工授权。
@@ -125,3 +131,13 @@ App ID、installation ID、slug 和生产授权标记存于 root-owned 本机配
 - 调度先 prepare，再仅对无人工保留且符合条件的 PR 调用 scan/submit；七个待批准 PR 按 Luke 最新指示纳入处理，仍逐个验证全部门禁。
 
 最新操作证据见本文件顶部状态。安装后的当前状态必须重新读取，不能以本地文件存在代替真实核验。
+
+## 首版专项证据限制
+
+controller 当前只从同一次可信 PR Validate 的 Vitest 报告采集专项。
+`prompt-budget:effective-config-diff`、`provider:effective-config-diff` 和
+`provider:affected-role-calls` 是独立配置/Provider 工具，不是 Vitest 测试，尚没有
+可信 producer artifact 的接入路径。需要这些专项的 PR 会保持待验证；重复运行
+Vitest 或人工路径授权不能满足它们。后续应在可信 workflow 中接入 producer 输出、
+绑定 head/base/merge SHA 与配置身份，再由 controller 校验 artifact。首版只开放
+现有证据可满足的普通改动，不声称支持这些 Provider/配置变更的自动合入。

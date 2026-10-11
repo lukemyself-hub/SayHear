@@ -119,6 +119,7 @@ export type HumanReviewAuthorization = Readonly<{
   diffDigest: string;
   requirementDigest: string;
   paths: readonly string[];
+  noRuntimeImpact?: boolean;
   validateWorkflowBlobSha: string | null;
   approvedAt: string;
 }>;
@@ -142,12 +143,16 @@ export function parseHumanReviewAuthorizations(value: unknown): readonly HumanRe
     }
     const approvedAt = requiredString(raw.approvedAt, "approvedAt");
     if (!Number.isFinite(Date.parse(approvedAt))) throw new Error("Human approval time is invalid.");
+    if (raw.noRuntimeImpact !== undefined && typeof raw.noRuntimeImpact !== "boolean") {
+      throw new Error("Human no-runtime decision must be a boolean.");
+    }
     return {
       pullRequestNumber: requiredPositiveInteger(raw.pullRequestNumber, "pullRequestNumber"),
       approvedHeadSha: hex(raw.approvedHeadSha, 40),
       diffDigest: hex(raw.diffDigest, 64),
       requirementDigest: hex(raw.requirementDigest, 64),
       paths: raw.paths as string[],
+      ...(raw.noRuntimeImpact === undefined ? {} : { noRuntimeImpact: raw.noRuntimeImpact }),
       validateWorkflowBlobSha: raw.validateWorkflowBlobSha === null ? null : hex(raw.validateWorkflowBlobSha, 40),
       approvedAt,
     };
@@ -1968,15 +1973,17 @@ function evaluateSnapshot(
   const input = parsePrReviewGateInput(
     createModelReviewInput(config, snapshot, report),
   );
+  const humanAuthorization = matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
+    pullRequestNumber: snapshot.gateInput.pullRequest.number,
+    diffDigest: snapshot.diff.digest,
+    requirementDigest: requirementDigest(snapshot.gateInput.issue, snapshot.gateInput.pullRequest),
+    diffComplete: snapshot.diff.complete,
+  });
   const policy = {
     ...config.policy,
     validateWorkflowBlobSha: snapshot.trustedWorkflowBlobSha,
-    humanApprovedPaths: matchHumanReviewAuthorization(config.app.humanReviewAuthorizations ?? [], {
-      pullRequestNumber: snapshot.gateInput.pullRequest.number,
-      diffDigest: snapshot.diff.digest,
-      requirementDigest: requirementDigest(snapshot.gateInput.issue, snapshot.gateInput.pullRequest),
-      diffComplete: snapshot.diff.complete,
-    })?.paths ?? [],
+    humanApprovedPaths: humanAuthorization?.paths ?? [],
+    humanApprovedNoRuntimeImpact: humanAuthorization?.noRuntimeImpact === true,
   };
   return { input, gate: evaluatePrReviewGate(input, policy) };
 }

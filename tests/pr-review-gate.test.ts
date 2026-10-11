@@ -224,6 +224,54 @@ function input(
 }
 
 describe("PR review gate", () => {
+  it("requires a trusted exact no-runtime decision for approval tooling", () => {
+    const paths = ["scripts/pr-approval-controller.ts", "package.json"];
+    const changedFiles = paths.map((path) => ({ path, status: "modified" as const }));
+    const candidate = input({ pullRequest: { changedFiles }, review: { declaredImpacts: [] } });
+    const approved = { ...policy, humanApprovedPaths: paths, humanApprovedNoRuntimeImpact: true };
+    expect(evaluatePrReviewGate(candidate, { ...approved, humanApprovedNoRuntimeImpact: false }).outcome)
+      .toBe("awaiting_verification");
+    const result = evaluatePrReviewGate(candidate, approved);
+    expect(result.outcome).toBe("merge_candidate");
+    expect(result.requiredEvidenceIds).toEqual([...FIXED_PR_CI_BASELINE]);
+    expect(evaluatePrReviewGate({ ...candidate, evidence: [] }, approved).outcome)
+      .toBe("awaiting_verification");
+    expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles }, review: {
+      declaredImpacts: [], riskFlags: { privacyBoundaryChanged: true },
+    } }), approved).outcome).toBe("human_decision");
+    expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles }, review: {
+      declaredImpacts: [], decision: "request_changes",
+      findings: [{ severity: "P2", file: paths[0]!, line: 1, trigger: "Broken gate", userImpact: "Incorrect approval", evidence: "Review finding" }],
+    } }), approved).outcome).toBe("request_changes");
+  });
+
+  it.each(["apps/web/custom-helper.ts", "packages/data/src/custom-helper.ts", "eval/new-tool.ts", "unknown-file.txt"])(
+    "does not locate runtime or unknown path %s with a no-runtime decision", (path) => {
+      const changedFiles = [{ path, status: "modified" as const }];
+      expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles }, review: { declaredImpacts: [] } }), {
+        ...policy, humanApprovedPaths: [path], humanApprovedNoRuntimeImpact: true,
+      }).outcome).toBe("awaiting_verification");
+    },
+  );
+
+  it("does not locate unapproved tooling paths with another path's no-runtime decision", () => {
+    const changedFiles = [{ path: "scripts/new-helper.ts", status: "modified" as const }];
+    expect(evaluatePrReviewGate(input({ pullRequest: { changedFiles }, review: { declaredImpacts: [] } }), {
+      ...policy, humanApprovedPaths: ["scripts/old-helper.ts"], humanApprovedNoRuntimeImpact: true,
+    }).outcome).toBe("awaiting_verification");
+  });
+
+  it("keeps targeted evidence required for a bound tooling decision", () => {
+    const path = "scripts/prompt-budget-tool.ts";
+    const result = evaluatePrReviewGate(input({
+      pullRequest: { changedFiles: [{ path, status: "modified" }] },
+      review: { declaredImpacts: [] },
+      evidence: FIXED_PR_CI_BASELINE.map((id) => makeEvidence(id)),
+    }), { ...policy, humanApprovedPaths: [path], humanApprovedNoRuntimeImpact: true });
+    expect(result.outcome).toBe("awaiting_verification");
+    expect(result.requiredEvidenceIds).toContain("prompt-budget:effective-config-diff");
+  });
+
   it("accepts only exact human-approved paths and keeps other risk gates", () => {
     const path = "docs/adr/0151-platform.md";
     const approved = { ...policy, humanApprovedPaths: [path] };

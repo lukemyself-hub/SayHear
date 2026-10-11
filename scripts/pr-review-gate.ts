@@ -202,6 +202,7 @@ export type TrustedPrReviewPolicy = Readonly<{
   actionsAppId: number | null;
   validateWorkflowBlobSha: string | null;
   humanApprovedPaths?: readonly string[];
+  humanApprovedNoRuntimeImpact?: boolean;
 }>;
 
 export type PrReviewGateReport = Readonly<{
@@ -1175,7 +1176,17 @@ export function evaluatePrReviewGate(
       message: "This change requires full capability acceptance and a human release decision.",
     });
   }
-  if (plan.requiresImpactLocation) {
+  // Only a bound owner decision can locate tooling with no deployed impact.
+  // Runtime, eval, unknown and unapproved paths still require normal classification.
+  const ownerLocatedTooling = policy.humanApprovedNoRuntimeImpact === true &&
+    input.pullRequest.changedFiles.length > 0 &&
+    input.pullRequest.changedFiles.every(({ path }) =>
+      policy.humanApprovedPaths?.includes(path) &&
+      (/^(?:scripts|tests|docs)\//.test(path) ||
+        [".gitignore", "AGENTS.md", "CODEOWNERS", "package.json", "pnpm-lock.yaml"].includes(path) ||
+        /^tsconfig[^/]*\.json$/.test(path)),
+    );
+  if (plan.requiresImpactLocation && !ownerLocatedTooling) {
     return outcome(input, "awaiting_verification", {
       code: "impact_not_located",
       message: "The change impact is unknown and must be classified before approval.",

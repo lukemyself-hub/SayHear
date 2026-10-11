@@ -136,6 +136,9 @@ describe("PR approval controller", () => {
       paths: ["docs/adr/0151-platform.md"], validateWorkflowBlobSha: null,
       approvedAt: "2026-10-11T08:00:00Z" };
     const records = parseHumanReviewAuthorizations([raw]);
+    expect(parseHumanReviewAuthorizations([{ ...raw, noRuntimeImpact: true }])[0])
+      .toEqual({ ...raw, noRuntimeImpact: true });
+    expect(() => parseHumanReviewAuthorizations([{ ...raw, noRuntimeImpact: "true" }])).toThrow();
     const identity = { pullRequestNumber: 311, diffDigest: CHANGE_DIGEST,
       requirementDigest: REQUIREMENT_DIGEST, diffComplete: true };
     expect(matchHumanReviewAuthorization(records, identity)).toEqual(raw);
