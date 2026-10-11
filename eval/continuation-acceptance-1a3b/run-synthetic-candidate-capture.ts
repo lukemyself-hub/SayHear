@@ -33,6 +33,13 @@
  * The deterministic double proves the plumbing without network calls: the
  * stub extract provider yields no loops, so no segment is produced and the
  * transcript must equal the incumbent main response turn for turn.
+ *
+ * `buildChampionAssembly` and the role adapters only support the `deepseek` /
+ * `opencode-go` providers and read the deepseek baseUrl only from
+ * `SAYHEAR_DEEPSEEK_BASE_URL`; any other pinned value fails closed. Role
+ * adapters use `F3_ROLE_TIMEOUT_MS`, deliberately wider than the runtime
+ * `SAYHEAR_PROVIDER_TIMEOUT_MS` default so a frozen evaluation is not killed
+ * mid-call.
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -105,7 +112,6 @@ import {
 import {
   createRuntimeProviderEgressPort,
   createRuntimeOneA3bRoleProviders,
-  type OneA3bProviderAdapter,
 } from "@sayhear/ai";
 import {
   asCompiledContextId,
@@ -122,6 +128,7 @@ import {
 
 import { buildChampionAssembly, loadDotEnv } from "../memory-pairwise-126/shared";
 import type { TwinConversationAdapter } from "../memory-pairwise-126/twin-harness";
+import { resolveF3RoleAdapter } from "./role-provider-provisioning";
 import {
   F3_RUN_VERSION,
   configurationFingerprint,
@@ -1370,6 +1377,11 @@ async function main(): Promise<void> {
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
   const { champion, conversationAdapter } = buildChampionAssembly(environment);
+  // Defensive guards, not reachable through the current construction path:
+  // `buildChampionAssembly` only returns the opencode-go or responses-api
+  // adapter and `requiredEnvironment` rejects a missing apiKey before it ever
+  // returns. They stay so a future assembly change can never let a capture run
+  // without a live provider credential.
   if (conversationAdapter.type === "deterministic") {
     throw new Error("The champion assembly did not return a live provider adapter.");
   }
@@ -1388,35 +1400,9 @@ async function main(): Promise<void> {
         const providersPresent = new Set(
           roleConfigurations.map((configuration) => configuration.provider),
         );
-        const adapters: OneA3bProviderAdapter[] = [];
-        for (const provider of providersPresent) {
-          if (provider === "deepseek") {
-            const apiKey = process.env.DEEPSEEK_API_KEY;
-            if (!apiKey) {
-              throw new Error("DEEPSEEK_API_KEY is required for the selected deepseek provider.");
-            }
-            adapters.push({
-              provider: "deepseek",
-              apiKey,
-              baseUrl:
-                process.env.SAYHEAR_DEEPSEEK_BASE_URL ??
-                process.env.DEEPSEEK_BASE_URL ??
-                "https://api.deepseek.com",
-              timeoutMs: 120_000,
-            });
-          } else if (provider === "opencode-go") {
-            const apiKey = process.env.OPENCODE_GO_API_KEY;
-            if (!apiKey) {
-              throw new Error("OPENCODE_GO_API_KEY is required for the selected opencode-go provider.");
-            }
-            adapters.push({ provider: "opencode-go", apiKey, timeoutMs: 120_000 });
-          } else {
-            throw new Error(`Capture does not support the pinned provider ${provider}.`);
-          }
-        }
-        if (adapters.length !== providersPresent.size) {
-          throw new Error("Capture could not provision every configured provider.");
-        }
+        const adapters = [...providersPresent].map((provider) =>
+          resolveF3RoleAdapter(provider),
+        );
         const providers = createRuntimeOneA3bRoleProviders({
           adapters,
           configurations: roleConfigurations,
