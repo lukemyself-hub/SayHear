@@ -7,13 +7,24 @@ import { estimateRecentContextTokens, localDateOf } from "@sayhear/application";
 /**
  * Case fixtures and their independent oracle ledgers (T00 #313).
  *
- * A fixture holds only what a user and time would produce: synthetic history
+ * A fixture holds what a user and time would produce: synthetic history
  * turns, instants, IANA zones and the follow-up inputs. It carries no title,
  * no description and no expectation. Everything the scorer needs to know —
  * capability, allowed and forbidden facts, source eligibility, criteria —
  * lives in a separate oracle file that the runner never loads on the request
  * path. `validateCase` enforces that separation mechanically, and the runner
- * re-checks it against the real Provider request (see `checks.ts`).
+ * re-checks it against the real Provider request (`evaluate.ts`,
+ * `INV-oracle-not-in-outbound`).
+ *
+ * One part of a fixture is not user input: a step's `historyReview` /
+ * `toolCall` script. In deterministic mode it stands in for the model's
+ * Decision (which lookup, which search clues, which continuation basis), and
+ * it was written by someone who knew what the history holds. An objective
+ * pass on such a step therefore shows that the pipeline and source control
+ * work for that Decision, not that a model would have made it.
+ * `scriptedDecisionHindsight` names the clues that could not have been taken
+ * from the current message or the person's previous seven days of messages;
+ * criteria that rest on them are reported as `pipeline-only`.
  */
 
 export const FIXTURE_SCHEMA_VERSION = "continuity-acceptance-fixture:v1";
@@ -740,6 +751,66 @@ export function validateCase(loaded: LoadedCase): string[] {
   }
 
   return problems;
+}
+
+export type ScriptedDecisionHindsight = Readonly<{
+  clue: string;
+  kind: "search_term" | "person";
+  stepId: string;
+}>;
+
+/** How far back a Decision sees the person's own words without a lookup. */
+const DECISION_VISIBLE_DAYS = 7;
+
+/**
+ * Scripted search clues and people that cannot be literally taken from what
+ * the Decision could see when it chose them: the step's own message, or a
+ * message the person wrote during the previous seven days (seeded history,
+ * earlier steps and corrections). Matching is literal and case-insensitive,
+ * with no stemming and no synonyms: a clue that is merely a plausible
+ * rewording is still one the script's author picked knowing the target.
+ * Assistant lines do not count. A date review names no clue and is not
+ * checked.
+ *
+ * This is a label, not a validity problem: a fixture is not edited to make it
+ * go away.
+ */
+export function scriptedDecisionHindsight(
+  fixture: CaseFixture,
+): ScriptedDecisionHindsight[] {
+  const flagged: ScriptedDecisionHindsight[] = [];
+  const said: Array<{ at: number; text: string }> = fixture.history.map((turn) => ({
+    at: Date.parse(turn.at),
+    text: turn.user,
+  }));
+  const windowMs = DECISION_VISIBLE_DAYS * 24 * 60 * 60 * 1000;
+  for (const step of fixture.steps) {
+    if (step.type === "say") {
+      const script = step.historyReview;
+      if (script !== undefined && "searchTerms" in script) {
+        const at = Date.parse(step.at);
+        const visible = [
+          step.text,
+          ...said
+            .filter((entry) => entry.at <= at && entry.at >= at - windowMs)
+            .map((entry) => entry.text),
+        ]
+          .join("\n")
+          .toLowerCase();
+        const derivable = (clue: string) => visible.includes(clue.toLowerCase());
+        for (const clue of script.searchTerms) {
+          if (!derivable(clue)) flagged.push({ clue, kind: "search_term", stepId: step.id });
+        }
+        for (const clue of script.people ?? []) {
+          if (!derivable(clue)) flagged.push({ clue, kind: "person", stepId: step.id });
+        }
+      }
+    }
+    if (step.type === "say" || step.type === "correct") {
+      said.push({ at: Date.parse(step.at), text: step.text });
+    }
+  }
+  return flagged;
 }
 
 /** Suite-level rule: zh, en and code-switch must each be exercised. */

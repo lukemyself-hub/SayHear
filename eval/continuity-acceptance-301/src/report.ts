@@ -219,7 +219,13 @@ export function buildRunReport(input: {
   if (observation.mode === "deterministic") {
     remainingRisks.push(
       "Deterministic mode: replies are a fixed stub sentence. Nothing here is evidence about what a real model would say.",
+      "Deterministic mode: the Decision itself (whether to look history up, the search clues, the people and the continuation basis) comes from the fixture script, not from a model. A passing objective criterion proves the pipeline and source control for that Decision; it does not prove that a model would choose it.",
     );
+    if (caseReport.pipelineOnly.length > 0) {
+      remainingRisks.push(
+        `Pipeline-only: ${caseReport.pipelineOnly.map((id) => `\`${id}\``).join(", ")} were judged on a step whose scripted Decision used hindsight clues (not literally in the current message or the person's previous seven days of messages). Their verdicts are not evidence of selection quality, and the case is not shown as a complete pass.`,
+      );
+    }
   }
   if (loaded.fixture.stage !== "final") {
     remainingRisks.push(
@@ -327,10 +333,25 @@ export function renderMarkdown(report: RunReport): string {
   lines.push("| --- | --- | --- | --- | --- |");
   for (const criterion of result.criteria) {
     lines.push(
-      `| \`${criterion.id}\` ${criterion.description} | ${criterion.kind} | **${STATUS_LABEL[criterion.status]}** | ${criterion.owner ?? "—"} | ${criterion.reason} |`,
+      `| \`${criterion.id}\` ${criterion.description} | ${criterion.kind} | **${STATUS_LABEL[criterion.status]}${criterion.scope === "pipeline-only" ? " (pipeline-only)" : ""}** | ${criterion.owner ?? "—"} | ${criterion.reason} |`,
     );
   }
   lines.push("");
+  const pipelineOnly = result.criteria.filter((criterion) => criterion.scope === "pipeline-only");
+  if (pipelineOnly.length > 0) {
+    lines.push("## Pipeline-only criteria (scripted Decision used hindsight clues)");
+    lines.push("");
+    lines.push(
+      "These verdicts hold for the pipeline and source control given the scripted Decision. They are not evidence that a model would have chosen those clues.",
+    );
+    lines.push("");
+    for (const criterion of pipelineOnly) {
+      for (const item of criterion.evidence.filter((entry) => entry.startsWith("pipeline-only:"))) {
+        lines.push(`- \`${criterion.id}\` — ${item}`);
+      }
+    }
+    lines.push("");
+  }
   const explained = result.criteria.filter(
     (criterion) => criterion.status !== "pass" && criterion.evidence.length > 0,
   );

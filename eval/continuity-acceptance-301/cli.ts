@@ -18,6 +18,7 @@ import {
 import {
   listCaseIds,
   loadCase,
+  scriptedDecisionHindsight,
   validateCase,
   validateLanguageCoverage,
   type LoadedCase,
@@ -487,6 +488,14 @@ async function main(): Promise<number> {
       console.log(
         `${loaded.fixture.id}  ${loaded.fixture.languageVariant.padEnd(11)} ${loaded.fixture.stage.padEnd(11)} history ${String(loaded.fixture.history.length).padStart(3)}  steps ${loaded.fixture.steps.length}  criteria ${loaded.oracle.criteria.length}  ${loaded.oracle.title}`,
       );
+    }
+    // Not a validity problem: it labels what a deterministic pass can show.
+    for (const loaded of cases) {
+      for (const entry of scriptedDecisionHindsight(loaded.fixture)) {
+        console.log(
+          `HINDSIGHT ${loaded.fixture.id} step ${entry.stepId}: scripted ${entry.kind === "person" ? "person" : "search clue"} ${JSON.stringify(entry.clue)} is not in the current message or the previous seven days of messages (criteria on this step are pipeline-only)`,
+        );
+      }
     }
     for (const problem of problems) console.error(`INVALID ${problem}`);
     console.log(problems.length === 0 ? `${cases.length} case(s) valid.` : `${problems.length} problem(s).`);

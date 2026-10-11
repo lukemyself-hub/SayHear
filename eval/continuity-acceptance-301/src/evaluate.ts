@@ -1,6 +1,7 @@
 import {
   ORACLE_LEAK_MIN_LENGTH,
   oracleStrings,
+  scriptedDecisionHindsight,
   sourceText,
   type LoadedCase,
   type ObjectiveCriterion,
@@ -65,12 +66,21 @@ export type CriterionResult = Readonly<{
   kind: "invariant" | "objective" | "semantic" | "subjective";
   owner: string | null;
   reason: string;
+  /**
+   * `pipeline-only`: judged on a step whose scripted Decision used a clue
+   * that needs hindsight. The verdict holds for the pipeline and source
+   * control given that Decision; it says nothing about whether a model would
+   * have chosen it. Absent otherwise.
+   */
+  scope?: "pipeline-only";
   status: CriterionStatus;
 }>;
 
 export type CaseReport = Readonly<{
   caseId: string;
   criteria: readonly CriterionResult[];
+  /** Ids of the criteria whose verdict is `pipeline-only`. */
+  pipelineOnly: readonly string[];
   mode: CaseObservation["mode"];
   reviewer: string | null;
   runId: string;
@@ -632,6 +642,17 @@ export function evaluateCase(input: {
     status: "environment-error",
   };
 
+  // The script only acts in deterministic mode; a real model picks its own clues.
+  const hindsightByStep = new Map<string, string[]>();
+  if (observation.mode === "deterministic") {
+    for (const entry of scriptedDecisionHindsight(loaded.fixture)) {
+      hindsightByStep.set(entry.stepId, [
+        ...(hindsightByStep.get(entry.stepId) ?? []),
+        entry.clue,
+      ]);
+    }
+  }
+
   const criteria: CriterionResult[] = [];
   for (const invariant of evaluateInvariants(loaded, observation)) {
     criteria.push(broken ? { ...invariant, ...brokenVerdict } : invariant);
@@ -651,23 +672,43 @@ export function evaluateCase(input: {
     } else {
       verdict = evaluateReviewed(criterion, observation, review);
     }
+    const scriptedStep =
+      criterion.kind === "objective" && "step" in criterion.check
+        ? criterion.check.step
+        : null;
+    const hindsightClues =
+      scriptedStep === null ? [] : (hindsightByStep.get(scriptedStep) ?? []);
     criteria.push({
       description: criterion.description,
-      evidence: verdict.evidence,
+      evidence:
+        hindsightClues.length > 0
+          ? [
+              ...verdict.evidence,
+              `pipeline-only: the scripted Decision for steps[${scriptedStep}] used hindsight clue(s) ${hindsightClues.map((clue) => JSON.stringify(clue)).join(", ")}, which neither the current message nor the person's previous seven days of messages contain`,
+            ]
+          : verdict.evidence,
       id: criterion.id,
       kind: criterion.kind,
       owner: criterion.owner ?? null,
       reason: verdict.reason,
+      ...(hindsightClues.length > 0 ? { scope: "pipeline-only" as const } : {}),
       status: verdict.status,
     });
   }
 
+  const pipelineOnly = criteria
+    .filter((criterion) => criterion.scope === "pipeline-only")
+    .map((criterion) => criterion.id);
+  const aggregate = aggregateStatus(criteria.map((criterion) => criterion.status));
   return {
     caseId: observation.caseId,
     criteria,
     mode: observation.mode,
+    pipelineOnly,
     reviewer: review?.reviewer ?? null,
     runId: observation.identity.runId,
-    status: aggregateStatus(criteria.map((criterion) => criterion.status)),
+    // A case whose passes rest on a hindsight Decision has not shown that the
+    // model would choose it: the choice was not exercised, so it is not a pass.
+    status: aggregate === "pass" && pipelineOnly.length > 0 ? "not-run" : aggregate,
   };
 }

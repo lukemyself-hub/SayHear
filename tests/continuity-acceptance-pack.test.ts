@@ -9,6 +9,7 @@ import { evaluateCase, type CaseReport } from "../eval/continuity-acceptance-301
 import {
   listCaseIds,
   loadCase,
+  scriptedDecisionHindsight,
   sha256,
   validateCase,
   validateLanguageCoverage,
@@ -166,6 +167,86 @@ describe("continuity acceptance case pack", () => {
   });
 });
 
+/**
+ * Review fix P. In deterministic mode the Decision is scripted by the fixture,
+ * including what to search for. A clue that the current message and the
+ * person's messages of the previous seven days do not literally contain could
+ * only be chosen by someone who already knew what the older message said.
+ */
+describe("scripted Decision clues that need hindsight", () => {
+  const script = (
+    text: string,
+    review: { people?: string[]; searchTerms: string[] },
+    at = "2026-03-25T15:00:00.000Z",
+  ) =>
+    withFixture(calibrationCase, (fixture) => ({
+      ...fixture,
+      steps: [{ at, historyReview: review, id: "q1", text, type: "say" as const }],
+    })).fixture;
+
+  it("accepts a clue that literally appears in the current message, whatever its letter case", () => {
+    expect(
+      scriptedDecisionHindsight(script("Did I mention the FENCE to you?", { searchTerms: ["fence"] })),
+    ).toEqual([]);
+  });
+
+  it("accepts a clue the person wrote within the previous seven days", () => {
+    // k1 (the garden fence) was said on 24 March; the step is on 25 March.
+    expect(
+      scriptedDecisionHindsight(script("What was that again?", { searchTerms: ["garden fence"] })),
+    ).toEqual([]);
+  });
+
+  it("flags a clue only an older message, an assistant line or nothing at all contains", () => {
+    const flagged = scriptedDecisionHindsight(
+      script("What was that again?", {
+        people: ["Dana", "Marguerite"],
+        // basement: said on 2 March, 23 days before; upright: only the
+        // assistant said it; plumber: nobody said it.
+        searchTerms: ["basement", "upright", "plumber", "fence"],
+      }),
+    );
+    expect(flagged).toEqual([
+      { clue: "basement", kind: "search_term", stepId: "q1" },
+      { clue: "upright", kind: "search_term", stepId: "q1" },
+      { clue: "plumber", kind: "search_term", stepId: "q1" },
+      { clue: "Marguerite", kind: "person", stepId: "q1" },
+    ]);
+  });
+
+  it("does not flag a date review, which names no clue", () => {
+    const fixture = withFixture(calibrationCase, (base) => ({
+      ...base,
+      steps: [
+        {
+          at: "2026-03-25T15:00:00.000Z",
+          historyReview: { endDate: "2026-03-24", startDate: "2026-03-24" },
+          id: "q1",
+          text: "What did we talk about yesterday?",
+          type: "say" as const,
+        },
+      ],
+    })).fixture;
+    expect(scriptedDecisionHindsight(fixture)).toEqual([]);
+  });
+
+  it("finds the known hindsight clues of the pack without anyone editing the fixtures", () => {
+    const byCase = Object.fromEntries(
+      cases.map((loaded) => [loaded.fixture.id, scriptedDecisionHindsight(loaded.fixture)]),
+    );
+    expect(byCase["C05"]!.map((entry) => `${entry.stepId}:${entry.clue}`)).toEqual(
+      expect.arrayContaining(["bare:entry", "cued:juried", "cued:entry"]),
+    );
+    expect(byCase["C06"]!.map((entry) => `${entry.stepId}:${entry.clue}`)).toEqual(
+      expect.arrayContaining(["ping:mock", "ping:market sizing", "boss:PM", "boss:sprint", "boss:新来"]),
+    );
+    // A clue lifted from the current message is not hindsight.
+    expect(byCase["C05"]!.some((entry) => entry.clue === "bowls")).toBe(false);
+    expect(byCase["C06"]!.some((entry) => entry.clue === "Vivian")).toBe(false);
+    expect(byCase["S01"]).toEqual([]);
+  });
+});
+
 describe("continuity acceptance known-red ledger", () => {
   const ledger = loadKnownRed();
 
@@ -191,6 +272,7 @@ describe("continuity acceptance known-red ledger", () => {
       })),
       mode: "deterministic",
       reviewer: null,
+      pipelineOnly: [],
       runId: "r",
       status: "fail",
     });
@@ -260,6 +342,82 @@ describe("continuity acceptance report", () => {
     expect(markdown).toContain("`S-topics`");
     expect(markdown).toContain("The fence repair is never mentioned.");
     expect(markdown).toContain("not browser rendering");
+  });
+
+  it("says in every deterministic report that the Decision was scripted and what a pass does and does not prove", () => {
+    const observation = { ...sample.observation, mode: "deterministic" as const };
+    const deterministic = buildRunReport({
+      caseReport: evaluateCase({ loaded: calibrationCase, observation, review: null }),
+      loaded: calibrationCase,
+      observation,
+      plan,
+      reproducibilityDigest: "digest",
+    });
+    expect(deterministic.remainingRisks.join("\n")).toMatch(
+      /Decision .*search clues.*continuation basis.*comes from the fixture script/s,
+    );
+    expect(deterministic.remainingRisks.join("\n")).toMatch(
+      /pipeline and source control.*does not prove that a model would choose/s,
+    );
+    expect(renderMarkdown(deterministic)).toMatch(/comes from the fixture script/);
+    // A real-model report makes no such statement: the model decided.
+    expect(report.remainingRisks.join("\n")).not.toMatch(/fixture script/);
+  });
+
+  it("labels criteria that rest on hindsight clues pipeline-only and never shows such a case as a complete pass", () => {
+    const good = calibrationSamples()[0]!;
+    const hindsight = withFixture(calibrationCase, (fixture) => ({
+      ...fixture,
+      steps: fixture.steps.map((step) =>
+        step.id === "q1" && step.type === "say"
+          ? { ...step, historyReview: { searchTerms: ["basement"] } }
+          : step,
+      ),
+    }));
+    // Only objective criteria, all of which pass on this observation.
+    const loaded = withOracle(hindsight, (oracle) => ({
+      ...oracle,
+      criteria: oracle.criteria.filter((criterion) => ["O-commit", "O-sources", "O-abort"].includes(criterion.id)),
+    }));
+    const observation = { ...good.observation, mode: "deterministic" as const };
+    const scored = evaluateCase({ loaded, observation, review: null });
+    const byId = Object.fromEntries(scored.criteria.map((criterion) => [criterion.id, criterion]));
+    // Criteria judged on the scripted step carry the label and the clue.
+    expect(byId["O-commit"]).toMatchObject({ scope: "pipeline-only", status: "pass" });
+    expect(byId["O-sources"]).toMatchObject({ scope: "pipeline-only", status: "pass" });
+    expect(byId["O-sources"]!.evidence.join(" ")).toMatch(/hindsight.*basement/);
+    // A criterion on another step is unaffected.
+    expect(byId["O-abort"]!.scope).toBeUndefined();
+    // Everything "passed", yet the case is not shown as a complete pass.
+    expect(scored.criteria.every((criterion) => criterion.status === "pass")).toBe(true);
+    expect(scored.status).not.toBe("pass");
+    expect(scored.pipelineOnly).toEqual(["O-commit", "O-sources"]);
+
+    const rendered = renderMarkdown(
+      buildRunReport({ caseReport: scored, loaded, observation, plan, reproducibilityDigest: "digest" }),
+    );
+    expect(rendered.split("\n")[0]).not.toContain("CAL: PASS");
+    expect(rendered).toContain("PASS (pipeline-only)");
+    expect(rendered).toMatch(/hindsight/);
+    expect(rendered).toContain("is **not** a completed acceptance pass");
+
+    // The same case without the hindsight clue is a plain pass.
+    const plain = evaluateCase({
+      loaded: withOracle(calibrationCase, (oracle) => ({
+        ...oracle,
+        criteria: oracle.criteria.filter((criterion) =>
+          ["O-commit", "O-sources", "O-abort"].includes(criterion.id),
+        ),
+      })),
+      observation,
+      review: null,
+    });
+    expect(plain.status).toBe("pass");
+    expect(plain.pipelineOnly).toEqual([]);
+
+    // A real model chooses its own clues: the script, and the label, do not apply.
+    const real = evaluateCase({ loaded, observation: { ...observation, mode: "real-model" }, review: null });
+    expect(real.pipelineOnly).toEqual([]);
   });
 
   it("gives the same digest for the same behaviour and a different one when behaviour changes", () => {
