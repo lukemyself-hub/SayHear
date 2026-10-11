@@ -24,12 +24,18 @@ import type {
 
 import type { ConversationFunctionDefinition } from "./conversation-action-catalog";
 import {
+  renderExperienceSearchReceiptLines,
+  runExperienceSearch,
+  type ExperienceSearchSourcePort,
+  type HistoryExperienceSearchPlan,
+} from "./history-experience-search";
+import {
   estimateRecentContextTokens,
   localDateOf,
   shiftLocalDate,
 } from "./recent-context";
 
-export const HISTORY_RECALL_POLICY_VERSION = "history-recall:v1";
+export const HISTORY_RECALL_POLICY_VERSION = "history-recall:v2";
 export const HISTORY_REVIEW_FUNCTION_NAME = "review_conversation_history";
 export const HISTORY_RECALL_RESULT_VERSION = 1;
 
@@ -45,8 +51,42 @@ export type HistoryRecallPolicy = Readonly<{
   pageSize: number;
   maxSingleEventTokens: number;
   readTimeoutMs: number;
+  /** Budgets of the original-text experience search (issue #316). */
+  search: HistoryExperienceSearchPolicy;
   version: string;
 }>;
+
+/**
+ * Versioned, deterministic limits of one experience search. Term variants,
+ * rows scanned and returned, groups and the shared deadline are all bounded
+ * here; the model cannot raise any of them.
+ */
+export type HistoryExperienceSearchPolicy = Readonly<{
+  /** Rows of context (user + assistant) one group may carry. */
+  contextRowsPerGroup: number;
+  /** Minutes around a hit within which same-session messages are adjacent. */
+  contextWindowMinutes: number;
+  /** One shared deadline for the whole search (aliases, hits, context). */
+  deadlineMs: number;
+  maxCharsPerTerm: number;
+  maxGroups: number;
+  /** Hit rows the lexical read may return before ranking. */
+  maxHitRows: number;
+  maxPeople: number;
+  maxSingleEventTokens: number;
+  /** Inclusive local-date span a dated search may cover. */
+  maxSpanDays: number;
+  maxTerms: number;
+  maxVariantsPerGroup: number;
+  /** Adjacent user turns kept on each side of a matching turn. */
+  neighborTurns: number;
+  /** Newest-first user messages one search may scan. */
+  scanLimit: number;
+  version: string;
+}>;
+
+export const HISTORY_EXPERIENCE_SEARCH_POLICY_VERSION =
+  "history-experience-search:v1";
 
 export const HISTORY_RECALL_DEFAULT_POLICY: HistoryRecallPolicy = Object.freeze({
   maxContextTokens: 3_000,
@@ -56,11 +96,27 @@ export const HISTORY_RECALL_DEFAULT_POLICY: HistoryRecallPolicy = Object.freeze(
   maxSourceRows: 120,
   pageSize: 60,
   readTimeoutMs: 2_000,
+  search: Object.freeze({
+    contextRowsPerGroup: 16,
+    contextWindowMinutes: 30,
+    deadlineMs: 2_500,
+    maxCharsPerTerm: 32,
+    maxGroups: 3,
+    maxHitRows: 40,
+    maxPeople: 3,
+    maxSingleEventTokens: 1_000,
+    maxSpanDays: 400,
+    maxTerms: 6,
+    maxVariantsPerGroup: 4,
+    neighborTurns: 1,
+    scanLimit: 6_000,
+    version: HISTORY_EXPERIENCE_SEARCH_POLICY_VERSION,
+  }),
   version: HISTORY_RECALL_POLICY_VERSION,
 });
 
 /** The model's proposal: intent, time basis and source scope only. */
-export type HistoryQueryProposal = Readonly<{
+export type HistoryDateReviewProposal = Readonly<{
   endDate: string;
   kind: "review_dates";
   sourceScope: "conversation_text";
@@ -68,18 +124,48 @@ export type HistoryQueryProposal = Readonly<{
   timeBasis: "expressed_date";
 }>;
 
+/**
+ * Find an ordinary older experience from the original words (issue #316). The
+ * terms are only clues for looking: equivalent keywords, never user facts.
+ */
+export type HistoryExperienceSearchProposal = Readonly<{
+  endDate: string | null;
+  kind: "search_experience";
+  people: readonly string[];
+  sourceScope: "conversation_text";
+  startDate: string | null;
+  terms: readonly string[];
+  timeBasis: "expressed_date";
+}>;
+
+export type HistoryQueryProposal =
+  | HistoryDateReviewProposal
+  | HistoryExperienceSearchProposal;
+
 export const HISTORY_REVIEW_FUNCTION: ConversationFunctionDefinition =
   Object.freeze({
     description:
-      "Look back at the original messages the user wrote on one specific past calendar date (or a very short run of dates) when they explicitly name or clearly point to that date and ask what they said or talked about then, for example 'what did I tell you on August 20' or 'what did we talk about last Friday'. Resolve the date yourself from the time context into YYYY-MM-DD in the user's timezone. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions), and it is not needed for today's conversation or for questions that do not name a date. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes.",
+      "Look back at the user's own saved original messages from before today. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions). Do not use it for today's conversation, or when the user does not ask about something they said earlier. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes. Two ways to ask. (1) By date: when the user names or clearly points to a specific past calendar date (for example 'what did I tell you on August 20' or 'what did we talk about last Friday'), give start_date (and end_date for a very short run of dates), resolved yourself from the time context into YYYY-MM-DD in the user's timezone. (2) By search: when the user asks about an ordinary thing, experience or person they told you about some time ago (weeks or months back) without a date you can resolve, for example 'did I ever tell you about playing the piano?', give search_terms: 2 to 5 short keywords or phrases exactly as they would literally appear in the user's own messages, including close synonyms and, when the user mixes languages, the forms in each language. Optionally add people (names or relationship words as the user would have written them) and a start_date/end_date range if the user gave a period. Search terms are only clues for finding the messages; they are not facts about the user.",
     name: HISTORY_REVIEW_FUNCTION_NAME,
     parameters: Object.freeze({
       additionalProperties: false,
       properties: Object.freeze({
         end_date: Object.freeze({
           description:
-            "Last local date to review, YYYY-MM-DD. Omit for a single date.",
+            "Last local date to review or search, YYYY-MM-DD. Omit for a single date.",
           type: "string",
+        }),
+        people: Object.freeze({
+          description:
+            "Search only: up to 3 names or relationship words the user may have used for the people involved.",
+          items: Object.freeze({ type: "string" }),
+          type: "array",
+        }),
+        search_terms: Object.freeze({
+          description:
+            "Search only: 2 to 5 short keywords or phrases, with close synonyms and each language the user mixes, as they would appear in the user's own messages.",
+          items: Object.freeze({ type: "string" }),
+          type: "array",
         }),
         source_scope: Object.freeze({
           description: "Only conversation text can be reviewed.",
@@ -87,7 +173,8 @@ export const HISTORY_REVIEW_FUNCTION: ConversationFunctionDefinition =
           type: "string",
         }),
         start_date: Object.freeze({
-          description: "First local date to review, YYYY-MM-DD.",
+          description:
+            "First local date to review (by date) or to start searching from (search), YYYY-MM-DD.",
           type: "string",
         }),
         time_basis: Object.freeze({
@@ -97,7 +184,7 @@ export const HISTORY_REVIEW_FUNCTION: ConversationFunctionDefinition =
           type: "string",
         }),
       }),
-      required: Object.freeze(["start_date"]),
+      required: Object.freeze([]),
       type: "object",
     }),
     strict: true,
@@ -113,6 +200,38 @@ export function isRealLocalDate(value: unknown): value is string {
     Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
   );
   return date.toISOString().slice(0, 10) === value;
+}
+
+/** Structural caps of the proposal; the policy re-checks them at planning. */
+const SEARCH_LIMITS = Object.freeze({
+  maxChars: 32,
+  maxPeople: 3,
+  maxTerms: 6,
+  minChars: 2,
+});
+
+function cleanSearchStrings(
+  value: unknown,
+  maxItems: number,
+): readonly string[] | null {
+  if (!Array.isArray(value) || value.length > maxItems) return null;
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") return null;
+    const trimmed = entry.trim();
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(trimmed)) return null;
+    const length = [...trimmed.normalize("NFKC")].length;
+    if (length < SEARCH_LIMITS.minChars || length > SEARCH_LIMITS.maxChars) {
+      return null;
+    }
+    const key = trimmed.normalize("NFKC").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
 }
 
 /**
@@ -135,16 +254,13 @@ export function normalizeHistoryReviewCall(input: {
   const record = parsed as Record<string, unknown>;
   const allowed = new Set([
     "end_date",
+    "people",
+    "search_terms",
     "source_scope",
     "start_date",
     "time_basis",
   ]);
   if (Object.keys(record).some((key) => !allowed.has(key))) {
-    return { invalid: true };
-  }
-  const startDate = record["start_date"];
-  const endDate = record["end_date"] ?? startDate;
-  if (!isRealLocalDate(startDate) || !isRealLocalDate(endDate)) {
     return { invalid: true };
   }
   if (
@@ -153,6 +269,39 @@ export function normalizeHistoryReviewCall(input: {
     (record["source_scope"] !== undefined &&
       record["source_scope"] !== "conversation_text")
   ) {
+    return { invalid: true };
+  }
+  if (record["search_terms"] !== undefined) {
+    const terms = cleanSearchStrings(record["search_terms"], SEARCH_LIMITS.maxTerms);
+    const people =
+      record["people"] === undefined
+        ? []
+        : cleanSearchStrings(record["people"], SEARCH_LIMITS.maxPeople);
+    if (terms === null || terms.length === 0 || people === null) {
+      return { invalid: true };
+    }
+    const startDate = record["start_date"] ?? null;
+    const endDateRaw = record["end_date"];
+    if (startDate === null && endDateRaw !== undefined) return { invalid: true };
+    if (startDate !== null && !isRealLocalDate(startDate)) return { invalid: true };
+    const endDate = startDate === null ? null : (endDateRaw ?? startDate);
+    if (endDate !== null && !isRealLocalDate(endDate)) return { invalid: true };
+    return {
+      proposal: {
+        endDate,
+        kind: "search_experience",
+        people,
+        sourceScope: "conversation_text",
+        startDate,
+        terms,
+        timeBasis: "expressed_date",
+      },
+    };
+  }
+  if (record["people"] !== undefined) return { invalid: true };
+  const startDate = record["start_date"];
+  const endDate = record["end_date"] ?? startDate;
+  if (!isRealLocalDate(startDate) || !isRealLocalDate(endDate)) {
     return { invalid: true };
   }
   return {
@@ -175,7 +324,9 @@ export type HistoryRecallFailureCode =
   | "source_read_timeout"
   | "source_read_threw"
   | "owner_inactive"
-  | "expected_data_epoch_mismatch";
+  | "expected_data_epoch_mismatch"
+  | "search_terms_unusable"
+  | "search_unavailable";
 
 /** The deterministic plan resolved from the proposal and frozen facts. */
 export type HistoryQueryPlan = Readonly<{
@@ -191,7 +342,7 @@ export type HistoryQueryPlan = Readonly<{
 export function resolveHistoryQueryPlan(input: {
   cutoff: Date;
   policy: HistoryRecallPolicy;
-  proposal: HistoryQueryProposal;
+  proposal: HistoryDateReviewProposal;
   timezone: string | null;
 }):
   | { ok: true; plan: HistoryQueryPlan }
@@ -282,7 +433,8 @@ export type HistoryRecallOmissionReason =
   | "correction_association"
   | "forget_association"
   | "single_event_over_budget"
-  | "budget_exhausted";
+  | "budget_exhausted"
+  | "candidate_limit";
 
 export type HistoryRecallDateState = "empty" | "complete" | "partial" | "unread";
 
@@ -302,8 +454,43 @@ export type HistoryRecallCoverage = Readonly<{
   pages: number;
   perDate: readonly HistoryRecallDateCoverage[];
   readLatencyMs: number;
+  /** Experience search accounting (issue #316); absent for date reviews. */
+  search?: HistoryExperienceSearchCoverage;
   selectedRows: number;
   selectedTokens: number;
+}>;
+
+export type HistoryExperienceSearchOutcome =
+  | "candidates"
+  | "no_match"
+  | "insufficient_coverage"
+  | "channel_failed";
+
+export type HistoryExperienceChannelState = "ok" | "failed" | "skipped";
+
+/** Content-free accounting of one experience search. */
+export type HistoryExperienceSearchCoverage = Readonly<{
+  ambiguousCues: number;
+  /** Aliases used to widen person cues: verified, unique only. */
+  aliasChannel: HistoryExperienceChannelState;
+  aliasesAdded: number;
+  candidateGroups: number;
+  contextChannel: HistoryExperienceChannelState;
+  matchedRows: number;
+  /** Earliest scanned instant; what "earliest" claims are limited to. */
+  oldestScannedAt: string | null;
+  outcome: HistoryExperienceSearchOutcome;
+  scanComplete: boolean;
+  scannedRows: number;
+  selectedGroups: number;
+  termGroups: number;
+  /** Per occasion (chronological), dates only. */
+  occasions: readonly Readonly<{
+    group: number;
+    localDate: string;
+    matchedRows: number;
+    selectedRows: number;
+  }>[];
 }>;
 
 export type HistoryRecallItemRef = Readonly<{
@@ -311,6 +498,10 @@ export type HistoryRecallItemRef = Readonly<{
   dailySessionId: DailySessionId;
   estimatedTokens: number;
   expressedAt: string;
+  /** Experience search: 1-based occasion, chronological. Absent for dates. */
+  group?: number;
+  /** Experience search: the matching message or its adjacent context. */
+  role?: "match" | "context";
   revisionId: ConversationEventRevisionId;
   sequence: number;
 }>;
@@ -319,7 +510,7 @@ export type HistoryRecallResult = Readonly<{
   coverage: HistoryRecallCoverage;
   failureCode: HistoryRecallFailureCode | null;
   itemRefs: readonly HistoryRecallItemRef[];
-  plan: HistoryQueryPlan | null;
+  plan: HistoryQueryPlan | HistoryExperienceSearchPlan | null;
   /** The proposal as the model asked, kept so a failed plan stays explainable. */
   proposal: HistoryQueryProposal;
   status: "completed" | "failed" | "partial";
@@ -340,7 +531,7 @@ export const EMPTY_HISTORY_RECALL_COVERAGE: HistoryRecallCoverage =
 
 export function failedHistoryRecallResult(
   proposal: HistoryQueryProposal,
-  plan: HistoryQueryPlan | null,
+  plan: HistoryQueryPlan | HistoryExperienceSearchPlan | null,
   code: HistoryRecallFailureCode,
   coverage: HistoryRecallCoverage = EMPTY_HISTORY_RECALL_COVERAGE,
 ): HistoryRecallResult {
@@ -553,6 +744,8 @@ export type HistoryRecallGateway = Readonly<{
 
 export function createHistoryRecallGateway(dependencies: {
   clock: () => Date;
+  /** Original-text experience search; without it a search fails closed. */
+  experienceSource?: ExperienceSearchSourcePort;
   policy?: HistoryRecallPolicy;
   repository: HistoryRecallRepository;
   source: HistoryRecallSourcePort;
@@ -571,13 +764,28 @@ export function createHistoryRecallGateway(dependencies: {
       if (facts === null || facts.inputRevisionId !== context.requestEventRevisionId) {
         return { outcome: "fence_rejected" };
       }
+      const timezone = facts.requestTimezone ?? facts.sessionTimezone;
+      let result: HistoryRecallResult;
+      if (proposal.kind === "search_experience") {
+        result = dependencies.experienceSource
+          ? await runExperienceSearch({
+              currentDailySessionId: facts.dailySessionId,
+              cutoff: facts.cutoff,
+              expectedDataEpoch: facts.expectedDataEpoch,
+              policy,
+              proposal,
+              source: dependencies.experienceSource,
+              timezone,
+              userId: context.userId,
+            })
+          : failedHistoryRecallResult(proposal, null, "search_unavailable");
+      } else {
       const resolved = resolveHistoryQueryPlan({
         cutoff: facts.cutoff,
         policy,
         proposal,
-        timezone: facts.requestTimezone ?? facts.sessionTimezone,
+        timezone,
       });
-      let result: HistoryRecallResult;
       if (!resolved.ok) {
         result = failedHistoryRecallResult(proposal, null, resolved.code);
       } else {
@@ -611,6 +819,7 @@ export function createHistoryRecallGateway(dependencies: {
           proposal,
           snapshot,
         });
+      }
       }
       const committed = await dependencies.repository.commitHistoryRecall({
         decisionAttemptId: context.modelRunAttemptId,
@@ -669,10 +878,22 @@ export function renderHistoryRecallReceipt(
   snapshot: HistoryRecallReceiptSnapshot,
 ): string {
   const { result } = snapshot;
-  const plan = result.plan;
   const lines = [
     `History review result (read-only lookup of the user's own saved messages; policy ${snapshot.policyVersion}):`,
   ];
+  if (result.proposal.kind === "search_experience") {
+    lines.push(...renderExperienceSearchReceiptLines(snapshot));
+    if (snapshot.droppedAtCompile > 0) {
+      lines.push(
+        `Some of the messages found are no longer available (no_longer_eligible x${snapshot.droppedAtCompile}) and are not quoted: do not guess or reconstruct them, and say you could only partly look at it.`,
+      );
+    }
+    lines.push(
+      "Rules for the reply: quote and describe only the messages that appear in the conversation before the user's current message (each has its own time in the Times list); do not invent anything else, no names, titles or details they do not contain. Mention roughly when each thing was said using those times. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status, search or lookup.",
+    );
+    return lines.join("\n");
+  }
+  const plan = result.plan as HistoryQueryPlan | null;
   if (plan === null) {
     lines.push(
       `The lookup could not be planned (${result.failureCode ?? "unknown"}). No messages were read.`,

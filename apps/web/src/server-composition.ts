@@ -121,6 +121,7 @@ import {
   PostgresReflectionRepository,
   PostgresRecentContextPolicyRepository,
   PostgresHistoryRecallRepository,
+  PostgresExperienceSearchSource,
   PostgresHistoryRecallSource,
   PostgresRecentContextSource,
 } from "@sayhear/data";
@@ -871,6 +872,7 @@ export function createServerComposition() {
     ? createHistoryRecallGateway({
         clock: configuration.clock,
         repository: new PostgresHistoryRecallRepository(pool),
+        experienceSource: new PostgresExperienceSearchSource(pool),
         source: new PostgresHistoryRecallSource(pool),
       })
     : undefined;

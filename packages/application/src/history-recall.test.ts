@@ -14,13 +14,13 @@ import {
   normalizeHistoryReviewCall,
   resolveHistoryQueryPlan,
   selectHistoryRecall,
-  type HistoryQueryProposal,
+  type HistoryDateReviewProposal,
   type HistoryRecallRepository,
   type HistoryRecallSourceItem,
   type HistoryRecallSourceSnapshot,
 } from "./history-recall";
 
-const proposal = (startDate: string, endDate = startDate): HistoryQueryProposal => ({
+const proposal = (startDate: string, endDate = startDate): HistoryDateReviewProposal => ({
   endDate,
   kind: "review_dates",
   sourceScope: "conversation_text",
@@ -53,7 +53,7 @@ describe("history review proposal", () => {
 
 describe("history query plan", () => {
   const cutoff = new Date("2026-09-15T02:10:00.000Z");
-  const resolve = (p: HistoryQueryProposal, timezone: string | null = "Asia/Shanghai") =>
+  const resolve = (p: HistoryDateReviewProposal, timezone: string | null = "Asia/Shanghai") =>
     resolveHistoryQueryPlan({ cutoff, policy: HISTORY_RECALL_DEFAULT_POLICY, proposal: p, timezone });
 
   it("resolves the local dates in the request timezone", () => {
