@@ -23,6 +23,7 @@ import type {
 import {
   decodeHistoryRecallReceipt,
   encodeHistoryRecallReceipt,
+  HISTORY_READING_RULES_VERSION,
   renderHistoryRecallReceipt,
   HISTORY_RECALL_RESULT_VERSION,
   type HistoryRecallReceiptSnapshot,
@@ -177,6 +178,12 @@ export type ContextSourceHistoryRecall = Readonly<{
   droppedAtCompile: number;
   events: readonly (ContextSourceEvent &
     Readonly<{
+      /**
+       * Set when the quoted wording is the person's own correction of the
+       * message (the current revision was created by a user correction): the
+       * instant the correction was made.
+       */
+      correctedAt?: string;
       dailySessionId: DailySessionId;
       expressedAt: string;
       selectionReason?: string;
@@ -692,15 +699,33 @@ export function createContextCompiler(dependencies: {
               sequence: event.sequence,
               text: event.text,
             }));
+      const historyCorrectionMarks = (source.historyRecall?.events ?? []).flatMap(
+        (event, index) =>
+          event.actor === "user" && event.correctedAt !== undefined
+            ? [
+                {
+                  correctedAt: event.correctedAt,
+                  messageIndex: index + 1,
+                  timezone: event.expressionTimezone ?? null,
+                },
+              ]
+            : [],
+      );
       const historyRecallSection =
         source.historyRecall === undefined
           ? undefined
           : {
               events: historyRecallEvents,
               receipt: {
+                // The quoted messages are the first messages sent, in this
+                // order, so a mark names its message by 1-based position.
+                ...(historyCorrectionMarks.length > 0
+                  ? { corrections: historyCorrectionMarks }
+                  : {}),
                 droppedAtCompile: source.historyRecall.droppedAtCompile,
                 injectedRows: historyRecallEvents.length,
                 policyVersion: source.historyRecall.policyVersion,
+                readingRulesVersion: HISTORY_READING_RULES_VERSION,
                 result: source.historyRecall.result,
                 version: HISTORY_RECALL_RESULT_VERSION,
               } satisfies HistoryRecallReceiptSnapshot,

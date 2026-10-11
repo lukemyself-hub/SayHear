@@ -1163,15 +1163,32 @@ export function createHistoryRecallGateway(dependencies: {
 
 /** The content-free manifest that rides in the receipt section reference. */
 export type HistoryRecallReceiptSnapshot = Readonly<{
+  /**
+   * Quoted messages whose current wording is the person's own correction
+   * (`created_by = 'user_correction'`), by their 1-based position among the
+   * messages sent, with the instant the correction was made. Content-free.
+   */
+  corrections?: readonly HistoryRecallCorrectionMark[];
   /** Rows that qualified at query time but no longer did when compiled. */
   droppedAtCompile: number;
   injectedRows: number;
   policyVersion: string;
+  /**
+   * The reading rules frozen with this result. Absent on results frozen
+   * before `history-reading:v2`, which replay with the v1 rules.
+   */
+  readingRulesVersion?: string;
   result: Pick<
     HistoryRecallResult,
     "coverage" | "failureCode" | "plan" | "proposal" | "status"
   >;
   version: typeof HISTORY_RECALL_RESULT_VERSION;
+}>;
+
+export type HistoryRecallCorrectionMark = Readonly<{
+  correctedAt: string;
+  messageIndex: number;
+  timezone: string | null;
 }>;
 
 export function encodeHistoryRecallReceipt(
@@ -1190,6 +1207,14 @@ export function decodeHistoryRecallReceipt(
     (parsed as { version?: unknown }).version !== HISTORY_RECALL_RESULT_VERSION
   ) {
     throw new Error("Unsupported frozen history recall receipt.");
+  }
+  const readingRulesVersion = (parsed as { readingRulesVersion?: unknown })
+    .readingRulesVersion;
+  if (
+    readingRulesVersion !== undefined &&
+    !KNOWN_HISTORY_READING_RULES_VERSIONS.has(readingRulesVersion as string)
+  ) {
+    throw new Error("Unsupported history reading rules version.");
   }
   return parsed as HistoryRecallReceiptSnapshot;
 }
@@ -1265,15 +1290,40 @@ function historyAnswerGuidance(
  * their earlier ones, and keeps inference, motives and one-off feelings out
  * of what is stated about them. Identity, voice and advice limits stay with
  * the Canonical Persona; this block never restates or replaces them.
+ *
+ * v2 (review fix J): a message the person corrected keeps its original place
+ * and time in the conversation, so under v1 a later, unassociated restatement
+ * of the old value read as "the latest statement". The receipt now marks such
+ * a message as the person's own correction with the moment it was made, and
+ * the rules say a marked correction overrides anything written about the same
+ * matter before that moment; "the latest statement is how it is now" holds
+ * only where no correction applies. Nothing is matched by meaning and no
+ * source is excluded for it: the restatement stays an ordinary quoted message.
+ *
+ * The version is frozen with each result (`readingRulesVersion` in the receipt
+ * snapshot); a result frozen before v2 carries none and replays with v1.
  */
-export const HISTORY_READING_RULES_VERSION = "history-reading:v1";
+export const HISTORY_READING_RULES_VERSION = "history-reading:v2";
+export const PREVIOUS_HISTORY_READING_RULES_VERSION = "history-reading:v1";
 
-export function renderHistoryReadingRules(): string {
+const KNOWN_HISTORY_READING_RULES_VERSIONS: ReadonlySet<string> = new Set([
+  PREVIOUS_HISTORY_READING_RULES_VERSION,
+  HISTORY_READING_RULES_VERSION,
+]);
+
+export function renderHistoryReadingRules(
+  version: string = HISTORY_READING_RULES_VERSION,
+): string {
+  const v1 = version === PREVIOUS_HISTORY_READING_RULES_VERSION;
   return [
-    `History reading rules (${HISTORY_READING_RULES_VERSION}), the same on every reply that uses earlier messages:`,
+    `History reading rules (${version}), the same on every reply that uses earlier messages:`,
     "- Time: each quoted message carries when it was said, not necessarily when the thing happened. Do not turn a message's time into an event date; if their words give no date, leave it undated.",
-    "- Past and present: when they later said something different about the same matter, the latest statement is how it is now and the earlier one is how it was then. Speak of the earlier one in the past tense and never as current.",
-    "- Corrections: if they themselves later corrected a date, number or name, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said.",
+    v1
+      ? "- Past and present: when they later said something different about the same matter, the latest statement is how it is now and the earlier one is how it was then. Speak of the earlier one in the past tense and never as current."
+      : "- Past and present: when they later said something different about the same matter and no correction of theirs covers it, the latest statement is how it is now and the earlier one is how it was then. Speak of the earlier one in the past tense and never as current.",
+    v1
+      ? "- Corrections: if they themselves later corrected a date, number or name, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said."
+      : "- Corrections: a message marked above as the person's own correction is what they stand by, and the mark says when they made it. It overrides anything they wrote about the same matter before that moment, wherever those messages sit in the conversation and even when they are listed after it: those say how it was put before the correction, never how it is now. Likewise, if they themselves later corrected a date, number or name in their own words, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said.",
     "- Plans: a plan they later called off did not happen: do not ask how it went. A plan with no later word is still only a plan: do not say how it turned out.",
     "- Their words only: assistant lines are your own earlier replies; they never prove what the person said, felt or meant. Add no reasons, no other people's motives, and no details they did not give, for example why someone left or why someone said something.",
     "- One moment is not a trait: a feeling or remark from one time describes that time. Do not present it as who they are, as a lasting pattern, or as a label such as a diagnosis, orientation, belief or trauma.",
@@ -1282,12 +1332,28 @@ export function renderHistoryReadingRules(): string {
   ].join("\n");
 }
 
+/** One line per quoted message whose wording is the person's own correction. */
+function renderCorrectionMarks(
+  snapshot: HistoryRecallReceiptSnapshot,
+): readonly string[] {
+  return (snapshot.corrections ?? []).map((mark) => {
+    const zone = mark.timezone ?? "UTC";
+    return `Message ${mark.messageIndex} is the person's own correction of what they first wrote at that point; they made the correction at ${formatLocalMinute(mark.correctedAt, zone)} (${zone}).`;
+  });
+}
+
 function withReadingRules(
   lines: readonly string[],
   snapshot: HistoryRecallReceiptSnapshot,
 ): string {
   return snapshot.injectedRows > 0
-    ? [...lines, renderHistoryReadingRules()].join("\n")
+    ? [
+        ...lines,
+        ...renderCorrectionMarks(snapshot),
+        renderHistoryReadingRules(
+          snapshot.readingRulesVersion ?? PREVIOUS_HISTORY_READING_RULES_VERSION,
+        ),
+      ].join("\n")
     : lines.join("\n");
 }
 

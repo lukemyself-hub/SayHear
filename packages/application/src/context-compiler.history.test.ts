@@ -204,6 +204,41 @@ describe("Context Compiler History Answer (issue #314)", () => {
     expect(payload.instructions).not.toContain("老师傅教我缝帆布包");
   });
 
+  it("marks a quoted message that is the person's own correction, with when it was made, and replays it", async () => {
+    const corrected: ContextSourceHistoryRecall = {
+      ...historyRecall,
+      events: [
+        { ...historyRecall.events[0]!, correctedAt: "2026-08-22T03:15:00.000Z" },
+        historyRecall.events[1]!,
+      ],
+    };
+    const { compile, compiler, saved } = build("history_answer", corrected);
+    await compile();
+    const manifest = saved();
+    const payload = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
+    // Message 1 in the Times list is the corrected message.
+    expect(payload.instructions).toMatch(/1=2026-08-20 18:30/);
+    expect(payload.instructions).toContain(
+      "Message 1 is the person's own correction of what they first wrote at that point; they made the correction at 2026-08-22 11:15 (Asia/Shanghai).",
+    );
+    expect(payload.instructions).toContain("History reading rules (history-reading:v2)");
+    // The frozen reference carries the mark without any message text.
+    const receipt = manifest.sections.find((section) => section.key === "history_recall_receipt")!;
+    expect(JSON.parse(receipt.reference)).toMatchObject({
+      corrections: [{ correctedAt: "2026-08-22T03:15:00.000Z", messageIndex: 1, timezone: "Asia/Shanghai" }],
+      readingRulesVersion: "history-reading:v2",
+    });
+    expect(receipt.reference).not.toContain("帆布包");
+  });
+
+  it("marks nothing when no quoted message was corrected", async () => {
+    const { compile, compiler, saved } = build("history_answer", historyRecall);
+    await compile();
+    const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
+    expect(payload.instructions).not.toMatch(/is the person's own correction of what they first wrote/);
+    expect(payload.instructions).toContain("History reading rules (history-reading:v2)");
+  });
+
   it("renders an empty or failed review honestly and still compiles", async () => {
     const empty: ContextSourceHistoryRecall = {
       ...historyRecall,

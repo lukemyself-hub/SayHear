@@ -998,9 +998,13 @@ function inspectableReceiptReference(reference: string): string {
     const snapshot = decodeHistoryRecallReceipt(reference);
     const proposal = snapshot.result.proposal;
     return JSON.stringify({
+      // How many quoted messages were marked as the person's own correction;
+      // which ones and when stays with the frozen Context.
+      correctionMarks: snapshot.corrections?.length ?? 0,
       droppedAtCompile: snapshot.droppedAtCompile,
       injectedRows: snapshot.injectedRows,
       policyVersion: snapshot.policyVersion,
+      readingRulesVersion: snapshot.readingRulesVersion ?? null,
       result: {
         coverage: snapshot.result.coverage,
         failureCode: snapshot.result.failureCode,

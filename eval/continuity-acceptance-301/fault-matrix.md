@@ -3,7 +3,7 @@
 稳定可运行环境 = 本包的 `pnpm acceptance:continuity ...`（真实聊天路由 + 真实 `next dev`，只替换外部 Provider）加下表的进程内系统套件
 （真实 Service / Harness / Compiler / Egress / PostgreSQL，只替换模型）。**组合版本**用 `pnpm acceptance:continuity versions` 取得：
 提交、迁移摘要（最新 `0081_history_recall_governance.sql`）、全部历史路径版本（`history-recall:v4`、`conversation-harness:v4`、
-`history-experience-search:v1`、`task-instruction-history-answer:v1/v2`、`history-reading:v1`、两个 Compiler 版本、人格版本）、验收包 fixture 摘要，
+`history-experience-search:v1`、`task-instruction-history-answer:v1/v2`、`history-reading:v2`、两个 Compiler 版本、人格版本）、验收包 fixture 摘要，
 并给出一个指纹。T08 的每次运行应记录该指纹。
 
 开关：`SAYHEAR_HISTORY_RECALL_ENABLED`（部署，默认 false）。验收环境与系统套件另需 history-recall 治理版本为 active：验收 harness 经真实操作路由

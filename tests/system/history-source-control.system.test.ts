@@ -244,4 +244,86 @@ describe("the controlled Inspector does not hand back what a Forget removed or w
   });
 });
 
+/**
+ * Review fix J (the C12 shape). A corrected message keeps its original place
+ * and time, so a restatement of the old value written minutes later used to
+ * look like the newest word on the matter. The restatement has no association
+ * with the correction and stays a permitted source (ADR-0149); what changes is
+ * that the reply is told which quoted message is the person's own correction
+ * and when they made it.
+ */
+describe("a corrected message is told apart from a later restatement of the old value", () => {
+  const OFFER_OLD = "猎头透了底，那家 startup 给的 base 是 45k，外加 sign-on bonus。";
+  const OFFER_OLD_REPLY = "Base 45k 还有 sign-on，听起来让你有点心动。";
+  const ECHO = "对，就是 45k，比我现在高了差不多三成。";
+  const ECHO_REPLY = "高三成，又不好跟身边人说。";
+  const OFFER_NEW = "猎头透了底，那家 startup 给的 base 是 38k，外加 sign-on bonus。";
+
+  async function askAboutTheOfferDay() {
+    await harness.say(OFFER_OLD, "2026-09-09T12:00:00.000Z", OFFER_OLD_REPLY);
+    await harness.say(ECHO, "2026-09-09T12:04:00.000Z", ECHO_REPLY);
+    await harness.closeSession("2026-09-09T14:00:00.000Z");
+    // Three days later the person corrects the first message.
+    harness.setNow("2026-09-12T11:40:00.000Z");
+    await harness.correctMessage(OFFER_OLD, OFFER_NEW);
+    harness.state.replyChunks = ["我看了", "你之前说的。"];
+    harness.state.requests = [];
+    harness.state.review = { start_date: "2026-09-09" };
+    const events = await harness.say("九月九号我跟你说了什么？", ASK_AT);
+    expect(terminal(events)).toBe("assistant_committed");
+    return harness.state.requests.find((request) => request.toolsDisabled)!;
+  }
+
+  it("marks the correction with when it was made, keeps the restatement, and states the rule", async () => {
+    const answer = await askAboutTheOfferDay();
+    const messages = answer.messages.join("\n");
+
+    // The corrected wording is quoted first, at its original time.
+    expect(answer.messages[0]).toBe(`user:${OFFER_NEW}`);
+    expect(answer.instructions).toMatch(/1=2026-09-09 20:00/);
+    // The superseded wording and the reply generated for it are not sent.
+    expect(messages).not.toContain(OFFER_OLD);
+    expect(messages).not.toContain(OFFER_OLD_REPLY);
+    // The person's own restatement has no association and is still quoted.
+    expect(messages).toContain(ECHO);
+
+    // The reply is told which message is the correction and when it was made:
+    // three days after the restatement, although it is listed before it.
+    expect(answer.instructions).toContain(
+      "Message 1 is the person's own correction of what they first wrote at that point; they made the correction at 2026-09-12 19:40 (Asia/Shanghai).",
+    );
+    expect(answer.instructions).toContain("History reading rules (history-reading:v2)");
+    expect(answer.instructions).toMatch(
+      /overrides anything they wrote about the same matter before that moment/,
+    );
+    // Only the corrected message is marked.
+    expect(answer.instructions.match(/is the person's own correction of what they first wrote/g)).toHaveLength(1);
+  });
+
+  it("keeps message text out of the Inspector while the mark stays content-free", async () => {
+    await askAboutTheOfferDay();
+    const [row] = await harness.rows<{ answer_command_id: string }>(
+      "SELECT answer_command_id::text FROM history_recall_results",
+    );
+    const metadata = await new PostgresInternalInspectionRepository(
+      harness.database.pool,
+    ).findGenerationMetadata({
+      generationCommandId: asGenerationCommandId(row!.answer_command_id),
+      userId: OWNER,
+    });
+    const serialized = JSON.stringify(metadata);
+    for (const text of [OFFER_OLD, OFFER_NEW, ECHO, OFFER_OLD_REPLY, ECHO_REPLY, "38k", "45k"]) {
+      expect(serialized).not.toContain(text);
+    }
+    expect(metadata?.historyRecall?.status).toBe("completed");
+    const receipt = metadata!.compiledContext.sections.find(
+      (section) => section.key === "history_recall_receipt",
+    )!;
+    expect(JSON.parse(receipt.reference)).toMatchObject({
+      correctionMarks: 1,
+      readingRulesVersion: "history-reading:v2",
+    });
+  });
+});
+
 void ENTRANCES;

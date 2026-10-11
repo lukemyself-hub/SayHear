@@ -1084,6 +1084,7 @@ export async function loadHistoryRecallForContext(
   if (!result) return null;
   const rows = await client.query<{
     actor: "user" | "assistant";
+    corrected_at: Date | null;
     daily_session_id: string;
     expressed_at: Date;
     expression_timezone: string | null;
@@ -1101,6 +1102,12 @@ export async function loadHistoryRecallForContext(
             event.actor, event.daily_session_id::text AS daily_session_id,
             event.created_at AS expressed_at, event.sequence_no::text AS sequence_no,
             revision.locale, revision.canonical_text AS text,
+            -- The quoted wording is the person's own correction of this
+            -- message: the revision row records who made it and when.
+            CASE
+              WHEN event.actor = 'user' AND revision.created_by = 'user_correction'
+              THEN revision.created_at
+            END AS corrected_at,
             COALESCE(generating_command.request_timezone, expression_command.request_timezone, session.timezone_at_start) AS expression_timezone,
             CASE
               WHEN generating_command.request_timezone IS NOT NULL THEN 'request'
@@ -1172,6 +1179,7 @@ export async function loadHistoryRecallForContext(
     droppedAtCompile: Math.max(0, result.item_refs.length - qualified.length),
     events: qualified.map((row) => ({
       actor: row.actor,
+      ...(row.corrected_at ? { correctedAt: row.corrected_at.toISOString() } : {}),
       dailySessionId: asDailySessionId(row.daily_session_id),
       expressedAt: row.expressed_at.toISOString(),
       expressionTimezone: row.expression_timezone,
