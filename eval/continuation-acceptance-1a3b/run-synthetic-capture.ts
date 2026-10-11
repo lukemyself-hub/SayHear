@@ -7,6 +7,9 @@
  * pinned incumbent arm `continuation-incumbent-1a3a`. The Provider adapter is
  * either the pinned DeepSeek champion (`buildChampionAssembly`) or a
  * deterministic double used to prove the plumbing without network calls.
+ * `buildChampionAssembly` only supports the `deepseek` / `opencode-go`
+ * adapters and reads the deepseek baseUrl only from
+ * `SAYHEAR_DEEPSEEK_BASE_URL`; any other adapter value fails closed.
  *
  * Usage:
  *   tsx eval/continuation-acceptance-1a3b/run-synthetic-capture.ts \
@@ -762,6 +765,11 @@ async function main(): Promise<void> {
     await readFile(resolve(arguments_.pins), "utf8"),
   ) as unknown as F3Pins;
   const { champion, conversationAdapter } = buildChampionAssembly(environment);
+  // Defensive guards, not reachable through the current construction path:
+  // `buildChampionAssembly` only returns the opencode-go or responses-api
+  // adapter and `requiredEnvironment` rejects a missing apiKey before it ever
+  // returns. They stay so a future assembly change can never let a capture run
+  // without a live provider credential.
   if (conversationAdapter.type === "deterministic") {
     throw new Error("The champion assembly did not return a live provider adapter.");
   }
