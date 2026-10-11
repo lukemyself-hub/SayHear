@@ -51,6 +51,19 @@ describe("history review proposal", () => {
   });
 });
 
+describe("history review time basis", () => {
+  it("keeps the expressed date and the experienced date as different questions", () => {
+    expect(
+      normalizeHistoryReviewCall({
+        rawArguments: '{"start_date":"2026-09-16","time_basis":"experienced_date"}',
+      }),
+    ).toEqual({ proposal: { ...proposal("2026-09-16"), timeBasis: "experienced_date" } });
+    expect(
+      normalizeHistoryReviewCall({ rawArguments: '{"start_date":"2026-09-16"}' }),
+    ).toEqual({ proposal: proposal("2026-09-16") });
+  });
+});
+
 describe("history query plan", () => {
   const cutoff = new Date("2026-09-15T02:10:00.000Z");
   const resolve = (p: HistoryQueryProposal, timezone: string | null = "Asia/Shanghai") =>
@@ -63,10 +76,37 @@ describe("history query plan", () => {
     });
   });
 
+  it("accepts a wide range of dates but only itemizes a short one", () => {
+    expect(resolve(proposal("2026-08-25", "2026-09-14"))).toMatchObject({
+      ok: true,
+      plan: { dateCount: 21, localDates: [] },
+    });
+    expect(resolve(proposal("2026-09-10", "2026-09-12"))).toMatchObject({
+      ok: true,
+      plan: { dateCount: 3, localDates: ["2026-09-10", "2026-09-11", "2026-09-12"] },
+    });
+  });
+
+  it("reads an experienced date through the days it may be retold, up to the request day", () => {
+    const experienced = { ...proposal("2026-09-10"), timeBasis: "experienced_date" as const };
+    expect(resolve(experienced)).toMatchObject({
+      ok: true,
+      plan: { readEndDate: "2026-09-15", readStartDate: "2026-09-10", timeBasis: "experienced_date" },
+    });
+    const old = { ...proposal("2026-08-01"), timeBasis: "experienced_date" as const };
+    expect(resolve(old)).toMatchObject({
+      ok: true,
+      plan: { readEndDate: "2026-08-15", readStartDate: "2026-08-01" },
+    });
+    expect(resolve(proposal("2026-09-10"))).toMatchObject({
+      plan: { readEndDate: "2026-09-10", readStartDate: "2026-09-10" },
+    });
+  });
+
   it("fails closed without a timezone, with reversed, too wide or future ranges", () => {
     expect(resolve(proposal("2026-08-20"), null)).toEqual({ code: "timezone_unavailable", ok: false });
     expect(resolve(proposal("2026-08-21", "2026-08-20"))).toEqual({ code: "date_range_reversed", ok: false });
-    expect(resolve(proposal("2026-08-01", "2026-08-10"))).toEqual({ code: "date_range_too_wide", ok: false });
+    expect(resolve(proposal("2026-01-01", "2026-09-10"))).toEqual({ code: "date_range_too_wide", ok: false });
     expect(resolve(proposal("2026-09-16"))).toEqual({ code: "date_in_future", ok: false });
     // 02:10Z is already the 15th in Shanghai but still the 14th in Honolulu.
     expect(resolve(proposal("2026-09-15"), "Pacific/Honolulu")).toEqual({ code: "date_in_future", ok: false });
@@ -101,8 +141,11 @@ const item = (
 
 const planFor = (dates: string[]) => ({
   cutoff: "2026-09-15T02:10:00.000Z",
+  dateCount: dates.length,
   endDate: dates.at(-1)!,
   localDates: dates,
+  readEndDate: dates.at(-1)!,
+  readStartDate: dates[0]!,
   startDate: dates[0]!,
   timeBasis: "expressed_date" as const,
   timezone: "Asia/Shanghai",

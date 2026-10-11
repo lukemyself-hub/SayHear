@@ -6,10 +6,11 @@
   "spec": ["#301 R1", "#301 R2", "ADR-0151"],
   "ownerTickets": ["#314", "#315"],
   "language": "zh",
-  "fixture": { "version": "dev-2", "sha256": "76ab7ad70ef230d6c0fa5ac08be15d03a82a4823011b155d48330850b082ec66" },
+  "fixture": { "version": "dev-3", "sha256": "523aed2400b99a3292e9dda58e32813715188060ef138e15ef1ee97f52e50868" },
   "preconditions": [
     { "description": "yesterday spans more than one history page of 50 messages", "localDate": "2026-09-14", "minMessages": 51 },
-    { "description": "yesterday's user text alone exceeds the 2,000-token default background budget", "localDate": "2026-09-14", "minUserContextTokens": 2001 }
+    { "description": "yesterday's user text alone exceeds the 2,000-token default background budget", "localDate": "2026-09-14", "minUserContextTokens": 2001 },
+    { "description": "yesterday's text exceeds the 3,000-token history review budget, so the late long subject cannot fit with the early ones", "localDate": "2026-09-14", "minUserContextTokens": 3001 }
   ],
   "facts": {
     "allowed": [

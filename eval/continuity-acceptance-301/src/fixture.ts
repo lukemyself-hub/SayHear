@@ -28,7 +28,12 @@ export type ProviderFaultSpec = Readonly<{
   httpStatus?: number;
 }>;
 
-export type HistoryReviewScript = Readonly<{ endDate: string; startDate: string }>;
+export type HistoryReviewScript = Readonly<{
+  endDate: string;
+  startDate: string;
+  /** Default expressed_date: when it was said; experienced_date: when it happened. */
+  timeBasis?: "expressed_date" | "experienced_date";
+}>;
 
 /** One seeded exchange: the user's words and the reply that was given then. */
 export type HistoryTurn = Readonly<{

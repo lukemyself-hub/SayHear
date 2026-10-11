@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C02",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "zh",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Shanghai" },
@@ -26,8 +26,8 @@
     }
   ],
   "steps": [
-    { "id": "said", "type": "say", "at": "2026-09-17T11:30:00.000Z", "text": "我昨天都跟你聊了些什么？" },
-    { "id": "happened", "type": "say", "at": "2026-09-17T11:32:00.000Z", "text": "那昨天我自己实际做了什么事？" },
-    { "id": "when", "type": "say", "at": "2026-09-17T11:34:00.000Z", "text": "我是哪天见的阿澈来着？" }
+    { "id": "said", "type": "say", "at": "2026-09-17T11:30:00.000Z", "historyReview": {"startDate": "2026-09-16", "endDate": "2026-09-16"}, "text": "我昨天都跟你聊了些什么？" },
+    { "id": "happened", "type": "say", "at": "2026-09-17T11:32:00.000Z", "historyReview": {"startDate": "2026-09-16", "endDate": "2026-09-16", "timeBasis": "experienced_date"}, "text": "那昨天我自己实际做了什么事？" },
+    { "id": "when", "type": "say", "at": "2026-09-17T11:34:00.000Z", "historyReview": {"startDate": "2026-09-16", "endDate": "2026-09-16", "timeBasis": "experienced_date"}, "text": "我是哪天见的阿澈来着？" }
   ]
 }

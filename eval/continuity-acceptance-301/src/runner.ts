@@ -54,6 +54,44 @@ function number(value: unknown): number | null {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/**
+ * Coverage of the controlled history review as date entries. A date inside a
+ * completely enumerated range that holds no message is empty and unbounded; a
+ * date of an unfinished or trimmed read is bounded.
+ */
+function historyDateCoverage(
+  history: Record<string, unknown> | null,
+): ObservedInspection["dateCoverage"] {
+  const coverage = record(history?.["coverage"]);
+  const plan = record(history?.["plan"]);
+  if (!coverage || !plan) return [];
+  const listed = (Array.isArray(coverage["perDate"]) ? coverage["perDate"] : [])
+    .map(record)
+    .filter((entry): entry is Record<string, unknown> => entry !== null);
+  const entries = new Map<string, ObservedInspection["dateCoverage"][number]>();
+  for (const entry of listed) {
+    const state = String(entry["state"]);
+    entries.set(String(entry["localDate"]), {
+      candidateRows: number(entry["enumeratedRows"]) ?? 0,
+      empty: state === "empty",
+      localDate: String(entry["localDate"]),
+      readBounded: state === "partial" || state === "unread",
+    });
+  }
+  if (coverage["enumerationComplete"] === true) {
+    const start = String(plan["readStartDate"] ?? plan["startDate"]);
+    const end = String(plan["readEndDate"] ?? plan["endDate"]);
+    let day = start;
+    for (let guard = 0; day <= end && guard < 400; guard += 1) {
+      if (!entries.has(day)) {
+        entries.set(day, { candidateRows: 0, empty: true, localDate: day, readBounded: false });
+      }
+      day = new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    }
+  }
+  return [...entries.values()];
+}
+
 /** Reduce the controlled Inspector's answer to the fields the checks use. */
 export function summarizeInspection(raw: Record<string, unknown>): ObservedInspection {
   const context = record(raw["compiledContext"]) ?? {};
@@ -86,15 +124,18 @@ export function summarizeInspection(raw: Record<string, unknown>): ObservedInspe
     commandStatus: text(raw["commandStatus"]),
     compilerVersion: text(context["compilerVersion"]),
     dailySessionId: sessionId && UUID.test(sessionId) ? sessionId : null,
-    dateCoverage: (Array.isArray(recent?.["perDate"]) ? recent["perDate"] : [])
-      .map(record)
-      .filter((entry): entry is Record<string, unknown> => entry !== null)
-      .map((entry) => ({
-        candidateRows: number(entry["candidateRows"]) ?? 0,
-        empty: entry["empty"] === true,
-        localDate: String(entry["localDate"]),
-        readBounded: entry["readBounded"] === true,
-      })),
+    dateCoverage: [
+      ...historyDateCoverage(history),
+      ...(Array.isArray(recent?.["perDate"]) ? recent["perDate"] : [])
+        .map(record)
+        .filter((entry): entry is Record<string, unknown> => entry !== null)
+        .map((entry) => ({
+          candidateRows: number(entry["candidateRows"]) ?? 0,
+          empty: entry["empty"] === true,
+          localDate: String(entry["localDate"]),
+          readBounded: entry["readBounded"] === true,
+        })),
+    ],
     inputTokens: number(raw["inputTokens"]),
     outputTokens: number(raw["outputTokens"]),
     providerLatencyMs: number(raw["providerLatencyMs"]),

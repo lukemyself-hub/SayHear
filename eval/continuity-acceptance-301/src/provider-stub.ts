@@ -64,7 +64,7 @@ export type ProviderStub = Readonly<{
    * read-only history review function, answer with a call to it carrying
    * these local dates instead of text.
    */
-  setHistoryReview(script: Readonly<{ endDate: string; startDate: string }> | null): void;
+  setHistoryReview(script: Readonly<{ endDate: string; startDate: string; timeBasis?: "expressed_date" | "experienced_date" }> | null): void;
   setStepLabel(label: string | null): void;
   stop(): Promise<void>;
 }>;
@@ -93,7 +93,7 @@ export async function startProviderStub(): Promise<ProviderStub> {
   let fault: ProviderFault | null = null;
   let stepLabel: string | null = null;
   let historicalReply: string | null = null;
-  let historyReview: Readonly<{ endDate: string; startDate: string }> | null = null;
+  let historyReview: Readonly<{ endDate: string; startDate: string; timeBasis?: "expressed_date" | "experienced_date" }> | null = null;
 
   const server: Server = createServer((request, response) => {
     void (async () => {
@@ -140,6 +140,7 @@ export async function startProviderStub(): Promise<ProviderStub> {
         const args = JSON.stringify({
           end_date: historyReview.endDate,
           start_date: historyReview.startDate,
+          ...(historyReview.timeBasis ? { time_basis: historyReview.timeBasis } : {}),
         });
         send({
           item: { arguments: "", call_id: `stub-call-${sequence}`, name: HISTORY_REVIEW_FUNCTION_NAME, type: "function_call" },

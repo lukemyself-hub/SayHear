@@ -52,13 +52,14 @@ type SourceRow = Readonly<{
  * One keyset page of retained original messages whose expression instant falls
  * inside the plan local-date range (half-open UTC bounds computed in SQL from
  * the IANA zone, so DST days are 23/25 hours long and correct), up to the
- * frozen cutoff, excluding the current Daily Session. Rows with an explicit
+ * frozen cutoff, including the current Daily Session (a conversation that
+ * crosses midnight still holds yesterday's messages) but never the request itself. Rows with an explicit
  * control association come back with their text blanked: the text never
  * crosses the port. The Assistant is bound to the user revision that
  * generated it; a superseded or controlled request makes the reply ineligible.
  *
  * Parameters: $1 user, $2 timezone, $3 start local date, $4 end local date,
- * $5 cutoff, $6 current session, $7 page size + 1, $8 cursor instant (text or
+ * $5 cutoff, $6 request revision, $7 page size + 1, $8 cursor instant (text or
  * NULL), $9 cursor session, $10 cursor sequence.
  */
 export const HISTORY_RECALL_PAGE_SQL = `
@@ -149,7 +150,7 @@ export const HISTORY_RECALL_PAGE_SQL = `
     AND event.created_at >= bounds.start_utc
     AND event.created_at < bounds.end_utc
     AND event.created_at <= $5::timestamptz
-    AND event.daily_session_id <> $6::uuid
+    AND revision.conversation_event_revision_id <> $6::uuid
     AND (
       $8::timestamptz IS NULL
       OR (event.created_at, event.daily_session_id::text, event.sequence_no) >
@@ -157,21 +158,6 @@ export const HISTORY_RECALL_PAGE_SQL = `
     )
   ORDER BY event.created_at, event.daily_session_id::text, event.sequence_no
   LIMIT $7
-`;
-
-const CURRENT_CONVERSATION_COUNT_SQL = `
-  WITH bounds AS (
-    SELECT ($3::date)::timestamp AT TIME ZONE $2 AS start_utc,
-           (($4::date) + 1)::timestamp AT TIME ZONE $2 AS end_utc
-  )
-  SELECT COUNT(*)::text AS rows
-  FROM bounds, conversation_events event
-  WHERE event.user_id = $1
-    AND event.daily_session_id = $5::uuid
-    AND event.actor IN ('user', 'assistant')
-    AND event.lifecycle_status = 'active'
-    AND event.created_at >= bounds.start_utc
-    AND event.created_at < bounds.end_utc
 `;
 
 const REASONS = ["correction_association", "forget_association"] as const;
@@ -240,10 +226,10 @@ export class PostgresHistoryRecallSource implements HistoryRecallSourcePort {
           [
             request.userId,
             plan.timezone,
-            plan.startDate,
-            plan.endDate,
+            plan.readStartDate,
+            plan.readEndDate,
             plan.cutoff,
-            request.currentDailySessionId,
+            request.requestRevisionId,
             limit + 1,
             cursor?.at ?? null,
             cursor?.session ?? "",
@@ -279,12 +265,8 @@ export class PostgresHistoryRecallSource implements HistoryRecallSourcePort {
         const last = rows.at(-1)!;
         cursor = { at: last.cursor_at, sequence: last.sequence_no, session: last.daily_session_id };
       }
-      const current = await client.query<{ rows: string }>(
-        CURRENT_CONVERSATION_COUNT_SQL,
-        [request.userId, plan.timezone, plan.startDate, plan.endDate, request.currentDailySessionId],
-      );
       return {
-        currentConversationRows: Number(current.rows[0]?.rows ?? 0),
+        currentConversationRows: 0,
         enumerationComplete: !more,
         failure: null,
         items,

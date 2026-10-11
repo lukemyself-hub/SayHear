@@ -67,7 +67,12 @@ const historyRecall: ContextSourceHistoryRecall = {
   policyVersion: "history-recall:v1",
   result: {
     coverage: {
+      blocks: 1,
+      blocksCovered: 1,
       currentConversationRows: 0,
+      limits: [],
+      readThrough: null,
+      timeBasis: "expressed_date",
       enumeratedRows: 2,
       enumerationComplete: true,
       omitted: {},
@@ -80,6 +85,9 @@ const historyRecall: ContextSourceHistoryRecall = {
     failureCode: null,
     plan: {
       cutoff: "2026-09-15T02:10:00.000Z",
+      dateCount: 1,
+      readEndDate: "2026-08-20",
+      readStartDate: "2026-08-20",
       endDate: "2026-08-20",
       localDates: ["2026-08-20"],
       startDate: "2026-08-20",
