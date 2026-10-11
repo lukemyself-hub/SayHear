@@ -387,6 +387,8 @@ export {
   RECENT_CONTEXT_TIME_COMPILER_VERSION,
   RECENT_CONTEXT_POLICY_VERSION_KEY,
   TIME_AWARE_CONTEXT_COMPILER_VERSION,
+  HISTORY_RECALL_TIME_COMPILER_VERSION,
+  HISTORY_RECALL_CONTEXT_SECTION_KEY,
   type CompiledContext,
   type ActionFinalizationReceiptSnapshot,
   type CompiledContextDegradedReason,
@@ -400,6 +402,7 @@ export {
   type ContextSourceEvent,
   type ContextSourceRecentContextPolicy,
   type ContextSourceSnapshot,
+  type ContextSourceHistoryRecall,
   type RenderedCompiledContextPayload,
 } from "./context-compiler";
 export {
@@ -456,6 +459,7 @@ export {
 } from "./context-compiler";
 export {
   ACTION_FINALIZATION_TASK_INSTRUCTION_VERSION,
+  HISTORY_ANSWER_TASK_INSTRUCTION_VERSION,
   CANONICAL_PERSONA_VERSION,
   CONVERSATION_DECISION_TASK_INSTRUCTION_VERSION,
   PERSONA_BEHAVIOR_ANCHORS_VERSION,

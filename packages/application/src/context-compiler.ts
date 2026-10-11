@@ -20,6 +20,13 @@ import type {
   InteractionTurnId,
   UserId,
 } from "@sayhear/domain";
+import {
+  decodeHistoryRecallReceipt,
+  encodeHistoryRecallReceipt,
+  renderHistoryRecallReceipt,
+  HISTORY_RECALL_RESULT_VERSION,
+  type HistoryRecallReceiptSnapshot,
+} from "./history-recall";
 import type { CurrentDialogueState } from "./dialogue-state";
 import type { CurrentRollingSummary } from "./rolling-summary";
 import {
@@ -161,8 +168,23 @@ export type ContextSourceRecentContextPolicy = Readonly<{
   selectorPolicyVersion: string;
 }>;
 
+/**
+ * The frozen History Answer input (issue #314). `events` are the referenced
+ * revisions re-read and re-qualified at compile time, in frozen order;
+ * `droppedAtCompile` counts references that no longer qualified.
+ */
+export type ContextSourceHistoryRecall = Readonly<{
+  droppedAtCompile: number;
+  events: readonly (ContextSourceEvent &
+    Readonly<{ dailySessionId: DailySessionId; expressedAt: string }>)[];
+  policyVersion: string;
+  result: HistoryRecallReceiptSnapshot["result"];
+  resultId: string;
+}>;
+
 export type ContextSourceSnapshot = Readonly<{
   actionFinalizationReceipt?: ActionFinalizationReceiptSnapshot;
+  historyRecall?: ContextSourceHistoryRecall;
   actionReferenceTargets?: readonly ActionReferenceTarget[];
   curiosityStopSignal?: CurrentCuriosityStopSignal | null;
   dailySession: Readonly<{
@@ -248,6 +270,8 @@ export type CompiledContextSectionKey =
   | "recall_experience"
   | "trust_action_expression"
   | "rolling_summary"
+  | "history_recall_receipt"
+  | "history_recall_context"
   | "recent_conversation_context"
   | "committed_raw_events"
   | "current_user_input"
@@ -275,7 +299,8 @@ export type CompiledContextReferencedEvent = ContextSourceEvent &
     section:
       | "committed_raw_events"
       | "current_user_input"
-      | "recent_conversation_context";
+      | "recent_conversation_context"
+      | "history_recall_context";
     selectionOrder: number | null;
   }>;
 
@@ -430,6 +455,17 @@ export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
 const COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v2" as const;
 
+/**
+ * The frozen Context format of a History Answer command (issue #314). It is
+ * time-aware and carries the history_recall_* sections; every earlier version
+ * must fail closed if such a section is grafted onto it.
+ */
+export const HISTORY_RECALL_TIME_COMPILER_VERSION =
+  "context-compiler:history-time:v1" as const;
+
+export const HISTORY_RECALL_CONTEXT_SECTION_KEY =
+  "history_recall_context" as const;
+
 const CONTEXT_TIME_BASE_TOKEN_BUDGET = 256;
 const CONTEXT_TIME_ENTRY_TOKEN_BUDGET = 12;
 const CONTEXT_TIME_ZONE_TOKEN_BUDGET = 16;
@@ -563,6 +599,9 @@ export function createContextCompiler(dependencies: {
         dependencies.recentContext && recentContextPolicyVersion !== null
           ? await loadRecentContextSelection({
               dependency: dependencies.recentContext,
+              extraExcludedRevisionIds: (source.historyRecall?.events ?? []).map(
+                (event) => event.revisionId,
+              ),
               frozenAt: now,
               source,
               userId: input.userId,
@@ -588,6 +627,55 @@ export function createContextCompiler(dependencies: {
               sequence: event.sequence,
               text: event.text,
             }));
+
+      // Issue #314: a History Answer command quotes the frozen, re-qualified
+      // review result ahead of the recent background and the live session.
+      if (source.generationStage === "history_answer") {
+        if (!source.historyRecall) {
+          throw new Error(
+            "A History Answer requires its frozen history recall result.",
+          );
+        }
+      } else if (source.historyRecall) {
+        throw new Error("Only a History Answer may carry a history recall result.");
+      }
+      const historyRecallEvents: CompiledContextReferencedEvent[] =
+        source.historyRecall === undefined
+          ? []
+          : source.historyRecall.events.map((event, index) => ({
+              actor: event.actor,
+              dailySessionId: event.dailySessionId,
+              estimatedTokens: estimateTokens(event.text),
+              expressedAt: event.expressedAt,
+              expressionTimezone: event.expressionTimezone ?? null,
+              expressionTimezoneSource:
+                event.expressionTimezoneSource ?? "unknown",
+              locale: event.locale,
+              occurredAt: null,
+              revisionId: event.revisionId,
+              section: "history_recall_context",
+              selectionOrder: index,
+              selectionReason: "history_date_range",
+              sequence: event.sequence,
+              text: event.text,
+            }));
+      const historyRecallSection =
+        source.historyRecall === undefined
+          ? undefined
+          : {
+              events: historyRecallEvents,
+              receipt: {
+                droppedAtCompile: source.historyRecall.droppedAtCompile,
+                injectedRows: historyRecallEvents.length,
+                policyVersion: source.historyRecall.policyVersion,
+                result: source.historyRecall.result,
+                version: HISTORY_RECALL_RESULT_VERSION,
+              } satisfies HistoryRecallReceiptSnapshot,
+              reference: encodeHistoryRecallEventsReference(
+                source.historyRecall.resultId,
+                historyRecallEvents,
+              ),
+            };
 
       const historyNewestFirst = source.events
         .filter((event) => {
@@ -617,6 +705,7 @@ export function createContextCompiler(dependencies: {
         (left, right) => left.sequence - right.sequence,
       );
       const referencedEvents: CompiledContextReferencedEvent[] = [
+        ...historyRecallEvents,
         ...recentReferencedEvents,
         ...selectedHistory,
         {
@@ -645,7 +734,12 @@ export function createContextCompiler(dependencies: {
             events: referencedEvents,
           })
         : undefined;
-      const compiledContextVersion = timeAwareFormat
+      if (historyRecallSection !== undefined && !timeAwareFormat) {
+        throw new Error("A History Answer requires the time-aware Context format.");
+      }
+      const compiledContextVersion = historyRecallSection !== undefined
+        ? HISTORY_RECALL_TIME_COMPILER_VERSION
+        : timeAwareFormat
         ? recentContext
           ? RECENT_CONTEXT_TIME_COMPILER_VERSION
           : TIME_AWARE_CONTEXT_COMPILER_VERSION
@@ -679,6 +773,9 @@ export function createContextCompiler(dependencies: {
         rollingSummary: source.rollingSummary ?? null,
         safetyPosture: source.safetyPosture ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
+        ...(historyRecallSection === undefined
+          ? {}
+          : { historyRecall: historyRecallSection }),
         ...(recentContext === null
           ? {}
           : {
@@ -809,6 +906,15 @@ export function createContextCompiler(dependencies: {
         source.referencedEvents.some(
           (event) => event.section === "recent_conversation_context",
         );
+      const hasHistoryMetadata =
+        source.sections.some(
+          (section) =>
+            section.key === HISTORY_RECALL_CONTEXT_SECTION_KEY ||
+            section.key === "history_recall_receipt",
+        ) ||
+        source.referencedEvents.some(
+          (event) => event.section === "history_recall_context",
+        );
       const timeSection = source.sections.find(
         (section) => section.key === "time_context",
       );
@@ -822,6 +928,14 @@ export function createContextCompiler(dependencies: {
         source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION;
       const versionAccepted =
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
+          source.compilerVersion === HISTORY_RECALL_TIME_COMPILER_VERSION &&
+          source.generationStage === "history_answer" &&
+          hasTimeMetadata &&
+          hasHistoryMetadata) ||
+        (!hasHistoryMetadata &&
+          source.generationStage !== "history_answer" &&
+          source.compilerVersion !== HISTORY_RECALL_TIME_COMPILER_VERSION &&
+          ((dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
             source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION) &&
           hasTimeMetadata &&
@@ -848,7 +962,7 @@ export function createContextCompiler(dependencies: {
         (dependencies.compilerVersion !== TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           source.compilerVersion === dependencies.compilerVersion &&
           !hasTimeMetadata &&
-          !hasRecentMetadata);
+          !hasRecentMetadata)));
       if (
         !versionAccepted ||
         source.integrity.algorithm !== "hmac-sha256" ||
@@ -914,6 +1028,56 @@ export function createContextCompiler(dependencies: {
       } else if (recentEvents.length > 0) {
         throw new CompiledContextIntegrityError();
       }
+      const historyRecallSections = {
+        context: source.sections.find(
+          (section) => section.key === HISTORY_RECALL_CONTEXT_SECTION_KEY,
+        ),
+        receipt: source.sections.find(
+          (section) => section.key === "history_recall_receipt",
+        ),
+      };
+      const historyRecallEvents = source.referencedEvents
+        .filter((event) => event.section === "history_recall_context")
+        .toSorted(
+          (left, right) =>
+            (left.selectionOrder ?? 0) - (right.selectionOrder ?? 0),
+        );
+      let historyRecall:
+        | Readonly<{
+            events: readonly CompiledContextReferencedEvent[];
+            receipt: HistoryRecallReceiptSnapshot;
+            reference: string;
+          }>
+        | undefined;
+      if (historyRecallSections.context || historyRecallSections.receipt) {
+        if (!historyRecallSections.context || !historyRecallSections.receipt) {
+          throw new CompiledContextIntegrityError();
+        }
+        let receipt: HistoryRecallReceiptSnapshot;
+        try {
+          receipt = decodeHistoryRecallReceipt(
+            historyRecallSections.receipt.reference,
+          );
+        } catch {
+          throw new CompiledContextIntegrityError();
+        }
+        if (
+          !historyRecallEventsMatch(
+            historyRecallSections.context.reference,
+            historyRecallEvents,
+          ) ||
+          receipt.injectedRows !== historyRecallEvents.length
+        ) {
+          throw new CompiledContextIntegrityError();
+        }
+        historyRecall = {
+          events: historyRecallEvents,
+          receipt,
+          reference: historyRecallSections.context.reference,
+        };
+      } else if (historyRecallEvents.length > 0) {
+        throw new CompiledContextIntegrityError();
+      }
       const currentInput = currentInputs[0];
       let timeContext: ContextTimeMetadata | undefined;
       if (timeSection) {
@@ -924,6 +1088,7 @@ export function createContextCompiler(dependencies: {
         }
         if (
           !contextTimeMetadataMatches(timeContext, [
+            ...historyRecallEvents,
             ...recentEvents,
             ...history,
             ...(currentInput ? [currentInput] : []),
@@ -1040,6 +1205,7 @@ export function createContextCompiler(dependencies: {
         memorySectionContents,
         rollingSummary: source.rollingSummary ?? null,
         actionFinalizationReceipt: source.actionFinalizationReceipt,
+        ...(historyRecall === undefined ? {} : { historyRecall }),
         ...(recentContext === undefined ? {} : { recentContext }),
       });
       const expectedSections = renderableSections.map(
@@ -1069,6 +1235,7 @@ export function createContextCompiler(dependencies: {
           .filter(
             (section) =>
               section.key !== "recent_conversation_context" &&
+              section.key !== HISTORY_RECALL_CONTEXT_SECTION_KEY &&
               section.key !== "committed_raw_events" &&
               section.key !== "current_user_input",
           )
@@ -1076,6 +1243,7 @@ export function createContextCompiler(dependencies: {
           .join("\n") +
           renderActionReferenceInstructions(source.actionReferenceHandles),
         messages: [
+          ...(historyRecall?.events ?? []),
           ...(recentContext?.events ?? []),
           ...history,
           currentInput,
@@ -1705,6 +1873,8 @@ function emptyRecentContextSelection(
 
 async function loadRecentContextSelection(input: {
   dependency: RecentContextCompilerDependency;
+  /** Revisions already quoted by a History Answer must not repeat here. */
+  extraExcludedRevisionIds?: readonly ConversationEventRevisionId[];
   frozenAt: Date;
   source: ContextSourceSnapshot;
   userId: UserId;
@@ -1752,9 +1922,10 @@ async function loadRecentContextSelection(input: {
       null,
     );
   }
-  const excludeRevisionIds = input.source.events.map(
-    (event) => event.revisionId,
-  );
+  const excludeRevisionIds = [
+    ...input.source.events.map((event) => event.revisionId),
+    ...(input.extraExcludedRevisionIds ?? []),
+  ];
   const request: RecentContextSourceRequest = {
     budgets: input.dependency.policy.budgets,
     cutoff,
@@ -1831,6 +2002,31 @@ async function loadRecentContextSelection(input: {
   });
 }
 
+function encodeHistoryRecallEventsReference(
+  resultId: string,
+  events: readonly CompiledContextReferencedEvent[],
+): string {
+  return `history-recall:v${HISTORY_RECALL_RESULT_VERSION}:${resultId}:${events
+    .map((event) => event.revisionId)
+    .join(",")}`;
+}
+
+function historyRecallEventsMatch(
+  reference: string,
+  events: readonly CompiledContextReferencedEvent[],
+): boolean {
+  const match = new RegExp(
+    `^history-recall:v${HISTORY_RECALL_RESULT_VERSION}:([^:]+):(.*)$`,
+  ).exec(reference);
+  if (!match) return false;
+  const ids = match[2] === "" ? [] : (match[2] ?? "").split(",");
+  return (
+    ids.length === events.length &&
+    ids.every((id, index) => id === String(events[index]?.revisionId)) &&
+    events.every((event, index) => event.selectionOrder === index)
+  );
+}
+
 function recentEventsMatch(
   decoded: ReturnType<typeof decodeRecentContextReference>,
   events: readonly CompiledContextReferencedEvent[],
@@ -1876,6 +2072,12 @@ function createSections(input: {
   safetyPosture?: CurrentSafetyPosture | null;
   safetyPostureContent?: string;
   actionFinalizationReceipt: ActionFinalizationReceiptSnapshot | undefined;
+  /** Issue #314: the frozen History Answer review result and its quotes. */
+  historyRecall?: Readonly<{
+    events: readonly CompiledContextReferencedEvent[];
+    receipt: HistoryRecallReceiptSnapshot;
+    reference: string;
+  }>;
   /** #293: frozen recent-source selection; bodies come from referenced events. */
   recentContext?: Readonly<{
     budgetTokens: number;
@@ -1918,6 +2120,10 @@ function createSections(input: {
               maximumMessageCount:
                 input.rawEventTokenBudget +
                 (input.recentContext?.budgetTokens ?? 0) +
+                (input.historyRecall?.events.reduce(
+                  (total, event) => total + event.estimatedTokens,
+                  0,
+                ) ?? 0) +
                 1,
             }),
           };
@@ -2063,6 +2269,33 @@ function createSections(input: {
     ...renderCuriosityStopSignalSection(input),
     ...renderMemorySections(input),
     ...renderRecallExperienceSection(input),
+    ...(input.historyRecall === undefined
+      ? []
+      : [
+          {
+            budgetTokens: null,
+            content: renderHistoryRecallReceipt(input.historyRecall.receipt),
+            key: "history_recall_receipt" as const,
+            reference: encodeHistoryRecallReceipt(input.historyRecall.receipt),
+            truncatable: false,
+          },
+          {
+            budgetTokens: null,
+            content: input.historyRecall.events
+              .map(
+                (event) =>
+                  `${event.actor}:${event.revisionId}:${event.expressedAt ?? "unknown"}:${event.occurredAt ?? "null"}:${event.text}`,
+              )
+              .join("\n"),
+            key: HISTORY_RECALL_CONTEXT_SECTION_KEY,
+            reference: input.historyRecall.reference,
+            selectedTokens: input.historyRecall.events.reduce(
+              (total, event) => total + event.estimatedTokens,
+              0,
+            ),
+            truncatable: false,
+          },
+        ]),
     ...(input.recentContext === undefined
       ? []
       : [
