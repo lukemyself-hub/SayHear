@@ -627,6 +627,11 @@ export function selectExperienceSearch(input: {
 /** Deterministic orchestration of one search against the source port. */
 export async function runExperienceSearch(input: {
   cutoff: Date;
+  /**
+   * A continuation never counts the current Daily Session as an earlier
+   * matter: that talk is already the current context.
+   */
+  currentDailySessionId?: DailySessionId;
   /** What this turn's Decision could see; used only for a continuation. */
   signals?: HistoryContinuationSignals;
   expectedDataEpoch: number;
@@ -758,7 +763,16 @@ export async function runExperienceSearch(input: {
   if (hits.failure !== null) {
     return failed(hits.failure.code, plan, hits.readLatencyMs);
   }
-  const ranked = rankExperienceHits(plan, hits);
+  const ranked = rankExperienceHits(
+    plan,
+    proposal.continuation && input.currentDailySessionId
+      ? {
+          hits: hits.hits.filter(
+            (hit) => hit.dailySessionId !== input.currentDailySessionId,
+          ),
+        }
+      : hits,
+  );
   const grouped = buildExperienceGroups(ranked.eligible, policy);
   let context: readonly HistoryRecallSourceItem[] = [];
   let contextChannel: HistoryExperienceChannelState = "skipped";

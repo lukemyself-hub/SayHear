@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg";
 
 import {
   HISTORY_ANSWER_TASK_INSTRUCTION_VERSION,
+  HISTORY_CONTINUATION_ANSWER_TASK_INSTRUCTION_VERSION,
   type HistoryAnswerCommandRef,
   type HistoryRecallDecisionFacts,
   type HistoryRecallFailureCode,
@@ -910,7 +911,10 @@ export class PostgresHistoryRecallRepository implements HistoryRecallRepository 
           answerCommandId,
           `history-answer/${input.decisionCommandId}`,
           input.decisionCommandId,
-          HISTORY_ANSWER_TASK_INSTRUCTION_VERSION,
+          input.result.proposal.kind === "search_experience" &&
+            input.result.proposal.continuation
+            ? HISTORY_CONTINUATION_ANSWER_TASK_INSTRUCTION_VERSION
+            : HISTORY_ANSWER_TASK_INSTRUCTION_VERSION,
           input.now,
           input.userId,
         ],

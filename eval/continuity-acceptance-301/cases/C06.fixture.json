@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C06",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "code-switch",
   "defaults": { "locale": "zh-CN", "timezone": "Asia/Hong_Kong" },
@@ -42,13 +42,15 @@
       "id": "ping",
       "type": "say",
       "at": "2026-09-18T03:00:00.000Z",
-      "text": "Vivian 刚 ping 我，说 interview 有结果了，约我今晚吃饭。"
+      "text": "Vivian 刚 ping 我，说 interview 有结果了，约我今晚吃饭。",
+      "historyReview": { "searchTerms": ["interview", "面试", "mock", "market sizing"], "people": ["Vivian"], "continuationBasis": ["current_input"] }
     },
     {
       "id": "boss",
       "type": "say",
       "at": "2026-09-18T03:03:00.000Z",
-      "text": "另外那个 Vivian 今天又在 standup 上 cue 我，你还记得她跟我是什么关系吗？"
+      "text": "另外那个 Vivian 今天又在 standup 上 cue 我，你还记得她跟我是什么关系吗？",
+      "historyReview": { "searchTerms": ["PM", "sprint", "新来", "同事"], "people": ["Vivian"], "continuationBasis": ["current_input"] }
     }
   ]
 }

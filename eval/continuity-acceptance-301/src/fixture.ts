@@ -42,6 +42,8 @@ export type HistoryReviewScript =
       timeBasis?: "expressed_date" | "experienced_date";
     }>
   | Readonly<{
+      /** Search as a continuation of the current talk (#317): signals used. */
+      continuationBasis?: readonly ("current_input" | "adjacent_user" | "dialogue_state")[];
       endDate?: string;
       people?: readonly string[];
       searchTerms: readonly string[];

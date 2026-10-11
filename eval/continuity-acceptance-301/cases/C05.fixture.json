@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-acceptance-fixture:v1",
   "id": "C05",
-  "fixtureVersion": "dev-1",
+  "fixtureVersion": "dev-2",
   "stage": "development",
   "languageVariant": "en",
   "defaults": { "locale": "en-GB", "timezone": "Europe/London" },
@@ -36,7 +36,8 @@
       "id": "bare",
       "type": "say",
       "at": "2026-09-21T09:00:00.000Z",
-      "text": "I finally got a reply!"
+      "text": "I finally got a reply!",
+      "historyReview": { "searchTerms": ["entry", "application", "submitted", "waiting"], "continuationBasis": ["current_input"] }
     },
     {
       "id": "studio",
@@ -48,7 +49,8 @@
       "id": "cued",
       "type": "say",
       "at": "2026-09-23T19:23:00.000Z",
-      "text": "And there was an envelope on the mat when I got in. They finally wrote back."
+      "text": "And there was an envelope on the mat when I got in. They finally wrote back.",
+      "historyReview": { "searchTerms": ["bowls", "juried", "entry"], "continuationBasis": ["current_input", "adjacent_user"] }
     }
   ]
 }

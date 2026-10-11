@@ -1015,6 +1015,7 @@ export function createHistoryRecallGateway(dependencies: {
               policy,
               proposal,
               requestRevisionId: context.requestEventRevisionId,
+              currentDailySessionId: facts.dailySessionId,
               signals: facts.signals,
               source: dependencies.experienceSource,
               timezone,

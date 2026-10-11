@@ -142,6 +142,9 @@ export async function startProviderStub(): Promise<ProviderStub> {
         const args = JSON.stringify(
           "searchTerms" in historyReview
             ? {
+                ...(historyReview.continuationBasis
+                  ? { continuation_basis: historyReview.continuationBasis }
+                  : {}),
                 ...(historyReview.endDate ? { end_date: historyReview.endDate } : {}),
                 ...(historyReview.people ? { people: historyReview.people } : {}),
                 search_terms: historyReview.searchTerms,

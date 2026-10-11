@@ -6,7 +6,7 @@
   "spec": ["#301 R4", "#301 R5", "ADR-0151"],
   "ownerTickets": ["#317", "#318"],
   "language": "code-switch (zh with en terms)",
-  "fixture": { "version": "dev-1", "sha256": "f189fbaf57466f1fd76c09a6736623966a1c289aa8860fa304cf6d19c11b0f8e" },
+  "fixture": { "version": "dev-2", "sha256": "bfc0731c3a9fdfa19012651d74f612fa2faf71405886272c147086ee7c21464d" },
   "facts": {
     "allowed": [
       { "id": "a-cousin-interview", "statement": "The relative with that name was preparing for a senior strategy-advisory interview, and the person coached her through practice problems.", "sources": ["cousin:user", "cousin-after:user"] },

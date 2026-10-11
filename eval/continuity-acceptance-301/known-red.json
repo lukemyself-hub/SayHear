@@ -1,13 +1,29 @@
 {
   "schemaVersion": "continuity-known-red:v1",
   "entries": [
-    { "caseId": "C05", "criterionId": "O-bare-older", "owner": "#317", "reason": "The older pending matter is outside the default background, so the ambiguity of a bare announcement cannot be seen." },
-    { "caseId": "C05", "criterionId": "O-cued-older", "owner": "#317", "reason": "A current cue does not yet pull in the related three-month-old background." },
-    { "caseId": "C06", "criterionId": "O-cousin-source", "owner": "#317", "reason": "Four-week-old messages about the same-named relative are outside the default background." },
-    { "caseId": "C06", "criterionId": "O-colleague-source", "owner": "#317", "reason": "Ten-day-old messages about the same-named colleague, including the unconfirmed guess, are outside the default background." },
-    { "caseId": "C07", "criterionId": "O-correction-source", "owner": "#318", "reason": "The offer and the person's explicit date correction are older than seven days and are not recalled." },
-    { "caseId": "C07", "criterionId": "O-cancel-source", "owner": "#318", "reason": "The plan and its cancellation are older than seven days and are not recalled." },
-    { "caseId": "C08", "criterionId": "O-meaning-source", "owner": "#318", "reason": "The month-old statement of what matters to the person is outside the default background." },
-    { "caseId": "C12", "criterionId": "O-user-echo-out", "owner": "#320", "reason": "The person's own adjacent restatement of a corrected figure still reaches the Provider; only the corrected message and the assistant's adjacent reply are excluded today." }
+    {
+      "caseId": "C07",
+      "criterionId": "O-correction-source",
+      "owner": "#318",
+      "reason": "The offer and the person's explicit date correction are older than seven days and are not recalled."
+    },
+    {
+      "caseId": "C07",
+      "criterionId": "O-cancel-source",
+      "owner": "#318",
+      "reason": "The plan and its cancellation are older than seven days and are not recalled."
+    },
+    {
+      "caseId": "C08",
+      "criterionId": "O-meaning-source",
+      "owner": "#318",
+      "reason": "The month-old statement of what matters to the person is outside the default background."
+    },
+    {
+      "caseId": "C12",
+      "criterionId": "O-user-echo-out",
+      "owner": "#320",
+      "reason": "The person's own adjacent restatement of a corrected figure still reaches the Provider; only the corrected message and the assistant's adjacent reply are excluded today."
+    }
   ]
 }

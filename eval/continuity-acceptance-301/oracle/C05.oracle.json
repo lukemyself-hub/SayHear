@@ -6,7 +6,7 @@
   "spec": ["#301 R4", "ADR-0151"],
   "ownerTickets": ["#317"],
   "language": "en",
-  "fixture": { "version": "dev-1", "sha256": "dded487971e83e8c2f6c35dc5f4fbd9254f2b87de8633c9a57fc2c9556afc338" },
+  "fixture": { "version": "dev-2", "sha256": "f2410327076eff65f4824afec5dcb8116224148afa5039b591dd8bb135f8a52c" },
   "facts": {
     "allowed": [
       { "id": "a-two-pending", "statement": "Both a juried pottery entry and an application to a local records office are waiting for an answer.", "sources": ["kiln-a:user", "job-a:user"] },

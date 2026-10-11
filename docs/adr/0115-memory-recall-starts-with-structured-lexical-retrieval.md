@@ -46,3 +46,23 @@ requested range was reached, groups omitted): a lexical miss, a top-k cut or a f
 scan never proves that something was not said or that a match is the earliest. A rebuildable
 projection may be introduced only when measured scan latency requires it, together with its
 Purge registration, invalidation and rebuild regressions.
+
+## Amendment (2026-10, issue #317, ADR-0151): natural continuation is a recorded model query proposal
+
+Following up on the current talk reuses the #316 in-place original-text search; it adds no store,
+framework or embedding and does not change the Claim retrieval above, which still has no
+pre-retrieval model. The one new model-authored element is the continuation query proposal: the
+same Decision call (`review_conversation_history`, still one query per turn) may carry
+`continuation_basis` (`current_input`, `adjacent_user`, `dialogue_state`) to say it follows the
+current talk rather than answers a question about the past. That proposal is persisted
+separately in `history_recall_results.plan` (already a registered private column) and surfaced
+content-free in the Inspector (`coverage.continuation`: accepted/rejected basis, DialogueState
+status, anchored clue count, verdict). Deterministic code, not the model, decides: which named
+signals are valid this turn (a DialogueState only while source-valid; recent user messages only if
+the Decision was shown some), which clues are too low-information to search (greetings, thanks),
+that the current Daily Session is not an "earlier matter", and the verdict `single` / `leading` /
+`tied` / `too_broad` / `none`. A leader needs strictly more of the current talk's own wording than
+every other occasion; query-word overlap alone never creates one, so neither "always ask" nor
+"always guess the most recent" is possible by construction. Clues are never facts, never a Claim,
+Entity or pending task. A failed or empty continuation degrades to an ordinary reply with no
+user-visible lookup language. History Answer for a continuation uses task instruction v2.

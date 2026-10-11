@@ -269,6 +269,27 @@ insufficient_coverage / channel_failed）；回执只用这些事实：无匹配
 
 **Inspector**：`plan` 只暴露线索组数量与变体总数，不含线索文本；`sources` 带 `group/role`。
 
+#### 8.4.5 当前话题的自然接续（#317，`history-recall:v4`）
+
+在 8.4.4 的同一函数、同一原文检索上增加**接续**用法：提案可带 `continuation_basis`（`current_input` /
+`adjacent_user` / `dialogue_state`，去重、至少一项），表示这次查找不是用户问过去，而是当前表达需要较早背景
+（代词/省略，如“终于有回复了”）。仍是一轮一个查询、无检索前模型、无 embedding、无新表/迁移；提案（含依据）单独
+记录在已登记的 `history_recall_results.plan`，Inspector 的 `coverage.continuation` 只含计数与结论。
+
+- **信号有效性**（`validateContinuationBasis`）：`loadDecisionFacts` 从本轮 Decision 冻结的 CompiledContext 取信号，文本只
+  在内存：当前输入；其引用里仍为事件当前 revision 的其他用户表达（最多 5 条）；`dialogue_state` 仅当该 Context 实际带有
+  source-valid 的 DialogueState 段（失败/撤销/不一致则 Context 不含，依据被拒绝）。落后（lagging）的状态仍可用，其后的原文
+  本就由 Context 补读。全部依据无效 → `continuation_basis_unavailable`，退化为普通回复。
+- **低信息线索**：问候/致谢等线索被剔除，剩余为空则 `search_terms_unusable`，不读取。当前 Daily Session 的命中不算“较早事情”。
+- **消歧**（`assessContinuation`）：命中按 8.4.4 分成独立事情（不合并）。“锚定”= 线索词本身出现在有效信号里。某事情的锚定数严格
+  多于其他所有事情 → `leading`；只有一件 → `single`；否则 `tied`（候选数超过 `maxGroups` 则 `too_broad`）；无命中 `none`。
+  仅靠词重叠不能产生领先者，所以既不会“总是澄清”也不会“总猜最近”。
+- **回答**：接续使用 History Answer 任务指令 `task-instruction-history-answer:v2`（回应当前表达，而非回答“问过去”）。回执按结论
+  指示：single/leading 自然接上且不要求重讲、不断言结果；tied 只问一个点名各事的简短问题；too_broad/none/失败按普通回复，不出现
+  “查不到”类话；不新增进展追问或待办。
+- **诊断分层**：选择（basis/锚定/verdict/occasions 支持度）、误召回（引用来源与 group）、澄清（verdict=tied 的回执）与最终生成
+  （既有 Provider/Event 记录）分别可见。真实模型的自然度与打扰感判据归 T08 #321。
+
 #### 8.4.1 Action Capability 元模型
 
 Catalog 中每个 ActionDefinition 声明：
