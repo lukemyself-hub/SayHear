@@ -2873,9 +2873,9 @@ async function requestPullRequestAutoMerge(
   }
 }
 
-function isWaitingForWorkflow(
-  snapshot: Snapshot,
-  gate: PrReviewGateReport,
+export function isWaitingForWorkflow(
+  snapshot: Pick<Snapshot, "workflowStatus">,
+  gate: Pick<PrReviewGateReport, "outcome" | "reasons">,
 ): boolean {
   return (
     gate.outcome === "awaiting_verification" &&
@@ -2883,8 +2883,7 @@ function isWaitingForWorkflow(
     (snapshot.workflowStatus === "queued" ||
       snapshot.workflowStatus === "in_progress" ||
       snapshot.workflowStatus === "missing" ||
-      snapshot.workflowStatus === "unknown" ||
-      snapshot.workflowConclusion !== "success")
+      snapshot.workflowStatus === "unknown")
   );
 }
 

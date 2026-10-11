@@ -364,6 +364,10 @@ describe("PR review gate", () => {
   });
 
   it.each([
+    "scripts/pr-approval-launcher.c",
+    "scripts/build-pr-approval-controller.mjs",
+    "tests/pr-approval-controller.test.ts",
+    "scripts/capture-g1-role-provider-calls.ts",
     ".github/workflows/pr-validate.yml",
     "scripts/ci/verify-test-databases.ts",
     "scripts/pr-review-gate.ts",

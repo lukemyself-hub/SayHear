@@ -18,6 +18,29 @@ Luke 已确认接受以 `ui:portal-smoke` 取代设计稿所述的桌面与移�
 
 ### 已确认差异的人工授权
 
+#### PR 作者也是审核决策者时
+
+GitHub 不接受作者批准自己的 PR，最近一次推送也必须由其他身份批准。
+Luke 的人工审核决定因此通过本机管理员写入的 `humanReviewAuthorizations`
+记录表达，由独立 GitHub App 提交正式审批。普通 PR 评论、标签或在聊天中表示
+“已审核”不会自行把 `pr-review-gate` 变绿。
+
+1. Agent 用固定 `prepare` 入口刷新审核包，展示 PR、head、完整 diff 摘要、需求摘要、
+   受保护路径及最新 Validate 结果，并完成独立代码审查。
+2. Luke 对该具体版本确认接受受保护路径的差异。Agent 准备配置安装助手，将决定
+   绑定审核包中的 PR 号、`approvedHeadSha`、`diff.digest`、
+   `reviewContext.requirementDigest` 和精确路径；经 Luke 在自己的终端授权后安装。
+   若 PR 改了 Validate 工作流，另绑定人工审核过的 workflow blob，不能自动信任它。
+3. 若仅剩 Issue 的人工交接标签，按这次决定恢复 `ongoing` 并移除 `ready-for-human`
+   和 `ready-for-agent`，随后再次 `prepare`，独立审核报告必须匹配最新需求摘要。
+4. 用固定 `submit` 提交报告。controller 重新验证所有检查、需求、版本与保护规则，
+   合格时由 App 提交 `APPROVED` 和成功的 gate，按既有生产授权执行受保护合入。
+
+人工授权只解除匹配的路径门禁。失败 CI、P0–P2 发现、未解决的审核线程、风险标记、
+能力发布、暂停与生产证据要求仍会阻断。代码或需求改变后重新审核与绑定。
+已有绑定记录在只同步 main 且 diff 与需求摘要均未改变时可继续使用。
+安装助手不得读取私钥，也不得取消分支保护、修改 App 权限或把模型报告当人工授权。
+
 Luke 已确认 #311、#310、#327 的具体差异。控制器从 root-owned `config.json`
 读取 `humanReviewAuthorizations`，每条记录绑定 PR 号、完整 diff 的 SHA-256、
 `reviewContext.requirementDigest`、精确文件路径和批准时间。`approvedHeadSha`

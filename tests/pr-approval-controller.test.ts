@@ -12,6 +12,7 @@ import {
   matchHumanReviewAuthorization,
   isTrustedWorkflowVersion,
   isVercelDeploymentStatus,
+  isWaitingForWorkflow,
   parseModelReviewReport,
   parsePauseState,
   parseRequestChangeHistory,
@@ -89,6 +90,34 @@ class StubApi implements GitHubApi {
 }
 
 describe("PR approval controller", () => {
+  it.each(["queued", "in_progress", "missing", "unknown"] as const)(
+    "waits without dispatching while Validate is %s",
+    (workflowStatus) => {
+      expect(isWaitingForWorkflow({ workflowStatus }, {
+        outcome: "awaiting_verification",
+        reasons: [{ code: "required_evidence_missing", message: "Missing CI" }],
+      })).toBe(true);
+    },
+  );
+
+  it("records a verification handoff when Validate completed unsuccessfully", () => {
+    expect(isWaitingForWorkflow({ workflowStatus: "completed" }, {
+      outcome: "awaiting_verification",
+      reasons: [{ code: "required_evidence_missing", message: "CI failed" }],
+    })).toBe(false);
+  });
+
+  it("does not suppress human decisions or unrelated evidence failures", () => {
+    expect(isWaitingForWorkflow({ workflowStatus: "in_progress" }, {
+      outcome: "human_decision",
+      reasons: [{ code: "human_review_required", message: "Protected policy" }],
+    })).toBe(false);
+    expect(isWaitingForWorkflow({ workflowStatus: "in_progress" }, {
+      outcome: "awaiting_verification",
+      reasons: [{ code: "stale_review", message: "Stale head" }],
+    })).toBe(false);
+  });
+
   it("excludes only authenticated Vercel deployment status from PR requirements", () => {
     const comment: GitHubComment = { id: 1, body: "[vc]: #status", created_at: "now",
       updated_at: "now", user: { id: 35613825, login: "vercel[bot]", type: "Bot" },
