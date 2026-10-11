@@ -328,7 +328,15 @@ Provider 结果落定（`recordProviderCompletion`）与提交（`commitComplete
 范围不变：只排除明确关联的整条消息及绑定的 Assistant 回复；用户自己此后对旧说法的不相关复述不被排除（ADR-0149）。
 
 **独立关闭。**`history_recall_policies`（0081）与 `history_recall_results.governance_policy_version`；操作入口
-`/api/internal/operator/history-recall`（GET 状态、POST enable/disable，鉴权与 recent-context 入口一致）。规则见 ADR-0093 的 #320 修订。
+`/api/internal/operator/history-recall`（GET 状态、POST enable/disable/drain，鉴权与 recent-context 入口一致）。规则见 ADR-0093 的 #320 修订。
+关闭（disable）在同一请求里把未结算的 History Answer 命令失败关闭排空，并返回 `historyAnswers: {drained, unsettled}`；`GET` 返回
+`historyAnswers.unsettled`；`drain` 只在分支关闭时可用（开启时 409）。回滚到不含历史分支的应用版本前必须读到 `unsettled: 0`
+（ADR-0093 / ADR-0094 的 SPEC #301 评审修订）。部署开关关闭或治理撤销后，崩溃遗留的 History Answer 由恢复扫描失败关闭结算，已过请求
+截止的不等恢复窗口。
+
+**关闭后的普通回复。**分支关闭、未部署或 Retry 退化时，回复是不带回执的普通回复。普通的时间感知 Context（`context-compiler:time:v4` /
+`recent-time:v4`）在 `time_context` 末尾带 `ORDINARY_BACKGROUND_HONESTY_RULE`：眼前的消息只是对方说过的一部分，问到的事不在其中时
+不说“从没提过”、不说“查过了”。三种状态下普通聊天 Context 逐字节相同；History Answer（`history-time:v1`）不带。
 `effective-runtime-config` 增加 `switch.history_recall_governance_enabled` / `policy.history_recall_governance_version`，探针缺失时报 `unverified`。
 
 **诊断。**受控 Inspector 增加 `turn`（同一 Turn 全部 command 的阶段、状态、Provider Egress 处置、Provider 请求 id，以及最终处置

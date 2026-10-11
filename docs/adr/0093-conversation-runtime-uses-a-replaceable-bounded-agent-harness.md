@@ -71,7 +71,8 @@ Harness Policy、Adapter conformance 与领域不变量测试实现。
 - 提案的 `time_basis` 增加 `experienced_date`（经历何时发生）。这不是新的信任边界：经历时间没有有来源的存储，
   所以此类查询读取“说过的话”作为线索，结果恒为 `partial`，不得宣称完整或“没发生”。表达日期与经历日期的
   回答不混用。
-- 日期范围上限、读取页数/行数/token 预算与时间块覆盖选取随 `history-recall:v2` 版本化（architecture 08-10
+- 日期范围上限、读取页数/行数/token 预算与时间块覆盖选取随 `history-recall` 策略版本化（#315 引入时为 `history-recall:v2`，
+  此后随 #316–#318 递增，当前代码为 `history-recall:v4`，即 `HISTORY_RECALL_POLICY_VERSION`；architecture 08-10
   §8.4.3）。仍是一次只读查询、不进 Catalog、不扩大 Action；细节追问重新调用同一函数，不依赖助手上一轮摘要。
 - 读取范围包含当前 Daily Session 中属于该范围的消息（跨午夜会话），仅排除请求本身，编译时按 revision 去重。
 
@@ -87,3 +88,21 @@ Harness Policy、Adapter conformance 与领域不变量测试实现。
 - 同一变更把“首个可见 token 前”并入围栏：来源引用、Data Epoch、治理在展示前再核对一次。
 - 这不改变 ADR-0149 的排除范围：只排除与既有 Correction/Forget 明确关联的整条消息及其绑定的 Assistant 回复，不做语义匹配，
   不为用户自己此后对旧说法的不相关复述另设排除。
+
+## 修订（2026-10，SPEC #301 评审）：关闭后的诚实表达、遗留命令的结算与排空
+
+- **普通回复不得据可见背景断言“没聊过”**。历史分支关闭、未部署，或 Retry 退化为普通回复时，模型只看得到当前对话与有界的近期背景，
+  没有任何查询回执。普通（非 History Answer）的时间感知 Context 因此带一句版本化的诚实指令
+  （`ORDINARY_BACKGROUND_HONESTY_RULE`，`ordinary-background-honesty:v1`，随 Context 格式 `context-compiler:time:v4` /
+  `recent-time:v4` 冻结）：眼前看得到的只是对方说过的一部分；对方问到的事不在其中时，不说“从没提过”，也不说“查过了”，只说眼前没看到。
+  措辞不含任何机制词。它与历史分支的开、关、未部署**无关**——三种状态下普通聊天的 Context 逐字节相同（系统测试断言），所以“关闭不改变
+  普通聊天”仍然成立；History Answer 由自己的回执约束，不带这句。v1–v3 的冻结 Context 原样重放。真实模型下这句话对普通聊天的影响
+  未经验证，归 T08 #321。
+- **遗留的 History Answer 必须能结算，且不受开关控制**。进程在冻结结果之后崩溃会留下未结算的 History Answer 命令。无论部署开关
+  关闭（运行时没有历史分支）还是治理被撤销，恢复扫描都把到期的命令失败关闭结算：不发送、不展示、不提交，Turn 进入终态，用户可显式
+  Retry；已过请求截止的命令不等恢复窗口即被清扫（`timeout`）。
+- **回滚旧应用前先排空**。不含历史分支的旧应用版本，其陈旧 Decision 扫描只排除 `action_finalization`，会把未结算的 `history_answer`
+  命令当作普通 Decision 认领并重跑。因此回滚到这类版本之前必须：先关闭治理（`POST /api/internal/operator/history-recall
+  {action:"disable"}`，同一请求即排空并返回 `historyAnswers: {drained, unsettled}`），再确认 `unsettled` 为 0（可用 `GET` 读回，或在
+  关闭状态下 `{action:"drain"}` 重复排空；分支开启时 `drain` 以 409 拒绝）。排空与恢复扫描共用同一结算路径。这是 T09 #322 的发布前置。
+

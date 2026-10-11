@@ -1161,7 +1161,16 @@ export function createHistoryRecallGateway(dependencies: {
   };
 }
 
-/** The content-free manifest that rides in the receipt section reference. */
+/**
+ * The manifest that rides in the receipt section reference. It holds no
+ * message body, but it is NOT content-free: `result.plan` and
+ * `result.proposal` carry the search clues and people the Decision proposed,
+ * which derive from the person's own words. The same clues are stored in
+ * `history_recall_results.plan`. Both `compiled_contexts.sections` and
+ * `history_recall_results` are registered private Purge surfaces, they share
+ * the compiled Context's lifecycle (ADR-0131 amendment), and the Inspector
+ * shows only counts (`inspectableReceiptReference`).
+ */
 export type HistoryRecallReceiptSnapshot = Readonly<{
   /**
    * Quoted messages whose current wording is the person's own correction

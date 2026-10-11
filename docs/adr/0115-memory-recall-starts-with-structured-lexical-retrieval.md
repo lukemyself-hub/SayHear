@@ -38,9 +38,12 @@ clues, optional date range) over the owner's retained User text. It runs in Post
 deterministic substring / word-boundary matching over normalized text, with no embedding, no
 pgvector and no `pg_trgm`/fuzzy extension, and without a rebuildable lexical projection: the
 bounded in-place scan avoids a second private copy of the text (so no new Purge surface, index or
-rebuild path), and the search clues live only in the already registered private
-`history_recall_results.plan`. Clues are not user facts and never create a Claim, Entity or
-alias. A person clue widens only through the verified labels of exactly one Entity and never
+rebuild path). The search clues are stored in two places, both already registered private
+Purge surfaces: `history_recall_results.plan` (the frozen plan and proposal) and the
+`history_recall_receipt` entry of `compiled_contexts.sections` (the History Answer's frozen
+Context carries the same plan in its section reference, and the clues in its rendered receipt).
+The controlled Inspector redacts both to counts. Clues are not user facts and never create a
+Claim, Entity or alias. A person clue widens only through the verified labels of exactly one Entity and never
 selects a message on its own. Result coverage is reported honestly (scanned rows, whether the
 requested range was reached, groups omitted): a lexical miss, a top-k cut or a finished bounded
 scan never proves that something was not said or that a match is the earliest. A rebuildable
@@ -66,3 +69,24 @@ every other occasion; query-word overlap alone never creates one, so neither "al
 "always guess the most recent" is possible by construction. Clues are never facts, never a Claim,
 Entity or pending task. A failed or empty continuation degrades to an ordinary reply with no
 user-visible lookup language. History Answer for a continuation uses task instruction v2.
+
+## Amendment (2026-10, SPEC #301 review): search clues add no retention mechanism
+
+Decision: the search clues of a history lookup (keywords, people, continuation basis) keep the
+**same lifecycle as the compiled Context** they belong to. No separate, shorter retention is
+introduced for `history_recall_results.plan` or for the receipt reference in
+`compiled_contexts.sections`.
+
+Why:
+
+- The clues come from the user message of that same Turn, and that message is itself stored
+  permanently as a User Event until the person corrects, forgets or purges it.
+- `compiled_contexts.sections` and the referenced revisions already hold the complete text that
+  was sent to the model for every command; the clues are a small subset of what those rows expose.
+- Expiring only the clues would not reduce what is exposed, and it would break replay: a frozen
+  History Answer Context is re-rendered from its section references, and the integrity check
+  fails once the plan is gone.
+
+Consequences: both surfaces stay registered in the Purge Surface Registry (ADR-0131) and are
+cleared by Owner Full Purge; the Inspector never returns the clues. If a shorter retention for
+compiled Contexts is ever decided, the clues follow it automatically.

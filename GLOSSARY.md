@@ -81,7 +81,7 @@ Conversation Decision 的主回应已经完成、当前 Event 的 DialogueState 
 _Avoid_: Conversation Decision Command, Action Finalization Command, Background message
 
 **History Query Proposal**:
-Conversation Decision 可以提出的第三种互斥结果：一个受控只读历史查询提案，只描述查询意图、时间依据（消息何时写下）、来源范围和本地日期范围。它不是 Conversation Action，不改变任何状态；日期/时区解析、owner 与权限核验、读取和资格检查都由确定性代码完成，模型不能提供 SQL、owner、游标或第二次查询。
+Conversation Decision 可以提出的第三种互斥结果：一个受控只读历史查询提案，只描述查询意图、时间依据、来源范围和本地日期范围。时间依据（`time_basis`）有两种：`expressed_date`（消息何时写下，默认）与 `experienced_date`（事情何时发生；经历时间没有有来源的存储，这类查询只能把“说过的话”当线索，结果恒为 partial，不得宣称完整或“没发生”）。检索形态的提案还可带 `continuation_basis`（`current_input`、`adjacent_user`、`dialogue_state` 中至少一项），表示这次查找不是用户在问过去，而是当前表达需要较早背景，并声明线索取自哪些信号；依据无效则不查询，退化为普通回复。它不是 Conversation Action，不改变任何状态；日期/时区解析、owner 与权限核验、读取和资格检查都由确定性代码完成，模型不能提供 SQL、owner、游标或第二次查询。
 _Avoid_: Conversation Action, Search tool, Agent query loop
 
 **History Recall Result**:
@@ -95,6 +95,7 @@ _Avoid_: Technical retry, Action Finalization Command, Proactive Follow-up Segme
 **Experience Search**:
 History Query Proposal 的第二种形态：用几个等价关键词、可选的人物线索和日期范围，在 owner 仍允许使用的 User 原文里确定性地找回未形成 Memory 的较早普通经历。关键词只是寻找线索，不是用户事实，也不创建 Claim、Entity 或别名；结果按“次经历”分组，覆盖不足或无匹配只说明“在可看范围里没找到”，不证明没聊过，也不证明是最早一次。
 _Avoid_: Memory retrieval, Claim search, Semantic search, Fuzzy match
+
 **Request Deadline**:
 一次聊天请求被接受时冻结在 GenerationCommand 上的绝对截止时刻（整体 30 秒，ADR-0151）。所有后续步骤共用剩余时间而不重新领取；截止后不再开始新步骤，迟到结果不展示、不提交，恢复扫描也不续跑。它与 Provider 传输超时是两个独立配置。
 _Avoid_: Provider timeout, Step timeout, Retry budget

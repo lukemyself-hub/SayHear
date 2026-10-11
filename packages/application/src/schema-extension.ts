@@ -22,6 +22,12 @@
  * This is deliberately not a generic SQL taxonomy. The protected-surface
  * deny-list lives in the CI guard (`scripts/check-schema-extensions.ts`), which
  * is the only other consumer.
+ *
+ * One registered extension is not purely additive: 0071 replaces the
+ * `generation_commands.generation_stage` CHECK to admit `history_answer`. It
+ * is the single exception the guard knows, bound to that file and to an exact
+ * DROP + ADD pair; see the guard's header and ADR-0094 (History Answer
+ * amendment) for why it was needed and where it ends.
  */
 
 export const ONE_A_3B_G1_SCHEMA_EXTENSION_REGISTRY_VERSION =
