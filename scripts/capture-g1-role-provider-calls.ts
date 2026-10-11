@@ -4,8 +4,10 @@
  * Provider support is limited to the pinned `deepseek` / `opencode-go`
  * adapters; any other pinned provider fails closed. Adapters come from
  * `resolveF3RoleAdapter`, which pins the capture timeout
- * (`F3_ROLE_TIMEOUT_MS`, wider than the runtime default) and reads the
- * deepseek baseUrl only from `SAYHEAR_DEEPSEEK_BASE_URL`.
+ * (`F3_ROLE_TIMEOUT_MS`, deliberately wider than the runtime
+ * `SAYHEAR_PROVIDER_TIMEOUT_MS` default so a frozen evaluation is not killed
+ * mid-call) and reads the deepseek baseUrl only from
+ * `SAYHEAR_DEEPSEEK_BASE_URL`.
  */
 import { randomUUID, randomUUIDv7 } from "node:crypto";
 import { execFileSync } from "node:child_process";

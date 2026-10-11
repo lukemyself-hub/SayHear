@@ -21,7 +21,7 @@ import type { OneA3bProviderAdapter } from "@sayhear/ai";
 
 export const F3_ROLE_TIMEOUT_MS = 120_000;
 
-export type F3RoleEnvironment = Readonly<Record<string, string | undefined>>;
+type F3RoleEnvironment = Readonly<Record<string, string | undefined>>;
 
 export function resolveF3RoleAdapter(
   provider: string,

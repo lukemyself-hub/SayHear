@@ -36,7 +36,10 @@
  *
  * `buildChampionAssembly` and the role adapters only support the `deepseek` /
  * `opencode-go` providers and read the deepseek baseUrl only from
- * `SAYHEAR_DEEPSEEK_BASE_URL`; any other pinned value fails closed.
+ * `SAYHEAR_DEEPSEEK_BASE_URL`; any other pinned value fails closed. Role
+ * adapters use `F3_ROLE_TIMEOUT_MS`, deliberately wider than the runtime
+ * `SAYHEAR_PROVIDER_TIMEOUT_MS` default so a frozen evaluation is not killed
+ * mid-call.
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
