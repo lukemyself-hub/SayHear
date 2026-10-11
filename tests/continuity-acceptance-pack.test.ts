@@ -364,6 +364,22 @@ describe("continuity acceptance report", () => {
     expect(report.remainingRisks.join("\n")).not.toMatch(/fixture script/);
   });
 
+  it("says when a Forget association was written by the seed rather than by the product", () => {
+    const controls = cases.find((loaded) => loaded.fixture.id === "C12")!;
+    const observation = { ...sample.observation, caseId: "C12", mode: "deterministic" as const };
+    const seeded = buildRunReport({
+      caseReport: evaluateCase({ loaded: controls, observation, review: null }),
+      loaded: controls,
+      observation,
+      plan,
+      reproducibilityDigest: "digest",
+    });
+    expect(seeded.remainingRisks.join("\n")).toMatch(
+      /Forget association .*written by the seed directly.*verifies only that the history path excludes/s,
+    );
+    expect(report.remainingRisks.join("\n")).not.toMatch(/Forget association/);
+  });
+
   it("labels criteria that rest on hindsight clues pipeline-only and never shows such a case as a complete pass", () => {
     const good = calibrationSamples()[0]!;
     const hindsight = withFixture(calibrationCase, (fixture) => ({

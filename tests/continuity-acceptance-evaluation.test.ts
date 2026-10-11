@@ -193,6 +193,107 @@ describe("continuity acceptance evaluation", () => {
     ).toBe("fail");
   });
 
+  /**
+   * Review fix S: an excluded source that reaches the Provider cut short,
+   * re-punctuated or embedded in other text is still a leak. The exact-text
+   * match alone would miss it.
+   */
+  describe("an excluded source is recognised by its distinctive fragments", () => {
+    const FORBIDDEN = "The basement flooded this morning and I spent hours bailing it out.";
+    const excludes: ObjectiveCheck = { sources: ["k0:user"], step: "q1", type: "outbound_excludes" };
+    const sending = (extra: string) => (observation: CaseObservation) => ({
+      ...observation,
+      steps: observation.steps.map((step) =>
+        step.id === "q1"
+          ? {
+              ...step,
+              providerRequests: step.providerRequests.map((request) => ({
+                ...request,
+                strings: [...request.strings, extra],
+              })),
+            }
+          : step,
+      ),
+    });
+
+    it("still passes when nothing of the source was sent", () => {
+      expect(scoreWith(excludes).status).toBe("pass");
+      expect(scoreWith(excludes, sending("An unrelated line about the weather and a long walk by the river.")).status).toBe("pass");
+    });
+
+    it("fails on the whole message, as before", () => {
+      expect(scoreWith(excludes, sending(FORBIDDEN)).status).toBe("fail");
+    });
+
+    it("fails on a truncated, re-punctuated or embedded part of the message", () => {
+      for (const leaked of [
+        "The basement flooded this morning and I spent hours",
+        "earlier they said: the basement flooded, this morning — and I spent hours bailing it out",
+        "summary=THE BASEMENT FLOODED THIS MORNING; next=...",
+      ]) {
+        const result = scoreWith(excludes, sending(leaked));
+        expect(result.status, leaked).toBe("fail");
+        expect(result.evidence.join(" ")).toMatch(/fragment/);
+      }
+    });
+
+    it("does not mistake words the source shares with a permitted message for a leak", () => {
+      // The person corrected the message: almost every word is shared, and the
+      // corrected wording is allowed to be sent.
+      const corrected = "The basement flooded this morning and I spent minutes mopping it up.";
+      const good = calibrationSamples()[0]!;
+      const loaded = {
+        ...calibrationCase,
+        fixture: {
+          ...calibrationCase.fixture,
+          steps: [
+            ...calibrationCase.fixture.steps,
+            { at: "2026-03-25T15:07:00.000Z", id: "fix", target: "k0", text: corrected, type: "correct" as const },
+          ],
+        },
+        oracle: {
+          ...calibrationCase.oracle,
+          criteria: [
+            { check: excludes, description: "probe", id: "PROBE", kind: "objective" as const, modes: ["real-model" as const] },
+          ],
+        },
+      };
+      const probe = (extra: string) =>
+        evaluateCase({ loaded, observation: sending(extra)(good.observation), review: null }).criteria.find(
+          (criterion) => criterion.id === "PROBE",
+        )!;
+      expect(probe(corrected).status).toBe("pass");
+      // The part only the superseded wording has is still caught.
+      expect(probe("and I spent hours bailing it out").status).toBe("fail");
+    });
+
+    it("recognises a fragment of a Chinese message without spaces or punctuation", () => {
+      const zh = "我朋友阿梅私下告诉我她被裁员了，补偿都还没谈拢，她让我千万别往外说。";
+      const good = calibrationSamples()[0]!;
+      const loaded = {
+        ...calibrationCase,
+        fixture: {
+          ...calibrationCase.fixture,
+          history: calibrationCase.fixture.history.map((turn) =>
+            turn.key === "k0" ? { ...turn, user: zh } : turn,
+          ),
+        },
+        oracle: {
+          ...calibrationCase.oracle,
+          criteria: [
+            { check: excludes, description: "probe", id: "PROBE", kind: "objective" as const, modes: ["real-model" as const] },
+          ],
+        },
+      };
+      const probe = (extra: string) =>
+        evaluateCase({ loaded, observation: sending(extra)(good.observation), review: null }).criteria.find(
+          (criterion) => criterion.id === "PROBE",
+        )!;
+      expect(probe("背景：阿梅 私下 告诉我 她被裁员了").status).toBe("fail");
+      expect(probe("今天天气不错，我们去河边散步了很久。").status).toBe("pass");
+    });
+  });
+
   it("never reports a run as complete unless every required criterion passed", () => {
     expect(aggregateStatus(["pass", "pass"])).toBe("pass");
     expect(aggregateStatus(["pass", "not-run"])).toBe("not-run");

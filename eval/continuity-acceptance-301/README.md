@@ -16,8 +16,9 @@ Runnable eval artifact。非权威评测制品（ADR-0020 / ADR-0073）：只使
   **fixture（模型可见输入）** 与 **oracle（独立预期账本）** 两份文件。
 - 默认 `deterministic` 模式，不产生任何付费调用。`real-model` 只有门禁与预算检查，
   前置未满足时以退出码 4 明确 blocked，绝不降级为桩后报结果。
-- 当前真实路径上有 15 条客观判据失败，全部登记在 [`known-red.json`](known-red.json)
-  并标注负责的票。它们是 T01–T07 的 red 信号，不是环境问题，也不是 skip。
+- [`known-red.json`](known-red.json) 目前为空：T00 登记的 15 条客观判据失败已由 T01–T07 逐条修复并在同一改动里
+  移出账本。这**不是**验收通过：deterministic 模式下全部语义/主观判据是 `not-run`，Decision 由 fixture 脚本
+  提供（见下文「deterministic 模式证明什么」），真实模型结论归 T08 #321。
 
 ## 测试边界
 
@@ -61,7 +62,7 @@ cases/<ID>.fixture.json   模型可见的一半：历史回合、时刻、IANA �
 oracle/<ID>.oracle.json   独立预期账本：能力、允许/禁止事实、主题、时间、来源资格、判据
 known-red.json            当前已知 red 清单（案例、判据、负责的票、原因）
 cost-ledger.json          共享费用账本：上限、单价、前置条件、历史调用
-sample-report/            一份通过的 smoke 与一份 red 案例的样例报告
+sample-report/            一份 smoke（S01）与一份历史案例（C04）的 deterministic 样例报告
 src/                      runner、评分、门禁
 cli.ts                    CLI 入口
 ```
@@ -108,9 +109,10 @@ pnpm acceptance:continuity validate                 # 核验 fixture、oracle、
 pnpm acceptance:continuity plan [--mode real-model] # dry run：模式、请求/token/费用上界、剩余预算
 pnpm acceptance:continuity run-case S01 --verify-reset
 pnpm acceptance:continuity run-case C04 --out artifacts/my-run
-pnpm acceptance:continuity suite --expect-known-red # 全部案例；失败必须恰好等于 known-red
+pnpm acceptance:continuity suite --expect-known-red # 全部案例；失败必须恰好等于 known-red；退出码仍是套件自身状态
+pnpm acceptance:continuity suite --expect-known-red --regression-only   # 只把账本比对当退出码（回归护栏），不是验收
 pnpm acceptance:continuity chat C01                 # 装载后交互对话
-pnpm acceptance:continuity report --run artifacts/my-run/C04 --review review.json
+pnpm acceptance:continuity report --run artifacts/my-run/C04 --review review.json   # 只重评由本工具写出且未被改动的运行
 pnpm acceptance:continuity calibrate                # 用预制正/反例 transcript 校准检查器
 pnpm acceptance:continuity rebind --case C04        # 有意修改开发 fixture 后重新绑定 oracle
 pnpm acceptance:continuity latency --repeats 10 --out DIR            # 同口径聊天时延画像（桩 Provider，#319）
@@ -146,15 +148,39 @@ fixture、同一桩延迟参数在两个提交上各跑一次。
 | blocked | `real-model` 被模式/预算门禁拦下，未发送任何请求 | 4 |
 | usage | 命令或案例 id 错误 | 64 |
 
-聚合取最坏者；空运行是 `not-run`。`suite --expect-known-red` 在失败恰好等于
-`known-red.json` 时退出 0，并明确输出“这不是验收通过”。
+聚合取最坏者；空运行是 `not-run`。
+
+`suite --expect-known-red` 比对失败与 `known-red.json`。账本不吻合退出 1；吻合时退出码仍是套件自身状态
+（全部 pass 才是 0；有 `not-run` / `needs-review` 是 2）。deterministic 下语义判据全部 `not-run`，所以只想把
+“失败恰好等于账本”当作回归护栏时，必须显式加 `--regression-only` 才退出 0，输出会写明“这不是验收通过”。
+
+`report` 重评已存运行前先核对完整性，不通过以退出码 3 拒绝：运行写出 `observation.json` 时同时写
+`observation.sha256`（该文件字节的摘要），`report` 要求摘要存在且吻合；并要求内容自洽——桩 Provider 的模型名
+只能属于 deterministic 运行，不能自称 `real-model`（语义判据只对 real-model 评分）。摘要不是签名：它挡住事后
+改动与手工拼装的目录，挡不住同时重写两个文件的人。
+
+## deterministic 模式证明什么
+
+deterministic 模式下不仅回复是桩句子，**Decision 也不是模型做的**：是否查历史、查哪天、检索词、人物线索、
+continuation basis 都由 fixture 步骤上的 `historyReview` / `toolCall` 脚本给出，而脚本是知道历史内容的人写的。
+因此客观判据的 `pass` 只证明：给定这个 Decision，管线与来源控制是对的；**不证明模型会做出这个选择**。
+
+`validate` 会列出 `HINDSIGHT`：脚本里的检索词或人物既不在该步当前输入里，也不在此前七天内用户输入里
+（字面、大小写不敏感，不做词干或同义词；Assistant 行不算）——例如 C05 `bare` 的 `entry`、`cued` 的
+`juried`/`entry`，C06 `ping` 的 `mock`/`market sizing`、`boss` 的 `PM`/`sprint`/`新来`。这类词只有事先知道
+目标消息的人才选得出。它是标注而不是校验失败，**不为消除标注去改 fixture 的词**。评分时，落在这类步骤上的
+客观判据标为 `pipeline-only`（报告里显示 `PASS (pipeline-only)`，证据写明是哪个词），案例聚合即使全部客观判据
+通过也不显示为 `PASS`（记 `not-run`：模型的选择没有被检验）。real-model 运行里脚本不生效，没有这个标注。
 
 ## 判据怎么判
 
 - **客观判据**由程序按 oracle 检查真实观测：turn 是否提交、历史与流是否一致、
   要求的来源是否真的进入本轮生成请求且被 Inspector 记录、禁止来源是否未出现在任何
   出站请求、Session 归属、取消后是否迟到提交、重发是否幂等、日期 coverage、usage、
-  deadline、是否触发 Action。
+  deadline、是否触发 Action。禁止来源（`outbound_excludes`）不只按整条消息精确匹配：去掉空白与标点、
+  统一大小写后，该来源**独有**的长片段（16 个字母数字；以汉字等为主时 8 个）出现在任何出站字符串里也算到达，
+  所以被截断、改了标点或嵌进别的文本的泄露同样判 fail。“独有”指不出现在案例允许发送的任何消息里
+  （未被禁止的种子消息、运行中说出或更正的话），因此被更正消息与其更正后文本共有的词不会误报。
 - **语义判据**从不由字符串命中决定。deterministic 模式下桩回复不是模型回答，一律
   `not-run`。real-model 运行后，由独立评审（Agent 或人）填写 `review-template.json`：
   逐个账本条目给 `pass` / `fail` / `needs-review`、理由，并引用回复中的原文片段。
@@ -217,7 +243,7 @@ deterministic 不评分语义与人格；以下输出由人按 ADR-0110 裁定�
   T08 #321 另测。应用重启后的首轮标记为 `cold`。
 - `real-model` 的线上传输未接线：门禁通过后仍以 blocked 结束，等首次获准的付费运行
   （T08）再接。预算上界是规划用的保守数字，T08 冻结实际值。
-- runner 尚不能：播种 Forget（由模型决定的 Trust Action 创建）、并发 Full Purge、
+- runner 尚不能：经产品路径创建 Forget（由模型决定的 Trust Action；`forget` step 只是 seed 直接写关联）、并发 Full Purge、
   注入历史读取失败或部分读取、对第二个获准模型配置重复运行。相关判据是 `not-run`。
 - Action handle 过期等少数路径使用数据库墙钟而非受控时间。
 - `next dev` 每个项目目录只允许一个实例；启动应用的套件和本 CLI 通过
@@ -229,11 +255,20 @@ deterministic 不评分语义与人格；以下输出由人按 ADR-0110 裁定�
 - **`pnpm acceptance:continuity versions`**：历史路径的组合版本与指纹（提交、迁移摘要、全部策略/提示/Compiler 版本、fixture 摘要）。T08 每次运行记录它。
 - **故障矩阵**：[`fault-matrix.md`](fault-matrix.md)，由 `tests/continuity-fault-matrix.test.ts` 核对其引用的测试仍存在。
 - **`forget` step**：`{"type":"forget","targets":["<turn key>", ...]}`。把这些种子消息的 Evidence 记为一个 active Forget 请求的排除（fixture setup，
-  只写本次运行自建的 schema）；之后的历史回合必须遵守。C12 的 `O-forget-out` 用它，已由 red/not-run 变为真实 pass。
+  只写本次运行自建的 schema）；之后的历史回合必须遵守。C12 的 `O-forget-out` 用它，已由 red/not-run 变为 pass。
+  **这个关联是 seed 用 SQL 直接建立的，不是产品的 Forget 路径产生的**：产品里 Forget 是模型决定的 Trust Action，针对一条 Claim，
+  而本环境关闭后台派生、没有 Claim，桩也不做这个决定；C12 的 fixture 还把 `mei-echo` 直接列为 target。所以 `O-forget-out`
+  **只验证排除机制**（有关联的来源及其 Assistant 回复不出站），不验证真实 Forget 会把哪些消息关联进来。报告的 Remaining risks
+  与 oracle 判据说明里都写明这一点。
 - **验收环境启用 history-recall 治理**：经真实操作路由 `POST /api/internal/operator/history-recall`。没有它，Decision 不提供历史函数、所有历史案例退化为普通回复。
 - **C12 的 `O-user-echo-out` 已删除**（known-red 现为空）：它要求排除“用户自己此后对旧数字的相邻复述”，而 ADR-0149 与 SPEC #301 只排除与既有 Correction/Forget
   明确关联的整条消息及其绑定的 Assistant 回复，不做语义匹配，也不扩大普通经历 Forget。该复述现记为 `allowed`（已接受的局限，`S-controls` 由语义裁定判断
   旧数字不被当作现在）。C12 同时升到 `dev-2`：`work` 步骤带 `historyReview` 脚本，使它真正走历史分支。
+  **变更记录（如实）**：oracle 里删除该判据、把 `offer-echo:user` 改为 `allowed` 的改动在提交 d777653；提交 7981829 只是清空 `known-red.json`。
+  依据是 SPEC #301 的“不扩大既有控制语义”、ADR-0149，以及 #320 第 2 点对“相邻 Assistant 复述”的范围界定。评审修复后 oracle 的口径统一为：
+  复述**可以**出现在出站来源里（既不要求也不禁止，系统测试不再断言它必须出站），但回答必须以更正后的数字为现状（`f-old-figure`、`expectedBehavior`）。
+  `S-controls` 只在真实模型加独立裁定下运行；**C12 的真实模型报告目前不存在**，归 T08 #321。历史出站里更正消息带“用户更正及其时间”的标记
+  （`history-reading:v2`）是让模型能分辨两者的手段，其效果同样只有 T08 能证明。
 - **报告里的 Diagnosis 段**（`report.md` / `report.json`）：对每个要求来源到达的步骤，给出 `none | undetermined | no_source | selection_omitted | time_lost | read_failed | generation_error`，
   依据权威历史、Inspector 和实际出站请求（含其 `Times:` 列表），并给出对应的 Provider 请求 id。`generation_error` 只来自语义裁定；没有裁定时是 `undetermined`。
 - `O-purge-race` 仍是 `not-run`：Full Purge 会撤销该 owner 的 Web 会话，CLI 无法读回；进程内证明见 `tests/system/history-purge-recovery.system.test.ts`。

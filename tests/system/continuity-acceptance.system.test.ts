@@ -220,10 +220,12 @@ describe("Continuity acceptance over the real chat path", () => {
     expect(work.inspection?.turn?.finalDisposition).toBe("committed");
     expect(work.providerRequests.some((request) => request.conversationTurn)).toBe(true);
 
-    // The person's own later restatement has no explicit association and is an
-    // ordinary dated message (ADR-0149); the oracle documents this limit.
-    const outbound = work.providerRequests.flatMap((request) => request.strings);
-    expect(outbound.some((value) => value.includes(controls.fixture.history[1]!.user))).toBe(true);
+    // The person's own later restatement has no explicit association: it is
+    // an ordinary dated message that may be quoted (ADR-0149). Neither its
+    // presence nor its absence is asserted here; what matters is that the
+    // answer gives the corrected figure as the present state, which only the
+    // semantic criterion S-controls can judge (real model, T08).
+    expect(byId["S-controls"]?.status).toBe("not-run");
 
     // The diagnosis names the very Provider call whose payload it inspected: the
     // id the Inspector recorded for the History Answer attempt.

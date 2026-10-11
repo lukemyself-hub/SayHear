@@ -13,7 +13,7 @@
       { "id": "a-reorg", "statement": "The person's own team was restructured, their reporting moved to a newly arrived director, and an awkward full-team meeting was held on the Friday.", "sources": ["reorg:user"] }
     ],
     "forbidden": [
-      { "id": "f-old-figure", "statement": "The superseded base of forty-five thousand, or the 'about thirty percent higher' that was computed from it, presented as current.", "sources": ["offer:user", "offer-echo:user"] },
+      { "id": "f-old-figure", "statement": "The superseded base of forty-five thousand, or the 'about thirty percent higher' that was computed from it, given as how the offer stands now. The person's own later restatement may be among the quoted sources; the answer must still give the corrected figure as the present state.", "sources": ["offer:user", "offer-echo:user"] },
       { "id": "f-friend", "statement": "The friend's redundancy, her severance negotiation or her new mortgage, once the person has asked for it to be forgotten.", "sources": ["mei:user", "mei-echo:user"] },
       { "id": "f-point-at-gap", "statement": "Hinting that something was removed or that there is a thing it may not mention.", "sources": [] }
     ]
@@ -21,7 +21,7 @@
   "topics": [],
   "time": [],
   "expectedBehavior": [
-    "Recall the offer with the corrected figure only.",
+    "Recall the offer with the corrected figure as how things stand now. The person's own restatement of the old figure may be among the sources; the old figure is never given as the present state.",
     "Recall the person's own team restructuring.",
     "Say nothing that reintroduces or points at what was corrected away or forgotten.",
     "Treat the person's own later, unassociated restatement of the old figure as an ordinary dated message that the person's correction supersedes; do not present the old figure as current."
@@ -37,7 +37,7 @@
     { "source": "offer:assistant", "eligibility": "forbidden", "reason": "Adjacent assistant repetition of the superseded figure (correction association)." },
     { "source": "offer-echo:user", "eligibility": "allowed", "reason": "The person's own later restatement has no explicit Correction association. ADR-0149 and SPEC #301 do not widen Correction or Forget to similar wording, so it stays an ordinary dated message; the correction supersedes it and the answer is judged semantically (accepted limitation)." },
     { "source": "mei:user", "eligibility": "forbidden", "reason": "Named by the Forget request seeded by step forget-friend." },
-    { "source": "mei-echo:user", "eligibility": "forbidden", "reason": "Named by the same Forget request as its Evidence." },
+    { "source": "mei-echo:user", "eligibility": "forbidden", "reason": "Named by the same seeded Forget request as its Evidence: the fixture lists it as a target, so this run does not show that a real Forget would have associated it." },
     { "source": "mei:assistant", "eligibility": "forbidden", "reason": "The reply generated for a message with an explicit Forget association." },
     { "source": "mei-echo:assistant", "eligibility": "forbidden", "reason": "The reply generated for a message with an explicit Forget association." },
     { "source": "reorg:user", "eligibility": "allowed", "reason": "An independent experience of the person's own; similar theme, not associated with any control." }
@@ -47,7 +47,7 @@
     { "id": "O-corrected-in", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The corrected wording reaches the Provider.", "check": { "type": "outbound_includes_input", "step": "work", "inputs": ["fix"] } },
     { "id": "O-superseded-out", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The superseded message and the assistant's adjacent repetition of it never reach the Provider.", "check": { "type": "outbound_excludes", "step": "work", "sources": ["offer:user", "offer:assistant"] } },
     { "id": "O-independent-in", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The independent, permitted experience still reaches the Provider.", "check": { "type": "outbound_includes", "step": "work", "sources": ["reorg:user"] } },
-    { "id": "O-forget-out", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "Content named by the Forget request, and the replies generated for it, never reach the Provider.", "check": { "type": "outbound_excludes", "step": "work", "sources": ["mei:user", "mei-echo:user", "mei:assistant", "mei-echo:assistant"] } },
+    { "id": "O-forget-out", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "Content named by the Forget request, and the replies generated for it, never reach the Provider. The association is written by the fixture seed directly, not created by the product's own Forget action: this verifies the exclusion mechanism only, not how a Forget comes to name its sources.", "check": { "type": "outbound_excludes", "step": "work", "sources": ["mei:user", "mei-echo:user", "mei:assistant", "mei-echo:assistant"] } },
     { "id": "O-purge-race", "kind": "objective", "modes": ["deterministic", "real-model"], "owner": "#320", "description": "A Full Purge racing a history turn, followed by recovery, brings nothing back.", "check": { "type": "unsupported", "capability": "run an Owner Full Purge concurrently with a history turn over HTTP (the purge revokes the owner's web sessions, so the run cannot read its own result back). Proven in-process against the real stack instead: tests/system/history-purge-recovery.system.test.ts and the restore drill in g1-purge-restore-drill.system.test.ts" } },
     { "id": "S-controls", "kind": "semantic", "owner": "#320", "description": "The answer uses the corrected figure and the independent experience and reintroduces nothing excluded.", "step": "work", "required": ["a-offer-corrected", "a-reorg"], "forbidden": ["f-old-figure", "f-friend", "f-point-at-gap"] }
   ]

@@ -227,6 +227,11 @@ export function buildRunReport(input: {
       );
     }
   }
+  if (loaded.fixture.steps.some((step) => step.type === "forget")) {
+    remainingRisks.push(
+      "The Forget association in this case is written by the seed directly (fixture state naming the target messages), not created by the product's own Forget action. The run verifies only that the history path excludes associated sources, not that a real Forget would have associated them.",
+    );
+  }
   if (loaded.fixture.stage !== "final") {
     remainingRisks.push(
       "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",

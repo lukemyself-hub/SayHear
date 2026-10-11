@@ -124,6 +124,65 @@ function normalize(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+/** Letters and digits only, case-folded: punctuation and spacing do not hide a leak. */
+function compact(text: string): string {
+  return text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+const FRAGMENT_LENGTH = 16;
+/** Han / kana / hangul carry far more per character, so a shorter run is already distinctive. */
+const DENSE_FRAGMENT_LENGTH = 8;
+const DENSE_FRAGMENT_MIN_NON_ASCII = 6;
+
+function fragmentsOf(compacted: string): Set<string> {
+  const fragments = new Set<string>();
+  for (let start = 0; start + DENSE_FRAGMENT_LENGTH <= compacted.length; start += 1) {
+    const dense = compacted.slice(start, start + DENSE_FRAGMENT_LENGTH);
+    // eslint-disable-next-line no-control-regex
+    if (dense.replace(/[\u0000-\u007f]/g, "").length >= DENSE_FRAGMENT_MIN_NON_ASCII) {
+      fragments.add(dense);
+    }
+    if (start + FRAGMENT_LENGTH <= compacted.length) {
+      fragments.add(compacted.slice(start, start + FRAGMENT_LENGTH));
+    }
+  }
+  return fragments;
+}
+
+/**
+ * The fragments of an excluded source that only it contains: long runs of its
+ * letters that appear in no message the case permits to be sent (other seeded
+ * messages that are not forbidden, and everything said or corrected during
+ * the run). A corrected message shares most of its words with the wording it
+ * replaced; only the part that differs can show that the old wording leaked.
+ */
+function distinctiveFragments(
+  loaded: LoadedCase,
+  source: string,
+  excluded: readonly string[],
+): Set<string> {
+  const forbidden = new Set([
+    ...excluded,
+    ...loaded.oracle.sourceEligibility
+      .filter((entry) => entry.eligibility === "forbidden")
+      .map((entry) => entry.source),
+  ]);
+  const permitted = [
+    ...loaded.fixture.history.flatMap((turn) => [
+      ...(forbidden.has(`${turn.key}:user`) ? [] : [turn.user]),
+      ...(forbidden.has(`${turn.key}:assistant`) ? [] : [turn.assistant]),
+    ]),
+    ...loaded.fixture.steps.flatMap((step) =>
+      step.type === "say" || step.type === "correct" ? [step.text] : [],
+    ),
+  ].map(compact);
+  const fragments = fragmentsOf(compact(sourceText(loaded.fixture, source) ?? ""));
+  for (const fragment of [...fragments]) {
+    if (permitted.some((text) => text.includes(fragment))) fragments.delete(fragment);
+  }
+  return fragments;
+}
+
 function allMessages(sessions: readonly ObservedSession[]): Array<
   ObservedMessage & { dailySessionId: string; index: number }
 > {
@@ -279,15 +338,26 @@ function evaluateObjective(
       const evidence: string[] = [];
       let allPresent = true;
       let anyPresent = false;
+      // An excluded source must not arrive in part either: cut short,
+      // re-punctuated or embedded in other text is still a leak.
+      const compactedStrings =
+        check.type === "outbound_excludes" ? strings.map(compact) : [];
       for (const source of check.sources) {
         const [key, actor] = source.split(":");
         const text = sourceText(loaded.fixture, source) ?? "";
         const turn = observation.seed.turns.find((candidate) => candidate.key === key);
         const revisionId = actor === "user" ? turn?.userRevisionId : turn?.assistantRevisionId;
-        const inRequest = strings.some((value) => value.includes(text));
+        const whole = strings.some((value) => value.includes(text));
+        const fragment =
+          check.type === "outbound_excludes" && !whole
+            ? [...distinctiveFragments(loaded, source, check.sources)].find((candidate) =>
+                compactedStrings.some((value) => value.includes(candidate)),
+              )
+            : undefined;
+        const inRequest = whole || fragment !== undefined;
         const inInspector = revisionId ? references.has(revisionId) : false;
         evidence.push(
-          `${source}: providerRequest=${inRequest ? "present" : "absent"}, inspector.referencedEvents=${inInspector ? "present" : "absent"}`,
+          `${source}: providerRequest=${inRequest ? "present" : "absent"}${fragment === undefined ? "" : ` (a distinctive fragment of it, ${fragment.length} letters after removing spacing and punctuation)`}, inspector.referencedEvents=${inInspector ? "present" : "absent"}`,
         );
         if (!(inRequest && inInspector)) allPresent = false;
         if (inRequest || inInspector) anyPresent = true;
