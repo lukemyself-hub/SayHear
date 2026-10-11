@@ -1028,12 +1028,22 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
           entityAnchorIds: successorEntityIds,
           now,
         });
-        await client.query(
+        // Both UPDATEs are conditional on the base still being the live
+        // current version. If a stale base reaches here without a revision or
+        // supersedes collision, a zero-row UPDATE would otherwise commit a
+        // divergent lineage: two `current` versions and/or a stale
+        // `episodes.current_version_id`. Fail closed instead of committing,
+        // discarding the successor and its links.
+        const superseded = await client.query(
           `UPDATE episode_versions SET status = 'superseded'
            WHERE episode_version_id = $1 AND status = 'current'`,
           [base.versionId],
         );
-        await client.query(
+        if ((superseded.rowCount ?? 0) === 0) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "continuation_base_stale" };
+        }
+        const advanced = await client.query(
           `UPDATE episodes SET current_version_id = $3
            WHERE episode_id = $1 AND user_id = $2
              AND current_version_id = $4`,
@@ -1044,6 +1054,10 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
             base.versionId,
           ],
         );
+        if ((advanced.rowCount ?? 0) === 0) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "continuation_base_stale" };
+        }
         inBatchEpisodeSuccessors.set(plan.episodeId, {
           versionId: successorId,
           revision: base.revision + 1,
