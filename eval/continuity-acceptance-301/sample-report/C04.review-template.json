@@ -53,6 +53,6 @@
   ],
   "reviewer": "agent:<name> | human:<name>",
   "rubricVersion": "continuity-rubric:v1",
-  "runId": "run-f70cc003-ed1a-4908-a594-c5dc9934d702",
+  "runId": "run-4fb68e76-3c89-49e3-9a89-3ff5406c220b",
   "schemaVersion": "continuity-acceptance-review:v1"
 }

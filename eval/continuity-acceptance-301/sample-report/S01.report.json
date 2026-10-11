@@ -36,7 +36,7 @@
         "id": "INV-oracle-not-in-outbound",
         "kind": "invariant",
         "owner": null,
-        "reason": "Scanned 228 outbound strings; none carries oracle text.",
+        "reason": "Scanned 309 outbound strings; none carries oracle text.",
         "status": "pass"
       },
       {
@@ -63,7 +63,7 @@
       {
         "description": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
         "evidence": [
-          "finalHistory has 1 message(s) with id 01a0a2af-69c0-70c6-87fa-51790e821e84",
+          "finalHistory has 1 message(s) with id 01a0a2af-69c0-7fde-97f8-198734d37000",
           "next message: assistant \"(deterministic stub reply; not a model answer; do not score \""
         ],
         "id": "O-history",
@@ -116,23 +116,69 @@
       }
     ],
     "mode": "deterministic",
+    "pipelineOnly": [],
     "reviewer": null,
-    "runId": "run-518d677d-b034-47a2-8483-7900b7bc233e",
+    "runId": "run-17798963-6646-4580-8104-eb3af92699c0",
     "status": "not-run"
   },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-09-14 (expected 2026-09-14)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "d1-a:user",
+            "trace": {
+              "commandStage": "decision",
+              "providerResponseId": "stub-request-5",
+              "requestSequence": 5
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 2",
+              "time of message 2: 2026-09-14 (expected 2026-09-14)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "d1-b:user",
+            "trace": {
+              "commandStage": "decision",
+              "providerResponseId": "stub-request-5",
+              "requestSequence": 5
+            }
+          }
+        ]
+      },
+      "stepId": "t1"
+    }
+  ],
   "identity": {
     "fixtureSha256": "2d0e724ded65dab98ecb4811d40a016e555e901c1b6193980ac56bfa4d88b1bd",
     "fixtureVersion": "dev-1",
-    "gitCommit": "e8c8944abe5c5f322ef452a7c1ed4c42d747c4a1",
+    "gitCommit": "ca4f3483d102bede51de12e2b305f79d4bdb74f0",
     "gitDirty": false,
     "model": "acceptance-deterministic-stub",
     "recentContextGovernance": "active",
-    "runId": "run-518d677d-b034-47a2-8483-7900b7bc233e",
+    "runId": "run-17798963-6646-4580-8104-eb3af92699c0",
     "oracleSha256": "fb04e518b68a1b4735bb56ac004e20cecb87226062e556ceb9e50c7cd39cdc08",
     "title": "Smoke: ordinary turn with yesterday in the default background"
   },
   "remainingRisks": [
     "Deterministic mode: replies are a fixed stub sentence. Nothing here is evidence about what a real model would say.",
+    "Deterministic mode: the Decision itself (whether to look history up, the search clues, the people and the continuation basis) comes from the fixture script, not from a model. A passing objective criterion proves the pipeline and source control for that Decision; it does not prove that a model would choose it.",
     "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
     "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
   ],
@@ -172,10 +218,10 @@
   "timings": [
     {
       "appState": "warm",
-      "cliAcceptedMs": 33.92991700000039,
-      "cliCommittedMs": 114.03220800000054,
-      "cliFirstVisibleTextMs": 101.03870800000004,
-      "cliStreamClosedMs": 114.12495800000033,
+      "cliAcceptedMs": 22.514457999990555,
+      "cliCommittedMs": 91.37400000001071,
+      "cliFirstVisibleTextMs": 78.25104100001045,
+      "cliStreamClosedMs": 91.42258300000685,
       "providerLatencyMs": 0,
       "stepId": "t1"
     }

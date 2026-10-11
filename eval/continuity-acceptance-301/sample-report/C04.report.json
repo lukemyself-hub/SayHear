@@ -11,9 +11,9 @@
     "remainingUsdMicros": 10000000,
     "requestsPerStepUpperBound": 4,
     "shape": {
-      "generationSteps": 1,
-      "scheduledScans": 3,
-      "seedTurns": 4
+      "generationSteps": 41,
+      "scheduledScans": 56,
+      "seedTurns": 133
     },
     "status": "ready",
     "unknownCostEntries": 1
@@ -36,7 +36,7 @@
         "id": "INV-oracle-not-in-outbound",
         "kind": "invariant",
         "owner": null,
-        "reason": "Scanned 378 outbound strings; none carries oracle text.",
+        "reason": "Scanned 533 outbound strings; none carries oracle text.",
         "status": "pass"
       },
       {
@@ -52,37 +52,43 @@
         "description": "The recall question streams and commits.",
         "evidence": [
           "steps[ask].chat.httpStatus=200",
-          "steps[ask].chat.terminalEvent=assistant_committed"
+          "steps[ask].chat.terminalEvent=assistant_committed",
+          "pipeline-only: the scripted Decision for steps[ask] used hindsight clue(s) \"钢琴\", \"弹钢琴\", which neither the current message nor the person's previous seven days of messages contain"
         ],
         "id": "O-commit",
         "kind": "objective",
         "owner": null,
         "reason": "The turn streamed text and committed.",
+        "scope": "pipeline-only",
         "status": "pass"
       },
       {
         "description": "Authoritative history holds the question once, followed by exactly the streamed reply.",
         "evidence": [
-          "finalHistory has 1 message(s) with id 01a0a2d4-08c0-7dfa-bf36-97cb22e41f24",
-          "next message: assistant \"(deterministic stub reply; not a model answer; do not score \""
+          "finalHistory has 1 message(s) with id 01a0a2d4-08c0-7c60-a3eb-d19696cd58eb",
+          "next message: assistant \"(deterministic stub reply; not a model answer; do not score \"",
+          "pipeline-only: the scripted Decision for steps[ask] used hindsight clue(s) \"钢琴\", \"弹钢琴\", which neither the current message nor the person's previous seven days of messages contain"
         ],
         "id": "O-history",
         "kind": "objective",
         "owner": null,
         "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "scope": "pipeline-only",
         "status": "pass"
       },
       {
         "description": "The three-month-old original messages reach the Provider when the person asks about that experience.",
         "evidence": [
-          "piano:user: providerRequest=absent, inspector.referencedEvents=absent",
-          "piano-after:user: providerRequest=absent, inspector.referencedEvents=absent"
+          "piano:user: providerRequest=present, inspector.referencedEvents=present",
+          "piano-after:user: providerRequest=present, inspector.referencedEvents=present",
+          "pipeline-only: the scripted Decision for steps[ask] used hindsight clue(s) \"钢琴\", \"弹钢琴\", which neither the current message nor the person's previous seven days of messages contain"
         ],
         "id": "O-old-source",
         "kind": "objective",
         "owner": "#316",
-        "reason": "A required source did not reach the Provider request for this turn.",
-        "status": "fail"
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "scope": "pipeline-only",
+        "status": "pass"
       },
       {
         "description": "The retelling is grounded in the original words and placed about three months back.",
@@ -104,53 +110,106 @@
       }
     ],
     "mode": "deterministic",
+    "pipelineOnly": [
+      "O-commit",
+      "O-history",
+      "O-old-source"
+    ],
     "reviewer": null,
-    "runId": "run-f70cc003-ed1a-4908-a594-c5dc9934d702",
-    "status": "fail"
+    "runId": "run-4fb68e76-3c89-49e3-9a89-3ff5406c220b",
+    "status": "not-run"
   },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 1",
+              "time of message 1: 2026-06-13 (expected 2026-06-13)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "piano:user",
+            "trace": {
+              "commandStage": "history_answer",
+              "providerResponseId": "stub-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 3",
+              "time of message 3: 2026-06-13 (expected 2026-06-13)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "piano-after:user",
+            "trace": {
+              "commandStage": "history_answer",
+              "providerResponseId": "stub-request-9",
+              "requestSequence": 9
+            }
+          }
+        ]
+      },
+      "stepId": "ask"
+    }
+  ],
   "identity": {
-    "fixtureSha256": "f909a97727f4415b815bad92924a952aa201902134aa61c3f2e6303c4b4dbc7d",
-    "fixtureVersion": "dev-1",
-    "gitCommit": "e8c8944abe5c5f322ef452a7c1ed4c42d747c4a1",
+    "fixtureSha256": "66e21a939b1aa3691035be268ff3552c5b6d81f2b993d78496a46ee7be289c35",
+    "fixtureVersion": "dev-2",
+    "gitCommit": "ca4f3483d102bede51de12e2b305f79d4bdb74f0",
     "gitDirty": false,
     "model": "acceptance-deterministic-stub",
     "recentContextGovernance": "active",
-    "runId": "run-f70cc003-ed1a-4908-a594-c5dc9934d702",
-    "oracleSha256": "02cc367dcb4df9e27a806eb829522091cfe15ad5c24f6c0f2f668900cb022d31",
+    "runId": "run-4fb68e76-3c89-49e3-9a89-3ff5406c220b",
+    "oracleSha256": "eccb0254d05a048695c5c994cc9f56b75cfaa32c2f1d0328d9b6a8544ba11e82",
     "title": "C04 Ordinary experience from three months ago, never a Memory"
   },
   "remainingRisks": [
     "Deterministic mode: replies are a fixed stub sentence. Nothing here is evidence about what a real model would say.",
+    "Deterministic mode: the Decision itself (whether to look history up, the search clues, the people and the continuation basis) comes from the fixture script, not from a model. A passing objective criterion proves the pipeline and source control for that Decision; it does not prove that a model would choose it.",
+    "Pipeline-only: `O-commit`, `O-history`, `O-old-source` were judged on a step whose scripted Decision used hindsight clues (not literally in the current message or the person's previous seven days of messages). Their verdicts are not evidence of selection quality, and the case is not shown as a complete pass.",
     "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
     "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
   ],
-  "reproducibilityDigest": "a1239f695b5876da3896f619b1c9e215ce1d38713ad784067e9d87dbd836250a",
+  "reproducibilityDigest": "a0b0f2db2ac580ad5bbf967cfba557bedc4f36eb19d89b91d402bab5636e2f2d",
   "schemaVersion": "continuity-acceptance-report:v1",
   "sourceManifest": [
     {
       "rows": [
         {
           "eligibility": "allowed",
-          "inInspector": false,
-          "inProviderRequest": false,
+          "inInspector": true,
+          "inProviderRequest": true,
           "source": "piano:user"
         },
         {
           "eligibility": "unspecified",
-          "inInspector": false,
-          "inProviderRequest": false,
+          "inInspector": true,
+          "inProviderRequest": true,
           "source": "piano:assistant"
         },
         {
           "eligibility": "allowed",
-          "inInspector": false,
-          "inProviderRequest": false,
+          "inInspector": true,
+          "inProviderRequest": true,
           "source": "piano-after:user"
         },
         {
           "eligibility": "unspecified",
-          "inInspector": false,
-          "inProviderRequest": false,
+          "inInspector": true,
+          "inProviderRequest": true,
           "source": "piano-after:assistant"
         },
         {
@@ -184,10 +243,10 @@
   "timings": [
     {
       "appState": "warm",
-      "cliAcceptedMs": 30.811875000000327,
-      "cliCommittedMs": 103.91916700000002,
-      "cliFirstVisibleTextMs": 88.75783300000057,
-      "cliStreamClosedMs": 104.00587499999983,
+      "cliAcceptedMs": 19.97650000000067,
+      "cliCommittedMs": 190.7045419999995,
+      "cliFirstVisibleTextMs": 176.0237500000003,
+      "cliStreamClosedMs": 190.75112499999886,
       "providerLatencyMs": 0,
       "stepId": "ask"
     }
@@ -206,6 +265,6 @@
     "inputTokens": 0,
     "outputTokens": 0,
     "paidCostUsdMicros": 0,
-    "providerRequests": 1
+    "providerRequests": 2
   }
 }
