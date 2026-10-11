@@ -28,7 +28,6 @@
  */
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -434,9 +433,16 @@ const CHECK_RATIONALE: Readonly<Record<string, string>> = {
     "New capability enablement, a major overall contract change or an External MVP release is the only trigger for the full 12-item capability acceptance.",
 };
 
+/**
+ * Portal UI surface. `apps/web/app/api/**` is internal server surface and
+ * `apps/web/src/**` holds handlers, so neither is Portal UI evidence.
+ */
+export const PORTAL_UI_PATH: RegExp =
+  /^apps\/web\/app\/(?!api\/).*\.(?:tsx|css|scss)$/i;
+
 /** Path hints only add targeted checks; they never trigger full acceptance. */
 const PATH_IMPACT_HINTS: readonly (readonly [RegExp, ReleaseImpactKind])[] = [
-  [/apps\/web\/(app|src\/components)\/.*\.(tsx|css|scss)$/i, "ui"],
+  [PORTAL_UI_PATH, "ui"],
   [/packages\/data\/migrations(-purge-marker)?\//i, "purge-coverage"],
   [/purge/i, "purge-coverage"],
   [/opencode|deepseek|provider|packages\/ai\/src\//i, "provider-migration"],
@@ -575,6 +581,21 @@ function isSha256(value: unknown): value is string {
  * declaration is authoritative for what the operator says changed; hints only
  * add checks so a boundary change cannot be missed by a narrow declaration.
  */
+// These tools do not configure the deployed runtime. Explicit impact
+// declarations still select their checks, and mixed/unknown paths stay guarded.
+const EVALUATION_TOOL_PATHS: ReadonlySet<string> = new Set([
+  "eval/continuation-acceptance-1a3b/pins.json",
+  "eval/continuation-acceptance-1a3b/role-provider-provisioning.ts",
+  "eval/continuation-acceptance-1a3b/run-synthetic-candidate-capture.ts",
+  "eval/continuation-acceptance-1a3b/run-synthetic-capture.ts",
+  "eval/continuation-acceptance-1a3b/run-validator-capture.ts",
+  "eval/memory-pairwise-126/capture-twins.ts",
+  "eval/memory-pairwise-126/shared.ts",
+  "scripts/capture-g1-role-provider-calls.ts",
+  "tests/f3-role-provider-provisioning.test.ts",
+  "tests/g1-capture-provider-adapters.test.ts",
+]);
+
 export function classifyReleaseImpact(
   declared: readonly ReleaseImpactKind[],
   changedPaths: readonly string[],
@@ -583,6 +604,9 @@ export function classifyReleaseImpact(
   const hintedUnique: ReleaseImpactKind[] = [];
   for (const path of changedPaths) {
     for (const [pattern, impact] of PATH_IMPACT_HINTS) {
+      if (impact === "provider-migration" && EVALUATION_TOOL_PATHS.has(path)) {
+        continue;
+      }
       if (pattern.test(path) && !hintedUnique.includes(impact)) {
         hintedUnique.push(impact);
       }
@@ -596,7 +620,8 @@ export function classifyReleaseImpact(
     declared: declaredUnique,
     hinted: hintedUnique,
     effective,
-    located: effective.length > 0,
+    located: effective.length > 0 ||
+      (changedPaths.length > 0 && changedPaths.every((path) => EVALUATION_TOOL_PATHS.has(path))),
   };
 }
 
@@ -1214,9 +1239,10 @@ export async function main(
   return dailyReleaseValidationExitCode(plan);
 }
 
+const entryPoint = process.argv[1]?.replace(/\\/g, "/");
 const isDirectRun =
-  typeof process.argv[1] === "string" &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  entryPoint === "scripts/daily-release-validation.ts" ||
+  entryPoint?.endsWith("/scripts/daily-release-validation.ts") === true;
 
 if (isDirectRun) {
   main()
