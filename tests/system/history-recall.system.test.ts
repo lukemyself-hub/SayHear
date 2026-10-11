@@ -180,6 +180,8 @@ function build(overrides: {
   policy?: HistoryRecallPolicy;
   afterAdmit?: () => Promise<void>;
   afterCompile?: () => Promise<void>;
+  /** Fails the first-token freshness probe this many times (fault injection). */
+  freshnessProbeFailures?: number;
   /** The pool the history repository commits through (fault injection). */
   historyRepositoryPool?: Pool;
   /** End-to-end request budget (ADR-0151); unset keeps the request unbounded. */
@@ -237,6 +239,25 @@ function build(overrides: {
     inactivityPolicy: { timeoutMs: 1_800_000, version: "continuous-exchange-inactivity:v1" },
     repository: new PostgresUserTextConversationRepository(database.pool),
   });
+  let probeFailuresLeft = overrides.freshnessProbeFailures ?? 0;
+  const harnessRepository =
+    probeFailuresLeft > 0
+      ? new Proxy(responseRepository, {
+          get(target, property) {
+            if (property === "checkResponseFreshness") {
+              return async (...args: Parameters<typeof target.checkResponseFreshness>) => {
+                if (probeFailuresLeft > 0) {
+                  probeFailuresLeft -= 1;
+                  throw Object.assign(new Error("connection lost"), { code: "57P01" });
+                }
+                return target.checkResponseFreshness(...args);
+              };
+            }
+            const value = Reflect.get(target, property) as unknown;
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        })
+      : responseRepository;
   const harness = createConversationAgentHarness({
     clock,
     contextCompiler,
@@ -250,7 +271,7 @@ function build(overrides: {
     }),
     historyRecall,
     jitter: () => 0,
-    repository: responseRepository,
+    repository: harnessRepository,
   });
   const service = createConversationResponseService({
     catalog: EMPTY_CONVERSATION_ACTION_CATALOG,
@@ -678,6 +699,36 @@ describe("controlled history review through the real conversation path", () => {
     // Frozen exactly once, with exactly one answer command.
     expect(await rows("SELECT 1 FROM history_recall_results")).toHaveLength(1);
     expect(await rows("SELECT 1 FROM generation_commands WHERE generation_stage = 'history_answer'")).toHaveLength(1);
+  });
+
+  it("shows nothing and ends the Turn as an interruption when the first-token freshness probe fails twice", async () => {
+    await seedHistory();
+    built = build({ freshnessProbeFailures: 2 });
+    script = { review: null };
+    const events = await say("今天的天气不错。", ASK_AT);
+    // The stream and the database agree: interrupted, nothing displayed or accepted.
+    expect(terminal(events)).toBe("response_interrupted");
+    expect(assistantText(events)).toBe("");
+    const [state] = await rows<{ attempts: string; command_status: string; turn_status: string }>(
+      `SELECT command.status AS command_status, turn.status AS turn_status,
+              (SELECT COUNT(*)::text FROM model_run_attempts attempt
+                WHERE attempt.generation_command_id = command.generation_command_id) AS attempts
+       FROM generation_commands command
+       INNER JOIN interaction_turns turn ON turn.interaction_turn_id = command.interaction_turn_id
+       WHERE command.created_at >= $1`,
+      [iso(ASK_AT)],
+    );
+    expect(state).toEqual({ attempts: "1", command_status: "interrupted", turn_status: "interrupted" });
+    expect(await rows("SELECT 1 FROM conversation_events WHERE actor = 'assistant' AND created_at >= $1", [iso(ASK_AT)])).toHaveLength(0);
+  });
+
+  it("shows the reply when only the first freshness probe fails", async () => {
+    await seedHistory();
+    built = build({ freshnessProbeFailures: 1 });
+    script = { review: null };
+    const events = await say("今天的天气不错。", ASK_AT);
+    expect(terminal(events)).toBe("assistant_committed");
+    expect(assistantText(events)).not.toBe("");
   });
 
   it("stops waiting for a stalled lookup when the request deadline arrives, and a late finish cannot commit", async () => {

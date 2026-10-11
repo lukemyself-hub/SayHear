@@ -230,6 +230,11 @@ export function createConversationAgentHarness(dependencies: {
     reason: "trust_control_priority";
   }>) => void;
   jitter?: () => number;
+  /**
+   * How long one first-token freshness probe may take before it counts as
+   * failed (default 1500 ms). Tests shorten it.
+   */
+  freshnessProbeTimeoutMs?: number;
   onUnexpectedFailure?: (failure: Readonly<{
     generationCommandId: string;
     stage: "provider" | "action_admission" | "action_commit" | "response_commit" | "history_admission";
@@ -258,17 +263,35 @@ export function createConversationAgentHarness(dependencies: {
     const stopSignalProposals: CuriosityStopSignalProposal[] = [];
 
     const interrupt = createInterrupt(signal, command.deadline);
+    // One read-only, idempotent probe, bounded by the request's own deadline
+    // and cancellation and by a short timeout of its own.
+    const probeFreshness = () =>
+      interrupt.guard(
+        withTimeout(
+          Promise.resolve(
+            dependencies.repository.checkResponseFreshness?.({
+              generationCommandId: command.generationCommandId,
+              now: dependencies.clock(),
+              userId: command.userId,
+            }) ?? "current",
+          ),
+          dependencies.freshnessProbeTimeoutMs ?? FRESHNESS_PROBE_TIMEOUT_MS,
+        ),
+      );
     async function assertStillCurrent(): Promise<void> {
-      let freshness: "current" | "deadline_exceeded" | "superseded" = "current";
+      let freshness: "current" | "deadline_exceeded" | "superseded";
       try {
-        freshness =
-          (await dependencies.repository.checkResponseFreshness?.({
-            generationCommandId: command.generationCommandId,
-            now: dependencies.clock(),
-            userId: command.userId,
-          })) ?? "current";
-      } catch {
-        // A failed probe never blocks a reply; the commit fence still holds.
+        freshness = await probeFreshness();
+      } catch (first) {
+        // The request ended while probing: that is its own, final answer.
+        if (first instanceof ProviderDispatchError) throw first;
+        // A probe is a single query and usually fails for a moment only, so it
+        // is asked once more. If it still cannot be answered the reply is not
+        // shown: the Provider-side first token is already recorded, so the
+        // attempt ends as an interruption (nothing displayed, nothing
+        // committed, explicit Retry) and the unexpected-failure callback gets
+        // the SQLSTATE. The commit fence remains the correctness guarantee.
+        freshness = await probeFreshness();
       }
       if (freshness === "superseded") throw new ProviderDispatchError("aborted");
       if (freshness === "deadline_exceeded") throw new ProviderDispatchError("timeout");
@@ -813,6 +836,29 @@ async function* streamExistingDecision(
 }
 
 const INTERRUPTED = Symbol("interrupted");
+
+const FRESHNESS_PROBE_TIMEOUT_MS = 1_500;
+
+/** Reject when the work takes longer than `ms`; the timer never keeps the process alive. */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("The freshness probe timed out.")),
+      ms,
+    );
+    timer.unref?.();
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 /**
  * Combines the consumer's cancellation and the request deadline (issue #319).
