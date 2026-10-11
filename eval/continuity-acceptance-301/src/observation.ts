@@ -1,4 +1,7 @@
+import { createHash } from "node:crypto";
+
 import type { RunMode } from "./fixture";
+import { DETERMINISTIC_STUB_MODEL } from "./provider-stub";
 
 /**
  * The machine-readable record of one case run (T00 #313): everything that was
@@ -204,3 +207,62 @@ export type CaseObservation = Readonly<{
   }>;
   steps: readonly ObservedStep[];
 }>;
+
+/**
+ * Integrity of a stored run (review fix T). `report` re-scores an
+ * `observation.json` that a run wrote earlier, and which criteria may be
+ * scored depends on the mode recorded in it. The run therefore seals the
+ * exact bytes it wrote (`observation.sha256`), and a stored observation is
+ * re-scored only when the seal matches and its own facts agree with its mode:
+ * the stand-in Provider's model can only belong to a deterministic run.
+ *
+ * The seal is a digest, not a signature: it catches a file edited after the
+ * run and a hand-assembled directory, not someone who rewrites both files.
+ */
+export const OBSERVATION_SEAL_FILE = "observation.sha256";
+
+export function sealObservation(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+export function observationIntegrityProblems(input: {
+  seal: string | null;
+  text: string;
+}): string[] {
+  const problems: string[] = [];
+  if (input.seal === null) {
+    problems.push(
+      `the run directory has no ${OBSERVATION_SEAL_FILE}; only a run written by this tool can be re-scored`,
+    );
+  } else if (input.seal.trim() !== sealObservation(input.text)) {
+    problems.push("observation.json changed after the run wrote it");
+  }
+  let parsed: {
+    identity?: { model?: unknown };
+    mode?: unknown;
+    schemaVersion?: unknown;
+  };
+  try {
+    parsed = JSON.parse(input.text) as typeof parsed;
+  } catch {
+    return [...problems, "observation.json is not readable JSON"];
+  }
+  if (parsed.schemaVersion !== OBSERVATION_SCHEMA_VERSION) {
+    problems.push(`observation.json is not ${OBSERVATION_SCHEMA_VERSION}`);
+  }
+  if (parsed.mode !== "deterministic" && parsed.mode !== "real-model") {
+    problems.push("observation.json records no known run mode");
+  }
+  const standIn = parsed.identity?.model === DETERMINISTIC_STUB_MODEL;
+  if (parsed.mode === "real-model" && standIn) {
+    problems.push(
+      "observation.json says real-model but its replies came from the stand-in Provider; it cannot be scored as a model run",
+    );
+  }
+  if (parsed.mode === "deterministic" && !standIn && parsed.identity?.model !== "unknown") {
+    problems.push(
+      "observation.json says deterministic but does not name the stand-in Provider's model",
+    );
+  }
+  return problems;
+}

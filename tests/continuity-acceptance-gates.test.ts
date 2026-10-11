@@ -10,6 +10,12 @@ import {
   assertSyntheticOwner,
   resolveIsolationTarget,
 } from "../eval/continuity-acceptance-301/src/isolation";
+import {
+  observationIntegrityProblems,
+  sealObservation,
+} from "../eval/continuity-acceptance-301/src/observation";
+import { DETERMINISTIC_STUB_MODEL } from "../eval/continuity-acceptance-301/src/provider-stub";
+import { knownRedOutcome } from "../eval/continuity-acceptance-301/src/report";
 
 const LOCAL = "postgresql://localhost:5432/sayhear_test_t00";
 const LOCAL_MARKER = "postgresql://localhost:5432/sayhear_marker_t00";
@@ -315,5 +321,89 @@ describe("continuity acceptance model-mode and budget gate", () => {
     expect(() =>
       planRun({ environment: {}, ledger: LEDGER, requestedMode: "fast", shape: SHAPE }),
     ).toThrow(/mode/);
+  });
+});
+
+/**
+ * Review fix T(1): `report` re-scores a stored run. Semantic criteria are only
+ * scored for a real-model run, so a stored observation is not believed on its
+ * own word about which mode produced it.
+ */
+describe("a stored run is checked before it is re-scored", () => {
+  const stored = (overrides: Record<string, unknown> = {}) =>
+    `${JSON.stringify(
+      {
+        caseId: "S01",
+        identity: { model: DETERMINISTIC_STUB_MODEL, runId: "run-1" },
+        mode: "deterministic",
+        schemaVersion: "continuity-acceptance-observation:v1",
+        steps: [],
+        ...overrides,
+      },
+      null,
+      2,
+    )}\n`;
+
+  it("accepts the bytes the run wrote, with their seal", () => {
+    const text = stored();
+    expect(observationIntegrityProblems({ seal: sealObservation(text), text })).toEqual([]);
+  });
+
+  it("refuses a run with no seal or with bytes that changed after the run", () => {
+    const text = stored();
+    expect(observationIntegrityProblems({ seal: null, text })).toHaveLength(1);
+    const edited = text.replace('"deterministic"', '"real-model"');
+    expect(observationIntegrityProblems({ seal: sealObservation(text), text: edited }).join(" ")).toMatch(
+      /changed after the run/,
+    );
+  });
+
+  it("refuses a stand-in Provider run that calls itself real-model, even when re-sealed", () => {
+    const forged = stored({ mode: "real-model" });
+    expect(
+      observationIntegrityProblems({ seal: sealObservation(forged), text: forged }).join(" "),
+    ).toMatch(/stand-in Provider/);
+  });
+
+  it("refuses an unknown mode, an unknown schema and unreadable content", () => {
+    for (const text of [stored({ mode: "fast" }), stored({ schemaVersion: "other:v9" }), "not json"]) {
+      expect(observationIntegrityProblems({ seal: sealObservation(text), text }).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+/**
+ * Review fix T(2): `suite --expect-known-red` compares failures with the
+ * ledger. With every semantic criterion not run that says nothing about
+ * acceptance, so exit 0 has to be asked for by name.
+ */
+describe("the known-red comparison does not read as a pass", () => {
+  const holds = { unexpectedGreen: [], unexpectedRed: [] };
+
+  it("exits 0 for a complete pass", () => {
+    expect(knownRedOutcome({ comparison: holds, regressionOnly: false, status: "pass" }).code).toBe(0);
+  });
+
+  it("is incomplete (2) when criteria were not run, unless regression-only was asked for", () => {
+    for (const status of ["not-run", "needs-review"] as const) {
+      const plain = knownRedOutcome({ comparison: holds, regressionOnly: false, status });
+      expect(plain.code).toBe(2);
+      expect(plain.message).toMatch(/--regression-only/);
+      const asked = knownRedOutcome({ comparison: holds, regressionOnly: true, status });
+      expect(asked.code).toBe(0);
+      expect(asked.message).toMatch(/NOT an acceptance pass/);
+    }
+  });
+
+  it("stays 0 for a declared red only when regression-only was asked for, and 1 when the ledger does not match", () => {
+    // Without the flag the exit code is the suite's own status.
+    expect(knownRedOutcome({ comparison: holds, regressionOnly: false, status: "fail" }).code).toBe(1);
+    expect(knownRedOutcome({ comparison: holds, regressionOnly: true, status: "fail" }).code).toBe(0);
+    const drift = {
+      unexpectedGreen: [],
+      unexpectedRed: [{ caseId: "C01", criterionId: "O-x", reason: "r" }],
+    };
+    expect(knownRedOutcome({ comparison: drift, regressionOnly: true, status: "fail" }).code).toBe(1);
+    expect(knownRedOutcome({ comparison: holds, regressionOnly: true, status: "environment-error" }).code).toBe(3);
   });
 });

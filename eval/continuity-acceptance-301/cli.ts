@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
@@ -24,10 +24,16 @@ import {
 } from "./src/fixture";
 import { IsolationError, resolveIsolationTarget } from "./src/isolation";
 import { renderLatencyMarkdown, runLatencyProfiles } from "./src/latency";
-import type { CaseObservation } from "./src/observation";
+import {
+  OBSERVATION_SEAL_FILE,
+  observationIntegrityProblems,
+  sealObservation,
+  type CaseObservation,
+} from "./src/observation";
 import {
   buildRunReport,
   compareWithKnownRed,
+  knownRedOutcome,
   loadKnownRed,
   renderMarkdown,
   suiteStatus,
@@ -51,9 +57,9 @@ const HELP = `Continuity acceptance CLI (T00 #313)
   validate  [--case ID ...]                    check fixtures, oracles, source refs, timezones
   plan      [--case ID ...] [--mode MODE]      dry run: model mode, request/token/cost bounds, budget left
   run-case  ID [--mode MODE] [--out DIR] [--review FILE] [--verify-reset]
-  suite     [--case ID ...] [--mode MODE] [--out DIR] [--expect-known-red]
+  suite     [--case ID ...] [--mode MODE] [--out DIR] [--expect-known-red [--regression-only]]
   chat      ID [--mode MODE]                   seed the case, then talk to it interactively
-  report    --run DIR [--review FILE]          re-score a stored run (for example with a review)
+  report    --run DIR [--review FILE]          re-score a stored, sealed run (for example with a review)
   rebind    [--case ID ...]                  re-point oracles at deliberately changed development fixtures
   calibrate                                    prove the checker catches prefabricated bad transcripts
   versions                                     the combined version of the continuity stack, with a fingerprint (#320)
@@ -205,7 +211,11 @@ function writeRun(input: {
       path.join(directory, name),
       typeof value === "string" ? value : `${JSON.stringify(value, null, 2)}\n`,
     );
-  write("observation.json", input.observation);
+  // The stored observation is sealed so `report` can tell the bytes this run
+  // wrote from a file that was edited or assembled afterwards.
+  const observationText = `${JSON.stringify(input.observation, null, 2)}\n`;
+  write("observation.json", observationText);
+  write(OBSERVATION_SEAL_FILE, `${sealObservation(observationText)}\n`);
   write("report.json", report);
   write("report.md", renderMarkdown(report));
   write("review-template.json", reviewTemplate(input.loaded, input.observation));
@@ -428,6 +438,7 @@ async function main(): Promise<number> {
       case: { multiple: true, type: "string" },
       "dry-run": { type: "boolean" },
       "expect-known-red": { type: "boolean" },
+      "regression-only": { type: "boolean" },
       "budget-ms": { type: "string" },
       help: { type: "boolean" },
       "provider-delay-ms": { type: "string" },
@@ -509,7 +520,20 @@ async function main(): Promise<number> {
   if (command === "report") {
     if (!values.run) throw new UsageError("report needs --run DIR (a case directory holding observation.json).");
     const directory = path.resolve(values.run);
-    const observation = JSON.parse(readFileSync(path.join(directory, "observation.json"), "utf8")) as CaseObservation;
+    const observationText = readFileSync(path.join(directory, "observation.json"), "utf8");
+    // The mode recorded in the file decides which criteria may be scored, so
+    // the file is not believed on its own word.
+    const problems = observationIntegrityProblems({
+      seal: existsSync(path.join(directory, OBSERVATION_SEAL_FILE))
+        ? readFileSync(path.join(directory, OBSERVATION_SEAL_FILE), "utf8")
+        : null,
+      text: observationText,
+    });
+    if (problems.length > 0) {
+      console.error(`REFUSED: the stored run cannot be re-scored:\n- ${problems.join("\n- ")}`);
+      return 3;
+    }
+    const observation = JSON.parse(observationText) as CaseObservation;
     const loaded = loadCase(observation.caseId);
     if (loaded.fixtureSha256 !== observation.identity.fixtureSha256) {
       throw new UsageError("The stored run used a different fixture than the one on disk; it cannot be re-scored against this oracle.");
@@ -610,15 +634,15 @@ async function main(): Promise<number> {
   }
   if (values["expect-known-red"]) {
     // Staged development: red must be exactly the declared red. This is a
-    // statement about the ledger, never an acceptance pass.
-    if (status === "environment-error") return 3;
-    const holds = comparison.unexpectedRed.length === 0 && comparison.unexpectedGreen.length === 0;
-    console.log(
-      holds
-        ? "Known-red ledger holds: failures are exactly the declared ones. This is NOT an acceptance pass."
-        : "Known-red ledger does not match this run.",
-    );
-    return holds ? 0 : 1;
+    // statement about the ledger, never an acceptance pass; exit 0 for a
+    // suite that is not a complete pass needs --regression-only.
+    const outcome = knownRedOutcome({
+      comparison,
+      regressionOnly: values["regression-only"] === true,
+      status,
+    });
+    console.log(outcome.message);
+    return outcome.code;
   }
   return exitCodeForStatus(status);
 }

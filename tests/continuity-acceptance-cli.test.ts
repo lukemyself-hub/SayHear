@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -77,6 +79,30 @@ describe("continuity acceptance CLI", { timeout: 120_000 }, () => {
   it("separates a usage mistake from every run outcome", () => {
     expect(run(["run-case", "C99"]).code).toBe(64);
     expect(run(["plan", "--mode", "fast"]).code).not.toBe(0);
+  });
+
+  it("refuses to re-score a stored run whose observation was edited or never sealed", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "sayhear-acceptance-report-"));
+    try {
+      const runDirectory = path.join(directory, "S01");
+      mkdirSync(runDirectory);
+      // A hand-assembled observation claiming a real-model run.
+      writeFileSync(
+        path.join(runDirectory, "observation.json"),
+        JSON.stringify({ caseId: "S01", mode: "real-model", steps: [] }),
+      );
+      const unsealed = run(["report", "--run", runDirectory]);
+      expect(unsealed.code).toBe(3);
+      expect(unsealed.output).toContain("REFUSED: the stored run cannot be re-scored");
+      expect(unsealed.output).not.toMatch(/S01: (PASS|NOT-RUN|FAIL|NEEDS-REVIEW)/);
+
+      writeFileSync(path.join(runDirectory, "observation.sha256"), "0".repeat(64));
+      const edited = run(["report", "--run", runDirectory]);
+      expect(edited.code).toBe(3);
+      expect(edited.output).toContain("changed after the run");
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
   });
 
   it("proves its checker against the prefabricated good and bad transcripts", () => {

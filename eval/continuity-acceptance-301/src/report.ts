@@ -3,6 +3,7 @@ import path from "node:path";
 
 import type { RunPlan } from "./budget";
 import {
+  exitCodeForStatus,
   aggregateStatus,
   type CaseReport,
   type CriterionStatus,
@@ -457,6 +458,41 @@ export function compareWithKnownRed(
         !failed.some((failure) => failure.caseId === entry.caseId && failure.criterionId === entry.criterionId),
     ),
     unexpectedRed: failed.filter((failure) => !declared(failure.caseId, failure.criterionId)),
+  };
+}
+
+/**
+ * What `suite --expect-known-red` exits with (review fix T). The comparison
+ * says only that the failures are the declared ones; with semantic criteria
+ * not run it says nothing about acceptance. Exit 0 for an incomplete or red
+ * suite therefore has to be asked for by name (`--regression-only`); without
+ * it the exit code is the suite's own status.
+ */
+export function knownRedOutcome(input: {
+  comparison: KnownRedComparison;
+  regressionOnly: boolean;
+  status: CriterionStatus;
+}): Readonly<{ code: number; message: string }> {
+  if (input.status === "environment-error") {
+    return { code: 3, message: "The run hit a harness or environment error; the ledger was not compared." };
+  }
+  const holds =
+    input.comparison.unexpectedRed.length === 0 &&
+    input.comparison.unexpectedGreen.length === 0;
+  if (!holds) return { code: 1, message: "Known-red ledger does not match this run." };
+  if (input.status === "pass") {
+    return { code: 0, message: "Known-red ledger holds and every criterion passed." };
+  }
+  if (input.regressionOnly) {
+    return {
+      code: 0,
+      message:
+        "Known-red ledger holds: failures are exactly the declared ones (regression check only). This is NOT an acceptance pass: criteria that were not run or await review are not covered.",
+    };
+  }
+  return {
+    code: exitCodeForStatus(input.status),
+    message: `Known-red ledger holds, but the suite is ${input.status}: this is not an acceptance pass. Pass --regression-only to use the ledger comparison alone as the exit status.`,
   };
 }
 
