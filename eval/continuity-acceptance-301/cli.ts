@@ -93,10 +93,13 @@ function requireValid(cases: readonly LoadedCase[]): void {
   }
 }
 
+/** The shared cost ledger, or the file named by `--ledger`. */
+let ledgerFile: string | undefined;
+
 function plan(cases: readonly LoadedCase[], mode: string | undefined): RunPlan {
   return planRun({
     environment: process.env,
-    ledger: loadLedger(),
+    ledger: loadLedger(ledgerFile),
     requestedMode: mode,
     shape: {
       generationSteps: cases.reduce(
@@ -135,14 +138,19 @@ function printPlan(runPlan: RunPlan): void {
   console.log(`tokens, at most:         input ${runPlan.inputTokenUpperBound}, output ${runPlan.outputTokenUpperBound}`);
   console.log(`cost, at most:           ${cost}`);
   console.log(`budget:                  cap ${runPlan.capUsdMicros} USD micros, remaining ${runPlan.remainingUsdMicros}, entries of unknown cost ${runPlan.unknownCostEntries}`);
+  for (const waived of runPlan.waivedPreconditions) {
+    console.log(
+      `waived:                  ${waived.id} — owner decision by ${waived.by} on ${waived.date}: ${JSON.stringify(waived.statement)} (a decision to proceed, not evidence that the condition holds)`,
+    );
+  }
   console.log(`status:                  ${runPlan.status.toUpperCase()}`);
   for (const blocker of runPlan.blockers) console.log(`  blocked: ${blocker}`);
 }
 
 /**
  * Real-model mode shares every gate with deterministic mode and is refused
- * here rather than silently served by the stub. T00 delivers the gate and the
- * budget check; the live transport is wired when a paid run is authorised.
+ * here rather than silently served by the stub. Past the gate and the budget
+ * check it still needs the Provider credential in this process (T08 #321).
  */
 function requireRunnable(runPlan: RunPlan): void {
   if (runPlan.status === "blocked") {
@@ -150,14 +158,17 @@ function requireRunnable(runPlan: RunPlan): void {
     console.error("BLOCKED: real-model mode cannot start. Nothing was sent and nothing was scored.");
     process.exit(EXIT_BLOCKED);
   }
-  if (runPlan.mode === "real-model") {
+  if (runPlan.mode === "real-model" && !process.env[PROVIDER_CREDENTIAL_VARIABLE]?.trim()) {
     printPlan(runPlan);
     console.error(
-      "BLOCKED: the gate passed, but the live Provider transport for real-model runs is not wired in T00 (#313). It lands with the first authorised paid run (T08 #321). Nothing was sent; the stub was not substituted.",
+      `BLOCKED: every gate passed, but ${PROVIDER_CREDENTIAL_VARIABLE} is not set in this process. Nothing was sent; the stub was not substituted.`,
     );
     process.exit(EXIT_BLOCKED);
   }
 }
+
+/** Read from the process environment only; never printed, stored or logged. */
+const PROVIDER_CREDENTIAL_VARIABLE = "OPENCODE_GO_API_KEY";
 
 function defaultOutDirectory(): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -442,6 +453,7 @@ async function main(): Promise<number> {
       "regression-only": { type: "boolean" },
       "budget-ms": { type: "string" },
       help: { type: "boolean" },
+      ledger: { type: "string" },
       "provider-delay-ms": { type: "string" },
       repeats: { type: "string" },
       "stall-ms": { type: "string" },
@@ -453,6 +465,7 @@ async function main(): Promise<number> {
     },
   });
   const command = positionals[0];
+  if (values.ledger) ledgerFile = path.resolve(values.ledger);
   if (values.help || !command) {
     console.log(HELP);
     return command ? 0 : EXIT_USAGE;

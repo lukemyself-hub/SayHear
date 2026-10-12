@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ledgerEntryForRun,
   planRun,
   remainingBudget,
   type CostLedger,
@@ -355,6 +356,56 @@ describe("continuity acceptance model-mode and budget gate", () => {
     expect(plan.status).toBe("blocked");
     expect(plan.estimatedCostUsdMicros).toBeNull();
     expect(plan.blockers.join(" ")).toMatch(/price/i);
+  });
+
+  it("prices a finished run at the ledger's rate, and a call of unknown usage at the planning bound", () => {
+    const ledger: CostLedger = {
+      ...LEDGER,
+      model: { ...LEDGER.model, inputUsdMicrosPerMillionTokens: 300_000, outputUsdMicrosPerMillionTokens: 1_200_000 },
+    };
+    const known = ledgerEntryForRun({
+      date: "2026-10-11",
+      ledger,
+      note: "H01",
+      runId: "run-1",
+      ticket: "#321",
+      usage: { inputTokens: 1_000, liveRequests: 2, outputTokens: 500, requestsWithUnknownUsage: 0 },
+    });
+    // 1,000 x $0.30/M + 500 x $1.20/M = $0.0009.
+    expect(known).toMatchObject({ costUsdMicros: 900, inputTokens: 1_000, outputTokens: 500, requests: 2 });
+
+    // A call that failed before reporting usage is still charged: at the
+    // per-request planning bound (16,000 in, 12,000 out = $0.0192), never zero.
+    const withUnknown = ledgerEntryForRun({
+      date: "2026-10-11",
+      ledger,
+      note: "H01",
+      runId: "run-2",
+      ticket: "#321",
+      usage: { inputTokens: 1_000, liveRequests: 3, outputTokens: 500, requestsWithUnknownUsage: 1 },
+    });
+    expect(withUnknown.costUsdMicros).toBe(900 + 19_200);
+    expect(withUnknown.note).toMatch(/1 request.*unknown usage.*planning bound/);
+    expect(remainingBudget({ ...ledger, entries: [known, withUnknown] })).toEqual({
+      remainingUsdMicros: 10_000_000 - 900 - 20_100,
+      unknownCostEntries: 0,
+    });
+  });
+
+  it("pauses for a report once spending reaches the recorded pause point, well below the cap", () => {
+    const paused: CostLedger = {
+      ...LEDGER,
+      entries: [{ costUsdMicros: 5_000_000, date: "2026-10-11", inputTokens: 1, note: "prior", outputTokens: 1, requests: 1, runId: "r", ticket: "#321" }],
+      pauseAtSpentUsdMicros: 5_000_000,
+    };
+    const plan = planRun({
+      environment: { SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled" },
+      ledger: paused,
+      requestedMode: "real-model",
+      shape: { generationSteps: 1, scheduledScans: 0, seedTurns: 1 },
+    });
+    expect(plan.status).toBe("blocked");
+    expect(plan.blockers.join(" ")).toMatch(/pause point/);
   });
 
   it("rejects an unknown mode outright", () => {

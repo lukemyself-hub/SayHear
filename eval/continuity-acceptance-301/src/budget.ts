@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { packRoot, type RunMode } from "./fixture";
@@ -48,6 +48,11 @@ export type CostLedgerEntry = Readonly<{
 
 export type CostLedger = Readonly<{
   capUsdMicros: number;
+  /**
+   * Spending at which paid runs stop for a report to the owner before going
+   * on, even though the cap is not reached. Absent: only the cap applies.
+   */
+  pauseAtSpentUsdMicros?: number;
   entries: readonly CostLedgerEntry[];
   model: Readonly<{
     inputUsdMicrosPerMillionTokens: number | null;
@@ -91,6 +96,68 @@ export function remainingBudget(ledger: CostLedger): {
     else spent += entry.costUsdMicros;
   }
   return { remainingUsdMicros: ledger.capUsdMicros - spent, unknownCostEntries };
+}
+
+/** Token usage of the live requests of one run (see `ProviderGate.usage`). */
+export type RunUsage = Readonly<{
+  inputTokens: number;
+  liveRequests: number;
+  outputTokens: number;
+  requestsWithUnknownUsage: number;
+}>;
+
+function priced(ledger: CostLedger, inputTokens: number, outputTokens: number): number {
+  const { inputUsdMicrosPerMillionTokens: input, outputUsdMicrosPerMillionTokens: output } =
+    ledger.model;
+  if (input === null || output === null) {
+    throw new Error("The cost ledger records no price; a paid run cannot be entered.");
+  }
+  return Math.ceil((inputTokens * input + outputTokens * output) / 1_000_000);
+}
+
+/**
+ * The ledger entry of one finished real-model run (T08 #321). Reported tokens
+ * are priced at the ledger's conservative rate. A live request that never
+ * reported usage (it failed or was cut off) is still charged, at the
+ * per-request planning bound, so the remaining budget is never overstated.
+ */
+export function ledgerEntryForRun(input: {
+  date: string;
+  ledger: CostLedger;
+  note: string;
+  runId: string;
+  ticket: string;
+  usage: RunUsage;
+}): CostLedgerEntry {
+  const unknown = input.usage.requestsWithUnknownUsage;
+  return {
+    costUsdMicros:
+      priced(input.ledger, input.usage.inputTokens, input.usage.outputTokens) +
+      unknown *
+        priced(
+          input.ledger,
+          PLANNING_BOUNDS.inputTokensPerRequest,
+          PLANNING_BOUNDS.outputTokensPerRequest,
+        ),
+    date: input.date,
+    inputTokens: input.usage.inputTokens,
+    note:
+      unknown === 0
+        ? input.note
+        : `${input.note} — ${unknown} request${unknown === 1 ? "" : "s"} with unknown usage charged at the planning bound`,
+    outputTokens: input.usage.outputTokens,
+    requests: input.usage.liveRequests,
+    runId: input.runId,
+    ticket: input.ticket,
+  };
+}
+
+/** Append one entry to the ledger file, keeping everything else as written. */
+export function appendLedgerEntry(entry: CostLedgerEntry, file: string = ledgerPath): void {
+  const ledger = JSON.parse(readFileSync(file, "utf8")) as { entries: CostLedgerEntry[] };
+  ledger.entries.push(entry);
+  writeFileSync(file, `${JSON.stringify(ledger, null, 2)}
+`);
 }
 
 export type RunShape = Readonly<{
@@ -211,6 +278,15 @@ export function planRun(input: {
   if (unknownCostEntries > 0) {
     blockers.push(
       `${unknownCostEntries} ledger entr${unknownCostEntries === 1 ? "y has" : "ies have"} unknown cost; the remaining budget cannot be stated until a cost is assigned to each.`,
+    );
+  }
+  const spentUsdMicros = input.ledger.capUsdMicros - remainingUsdMicros;
+  if (
+    input.ledger.pauseAtSpentUsdMicros !== undefined &&
+    spentUsdMicros >= input.ledger.pauseAtSpentUsdMicros
+  ) {
+    blockers.push(
+      `Spending (${spentUsdMicros} USD micros) has reached the recorded pause point (${input.ledger.pauseAtSpentUsdMicros}); report to the owner before any further paid run.`,
     );
   }
   if (estimatedCostUsdMicros !== null && estimatedCostUsdMicros > remainingUsdMicros) {

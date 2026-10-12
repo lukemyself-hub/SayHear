@@ -43,8 +43,71 @@ describe("continuity acceptance CLI", { timeout: 120_000 }, () => {
     expect(result.code).toBe(0);
   });
 
+  function withLedger<T>(ledger: Record<string, unknown>, use: (file: string) => T): T {
+    const directory = mkdtempSync(path.join(tmpdir(), "sayhear-acceptance-ledger-"));
+    try {
+      const file = path.join(directory, "cost-ledger.json");
+      writeFileSync(file, JSON.stringify({ capUsdMicros: 10_000_000, entries: [], schemaVersion: "continuity-cost-ledger:v1", ...ledger }));
+      return use(file);
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  }
+  const PRICED_MODEL = {
+    inputUsdMicrosPerMillionTokens: 300_000,
+    model: "deepseek-v4.1-flash",
+    outputUsdMicrosPerMillionTokens: 1_200_000,
+    provider: "opencode-go",
+  };
+
+  it("starts a paid run only with the Provider credential, and shows a waived precondition as waived", () => {
+    withLedger(
+      {
+        model: PRICED_MODEL,
+        preconditions: [
+          {
+            decision: { by: "Luke", date: "2026-10-11", statement: "T08 may start." },
+            description: "#307 online acceptance",
+            evidence: null,
+            id: "issue-307-online-acceptance",
+            status: "owner-waived",
+          },
+        ],
+      },
+      (ledger) => {
+        const planned = run(["plan", "--case", "S01", "--mode", "real-model", "--ledger", ledger], {
+          SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled",
+        });
+        expect(planned.output).toMatch(/status:\s+READY/);
+        expect(planned.output).toMatch(/waived:\s+issue-307-online-acceptance .*Luke.*2026-10-11/);
+        expect(planned.output).not.toMatch(/verified/i);
+        expect(planned.code).toBe(0);
+
+        // Every gate passed, but there is no credential: nothing starts, and
+        // the stub is not substituted.
+        const started = run(["run-case", "S01", "--mode", "real-model", "--ledger", ledger], {
+          SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled",
+        });
+        expect(started.code).toBe(4);
+        expect(started.output).toContain("OPENCODE_GO_API_KEY");
+        expect(started.output).not.toMatch(/S01: (PASS|NOT-RUN|FAIL|NEEDS-REVIEW)/);
+      },
+    );
+  });
+
   it("blocks real-model mode with its own exit code instead of falling back to the stub", () => {
-    const requested = run(["plan", "--mode", "real-model"]);
+    withLedger(
+      {
+        entries: [{ costUsdMicros: null, date: "2026-10-09", inputTokens: 2131, note: "unknown", outputTokens: 564, requests: 1, runId: "r", ticket: "#307" }],
+        model: { ...PRICED_MODEL, inputUsdMicrosPerMillionTokens: null, outputUsdMicrosPerMillionTokens: null },
+        preconditions: [{ description: "#307 online acceptance", evidence: null, id: "issue-307-online-acceptance", status: "unverified" }],
+      },
+      (ledger) => blocksWhileUnverified(ledger),
+    );
+  });
+
+  function blocksWhileUnverified(ledger: string) {
+    const requested = run(["plan", "--mode", "real-model", "--ledger", ledger]);
     expect(requested.code).toBe(4);
     expect(requested.output).toMatch(/status:\s+BLOCKED/);
     expect(requested.output).toContain("SAYHEAR_ACCEPTANCE_REAL_MODEL");
@@ -52,13 +115,13 @@ describe("continuity acceptance CLI", { timeout: 120_000 }, () => {
 
     // Even with the switch set, an unverified precondition and an unresolved
     // ledger entry keep it blocked, and a run refuses before touching anything.
-    const enabled = run(["run-case", "S01", "--mode", "real-model"], {
+    const enabled = run(["run-case", "S01", "--mode", "real-model", "--ledger", ledger], {
       SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled",
     });
     expect(enabled.code).toBe(4);
     expect(enabled.output).toContain("BLOCKED: real-model mode cannot start.");
     expect(enabled.output).not.toMatch(/S01: (PASS|NOT-RUN|FAIL)/);
-  });
+  }
 
   it("refuses to run against a database it cannot prove is synthetic", () => {
     const missing = run(["run-case", "S01"]);
