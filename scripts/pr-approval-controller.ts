@@ -74,6 +74,21 @@ const REVIEW_ARTIFACT_DIRECTORY = "artifacts/pr-approval";
 const ISSUE_COMMENT_MARKER = "<!-- sayhear-pr-auto-approval:v1";
 const PAUSE_MARKER = "<!-- sayhear-pr-auto-approval-pause:v1";
 const AUTO_REVIEW_COMMENT_MARKER = "<!-- sayhear-pr-auto-approval-review:v1";
+const ISSUE_STATUS_LABELS = [
+  "ongoing",
+  "ready-for-agent",
+  "ready-for-human",
+  "needs-triage",
+  "needs-info",
+  "wontfix",
+] as const;
+const ISSUE_STATUS_LABEL_SET: ReadonlySet<string> = new Set(ISSUE_STATUS_LABELS);
+const REVIEW_RETRYABLE_WAIT_REASONS = new Set([
+  "policy_version_mismatch",
+  "stale_review",
+  "github_context_unavailable",
+  "incomplete_diff",
+]);
 
 type JsonRecord = Record<string, unknown>;
 
@@ -2679,38 +2694,42 @@ async function submitPullRequestReview(
 }
 
 async function postIssueCommentOnce(
-  config: ControllerConfig,
+  api: GitHubApi,
   issueNumber: number,
   marker: string,
   body: string,
+  expectedAuthorId: number,
 ): Promise<void> {
-  const comments = await config.api.pages<GitHubComment>(
-    repositoryPath(`/issues/${issueNumber}/comments`),
+  const commentsPath = repositoryPath(`/issues/${issueNumber}/comments`);
+  const comments = await api.pages<GitHubComment>(
+    commentsPath,
   );
-  if (comments.some((comment) => comment.body?.includes(marker))) return;
+  const isPersistedReviewComment = (comment: GitHubComment): boolean =>
+    comment.user?.id === expectedAuthorId && comment.body?.includes(marker) === true;
+  if (comments.some(isPersistedReviewComment)) return;
   try {
-    await config.api.request(
-      repositoryPath(`/issues/${issueNumber}/comments`),
+    await api.request(
+      commentsPath,
       { method: "POST", body: { body } },
     );
   } catch (error) {
-    const recovered = await config.api
-      .pages<GitHubComment>(
-        repositoryPath(`/issues/${issueNumber}/comments`),
-      )
-      .catch(() => []);
-    if (recovered.some((comment) => comment.body?.includes(marker))) return;
+    const recovered = await api.pages<GitHubComment>(commentsPath).catch(() => []);
+    if (recovered.some(isPersistedReviewComment)) return;
     throw error;
+  }
+  const persisted = await api.pages<GitHubComment>(commentsPath);
+  if (!persisted.some(isPersistedReviewComment)) {
+    throw new Error(`GitHub did not retain the review comment on Issue #${issueNumber}.`);
   }
 }
 
 async function deleteLabelIfPresent(
-  config: ControllerConfig,
+  api: GitHubApi,
   issueNumber: number,
   label: string,
 ): Promise<void> {
   try {
-    await config.api.request(
+    await api.request(
       repositoryPath(
         `/issues/${issueNumber}/labels/${encodeURIComponent(label)}`,
       ),
@@ -2722,34 +2741,141 @@ async function deleteLabelIfPresent(
   }
 }
 
-async function applyIssueHandoff(
-  config: ControllerConfig,
+async function clearIssueStatusLabels(
+  api: GitHubApi,
   issueNumber: number,
-  target: "ready-for-agent" | "ready-for-human",
-): Promise<void> {
-  const issue = await config.api.request<GitHubIssue>(
-    repositoryPath(`/issues/${issueNumber}`),
+): Promise<GitHubIssue> {
+  const issuePath = repositoryPath(`/issues/${issueNumber}`);
+  const issue = await api.request<GitHubIssue>(issuePath);
+  const labels = new Map(
+    labelNames(issue).map((label) => [label.toLowerCase(), label]),
   );
-  if (issue.state !== "open") {
-    throw new Error(`Issue #${issueNumber} is closed and cannot be handed off.`);
-  }
-  const currentLabels = new Set(labelNames(issue));
-  const labelsToRemove = [
-    "ongoing",
-    target === "ready-for-agent" ? "ready-for-human" : "ready-for-agent",
-    "needs-triage",
-    "needs-info",
-    "wontfix",
-  ];
-  for (const label of labelsToRemove) {
-    if (label !== target && currentLabels.has(label)) {
-      await deleteLabelIfPresent(config, issueNumber, label);
+  for (const statusLabel of ISSUE_STATUS_LABELS) {
+    const actualLabel = labels.get(statusLabel);
+    if (actualLabel) {
+      await deleteLabelIfPresent(api, issueNumber, actualLabel);
     }
   }
+  const readback = await api.request<GitHubIssue>(issuePath);
+  const remaining = labelNames(readback).filter((label) =>
+    ISSUE_STATUS_LABEL_SET.has(label.toLowerCase()),
+  );
+  if (remaining.length > 0) {
+    throw new Error(
+      `Issue #${issueNumber} retained status labels after cleanup: ${remaining.join(", ")}.`,
+    );
+  }
+  return readback;
+}
+
+async function applyIssueHandoff(
+  api: GitHubApi,
+  issueNumber: number,
+  target: "ready-for-agent",
+): Promise<void> {
+  const issuePath = repositoryPath(`/issues/${issueNumber}`);
+  const issue = await api.request<GitHubIssue>(issuePath);
+  let currentLabels = new Set(
+    labelNames(issue).map((label) => label.toLowerCase()),
+  );
+  if (issue.state === "closed") {
+    await clearIssueStatusLabels(api, issueNumber);
+    throw new Error(`Issue #${issueNumber} is closed and cannot be handed off.`);
+  }
+
   if (!currentLabels.has(target)) {
-    await config.api.request(
+    await api.request(
       repositoryPath(`/issues/${issueNumber}/labels`),
       { method: "POST", body: { labels: [target] } },
+    );
+  }
+
+  for (const label of ISSUE_STATUS_LABELS) {
+    if (label !== target && currentLabels.has(label)) {
+      const latest = await api.request<GitHubIssue>(issuePath);
+      if (latest.state !== "open") {
+        await clearIssueStatusLabels(api, issueNumber);
+        throw new Error(`Issue #${issueNumber} closed during the review handoff.`);
+      }
+      currentLabels = new Set(
+        labelNames(latest).map((candidate) => candidate.toLowerCase()),
+      );
+      const actualLabel = labelNames(latest).find(
+        (candidate) => candidate.toLowerCase() === label,
+      );
+      if (actualLabel) {
+        await deleteLabelIfPresent(api, issueNumber, actualLabel);
+        currentLabels.delete(label);
+      }
+    }
+  }
+
+  const readback = await api.request<GitHubIssue>(issuePath);
+  if (readback.state !== "open") {
+    await clearIssueStatusLabels(api, issueNumber);
+    throw new Error(`Issue #${issueNumber} closed during the review handoff.`);
+  }
+  const finalLabels = new Set(labelNames(readback).map((label) => label.toLowerCase()));
+  const finalConflicts = ISSUE_STATUS_LABELS.filter(
+    (label) => label !== target && finalLabels.has(label),
+  );
+  if (finalConflicts.length > 0) {
+    const actualTarget = labelNames(readback).find(
+      (label) => label.toLowerCase() === target,
+    );
+    if (actualTarget) await deleteLabelIfPresent(api, issueNumber, actualTarget);
+    throw new Error(
+      `Issue #${issueNumber} changed during the review handoff; conflicting labels: ${finalConflicts.join(", ")}.`,
+    );
+  }
+  if (!finalLabels.has(target)) {
+    throw new Error(`Issue #${issueNumber} did not retain the ready-for-agent handoff.`);
+  }
+}
+
+export async function publishIssueHandoff(
+  api: GitHubApi,
+  issueNumber: number,
+  marker: string,
+  body: string,
+  expectedAuthorId: number,
+): Promise<void> {
+  await postIssueCommentOnce(api, issueNumber, marker, body, expectedAuthorId);
+  await applyIssueHandoff(api, issueNumber, "ready-for-agent");
+}
+
+export async function completeIssueAfterApproval(
+  api: GitHubApi,
+  issueNumber: number,
+  proof: Readonly<{
+    autoMergeEnabled: boolean;
+    merged: boolean;
+  }>,
+): Promise<void> {
+  if (!proof.autoMergeEnabled && !proof.merged) {
+    throw new Error("The Issue cannot close before GitHub confirms auto-merge or merge.");
+  }
+  const issuePath = repositoryPath(`/issues/${issueNumber}`);
+  let issue = await api.request<GitHubIssue>(issuePath);
+  if (issue.state !== "closed") {
+    issue = await clearIssueStatusLabels(api, issueNumber);
+  }
+  if (issue.state !== "closed") {
+    try {
+      await api.request(issuePath, {
+        method: "PATCH",
+        body: { state: "closed", state_reason: "completed" },
+      });
+    } catch (error) {
+      const recovered = await api.request<GitHubIssue>(issuePath).catch(() => null);
+      if (recovered?.state !== "closed") throw error;
+    }
+  }
+
+  const readback = await clearIssueStatusLabels(api, issueNumber);
+  if (readback.state !== "closed") {
+    throw new Error(
+      `Issue #${issueNumber} was not fully closed and cleared after PR approval.`,
     );
   }
 }
@@ -2801,8 +2927,7 @@ async function recordReviewHandoff(
     "",
     finalMarker,
   ].join("\n");
-  await postIssueCommentOnce(config, issueNumber, marker, body);
-  await applyIssueHandoff(config, issueNumber, "ready-for-agent");
+  await publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId);
 }
 
 export async function requestProtectedMerge(
@@ -2880,17 +3005,27 @@ async function requestPullRequestAutoMerge(
   }
 }
 
-export function isWaitingForWorkflow(
+export function isReviewStillPending(
   snapshot: Pick<Snapshot, "workflowStatus">,
   gate: Pick<PrReviewGateReport, "outcome" | "reasons">,
 ): boolean {
+  if (gate.outcome !== "awaiting_verification") return false;
+  if (
+    gate.reasons.some((reason) =>
+      reason.code === "repository_merge_busy" ||
+      REVIEW_RETRYABLE_WAIT_REASONS.has(reason.code),
+    )
+  ) {
+    return true;
+  }
+  if (!gate.reasons.some((reason) => reason.code === "required_evidence_missing")) {
+    return false;
+  }
   return (
-    gate.outcome === "awaiting_verification" &&
-    gate.reasons.some((reason) => reason.code === "required_evidence_missing") &&
-    (snapshot.workflowStatus === "queued" ||
-      snapshot.workflowStatus === "in_progress" ||
-      snapshot.workflowStatus === "missing" ||
-      snapshot.workflowStatus === "unknown")
+    snapshot.workflowStatus === "queued" ||
+    snapshot.workflowStatus === "in_progress" ||
+    snapshot.workflowStatus === "missing" ||
+    snapshot.workflowStatus === "unknown"
   );
 }
 
@@ -2901,8 +3036,6 @@ async function postNonBlockingOutcome(
   gate: PrReviewGateReport,
 ): Promise<void> {
   const issueNumber = snapshot.gateInput.issue.number;
-  const target =
-    gate.outcome === "human_decision" ? "ready-for-human" : "ready-for-agent";
   const marker = `<!-- sayhear-pr-auto-approval-outcome:v1 pr=${report.pullRequestNumber} head=${report.headSha} requirement=${report.requirementDigest} outcome=${gate.outcome} -->`;
   const body = [
     `Automated review of PR #${report.pullRequestNumber} stopped at \`${gate.outcome}\`.`,
@@ -2921,8 +3054,7 @@ async function postNonBlockingOutcome(
     "",
     marker,
   ].join("\n");
-  await postIssueCommentOnce(config, issueNumber, marker, body);
-  await applyIssueHandoff(config, issueNumber, target);
+  await publishIssueHandoff(config.api, issueNumber, marker, body, config.botActorId);
 }
 
 async function reportReviewResult(
@@ -2951,20 +3083,10 @@ async function reportReviewResult(
     };
   }
 
-  if (gate.outcome === "awaiting_verification" && isWaitingForWorkflow(snapshot, gate)) {
+  if (gate.outcome === "awaiting_verification" && isReviewStillPending(snapshot, gate)) {
     return {
       outcome: gate.outcome,
       message: `Waiting for PR Validate evidence for PR #${report.pullRequestNumber}; no Issue dispatch was created.`,
-    };
-  }
-
-  if (
-    gate.outcome === "awaiting_verification" &&
-    gate.reasons.some((reason) => reason.code === "repository_merge_busy")
-  ) {
-    return {
-      outcome: gate.outcome,
-      message: `Waiting for the other in-flight PR before continuing PR #${report.pullRequestNumber}.`,
     };
   }
 
@@ -3030,6 +3152,7 @@ async function reportReviewResult(
       ],
     };
     await upsertCheckRun(config, freshSnapshot, report, staleGate);
+    await postNonBlockingOutcome(config, freshSnapshot, report, staleGate);
     return {
       outcome: staleGate.outcome,
       message: `Auto-merge was not enabled for PR #${report.pullRequestNumber} because its head or base changed.`,
@@ -3052,6 +3175,10 @@ async function reportReviewResult(
   ) {
     throw new Error("GitHub did not retain the requested auto-merge state.");
   }
+  await completeIssueAfterApproval(config.api, freshSnapshot.gateInput.issue.number, {
+    autoMergeEnabled: isRecord(readback.auto_merge),
+    merged: readback.merged === true && readback.state === "closed",
+  });
   return {
     outcome: "merge_candidate",
     message: isRecord(readback.auto_merge)
