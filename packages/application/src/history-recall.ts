@@ -13,7 +13,10 @@
  * an object permission, a cursor or a second query.
  */
 
-import { EARLIER_MESSAGE_MARK, formatLocalMinute } from "./message-presentation";
+import {
+  EARLIER_MESSAGES_BLOCK_TITLE,
+  formatLocalMinute,
+} from "./message-presentation";
 import type { HistoryRecallGovernancePort } from "./history-recall-governance";
 import type {
   ConversationEventRevisionId,
@@ -1312,10 +1315,11 @@ const KNOWN_HISTORY_READING_RULES_VERSIONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a result frozen with these rules sends its quoted messages with an
- * in-place note (v3 on). Earlier results replay their messages untouched.
+ * Whether a result frozen with these rules presents its quoted messages as
+ * the bounded block at the end of the instructions (v3 on). Earlier results
+ * replay them as conversation turns, exactly as they were sent.
  */
-export function historyReadingRulesMarkMessages(
+export function historyReadingRulesUseBlock(
   version: string | undefined,
 ): boolean {
   return (
@@ -1329,7 +1333,7 @@ export function renderHistoryReadingRules(
   version: string = HISTORY_READING_RULES_VERSION,
 ): string {
   const v1 = version === PREVIOUS_HISTORY_READING_RULES_VERSION;
-  const marked = historyReadingRulesMarkMessages(version);
+  const block = historyReadingRulesUseBlock(version);
   return [
     `History reading rules (${version}), the same on every reply that uses earlier messages:`,
     "- Time: each quoted message carries when it was said, not necessarily when the thing happened. Do not turn a message's time into an event date; if their words give no date, leave it undated.",
@@ -1338,36 +1342,49 @@ export function renderHistoryReadingRules(
       : "- Past and present: when they later said something different about the same matter and no correction of theirs covers it, the latest statement is how it is now and the earlier one is how it was then. Speak of the earlier one in the past tense and never as current.",
     v1
       ? "- Corrections: if they themselves later corrected a date, number or name, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said."
-      : marked
-        ? "- Corrections: an earlier message whose first line says it is their corrected wording is what they stand by, and that line says when they corrected it. A message whose first line says it was said before that correction was written first, whatever its place in the order: it is how they put it earlier, not a later change of mind, and where the two differ on the same point the corrected wording is how it is now. Likewise, if they themselves later corrected a date, number or name in their own words, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said."
+      : block
+        ? "- Corrections: an entry marked as their corrected wording is what they stand by, and the mark says when they corrected it. An entry marked as written before that correction was written first, whatever its place in the list: it is how they put it earlier, not a later change of mind, and where the two differ on the same point the corrected wording is how it is now. Likewise, if they themselves later corrected a date, number or name in their own words, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said."
         : "- Corrections: a message marked above as the person's own correction is what they stand by, and the mark says when they made it. It overrides anything they wrote about the same matter before that moment, wherever those messages sit in the conversation and even when they are listed after it: those say how it was put before the correction, never how it is now. Likewise, if they themselves later corrected a date, number or name in their own words, use the corrected one and do not offer the earlier one as a possibility. Their own correction is the only thing that settles it; a new remark that does not correct anything changes nothing else they said.",
     "- Plans: a plan they later called off did not happen: do not ask how it went. A plan with no later word is still only a plan: do not say how it turned out.",
     "- Their words only: assistant lines are your own earlier replies; they never prove what the person said, felt or meant. Add no reasons, no other people's motives, and no details they did not give, for example why someone left or why someone said something.",
     "- One moment is not a trait: a feeling or remark from one time describes that time. Do not present it as who they are, as a lasting pattern, or as a label such as a diagnosis, orientation, belief or trauma.",
     "- Relevance: use an earlier message only when it helps with what they are saying now. Do not bring up an unrelated earlier thing just because it was found, and do not mention history in every reply. If you connect an earlier statement to how they feel now, offer it as your own tentative reading, not as a fact about them.",
     "- Same you: keep your usual voice and limits. Receive what they said now first; give no advice or verdict unless they ask.",
-    ...(marked
+    ...(block
       ? [
-          "- Notes: the bracketed first line on an earlier message is a note for you about that message, not something anyone said. Never read it out, repeat it or quote it, and never mention that messages carry notes; say when something was said the way a person would.",
+          "- Notes: the headings, numbers and bracketed remarks in the earlier-messages block are notes for you, not something anyone said. Never read them out or mention the block or its numbering; say when something was said the way a person would.",
         ]
       : []),
   ].join("\n");
 }
 
 /**
- * How the reply finds the quoted messages. From v3 each one says so itself;
- * before that the reply had to match them against the numbered Times list.
+ * Where the reply finds the quoted messages. From v3 they are the bounded
+ * block at the end of the instructions; before that they were conversation
+ * turns the reply had to match against the numbered Times list.
  */
-function quotedMessagesPointer(snapshot: HistoryRecallReceiptSnapshot): string {
-  return historyReadingRulesMarkMessages(snapshot.readingRulesVersion)
-    ? `(each of them begins with a bracketed first line starting "${EARLIER_MESSAGE_MARK}" that says when it was said)`
-    : "(each has its own time in the Times list)";
+function quotedMessagesWhere(snapshot: HistoryRecallReceiptSnapshot): string {
+  if (!historyReadingRulesUseBlock(snapshot.readingRulesVersion)) {
+    return "that appear in the conversation before the user's current message (each has its own time in the Times list)";
+  }
+  // Nothing quoted means no block is sent; never point at one that is absent.
+  return snapshot.injectedRows === 0
+    ? "that the lookup found (it found none this time, so there are none to quote)"
+    : `in the block titled "${EARLIER_MESSAGES_BLOCK_TITLE}" at the end of these instructions (each entry is numbered and says when it was said)`;
 }
+
+/**
+ * The block holds what the lookup found; the conversation is still there. The
+ * benchmark's reasoning stumbled where a message from the period asked about
+ * sat in the conversation while the rule said "only the quoted ones".
+ */
+const CONVERSATION_BESIDE_BLOCK_LINE =
+  "The conversation that follows these instructions is the current talk and is not part of that block: what the person said there you can see for yourself and use it as usual.";
 
 /**
  * One line per quoted message whose wording is the person's own correction.
  * Only for results frozen with history-reading:v2; from v3 the corrected
- * message carries the note itself.
+ * entry carries the remark itself.
  */
 function renderCorrectionMarks(
   snapshot: HistoryRecallReceiptSnapshot,
@@ -1390,6 +1407,9 @@ function withReadingRules(
   return snapshot.injectedRows > 0
     ? [
         ...lines,
+        ...(historyReadingRulesUseBlock(snapshot.readingRulesVersion)
+          ? [CONVERSATION_BESIDE_BLOCK_LINE]
+          : []),
         ...renderCorrectionMarks(snapshot),
         renderHistoryReadingRules(
           snapshot.readingRulesVersion ?? PREVIOUS_HISTORY_READING_RULES_VERSION,
@@ -1418,7 +1438,7 @@ export function renderHistoryRecallReceipt(
       );
     }
     lines.push(
-      `Rules for the reply: use only the earlier messages that appear in the conversation before the user's current message ${quotedMessagesPointer(snapshot)}; invent nothing else, no names, titles or details they do not contain. Reply to the current message as one natural reply. Never mention internal terms such as policy, receipt, section, token, coverage, status, search, lookup or background.`,
+      `Rules for the reply: use only the earlier messages ${quotedMessagesWhere(snapshot)}; invent nothing else, no names, titles or details they do not contain. Reply to the current message as one natural reply. Never mention internal terms such as policy, receipt, section, token, coverage, status, search, lookup or background.`,
     );
     return withReadingRules(lines, snapshot);
   }
@@ -1430,7 +1450,7 @@ export function renderHistoryRecallReceipt(
       );
     }
     lines.push(
-      `Rules for the reply: quote and describe only the messages that appear in the conversation before the user's current message ${quotedMessagesPointer(snapshot)}; do not invent anything else, no names, titles or details they do not contain. Mention roughly when each thing was said using those times. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status, search or lookup.`,
+      `Rules for the reply: quote and describe only the messages ${quotedMessagesWhere(snapshot)}; do not invent anything else, no names, titles or details they do not contain. Mention roughly when each thing was said using those times. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status, search or lookup.`,
     );
     return withReadingRules(lines, snapshot);
   }
@@ -1479,7 +1499,7 @@ export function renderHistoryRecallReceipt(
     );
   }
   lines.push(
-    `Rules for the reply: quote and describe only the messages that appear in the conversation before the user's current message ${quotedMessagesPointer(snapshot)}; do not invent anything else. Mention when each thing was said using those times. Assistant lines there are only your earlier replies for understanding and are never evidence of what the person said. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status or limits.`,
+    `Rules for the reply: quote and describe only the messages ${quotedMessagesWhere(snapshot)}; do not invent anything else. Mention when each thing was said using those times. Assistant lines there are only your earlier replies for understanding and are never evidence of what the person said. Reply as one complete natural paragraph. Never mention internal terms such as policy, receipt, section, token, coverage, status or limits.`,
     ...historyAnswerGuidance(snapshot),
   );
   return withReadingRules(lines, snapshot);

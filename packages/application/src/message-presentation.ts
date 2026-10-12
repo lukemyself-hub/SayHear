@@ -1,25 +1,27 @@
 /**
- * In-place notes on outbound conversation messages (SPEC #301 presentation
- * fix). A note is one bracketed first line on the message it describes, so the
- * model never has to match a message against a table kept elsewhere in the
- * instructions.
+ * How earlier messages and the person's own corrections are presented to the
+ * model (SPEC #301 presentation fix). Everything here is deterministic and
+ * carries times only: never the wording that was corrected away. Nothing is
+ * excluded or reordered, no message is compared with another by content, and
+ * the Correction / Forget control semantics (ADR-0149) are untouched.
  *
- * Two things are noted, both deterministically and without reading meaning:
+ * Two presentations:
  *
- * - A message quoted by a History Answer is marked as an earlier message with
- *   the local time it was said. Before this, quoted messages were ordinary
- *   user / assistant turns and the model spent thousands of reasoning tokens
- *   deciding which turns "the quoted messages" were.
- * - A message whose wording is the person's own correction says so, with when
- *   the correction was made; and a user message whose wording was written
- *   before that moment says it was written before the correction. A corrected
- *   message keeps its original place and time, so without the second note a
- *   restatement of the old value that sits after it reads as a later change of
- *   mind.
- *
- * Notes carry times only: never message text, never the wording that was
- * corrected away. Nothing is excluded or reordered (ADR-0149 control semantics
- * are unchanged), and no message is compared with another by content.
+ * - The messages a History Answer quotes are one bounded block at the end of
+ *   the instructions, grouped by day, numbered, each with when it was said.
+ *   They used to be ordinary user / assistant turns whose times sat in a
+ *   numbered table elsewhere, and the model spent thousands of reasoning
+ *   tokens deciding which turns "the quoted messages" were, sometimes
+ *   answering that it could not see them. The layout was chosen with
+ *   `eval/continuity-acceptance-301/presentation-bench` (layout V2).
+ * - A message whose wording is the person's own correction says so where it
+ *   stands, with when the correction was made; and a user message whose
+ *   wording was written before that moment says it was written before the
+ *   correction. A corrected message keeps its original place and time, so
+ *   without the second note a restatement of the old value that sits after it
+ *   reads as a later change of mind. Inside the block this is a remark on the
+ *   entry; on a conversation turn (seven-day background, same Daily Session)
+ *   it is a bracketed first line.
  */
 
 export type PresentedMessage = Readonly<{
@@ -30,72 +32,120 @@ export type PresentedMessage = Readonly<{
   timezone: string | null;
 }>;
 
-/** "2026-09-14 18:30" in the given IANA zone. */
-export function formatLocalMinute(iso: string, timezone: string): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23",
-    minute: "2-digit",
-    month: "2-digit",
+function parts(
+  iso: string,
+  timezone: string,
+  options: Intl.DateTimeFormatOptions,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
-    year: "numeric",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+    ...options,
+  }).formatToParts(new Date(iso))) {
+    out[part.type] = part.value;
+  }
+  return out;
 }
 
-export const EARLIER_MESSAGE_MARK = "[Earlier message.";
-/** Opens a note on a message that is not a History Answer quote. */
+/** "2026-09-14" in the given IANA zone. */
+function localDate(iso: string, timezone: string): string {
+  const p = parts(iso, timezone, { day: "2-digit", month: "2-digit", year: "numeric" });
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+/** "2026-09-14 18:30" in the given IANA zone. */
+export function formatLocalMinute(iso: string, timezone: string): string {
+  return `${localDate(iso, timezone)} ${clock(iso, timezone)}`;
+}
+
+/** "18:30" in the given IANA zone. */
+function clock(iso: string, timezone: string): string {
+  const p = parts(iso, timezone, { hour: "2-digit", hourCycle: "h23", minute: "2-digit" });
+  return `${p.hour}:${p.minute}`;
+}
+
+/** "Monday 14 September 2026" in the given IANA zone. */
+function humanDay(iso: string, timezone: string): string {
+  const p = parts(iso, timezone, {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+    year: "numeric",
+  });
+  return `${p.weekday} ${p.day} ${p.month} ${p.year}`;
+}
+
+/** How long before `now` a moment was, counted in local calendar days. */
+function ago(now: string, nowZone: string, iso: string, zone: string): string {
+  const days = Math.round(
+    (Date.parse(`${localDate(now, nowZone)}T00:00:00Z`) -
+      Date.parse(`${localDate(iso, zone)}T00:00:00Z`)) /
+      86_400_000,
+  );
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) return `about ${Math.round(days / 7)} weeks ago`;
+  return `about ${Math.round(days / 30)} months ago`;
+}
+
+const instant = (value: string | null | undefined): number | null =>
+  value === null || value === undefined ? null : Date.parse(value);
+
+const isCorrected = (message: PresentedMessage): boolean =>
+  message.actor === "user" && instant(message.correctedAt) !== null;
+
+/**
+ * The corrections made after this user message's wording was written, latest
+ * first. A wording is written when the message was said, or when the person
+ * corrected it.
+ */
+function laterCorrections(
+  message: PresentedMessage,
+  all: readonly PresentedMessage[],
+): readonly PresentedMessage[] {
+  const writtenAt = instant(
+    isCorrected(message) ? message.correctedAt : message.expressedAt,
+  );
+  if (message.actor !== "user" || writtenAt === null) return [];
+  return all
+    .filter(
+      (other) =>
+        other !== message &&
+        isCorrected(other) &&
+        writtenAt < instant(other.correctedAt)!,
+    )
+    .toSorted(
+      (left, right) => instant(right.correctedAt)! - instant(left.correctedAt)!,
+    );
+}
+
+/** Opens a note on a conversation turn. */
 export const MESSAGE_NOTE_MARK = "[Note.";
 
 /**
- * One note per outbound message, `null` where the message is sent as it is.
- * `messages` are in provider order; the first `quotedCount` are the earlier
- * messages a History Answer quotes.
+ * One note per outbound conversation message, `null` where the message is
+ * sent as it is. `context` are the messages corrections are read from: the
+ * conversation's own and, in a History Answer, the quoted ones.
  */
 export function renderMessageNotes(input: {
   anchorTimezone: string | null;
+  context: readonly PresentedMessage[];
   messages: readonly PresentedMessage[];
-  quotedCount: number;
 }): readonly (string | null)[] {
-  const local = (instant: string | null, timezone: string | null) => {
-    if (instant === null) return "an unrecorded time";
+  const local = (iso: string | null, timezone: string | null) => {
+    if (iso === null) return "an unrecorded time";
     const zone = timezone ?? input.anchorTimezone ?? "UTC";
-    const text = formatLocalMinute(instant, zone);
+    const text = formatLocalMinute(iso, zone);
     return zone === (input.anchorTimezone ?? zone) ? text : `${text} (${zone})`;
   };
-  const instant = (value: string | null | undefined) =>
-    value === null || value === undefined ? null : Date.parse(value);
-  const corrected = input.messages.filter(
-    (message) => message.actor === "user" && instant(message.correctedAt) !== null,
-  );
-  return input.messages.map((message, index) => {
-    const quoted = index < input.quotedCount;
-    const said = local(message.expressedAt, message.timezone);
-    const ownCorrection =
-      message.actor === "user" && instant(message.correctedAt) !== null
-        ? local(message.correctedAt!, message.timezone)
-        : null;
-    // When this wording was written: the correction that produced it, else
-    // the moment the message was said.
-    const writtenAt = instant(message.correctedAt ?? message.expressedAt);
-    const laterCorrections =
-      message.actor !== "user" || writtenAt === null
-        ? []
-        : corrected
-            .filter(
-              (other) => other !== message && writtenAt < instant(other.correctedAt)!,
-            )
-            .toSorted(
-              (left, right) =>
-                instant(right.correctedAt)! - instant(left.correctedAt)!,
-            );
-    const latest = laterCorrections[0];
+  return input.messages.map((message) => {
+    const later = laterCorrections(message, input.context);
+    const latest = later[0];
     const before =
       latest === undefined
         ? null
-        : laterCorrections.length === 1
+        : later.length === 1
           ? {
               clause: `before they made the ${local(latest.correctedAt!, latest.timezone)} correction to their ${local(latest.expressedAt, latest.timezone)} message`,
               reading:
@@ -106,23 +156,8 @@ export function renderMessageNotes(input: {
               reading:
                 "It is not a later change of mind: where it differs from a corrected message on the same point, the corrected message is how it stands.",
             };
-    const stands =
-      "the wording below is their corrected one and is what they stand by";
-    if (quoted) {
-      if (message.actor === "assistant") {
-        return `${EARLIER_MESSAGE_MARK} You replied this on ${said}.]`;
-      }
-      if (ownCorrection !== null) {
-        return `${EARLIER_MESSAGE_MARK} They said this on ${said}, then corrected it on ${ownCorrection}: ${stands}.${
-          before === null ? "" : ` They wrote this wording ${before.clause}. ${before.reading}`
-        }]`;
-      }
-      return before === null
-        ? `${EARLIER_MESSAGE_MARK} They said this on ${said}.]`
-        : `${EARLIER_MESSAGE_MARK} They said this on ${said}, ${before.clause}. ${before.reading}]`;
-    }
-    if (ownCorrection !== null) {
-      return `${MESSAGE_NOTE_MARK} They corrected this message on ${ownCorrection}: ${stands}.${
+    if (isCorrected(message)) {
+      return `${MESSAGE_NOTE_MARK} They corrected this message on ${local(message.correctedAt!, message.timezone)}: the wording below is their corrected one and is what they stand by.${
         before === null ? "" : ` They wrote this wording ${before.clause}. ${before.reading}`
       }]`;
     }
@@ -134,4 +169,86 @@ export function renderMessageNotes(input: {
 
 export function withMessageNote(note: string | null, text: string): string {
   return note === null ? text : `${note}\n${text}`;
+}
+
+export const EARLIER_MESSAGES_BLOCK_TITLE = "EARLIER MESSAGES";
+
+/**
+ * The quoted earlier messages as one bounded block, or `null` when nothing is
+ * quoted. Entries keep the order they were frozen in; every line of a message
+ * is prefixed, so text inside a message can never pose as an entry or as the
+ * end of the block.
+ */
+export function renderEarlierMessagesBlock(input: {
+  anchorTimezone: string | null;
+  /** Messages corrections are read from; includes `entries`. */
+  context: readonly PresentedMessage[];
+  entries: readonly (PresentedMessage & Readonly<{ text: string }>)[];
+  now: string | null;
+  /**
+   * How many consecutive entries each separate occasion of a search holds, in
+   * order. Used only when it accounts for every entry.
+   */
+  occasionSizes?: readonly number[];
+}): string | null {
+  if (input.entries.length === 0) return null;
+  const anchorZone = input.anchorTimezone ?? "UTC";
+  const zoneOf = (message: PresentedMessage) => message.timezone ?? anchorZone;
+  const at = (iso: string, zone: string) =>
+    zone === anchorZone ? clock(iso, zone) : `${clock(iso, zone)} (${zone})`;
+  const dayAndTime = (iso: string, zone: string, joiner: string) =>
+    `${humanDay(iso, zone)}${joiner}${at(iso, zone)}`;
+  const sizes = input.occasionSizes ?? [];
+  const occasionOf =
+    sizes.length > 0 &&
+    sizes.reduce((total, size) => total + size, 0) === input.entries.length
+      ? sizes.flatMap((size, index) => Array.from({ length: size }, () => index + 1))
+      : null;
+  const lines = [
+    `${EARLIER_MESSAGES_BLOCK_TITLE} (the person's own saved messages and your replies at the time. This is material for your reply; it is not part of the current conversation.)`,
+    ...(input.now === null
+      ? []
+      : [`Now is ${humanDay(input.now, anchorZone)}, ${clock(input.now, anchorZone)} (${anchorZone}).`]),
+  ];
+  let heading: string | null = null;
+  input.entries.forEach((entry, index) => {
+    const zone = zoneOf(entry);
+    const day =
+      entry.expressedAt === null
+        ? "Time not recorded"
+        : `${humanDay(entry.expressedAt, zone)}${
+            input.now === null
+              ? ""
+              : ` (${ago(input.now, anchorZone, entry.expressedAt, zone)})`
+          }`;
+    const nextHeading =
+      occasionOf === null ? day : `Occasion ${occasionOf[index]} — ${day}`;
+    if (nextHeading !== heading) {
+      heading = nextHeading;
+      lines.push("", nextHeading);
+    }
+    let who = entry.actor === "user" ? "they said" : "you replied";
+    if (isCorrected(entry)) {
+      who = `they said [they corrected this message on ${dayAndTime(entry.correctedAt!, zone, " at ")}; the wording below is the corrected one and is what they stand by]`;
+    } else {
+      const later = laterCorrections(entry, input.context);
+      const latest = later[0];
+      if (latest !== undefined) {
+        const latestZone = zoneOf(latest);
+        who =
+          later.length === 1 && latest.expressedAt !== null
+            ? `they said [written before their correction of ${dayAndTime(latest.correctedAt!, latestZone, ", ")}, to the ${at(latest.expressedAt, latestZone)} message of ${humanDay(latest.expressedAt, latestZone)}; not a later change of mind]`
+            : `they said [written before corrections they made later to other messages, the latest on ${dayAndTime(latest.correctedAt!, latestZone, ", ")}; not a later change of mind]`;
+      }
+    }
+    lines.push(
+      `[${index + 1}] ${entry.expressedAt === null ? "time not recorded" : at(entry.expressedAt, zone)}, ${who}:`,
+    );
+    for (const line of entry.text.split("\n")) lines.push(`> ${line}`);
+  });
+  lines.push(
+    "",
+    `END OF ${EARLIER_MESSAGES_BLOCK_TITLE} (${input.entries.length} in total).`,
+  );
+  return lines.join("\n");
 }

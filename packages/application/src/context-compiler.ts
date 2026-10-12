@@ -22,6 +22,7 @@ import type {
 } from "@sayhear/domain";
 import {
   MESSAGE_NOTE_MARK,
+  renderEarlierMessagesBlock,
   renderMessageNotes,
   withMessageNote,
 } from "./message-presentation";
@@ -29,7 +30,7 @@ import {
   decodeHistoryRecallReceipt,
   encodeHistoryRecallReceipt,
   HISTORY_READING_RULES_VERSION,
-  historyReadingRulesMarkMessages,
+  historyReadingRulesUseBlock,
   renderHistoryRecallReceipt,
   HISTORY_RECALL_RESULT_VERSION,
   type HistoryRecallReceiptSnapshot,
@@ -1300,13 +1301,37 @@ export function createContextCompiler(dependencies: {
         throw new CompiledContextIntegrityError();
       }
 
+      // From history-reading:v3 the quoted messages are material at the end
+      // of the instructions, not conversation turns; a result frozen earlier
+      // replays them as the turns they were.
+      const quoted =
+        historyRecall !== undefined &&
+        historyReadingRulesUseBlock(historyRecall.receipt.readingRulesVersion)
+          ? historyRecall
+          : undefined;
+      const quotedCount = quoted?.events.length ?? 0;
       const outboundEvents = [
-        ...(historyRecall?.events ?? []),
+        ...(quoted === undefined ? historyRecall?.events ?? [] : []),
         ...(recentContext?.events ?? []),
         ...history,
         currentInput,
       ];
-      const messageNotes = renderOutboundMessageNotes(timeContext, historyRecall);
+      const messageNotes = renderOutboundMessageNotes(timeContext, quotedCount);
+      const earlierMessagesBlock =
+        quoted !== undefined && timeContext !== undefined
+          ? renderEarlierMessagesBlock({
+              anchorTimezone: timeContext.anchor.timezone,
+              context: presentedMessages(timeContext),
+              entries: quoted.events.map((event, index) => ({
+                ...presentedMessages(timeContext)[index]!,
+                text: event.text,
+              })),
+              now: timeContext.anchor.expressedAt,
+              occasionSizes: (
+                quoted.receipt.result.coverage.search?.occasions ?? []
+              ).map((occasion) => occasion.selectedRows),
+            })
+          : null;
       return {
         ...(source.actionReferenceHandles === undefined
           ? {}
@@ -1321,7 +1346,8 @@ export function createContextCompiler(dependencies: {
           )
           .map((section) => section.content)
           .join("\n") +
-          renderActionReferenceInstructions(source.actionReferenceHandles),
+          renderActionReferenceInstructions(source.actionReferenceHandles) +
+          (earlierMessagesBlock === null ? "" : `\n${earlierMessagesBlock}`),
         messages: outboundEvents.map((event, index) => ({
           revisionId: event.revisionId,
           role: event.actor,
@@ -1714,36 +1740,50 @@ function contextTimeMetadataMatches(
   );
 }
 
+function presentedMessages(timeContext: ContextTimeMetadata) {
+  return timeContext.entries.map((entry) => ({
+    actor: entry.actor,
+    correctedAt: entry.correctedAt ?? null,
+    expressedAt: entry.expressedAt,
+    timezone: entry.expressionTimezone,
+  }));
+}
+
 /**
- * In-place notes for the outbound messages, in provider order. A History
- * Answer frozen with history-reading:v3 marks every message it quotes; a
- * result frozen earlier replays its messages exactly as they were. Correction
- * notes follow the instants frozen on the time metadata entries, which only a
- * Context compiled with them carries.
+ * How many leading time entries belong to messages a History Answer presents
+ * as the earlier-messages block (history-reading:v3 on) and therefore does not
+ * send as conversation turns.
  */
-function renderOutboundMessageNotes(
-  timeContext: ContextTimeMetadata | undefined,
+function quotedBlockCount(
   historyRecall:
     | Readonly<{
         events: readonly unknown[];
         receipt: HistoryRecallReceiptSnapshot;
       }>
     | undefined,
+): number {
+  return historyRecall !== undefined &&
+    historyReadingRulesUseBlock(historyRecall.receipt.readingRulesVersion)
+    ? historyRecall.events.length
+    : 0;
+}
+
+/**
+ * Correction notes for the outbound conversation messages, in provider order.
+ * They follow the instants frozen on the time metadata entries, which only a
+ * Context compiled with them carries; corrections of quoted messages count
+ * too, so a turn written before one of those says so.
+ */
+function renderOutboundMessageNotes(
+  timeContext: ContextTimeMetadata | undefined,
+  quotedCount: number,
 ): readonly (string | null)[] {
   if (timeContext === undefined) return [];
+  const all = presentedMessages(timeContext);
   return renderMessageNotes({
     anchorTimezone: timeContext.anchor.timezone,
-    messages: timeContext.entries.map((entry) => ({
-      actor: entry.actor,
-      correctedAt: entry.correctedAt ?? null,
-      expressedAt: entry.expressedAt,
-      timezone: entry.expressionTimezone,
-    })),
-    quotedCount:
-      historyRecall !== undefined &&
-      historyReadingRulesMarkMessages(historyRecall.receipt.readingRulesVersion)
-        ? historyRecall.events.length
-        : 0,
+    context: all,
+    messages: all.slice(quotedCount),
   });
 }
 
@@ -1751,6 +1791,8 @@ function renderContextTimeMetadata(
   metadata: ContextTimeMetadata,
   includeRelativeDateRules: boolean,
   includeMessageNoteRule = false,
+  /** Leading entries that are not sent as conversation messages. */
+  quotedCount = 0,
 ): string {
   const zones = [
     metadata.anchor.timezone,
@@ -1769,7 +1811,9 @@ function renderContextTimeMetadata(
     "Expression times are when messages were written, in provider message order (1-based). Zone codes name each message's timezone; source codes are r=request, s=session-start fallback, ?=unknown. The GMT offset disambiguates repeated DST hours.",
     `Zones: ${[...zoneCodes.entries()].map(([zone, code]) => `${code}=${zone}`).join("; ") || "none"}`,
     "Times:",
-    ...metadata.entries.map((entry) => {
+    // Rows are numbered in provider message order, so entries presented as
+    // the earlier-messages block have none.
+    ...metadata.entries.slice(quotedCount).map((entry, index) => {
       const zoneCode =
         entry.expressionTimezone === null
           ? "?"
@@ -1784,7 +1828,7 @@ function renderContextTimeMetadata(
         entry.expressedAt,
         entry.expressionTimezone,
       );
-      return `${entry.messageIndex}=${local};z=${zoneCode};s=${sourceCode}`;
+      return `${quotedCount === 0 ? entry.messageIndex : index + 1}=${local};z=${zoneCode};s=${sourceCode}`;
     }),
     "Expression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.",
   ];
@@ -1802,11 +1846,13 @@ function createBoundedContextTimeMetadata(input: {
   maximumMessageCount: number;
   includeMessageNoteRule: boolean;
   includeRelativeDateRules: boolean;
+  quotedCount: number;
 }): Readonly<{ budgetTokens: number; content: string }> {
   const content = renderContextTimeMetadata(
     input.metadata,
     input.includeRelativeDateRules,
     input.includeMessageNoteRule,
+    input.quotedCount,
   );
   const zoneCount = new Set(
     [
@@ -2244,8 +2290,9 @@ function createSections(input: {
               metadata: input.timeContext,
               includeMessageNoteRule: renderOutboundMessageNotes(
                 input.timeContext,
-                input.historyRecall,
+                quotedBlockCount(input.historyRecall),
               ).some((note) => note?.startsWith(MESSAGE_NOTE_MARK) === true),
+              quotedCount: quotedBlockCount(input.historyRecall),
               includeRelativeDateRules: input.timeContextFormat !== "compact-v2",
               maximumMessageCount:
                 input.rawEventTokenBudget +
