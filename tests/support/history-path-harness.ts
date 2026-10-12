@@ -21,6 +21,7 @@ import {
   type HistoryRecallGateway,
   type HistoryRecallPolicy,
   type HistoryRecallSourcePort,
+  ProviderDispatchError,
 } from "@sayhear/application";
 import {
   PostgresContinuousExchangeRepository,
@@ -117,6 +118,8 @@ export type Hooks = {
   beforeFirstDelta?: () => Promise<void>;
   /** Runs inside the answer stream, after the first token was yielded. */
   afterFirstDelta?: () => Promise<void>;
+  /** Runs inside a reply call that is about to come back empty. */
+  duringEmptyReply?: () => Promise<void>;
 };
 
 export type HarnessOptions = {
@@ -159,6 +162,11 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     requests: [] as CapturedRequest[],
     review: null as Record<string, unknown> | null,
     sourceReads: 0,
+    /**
+     * How many of the next reply calls (not the history-review call) come back
+     * with reasoning only and no visible text, the way the adapter reports it.
+     */
+    emptyReplies: 0,
   };
   let hookArmed = { afterAnswerCompile: false };
   let sequence = 0;
@@ -192,6 +200,20 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
         return;
       }
       const answerStage = request.toolsDisabled === true;
+      if (state.emptyReplies > 0) {
+        state.emptyReplies -= 1;
+        await takeHook("duringEmptyReply");
+        throw new ProviderDispatchError("invalid_response", "The Provider returned no visible text.", true, {
+          cachedTokens: null,
+          inputTokens: 10,
+          kind: "empty_output",
+          outputLength: 0,
+          outputTokens: 7,
+          providerReason: null,
+          reasoningTokens: 7,
+          totalTokens: 17,
+        });
+      }
       if (answerStage) await takeHook("beforeFirstDelta");
       let first = true;
       for (const chunk of state.replyChunks) {
@@ -505,6 +527,7 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
     state.requests = [];
     state.review = null;
     state.sourceReads = 0;
+    state.emptyReplies = 0;
     state.replyChunks = ["我看了", "你之前说的。"];
     hookArmed = { afterAnswerCompile: false };
     sequence = 0;

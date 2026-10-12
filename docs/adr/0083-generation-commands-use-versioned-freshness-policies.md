@@ -27,6 +27,14 @@ Journal publish、current Reflection 等要求 exact head；只要原 Evidence �
   不提交迟到结果。Finalization 与 History Answer 从 Decision 命令复制该列。技术重试只在重试时刻早于
   截止时才被安排；请求已结束（截止或取消）永不重试。恢复扫描遇到截止已过的未结算命令直接终止它，
   不续跑，也不等待长恢复窗口。
+  **空正文的技术重试（2026-10-12，Luke 确认，SPEC #301）。**回复调用正常结束但没有任何可见正文（只有推理；真实模型在
+  历史回答与基准中都出现过）不再立即失败关闭：它与超时 / 限流 / 不可用一样，作为同一 Command 的一次技术重试，
+  条件相同——重试时刻早于截止、请求未结束、未超过恢复策略的尝试上限——并且**只有该 Command 的第一次尝试**可以为此重试，
+  所以最多重试一次；第二次仍为空（或在其他重试之后为空）照旧以 `invalid_response` 失败关闭。只认已证明的原因
+  （`ProviderResponseFailure.kind = empty_output`，由适配器或 Harness 在「调用完成且正文长度为 0」时给出），
+  格式错误的流、模型身份不符、被截断等其他 `invalid_response` 不重试。重试是一次新的 ModelRunAttempt，走普通派发路径：
+  `claimDispatch`、Egress 重推导与来源重新过资格、首个可见 token 前探针、提交围栏全部重新执行；空的那次没有任何内容
+  上屏或提交，两次调用的 usage 各自记在自己的 attempt 上。适用于 Decision、Action Finalization 与 History Answer。
 - **`latest_input_fence_version = latest_user_input:v1`**：回答只有在其输入仍是所属 Daily Session 最新的用户
   文本消息（含显式 Retry 动作）时才可保留。更新的用户消息一经接受，旧待完成回答即失去展示与提交资格。
 

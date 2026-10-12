@@ -2580,6 +2580,7 @@ export class PostgresConversationResponseRepository
 
   public async settleResponseFailureOnce(input: {
     category: ProviderDispatchErrorCategory;
+    emptyReply?: boolean;
     generationCommandId: GenerationCommandId;
     interrupted: boolean;
     jitter: number;
@@ -2687,7 +2688,13 @@ export class PostgresConversationResponseRepository
         retryFitsDeadline &&
         (input.category === "rate_limited" ||
           input.category === "timeout" ||
-          input.category === "unavailable") &&
+          input.category === "unavailable" ||
+          // A reply call that completed with no visible text gets one more
+          // try: only the Command's first attempt, so a second empty reply
+          // (or an empty reply after another retry) fails closed.
+          (input.category === "invalid_response" &&
+            input.emptyReply === true &&
+            recoveryRow.attempt_no === 1)) &&
         recoveryRow.attempt_no < recoveryRow.max_attempts;
       if (retryable) {
         await client.query(

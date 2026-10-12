@@ -206,6 +206,13 @@ export type ConversationResponseRepository = Readonly<{
     interrupted: boolean;
     jitter: number;
     modelRunAttemptId: ModelRunAttemptId;
+    /**
+     * The reply call completed without any visible text (a proven
+     * `empty_output`, never a malformed stream). The first attempt of a
+     * Command gets one technical retry for it, inside the request deadline and
+     * under the same rules as any other technical retry (ADR-0083).
+     */
+    emptyReply?: boolean;
     /** The request ended (deadline or cancel): never schedule a retry (#319). */
     noRetry?: boolean;
     settledAt: Date;

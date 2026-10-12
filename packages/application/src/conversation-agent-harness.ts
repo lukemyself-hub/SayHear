@@ -513,8 +513,27 @@ export function createConversationAgentHarness(dependencies: {
         yield { receipt, type: "history_recall_admitted" };
         return;
       }
-      if (completion === null || completeText.length === 0) {
+      if (completion === null) {
         throw new ProviderDispatchError("invalid_response");
+      }
+      if (completeText.length === 0) {
+        // A completed call with no visible text: the same proven cause an
+        // adapter reports itself, eligible for the one empty-reply retry.
+        throw new ProviderDispatchError(
+          "invalid_response",
+          "The Provider completed without any visible text.",
+          true,
+          {
+            cachedTokens: null,
+            inputTokens: completion.inputTokens,
+            kind: "empty_output",
+            outputLength: 0,
+            outputTokens: completion.outputTokens,
+            providerReason: null,
+            reasoningTokens: null,
+            totalTokens: null,
+          },
+        );
       }
 
       interrupt.throwIfInterrupted();
@@ -572,8 +591,16 @@ export function createConversationAgentHarness(dependencies: {
       const interrupted = possiblyVisible || category === "unknown";
       // A request that ended (deadline or cancel) is never retried (#319).
       const requestEnded = interrupt.ended();
+      // Nothing was shown and the Provider proved it produced no visible
+      // text: worth one more try. Any other invalid response is not.
+      const emptyReply =
+        error instanceof ProviderDispatchError &&
+        error.category === "invalid_response" &&
+        error.failure?.kind === "empty_output" &&
+        !possiblyVisible;
       const failure = await dependencies.repository.settleResponseFailure({
         category,
+        ...(emptyReply ? { emptyReply: true } : {}),
         generationCommandId: command.generationCommandId,
         interrupted,
         jitter: normalizedJitter(jitter()),
