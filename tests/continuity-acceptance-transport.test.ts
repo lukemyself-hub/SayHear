@@ -1,9 +1,11 @@
+import { createOpenCodeGoConversationTextModel } from "@sayhear/ai";
 import { describe, expect, it } from "vitest";
 
 import {
   OPENCODE_GO_ENDPOINT,
   createTappedFetch,
 } from "../eval/continuity-acceptance-301/src/egress-tap.mjs";
+import { startProviderGate } from "../eval/continuity-acceptance-301/src/provider-gate";
 
 /**
  * T08 #321: the real-model transport. The app under test keeps its production
@@ -160,5 +162,137 @@ describe("egress tap on the app's own fetch", () => {
     ).rejects.toThrow("network down");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(JSON.parse(failing.calls.at(-1)!.body!)).toMatchObject({ outcome: "error", status: null });
+  });
+});
+
+/**
+ * The gate is the run's side of the tap. These tests drive it with the
+ * product's real OpenCode Go adapter, so "the wire shape the adapter accepts"
+ * is checked by the adapter itself rather than restated here.
+ */
+describe("provider gate behind the tap", () => {
+  const PROVIDER_SSE = [
+    { choices: [{ delta: { reasoning_content: "thinking" }, index: 0 }], id: "chatcmpl-1", model: "deepseek-v4.1-flash" },
+    { choices: [{ delta: { content: "Hel" }, index: 0 }], id: "chatcmpl-1", model: "deepseek-v4.1-flash" },
+    { choices: [{ delta: { content: "lo." }, finish_reason: "stop", index: 0 }], id: "chatcmpl-1", model: "deepseek-v4.1-flash" },
+    {
+      choices: [],
+      id: "chatcmpl-1",
+      model: "deepseek-v4.1-flash",
+      usage: { completion_tokens: 9, completion_tokens_details: { reasoning_tokens: 4 }, prompt_tokens: 120, total_tokens: 129 },
+    },
+  ]
+    .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)
+    .concat("data: [DONE]\n\n")
+    .join("");
+
+  async function harness() {
+    const gate = await startProviderGate();
+    const providerCalls: string[] = [];
+    const model = createOpenCodeGoConversationTextModel({
+      apiKey: "provider-credential",
+      fetchImplementation: createTappedFetch({
+        gateUrl: gate.baseUrl,
+        original: (async (resource: RequestInfo | URL, init?: RequestInit) => {
+          if (String(resource).startsWith(gate.baseUrl)) return fetch(resource, init);
+          providerCalls.push(String(init?.body));
+          return new Response(PROVIDER_SSE, { headers: { "x-request-id": "req-live-1" } });
+        }) as typeof fetch,
+      }),
+    });
+    const ask = async (text: string) => {
+      let reply = "";
+      for await (const event of model.stream({
+        instructions: "You are SayHear.",
+        locale: "en-US",
+        messages: [{ revisionId: "rev-1" as never, role: "user", text }],
+        model: "deepseek-v4.1-flash",
+        providerSessionId: "session-hash",
+      })) {
+        if (event.type === "delta") reply += event.delta;
+      }
+      return reply;
+    };
+    return { ask, gate, providerCalls };
+  }
+
+  it("answers history seeding locally in the adapter's own wire format", async () => {
+    const { ask, gate, providerCalls } = await harness();
+    try {
+      gate.setStepLabel("seed:one");
+      gate.setHistoricalReply("That sounds like a long day.");
+      expect(await ask("I walked home in the rain.")).toBe("That sounds like a long day.");
+      expect(providerCalls).toEqual([]);
+      const [request] = gate.requests();
+      expect(request).toMatchObject({
+        instructions: "You are SayHear.",
+        messages: [{ role: "user", text: "I walked home in the rain." }],
+        response: null,
+        stepLabel: "seed:one",
+        transport: "served",
+      });
+      expect(JSON.stringify(gate.requests())).not.toContain("provider-credential");
+    } finally {
+      await gate.stop();
+    }
+  });
+
+  it("lets a live request through once seeding is over and keeps what the Provider answered", async () => {
+    const { ask, gate, providerCalls } = await harness();
+    try {
+      gate.setLive(true);
+      gate.setStepLabel("t1");
+      expect(await ask("Morning.")).toBe("Hello.");
+      await gate.settled();
+      expect(providerCalls).toHaveLength(1);
+      const [request] = gate.requests();
+      expect(request!.transport).toBe("live");
+      expect(request!.response).toMatchObject({
+        finishReason: "stop",
+        model: "deepseek-v4.1-flash",
+        outcome: "complete",
+        providerRequestId: "req-live-1",
+        reasoning: "thinking",
+        status: 200,
+        text: "Hello.",
+        toolCalls: [],
+        usage: { inputTokens: 120, outputTokens: 9, reasoningTokens: 4, totalTokens: 129 },
+      });
+      expect(request!.response!.firstContentMs).toBeGreaterThanOrEqual(0);
+      expect(gate.usage()).toEqual({
+        inputTokens: 120,
+        liveRequests: 1,
+        outputTokens: 9,
+        requestsWithUnknownUsage: 0,
+      });
+    } finally {
+      await gate.stop();
+    }
+  });
+
+  it("injects a Provider fault without contacting the Provider", async () => {
+    const { ask, gate, providerCalls } = await harness();
+    try {
+      gate.setLive(true);
+      gate.setFault({ httpStatus: 503 });
+      await expect(ask("Morning.")).rejects.toMatchObject({ category: "unavailable" });
+      expect(providerCalls).toEqual([]);
+      expect(gate.requests()[0]!.transport).toBe("fault");
+
+      // A Provider that never answers: the request waits at the gate, is not
+      // sent, and ends when the app gives up on it.
+      gate.setFault({ delayBeforeFirstChunkMs: 60_000 });
+      const controller = new AbortController();
+      const stalled = createTappedFetch({ gateUrl: gate.baseUrl, original: fetch })(
+        OPENCODE_GO_ENDPOINT,
+        { ...PROVIDER_INIT, signal: controller.signal },
+      );
+      setTimeout(() => controller.abort(), 50);
+      await expect(stalled).rejects.toThrow();
+      expect(gate.requests()[1]!.transport).toBe("fault");
+      expect(gate.usage().liveRequests).toBe(0);
+    } finally {
+      await gate.stop();
+    }
   });
 });
