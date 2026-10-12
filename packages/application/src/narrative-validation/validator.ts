@@ -436,6 +436,55 @@ async function executeNarrativeAttempt(input: Readonly<{
     ) {
       throw error;
     }
+    // COMMIT may be durable even if the repository lost its acknowledgement.
+    // The read uses the exact owner/draft locator and rechecks retention; only
+    // the command and attempt that wrote this result can confirm it.
+    let persisted: NarrativeValidationResultRecord | null = null;
+    try {
+      const readBack = await input.dependencies.repository.readResult({
+        userId: request.userId,
+        artifactKind: request.artifactKind,
+        draftRef: request.draftRef,
+        now: input.dependencies.clock(),
+      });
+      if (
+        readBack.outcome === "ok" &&
+        readBack.result.narrativeValidatorRequestId === input.narrativeValidatorRequestId &&
+        readBack.result.generationCommandId === generationCommandId &&
+        readBack.result.modelRunAttemptId === modelRunAttemptId &&
+        readBack.result.userId === request.userId
+      ) {
+        persisted = readBack.result;
+      }
+    } catch {
+      // Read-back failure leaves the existing terminal failure path in force.
+    }
+    if (persisted) {
+      const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
+        userId: request.userId,
+        generationCommandId,
+        modelRunAttemptId,
+        role: "narrative.validate",
+        attemptNo: input.attemptNo,
+        technicalRetriesUsed: input.technicalRetriesUsed,
+        semanticRepairsUsed: 0,
+        outcome: "succeeded",
+        currentSourceRevision: 0,
+        expectedDataEpoch: input.expectedDataEpoch,
+        now: input.dependencies.clock(),
+        usage: normalizeModelRoleCallUsage(callUsage),
+      });
+      return entrypointResult(
+        request.draftRef,
+        recorded.outcome === "discarded" ? "fenced" : "completed",
+        recorded.outcome === "discarded" ? (recorded.reason ?? "already_settled") : null,
+        null,
+        recorded.outcome === "discarded" ? null : persisted.result.outcome,
+        ledger,
+        null,
+        callUsage,
+      );
+    }
     const failureCode: ModelRoleFailureCode = "unknown";
     const recorded = await input.dependencies.modelRoleCommandService.recordAttemptResult({
       userId: request.userId,

@@ -696,6 +696,100 @@ systemDescribe("Episode admission transaction", () => {
     )).rows[0]!.count).toBe(0);
   });
 
+  it("settles a durably committed Episode when the commit acknowledgement is lost (#257)", async () => {
+    const session = await seedSession({ logicalDate: "2026-09-27" });
+    const reported: ModelRoleCallUsage = {
+      cachedTokens: 2, inputTokens: 80, outputTokens: 35,
+      reasoningTokens: 8, totalTokens: 125,
+    };
+    let calls = 0;
+    const provider: EpisodeBuildModelProvider = {
+      role: "episode.build",
+      async buildProposals(_request, onUsage) {
+        calls += 1;
+        onUsage?.(reported);
+        return [{
+          proposedKind: "sh.episode.trip",
+          label: "Osaka trip",
+          temporalAnchor: { start: { date: "2026-09-27", precision: "exact" } },
+          phase: "planned",
+          kindFields: { destination: "Osaka" },
+          citedEvidenceItemIds: [session.evidenceItemId],
+          realWorldOccurrence: true,
+        }];
+      },
+    };
+    const repository = new PostgresEpisodeRepository(database!.pool);
+    const realCommit = repository.commitEpisodeAdmission.bind(repository);
+    const commitSpy = vi.spyOn(repository, "commitEpisodeAdmission").mockImplementationOnce(async (input) => {
+      const result = await realCommit(input);
+      throw new Error(`commit acknowledgement lost after ${result.outcome}`);
+    });
+    let result: Awaited<ReturnType<typeof runEpisodeBuild>>;
+    try {
+      result = await runEpisodeBuild({
+        clock: () => new Date(BASE_TIME), repository,
+        modelRoleCommandService: commandService!, episodeBuildProvider: provider,
+        dedupeFingerprintSecret: "synthetic-episode-secret",
+        workflowReceiptId: "wf-episode-ack-loss",
+        command: {
+          workflowCommandId: seedId(), subjectId: session.dailySessionId,
+          sourceRevision: 1, policyVersion: EPISODE_ADMISSION_POLICY_VERSION,
+          expectedDataEpoch: 1,
+        },
+        providerEgress: testEgress(),
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+    expect(result.outcome).toBe("built");
+    expect(result.acceptedCount).toBe(1);
+    expect(calls).toBe(1);
+    const attempt = await database!.pool.query<{
+      generation_command_id: string; status: string; input_tokens: number | null;
+      output_tokens: number | null; reasoning_tokens: number | null;
+      cached_tokens: number | null; total_tokens: number | null;
+    }>(
+      `SELECT a.generation_command_id::text, a.status, a.input_tokens,
+              a.output_tokens, a.reasoning_tokens, a.cached_tokens, a.total_tokens
+       FROM model_run_attempts a JOIN generation_commands c
+         ON c.generation_command_id = a.generation_command_id
+       WHERE c.subject_id = $1 AND c.operation_type = 'episode.build'
+       ORDER BY a.created_at DESC, a.model_run_attempt_id DESC LIMIT 1`,
+      [session.dailySessionId],
+    );
+    expect(attempt.rows[0]).toMatchObject({
+      status: "succeeded", input_tokens: 80, output_tokens: 35,
+      reasoning_tokens: 8, cached_tokens: 2, total_tokens: 125,
+    });
+    expect((await database!.pool.query(
+      `SELECT status FROM episode_build_runs WHERE daily_session_id = $1`,
+      [session.dailySessionId],
+    )).rows).toEqual([{ status: "built" }]);
+    expect((await database!.pool.query(
+      `SELECT count(*)::int AS count FROM episode_candidates WHERE daily_session_id = $1`,
+      [session.dailySessionId],
+    )).rows[0]!.count).toBe(1);
+    const siblings = await database!.pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM model_run_attempts
+       WHERE generation_command_id = $1`,
+      [attempt.rows[0]!.generation_command_id],
+    );
+    expect(siblings.rows[0]!.count).toBe("1");
+    const command = await database!.pool.query<{
+      status: string;
+      recovery_status: string;
+    }>(
+      `SELECT status, recovery_status FROM generation_commands
+       WHERE generation_command_id = $1`,
+      [attempt.rows[0]!.generation_command_id],
+    );
+    expect(command.rows[0]).toMatchObject({
+      status: "succeeded",
+      recovery_status: "not_needed",
+    });
+  });
+
   it("persists owner Entity anchors on both the candidate and the created version", async () => {
     const session = await seedSession({ logicalDate: "2026-09-12" });
     const entityId = await seedResolvableEntity();

@@ -505,6 +505,50 @@ async function executeEpisodeAttempt(input: Readonly<{
     ) {
       throw error;
     }
+    let authoritative: Awaited<
+      ReturnType<EpisodeBuilderRepository["readCommittedBuild"]>
+    > = { outcome: "not_built" };
+    try {
+      authoritative = await input.repository.readCommittedBuild({
+        userId: input.userId,
+        dailySessionId: input.dailySessionId,
+        sourceRevision: input.sourceRevision,
+        policyVersion: input.policyVersion,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+      });
+    } catch {
+      // If read-back is unavailable, retain the existing terminal failure path.
+    }
+    if (authoritative.outcome === "built") {
+      const settled = await input.modelRoleCommandService.recordAttemptResult({
+        userId: input.userId,
+        generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+        role: "episode.build",
+        attemptNo: input.admitted.attemptNo,
+        technicalRetriesUsed: input.technicalRetriesUsed,
+        semanticRepairsUsed: 0,
+        outcome: "succeeded",
+        currentSourceRevision: input.sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        now: input.clock(),
+        usage: normalizeModelRoleCallUsage(callUsage),
+      });
+      if (settled.outcome === "discarded") {
+        return { dailySessionId: input.dailySessionId, outcome: "fenced", candidateCount: 0, acceptedCount: 0, unresolvedCount: 0, rejectedCount: 0, errorCode: settled.reason ?? "already_settled" };
+      }
+      return {
+        dailySessionId: input.dailySessionId,
+        outcome: "built",
+        candidateCount: authoritative.candidateCount,
+        acceptedCount: authoritative.acceptedCount,
+        unresolvedCount: authoritative.unresolvedCount,
+        rejectedCount: authoritative.rejectedCount,
+        errorCode: null,
+      };
+    }
     const failureCode: ModelRoleFailureCode = "unknown";
     const settled = await input.modelRoleCommandService.recordAttemptResult({
       userId: input.userId,

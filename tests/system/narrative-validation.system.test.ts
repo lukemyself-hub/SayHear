@@ -399,6 +399,72 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
     return { generationCommandId, modelRunAttemptId };
   }
 
+  it("returns and settles a persisted verdict when commit acknowledgement is lost (#257)", async () => {
+    const reported: ModelRoleCallUsage = {
+      cachedTokens: 3, inputTokens: 90, outputTokens: 40,
+      reasoningTokens: 9, totalTokens: 142,
+    };
+    const deps = dependencies(providerFor(() => acceptedOutput(), reported));
+    const draftRef = `bio-version:${randomUUID()}`;
+    const repository = deps.repository;
+    const realCommit = repository.commitResult.bind(repository);
+    const commitSpy = vi.spyOn(repository, "commitResult").mockImplementationOnce(async (input) => {
+      const result = await realCommit(input);
+      throw new Error(`commit acknowledgement lost after ${result.outcome}`);
+    });
+    let result: Awaited<ReturnType<typeof runNarrativeValidation>>;
+    try {
+      result = await runNarrativeValidation({
+        dependencies: deps,
+        command: {
+          request: cleanRequest(draftRef),
+          expectedDataEpoch: 1,
+        },
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+    expect(result.outcome).toBe("completed");
+    expect(result.verdict).toBe("accepted");
+    expect(result.generationCommandId).toBeTruthy();
+    expect(result.modelRunAttemptId).toBeTruthy();
+
+    const attempt = await database!.pool.query<{
+      status: string; input_tokens: number | null; output_tokens: number | null;
+      reasoning_tokens: number | null; cached_tokens: number | null;
+      total_tokens: number | null; attempts: string;
+    }>(
+      `SELECT a.status, a.input_tokens, a.output_tokens, a.reasoning_tokens,
+              a.cached_tokens, a.total_tokens,
+              (SELECT count(*)::text FROM model_run_attempts sibling
+               WHERE sibling.generation_command_id = a.generation_command_id) AS attempts
+       FROM model_run_attempts a
+       WHERE a.model_run_attempt_id = $1`,
+      [result.modelRunAttemptId],
+    );
+    expect(attempt.rows[0]).toMatchObject({
+      status: "succeeded", input_tokens: 90, output_tokens: 40,
+      reasoning_tokens: 9, cached_tokens: 3, total_tokens: 142, attempts: "1",
+    });
+    const persisted = await readNarrativeValidationOutcome({
+      repository, userId, artifactKind: "bio", draftRef, now: baseTime,
+    });
+    expect(persisted.outcome).toBe("ok");
+    if (persisted.outcome === "ok") {
+      expect(persisted.result.result.outcome).toBe("accepted");
+      expect(persisted.result.generationCommandId).toBe(result.generationCommandId);
+      expect(persisted.result.modelRunAttemptId).toBe(result.modelRunAttemptId);
+    }
+    const command = await database!.pool.query<{
+      status: string; recovery_status: string;
+    }>(
+      `SELECT status, recovery_status FROM generation_commands
+       WHERE generation_command_id = $1`,
+      [result.generationCommandId],
+    );
+    expect(command.rows[0]).toMatchObject({ status: "succeeded", recovery_status: "not_needed" });
+  });
+
   it("runs all 18 calibration fixtures through the production validation entry", async () => {
     const bundles = buildValidatorRequestBundle(loadValidatorCatalog(
       resolve(process.cwd(), "eval/continuation-acceptance-1a3b/fixtures.json"),

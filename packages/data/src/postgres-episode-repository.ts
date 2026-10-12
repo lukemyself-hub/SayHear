@@ -691,6 +691,73 @@ export class PostgresEpisodeRepository implements EpisodeBuilderRepository {
     }
   }
 
+  public async readCommittedBuild(input: {
+    userId: UserId;
+    dailySessionId: DailySessionId;
+    sourceRevision: number;
+    policyVersion: string;
+    expectedDataEpoch: number;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+  }): Promise<
+    | Readonly<{
+        outcome: "built";
+        candidateCount: number;
+        acceptedCount: number;
+        unresolvedCount: number;
+        rejectedCount: number;
+      }>
+    | Readonly<{ outcome: "not_built" }>
+    | Readonly<{ outcome: "fenced" }>
+  > {
+    const result = await this.pool.query<{
+      status: string;
+      candidate_count: number;
+      accepted_count: number;
+      unresolved_count: number;
+      rejected_count: number;
+      attempt_status: string | null;
+    }>(
+      `SELECT run.status, run.candidate_count, run.accepted_count,
+              run.unresolved_count, run.rejected_count, attempt.status AS attempt_status
+       FROM episode_build_runs run
+       INNER JOIN app_users owner ON owner.user_id = run.user_id
+       INNER JOIN daily_sessions session
+         ON session.daily_session_id = run.daily_session_id
+        AND session.user_id = run.user_id
+       INNER JOIN generation_commands command
+         ON command.generation_command_id = run.generation_command_id
+        AND command.user_id = run.user_id
+       INNER JOIN model_run_attempts attempt
+         ON attempt.model_run_attempt_id = run.model_run_attempt_id
+        AND attempt.generation_command_id = run.generation_command_id
+       WHERE run.user_id = $1 AND run.daily_session_id = $2
+         AND run.source_revision = $3 AND run.policy_version = $4
+         AND run.expected_data_epoch = $5
+         AND run.generation_command_id = $6
+         AND run.model_run_attempt_id = $7
+         AND command.operation_type = 'episode.build'
+         AND command.subject_id = $2 AND command.source_revision = $3
+         AND command.expected_data_epoch = $5
+         AND attempt.status = 'running'
+         AND owner.status = 'active' AND owner.data_epoch = $5
+         AND session.source_revision = $3`,
+      [input.userId, input.dailySessionId, input.sourceRevision,
+       input.policyVersion, input.expectedDataEpoch, input.generationCommandId,
+       input.modelRunAttemptId],
+    );
+    const row = result.rows[0];
+    if (!row) return { outcome: "fenced" };
+    if (row.status !== "built") return { outcome: "not_built" };
+    return {
+      outcome: "built",
+      candidateCount: row.candidate_count,
+      acceptedCount: row.accepted_count,
+      unresolvedCount: row.unresolved_count,
+      rejectedCount: row.rejected_count,
+    };
+  }
+
   public async commitEpisodeAdmission(input: {
     userId: UserId;
     dailySessionId: DailySessionId;
