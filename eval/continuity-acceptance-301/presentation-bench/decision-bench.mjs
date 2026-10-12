@@ -54,6 +54,11 @@ const SOURCES = [
   { run: "full1/H05", step: "garden", expect: "no-recall", why: "an ordinary share about the afternoon" },
   { run: "full1/H10", step: "after", expect: "no-recall", why: "an ordinary follow-up" },
   { run: "full1/H01", step: "detail", expect: "either", why: "a detail of yesterday; timed out on the real path" },
+  // Requests sent by the product after the time layout shipped (time:v4,
+  // history-recall:v6). Their times are already on the messages: run them
+  // with a plain variant (`v6a`), never with an `@layout`.
+  { id: "V4-H01-recap", run: "time-full1/H01", step: "recap", expect: "either", why: "a recap of yesterday, all of it visible; timed out on the real path at time:v4" },
+  { id: "V4-H06-ping", run: "time-full1/H06", step: "ping", expect: "either", why: "news from a person not in the visible conversation; timed out on the real path at time:v4" },
 ];
 
 const [command, ...rest] = process.argv.slice(2);
@@ -81,7 +86,7 @@ if (command === "extract") {
     const decision = step.providerRequests[0];
     if (!decision.toolsOffered.includes(REVIEW)) throw new Error(`${source.run} ${source.step}: not a Decision request`);
     const fixture = {
-      id: `${observation.caseId}-${source.step}`,
+      id: source.id ?? `${observation.caseId}-${source.step}`,
       caseId: observation.caseId,
       stepId: source.step,
       expect: source.expect,

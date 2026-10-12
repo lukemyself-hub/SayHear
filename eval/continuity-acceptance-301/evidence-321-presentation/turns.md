@@ -69,3 +69,46 @@
 | H07 | party | assistant_committed | 2 | 988 | 1324 | 15.7 | 16.2 | yes | no | 2 | match | no |
 | H07 | september | assistant_committed | 2 | 1134 | 1837 | 20.2 | 21.9 | yes | no | 2 | match | no |
 | H12 | work | assistant_committed | 2 | 1405 | 2820 | 25.5 | 26.5 | yes | no | 5 | no | no |
+
+### eval/continuity-acceptance-301/evidence-321-presentation/runs/time-full1
+
+| case | turn | outcome | requests | answer-call reasoning | turn reasoning | first text s | committed s | ≤30 s | 3 s / 10 s | quoted | "cannot find quoted" | note read out |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| H01 | recap | response_failed | 1 | — | 0 | — | — | NO | no | — | — | no |
+| H01 | detail | response_failed | 2 | unknown | 3377 | — | — | NO | no | 74 | no | no |
+| H02 | said | assistant_committed | 1 | — | 1731 | 9.9 | 10.4 | yes | no | — | — | no |
+| H02 | happened | assistant_committed | 2 | 818 | 1407 | 11.6 | 12.4 | yes | no | 8 | no | no |
+| H02 | when | assistant_committed | 1 | — | 466 | 4.0 | 4.4 | yes | no | — | — | no |
+| H02 | market-when | assistant_committed | 1 | — | 413 | 3.4 | 3.7 | yes | no | — | — | no |
+| H03 | night | assistant_committed | 1 | — | 2796 | 21.9 | 23.0 | yes | no | — | — | no |
+| H03 | order | assistant_committed | 1 | — | 355 | 7.4 | 7.5 | yes | no | — | — | no |
+| H03 | trip | assistant_committed | 1 | — | 386 | 3.7 | 4.1 | yes | no | — | — | no |
+| H04 | ask | assistant_committed | 2 | 240 | 311 | 3.6 | 4.0 | yes | no | 6 | no | no |
+| H05 | bare | assistant_committed | 1 | — | 168 | 2.8 | 3.1 | yes | yes | — | — | no |
+| H05 | garden | assistant_committed | 2 | 382 | 2532 | 22.8 | 22.8 | yes | no | 0 | no | no |
+| H05 | cued | assistant_committed | 2 | 295 | 1737 | 14.4 | 14.9 | yes | no | 4 | no | no |
+| H06 | ping | response_failed | 1 | — | 0 | — | — | NO | no | — | — | no |
+| H06 | role | assistant_committed | 2 | 2324 | 2912 | 23.9 | 25.3 | yes | no | 7 | no | no |
+| H07 | where | assistant_committed | 2 | 608 | 907 | 9.4 | 10.0 | yes | no | 4 | no | no |
+| H07 | party | assistant_committed | 2 | 461 | 563 | 7.0 | 7.5 | yes | no | 6 | match | no |
+| H07 | september | assistant_committed | 2 | 865 | 1188 | 11.8 | 12.9 | yes | no | 2 | no | no |
+| H08 | praise | assistant_committed | 1 | — | 920 | 9.3 | 9.6 | yes | no | — | — | no |
+| H09 | light | assistant_committed | 1 | — | 498 | 5.6 | 6.1 | yes | no | — | — | no |
+| H09 | recall | assistant_committed | 2 | 267 | 470 | 7.2 | 8.1 | yes | no | 4 | no | no |
+| H09 | turn | assistant_committed | 1 | — | 282 | 3.5 | 4.3 | yes | no | — | — | no |
+| H09 | probe | assistant_committed | 1 | — | 1256 | 11.8 | 13.5 | yes | no | — | — | no |
+| H10 | ask | client-aborted | 1 | — | 0 | — | — | NO | no | — | — | no |
+| H10 | supplement | assistant_committed | 1 | — | 542 | 4.8 | 5.2 | yes | no | — | — | no |
+| H10 | ask-again | client-aborted | 1 | — | 0 | — | — | NO | no | — | — | no |
+| H10 | switch | assistant_committed | 1 | — | 735 | 7.9 | 8.5 | yes | no | — | — | no |
+| H10 | resend | assistant_committed | 0 | — | 0 | 0.0 | 0.0 | yes | yes | — | — | no |
+| H10 | reconnect | assistant_committed | 0 | — | 0 | 0.1 | 0.1 | yes | yes | — | — | no |
+| H10 | after | assistant_committed | 1 | — | 1297 | 11.2 | 11.5 | yes | no | — | — | no |
+| H11 | empty | assistant_committed | 2 | 439 | 703 | 7.1 | 8.1 | yes | no | 0 | no | no |
+| H11 | older | assistant_committed | 2 | 241 | 344 | 5.1 | 6.2 | yes | no | 4 | no | no |
+| H11 | earliest | assistant_committed | 2 | 590 | 1003 | 9.3 | 9.9 | yes | no | 2 | no | no |
+| H12 | work | assistant_committed | 2 | 360 | 629 | 6.4 | 7.1 | yes | no | 5 | no | no |
+| HL1 | ask | response_failed | 1 | — | 0 | — | — | NO | no | — | — | no |
+| HL1 | supplement | assistant_committed | 1 | — | 303 | 2.9 | 3.0 | yes | yes | — | — | no |
+| HL1 | stall | response_failed | 1 | — | 0 | — | — | NO | no | — | — | no |
+| HL1 | after | assistant_committed | 1 | — | 817 | 8.1 | 9.0 | yes | no | — | — | no |

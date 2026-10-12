@@ -1,0 +1,355 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 4377600,
+    "inputTokenUpperBound": 3648000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 2736000,
+    "paidRequestUpperBound": 228,
+    "remainingUsdMicros": 5398563,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 36,
+      "scheduledScans": 42,
+      "seedTurns": 112
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H12",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 5 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 673 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "12 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The recap streams and commits.",
+        "evidence": [
+          "steps[work].chat.httpStatus=200",
+          "steps[work].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The turn actually takes the history path for last week (a day of it is recorded as read).",
+        "evidence": [
+          "steps[work].inspection.dateCoverage[2026-11-13] empty=false readBounded=false candidateRows=2"
+        ],
+        "id": "O-week-read",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Recorded coverage for the date matches the expectation.",
+        "status": "pass"
+      },
+      {
+        "description": "The corrected wording reaches the Provider.",
+        "evidence": [
+          "steps[fix].input.text: providerRequest=present"
+        ],
+        "id": "O-corrected-in",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The superseded wording and its adjacent assistant reply reach no Provider request.",
+        "evidence": [
+          "bonus:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "bonus:assistant: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-superseded-out",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No excluded source reached the Provider or the compiled Context.",
+        "status": "pass"
+      },
+      {
+        "description": "The independent experience reaches the Provider.",
+        "evidence": [
+          "merge:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-independent-in",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Messages associated with the Forget request and their replies reach no Provider request. The association is seeded as fixture state, so this shows the exclusion mechanism, not what a real Forget would associate.",
+        "evidence": [
+          "lena:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "lena-echo:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "lena:assistant: providerRequest=absent, inspector.referencedEvents=absent",
+          "lena-echo:assistant: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-forget-out",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No excluded source reached the Provider or the compiled Context.",
+        "status": "pass"
+      },
+      {
+        "description": "Asking for a recap triggers no Trust Action.",
+        "evidence": [
+          "steps[work].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "A Full Purge racing a history turn.",
+        "evidence": [],
+        "id": "O-purge-race",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Not exercised: the runner cannot yet run an Owner Full Purge concurrently with a history turn over HTTP (the purge revokes the owner's web sessions, so the run cannot read its own result back); proven in-process in tests/system/history-purge-recovery.system.test.ts. This is a missing harness capability, not a product verdict.",
+        "status": "not-run"
+      },
+      {
+        "description": "Response-time contract.",
+        "evidence": [
+          "steps[work].chat.timing.firstVisibleTextMs=6444.523583000002 (CLI network, limit 3000)",
+          "steps[work].chat.timing.committedMs=7058.058625000005 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The recap uses the corrected figure as the present state, keeps the independent experience, and brings back nothing that was corrected away or forgotten.",
+        "evidence": [
+          "owner ruling (R1, Luke 2026-10-12): Restating the superseded figure as the person's earlier wording, followed by the correction, passes. Giving the superseded figure as how things stand now still fails."
+        ],
+        "id": "S-controls",
+        "kind": "semantic",
+        "owner": "#320",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-f34ae932-2b32-4b48-9fbd-01251965c1da",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: earlier-messages entry 4",
+              "day of entry 4: 2026-11-13 (expected 2026-11-13)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "merge:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-13",
+              "requestSequence": 13
+            }
+          }
+        ]
+      },
+      "stepId": "work"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "3eee929a3ae0097678b17403b816720e2cd4916b2ff8ba9bda873950eec752c7",
+    "fixtureVersion": "final-1",
+    "gitCommit": "e2bd28f991cc090836e7a7e2c66940ce346e0d23",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-f34ae932-2b32-4b48-9fbd-01251965c1da",
+    "oracleSha256": "94cc66f83497e63b4629c72b87fa8934e0520ce0dd468b9722ffdc94d7ce5a12",
+    "title": "H12 Holdout: a corrected figure and a forgotten confidence stay out, a separate experience stays in"
+  },
+  "remainingRisks": [
+    "The Forget association in this case is written by the seed directly (fixture state naming the target messages), not created by the product's own Forget action. The run verifies only that the history path excludes associated sources, not that a real Forget would have associated them.",
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "a523b4477113ef0cb48a151213f27ae84cf9913d02d0b7d01778bf67f8ccaa89",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "bonus:user"
+        },
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "bonus:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bonus-echo:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "bonus-echo:assistant"
+        },
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lena:user"
+        },
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lena:assistant"
+        },
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lena-echo:user"
+        },
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lena-echo:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "merge:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "merge:assistant"
+        }
+      ],
+      "stepId": "work"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": null,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": null,
+      "providerLatencyMs": null,
+      "stepId": "fix"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": null,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": null,
+      "providerLatencyMs": null,
+      "stepId": "forget-colleague"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 23.610665999993216,
+      "cliCommittedMs": 7058.058625000005,
+      "cliFirstVisibleTextMs": 6444.523583000002,
+      "cliStreamClosedMs": 7058.190457999997,
+      "providerLatencyMs": 0,
+      "stepId": "work"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": null,
+      "at": "2026-11-13T11:45:00.000Z",
+      "stepId": "fix",
+      "terminalEvent": null,
+      "type": "correct",
+      "user": "有个消息，今天 HR 私下 verbal 跟我讲，今年 year-end bonus 是 1.5 个月，而且 Q1 就会发。"
+    },
+    {
+      "assistant": null,
+      "at": "2026-11-14T09:00:00.000Z",
+      "stepId": "forget-colleague",
+      "terminalEvent": null,
+      "type": "forget",
+      "user": null
+    },
+    {
+      "assistant": "上周三晚上你跟我说的是年终奖的事：HR 私下口头告诉你，今年的 year-end bonus 是 1.5 个月，而且 Q1 就会发。到了上周五，你说工作这边也在变——你的 project 被 merge 进了 platform team，owner 从 Priya 换成了一个刚调过来的 manager，周四那场 kickoff 开得特别冷场。",
+      "at": "2026-11-16T12:00:00.000Z",
+      "stepId": "work",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "帮我捋一下，上周我都跟你说了哪些工作上的事？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 3354,
+    "outputTokens": 442,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "H12",
+    "committedMs": 7058.058625000005,
+    "firstVisibleTextMs": 6444.523583000002,
+    "kind": "history",
+    "liveRequests": 2,
+    "outcome": "assistant_committed",
+    "outputTokens": 780,
+    "reasoningTokens": 629,
+    "runId": "run-f34ae932-2b32-4b48-9fbd-01251965c1da",
+    "stepId": "work",
+    "streamClosedMs": 7058.190457999997,
+    "withinContract": false
+  }
+]
