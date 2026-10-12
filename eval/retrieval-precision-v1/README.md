@@ -62,6 +62,13 @@ pnpm exec vitest run tests/retrieval-precision-corpus.test.ts
 pnpm exec vitest run tests/system/retrieval-precision-corpus.system.test.ts
 ```
 
+The CI system test drives a stepwise monotonic clock for deterministic timing
+accounting. This is not production latency evidence. Deadline expiration is
+covered by the retrieval service's controlled-clock unit tests. The standalone
+CLI omits the test seam and records real durations against the production 200 ms
+policy. The committed `run/2026-*` baselines predate this seam and were not
+recaptured for this CI change.
+
 ## 基线（v1 语料，2026-08-28，本地 Neon Postgres）
 
 `run/2026-*/` 为提交的证据运行：41 探针、73 claims 全部经生产准入；hit rate
