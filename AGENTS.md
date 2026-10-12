@@ -32,6 +32,8 @@
 
 Issues and PRDs are tracked in GitHub Issues for `lukemyself-hub/SayHear`. See `docs/agents/issue-tracker.md`.
 
+实现 Issue、提交 PR 审核或接续审查修改前，读取该文档的“实现与 PR 审核交接”规则。
+
 ### Triage labels
 
 Use the five default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
