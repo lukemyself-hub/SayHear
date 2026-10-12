@@ -880,6 +880,56 @@
       "requests": 12,
       "runId": "decision-bench-t6-c426d88b",
       "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 602096,
+      "date": "2026-10-12",
+      "inputTokens": 1420144,
+      "note": "presentation-bench Decision benchmark round e1: variants v6a@T5,v6a@T5@low,v6a@T5@off x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e1/decision-calls.jsonl",
+      "outputTokens": 146618,
+      "requests": 252,
+      "runId": "decision-bench-e1-49cc91c9",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 440346,
+      "date": "2026-10-12",
+      "inputTokens": 962066,
+      "note": "presentation-bench Decision benchmark round e2: variants v6a@T5@@n1,v6a@T5@low@n1 x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e2/decision-calls.jsonl",
+      "outputTokens": 126374,
+      "requests": 168,
+      "runId": "decision-bench-e2-94ddd03b",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 244994,
+      "date": "2026-10-12",
+      "inputTokens": 482561,
+      "note": "presentation-bench Decision benchmark round e3: variants v6a@T5@@n2 x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e3/decision-calls.jsonl",
+      "outputTokens": 83491,
+      "requests": 84,
+      "runId": "decision-bench-e3-a0947d4c",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 243408,
+      "date": "2026-10-12",
+      "inputTokens": 474213,
+      "note": "presentation-bench Decision benchmark round e4: variants v6a@T5@medium x 14 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e4/decision-calls.jsonl",
+      "outputTokens": 84258,
+      "requests": 84,
+      "runId": "decision-bench-e4-78b8404c",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 513853,
+      "date": "2026-10-12",
+      "inputTokens": 439158,
+      "note": "presentation-bench Decision benchmark round e4: variants v6a@T5@high,v6a@T5@max x 14 fixture(s), repeat 3; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/e4/decision-calls.jsonl",
+      "outputTokens": 318396,
+      "requests": 62,
+      "runId": "decision-bench-e4-a5ee09dd",
+      "ticket": "#301-presentation"
     }
   ]
 }

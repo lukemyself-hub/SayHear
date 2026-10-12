@@ -127,6 +127,8 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 function withTimeLayout(fixture, layout) {
   if (!layout) return { instructions: fixture.instructions, messages: fixture.messages };
+  // A request the product sent at time:v4 already carries its times on the messages.
+  if (!fixture.instructions.includes("\nTimes:\n")) return { instructions: fixture.instructions, messages: fixture.messages };
   const lines = fixture.instructions.split("\n");
   const rows = lines.map((line) => TIME_ROW.exec(line)).filter(Boolean);
   if (rows.length !== fixture.messages.length) throw new Error(`${fixture.id}: ${rows.length} time rows for ${fixture.messages.length} messages`);
@@ -166,11 +168,43 @@ function withTimeLayout(fixture, layout) {
   };
 }
 
+/**
+ * Reasoning settings (`variant@layout@reasoning`, default none: the Provider's
+ * own default, thinking on at effort high):
+ *   low   thinking on, reasoning_effort low
+ *   high  thinking on, reasoning_effort high, stated explicitly
+ *   off   thinking disabled
+ */
+const REASONING = {
+  high: { reasoning_effort: "high", thinking: { type: "enabled" } },
+  low: { reasoning_effort: "low", thinking: { type: "enabled" } },
+  // DeepSeek documents `medium` as mapped to high; run to confirm on this route.
+  max: { reasoning_effort: "max", thinking: { type: "enabled" } },
+  medium: { reasoning_effort: "medium", thinking: { type: "enabled" } },
+  off: { thinking: { type: "disabled" } },
+};
+
+/**
+ * Instruction notes (`variant@layout@reasoning@note`, default none): a sentence
+ * about what thinking is for, added after the output-format line.
+ */
+const OUTPUT_FORMAT_LINE = /^Return only the natural-language companion response[^\n]*$/m;
+const NOTES = {
+  n2: "The person is waiting while you think, and nothing in your thinking reaches them. Keep your thinking to a few short notes: what they are telling you, whether a function is called for, and the one or two things you want to say back. Write no sentence of the response in your thinking, and do not compare alternative wordings or questions there: choose once, then write the response as the response. The guidance above describes how you speak; it is not a checklist to verify before speaking.",
+  n1: "The person is waiting while you think, and nothing in your thinking reaches them. Think only until you know two things: whether a function is called for, and what you want to say back. Then write the response once, as the response. Do not draft, reword or proofread the response inside your thinking; the guidance above describes how you speak, it is not a checklist to verify before speaking.",
+};
+
 function requestBody(fixtureAsRecorded, variantAndLayout, sessionId) {
-  const [variant, layout] = variantAndLayout.split("@");
+  const [variant, layout, reasoning, note] = variantAndLayout.split("@");
+  if (note && !NOTES[note]) throw new Error(`Unknown instruction note ${note}`);
+  if (reasoning && !REASONING[reasoning]) throw new Error(`Unknown reasoning setting ${reasoning}`);
   const description = variants[variant]?.description;
   if (typeof description !== "string") throw new Error(`Unknown variant ${variant}`);
   const fixture = withTimeLayout(fixtureAsRecorded, layout);
+  if (note) {
+    if (!OUTPUT_FORMAT_LINE.test(fixture.instructions)) throw new Error(`${fixtureAsRecorded.id}: output-format line not found`);
+    fixture.instructions = fixture.instructions.replace(OUTPUT_FORMAT_LINE, (line) => `${line}\n${NOTES[note]}`);
+  }
   return {
     messages: [
       {
@@ -184,6 +218,7 @@ function requestBody(fixtureAsRecorded, variantAndLayout, sessionId) {
       ),
     ],
     model: "deepseek-v4.1-flash",
+    ...(reasoning ? REASONING[reasoning] : {}),
     stream: true,
     stream_options: { include_usage: true },
     tool_choice: "auto",
