@@ -274,30 +274,36 @@ describe("a corrected message is told apart from a later restatement of the old 
     return harness.state.requests.find((request) => request.toolsDisabled)!;
   }
 
-  it("marks the correction with when it was made, keeps the restatement, and states the rule", async () => {
+  it("says on the corrected message that it is the corrected wording, and on the restatement that it came before the correction", async () => {
     const answer = await askAboutTheOfferDay();
     const messages = answer.messages.join("\n");
 
-    // The corrected wording is quoted first, at its original time.
-    expect(answer.messages[0]).toBe(`user:${OFFER_NEW}`);
+    // The corrected wording is quoted first, at its original time, and says
+    // itself that it was corrected three days later.
+    expect(answer.messages[0]).toBe(
+      `user:[Earlier message. They said this on 2026-09-09 20:00, then corrected it on 2026-09-12 19:40: the wording below is their corrected one and is what they stand by.]\n${OFFER_NEW}`,
+    );
     expect(answer.instructions).toMatch(/1=2026-09-09 20:00/);
     // The superseded wording and the reply generated for it are not sent.
     expect(messages).not.toContain(OFFER_OLD);
     expect(messages).not.toContain(OFFER_OLD_REPLY);
-    // The person's own restatement has no association and is still quoted.
-    expect(messages).toContain(ECHO);
+    // The person's own restatement has no association and is still quoted; it
+    // says it was written before the correction although it is listed after.
+    expect(answer.messages).toContain(
+      `user:[Earlier message. They said this on 2026-09-09 20:04, before they made the 2026-09-12 19:40 correction to their 2026-09-09 20:00 message. It is not a later change of mind: where it differs from that corrected message on the same point, the corrected message is how it stands.]\n${ECHO}`,
+    );
+    // The reply generated for the restatement is an earlier message with no correction note.
+    expect(answer.messages).toContain(
+      `assistant:[Earlier message. You replied this on 2026-09-09 20:04.]\n${ECHO_REPLY}`,
+    );
+    // The current message is sent as written.
+    expect(answer.messages.at(-1)).toBe("user:九月九号我跟你说了什么？");
 
-    // The reply is told which message is the correction and when it was made:
-    // three days after the restatement, although it is listed before it.
-    expect(answer.instructions).toContain(
-      "Message 1 is the person's own correction of what they first wrote at that point; they made the correction at 2026-09-12 19:40 (Asia/Shanghai).",
-    );
-    expect(answer.instructions).toContain("History reading rules (history-reading:v2)");
-    expect(answer.instructions).toMatch(
-      /overrides anything they wrote about the same matter before that moment/,
-    );
-    // Only the corrected message is marked.
-    expect(answer.instructions.match(/is the person's own correction of what they first wrote/g)).toHaveLength(1);
+    expect(answer.instructions).toContain("History reading rules (history-reading:v3)");
+    expect(answer.instructions).toContain('"[Earlier message."');
+    // Nothing points at a message by its number any more.
+    expect(answer.instructions).not.toMatch(/Message \d+ is the person's own correction/);
+    expect(answer.instructions).not.toMatch(/Times list/);
   });
 
   it("keeps message text out of the Inspector while the mark stays content-free", async () => {
@@ -321,7 +327,7 @@ describe("a corrected message is told apart from a later restatement of the old 
     )!;
     expect(JSON.parse(receipt.reference)).toMatchObject({
       correctionMarks: 1,
-      readingRulesVersion: "history-reading:v2",
+      readingRulesVersion: "history-reading:v3",
     });
   });
 });

@@ -28,6 +28,7 @@ type CandidateRow = Readonly<{
   candidate_count: string;
   daily_session_id: string | null;
   exclusion: { controlId: string; reason: string } | null;
+  corrected_at: Date | null;
   expressed_at: Date | null;
   expression_timezone: string | null;
   expression_timezone_source: "request" | "session_start_fallback" | null;
@@ -112,6 +113,13 @@ export const RECENT_CONTEXT_CANDIDATE_SQL = `
         revision.canonical_text AS text,
         pg_catalog.octet_length(revision.canonical_text) AS text_bytes,
         event.created_at AS expressed_at,
+        -- Presentation only: the wording is the person's own correction of
+        -- this message, made at this instant. Selection and the existing
+        -- Correction / Forget exclusions do not read it.
+        CASE
+          WHEN event.actor = 'user' AND revision.created_by = 'user_correction'
+          THEN revision.created_at
+        END AS corrected_at,
         COALESCE(
           generating_command.request_timezone,
           expression_command.request_timezone,
@@ -264,6 +272,7 @@ export const RECENT_CONTEXT_CANDIDATE_SQL = `
     bounded.text,
     bounded.text_bytes,
     bounded.expressed_at,
+    bounded.corrected_at,
     bounded.expression_timezone,
     bounded.expression_timezone_source,
     bounded.exclusion,
@@ -419,6 +428,9 @@ export class PostgresRecentContextSource implements RecentContextSourcePort {
             row.exclusion === null || controlReason === null
               ? null
               : { controlId: row.exclusion.controlId, reason: controlReason },
+          ...(row.corrected_at === null
+            ? {}
+            : { correctedAt: row.corrected_at.toISOString() }),
           expressedAt: row.expressed_at!.toISOString(),
           expressionTimezone: row.expression_timezone,
           expressionTimezoneSource:

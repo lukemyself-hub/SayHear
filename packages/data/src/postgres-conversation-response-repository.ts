@@ -112,6 +112,7 @@ type ContextHeadRow = Readonly<{
 
 type ContextEventRow = Readonly<{
   actor: "user" | "assistant";
+  corrected_at: Date | null;
   expressed_at: Date;
   expression_timezone: string | null;
   expression_timezone_source: "request" | "session_start_fallback" | null;
@@ -1093,6 +1094,13 @@ export class PostgresConversationResponseRepository
           SELECT
             event.actor,
             event.created_at AS expressed_at,
+            -- Presentation only: the wording is the person's own correction
+            -- of this message, made at this instant.
+            CASE
+              WHEN event.actor = 'user'
+                AND revision.created_by = 'user_correction'
+              THEN revision.created_at
+            END AS corrected_at,
             COALESCE(
               generating_command.request_timezone,
               expression_command.request_timezone,
@@ -1297,6 +1305,9 @@ export class PostgresConversationResponseRepository
           : { requestTimezone: row.request_timezone }),
         events: events.rows.map((event) => ({
           actor: event.actor,
+          ...(event.corrected_at === null
+            ? {}
+            : { correctedAt: event.corrected_at.toISOString() }),
           expressedAt: event.expressed_at.toISOString(),
           expressionTimezone: event.expression_timezone,
           expressionTimezoneSource:

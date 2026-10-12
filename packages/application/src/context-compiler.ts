@@ -20,7 +20,11 @@ import type {
   InteractionTurnId,
   UserId,
 } from "@sayhear/domain";
-import { renderMessageNotes, withMessageNote } from "./message-presentation";
+import {
+  MESSAGE_NOTE_MARK,
+  renderMessageNotes,
+  withMessageNote,
+} from "./message-presentation";
 import {
   decodeHistoryRecallReceipt,
   encodeHistoryRecallReceipt,
@@ -141,6 +145,12 @@ export type ContextPolicyVersions = Readonly<{
 
 export type ContextSourceEvent = Readonly<{
   actor: "user" | "assistant";
+  /**
+   * Set when this user message's wording is the person's own correction (the
+   * current revision was created by a user correction): the instant the
+   * correction was made. It is frozen on the time metadata entry only.
+   */
+  correctedAt?: string;
   /** Message expression instant from the committed Event row. */
   expressedAt?: string;
   /** Request zone for this message, or the session-start fallback. */
@@ -482,6 +492,14 @@ export const HISTORY_RECALL_CONTEXT_SECTION_KEY =
 const CONTEXT_TIME_BASE_TOKEN_BUDGET = 256;
 const CONTEXT_TIME_ENTRY_TOKEN_BUDGET = 12;
 const CONTEXT_TIME_ZONE_TOKEN_BUDGET = 16;
+/** Added only when a message outside a History Answer quote carries a note. */
+const CONTEXT_TIME_NOTE_RULE_TOKEN_BUDGET = 128;
+/**
+ * How to read a correction note on a message that is not a History Answer
+ * quote (seven-day background, same Daily Session). Present only when such a
+ * note is sent, so a Context without corrections is unchanged.
+ */
+const MESSAGE_NOTE_RULE = `A message that opens with a bracketed line starting "${MESSAGE_NOTE_MARK}" carries a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.`;
 
 type ContextTimeEntry = Readonly<{
   actor: "user" | "assistant";
@@ -733,8 +751,9 @@ export function createContextCompiler(dependencies: {
         if (estimatedTokens > remaining) {
           break;
         }
+        const { correctedAt: _correctedAt, ...sessionEvent } = event;
         selectedNewestFirst.push({
-          ...event,
+          ...sessionEvent,
           estimatedTokens,
           section: "committed_raw_events",
           selectionOrder,
@@ -773,8 +792,14 @@ export function createContextCompiler(dependencies: {
                 ? currentInput.expressionTimezone ?? null
                 : null),
             correctedAt: new Map(
-              (source.historyRecall?.events ?? []).flatMap((event) =>
-                event.actor === "user" && event.correctedAt !== undefined
+              [
+                ...(source.historyRecall?.events ?? []),
+                ...(recentContext?.selected ?? []),
+                ...source.events,
+              ].flatMap((event) =>
+                event.actor === "user" &&
+                event.correctedAt !== undefined &&
+                event.correctedAt !== null
                   ? [[String(event.revisionId), event.correctedAt] as const]
                   : [],
               ),
@@ -1281,26 +1306,7 @@ export function createContextCompiler(dependencies: {
         ...history,
         currentInput,
       ];
-      // In-place notes are part of the frozen reading rules: a result frozen
-      // before history-reading:v3 replays its messages exactly as they were.
-      const marksQuotedMessages =
-        historyRecall !== undefined &&
-        historyReadingRulesMarkMessages(historyRecall.receipt.readingRulesVersion);
-      const messageNotes =
-        timeContext === undefined
-          ? []
-          : renderMessageNotes({
-              anchorTimezone: timeContext.anchor.timezone,
-              messages: timeContext.entries.map((entry) => ({
-                actor: entry.actor,
-                correctedAt: entry.correctedAt ?? null,
-                expressedAt: entry.expressedAt,
-                timezone: entry.expressionTimezone,
-              })),
-              quotedCount: marksQuotedMessages
-                ? historyRecall!.events.length
-                : 0,
-            });
+      const messageNotes = renderOutboundMessageNotes(timeContext, historyRecall);
       return {
         ...(source.actionReferenceHandles === undefined
           ? {}
@@ -1708,9 +1714,43 @@ function contextTimeMetadataMatches(
   );
 }
 
+/**
+ * In-place notes for the outbound messages, in provider order. A History
+ * Answer frozen with history-reading:v3 marks every message it quotes; a
+ * result frozen earlier replays its messages exactly as they were. Correction
+ * notes follow the instants frozen on the time metadata entries, which only a
+ * Context compiled with them carries.
+ */
+function renderOutboundMessageNotes(
+  timeContext: ContextTimeMetadata | undefined,
+  historyRecall:
+    | Readonly<{
+        events: readonly unknown[];
+        receipt: HistoryRecallReceiptSnapshot;
+      }>
+    | undefined,
+): readonly (string | null)[] {
+  if (timeContext === undefined) return [];
+  return renderMessageNotes({
+    anchorTimezone: timeContext.anchor.timezone,
+    messages: timeContext.entries.map((entry) => ({
+      actor: entry.actor,
+      correctedAt: entry.correctedAt ?? null,
+      expressedAt: entry.expressedAt,
+      timezone: entry.expressionTimezone,
+    })),
+    quotedCount:
+      historyRecall !== undefined &&
+      historyReadingRulesMarkMessages(historyRecall.receipt.readingRulesVersion)
+        ? historyRecall.events.length
+        : 0,
+  });
+}
+
 function renderContextTimeMetadata(
   metadata: ContextTimeMetadata,
   includeRelativeDateRules: boolean,
+  includeMessageNoteRule = false,
 ): string {
   const zones = [
     metadata.anchor.timezone,
@@ -1753,17 +1793,20 @@ function renderContextTimeMetadata(
       "For recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.",
     );
   }
+  if (includeMessageNoteRule) lines.push(MESSAGE_NOTE_RULE);
   return lines.join("\n");
 }
 
 function createBoundedContextTimeMetadata(input: {
   metadata: ContextTimeMetadata;
   maximumMessageCount: number;
+  includeMessageNoteRule: boolean;
   includeRelativeDateRules: boolean;
 }): Readonly<{ budgetTokens: number; content: string }> {
   const content = renderContextTimeMetadata(
     input.metadata,
     input.includeRelativeDateRules,
+    input.includeMessageNoteRule,
   );
   const zoneCount = new Set(
     [
@@ -1774,7 +1817,8 @@ function createBoundedContextTimeMetadata(input: {
   const budget =
     CONTEXT_TIME_BASE_TOKEN_BUDGET +
     input.metadata.entries.length * CONTEXT_TIME_ENTRY_TOKEN_BUDGET +
-    zoneCount * CONTEXT_TIME_ZONE_TOKEN_BUDGET;
+    zoneCount * CONTEXT_TIME_ZONE_TOKEN_BUDGET +
+    (input.includeMessageNoteRule ? CONTEXT_TIME_NOTE_RULE_TOKEN_BUDGET : 0);
   const actualTokens = estimateTokens(content);
   if (
     input.metadata.entries.length > input.maximumMessageCount ||
@@ -2198,6 +2242,10 @@ function createSections(input: {
         : {
             ...createBoundedContextTimeMetadata({
               metadata: input.timeContext,
+              includeMessageNoteRule: renderOutboundMessageNotes(
+                input.timeContext,
+                input.historyRecall,
+              ).some((note) => note?.startsWith(MESSAGE_NOTE_MARK) === true),
               includeRelativeDateRules: input.timeContextFormat !== "compact-v2",
               maximumMessageCount:
                 input.rawEventTokenBudget +

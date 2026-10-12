@@ -151,6 +151,12 @@ export type RecentContextSourceRequest = Readonly<{
  */
 export type RecentContextSourceItem = Readonly<{
   actor: "user" | "assistant";
+  /**
+   * Set when a user message's wording is the person's own correction: the
+   * instant the correction was made. Presentation only; selection and the
+   * existing Correction / Forget exclusions do not read it.
+   */
+  correctedAt?: string | null;
   dailySessionId: DailySessionId;
   exclusion: Readonly<{
     controlId: string;
@@ -344,6 +350,8 @@ export type RecentContextOmission = Readonly<{
 
 export type RecentContextSelectedEvent = Readonly<{
   actor: "user" | "assistant";
+  /** See {@link RecentContextSourceItem.correctedAt}. */
+  correctedAt?: string;
   dailySessionId: DailySessionId;
   estimatedTokens: number;
   expressedAt: string;
@@ -750,6 +758,11 @@ export function selectRecentContext(input: {
     remaining -= estimatedTokens;
     selected.push({
       actor: item.actor,
+      ...(item.actor === "user" &&
+      item.correctedAt !== undefined &&
+      item.correctedAt !== null
+        ? { correctedAt: item.correctedAt }
+        : {}),
       dailySessionId: item.dailySessionId,
       estimatedTokens,
       expressedAt: item.expressedAt,

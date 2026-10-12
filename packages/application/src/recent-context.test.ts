@@ -1537,6 +1537,148 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       }),
     ).toThrow(CompiledContextIntegrityError);
   });
+
+  /**
+   * SPEC #301 presentation fix: a corrected message keeps its original place
+   * and time in the seven-day background and in the same Daily Session too, so
+   * a restatement of the old value written before the correction reads as a
+   * later change of mind. The notes sit on the messages themselves.
+   */
+  describe("corrections are noted on the messages (ordinary turns)", () => {
+    const currentAt = new Date("2026-11-03T18:00:00.000Z");
+    const zone = {
+      expressionTimezone: "America/Los_Angeles",
+      expressionTimezoneSource: "request" as const,
+      locale: "en-US",
+    };
+    const restatement = {
+      ...zone,
+      actor: "user" as const,
+      expressedAt: "2026-11-03T16:00:00.000Z",
+      revisionId: rev(0x702),
+      sequence: 7,
+      text: "Yes, two and a half months.",
+    };
+    const reply = {
+      ...zone,
+      actor: "assistant" as const,
+      expressedAt: "2026-11-03T16:00:05.000Z",
+      revisionId: rev(0x703),
+      sequence: 8,
+      text: "That is a good bonus.",
+    };
+    const currentInput = {
+      ...zone,
+      actor: "user" as const,
+      expressedAt: currentAt.toISOString(),
+      revisionId: currentInputRevisionId,
+      sequence: 9,
+      text: "Anyway, long day.",
+    };
+    const NOTE_RULE =
+      'A message that opens with a bracketed line starting "[Note." carries a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.';
+    const render = async (
+      recent: Parameters<typeof createCompilerWithRecent>[0],
+      events: NonNullable<ContextSourceSnapshot["events"]>,
+    ) => {
+      const { compiler, saved } = createCompilerWithRecent(recent, [], {
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+        sourceOverrides: {
+          commandCreatedAt: currentAt,
+          events,
+          requestTimezone: "America/Los_Angeles",
+        },
+      });
+      await compiler.compile({ generationCommandId, interactionTurnId, userId });
+      const manifest = saved();
+      if (!manifest) throw new Error("The test manifest was not captured.");
+      return {
+        manifest,
+        payload: compiler.renderPermittedPayload({ ...manifest, generationStage: "decision" }),
+      };
+    };
+
+    it("notes a corrected seven-day background message and a same-session message written before that correction", async () => {
+      const { manifest, payload } = await render(
+        [
+          item({
+            correctedAt: "2026-11-03T16:30:00.000Z",
+            dailySessionId: earlierSessionId,
+            expressedAt: "2026-11-02T03:00:00.000Z",
+            expressionTimezone: "Asia/Shanghai",
+            expressionTimezoneSource: "request",
+            revisionId: 0x701,
+            sequence: 4,
+            text: "The bonus is one and a half months.",
+          }),
+        ],
+        [restatement, reply, currentInput],
+      );
+      expect(payload.messages.map((message) => message.text)).toEqual([
+        "[Note. They corrected this message on 2026-11-04 00:30 (Asia/Shanghai): the wording below is their corrected one and is what they stand by.]\nThe bonus is one and a half months.",
+        "[Note. They wrote this before they made the 2026-11-04 00:30 (Asia/Shanghai) correction to their 2026-11-02 11:00 (Asia/Shanghai) message. It is not a later change of mind: where it differs from that corrected message on the same point, the corrected message is how it stands.]\nYes, two and a half months.",
+        "That is a good bonus.",
+        "Anyway, long day.",
+      ]);
+      expect(payload.instructions).toContain(NOTE_RULE);
+      // The frozen Context carries the instant, never the text.
+      for (const section of manifest.sections) {
+        expect(section.reference).not.toContain("bonus");
+      }
+      expect(compiler_replays(manifest, payload)).toBe(true);
+    });
+
+    it("notes a message corrected in the same Daily Session", async () => {
+      const { payload } = await render(
+        [],
+        [{ ...restatement, correctedAt: "2026-11-03T17:00:00.000Z" }, reply, currentInput],
+      );
+      expect(payload.messages.map((message) => message.text)).toEqual([
+        "[Note. They corrected this message on 2026-11-03 09:00: the wording below is their corrected one and is what they stand by.]\nYes, two and a half months.",
+        "That is a good bonus.",
+        "Anyway, long day.",
+      ]);
+      expect(payload.instructions).toContain(NOTE_RULE);
+    });
+
+    it("adds no note and no rule when nothing was corrected", async () => {
+      const { payload } = await render(
+        [
+          item({
+            dailySessionId: earlierSessionId,
+            expressedAt: "2026-11-02T03:00:00.000Z",
+            expressionTimezone: "Asia/Shanghai",
+            expressionTimezoneSource: "request",
+            revisionId: 0x701,
+            sequence: 4,
+            text: "The bonus is one and a half months.",
+          }),
+        ],
+        [restatement, reply, currentInput],
+      );
+      expect(payload.messages.map((message) => message.text)).toEqual([
+        "The bonus is one and a half months.",
+        "Yes, two and a half months.",
+        "That is a good bonus.",
+        "Anyway, long day.",
+      ]);
+      expect(payload.instructions).not.toContain("[Note.");
+    });
+
+    function compiler_replays(
+      manifest: NonNullable<ReturnType<ReturnType<typeof createCompilerWithRecent>["saved"]>>,
+      payload: unknown,
+    ): boolean {
+      const { compiler } = createCompilerWithRecent([], [], {
+        compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
+      });
+      return (
+        JSON.stringify(
+          compiler.renderPermittedPayload({ ...manifest, generationStage: "decision" }),
+        ) === JSON.stringify(payload)
+      );
+    }
+  });
 });
 
 /**
