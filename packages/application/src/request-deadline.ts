@@ -4,7 +4,7 @@ import {
 } from "./conversation-model";
 
 /**
- * The absolute end-to-end deadline of one chat request (issue #319, ADR-0151:
+ * The absolute end-to-end deadline of one chat request (issue #319, ADR-0152:
  * 30 seconds). It is frozen once at acceptance as a wall-clock instant and
  * every later step shares the remaining time; no step re-acquires a budget.
  *

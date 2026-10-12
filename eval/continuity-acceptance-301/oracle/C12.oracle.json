@@ -3,7 +3,7 @@
   "id": "C12",
   "title": "C12 Corrected and forgotten sources stay out, an independent experience stays in",
   "capability": "A figure the person corrected and the assistant reply adjacent to it, and something the person asked to have forgotten together with the sources explicitly associated with that request, must not flow back into a history answer. A separate, permitted experience on a similar theme must still be usable. A Full Purge racing a history turn, a recovery and any cache must not bring excluded material back. Existing Correction, Forget and Purge scopes apply unchanged to the new history path: ADR-0149 and SPEC #301 exclude only explicitly associated messages and do not widen Correction or Forget to the person's own later, unassociated restatements.",
-  "spec": ["#301 R12", "ADR-0151"],
+  "spec": ["#301 R12", "ADR-0152"],
   "ownerTickets": ["#320"],
   "language": "code-switch (zh with en terms)",
   "fixture": { "version": "dev-2", "sha256": "b16778616e3476ea9f6f86156583bef1412cbb70cf2cf838099693aea82a6578" },

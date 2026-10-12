@@ -29,7 +29,7 @@ prototype improves that failure without increasing incorrect recall, and the sel
 passes SayHear's privacy checks. Until then, `embedding` has no active Champion and runtime does
 not silently switch to a vector Provider.
 
-## Amendment (2026-10, issue #316, ADR-0151): original-text lookup is a separate, in-place lexical path
+## Amendment (2026-10, issue #316, ADR-0152): original-text lookup is a separate, in-place lexical path
 
 This ADR covers recall of **admitted Claims** only. Finding an ordinary older experience that
 never became a Claim is a different mechanism and does not change the Claim retrieval baseline:
@@ -50,7 +50,7 @@ scan never proves that something was not said or that a match is the earliest. A
 projection may be introduced only when measured scan latency requires it, together with its
 Purge registration, invalidation and rebuild regressions.
 
-## Amendment (2026-10, issue #317, ADR-0151): natural continuation is a recorded model query proposal
+## Amendment (2026-10, issue #317, ADR-0152): natural continuation is a recorded model query proposal
 
 Following up on the current talk reuses the #316 in-place original-text search; it adds no store,
 framework or embedding and does not change the Claim retrieval above, which still has no

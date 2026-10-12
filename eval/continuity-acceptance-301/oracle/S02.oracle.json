@@ -3,7 +3,7 @@
   "id": "S02",
   "title": "Smoke: a Trust Action that is actually needed",
   "capability": "An explicit request to stop remembering something is handled as a Trust Action, and the ordinary remark that follows is handled as an ordinary remark. Guards both halves of the #312 clue: the needed Action must still happen, and no Action may be invented for plain talk.",
-  "spec": ["#301 baseline", "#312", "ADR-0151"],
+  "spec": ["#301 baseline", "#312", "ADR-0152"],
   "ownerTickets": ["#313", "#319"],
   "language": "en",
   "fixture": { "version": "dev-1", "sha256": "dfcf5111f6160079ef2316bf868090406e09e968265956a4fc83272267e47fa7" },

@@ -5,7 +5,7 @@ date: 2026-08-22
 
 # Human Taste Is Authoritative in Behavior Evaluation
 
-> 2026-10-09：[ADR-0151](0151-continuity-requires-history-recall-and-response-acceptance.md)
+> 2026-10-09：[ADR-0152](0152-continuity-requires-history-recall-and-response-acceptance.md)
 > 为新连续记忆合同增加小规模真实模型回答验收；共情、人格及语义争议保留人工裁定，
 > 不把下述首版例外延用到新能力，也不因此恢复无关的大型评测流程。
 

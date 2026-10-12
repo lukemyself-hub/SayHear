@@ -3,7 +3,7 @@
   "id": "C07",
   "title": "C07 Old employer to new employer, a corrected start date, and a plan that was cancelled",
   "capability": "The person left one employer for another, explicitly corrected the start date they had first given, and planned a trip that they later cancelled. Asked about the present, SayHear keeps past and current apart, uses the corrected date and never the superseded one, and does not report a cancelled plan as something that happened.",
-  "spec": ["#301 R5", "#301 R7", "ADR-0151"],
+  "spec": ["#301 R5", "#301 R7", "ADR-0152"],
   "ownerTickets": ["#318"],
   "language": "zh",
   "fixture": { "version": "dev-2", "sha256": "58c8bd970f6fa7da2228709a3ccfdcb63dd86eccb3ef79c9433e9e94b7b6d7d0" },

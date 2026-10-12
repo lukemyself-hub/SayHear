@@ -1,5 +1,5 @@
 /**
- * Original-text experience search (issue #316, ADR-0151, ADR-0115 amendment).
+ * Original-text experience search (issue #316, ADR-0152, ADR-0115 amendment).
  *
  * The Decision may propose a search for an ordinary older experience: a few
  * equivalent keywords, optional people cues and an optional date range. The

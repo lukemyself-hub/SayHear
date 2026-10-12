@@ -22,7 +22,7 @@ Accepted（2026-08-22，issue #63 grilling 定案）
 
 > 七天背景首版曾按 [ADR-0150](../adr/0150-recent-context-ships-after-deterministic-validation.md)
 > 在确定性检查后上线。新的[连续记忆体验 SPEC](https://github.com/lukemyself-hub/SayHear/issues/301)
-> 按 [ADR-0151](../adr/0151-continuity-requires-history-recall-and-response-acceptance.md)
+> 按 [ADR-0152](../adr/0152-continuity-requires-history-recall-and-response-acceptance.md)
 > 增加小规模实际模型回答验收，不能沿用首版例外；私人聊天仍不复制为正式评测材料。
 
 ### 连续记忆验收补充

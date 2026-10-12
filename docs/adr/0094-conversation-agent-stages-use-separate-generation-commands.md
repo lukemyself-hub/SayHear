@@ -36,7 +36,7 @@ Attempt。它冻结主回应 result、current DialogueState Version、target Ver
 CompiledContext 与 policy bundle，不继承旧 Command 的可变 Session。Retry 从新的 Decision
 Command 开始，重新取得状态、选择和 reservation。
 
-## 修订（2026-10，issue #314，ADR-0151）：History Answer Command
+## 修订（2026-10，issue #314，ADR-0152）：History Answer Command
 
 - 新增显式 Command kind：**History Answer Command**（`generation_stage = 'history_answer'`）。
   Decision 以历史查询提案结束时，Gateway 在同一事务内：结算 Decision（command 与 attempt 为
@@ -72,7 +72,7 @@ Command 开始，重新取得状态、选择和 reservation。
 `history_recall_results` 与同一冻结/重验/恢复路径，不新增 stage 或 Command kind；它只在冻结结果中增加
 检索计划（线索组，私人字段）、按次经历分组的引用与检索覆盖统计，并在 Context 引用上增加
 `history_lexical_match/history_lexical_context` 两个选择原因（迁移 0075，不涉及受保护关系）。
-## 修订（2026-10，issue #319，ADR-0151）：新输入、取代与 Decision 结算
+## 修订（2026-10，issue #319，ADR-0152）：新输入、取代与 Decision 结算
 
 - **新输入是新的 User Event / Turn**。“再补充一点”“换个话题”都不追加进旧 Command：新一轮的冻结上下文
   包含前一个有效用户问题与新输入，由新一轮结合当前表达理解。不新增“补充”按钮或另一套意图状态机。

@@ -6,7 +6,7 @@ date: 2026-10-07
 # 近期对话背景通过确定性验证后上线，体验在正常聊天中验收
 
 > 2026-10-09：下文保留七天背景首版的历史取舍。
-> [ADR-0151](0151-continuity-requires-history-recall-and-response-acceptance.md)已为新的
+> [ADR-0152](0152-continuity-requires-history-recall-and-response-acceptance.md)已为新的
 > 连续记忆体验合同增加实际模型回答的上线前验收，不可继续援引本例外跳过新能力的
 > 时间、话题覆盖、自然接续和人格验证。既有确定性安全检查仍适用。
 

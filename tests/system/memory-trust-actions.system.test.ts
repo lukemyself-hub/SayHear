@@ -405,6 +405,7 @@ function createContextCompilerForTest() {
     rawEventTokenBudget: 4_000,
     repository: responseRepository,
     memoryRetrieval: createMemoryRetrievalService({
+      monotonicNow: () => 0,
       repository: new PostgresMemoryRetrievalRepository(database.pool),
       registry: {
         registryVersion: registrySnapshot.registryVersion,

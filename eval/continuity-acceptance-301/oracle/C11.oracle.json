@@ -3,7 +3,7 @@
   "id": "C11",
   "title": "C11 Partly remembered, could not look it up, and verified nothing there",
   "capability": "Three situations that must not collapse into one sentence. A date that was fully read and holds nothing may be called empty. A range that was only partly reachable must be answered as partial. A lookup that failed must be owned as not being able to recall right now. 'We never talked about that' and 'that was the first time' are claims that need a verified, complete read of the relevant range. None of this is said in system vocabulary.",
-  "spec": ["#301 R11", "#301 R2", "ADR-0151"],
+  "spec": ["#301 R11", "#301 R2", "ADR-0152"],
   "ownerTickets": ["#315", "#320"],
   "language": "zh",
   "fixture": { "version": "dev-2", "sha256": "230b6a130d407dcab25591787016bbb353b20e4b79afbb3a3c948ade0e47b999" },

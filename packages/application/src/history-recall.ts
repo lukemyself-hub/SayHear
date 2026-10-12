@@ -1,6 +1,6 @@
 /**
  * Controlled read-only history review (issue #314, ADR-0093/0094 amendment,
- * ADR-0151).
+ * ADR-0152).
  *
  * The Decision stage may PROPOSE one read-only history query. The proposal
  * only describes intent: a range of local calendar dates, the time basis
@@ -1008,7 +1008,7 @@ export type HistoryRecallGateway = Readonly<{
       userId: UserId;
     }>;
     /**
-     * The request's absolute end-to-end deadline (ADR-0151). The lookup runs
+     * The request's absolute end-to-end deadline (ADR-0152). The lookup runs
      * for no longer than the fixed policy bound or what remains of it,
      * whichever is smaller; once it is reached the lookup is a failure.
      */

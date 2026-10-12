@@ -12,6 +12,7 @@ import {
 const MANAGED_KEYS = [
   "SAYHEAR_PROVIDER_ADAPTER",
   "DEEPSEEK_API_KEY",
+  "DEEPSEEK_BASE_URL",
   "OPENAI_API_KEY",
   "OPENCODE_GO_API_KEY",
   "SAYHEAR_DEEPSEEK_BASE_URL",
@@ -114,6 +115,42 @@ describe("G1 capture provider adapters", () => {
         if (conversationAdapter.type === "responses-api") {
           expect(conversationAdapter.baseUrl).toBe("https://proxy.example");
         }
+      },
+    );
+  });
+
+  it("ignores the legacy DEEPSEEK_BASE_URL on the champion side", () => {
+    withEnvironment(
+      {
+        DEEPSEEK_API_KEY: "test-key",
+        DEEPSEEK_BASE_URL: "https://legacy.example",
+        SAYHEAR_PROVIDER_ADAPTER: "deepseek",
+      },
+      () => {
+        const { conversationAdapter } = buildChampionAssembly(process.env);
+        expect(conversationAdapter.type).toBe("responses-api");
+        if (conversationAdapter.type === "responses-api") {
+          expect(conversationAdapter.baseUrl).toBe("https://api.deepseek.com");
+        }
+      },
+    );
+  });
+
+  it("fails closed on the retired openai adapter and on unknown values", () => {
+    withEnvironment(
+      { OPENAI_API_KEY: "test-key", SAYHEAR_PROVIDER_ADAPTER: "openai" },
+      () => {
+        expect(() => buildChampionAssembly(process.env)).toThrow(
+          /Unsupported SAYHEAR_PROVIDER_ADAPTER: openai/,
+        );
+      },
+    );
+    withEnvironment(
+      { DEEPSEEK_API_KEY: "test-key", SAYHEAR_PROVIDER_ADAPTER: "not-a-provider" },
+      () => {
+        expect(() => buildChampionAssembly(process.env)).toThrow(
+          /Unsupported SAYHEAR_PROVIDER_ADAPTER: not-a-provider/,
+        );
       },
     );
   });

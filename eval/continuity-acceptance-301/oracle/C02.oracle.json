@@ -3,7 +3,7 @@
   "id": "C02",
   "title": "C02 What was talked about versus what happened, with three kinds of experience time",
   "capability": "Yesterday (Wednesday 16 September) the person mentioned three things: an outing that took place the previous Sunday, a repair done that same day, and a reunion whose date was never given. Asked what was talked about yesterday, all three count. Asked what actually happened yesterday, only the repair does. Asked when the reunion was, the honest answer is that no date was given. The day something was said is never passed off as the day it happened.",
-  "spec": ["#301 R1", "#301 R2", "#307", "ADR-0151"],
+  "spec": ["#301 R1", "#301 R2", "#307", "ADR-0152"],
   "ownerTickets": ["#314", "#315"],
   "language": "zh",
   "fixture": { "version": "dev-2", "sha256": "35bc798b5d2b52e3070a6d9d3f59817552da3d134dc2dd8184c0ab982d41a9a9" },

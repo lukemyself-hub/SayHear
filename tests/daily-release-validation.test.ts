@@ -146,6 +146,26 @@ describe("per-impact check selection", () => {
 });
 
 describe("unknown impact is located, never escalated", () => {
+  it("keeps known evaluation tools on baseline while preserving runtime and declared migration gates", () => {
+    const paths = [
+      "eval/continuation-acceptance-1a3b/pins.json",
+      "eval/continuation-acceptance-1a3b/role-provider-provisioning.ts",
+      "eval/memory-pairwise-126/shared.ts",
+      "scripts/capture-g1-role-provider-calls.ts",
+      "tests/g1-capture-provider-adapters.test.ts",
+    ];
+    const tools = planDailyReleaseValidation(request({ changedPaths: paths }));
+    expect(tools.requiresImpactLocation).toBe(false);
+    expect(selectedIds(tools)).toEqual(FIXED_PR_CI_BASELINE);
+    expect(classifyReleaseImpact([], [...paths, "packages/ai/src/provider.ts"]).effective)
+      .toContain("provider-migration");
+    expect(classifyReleaseImpact(["provider-migration"], paths).effective)
+      .toContain("provider-migration");
+    expect(classifyReleaseImpact([], [...paths, "unknown/tool.ts"]).located).toBe(false);
+    expect(classifyReleaseImpact([], ["eval/unknown-provider.ts"]).effective)
+      .toContain("provider-migration");
+  });
+
   it("asks for the impact location instead of starting the full acceptance", () => {
     const plan = planDailyReleaseValidation(
       request({ changedPaths: ["docs/notes.md"] }),

@@ -4,7 +4,7 @@
 
 Runnable eval artifact。非权威评测制品（ADR-0020 / ADR-0073）：只使用合成输入，
 只写入本次运行自建并在结束时删除的隔离 schema，不写产品状态。产品合同见
-[ADR-0151](../../docs/adr/0151-continuity-requires-history-recall-and-response-acceptance.md)
+[ADR-0152](../../docs/adr/0152-continuity-requires-history-recall-and-response-acceptance.md)
 与 SPEC #301；本目录不实现历史召回，也不宣称产品已通过。
 
 ## TL;DR

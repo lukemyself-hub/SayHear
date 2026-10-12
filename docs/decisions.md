@@ -32,6 +32,7 @@ Accepted
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 先用 PostgreSQL structured-lexical retrieval 验证 Memory 价值，Embedding 与 pgvector 改为证据触发的后续升级（2026-10 补充：未形成 Claim 的普通原文经历用独立的有界原位词法检索，无投影、无 embedding）
 - [`0065`](adr/0065-vercel-hosts-web-bff-and-durable-workflows.md)：Vercel 承载 Web、BFF 与 Durable Workflow
 - [`0066`](adr/0066-vercel-workflows-v4-runs-durable-asynchronous-work.md)：1A.2 起由 Vercel Workflows v4 承载持久异步任务
+- [`0151`](adr/0151-vercel-workflow-callback-redelivery-is-a-platform-limitation.md)：Vercel Workflow callback 的 at-least-once 重投是已接受的平台限制，应用层不拦截、等上游修复；不改变 outbox 幂等与 200ms retrieval deadline
 - [`0068`](adr/0068-agent-frameworks-do-not-own-long-term-product-state.md)：Agent Framework 不保存产品长期状态
 - [`0069`](adr/0069-internal-core-does-not-add-python-redis-or-temporal.md)：Internal Core 不增加 Python Worker、Redis 或 Temporal
 - [`0072`](adr/0072-internal-core-validates-bilingual-and-code-switched-use.md)：Internal Core 验收英文、中文与 code-switching，不建设中国大陆部署
@@ -102,7 +103,7 @@ Accepted
 - [`0142`](adr/0142-high-risk-gate-requires-referral-not-a-crisis-number.md)：高风险硬门禁要求把用户引向真实帮助，不要求报出危机热线；号码准确性由白名单另行把关
 - [`0146`](adr/0146-f3-ordinary-double-questions-are-observations.md)：F3 普通回复偶尔两个问句只记录观察；禁止问题、安全姿态及三个以上问题仍阻断
 - [`0149`](adr/0149-recent-conversation-context-is-bounded-source-history.md)：近期对话背景用含今天的七个本地日有界原文，不依赖 Claim/Episode/Reflection；既有 Correction/Forget 明确关联的旧消息整条排除
-- [`0151`](adr/0151-continuity-requires-history-recall-and-response-acceptance.md)：连续记忆增加不限七天的历史回顾、时间语义、自然接续与可选两段式回应；实际模型回答进入小规模上线前验收，技术路线另行决策
+- [`0152`](adr/0152-continuity-requires-history-recall-and-response-acceptance.md)：连续记忆增加不限七天的历史回顾、时间语义、自然接续与可选两段式回应；实际模型回答进入小规模上线前验收，技术路线另行决策
 - [`0134`](adr/0134-1a3b-rollout-is-staged-and-correctness-triggered.md)：1A.3b 分三阶段直接切换，已确认的正确性失败立即回滚受影响阶段
 - [`0115`](adr/0115-memory-recall-starts-with-structured-lexical-retrieval.md)：1A.3a 不预装向量检索，先以可观测的 structured-lexical baseline 验证召回
 - [`0116`](adr/0116-ai-impressions-use-natural-relational-recall.md)：相关 AI Impression 可以用自然、朋友式的观察主动表达，不强制每次加入来源声明或仪式化保留语

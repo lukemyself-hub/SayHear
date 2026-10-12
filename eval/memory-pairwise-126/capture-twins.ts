@@ -14,9 +14,10 @@
  * never production shadowing.
  *
  * Required environment (read from the repo root .env): DATABASE_URL,
- * SAYHEAR_PROVIDER_ADAPTER=deepseek|openai with the matching *_API_KEY, and
+ * SAYHEAR_PROVIDER_ADAPTER=deepseek|opencode-go with the matching *_API_KEY, and
  * optionally SAYHEAR_DEEPSEEK_BASE_URL / SAYHEAR_CONVERSATION_TEXT_MODEL /
- * SAYHEAR_PROVIDER_TIMEOUT_MS.
+ * SAYHEAR_PROVIDER_TIMEOUT_MS. Any other adapter value (including the retired
+ * "openai") fails closed.
  */
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";

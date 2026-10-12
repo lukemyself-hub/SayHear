@@ -19,7 +19,7 @@ Proposed
 ### 连续记忆体验的新增验收门槛
 
 [连续记忆体验 SPEC](https://github.com/lukemyself-hub/SayHear/issues/301)与
-[ADR-0151](../adr/0151-continuity-requires-history-recall-and-response-acceptance.md)
+[ADR-0152](../adr/0152-continuity-requires-history-recall-and-response-acceptance.md)
 要求确定性来源/出站/用户控制验证之外，增加小规模固定合成场景的真实模型回答验证。
 日期、主要话题覆盖、事实、更正、自然承接、人格和取消续答须有结果证据；核心失败
 不能被总体平均分掩盖。人工味觉权威保留，自动检查/judge 仅预筛。

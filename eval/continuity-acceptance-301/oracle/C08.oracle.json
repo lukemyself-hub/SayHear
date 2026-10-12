@@ -3,7 +3,7 @@
   "id": "C08",
   "title": "C08 Praised for efficiency and feeling flat: use what the person said matters to them",
   "capability": "A month ago the person said that deciding things for themselves matters more to them than being fast. Today they are praised in public for speed and feel deflated. History is used to understand the present feeling: the earlier statement is the relevant meaning, the unrelated camping trip is not. The reply does not guess the manager's motives, does not slide into advice, and does not turn one feeling into a fixed description of who the person is.",
-  "spec": ["#301 R6", "#301 R8", "ADR-0108", "ADR-0110", "ADR-0151"],
+  "spec": ["#301 R6", "#301 R8", "ADR-0108", "ADR-0110", "ADR-0152"],
   "ownerTickets": ["#318"],
   "language": "en",
   "fixture": { "version": "dev-2", "sha256": "8e318020a28ab2f68c09ae927fed394af5c3ee380703f30624f15adac99079b2" },

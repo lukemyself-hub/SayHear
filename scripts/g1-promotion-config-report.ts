@@ -36,7 +36,6 @@
  */
 import { execFile } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
-import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 import { ONE_A_3B_G1_ENABLED_ROLES } from "@sayhear/application";
@@ -771,9 +770,10 @@ export async function main(
   return report.promotionAllowed ? 0 : 1;
 }
 
+const entryPoint = process.argv[1]?.replace(/\\/g, "/");
 const isDirectRun =
-  typeof process.argv[1] === "string" &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  entryPoint === "scripts/g1-promotion-config-report.ts" ||
+  entryPoint?.endsWith("/scripts/g1-promotion-config-report.ts") === true;
 
 if (isDirectRun) {
   main()

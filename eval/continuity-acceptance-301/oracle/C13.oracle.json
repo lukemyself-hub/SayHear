@@ -3,7 +3,7 @@
   "id": "C13",
   "title": "C13 Explicit-date review of an unclaimed experience older than seven days",
   "capability": "When the person names a calendar date well outside the seven-day default background, the original messages written on that local date (and only that date) are read from the retained source and reach the Provider with their roles, expression times and sources, so the reply is grounded and a single complete paragraph. Neighbouring dates are not pulled in.",
-  "spec": ["#301 R3", "#314", "ADR-0093", "ADR-0094", "ADR-0151"],
+  "spec": ["#301 R3", "#314", "ADR-0093", "ADR-0094", "ADR-0152"],
   "ownerTickets": ["#314"],
   "language": "zh",
   "fixture": { "version": "dev-1", "sha256": "9fa275dc3dc8c7eef4e18378b485881eac1a685d2032a7f813dfc1bef1696c7f" },

@@ -485,8 +485,16 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
    */
   async function respond(
     text: string,
-    options: { policyVersion?: string } = {},
+    options: { policyVersion?: string; structuredLaneDurationMs?: number } = {},
   ): Promise<void> {
+    let elapsedMs = 0;
+    const retrievalRepository = new PostgresMemoryRetrievalRepository(database.pool);
+    const runStructuredLane = retrievalRepository.runStructuredLane.bind(retrievalRepository);
+    retrievalRepository.runStructuredLane = async (input) => {
+      const rows = await runStructuredLane(input);
+      elapsedMs += options.structuredLaneDurationMs ?? 0;
+      return rows;
+    };
     const contextCompiler = createContextCompiler({
       clock,
       compilerVersion: "context-compiler:v1",
@@ -494,7 +502,8 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
       rawEventTokenBudget: 4_000,
       repository: responseRepository,
       memoryRetrieval: createMemoryRetrievalService({
-        repository: new PostgresMemoryRetrievalRepository(database.pool),
+        monotonicNow: () => elapsedMs,
+        repository: retrievalRepository,
         registry: {
           registryVersion: registrySnapshot.registryVersion,
           entryFor(predicateId) {
@@ -794,14 +803,16 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
     );
     const wang = await seedPersonEntity("小王");
     await seedColleagueClaim(wang);
-    retrievalFaults = { structuredExact: { delayMs: 120 } };
-    await respond("我同事小王还好吗", { policyVersion: "memory-retrieval:v1-tight" });
+    await respond("我同事小王还好吗", {
+      policyVersion: "memory-retrieval:v1-tight",
+      structuredLaneDurationMs: 120,
+    });
 
     const run = await latestRun();
     expect(run.status).toBe("degraded");
     expect(run.degraded_reason_codes).toContain("retrieval_deadline_exceeded");
     expect(run.deadline_exceeded_stage).toBe("lane_execution");
-    expect(run.duration_ms).toBeGreaterThanOrEqual(60);
+    expect(run.duration_ms).toBe(120);
     const compiled = await database.pool.query<{ degraded_reason: string | null }>(
       `SELECT degraded_reason FROM compiled_contexts
        WHERE compiled_context_id = $1`,
@@ -813,13 +824,14 @@ describe("Structured-Lexical retrieval baseline system seam", () => {
   it("demonstrates boundary success inside the deadline with recorded duration (AC 18)", async () => {
     const wang = await seedPersonEntity("小王");
     await seedColleagueClaim(wang);
-    retrievalFaults = { structuredExact: { delayMs: 80 } };
-    await respond("我同事小王还好吗", { policyVersion: "memory-retrieval:v1-wide" });
+    await respond("我同事小王还好吗", {
+      policyVersion: "memory-retrieval:v1-wide",
+      structuredLaneDurationMs: 80,
+    });
 
     const run = await latestRun();
     expect(run.status).toBe("completed");
-    expect(run.duration_ms).toBeGreaterThanOrEqual(80);
-    expect(run.duration_ms).toBeLessThanOrEqual(10_000);
+    expect(run.duration_ms).toBe(80);
     const candidates = await candidatesOf(run.retrieval_run_id);
     expect(candidates[0]!.final_rank).toBe(1);
   });

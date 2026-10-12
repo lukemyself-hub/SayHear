@@ -239,6 +239,16 @@ Claim、Embedding、Summary、Transcript finalization 和 Replay。
 - 1B.1：过期未删除音频、卡住的 Transcript finalization 和 Voice runtime cleanup；
 - 1B.2：卡住或无法收敛的 delivery receipt / buffer。
 
+### 13.7 平台 callback 重投
+
+Vercel Workflow 在 at-least-once 投递下可能对同一已处理 message 重复触发队列
+callback，其编译后 runtime 会抛出 `MessageNotFoundError` / `MessageNotAvailableError`
+并返回 HTTP 500。这属于平台行为，应用层没有可插拔的 callback 处理 seam，不拦截、
+不静默、不新增处理，等待上游修复；记录见
+[ADR-0151](../adr/0151-vercel-workflow-callback-redelivery-is-a-platform-limitation.md)。
+该限制不改变本节 13.2 / 13.3 的业务幂等与 outbox 可靠性契约：有效 Workflow 工作仍
+既不丢失也不重复，若出现与之冲突的收敛失败则按该 ADR 的边界另行处理。
+
 ## References
 
 - [原始 核心架构 v0.1 快照](../archive/architecture/sayhear-core-agent-architecture-v0.1.md)

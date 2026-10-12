@@ -128,6 +128,7 @@ const BIO_PROPOSITION_ID = "22222222-2222-7222-8222-222222222233";
 const BIO_COVERAGE_UNIT_ID = "22222222-2222-7222-8222-222222222234";
 const BIO_CLAIM_LINK_ID = "22222222-2222-7222-8222-222222222235";
 const BIO_FINDING_ID = "22222222-2222-7222-8222-222222222236";
+const JOURNAL_DIAGNOSTIC_FINDING_ID = "22222222-2222-7222-8222-222222222237";
 const ACTION_HANDLE = "purge-test-memory-handle";
 const OTHER_OWNER = "33333333-3333-7333-8333-333333333301";
 const OTHER_SESSION = "33333333-3333-7333-8333-333333333302";
@@ -382,6 +383,17 @@ async function seedOwnerData(pool: IsolatedPostgresSchema["pool"]) {
     ) VALUES (
       '11111111-1111-7111-8111-11111111112a', '${JV1}', '${S1}', 1, 'jg-1',
       'ja-1', TRUE, 'validated', '${VALIDATOR_POLICY}', '${t1}'
+    );
+    -- issue #234: the purge clear path DELETEs journal_diagnostic_findings, an
+    -- immutable table. A row must exist for the regression to exercise the
+    -- 0050 purge-pass exemption end to end (the run03 canary failure).
+    INSERT INTO journal_diagnostic_findings (
+      journal_diagnostic_finding_id, journal_validation_result_id,
+      journal_version_id, journal_statement_id, code, detail_code, created_at
+    ) VALUES (
+      '${JOURNAL_DIAGNOSTIC_FINDING_ID}',
+      '11111111-1111-7111-8111-11111111112a', '${JV1}', '${JS1}',
+      'third_person_style', 'first_person_expression', '${t1}'
     );
     INSERT INTO daily_session_date_outcomes (
       daily_session_id, user_id, logical_date, outcome,
@@ -1360,6 +1372,50 @@ describe("Internal Owner Full Purge system seam — 1A.3a operator-only purge", 
     ).resolves.toEqual({ deleted: operationalMetadataBeforeSweep + 1 });
     expect(await countRows("SELECT 1 FROM sensitive_access_audits")).toBe(0);
     expect(await countRows("SELECT 1 FROM owner_purge_operational_metadata")).toBe(0);
+  }, 60_000);
+
+  it("keeps immutability absolute outside a verified purge pass", async () => {
+    // The purge-pass exemption is conditional: DELETE only succeeds while an
+    // in-progress order is flagged on the transaction. Every normal-path
+    // UPDATE and every DELETE without a pass must still raise. The row counts
+    // prove the assertions below operate on real seeded rows.
+    expect(
+      await countRows("SELECT 1 FROM journal_diagnostic_findings"),
+    ).toBeGreaterThan(0);
+    expect(await countRows("SELECT 1 FROM evidence_items")).toBeGreaterThan(0);
+
+    await expect(
+      database.pool.query("DELETE FROM journal_diagnostic_findings"),
+    ).rejects.toMatchObject({
+      code: "55000",
+      message: "Journal diagnostic findings are immutable",
+    });
+    await expect(
+      database.pool.query("DELETE FROM evidence_items"),
+    ).rejects.toMatchObject({
+      code: "55000",
+      message: "EvidenceItem is immutable",
+    });
+    await expect(
+      database.pool.query(
+        "UPDATE journal_statements SET statement_text = 'rewritten'",
+      ),
+    ).rejects.toMatchObject({
+      code: "55000",
+      message: "Published Journal artifacts are immutable",
+    });
+    await seedMemoryPurgeData(database.pool);
+    expect(
+      await countRows("SELECT 1 FROM memory_claim_versions"),
+    ).toBeGreaterThan(0);
+    await expect(
+      database.pool.query(
+        "UPDATE memory_claim_versions SET typed_value = '\"rewritten\"'::jsonb",
+      ),
+    ).rejects.toMatchObject({
+      code: "55000",
+      message: "MemoryClaimVersion is immutable",
+    });
   }, 60_000);
 
   it("clears the typed Bio aggregate and every owner-scoped Bio child surface", async () => {

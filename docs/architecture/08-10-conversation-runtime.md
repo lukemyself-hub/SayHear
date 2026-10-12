@@ -88,7 +88,7 @@ Entity 和 Memory 等消费者，1A.3b 再增加 Reflection 消费者。
 | Provider 429 / 5xx | 受控退避与 jitter；不产生部分领域状态 |
 | Schema 非法 | 有限次数修复；随后 `needs_review` |
 | 用户删除与生成并发 | `data_epoch` / fencing token 阻止结果提交 |
-| 请求超过整体 30 秒（ADR-0151） | 截止时刻在受理时冻结并由所有步骤共用；超过后不开始新步骤，进行中的调用被取消（取消不了的不再等待），迟到结果不展示、不提交；无 token 展示为 failed(timeout)，已展示为 `interrupted`；技术重试不会越过截止 |
+| 请求超过整体 30 秒（ADR-0152） | 截止时刻在受理时冻结并由所有步骤共用；超过后不开始新步骤，进行中的调用被取消（取消不了的不再等待），迟到结果不展示、不提交；无 token 展示为 failed(timeout)，已展示为 `interrupted`；技术重试不会越过截止 |
 | 新用户消息到达时旧回答仍在途 | 旧回答失去展示与提交资格（同一 Session 存在更新的用户消息，数据库围栏）；进程内另取消其 Provider 调用；新消息是新 Turn，冻结上下文含前一个有效用户问题 |
 | Decision 转为 Action 提案后 | 无论受理结果，Decision 的 command/attempt 都被结算；已报告的 Provider 用量无论完成与否入账，未知保持 NULL |
 
@@ -721,7 +721,7 @@ Segment Command。Retry 创建新的 Decision Command，并重新取得 state、
 ### 9.1.1 近期对话背景
 
 > 本节保留七天背景首版的技术范围。新增历史回顾目标及模型回答验收见 §9.1.2 与
-> [ADR-0151](../adr/0151-continuity-requires-history-recall-and-response-acceptance.md)，
+> [ADR-0152](../adr/0152-continuity-requires-history-recall-and-response-acceptance.md)，
 > 不再将下述“首版不追加正式人评”推广到新连续记忆能力。
 
 首版技术与验收路线见 [ADR-0150](../adr/0150-recent-context-ships-after-deterministic-validation.md)：

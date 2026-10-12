@@ -128,7 +128,7 @@ export const ONE_A_3B_G1_SCHEMA_EXTENSIONS: readonly OneA3bG1SchemaExtensionPin[
     Object.freeze({
       store: "business" as const,
       name: "0080_conversation_request_lifecycle.sql",
-      sha256: "94b6e1da6f6c2a8fbaf383d582b41109afa3f4ff3e7cfdb3661be0a6038b616e",
+      sha256: "6a2302cc7205760db9cb517593b260b9d5fac16df5c6a3e796921f3e7b752ab3",
       justification:
         "Adds two nullable columns to generation_commands: request_deadline_at (the end-to-end deadline frozen at acceptance) and latest_input_fence_version (the named newest-user-input freshness rule), issue #319. Additive ADD COLUMN only; freshness_policy and every existing constraint are untouched.",
     }),

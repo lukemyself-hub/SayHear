@@ -3,7 +3,7 @@
   "id": "C06",
   "title": "C06 Two people with the same name, two similar interviews, and a guess the assistant once made",
   "capability": "A cousin and a new colleague share a given name. The cousin prepared for a consulting interview; the person separately and quietly interviewed at a fintech. The assistant once guessed the colleague was the person's new manager and the guess was never confirmed. When the name comes up again, people and events are not spliced together, the person's own interview is not handed to the cousin, and the assistant's guess is not promoted to a fact about the person's life.",
-  "spec": ["#301 R4", "#301 R5", "ADR-0151"],
+  "spec": ["#301 R4", "#301 R5", "ADR-0152"],
   "ownerTickets": ["#317", "#318"],
   "language": "code-switch (zh with en terms)",
   "fixture": { "version": "dev-2", "sha256": "bfc0731c3a9fdfa19012651d74f612fa2faf71405886272c147086ee7c21464d" },

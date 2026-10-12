@@ -110,7 +110,7 @@ Daily Session 与 Journal 的日期归属保持不变。此处记录已确认产
 ### 15.3.2 历史回顾与自然接续
 
 以下规则由[连续记忆体验 SPEC](https://github.com/lukemyself-hub/SayHear/issues/301)与
-[ADR-0151](../adr/0151-continuity-requires-history-recall-and-response-acceptance.md)确认，
+[ADR-0152](../adr/0152-continuity-requires-history-recall-and-response-acceptance.md)确认，
 属于待实现的体验合同，不表示当前线上能力已达到。七天仍是默认背景窗口，不是
 用户明确回顾历史的期限。
 

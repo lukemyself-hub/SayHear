@@ -97,7 +97,7 @@ History Query Proposal 的第二种形态：用几个等价关键词、可选的
 _Avoid_: Memory retrieval, Claim search, Semantic search, Fuzzy match
 
 **Request Deadline**:
-一次聊天请求被接受时冻结在 GenerationCommand 上的绝对截止时刻（整体 30 秒，ADR-0151）。所有后续步骤共用剩余时间而不重新领取；截止后不再开始新步骤，迟到结果不展示、不提交，恢复扫描也不续跑。它与 Provider 传输超时是两个独立配置。
+一次聊天请求被接受时冻结在 GenerationCommand 上的绝对截止时刻（整体 30 秒，ADR-0152）。所有后续步骤共用剩余时间而不重新领取；截止后不再开始新步骤，迟到结果不展示、不提交，恢复扫描也不续跑。它与 Provider 传输超时是两个独立配置。
 _Avoid_: Provider timeout, Step timeout, Retry budget
 
 **Superseded Answer**:

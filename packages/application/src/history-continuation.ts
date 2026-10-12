@@ -1,5 +1,5 @@
 /**
- * Natural continuation of the current talk (issue #317, ADR-0151, ADR-0115
+ * Natural continuation of the current talk (issue #317, ADR-0152, ADR-0115
  * amendment).
  *
  * A continuation is an experience search (#316) whose clues come from the

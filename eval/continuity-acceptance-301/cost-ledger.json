@@ -10,7 +10,7 @@
   "preconditions": [
     {
       "id": "issue-307-online-acceptance",
-      "description": "The #307 time-input fix is deployed to production and its online acceptance is recorded as complete (ADR-0151, 2026-10-09 addendum). Set to verified only with a link to that record.",
+      "description": "The #307 time-input fix is deployed to production and its online acceptance is recorded as complete (ADR-0152, 2026-10-09 addendum). Set to verified only with a link to that record.",
       "status": "unverified",
       "evidence": null
     }

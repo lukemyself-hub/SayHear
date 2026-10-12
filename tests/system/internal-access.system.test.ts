@@ -4336,6 +4336,15 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
         terminal: 0,
       },
     });
+
+    // Dispatch returns before the workflow's source-reading transaction ends.
+    // Wait for publication before the next case acquires TRUNCATE locks.
+    await vi.waitFor(async () => {
+      const commands = await database.pool.query<{ status: string }>(
+        "SELECT status FROM dialogue_state_commands",
+      );
+      expect(commands.rows).toEqual([{ status: "published" }]);
+    }, { timeout: 10_000, interval: 20 });
   });
 
   it("recovers a stale Text Turn whose process stopped before Provider dispatch", async () => {

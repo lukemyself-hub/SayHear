@@ -32,7 +32,7 @@ import { asGenerationCommandId } from "@sayhear/domain";
 import { createConversationResponseHandler } from "../../apps/web/src/conversation-response-handler";
 
 /**
- * Request lifecycle (issue #319, ADR-0151): one absolute 30 second deadline,
+ * Request lifecycle (issue #319, ADR-0152): one absolute 30 second deadline,
  * a newer user message that retires an older answer, and settlement of every
  * attempt. The model is the only substituted part; the BFF handler, Service,
  * Harness, Egress, Context Compiler and PostgreSQL run for real.

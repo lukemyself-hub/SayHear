@@ -1,4 +1,4 @@
--- Issue #319 (ADR-0151, ADR-0083, ADR-0094): the conversation request lifecycle.
+-- Issue #319 (ADR-0152, ADR-0083, ADR-0094): the conversation request lifecycle.
 --
 -- request_deadline_at     The absolute end-to-end deadline frozen when the
 --                         request was accepted. No step starts, and no result is

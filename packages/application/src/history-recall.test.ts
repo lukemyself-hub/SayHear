@@ -440,7 +440,7 @@ describe("history recall gateway", () => {
     expect(reads).toHaveLength(0);
     expect(commits).toHaveLength(1);
   });
-  describe("the request deadline bounds the lookup (SPEC #301 R10, ADR-0151)", () => {
+  describe("the request deadline bounds the lookup (SPEC #301 R10, ADR-0152)", () => {
     const deadlineIn = (ms: number): RequestDeadline =>
       createRequestDeadline({
         clock: () => new Date("2026-09-15T02:10:05.000Z"),

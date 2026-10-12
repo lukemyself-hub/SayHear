@@ -3,7 +3,7 @@
   "id": "C10",
   "title": "C10 Supplement, cancel, change of subject, resend, reconnect and recovery",
   "capability": "While a history answer is being looked up or generated, the person may add to the question, cancel, move to another subject, re-send, lose the connection and come back. A supplement is folded into the answer; an abandoned answer never arrives late; nothing is stored twice; and a single-segment reply that was cut off never becomes a successful Assistant Event.",
-  "spec": ["#301 R10", "ADR-0151", "#312"],
+  "spec": ["#301 R10", "ADR-0152", "#312"],
   "ownerTickets": ["#319"],
   "language": "en",
   "fixture": { "version": "dev-1", "sha256": "ffcd2452d6cc6263ef2c659371aaa76a3e68960ae62c42d467728b0b2fafaf8a" },

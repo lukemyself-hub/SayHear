@@ -3,7 +3,7 @@
   "id": "C05",
   "title": "C05 'They finally wrote back': connect when there is a cue, clarify when there is not",
   "capability": "Two things are awaiting an answer: a pottery submission from over three months ago and a job application from this week. A bare 'I finally got a reply' with no cue cannot be attributed, so a light clarification is right and neither guessing the recent one nor asking for the whole story again is. Two days later, after talk of throwing pots and a letter arriving by post, the same kind of sentence does have a cue and should be connected to the old submission.",
-  "spec": ["#301 R4", "ADR-0151"],
+  "spec": ["#301 R4", "ADR-0152"],
   "ownerTickets": ["#317"],
   "language": "en",
   "fixture": { "version": "dev-2", "sha256": "f2410327076eff65f4824afec5dcb8116224148afa5039b591dd8bb135f8a52c" },

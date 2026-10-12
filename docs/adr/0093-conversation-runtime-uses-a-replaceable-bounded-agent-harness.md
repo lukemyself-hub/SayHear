@@ -42,7 +42,7 @@ Conversation Action、receipt、Evidence、幂等、删除 fencing 或长期状�
 工具箱或多层 pass-through wrapper 购买“扩展性”。扩展通过稳定 Interface、版本化
 Harness Policy、Adapter conformance 与领域不变量测试实现。
 
-## 修订（2026-10，issue #314，ADR-0151）：受控只读历史查询是第三种互斥结果
+## 修订（2026-10，issue #314，ADR-0152）：受控只读历史查询是第三种互斥结果
 
 - Decision 的结果现在是三选一且互斥：普通 Final Response、恰好一个 Conversation Action
   Proposal、或恰好一个**受控只读历史查询提案**。查询提案不是 Conversation Action：它不进
@@ -66,7 +66,7 @@ Harness Policy、Adapter conformance 与领域不变量测试实现。
   相关开关，应用层 `GenerationCommandStage` 不含它；它**不是**新阶段的前身或借用对象。
 
 
-## 修订（2026-10，issue #315，ADR-0151）：历史查询提案增加“经历时间”基准，计划按时间块覆盖
+## 修订（2026-10，issue #315，ADR-0152）：历史查询提案增加“经历时间”基准，计划按时间块覆盖
 
 - 提案的 `time_basis` 增加 `experienced_date`（经历何时发生）。这不是新的信任边界：经历时间没有有来源的存储，
   所以此类查询读取“说过的话”作为线索，结果恒为 `partial`，不得宣称完整或“没发生”。表达日期与经历日期的
@@ -76,7 +76,7 @@ Harness Policy、Adapter conformance 与领域不变量测试实现。
   §8.4.3）。仍是一次只读查询、不进 Catalog、不扩大 Action；细节追问重新调用同一函数，不依赖助手上一轮摘要。
 - 读取范围包含当前 Daily Session 中属于该范围的消息（跨午夜会话），仅排除请求本身，编译时按 revision 去重。
 
-## 修订（2026-10，issue #320，ADR-0151）：历史分支有独立的版本化关闭与运行中停止规则
+## 修订（2026-10，issue #320，ADR-0152）：历史分支有独立的版本化关闭与运行中停止规则
 
 - 历史分支（受控只读历史查询与 History Answer）除部署开关 `SAYHEAR_HISTORY_RECALL_ENABLED` 外，增加与近期背景治理（ADR-0149 / #295）
   同模式的独立治理：全局、无 `user_id`、无内容的 `history_recall_policies`，最多一个 active 版本；关闭 = 撤销该行，重新启用 =

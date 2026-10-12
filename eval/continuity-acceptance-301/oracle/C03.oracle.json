@@ -3,7 +3,7 @@
   "id": "C03",
   "title": "C03 One session across midnight, a repeated daylight-saving hour, a travel timezone and a missing timezone",
   "capability": "A single conversation runs from 23:50 on 31 October to 01:40 on 1 November Pacific time, through the hour that occurs twice when clocks go back. It stays one Daily Session, yet a look back is organised by when each message was actually expressed and by the timezone of the question, not by the session's date. An earlier message was sent from Tokyo, and another has no recorded timezone. Session ownership is preserved, real instants decide order, and what is genuinely unknown stays unknown.",
-  "spec": ["#301 R1", "#307", "ADR-0012", "ADR-0151"],
+  "spec": ["#301 R1", "#307", "ADR-0012", "ADR-0152"],
   "ownerTickets": ["#314", "#315"],
   "language": "en",
   "fixture": { "version": "dev-1", "sha256": "520f77e5dae0fb0a8c2896902207aa8e0dad8aa5ccc78490ec57e98ff5577310" },

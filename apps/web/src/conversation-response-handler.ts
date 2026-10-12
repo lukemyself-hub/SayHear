@@ -11,7 +11,7 @@ type AuthenticatedPrincipal = Readonly<{ userId: UserId }>;
 export function createConversationResponseHandler(dependencies: {
   authenticate(request: Request): Promise<AuthenticatedPrincipal | null>;
   /**
-   * End-to-end request budget (ADR-0151: 30 seconds), enforced by the service
+   * End-to-end request budget (ADR-0152: 30 seconds), enforced by the service
    * at every step and backstopped here (issue #319).
    */
   requestBudgetMs?: number;

@@ -14,7 +14,7 @@ Journal publish、current Reflection 等要求 exact head；只要原 Evidence �
 任何删除、epoch 变化或 source invalidation 都优先 fail closed，旧 command 不能覆盖
 新 revision 或复活数据。
 
-## 修订（2026-10，issue #319，ADR-0151）：对话响应的请求截止与最新输入围栏
+## 修订（2026-10，issue #319，ADR-0152）：对话响应的请求截止与最新输入围栏
 
 对话响应链上的 GenerationCommand（`decision`、`action_finalization`、`history_answer`）在
 `source_valid:v1` 之外，冻结两条**具名**规则；`freshness_policy` 本身与它的 CHECK 约束不变，
@@ -22,7 +22,7 @@ Journal publish、current Reflection 等要求 exact head；只要原 Evidence �
 版本文本列，而不是 `freshness_policy` 的新取值：`freshness_policy` 的 CHECK 属于受 G1 schema 守卫保护的约束，
 不能为此修改，所以新规则以独立、可空、带版本名的列表达，守卫也不需要为它开例外：
 
-- **`request_deadline_at`**：请求被接受时冻结的绝对截止时刻（整体请求 30 秒，ADR-0151）。各阶段共用
+- **`request_deadline_at`**：请求被接受时冻结的绝对截止时刻（整体请求 30 秒，ADR-0152）。各阶段共用
   剩余时间，不重新领取：截止后不再开始新步骤（Provider 派发、技术重试与退避、历史回答、提交），不展示、
   不提交迟到结果。Finalization 与 History Answer 从 Decision 命令复制该列。技术重试只在重试时刻早于
   截止时才被安排；请求已结束（截止或取消）永不重试。恢复扫描遇到截止已过的未结算命令直接终止它，

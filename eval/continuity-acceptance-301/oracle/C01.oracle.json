@@ -3,7 +3,7 @@
   "id": "C01",
   "title": "C01 Recap of a full day with five subjects, then a follow-up on one detail",
   "capability": "Yesterday held five subjects spread from early morning to late night. The last one is long enough to crowd out the others, the day spans more than one history page (52 messages) and exceeds the default background budget. Asked to go over yesterday, SayHear covers all five subjects without mixing in today's similar bookkeeping problem; asked a follow-up, it answers the work detail from the original words.",
-  "spec": ["#301 R1", "#301 R2", "ADR-0151"],
+  "spec": ["#301 R1", "#301 R2", "ADR-0152"],
   "ownerTickets": ["#314", "#315"],
   "language": "zh",
   "fixture": { "version": "dev-3", "sha256": "523aed2400b99a3292e9dda58e32813715188060ef138e15ef1ee97f52e50868" },

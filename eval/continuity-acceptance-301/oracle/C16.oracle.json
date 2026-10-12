@@ -3,7 +3,7 @@
   "id": "C16",
   "title": "C16 Two similar older experiences and a same-named person, in English and code-switch",
   "capability": "A person asks about an ordinary activity they once told about. Two separate occasions months apart (one written in English, one mixing Chinese and English) are found again from the original words and kept as two occasions. A different person who merely shares a first name is not pulled in, and the answer is limited to what the search actually examined: it does not turn a bounded lookup into 'the first time ever' or 'only twice'.",
-  "spec": ["#301 R3", "#316", "ADR-0115", "ADR-0151"],
+  "spec": ["#301 R3", "#316", "ADR-0115", "ADR-0152"],
   "ownerTickets": ["#316"],
   "language": "code-switch",
   "fixture": { "version": "dev-1", "sha256": "20d91f265b914bcd74f07914ebecc3e4fe8d0dcbb9ca36004e2d4e9b31a00d3b" },

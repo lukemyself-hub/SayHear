@@ -184,7 +184,7 @@ function build(overrides: {
   freshnessProbeFailures?: number;
   /** The pool the history repository commits through (fault injection). */
   historyRepositoryPool?: Pool;
-  /** End-to-end request budget (ADR-0151); unset keeps the request unbounded. */
+  /** End-to-end request budget (ADR-0152); unset keeps the request unbounded. */
   requestBudgetMs?: number;
   source?: (inner: HistoryRecallSourcePort) => HistoryRecallSourcePort;
 } = {}) {

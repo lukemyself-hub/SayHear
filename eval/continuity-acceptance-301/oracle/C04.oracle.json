@@ -3,7 +3,7 @@
   "id": "C04",
   "title": "C04 Ordinary experience from three months ago, never a Memory",
   "capability": "An ordinary experience told about three months earlier, for which no Claim was ever formed, is found again from the original words when the person asks about it. Recall is not limited to the seven-day default background, small details come from the source, and nothing is invented. A recent rehearsal of a talk shares surface features (practising, hands) and must not be mistaken for it.",
-  "spec": ["#301 R3", "ADR-0151"],
+  "spec": ["#301 R3", "ADR-0152"],
   "ownerTickets": ["#316"],
   "language": "zh",
   "fixture": { "version": "dev-2", "sha256": "66e21a939b1aa3691035be268ff3552c5b6d81f2b993d78496a46ee7be289c35" },

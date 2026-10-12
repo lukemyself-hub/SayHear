@@ -274,7 +274,7 @@ export function reduceScrollFollow(
 }
 
 /**
- * Client-side stop condition (issue #319, ADR-0151). The server ends a request
+ * Client-side stop condition (issue #319, ADR-0152). The server ends a request
  * at 30 seconds; the client waits two seconds longer so it normally hears the
  * server's own terminal event, and gives up on its own after that even if the
  * connection is silent.

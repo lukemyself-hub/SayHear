@@ -479,6 +479,7 @@ describe("Context Inspector retrieval panel system seam (#122)", () => {
         ? {}
         : {
             memoryRetrieval: createMemoryRetrievalService({
+              monotonicNow: () => 0,
               repository: new PostgresMemoryRetrievalRepository(database.pool),
               registry: {
                 registryVersion: registrySnapshot.registryVersion,

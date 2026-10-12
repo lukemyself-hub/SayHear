@@ -268,7 +268,7 @@ export function createConversationResponseService(dependencies: {
   recoveryScanLimit?: number;
   recoveryGate?: RecoveryGate;
   /**
-   * End-to-end budget of one chat request in milliseconds (ADR-0151: 30000).
+   * End-to-end budget of one chat request in milliseconds (ADR-0152: 30000).
    * It is frozen as an absolute deadline when the request is accepted and
    * shared by every step; unset keeps the legacy unbounded behavior (issue
    * #319). It is separate from the Provider transport timeout.

@@ -3,7 +3,7 @@
   "id": "L01",
   "title": "L01 Request lifecycle: a newer message retires a reply in preparation, and a stalled reply stops at the deadline",
   "capability": "While a reply is still being prepared the person may keep typing: the newer message is taken as an addition or a new subject, the older reply is never shown and never stored, and nothing the person said is lost. A reply whose Provider stalls is stopped at the request deadline with an honest timeout, commits nothing late and leaves nothing running, and the conversation carries on normally afterwards.",
-  "spec": ["#301 R10", "#319", "ADR-0151", "ADR-0059", "ADR-0077", "ADR-0083"],
+  "spec": ["#301 R10", "#319", "ADR-0152", "ADR-0059", "ADR-0077", "ADR-0083"],
   "ownerTickets": ["#319"],
   "language": "en",
   "fixture": { "version": "dev-1", "sha256": "5ddbe2352c8c6ff280ab88c304eba0ba974fca496e1a2792e82a0f9e7b16eae2" },
