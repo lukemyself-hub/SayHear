@@ -1,0 +1,297 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 192000,
+    "inputTokenUpperBound": 160000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 120000,
+    "paidRequestUpperBound": 10,
+    "remainingUsdMicros": 9314656,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 3,
+      "seedTurns": 4
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H04",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 550 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "10 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The question streams and commits.",
+        "evidence": [
+          "steps[ask].chat.httpStatus=200",
+          "steps[ask].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a151f0-d4a0-79a9-a7ce-192ac7fdcfd8",
+          "next message: assistant \"讲过。七月十五号那天你跟我说，下班后和表弟去城北那条河里游了一会儿，好多年没下过野水了，换气老是呛，岸上有个钓鱼的大叔看\""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The three-month-old message and its neighbour reach the Provider.",
+        "evidence": [
+          "river:user: providerRequest=present, inspector.referencedEvents=present",
+          "river-after:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-old-source",
+        "kind": "objective",
+        "owner": "#316",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Asking about the past triggers no Trust Action.",
+        "evidence": [
+          "steps[ask].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract.",
+        "evidence": [
+          "steps[ask].chat.timing.firstVisibleTextMs=16728.325416999985 (CLI network, limit 3000)",
+          "steps[ask].chat.timing.committedMs=17238.13499999998 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The experience is retold from its source, at the right time.",
+        "evidence": [
+          "a-place: pass — reply: \"下班后和表弟去城北那条河里游了一会儿\" — Place, companion and occasion match the source.",
+          "a-angler: pass — reply: \"扔了个旧救生圈给你抱着\" — The life ring from the man fishing is retold.",
+          "tm-when: pass — reply: \"七月十五号那天你跟我说\" — Correct date of telling.",
+          "f-no-record: pass — It confirms the experience was told."
+        ],
+        "id": "S-detail",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Nothing is invented and the recent look-alike is not mixed in.",
+        "evidence": [
+          "f-river-name: pass — No river name, distance or duration is added.",
+          "f-person-name: pass — Nobody is named.",
+          "f-lesson-mixup: pass — The daughter's lessons are not mixed in."
+        ],
+        "id": "S-no-invention",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "Every ledger item is settled by a finding that cites the reply.",
+        "status": "pass"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": "agent:claude-opus-5.5-t08",
+    "runId": "run-1c818101-cbd7-4114-9deb-c3346f1f58c5",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 1",
+              "time of message 1: 2026-07-15 (expected 2026-07-15)"
+            ],
+            "fault": "none",
+            "source": "river:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 3",
+              "time of message 3: 2026-07-15 (expected 2026-07-15)"
+            ],
+            "fault": "none",
+            "source": "river-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          }
+        ]
+      },
+      "stepId": "ask"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "c021cf10a819ed029a1e1ba1a3bc2e5408de20bede2aa09d86c53c1d7f5df94c",
+    "fixtureVersion": "final-1",
+    "gitCommit": "1cfdf11a992d7bc7f6536c5dda783a4995fd8c28",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "recentContextGovernance": "active",
+    "runId": "run-1c818101-cbd7-4114-9deb-c3346f1f58c5",
+    "oracleSha256": "e7f8df67fe3c784c5b900c719216d01e11f648e42b23eb564bd44a7ad521ac8c",
+    "title": "H04 Holdout: an everyday experience from three months back that never became a Memory"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "abb8e582bd4eefb16b3a0aa8a3bf2140c877d13cc0c247ad0439cab14489b146",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "river:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "river:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "river-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "river-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-a:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-b:assistant"
+        }
+      ],
+      "stepId": "ask"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 32.054375000006985,
+      "cliCommittedMs": 17238.13499999998,
+      "cliFirstVisibleTextMs": 16728.325416999985,
+      "cliStreamClosedMs": 17238.212792000006,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "讲过。七月十五号那天你跟我说，下班后和表弟去城北那条河里游了一会儿，好多年没下过野水了，换气老是呛，岸上有个钓鱼的大叔看不过去，扔了个旧救生圈给你抱着。那天晚一点你又补了一句，说上岸的时候小腿肚子抽了一下筋，可回来的路上整个人特别松。我这儿能翻到的就这些，别的细节没有。",
+      "at": "2026-10-19T02:15:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我是不是跟你讲过有一回我自己下河游泳的事？那次是怎么个情况，我有点想不起来了。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 3247,
+    "outputTokens": 3196,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

@@ -1,0 +1,267 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 115200,
+    "inputTokenUpperBound": 96000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 72000,
+    "paidRequestUpperBound": 6,
+    "remainingUsdMicros": 9314656,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 1,
+      "seedTurns": 2
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "S03",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 2 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 323 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "6 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The recap request streams and commits.",
+        "evidence": [
+          "steps[recap].chat.httpStatus=200",
+          "steps[recap].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The corrected wording reaches the Provider.",
+        "evidence": [
+          "steps[fix].input.text: providerRequest=present"
+        ],
+        "id": "O-corrected-in",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The superseded wording never reaches the Provider.",
+        "evidence": [
+          "demo:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-superseded-out",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No excluded source reached the Provider or the compiled Context.",
+        "status": "pass"
+      },
+      {
+        "description": "The uncorrected message from the same day still reaches the Provider.",
+        "evidence": [
+          "gym:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-unrelated-in",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "No Action is admitted for a plain recap request.",
+        "evidence": [
+          "steps[recap].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "First visible text within 3 s and the complete reply within 10 s (CLI network).",
+        "evidence": [
+          "steps[recap].chat.timing.firstVisibleTextMs=24078.766916999994 (CLI network, limit 3000)",
+          "steps[recap].chat.timing.committedMs=24274.582084 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": null,
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The recap covers both subjects, uses the corrected timing and places them two days back.",
+        "evidence": [],
+        "id": "S-recap",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-5d9f76d8-d65a-4bbf-a4eb-bab99dc68b36",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 2",
+              "time of message 2: 2026-09-10 (expected 2026-09-10)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "gym:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-5",
+              "requestSequence": 5
+            }
+          }
+        ]
+      },
+      "stepId": "recap"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "2de842a38dc30ca3e21f15cf4a73915ca84085ddcbf44368b1e8964f64589fbb",
+    "fixtureVersion": "dev-1",
+    "gitCommit": "3b85255ef083197381bd669259569b0706c0c086",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-5d9f76d8-d65a-4bbf-a4eb-bab99dc68b36",
+    "oracleSha256": "4798a52a084757f4c4d7c46da1ba3c76517a02037d13fda8beeb11a837f1c681",
+    "title": "Smoke: history holds a correction, the present turn only asks for a recap"
+  },
+  "remainingRisks": [
+    "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "646e0299cccfd2188cfb66627ef4264ca0e06e0fa45f6e5a4d71f5bca2d4c019",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "demo:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "demo:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gym:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "gym:assistant"
+        }
+      ],
+      "stepId": "recap"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": null,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": null,
+      "providerLatencyMs": null,
+      "stepId": "fix"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 37.70012499999575,
+      "cliCommittedMs": 24274.582084,
+      "cliFirstVisibleTextMs": 24078.766916999994,
+      "cliStreamClosedMs": 24274.6365,
+      "providerLatencyMs": 0,
+      "stepId": "recap"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": null,
+      "at": "2026-09-10T10:50:00.000Z",
+      "stepId": "fix",
+      "terminalEvent": null,
+      "type": "correct",
+      "user": "这周最烦的是那个 client demo，定在周四上午十点，我的 slides 才做了一半。"
+    },
+    {
+      "assistant": "10号傍晚你跟我说的就两件事，一件是这周最烦那个 client demo，定在周四上午十点，slides 才做了一半；另一件是下班后去了趟 gym，跑步机上 twenty minutes 就不行了。11号那天你没留什么话。",
+      "at": "2026-09-12T02:00:00.000Z",
+      "stepId": "recap",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "帮我 recap 一下，前两天我都跟你说了些什么？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 2895,
+    "outputTokens": 3901,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "caseId": "H08",
+  "findings": [
+    {
+      "criterionId": "S-meaning",
+      "itemId": "a-small-now",
+      "quote": "it still left you feeling small",
+      "reason": "The present feeling is received.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-meaning",
+      "itemId": "a-own-say",
+      "reason": "Nothing links the feeling to what the person said about wanting a say; no history review was requested and the month-old messages never reached the Provider.",
+      "verdict": "fail"
+    },
+    {
+      "criterionId": "S-meaning",
+      "itemId": "f-sister-motive",
+      "reason": "The sister's motive is not asserted.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "S-meaning",
+      "itemId": "f-ferry",
+      "reason": "The island trip is not mentioned.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "a-small-now",
+      "quote": "it still left you feeling small",
+      "reason": "Advisory: the feeling is named plainly.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-advice",
+      "reason": "Advisory: no course of action is recommended.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-fixed-trait",
+      "reason": "Advisory: no permanent trait is declared.",
+      "verdict": "pass"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-cheerlead",
+      "reason": "Advisory: the person is not told to be pleased.",
+      "verdict": "pass"
+    }
+  ],
+  "reviewer": "agent:claude-opus-5.5-t08",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-20ddc851-463f-4ff7-91e3-f55e29b87a8e",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

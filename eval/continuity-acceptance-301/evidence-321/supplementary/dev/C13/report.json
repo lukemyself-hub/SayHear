@@ -1,0 +1,282 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 268800,
+    "inputTokenUpperBound": 224000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 168000,
+    "paidRequestUpperBound": 14,
+    "remainingUsdMicros": 9314656,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 5,
+      "seedTurns": 5
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "C13",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 5 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 665 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "12 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The review question streams and commits as one complete reply.",
+        "evidence": [
+          "steps[ask].chat.httpStatus=200",
+          "steps[ask].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds the question once, followed by exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a0a2d4-08c0-7359-94b5-184cd1e88c55",
+          "next message: assistant \"八月二十号那天你先说的是巷口修鞋摊的事，晚上六点半发的——老师傅教你用蜡线把开了线的帆布包缝了一遍，针脚歪歪扭扭，他还夸\""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The original messages of the asked date reach the Provider.",
+        "evidence": [
+          "cobbler:user: providerRequest=present, inspector.referencedEvents=present",
+          "cobbler-after:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-date-source",
+        "kind": "objective",
+        "owner": "#314",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Messages of neighbouring dates do not reach the Provider through the review.",
+        "evidence": [
+          "eve:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "next:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-date-scope",
+        "kind": "objective",
+        "owner": "#314",
+        "reason": "No excluded source reached the Provider or the compiled Context.",
+        "status": "pass"
+      },
+      {
+        "description": "The reply is grounded in the two messages of the asked date.",
+        "evidence": [],
+        "id": "S-grounded",
+        "kind": "semantic",
+        "owner": "#314",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-a040769a-f575-4fd7-b156-60560c01a4b5",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 1",
+              "time of message 1: 2026-08-20 (expected 2026-08-20)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "cobbler:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-12",
+              "requestSequence": 12
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 3",
+              "time of message 3: 2026-08-20 (expected 2026-08-20)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "cobbler-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-12",
+              "requestSequence": 12
+            }
+          }
+        ]
+      },
+      "stepId": "ask"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "9fa275dc3dc8c7eef4e18378b485881eac1a685d2032a7f813dfc1bef1696c7f",
+    "fixtureVersion": "dev-1",
+    "gitCommit": "3b85255ef083197381bd669259569b0706c0c086",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-a040769a-f575-4fd7-b156-60560c01a4b5",
+    "oracleSha256": "76d4a4b6d72f630ff27f5da0ac17e090543081fe304b079da10fc07b70bc110e",
+    "title": "C13 Explicit-date review of an unclaimed experience older than seven days"
+  },
+  "remainingRisks": [
+    "This is a development fixture. Final validation needs separately authored fixtures frozen before tuning.",
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "342e626cab300a637959e19c87e153b0b7e91c72493e6d7a9e020b5e8582ea30",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "eve:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "eve:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "cobbler:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "cobbler:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "cobbler-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "cobbler-after:assistant"
+        },
+        {
+          "eligibility": "forbidden",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "next:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "next:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "recent:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "recent:assistant"
+        }
+      ],
+      "stepId": "ask"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 30.639792000001762,
+      "cliCommittedMs": 16691.512042000002,
+      "cliFirstVisibleTextMs": 16023.944082999995,
+      "cliStreamClosedMs": 16691.58037499999,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "八月二十号那天你先说的是巷口修鞋摊的事，晚上六点半发的——老师傅教你用蜡线把开了线的帆布包缝了一遍，针脚歪歪扭扭，他还夸你手稳；到七点二十，你又讲回家以后越看那个包越顺眼，打算以后东西坏了先自己试着补。那天就这两件，超市排队听大爷聊孙子的那段是九月十四号晚上说的，不在八月二十号。",
+      "at": "2026-09-15T02:10:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "八月二十号那天，我都跟你说了些什么？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 2965,
+    "outputTokens": 1943,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}
