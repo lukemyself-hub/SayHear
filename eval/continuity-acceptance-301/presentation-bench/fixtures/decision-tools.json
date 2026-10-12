@@ -1,0 +1,265 @@
+[
+  {
+    "function": {
+      "description": "Record the user's explicit correction of something SayHear remembers. targetAnchor must quote the user's own words that identify the remembered item; optionally include correctedFact quoting what the user now states instead. Only call this when the user is clearly correcting or revoking a remembered understanding — never for ordinary new information.",
+      "name": "memory_correction",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "correctedFact": {
+            "maxLength": 300,
+            "type": "string"
+          },
+          "targetAnchor": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetAnchor"
+        ],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Explain where a remembered understanding came from, when the user asks why SayHear remembers or believes something. targetAnchor must quote the user's own words that identify the remembered item. Read-only: it never changes what SayHear remembers.",
+      "name": "explain_memory_source",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "targetAnchor": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetAnchor"
+        ],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Stop recalling one thing SayHear remembers. Use targetAnchor to quote the user's own words that identify either the whole remembered item or one relationship role. Do not use this for 'everything about' a person; that broader scope is not supported. This keeps the conversation and Journal intact while preventing the selected memory from being learned again.",
+      "name": "memory_forget_request",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "targetAnchor": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetAnchor"
+        ],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Remember one previously forgotten item again only when the user explicitly gives permission. targetAnchor must quote the user's own words identifying the currently fenced whole memory or relationship role. The new permission event is the new Evidence; never reactivate old Evidence, and never infer permission from repetition or time.",
+      "name": "memory_forget_reversal",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "targetAnchor": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetAnchor"
+        ],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Repair one Entity identity only when the user explicitly corrects SayHear: operation is merge, split, or promote; targetAnchor quotes the user's words identifying the existing Entity. Merge also requires relatedTargetAnchor for the other Entity. Split requires newEntityLabel for the separate identity. Promote is allowed only with an explicit identity statement or at least two independent revisions on different dates. Never use this for an ordinary mention, a fuzzy name, or a guessed identity.",
+      "name": "entity_identity_correction",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "newEntityLabel": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "merge",
+              "split",
+              "promote"
+            ],
+            "type": "string"
+          },
+          "relatedTargetAnchor": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "targetAnchor": {
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "targetAnchor"
+        ],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Propose changes to the Curiosity Stop Signal projection when the user avoids, refuses, or changes away from a question direction, asks you to stop asking questions, or later re-opens a stopped topic / offers new substantive content / explicitly invites questions again. Calling this function never replaces your user-facing reply: always include your complete natural-language response text in the same response, and add the call alongside it. Proposals are committed only by deterministic code; a preceding assistant question is required to suppress a direction.",
+      "name": "curiosity_stop_signal",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "proposals": {
+            "additionalProperties": false,
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "direction": {
+                  "description": "Short label of the question direction, e.g. 'work pressure'. Required for suppress_direction and release_direction.",
+                  "maxLength": 120,
+                  "type": "string"
+                },
+                "kind": {
+                  "description": "The proposed stop-signal change.",
+                  "enum": [
+                    "suppress_direction",
+                    "release_direction",
+                    "suppress_all_questions",
+                    "release_all_questions"
+                  ],
+                  "type": "string"
+                },
+                "release_reason": {
+                  "description": "Why the direction may be questioned again. Required for release proposals.",
+                  "enum": [
+                    "user_reopened",
+                    "new_substantive_content",
+                    "explicit_reinvitation"
+                  ],
+                  "type": "string"
+                },
+                "signal_kind": {
+                  "description": "How the user stopped the direction. Required for suppress proposals.",
+                  "enum": [
+                    "short_response",
+                    "avoided",
+                    "refused",
+                    "topic_changed"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposals"
+        ],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Look back at the user's own saved original messages from before today. This is a read-only lookup: it changes nothing and is NOT for correcting, forgetting or changing remembered information (those are separate actions). Do not use it for today's conversation, or for a greeting, small talk, a new subject or an unrelated remark. When you call it, call it alone, without any reply text; the answer is written after the lookup finishes. Resolve dates yourself from the time context into YYYY-MM-DD in the user's timezone. Two ways to ask. (1) By date: when the user names or points to a past calendar date or period (up to about three months), for example 'what did I tell you on August 20', 'what did we talk about yesterday', 'go over last week', or 'when did I first mention painting' (use a wide range from the far past), give start_date (and end_date for a run of dates). Also use it, with time_basis experienced_date, when they ask what HAPPENED or what they DID on a past day ('what did I do yesterday'). A follow-up asking for a detail of a period you already recapped should call it again for that period so the answer comes from the original words, not from your earlier summary. (2) By search: when the user asks about an ordinary thing, experience or person they told you about some time ago (weeks or months back) without a date you can resolve, for example 'did I ever tell you about playing the piano?', give search_terms: 2 to 5 short keywords or phrases exactly as they would literally appear in the user's own messages, including close synonyms and, when the user mixes languages, the forms in each language. Optionally add people (names or relationship words as the user would have written them) and a start_date/end_date range if the user gave a period. (3) By continuation: when the user does NOT ask about the past but their current message only makes sense with something they told you earlier (a pronoun or omission such as 'the results came in', 'she called again', 'it went better this time') and the current message, the user's last few messages or the DialogueState topic give enough clues to say what the earlier thing was likely about, search with search_terms taken from those clues (never from your own earlier replies) and set continuation_basis to the signals you used: current_input, adjacent_user (the user's recent messages) and/or dialogue_state (only if a DialogueState section is present). Use continuation also when the person tells you how they feel about something specific (a person, project, decision or plan) and what the person told you before matters to understanding what they actually care about here: take search_terms from words that literally appear in the current message (a name, a project, the thing itself) and set continuation_basis to current_input. The result is background; it is used only if it bears on what they just said. Never search merely because another topic is related, and never to bring up an unrelated trip or event to show you remember. Do not use it when the earlier context is already in the conversation, when nothing in the current talk points to an earlier matter, or just to be thorough. The conversation holds the earlier context only if it fits what the current message actually says: when the message says who something came from, how it arrived or what it concerns, and the matter you can see in the conversation does not match those details (for example the conversation is about a job application sent by email and the message mentions a parcel from 'the surveyor'), it is probably about something older, so search with those details and the user's last few messages instead of assuming it is the matter you can see. Search terms are only clues for finding the messages; they are not facts about the user.",
+      "name": "review_conversation_history",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "continuation_basis": {
+            "description": "Search only, for a continuation of the current talk (not a question about the past): the signals the clues came from, one or more of current_input, adjacent_user, dialogue_state.",
+            "items": {
+              "enum": [
+                "current_input",
+                "adjacent_user",
+                "dialogue_state"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "end_date": {
+            "description": "Last local date to review or search, YYYY-MM-DD. Omit for a single date.",
+            "type": "string"
+          },
+          "people": {
+            "description": "Search only: up to 3 names or relationship words the user may have used for the people involved.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "search_terms": {
+            "description": "Search only: 2 to 5 short keywords or phrases, with close synonyms and each language the user mixes, as they would appear in the user's own messages.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "source_scope": {
+            "description": "Only conversation text can be reviewed.",
+            "enum": [
+              "conversation_text"
+            ],
+            "type": "string"
+          },
+          "start_date": {
+            "description": "First local date to review (by date) or to start searching from (search), YYYY-MM-DD.",
+            "type": "string"
+          },
+          "time_basis": {
+            "description": "expressed_date (default): the dates are when the user wrote or said things, for 'what did we talk about yesterday'. experienced_date: the dates are when the described events happened, for 'what happened yesterday' or 'what did I do last Sunday'; the event date is not recorded, so this only returns the messages from around then and later that may mention it.",
+            "enum": [
+              "expressed_date",
+              "experienced_date"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "strict": true
+    },
+    "type": "function"
+  }
+]

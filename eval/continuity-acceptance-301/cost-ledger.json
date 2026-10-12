@@ -400,6 +400,56 @@
       "requests": 7,
       "runId": "run-4ba0017f-7265-4b4b-bc9d-fe54cc068e8c",
       "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 4388,
+      "date": "2026-10-12",
+      "inputTokens": 11315,
+      "note": "presentation-bench round smoke: layouts V3,V2 x fixtures H02-said (correction a, rules full, repeat 1); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/smoke/calls.jsonl",
+      "outputTokens": 827,
+      "requests": 3,
+      "runId": "presentation-bench-smoke-af4ca8c3",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 529601,
+      "date": "2026-10-12",
+      "inputTokens": 755868,
+      "note": "presentation-bench round r1: layouts V0,V1,V2,V3,V4 x fixtures H01-recap,H02-said,H04-ask,H06-role,H07-party,H07-september,H11-older,H12-work (correction a,b, rules full, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r1/calls.jsonl",
+      "outputTokens": 252311,
+      "requests": 159,
+      "runId": "presentation-bench-r1-1be22f0b",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 81608,
+      "date": "2026-10-12",
+      "inputTokens": 101819,
+      "note": "presentation-bench round r2: layouts V5 x fixtures H12-work,H07-september,H07-party,H11-older,H04-ask,H06-role,H01-recap,H02-said (correction a, rules full, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r2/calls.jsonl",
+      "outputTokens": 42542,
+      "requests": 24,
+      "runId": "presentation-bench-r2-4777a376",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 233488,
+      "date": "2026-10-12",
+      "inputTokens": 445419,
+      "note": "presentation-bench round r2: layouts V5,V3,V2 x fixtures H12-work,H07-september,H07-party,H11-older,H04-ask,H06-role,H01-recap,H02-said (correction a, rules lean, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r2/calls.jsonl",
+      "outputTokens": 83181,
+      "requests": 96,
+      "runId": "presentation-bench-r2-5eca04ef",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 423487,
+      "date": "2026-10-12",
+      "inputTokens": 583642,
+      "note": "presentation-bench round r3-serial: layouts V0,V1,V2,V3 x fixtures H01-recap,H02-said,H04-ask,H06-role,H07-party,H07-september,H11-older,H12-work (correction a, rules full, repeat 3); direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/r3-serial/calls.jsonl",
+      "outputTokens": 206949,
+      "requests": 120,
+      "runId": "presentation-bench-r3-serial-200a4020",
+      "ticket": "#301-presentation"
     }
   ]
 }
