@@ -56,10 +56,16 @@ export type CostLedger = Readonly<{
     provider: string;
   }>;
   preconditions: readonly Readonly<{
+    /**
+     * Required for `owner-waived`: who decided the run may start without the
+     * condition being met, when, and in what words. A waiver is not evidence
+     * that the condition holds and is never reported as `verified`.
+     */
+    decision?: Readonly<{ by: string; date: string; statement: string }>;
     description: string;
     evidence: string | null;
     id: string;
-    status: "verified" | "unverified";
+    status: "verified" | "unverified" | "owner-waived";
   }>[];
   schemaVersion: typeof LEDGER_SCHEMA_VERSION;
 }>;
@@ -115,6 +121,13 @@ export type RunPlan = Readonly<{
   shape: RunShape;
   status: "ready" | "blocked";
   unknownCostEntries: number;
+  /** Preconditions the owner waived by a recorded decision (not verified). */
+  waivedPreconditions: readonly Readonly<{
+    by: string;
+    date: string;
+    id: string;
+    statement: string;
+  }>[];
 }>;
 
 export function planRun(input: {
@@ -129,6 +142,11 @@ export function planRun(input: {
   }
   const mode: RunMode = requested;
   const { remainingUsdMicros, unknownCostEntries } = remainingBudget(input.ledger);
+  const waivedPreconditions = input.ledger.preconditions.flatMap((precondition) =>
+    precondition.status === "owner-waived" && precondition.decision
+      ? [{ ...precondition.decision, id: precondition.id }]
+      : [],
+  );
   const requestsPerStepUpperBound =
     PLANNING_BOUNDS.attemptsPerStep * (1 + PLANNING_BOUNDS.continuationsPerAttempt);
 
@@ -147,6 +165,7 @@ export function planRun(input: {
       shape: input.shape,
       status: "ready",
       unknownCostEntries,
+      waivedPreconditions,
     };
   }
 
@@ -171,7 +190,14 @@ export function planRun(input: {
     );
   }
   for (const precondition of input.ledger.preconditions) {
-    if (precondition.status !== "verified") {
+    if (precondition.status === "owner-waived") {
+      const decision = precondition.decision;
+      if (!decision?.by?.trim() || !decision.date?.trim() || !decision.statement?.trim()) {
+        blockers.push(
+          `Precondition ${precondition.id} is marked owner-waived without a recorded decision (by, date, statement).`,
+        );
+      }
+    } else if (precondition.status !== "verified") {
       blockers.push(
         `Precondition ${precondition.id} is not verified: ${precondition.description}`,
       );
@@ -207,5 +233,6 @@ export function planRun(input: {
     shape: input.shape,
     status: blockers.length === 0 ? "ready" : "blocked",
     unknownCostEntries,
+    waivedPreconditions,
   };
 }

@@ -273,6 +273,46 @@ describe("continuity acceptance model-mode and budget gate", () => {
     expect(plan.blockers.join(" ")).toMatch(/issue-307/);
   });
 
+  it("lets the owner waive a precondition by a recorded decision, and never reports it as verified", () => {
+    const waived: CostLedger = {
+      ...LEDGER,
+      preconditions: [
+        {
+          decision: { by: "Luke", date: "2026-10-11", statement: "T08 may start." },
+          description: "#307 online acceptance",
+          evidence: null,
+          id: "issue-307",
+          status: "owner-waived",
+        },
+      ],
+    };
+    const plan = planRun({
+      environment: { SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled" },
+      ledger: waived,
+      requestedMode: "real-model",
+      shape: SHAPE,
+    });
+    expect(plan.status).toBe("ready");
+    // The plan says the condition was waived, by whom and when; it is not
+    // folded into the verified ones.
+    expect(plan.waivedPreconditions).toEqual([
+      { by: "Luke", date: "2026-10-11", id: "issue-307", statement: "T08 may start." },
+    ]);
+
+    // A waiver with no recorded decision is not a waiver.
+    const bare = planRun({
+      environment: { SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled" },
+      ledger: {
+        ...LEDGER,
+        preconditions: [{ description: "#307", evidence: null, id: "issue-307", status: "owner-waived" }],
+      },
+      requestedMode: "real-model",
+      shape: SHAPE,
+    });
+    expect(bare.status).toBe("blocked");
+    expect(bare.blockers.join(" ")).toMatch(/issue-307.*decision/);
+  });
+
   it("blocks when the remaining budget cannot cover the upper bound", () => {
     const spent: CostLedger = {
       ...LEDGER,
