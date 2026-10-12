@@ -1,0 +1,389 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 345600,
+    "inputTokenUpperBound": 288000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 216000,
+    "paidRequestUpperBound": 18,
+    "remainingUsdMicros": 2858021,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 4,
+      "scheduledScans": 1,
+      "seedTurns": 2
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "UL1",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 2 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 644 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "10 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The reply to the replaced question is neither shown nor stored.",
+        "evidence": [
+          "steps[ask].chat.events types=[\"user_committed\",\"response_failed\"]",
+          "message following 01a12f57-1a80-712b-9834-a14f206ba3a7: user"
+        ],
+        "id": "O-replaced-never-shown",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "The retired reply was neither shown nor stored.",
+        "status": "pass"
+      },
+      {
+        "description": "History holds the addition once, followed by exactly its reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a12f57-39c0-7251-b86e-8620a66788e3",
+          "next message: assistant \"说过。你说那天带外甥女豆豆去逛庙会，你俩坐在戏台边的石阶上，分着吃了一串糖葫芦；回来的路上还跟她说好，趁天没冷透去江边放\""
+        ],
+        "id": "O-addition-commits",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The replaced question still reaches the Provider with the addition.",
+        "evidence": [
+          "steps[ask].input.text: providerRequest=present"
+        ],
+        "id": "O-addition-keeps-earlier-question",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The message naming the companion reaches the Provider.",
+        "evidence": [
+          "market:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-addition-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "With the product's own budget, a request whose Provider never answers ends with a timeout by 60 seconds (61 allowed for the client to see it), commits nothing late and leaves nothing running.",
+        "evidence": [
+          "steps[stall].chat last event=response_failed category=timeout",
+          "steps[stall].chat.timing.streamClosedMs=60050.488833999996 (CLI network, limit 61000)",
+          "steps[stall].inspection.commandStatus=failed attemptStatus=failed",
+          "message following 01a12f58-ef40-7022-9151-751b4f3f1c41: user"
+        ],
+        "id": "O-stall-stops",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "The request ended with a timeout inside the limit, committed nothing late and left nothing running.",
+        "status": "pass"
+      },
+      {
+        "description": "The next message is answered normally.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a12f5a-c400-7744-8f27-210aaccf63cd",
+          "next message: assistant \"十月中，白天有太阳还行，傍晚江边风从水面过来，站在那儿不动，冷得挺快——放风筝又多半是站着抬头看，人不动，更觉得凉。\\n\\n\""
+        ],
+        "id": "O-after-stall",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The addition is answered as asked, in ordinary words.",
+        "evidence": [],
+        "id": "S-addition",
+        "kind": "semantic",
+        "owner": "#319",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-2b86ec25-f73b-460a-b81d-46dc61233daa",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-10 (expected 2026-10-10)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "market:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-5",
+              "requestSequence": 5
+            }
+          }
+        ]
+      },
+      "stepId": "supplement"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "45e68e98538d0e54d80e0ca55e692a0632e0cc55f6a72347dc37912a4d18649b",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-2b86ec25-f73b-460a-b81d-46dc61233daa",
+    "oracleSha256": "d9b9d08b2d81a7aeb903f2e7397fef5713a5533141ef7f64bc2a8009969efbd9",
+    "title": "UL1 Unseen: typing on while a reply is prepared, and a Provider that never answers"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "19361a0bed5dbf79c382dc84ba914c8af8c104c85d0eed5ac0a11696fa69b8b2",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "kite:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "kite:assistant"
+        }
+      ],
+      "stepId": "ask"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "kite:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "kite:assistant"
+        }
+      ],
+      "stepId": "supplement"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "kite:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "kite:assistant"
+        }
+      ],
+      "stepId": "stall"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "market:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "kite:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "kite:assistant"
+        }
+      ],
+      "stepId": "after"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 41.18600000000015,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 9520.892915999999,
+      "providerLatencyMs": 8000,
+      "stepId": "ask"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 22.510167000000365,
+      "cliCommittedMs": 4544.665959,
+      "cliFirstVisibleTextMs": 3997.8740420000004,
+      "cliStreamClosedMs": 4544.750084,
+      "providerLatencyMs": 0,
+      "stepId": "supplement"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 25.379625000001397,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 60050.488833999996,
+      "providerLatencyMs": 0,
+      "stepId": "stall"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 35.70495799998753,
+      "cliCommittedMs": 12297.081207999989,
+      "cliFirstVisibleTextMs": 11910.071666999997,
+      "cliStreamClosedMs": 12297.150291999991,
+      "providerLatencyMs": 0,
+      "stepId": "after"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "",
+      "at": "2026-10-12T09:00:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "response_failed",
+      "type": "say",
+      "user": "我跟你说过逛庙会那天的事吧，都说了些什么？"
+    },
+    {
+      "assistant": "说过。你说那天带外甥女豆豆去逛庙会，你俩坐在戏台边的石阶上，分着吃了一串糖葫芦；回来的路上还跟她说好，趁天没冷透去江边放一次风筝，就像你小时候舅舅带你去的那样。\n\n你只想知道那天跟你一起去的人——是豆豆。",
+      "at": "2026-10-12T09:00:08.000Z",
+      "stepId": "supplement",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "其实我只想知道那天是谁跟我一起去的。"
+    },
+    {
+      "assistant": "",
+      "at": "2026-10-12T09:02:00.000Z",
+      "stepId": "stall",
+      "terminalEvent": "response_failed",
+      "type": "say",
+      "user": "那放风筝的事我们当时是怎么说的？"
+    },
+    {
+      "assistant": "十月中，白天有太阳还行，傍晚江边风从水面过来，站在那儿不动，冷得挺快——放风筝又多半是站着抬头看，人不动，更觉得凉。\n\n不过冷不冷我这边看不到你那天的天气，得看你们挑的是哪一天、哪个时段。你们是想白天去，还是傍晚？",
+      "at": "2026-10-12T09:04:00.000Z",
+      "stepId": "after",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "算了不管那个了。这个时节去江边放风筝，会不会已经太冷了？"
+    }
+  ],
+  "usage": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}

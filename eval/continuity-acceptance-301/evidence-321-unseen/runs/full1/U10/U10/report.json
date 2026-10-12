@@ -1,0 +1,583 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 460800,
+    "inputTokenUpperBound": 384000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 288000,
+    "paidRequestUpperBound": 24,
+    "remainingUsdMicros": 2933556,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 5,
+      "scheduledScans": 2,
+      "seedTurns": 3
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "U10",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 898 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "Nothing is committed for the first abandoned question.",
+        "evidence": [
+          "after abort, message following 01a1678f-3180-74d1-ab2b-8322c1ee5f1b: user \"不好意思，刚才被我打断了。你只要告诉我是谁跟我一块儿去的就行。\""
+        ],
+        "id": "O-cancel-1",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No assistant reply was committed for the cancelled turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The narrowed question streams and commits.",
+        "evidence": [
+          "steps[supplement].chat.httpStatus=200",
+          "steps[supplement].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-supplement-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "History holds the narrowed question once, followed by exactly its reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a1678f-9328-7a76-8f62-a4aef3988f0b",
+          "next message: assistant \"是你表弟阿凯，还有他女朋友小满。就你们三个一起去的雁荡山。\""
+        ],
+        "id": "O-supplement-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The message naming the companions reaches the Provider.",
+        "evidence": [
+          "hike-a:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-supplement-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Nothing is committed for the second abandoned question.",
+        "evidence": [
+          "after abort, message following 01a16791-0640-771e-8a28-321c447edfb5: user \"先不说爬山了。今天真正让我心烦的其实是车位那件事。\""
+        ],
+        "id": "O-cancel-2",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No assistant reply was committed for the cancelled turn.",
+        "status": "pass"
+      },
+      {
+        "description": "History holds the change of subject once, followed by exactly its reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a16791-5460-7e60-8012-de3e61c4dcc5",
+          "next message: assistant \"行，爬山先搁着。\\n\\n车位那事你周三就跟我提过，今天正好是周五——期限就压在今天，你心里烦也不奇怪。难的是你还没拿定续不续\""
+        ],
+        "id": "O-switch-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Sending the same message again is idempotent.",
+        "evidence": [
+          "steps[switch].chat.userMessageId=01a16791-5460-7e60-8012-de3e61c4dcc5",
+          "steps[resend].chat.userMessageId=01a16791-5460-7e60-8012-de3e61c4dcc5",
+          "steps[resend].providerRequests (conversation turn)=0",
+          "finalHistory copies=1"
+        ],
+        "id": "O-resend",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The resend resolved to the original message and caused no new generation.",
+        "status": "pass"
+      },
+      {
+        "description": "Sending it again after a restart is idempotent.",
+        "evidence": [
+          "steps[switch].chat.userMessageId=01a16791-5460-7e60-8012-de3e61c4dcc5",
+          "steps[reconnect].chat.userMessageId=01a16791-5460-7e60-8012-de3e61c4dcc5",
+          "steps[reconnect].providerRequests (conversation turn)=0",
+          "finalHistory copies=1"
+        ],
+        "id": "O-reconnect",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The resend resolved to the original message and caused no new generation.",
+        "status": "pass"
+      },
+      {
+        "description": "The conversation carries on normally after the restart.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a16792-db00-757f-8ad2-9e1ee3f86727",
+          "next message: assistant \"想清楚了就好。\\n\\n这么拖着的时候最耗人，现在有个准话，心里那块就先放下了。\""
+        ],
+        "id": "O-after-restart",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The narrowed question is answered as narrowed.",
+        "evidence": [],
+        "id": "S-supplement",
+        "kind": "semantic",
+        "owner": "#319",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "After the change of subject the reply stays with the new subject.",
+        "evidence": [],
+        "id": "S-switch",
+        "kind": "semantic",
+        "owner": "#319",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-7cacff81-eff9-433b-85d3-6901cdb759c4",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-19 (expected 2026-10-19)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "hike-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          }
+        ]
+      },
+      "stepId": "supplement"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "55d15a7b1e6fe83cee1360c84937547105233ede33ea323157cbf54951da6daa",
+    "fixtureVersion": "final-2",
+    "gitCommit": "b48f2fb03614b8f6a485a000c6efcda9e85f625d",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-7cacff81-eff9-433b-85d3-6901cdb759c4",
+    "oracleSha256": "94bb79ff66219727c2703b2cc6d29c2491d8431acff28b07c136e8fcaaf70ac4",
+    "title": "U10 Unseen: giving up on an answer, narrowing, changing subject, re-sending and reconnecting"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "e030b153d8cd9959b21a7033a351ef1d0f901c4f9676e4751fbbf4b4ffdac3ad",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "hike-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:assistant"
+        }
+      ],
+      "stepId": "ask"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "hike-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:assistant"
+        }
+      ],
+      "stepId": "supplement"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "hike-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:assistant"
+        }
+      ],
+      "stepId": "ask-again"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "hike-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:assistant"
+        }
+      ],
+      "stepId": "switch"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "hike-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "hike-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "parking:assistant"
+        }
+      ],
+      "stepId": "after"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 30.40062500000022,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 504.70787500000006,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 19.952792000000045,
+      "cliCommittedMs": 3224.5319169999984,
+      "cliFirstVisibleTextMs": 3016.842124999999,
+      "cliStreamClosedMs": 3224.6202919999996,
+      "providerLatencyMs": 0,
+      "stepId": "supplement"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 69.62312499999825,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 2502.6301669999993,
+      "providerLatencyMs": 0,
+      "stepId": "ask-again"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 19.259000000001834,
+      "cliCommittedMs": 12902.261834000004,
+      "cliFirstVisibleTextMs": 12622.709000000003,
+      "cliStreamClosedMs": 12902.359209000002,
+      "providerLatencyMs": 0,
+      "stepId": "switch"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 18.759666999998444,
+      "cliCommittedMs": 19.104083999998693,
+      "cliFirstVisibleTextMs": 19.098875000003318,
+      "cliStreamClosedMs": 19.140666999999667,
+      "providerLatencyMs": 0,
+      "stepId": "resend"
+    },
+    {
+      "appState": "cold",
+      "cliAcceptedMs": 62.75716700000339,
+      "cliCommittedMs": 64.2400420000049,
+      "cliFirstVisibleTextMs": 64.23708299999998,
+      "cliStreamClosedMs": 64.2647500000021,
+      "providerLatencyMs": 0,
+      "stepId": "reconnect"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 21.63183299999946,
+      "cliCommittedMs": 1606.2742920000019,
+      "cliFirstVisibleTextMs": 1322.5850829999981,
+      "cliStreamClosedMs": 1606.319875000001,
+      "providerLatencyMs": 0,
+      "stepId": "after"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "",
+      "at": "2026-10-23T07:00:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": null,
+      "type": "say",
+      "user": "我跟你说过的那次爬山是怎么回事来着？"
+    },
+    {
+      "assistant": "是你表弟阿凯，还有他女朋友小满。就你们三个一起去的雁荡山。",
+      "at": "2026-10-23T07:00:25.000Z",
+      "stepId": "supplement",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "不好意思，刚才被我打断了。你只要告诉我是谁跟我一块儿去的就行。"
+    },
+    {
+      "assistant": "",
+      "at": "2026-10-23T07:02:00.000Z",
+      "stepId": "ask-again",
+      "terminalEvent": null,
+      "type": "say",
+      "user": "那第二天后来怎么样了？"
+    },
+    {
+      "assistant": "行，爬山先搁着。\n\n车位那事你周三就跟我提过，今天正好是周五——期限就压在今天，你心里烦也不奇怪。难的是你还没拿定续不续，还是去回他们这句话本身就让你不想动？",
+      "at": "2026-10-23T07:02:20.000Z",
+      "stepId": "switch",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "先不说爬山了。今天真正让我心烦的其实是车位那件事。"
+    },
+    {
+      "assistant": "行，爬山先搁着。\n\n车位那事你周三就跟我提过，今天正好是周五——期限就压在今天，你心里烦也不奇怪。难的是你还没拿定续不续，还是去回他们这句话本身就让你不想动？",
+      "at": "2026-10-23T07:02:45.000Z",
+      "stepId": "resend",
+      "terminalEvent": "assistant_committed",
+      "type": "resend",
+      "user": "先不说爬山了。今天真正让我心烦的其实是车位那件事。"
+    },
+    {
+      "assistant": null,
+      "at": "2026-10-23T07:03:00.000Z",
+      "stepId": "restart",
+      "terminalEvent": null,
+      "type": "restart",
+      "user": null
+    },
+    {
+      "assistant": "行，爬山先搁着。\n\n车位那事你周三就跟我提过，今天正好是周五——期限就压在今天，你心里烦也不奇怪。难的是你还没拿定续不续，还是去回他们这句话本身就让你不想动？",
+      "at": "2026-10-23T07:03:10.000Z",
+      "stepId": "reconnect",
+      "terminalEvent": "assistant_committed",
+      "type": "resend",
+      "user": "先不说爬山了。今天真正让我心烦的其实是车位那件事。"
+    },
+    {
+      "assistant": "想清楚了就好。\n\n这么拖着的时候最耗人，现在有个准话，心里那块就先放下了。",
+      "at": "2026-10-23T07:04:00.000Z",
+      "stepId": "after",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我想我还是续了吧，省得天天满小区找地方停。"
+    }
+  ],
+  "usage": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "paidCostUsdMicros": null,
+    "providerRequests": 5
+  }
+}

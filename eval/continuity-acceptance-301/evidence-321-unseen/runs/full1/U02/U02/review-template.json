@@ -1,0 +1,100 @@
+{
+  "caseId": "U02",
+  "findings": [
+    {
+      "criterionId": "S-said",
+      "itemId": "t-springs",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "t-latch",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "t-coach",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "tm-said-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "f-springs-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-happened",
+      "itemId": "a-repair-done",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-happened",
+      "itemId": "f-springs-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-happened",
+      "itemId": "f-coach-dated",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-when",
+      "itemId": "tm-coach-undated",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-when",
+      "itemId": "f-coach-dated",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-when",
+      "itemId": "f-coach-unknown",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-springs-when",
+      "itemId": "tm-springs-day",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-springs-when",
+      "itemId": "f-springs-wrong-anchor",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-415b55b5-9ffd-4043-b46a-42ea11872c06",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

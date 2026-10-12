@@ -1,0 +1,44 @@
+{
+  "caseId": "U04",
+  "findings": [
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-class",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-teacher",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-no-record",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-invented",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-no-invention",
+      "itemId": "f-child-mixup",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-ef1c9c89-4993-4305-93f4-b7a785782863",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}
