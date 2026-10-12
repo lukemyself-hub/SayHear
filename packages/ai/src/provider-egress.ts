@@ -8,6 +8,9 @@ import {
   normalizeHistoryReviewCall,
   normalizeProviderActionProposal,
   ProviderDispatchError,
+  PROTOTYPE_MAX_TOOL_STEPS,
+  prototypeHistoryTools,
+  prototypeStructure,
   renderSafetyPostureResponseAnchor,
   SAFETY_POSTURE_ACTIVE_MARKER,
   type ContextCompiler,
@@ -110,7 +113,47 @@ export function createProviderEgressPort(dependencies: {
       let reportedUsage: ModelRoleCallUsage | null = null;
       let completionRecorded = false;
       try {
+      // PROTOTYPE ONLY (SPEC #301 response-structure comparison).
+      const prototypeTools = prototypeHistoryTools();
+      const prototypeContext =
+        prototypeTools && input.requestEventRevisionId && input.toolsDisabled !== true
+          ? {
+              generationCommandId: input.generationCommandId as string,
+              requestEventRevisionId: input.requestEventRevisionId as string,
+              userId: input.userId as string,
+            }
+          : null;
+      let prototypePreface: string | null = null;
+      if (prototypeStructure() === 2 && prototypeTools && prototypeContext) {
+        try {
+          prototypePreface = await prototypeTools.frontload(prototypeContext);
+        } catch (error) {
+          console.error("prototype_frontload_failed", error instanceof Error ? error.message : "unknown");
+        }
+      }
+      const prototypeLoop =
+        prototypeStructure() === 3 &&
+        prototypeTools &&
+        prototypeContext &&
+        (input.functions ?? []).some(
+          (definition) => definition.name === HISTORY_REVIEW_FUNCTION_NAME,
+        )
+          ? {
+              execute: async (rawArguments: string) => {
+                try {
+                  return await prototypeTools.runToolCall(prototypeContext, rawArguments);
+                } catch (error) {
+                  console.error("prototype_tool_failed", error instanceof Error ? error.message : "unknown");
+                  return "The lookup failed just now. Say you could not look it up right now, or try once more.";
+                }
+              },
+              functionName: HISTORY_REVIEW_FUNCTION_NAME,
+              maxSteps: PROTOTYPE_MAX_TOOL_STEPS,
+            }
+          : null;
       for await (const event of dependencies.model.stream({
+        ...(prototypePreface ? { prototypePreface } : {}),
+        ...(prototypeLoop ? { prototypeLoop } : {}),
         onUsage: (usage) => {
           reportedUsage = usage;
         },

@@ -318,15 +318,21 @@ export function loadRuntimeConfiguration(environment: Environment) {
   // Provider timeout, separate from SAYHEAR_PROVIDER_TIMEOUT_MS, which the
   // background roles share (memory extraction legitimately needs minutes).
   // Both can only be tightened below the ADR-0152 stop condition (30 s).
+  // PROTOTYPE ONLY (SPEC #301 response-structure comparison): one variable
+  // lifts both chat bounds on this throwaway branch. Unset, nothing changes.
+  const prototypeRequestMaxMs =
+    environment.SAYHEAR_PROTOTYPE_REQUEST_BUDGET_MS === undefined
+      ? CONVERSATION_REQUEST_MAX_MS
+      : Number(environment.SAYHEAR_PROTOTYPE_REQUEST_BUDGET_MS);
   const conversationRequestBudgetMs = boundedMilliseconds(
     environment,
     "SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS",
-    CONVERSATION_REQUEST_MAX_MS,
+    prototypeRequestMaxMs,
   );
   const conversationProviderTimeoutMs = boundedMilliseconds(
     environment,
     "SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS",
-    CONVERSATION_REQUEST_MAX_MS,
+    prototypeRequestMaxMs,
   );
   const deepseekBaseUrl =
     environment.SAYHEAR_DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";

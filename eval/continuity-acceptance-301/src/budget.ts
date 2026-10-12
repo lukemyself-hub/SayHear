@@ -29,9 +29,16 @@ export const PLANNING_BOUNDS = Object.freeze({
   /** Background model roles one scheduled scan may dispatch. */
   backgroundRequestsPerScan: 2,
   /** One extra round trip when a call-only answer needs a visible reply. */
-  continuationsPerAttempt: 1,
+  // PROTOTYPE ONLY: a structure-3 turn may add 3 lookup round trips; the
+  // output bound scales with the widened request budget (30 s -> 12k tokens).
+  continuationsPerAttempt: process.env["SAYHEAR_PROTOTYPE_STRUCTURE"] === "3" ? 4 : 1,
   inputTokensPerRequest: 16_000,
-  outputTokensPerRequest: 12_000,
+  outputTokensPerRequest:
+    12_000 *
+    Math.max(
+      1,
+      Math.ceil(Number(process.env["SAYHEAR_PROTOTYPE_REQUEST_BUDGET_MS"] ?? 30_000) / 30_000),
+    ),
 });
 
 export type CostLedgerEntry = Readonly<{

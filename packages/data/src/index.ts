@@ -105,3 +105,6 @@ export {
   type EvidenceStepUpDenialReason,
   type EvidenceStepUpIssuerContext,
 } from "./postgres-evidence-step-up-repository";
+
+// PROTOTYPE ONLY (SPEC #301 response-structure comparison).
+export { prototypeLoadHistoryItems, prototypeTermFrequencies } from "./postgres-history-recall";

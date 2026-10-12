@@ -50,6 +50,7 @@ import {
   type ProviderDispatchErrorCategory,
   type ProviderEgressPort,
 } from "./conversation-model";
+import { prototypeStructure } from "./prototype-response-structure";
 import {
   createRequestInterrupt,
   type RequestDeadline,
@@ -322,6 +323,8 @@ export function createConversationAgentHarness(dependencies: {
       // fence on (not on Retry/recovery turns) and an execution gateway.
       const historyReviewOffered =
         command.harnessPolicy.toolsDisabled !== true &&
+        // PROTOTYPE ONLY: structure 2 never lets the model propose a review.
+        prototypeStructure() !== 2 &&
         command.harnessPolicy.maxHistoryQueries === 1 &&
         command.requestEventRevisionId !== undefined &&
         dependencies.historyRecall !== undefined &&

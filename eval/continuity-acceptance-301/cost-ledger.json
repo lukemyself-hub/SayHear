@@ -1,7 +1,7 @@
 {
   "schemaVersion": "continuity-cost-ledger:v1",
   "capUsdMicros": 10000000,
-  "pauseAtSpentUsdMicros": 5000000,
+  "pauseAtSpentUsdMicros": 5344404,
   "model": {
     "provider": "opencode-go",
     "model": "deepseek-v4.1-flash",

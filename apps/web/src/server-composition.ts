@@ -128,6 +128,13 @@ import {
 } from "@sayhear/data";
 
 import { createAuthOptions } from "./auth";
+// PROTOTYPE ONLY (SPEC #301 response-structure comparison).
+import {
+  createPrototypeHistoryTools,
+  prototypeStructure,
+  registerPrototypeHistoryTools,
+} from "@sayhear/application";
+import { prototypeLoadHistoryItems, prototypeTermFrequencies } from "@sayhear/data";
 import { loadRuntimeConfiguration } from "./runtime-config";
 import { createWorkflowStarter } from "./workflow-starter";
 
@@ -882,6 +889,18 @@ export function createServerComposition() {
         source: new PostgresHistoryRecallSource(pool),
       })
     : undefined;
+  // PROTOTYPE ONLY (SPEC #301 response-structure comparison): structures 2 and 3.
+  if (configuration.writeSwitches.historyRecallEnabled && prototypeStructure() >= 2) {
+    registerPrototypeHistoryTools(
+      createPrototypeHistoryTools({
+        experienceSource: new PostgresExperienceSearchSource(pool),
+        loadItems: (userId, itemRefs) => prototypeLoadHistoryItems(pool, userId, itemRefs),
+        repository: new PostgresHistoryRecallRepository(pool),
+        source: new PostgresHistoryRecallSource(pool),
+        termFrequencies: (input) => prototypeTermFrequencies(pool, input),
+      }),
+    );
+  }
   const conversationAgentHarness = createConversationAgentHarness({
     actionGateway,
     ...(historyRecallGateway ? { historyRecall: historyRecallGateway } : {}),

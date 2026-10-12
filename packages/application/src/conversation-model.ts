@@ -73,6 +73,14 @@ export type ConversationTextModelRequest = Readonly<{
   providerSessionId?: string;
   signal?: AbortSignal;
   toolsDisabled?: boolean;
+  /** PROTOTYPE ONLY: text appended to the instructions (structure 2). */
+  prototypePreface?: string;
+  /** PROTOTYPE ONLY: in-conversation history tool loop (structure 3). */
+  prototypeLoop?: Readonly<{
+    execute(rawArguments: string): Promise<string>;
+    functionName: string;
+    maxSteps: number;
+  }>;
 }>;
 
 export type ConversationTextModelStreamEvent =

@@ -1206,3 +1206,142 @@ export async function loadHistoryRecallForContext(
     resultId: result.history_recall_result_id,
   };
 }
+
+/** PROTOTYPE ONLY (SPEC #301 response-structure comparison): the text of fenced item refs. */
+export async function prototypeLoadHistoryItems(
+  pool: Pool,
+  userId: string,
+  itemRefs: readonly HistoryRecallItemRef[],
+): Promise<
+  readonly {
+    actor: "user" | "assistant";
+    correctedAt: string | null;
+    expressedAt: string;
+    expressionTimezone: string | null;
+    group: number | null;
+    role: string | null;
+    text: string;
+  }[]
+> {
+  const rows = await pool.query<{
+    actor: "user" | "assistant";
+    corrected_at: Date | null;
+    expressed_at: Date;
+    expression_timezone: string | null;
+    ref_group: string | null;
+    ref_role: string | null;
+    text: string;
+  }>(
+    `SELECT ref.value ->> 'revisionId' AS revision_id,
+            ref.value ->> 'role' AS ref_role,
+            ref.value ->> 'group' AS ref_group,
+            event.actor, event.daily_session_id::text AS daily_session_id,
+            event.created_at AS expressed_at, event.sequence_no::text AS sequence_no,
+            revision.locale, revision.canonical_text AS text,
+            -- The quoted wording is the person's own correction of this
+            -- message: the revision row records who made it and when.
+            CASE
+              WHEN event.actor = 'user' AND revision.created_by = 'user_correction'
+              THEN revision.created_at
+            END AS corrected_at,
+            COALESCE(generating_command.request_timezone, expression_command.request_timezone, session.timezone_at_start) AS expression_timezone,
+            CASE
+              WHEN generating_command.request_timezone IS NOT NULL THEN 'request'
+              WHEN expression_command.request_timezone IS NOT NULL THEN 'request'
+              WHEN session.timezone_at_start IS NOT NULL THEN 'session_start_fallback'
+            END AS expression_timezone_source
+     FROM jsonb_array_elements($2::jsonb) WITH ORDINALITY AS ref(value, ord)
+     INNER JOIN conversation_event_revisions revision
+       ON revision.conversation_event_revision_id = (ref.value ->> 'revisionId')::uuid
+      AND revision.user_id = $1
+     INNER JOIN conversation_events event
+       ON event.conversation_event_id = revision.conversation_event_id
+      AND event.user_id = revision.user_id
+     LEFT JOIN generation_commands generating_command
+       ON generating_command.generation_command_id = event.generation_command_id
+      AND generating_command.user_id = event.user_id
+     LEFT JOIN LATERAL (
+       SELECT request_command.request_timezone
+       FROM generation_commands request_command
+       WHERE event.actor = 'user'
+         AND request_command.subject_type = 'conversation_event'
+         AND request_command.subject_id = event.conversation_event_id
+         AND request_command.interaction_turn_id = event.interaction_turn_id
+         AND request_command.user_id = event.user_id
+       ORDER BY request_command.created_at
+       LIMIT 1
+     ) expression_command ON TRUE
+     LEFT JOIN daily_sessions session
+       ON session.daily_session_id = event.daily_session_id
+      AND session.user_id = event.user_id
+     WHERE event.lifecycle_status = 'active'
+       AND event.current_revision_id = revision.conversation_event_revision_id
+       AND revision.content_purged_at IS NULL
+       AND revision.transcript_status IN ${ELIGIBLE_TRANSCRIPT_STATUSES_SQL}
+       AND ${controlExclusionSql({
+         revisionId: "revision.conversation_event_revision_id",
+         userId: "event.user_id",
+       })} IS NULL
+       AND (
+         event.actor = 'user'
+         OR (
+           generating_command.input_revision_id IS NOT NULL
+           AND ${generatingUserRevisionIsCurrentSql({
+             generatingRevisionId: "generating_command.input_revision_id",
+             userId: "event.user_id",
+           })}
+           AND ${controlExclusionSql({
+             revisionId: "generating_command.input_revision_id",
+             userId: "event.user_id",
+           })} IS NULL
+         )
+       )
+     ORDER BY ref.ord`,
+    [userId, JSON.stringify(itemRefs)],
+  );
+  const liveMatchGroups = new Set(
+    rows.rows.filter((row) => row.ref_role === "match").map((row) => row.ref_group),
+  );
+  return rows.rows
+    .filter((row) => row.ref_role !== "context" || liveMatchGroups.has(row.ref_group))
+    .map((row) => ({
+      actor: row.actor,
+      correctedAt: row.corrected_at ? row.corrected_at.toISOString() : null,
+      expressedAt: row.expressed_at.toISOString(),
+      expressionTimezone: row.expression_timezone,
+      group: row.ref_group === null ? null : Number(row.ref_group),
+      role: row.ref_role,
+      text: row.text,
+    }));
+}
+
+/** PROTOTYPE ONLY: in how many older user messages each candidate word occurs. */
+export async function prototypeTermFrequencies(
+  pool: Pool,
+  input: { before: Date; terms: readonly string[]; userId: string },
+): Promise<{ df: Record<string, number>; total: number }> {
+  const result = await pool.query<{ df: number; term: string; total: number }>(
+    `WITH docs AS (
+       SELECT lower(revision.canonical_text) AS norm
+       FROM conversation_events event
+       INNER JOIN conversation_event_revisions revision
+         ON revision.conversation_event_revision_id = event.current_revision_id
+        AND revision.user_id = event.user_id
+       WHERE event.user_id = $1
+         AND event.actor = 'user'
+         AND event.lifecycle_status = 'active'
+         AND revision.content_purged_at IS NULL
+         AND event.created_at < $2
+       ORDER BY event.created_at DESC
+       LIMIT 6000
+     )
+     SELECT term.val AS term,
+            (SELECT count(*) FROM docs WHERE strpos(docs.norm, term.val) > 0)::int AS df,
+            (SELECT count(*) FROM docs)::int AS total
+     FROM unnest($3::text[]) AS term(val)`,
+    [input.userId, input.before, [...input.terms]],
+  );
+  const df: Record<string, number> = {};
+  for (const row of result.rows) df[row.term] = row.df;
+  return { df, total: result.rows[0]?.total ?? 0 };
+}

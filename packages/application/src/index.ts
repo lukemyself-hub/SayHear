@@ -1363,3 +1363,6 @@ export {
   type HistoryContinuationSignals,
   type HistoryContinuationVerdict,
 } from "./history-continuation";
+
+// PROTOTYPE ONLY (SPEC #301 response-structure comparison).
+export * from "./prototype-response-structure";

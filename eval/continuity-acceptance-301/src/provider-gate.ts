@@ -329,6 +329,8 @@ export async function startProviderGate(): Promise<ProviderGate> {
       if (live && historicalReply === null) {
         entry.transport = "live";
         open.add(sequence);
+        // PROTOTYPE ONLY: structure 1 sends every live request with thinking off.
+        const prototypeThinkingOff = process.env["SAYHEAR_PROTOTYPE_STRUCTURE"] === "1";
         const patched =
           experiment && record(body)
             ? JSON.stringify({
@@ -336,8 +338,11 @@ export async function startProviderGate(): Promise<ProviderGate> {
                 reasoning_effort: experiment.reasoningEffort,
                 thinking: { type: "enabled" },
               })
-            : null;
+            : prototypeThinkingOff && record(body)
+              ? JSON.stringify({ ...record(body), thinking: { type: "disabled" } })
+              : null;
         if (patched && experiment) entry.experiment = `reasoning_effort=${experiment.reasoningEffort}`;
+        else if (patched) entry.experiment = "prototype: thinking=disabled";
         response
           .writeHead(200, { "content-type": "application/json" })
           .end(JSON.stringify({ disposition: "live", sequence, ...(patched ? { body: patched } : {}) }));

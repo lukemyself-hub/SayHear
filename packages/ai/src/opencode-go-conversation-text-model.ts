@@ -124,8 +124,11 @@ export function createOpenCodeGoConversationTextModel(input: {
       let secondUsage: Record<string, unknown> | null = null;
       let secondCallStarted = false;
       let usageReported = false;
+      // PROTOTYPE ONLY: usage of the earlier steps of a structure-3 tool loop.
+      const prototypeUsages: Record<string, unknown>[] = [];
       const currentAggregate = (): ModelRoleCallUsage | null => {
         const usages: (ModelRoleCallUsage | null)[] = [
+          ...prototypeUsages.map((usage) => normalizedUsage(usage)),
           firstUsage === null ? null : normalizedUsage(firstUsage),
         ];
         if (secondCallStarted) {
@@ -146,8 +149,27 @@ export function createOpenCodeGoConversationTextModel(input: {
       };
 
       try {
+        // PROTOTYPE ONLY (structure 3): the history lookup is answered inside
+        // this model conversation as a tool result, for up to maxSteps lookups.
+        const prototypeLoop = request.prototypeLoop;
+        const prototypeExtraMessages: Record<string, unknown>[] = [];
+        let prototypeLookups = 0;
+        let firstOutcome: ChatStreamOutcome | null = null;
+        const functions = request.functions ?? [];
+        const toolsOffered =
+          request.toolsDisabled !== true && functions.length > 0;
+        for (;;) {
+        firstUsage = null;
+        const prototypeExhausted =
+          prototypeLoop !== undefined && prototypeLookups >= prototypeLoop.maxSteps;
         const response = await fetchImplementation(OPENCODE_GO_ENDPOINT, {
-          body: JSON.stringify(chatRequestBody(request)),
+          body: JSON.stringify(
+            chatRequestBody(
+              request,
+              prototypeExtraMessages,
+              prototypeExhausted ? prototypeLoop.functionName : undefined,
+            ),
+          ),
           headers: chatHeaders(input.apiKey, providerSessionId),
           method: "POST",
           // A redirect is never followed: the endpoint is fixed and an
@@ -170,10 +192,7 @@ export function createOpenCodeGoConversationTextModel(input: {
           throw new ProviderDispatchError("invalid_response");
         }
 
-        const functions = request.functions ?? [];
-        const toolsOffered =
-          request.toolsDisabled !== true && functions.length > 0;
-        let firstOutcome: ChatStreamOutcome | null = null;
+        let stepOutcome: ChatStreamOutcome | null = null;
         for await (const item of parseChatCompletion({
           body: response.body,
           expectedModel: OPENCODE_GO_MODEL,
@@ -186,8 +205,65 @@ export function createOpenCodeGoConversationTextModel(input: {
           if (item.type === "delta") {
             yield { delta: item.delta, type: "delta" };
           } else {
-            firstOutcome = item.outcome;
+            stepOutcome = item.outcome;
           }
+        }
+        if (stepOutcome === null) {
+          throw new ProviderDispatchError("invalid_response");
+        }
+        const settled: ChatStreamOutcome = stepOutcome;
+        const stepCalls = sortedToolCalls(settled.toolCalls).map(([, call]) => call);
+        const historyCalls = prototypeLoop
+          ? stepCalls.filter((call) => call.name === prototypeLoop.functionName)
+          : [];
+        if (
+          prototypeLoop === undefined ||
+          historyCalls.length === 0 ||
+          settled.emittedTextLength > 0 ||
+          prototypeExhausted
+        ) {
+          // Final step: any leftover lookup call is dropped, never surfaced.
+          firstOutcome =
+            historyCalls.length === 0
+              ? settled
+              : {
+                  ...settled,
+                  toolCalls: new Map(
+                    [...settled.toolCalls].filter(
+                      ([, call]) => call.name !== prototypeLoop!.functionName,
+                    ),
+                  ),
+                };
+          break;
+        }
+        if (firstUsage !== null) prototypeUsages.push(firstUsage);
+        for (const call of stepCalls) {
+          if (call.id === null) throw new ProviderDispatchError("invalid_response");
+        }
+        prototypeExtraMessages.push({
+          content: null,
+          reasoning_content: "",
+          role: "assistant",
+          tool_calls: stepCalls.map((call) => ({
+            function: { arguments: call.arguments, name: call.name },
+            id: call.id,
+            type: "function",
+          })),
+        });
+        for (const call of stepCalls) {
+          let output: string;
+          if (call.name !== prototypeLoop.functionName) {
+            output =
+              "Not done in this step. If it is still needed, call it again on its own after the lookup.";
+          } else if (prototypeLookups >= prototypeLoop.maxSteps) {
+            output =
+              "The lookup limit for this reply is reached. Reply now from what you already have.";
+          } else {
+            prototypeLookups += 1;
+            output = await prototypeLoop.execute(call.arguments);
+          }
+          prototypeExtraMessages.push({ content: output, role: "tool", tool_call_id: call.id });
+        }
         }
         if (firstOutcome === null) {
           throw new ProviderDispatchError("invalid_response");
@@ -233,6 +309,7 @@ export function createOpenCodeGoConversationTextModel(input: {
               secondUsage = observed;
             },
             providerSessionId,
+            prototypeExtraMessages,
             request,
             toolCalls: buffered,
           });
@@ -530,6 +607,7 @@ async function dispatchChatContinuation(input: {
   fetchImplementation: typeof fetch;
   onUsageObserved: (usage: Record<string, unknown>) => void;
   providerSessionId: string;
+  prototypeExtraMessages?: readonly Record<string, unknown>[];
   request: ConversationTextModelRequest;
   toolCalls: readonly ToolCallAccumulator[];
 }): Promise<{
@@ -539,7 +617,7 @@ async function dispatchChatContinuation(input: {
 }> {
   const response = await input.fetchImplementation(OPENCODE_GO_ENDPOINT, {
     body: JSON.stringify(
-      chatContinuationBody(input.request, input.toolCalls),
+      chatContinuationBody(input.request, input.toolCalls, input.prototypeExtraMessages ?? []),
     ),
     headers: chatHeaders(input.apiKey, input.providerSessionId),
     method: "POST",
@@ -601,15 +679,25 @@ function chatHeaders(
  * carry the empty `reasoning_content` the public OpenCode transform emits (no
  * reasoning is ever invented or persisted).
  */
+function prototypeInstructions(request: ConversationTextModelRequest): string {
+  return request.prototypePreface
+    ? `${request.instructions}\n\n${request.prototypePreface}`
+    : request.instructions;
+}
+
 function chatRequestBody(
   request: ConversationTextModelRequest,
+  prototypeExtraMessages: readonly Record<string, unknown>[] = [],
+  prototypeOmitFunction?: string,
 ): Record<string, unknown> {
-  const functions = request.functions ?? [];
+  const functions = (request.functions ?? []).filter(
+    (definition) => definition.name !== prototypeOmitFunction,
+  );
   const toolsOffered = request.toolsDisabled !== true && functions.length > 0;
   return {
     ...translateParameters(request.parameters),
     messages: [
-      { content: request.instructions, role: "system" },
+      { content: prototypeInstructions(request), role: "system" },
       ...request.messages.map((message) =>
         message.role === "assistant"
           ? {
@@ -619,6 +707,7 @@ function chatRequestBody(
             }
           : { content: message.text, role: "user" },
       ),
+      ...prototypeExtraMessages,
     ],
     model: OPENCODE_GO_MODEL,
     stream: true,
@@ -641,11 +730,12 @@ function chatRequestBody(
 function chatContinuationBody(
   request: ConversationTextModelRequest,
   toolCalls: readonly ToolCallAccumulator[],
+  prototypeExtraMessages: readonly Record<string, unknown>[] = [],
 ): Record<string, unknown> {
   return {
     ...translateParameters(request.parameters),
     messages: [
-      { content: request.instructions, role: "system" },
+      { content: prototypeInstructions(request), role: "system" },
       ...request.messages.map((message) =>
         message.role === "assistant"
           ? {
@@ -655,6 +745,7 @@ function chatContinuationBody(
             }
           : { content: message.text, role: "user" },
       ),
+      ...prototypeExtraMessages,
       {
         content: null,
         reasoning_content: "",

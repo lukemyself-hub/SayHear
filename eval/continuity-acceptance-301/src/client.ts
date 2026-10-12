@@ -13,7 +13,9 @@ export const SESSION_COOKIE_NAME = "sayhear.session-token";
  * request budget (and the Portal's own 32 second client stop) so a server that
  * honors its deadline is seen ending the request itself (#319).
  */
-export const CHAT_OBSERVATION_LIMIT_MS = 33_000;
+// PROTOTYPE ONLY: follows the widened request budget on this throwaway branch.
+export const CHAT_OBSERVATION_LIMIT_MS =
+  Number(process.env["SAYHEAR_PROTOTYPE_REQUEST_BUDGET_MS"] ?? 30_000) + 3_000;
 
 export type StreamEventRecord = Readonly<{
   elapsedMs: number;

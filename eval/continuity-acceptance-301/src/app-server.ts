@@ -92,6 +92,10 @@ export function buildAppEnvironment(
     const value = process.env[name];
     if (value !== undefined) passthrough[name] = value;
   }
+  // PROTOTYPE ONLY (SPEC #301 response-structure comparison).
+  for (const [name, value] of Object.entries(process.env)) {
+    if (name.startsWith("SAYHEAR_PROTOTYPE_") && value !== undefined) passthrough[name] = value;
+  }
   const provider =
     input.provider.kind === "opencode-go"
       ? {
