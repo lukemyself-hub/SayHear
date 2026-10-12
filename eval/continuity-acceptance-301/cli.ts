@@ -130,6 +130,9 @@ function requireValid(cases: readonly LoadedCase[]): void {
   }
 }
 
+/** `--experiment reasoning-effort=low|high|max`: a labelled diagnostic, never acceptance. */
+let reasoningEffortExperiment: "low" | "high" | "max" | null = null;
+
 /** `--history-recall off`: run with the history review branch closed (diagnostic). */
 let historyRecallClosed = false;
 
@@ -332,6 +335,9 @@ async function runOne(
       ...(historyRecallClosed ? { historyRecallEnabled: false } : {}),
       target,
     });
+    if (reasoningEffortExperiment) {
+      environment.gate?.setExperiment({ reasoningEffort: reasoningEffortExperiment });
+    }
     const run = () =>
       runCase({
         environment: environment!,
@@ -560,6 +566,7 @@ async function main(): Promise<number> {
       pack: { type: "string" },
       "provider-credential-file": { type: "string" },
       "history-recall": { type: "string" },
+      experiment: { type: "string" },
       review: { type: "string" },
       run: { type: "string" },
       "verify-reset": { type: "boolean" },
@@ -575,6 +582,12 @@ async function main(): Promise<number> {
       .find((candidate) => candidate.startsWith(`${PROVIDER_CREDENTIAL_VARIABLE}=`));
     const value = line?.slice(PROVIDER_CREDENTIAL_VARIABLE.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2");
     if (value) process.env[PROVIDER_CREDENTIAL_VARIABLE] = value;
+  }
+  if (values.experiment !== undefined) {
+    const match = /^reasoning-effort=(low|high|max)$/.exec(values.experiment);
+    if (!match) throw new UsageError("--experiment must be reasoning-effort=low|high|max.");
+    reasoningEffortExperiment = match[1] as "low" | "high" | "max";
+    console.log(`EXPERIMENT: live requests carry reasoning_effort=${reasoningEffortExperiment}. This is a diagnostic, not an acceptance run.`);
   }
   if (values["history-recall"] !== undefined) {
     if (values["history-recall"] !== "off" && values["history-recall"] !== "on") {

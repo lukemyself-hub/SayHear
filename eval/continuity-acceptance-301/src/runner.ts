@@ -530,6 +530,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
                 viaGate?.response?.providerRequestId ??
                 (viaGate ? `gate-request-${request.sequence}` : `stub-request-${request.sequence}`),
               ...(viaGate ? { response: viaGate.response, transport: viaGate.transport } : {}),
+              ...(viaGate?.experiment ? { experiment: viaGate.experiment } : {}),
               sequence: request.sequence,
               strings,
               toolsOffered: viaGate

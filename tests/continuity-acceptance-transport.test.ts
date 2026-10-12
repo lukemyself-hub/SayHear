@@ -310,6 +310,26 @@ describe("provider gate behind the tap", () => {
     }
   });
 
+  it("can run a labelled experiment that adds a reasoning effort to live requests", async () => {
+    // Not an acceptance configuration: a diagnostic that asks what the same
+    // requests would cost in time with the effort the adapter already knows
+    // how to send. Every request it touched is marked.
+    const { ask, gate, providerCalls } = await harness();
+    try {
+      gate.setLive(true);
+      gate.setExperiment({ reasoningEffort: "low" });
+      await ask("Morning.");
+      await gate.settled();
+      const sent = JSON.parse(providerCalls[0]!) as Record<string, unknown>;
+      expect(sent["reasoning_effort"]).toBe("low");
+      expect(sent["thinking"]).toEqual({ type: "enabled" });
+      expect((sent["messages"] as unknown[]).length).toBe(2);
+      expect(gate.requests()[0]!.experiment).toBe("reasoning_effort=low");
+    } finally {
+      await gate.stop();
+    }
+  });
+
   it("injects a Provider fault without contacting the Provider", async () => {
     const { ask, gate, providerCalls } = await harness();
     try {

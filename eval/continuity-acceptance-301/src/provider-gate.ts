@@ -72,6 +72,8 @@ export type GateRequest = CapturedProviderRequest &
     response: GateResponse | null;
     toolsOffered: readonly string[];
     transport: GateTransport;
+    /** Set when a diagnostic experiment changed what was sent (never acceptance evidence). */
+    experiment?: string;
   }>;
 
 export type GateUsage = Readonly<{
@@ -90,6 +92,13 @@ export type ProviderGate = Omit<ProviderStub, "requests"> &
      * Provider. Off by default, so nothing is paid for until the run says so.
      */
     setLive(live: boolean): void;
+    /**
+     * Diagnostic only: add a reasoning effort to every live request, in the
+     * exact wire form the product adapter uses when a release pins one. The
+     * product sends none on the conversation path today; a run with this set
+     * is an experiment and is labelled as such on every request.
+     */
+    setExperiment(experiment: Readonly<{ reasoningEffort: "low" | "high" | "max" }> | null): void;
     /** Resolves when every live request has reported how it ended. */
     settled(timeoutMs?: number): Promise<void>;
     /** Token usage of every live request so far, for the cost ledger. */
@@ -248,6 +257,7 @@ export async function startProviderGate(): Promise<ProviderGate> {
   let historicalReply: string | null = null;
   let live = false;
   let fault: ProviderFault | null = null;
+  let experiment: Readonly<{ reasoningEffort: "low" | "high" | "max" }> | null = null;
   /** Live requests that have not yet reported how they ended. */
   const open = new Set<number>();
 
@@ -319,9 +329,18 @@ export async function startProviderGate(): Promise<ProviderGate> {
       if (live && historicalReply === null) {
         entry.transport = "live";
         open.add(sequence);
+        const patched =
+          experiment && record(body)
+            ? JSON.stringify({
+                ...record(body),
+                reasoning_effort: experiment.reasoningEffort,
+                thinking: { type: "enabled" },
+              })
+            : null;
+        if (patched && experiment) entry.experiment = `reasoning_effort=${experiment.reasoningEffort}`;
         response
           .writeHead(200, { "content-type": "application/json" })
-          .end(JSON.stringify({ disposition: "live", sequence }));
+          .end(JSON.stringify({ disposition: "live", sequence, ...(patched ? { body: patched } : {}) }));
         return;
       }
 
@@ -375,6 +394,9 @@ export async function startProviderGate(): Promise<ProviderGate> {
     setHistoryReview() {},
     setLive(next) {
       live = next;
+    },
+    setExperiment(next) {
+      experiment = next;
     },
     setStepLabel(label) {
       stepLabel = label;

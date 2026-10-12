@@ -310,6 +310,26 @@
       "requests": 3,
       "runId": "run-2af93e5b-e4c4-49b7-9fc7-019000276ee4",
       "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 2745,
+      "date": "2026-10-12",
+      "inputTokens": 3923,
+      "note": "H04 (final, fixture c021cf10a819) real-model run; conservative peak, uncached list price",
+      "outputTokens": 1306,
+      "requests": 2,
+      "runId": "run-87d96299-341c-408d-ae52-51518755fffd",
+      "ticket": "#321"
+    },
+    {
+      "costUsdMicros": 7530,
+      "date": "2026-10-12",
+      "inputTokens": 11440,
+      "note": "H11 (final, fixture a9172e11797d) real-model run; conservative peak, uncached list price",
+      "outputTokens": 3415,
+      "requests": 4,
+      "runId": "run-5706ea02-23c2-4646-b4c8-1c99a04140a4",
+      "ticket": "#321"
     }
   ]
 }

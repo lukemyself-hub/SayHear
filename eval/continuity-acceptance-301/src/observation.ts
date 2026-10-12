@@ -164,6 +164,8 @@ export type ObservedStep = Readonly<{
      * by an injected fault. Only a `live` answer is a model answer.
      */
     transport?: GateTransport;
+    /** A diagnostic experiment changed this request; it is not acceptance evidence. */
+    experiment?: string;
     /** The real Provider's answer, copied by the egress tap. */
     response?: GateResponse | null;
     sequence: number;

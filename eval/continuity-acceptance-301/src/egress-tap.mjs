@@ -83,7 +83,11 @@ export function createTappedFetch(input) {
     const sentMs = performance.now() - started;
     let response;
     try {
-      response = await original(resource, init);
+      // A diagnostic experiment may replace the body; an acceptance run never does.
+      response = await original(
+        resource,
+        typeof directive.body === "string" ? { ...init, body: directive.body } : init,
+      );
     } catch (error) {
       report("error", null, null);
       throw error;
