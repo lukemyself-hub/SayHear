@@ -54,6 +54,8 @@ const execFileAsync = promisify(execFile);
 
 export const RELEASE_CLOSURE_REPORT_VERSION = "spec275-release-closure-report:v1";
 
+const PRODUCTION_VERCEL_PROJECT_ID = "prj_KJD7fJhlIxlOMc4W4goUsIhOaLly";
+
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PROMOTION_FIXTURE_DIRECTORY = join(
   repositoryRoot,
@@ -80,6 +82,21 @@ export type CommandRunner = (
   args: readonly string[],
 ) => Promise<CommandResult>;
 
+type ReleaseIdentity = Readonly<{
+  version: "1a3b-g1-hosted-release-identity:v1";
+  commit: string;
+  environment: "production";
+  projectId: string;
+  teamId: string | null;
+  businessTargetHash: string;
+  purgeMarkerTargetHash: string;
+}>;
+
+export type ReleaseIdentityFetcher = (
+  url: string,
+  init: RequestInit,
+) => Promise<Response>;
+
 export type CiRunEvidence = Readonly<{
   id: number;
   workflow: string;
@@ -101,6 +118,10 @@ export type DeploymentIdentityState = Readonly<{
   status: "verified" | "unverified";
   commit: string | null;
   deploymentId: string | null;
+  projectId: string | null;
+  teamId: string | null;
+  businessTargetHash: string | null;
+  purgeMarkerTargetHash: string | null;
   reason: string;
 }>;
 
@@ -662,6 +683,10 @@ export function syntheticClosureFixture(): ReleaseClosureInput {
         status: "unverified",
         commit: null,
         deploymentId: null,
+        projectId: null,
+        teamId: null,
+        businessTargetHash: null,
+        purgeMarkerTargetHash: null,
         reason:
           "No production deployment has occurred for the integration branch and no authorized production read is available.",
       },
@@ -669,6 +694,10 @@ export function syntheticClosureFixture(): ReleaseClosureInput {
         status: "unverified",
         commit: null,
         deploymentId: null,
+        projectId: null,
+        teamId: null,
+        businessTargetHash: null,
+        purgeMarkerTargetHash: null,
         reason:
           "No candidate deployment exists; the only promotion evidence is the synthetic rehearsal.",
       },
@@ -972,6 +1001,8 @@ export type CollectReleaseClosureOptions = Readonly<{
   visualResult?: string;
   collectedAt?: string;
   workflowDirectory?: string;
+  environment?: Readonly<Record<string, string | undefined>>;
+  fetcher?: ReleaseIdentityFetcher;
 }>;
 
 const defaultRunner: CommandRunner = async (command, args) => {
@@ -1003,6 +1034,135 @@ async function requireGhJson(
     throw new Error(result.stderr.trim() || `gh ${args.join(" ")} failed`);
   }
   return JSON.parse(result.stdout) as unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseReleaseIdentity(value: unknown): ReleaseIdentity | null {
+  if (!isRecord(value)) return null;
+  const expectedKeys = [
+    "businessTargetHash",
+    "commit",
+    "environment",
+    "projectId",
+    "purgeMarkerTargetHash",
+    "teamId",
+    "version",
+  ];
+  if (
+    Object.keys(value).length !== expectedKeys.length ||
+    expectedKeys.some((key) => !Object.hasOwn(value, key)) ||
+    value.version !== "1a3b-g1-hosted-release-identity:v1" ||
+    typeof value.commit !== "string" ||
+    !/^[a-f0-9]{40}$/.test(value.commit) ||
+    value.environment !== "production" ||
+    value.projectId !== PRODUCTION_VERCEL_PROJECT_ID ||
+    (value.teamId !== null && typeof value.teamId !== "string") ||
+    typeof value.businessTargetHash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.businessTargetHash) ||
+    typeof value.purgeMarkerTargetHash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(value.purgeMarkerTargetHash)
+  ) {
+    return null;
+  }
+  return value as ReleaseIdentity;
+}
+
+async function readProductionReleaseIdentity(input: {
+  endpoint: string | undefined;
+  fetcher: ReleaseIdentityFetcher;
+  secret: string | undefined;
+}): Promise<DeploymentIdentityState> {
+  const unverified = (reason: string): DeploymentIdentityState => ({
+    status: "unverified",
+    commit: null,
+    deploymentId: null,
+    projectId: null,
+    teamId: null,
+    businessTargetHash: null,
+    purgeMarkerTargetHash: null,
+    reason,
+  });
+  if (!input.secret) {
+    return unverified(
+      "CRON_SECRET is unavailable for the authenticated production identity read.",
+    );
+  }
+  if (!input.endpoint) {
+    return unverified(
+      "RECOVERY_SCAN_URL is unavailable for resolving the production release-identity endpoint.",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(input.endpoint);
+  } catch {
+    return unverified(
+      "RECOVERY_SCAN_URL is not a valid production recovery scan URL.",
+    );
+  }
+  if (
+    url.protocol !== "https:" ||
+    !/^(say-hear-web|say-hear-[a-z0-9]+-lukemyself)\.vercel\.app$/.test(url.hostname) ||
+    url.pathname !== "/api/internal/recovery/scan" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    return unverified(
+      "RECOVERY_SCAN_URL does not identify the production recovery scan endpoint.",
+    );
+  }
+  url.pathname = "/api/internal/inspection/release-identity";
+  try {
+    const response = await input.fetcher(url.toString(), {
+      headers: { authorization: `Bearer ${input.secret}` },
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      return unverified(
+        `Authenticated production release-identity read returned HTTP ${response.status}.`,
+      );
+    }
+    const identity = parseReleaseIdentity(await response.json());
+    if (!identity) {
+      return unverified("Authenticated production release-identity response had an unexpected shape.");
+    }
+    return {
+      status: "verified",
+      commit: identity.commit,
+      deploymentId: null,
+      projectId: identity.projectId,
+      teamId: identity.teamId,
+      businessTargetHash: identity.businessTargetHash,
+      purgeMarkerTargetHash: identity.purgeMarkerTargetHash,
+      reason: "read from the authenticated release-identity endpoint",
+    };
+  } catch {
+    return unverified("Authenticated production release-identity read failed or was unreadable.");
+  }
+}
+
+async function readRecoveryScanEndpoint(
+  runner: CommandRunner,
+  environment: Readonly<Record<string, string | undefined>>,
+  repository: string,
+): Promise<string | undefined> {
+  if (environment.RECOVERY_SCAN_URL) return environment.RECOVERY_SCAN_URL;
+  try {
+    const result = await runner("gh", [
+      "variable",
+      "get",
+      "RECOVERY_SCAN_URL",
+      "--repo",
+      repository,
+    ]);
+    return result.exitCode === 0 ? result.stdout.trim() || undefined : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function trimSha(stdout: string): string | null {
@@ -1280,6 +1440,17 @@ export async function collectReleaseClosureInput(
 
   const acceptance = await verifyAcceptanceCommits(ACCEPTANCE_EVIDENCE, runner);
   const promotion = await parsePromotionStatus(promotionReportPath);
+  const environment = options.environment ?? process.env;
+  const productionIdentityEndpoint = await readRecoveryScanEndpoint(
+    runner,
+    environment,
+    repository,
+  );
+  const productionIdentity = await readProductionReleaseIdentity({
+    endpoint: productionIdentityEndpoint,
+    fetcher: options.fetcher ?? fetch,
+    secret: environment.CRON_SECRET,
+  });
 
   return {
     collectedAt,
@@ -1293,17 +1464,15 @@ export async function collectReleaseClosureInput(
     ciRuns,
     requiredChecks,
     deploymentIdentity: {
-      production: {
-        status: "unverified",
-        commit: null,
-        deploymentId: null,
-        reason:
-          "No production deployment has occurred for the integration branch and no authorized production read is available.",
-      },
+      production: productionIdentity,
       candidate: {
         status: "unverified",
         commit: null,
         deploymentId: null,
+        projectId: null,
+        teamId: null,
+        businessTargetHash: null,
+        purgeMarkerTargetHash: null,
         reason:
           "No candidate deployment exists; the only promotion evidence is the synthetic rehearsal.",
       },
