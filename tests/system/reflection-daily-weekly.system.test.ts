@@ -2427,6 +2427,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       policyVersion: READINESS_POLICY,
     });
     if (queued.outcome !== "queued") throw new Error("unreachable");
+    const commandRow = await database!.pool.query<{ generation_command_id: string }>(
+      "SELECT generation_command_id::text FROM generation_commands WHERE workflow_command_id = $1",
+      [queued.workflowCommandId],
+    );
+    const generationCommandId = commandRow.rows[0]!.generation_command_id;
     narrativeScript = () => ({ propositions: [], coverageKeys: [] });
     const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
     const commitSpy = vi
@@ -2472,7 +2477,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       commitSpy.mockRestore();
     }
 
-    expect(result.outcome).toBe("failed");
+    expect(result.outcome).toBe("built");
     const attempt = await database!.pool.query<{ status: string }>(
       `SELECT a.status FROM model_run_attempts a
        INNER JOIN generation_commands c ON c.generation_command_id = a.generation_command_id
@@ -2480,7 +2485,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
        ORDER BY a.created_at DESC, a.model_run_attempt_id DESC LIMIT 1`,
       [session.dailySessionId],
     );
-    expect(attempt.rows[0]!.status).toBe("failed");
+    expect(attempt.rows[0]!.status).toBe("succeeded");
     const current = await database!.pool.query<{ n: string }>(
       `SELECT count(*)::text AS n FROM reflections r
        INNER JOIN reflection_versions v ON v.reflection_version_id = r.current_version_id
@@ -2489,7 +2494,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     );
     expect(current.rows[0]!.n).toBe("1");
     const run = await database!.pool.query<{ status: string }>(
-      `SELECT status FROM reflection_runs r
+      `SELECT r.status FROM reflection_runs r
        INNER JOIN model_run_attempts a ON a.model_run_attempt_id = r.model_run_attempt_id
        INNER JOIN generation_commands c ON c.generation_command_id = a.generation_command_id
        WHERE c.subject_id = $1 AND a.operation_type = 'reflection.daily'
@@ -2497,8 +2502,21 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       [session.dailySessionId],
     );
     // The transaction committed both rows before its acknowledgement failed.
-    // The catch may fail the attempt, but must preserve built run history.
+    // Read-back confirms the authoritative result and must settle it succeeded.
     expect(run.rows[0]!.status).toBe("built");
+    const command = await database!.pool.query<{
+      status: string;
+      recovery_status: string;
+    }>(
+      `SELECT c.status, c.recovery_status FROM generation_commands c
+       INNER JOIN model_run_attempts a ON a.generation_command_id = c.generation_command_id
+       WHERE c.generation_command_id = $1`,
+      [generationCommandId],
+    );
+    expect(command.rows[0]).toMatchObject({
+      status: "succeeded",
+      recovery_status: "not_needed",
+    });
   });
 
   it("settles a terminal failure and keeps the consumed usage when the daily Reflection commit throws (#257)", async () => {
@@ -2697,6 +2715,116 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         [OWNER],
       )).rows[0]!.count,
     ).toBe(0);
+  });
+
+  it("settles a committed weekly Reflection when commit acknowledgement throws (#257)", async () => {
+    const monday = await seedSession({ logicalDate: "2026-09-07" });
+    const tuesday = await seedSession({ logicalDate: "2026-09-08" });
+    for (const session of [monday, tuesday]) {
+      await seedDateOutcome({
+        dailySessionId: session.dailySessionId,
+        outcome: "journal_available",
+      });
+      await seedJournalOutcome({
+        dailySessionId: session.dailySessionId,
+        outcome: "published",
+      });
+    }
+    const [week] = await reflectionRepository!.listDueWeekWindows({
+      now: new Date(Date.parse("2026-09-14T06:00:00.000Z")),
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    const queued = await reflectionRepository!.queueWeeklyReflection({
+      userId: OWNER as never,
+      weekIdentifier: week!.weekIdentifier,
+      windowStartDate: week!.windowStartDate,
+      windowEndDate: week!.windowEndDate,
+      sourceDigest: week!.sourceDigest,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") throw new Error("unreachable");
+    const commandRow = await database!.pool.query<{ generation_command_id: string }>(
+      "SELECT generation_command_id::text FROM generation_commands WHERE workflow_command_id = $1",
+      [queued.workflowCommandId],
+    );
+    const generationCommandId = commandRow.rows[0]!.generation_command_id;
+    narrativeScript = () => ({ propositions: [], coverageKeys: [] });
+    const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
+    const commitSpy = vi
+      .spyOn(reflectionRepository!, "commitReflection")
+      .mockImplementationOnce(async (input) => {
+        await commit(input);
+        throw new Error("weekly commit acknowledgement lost");
+      });
+    let result: Awaited<ReturnType<typeof runReflectionWeeklyBuild>>;
+    try {
+      result = await runReflectionWeeklyBuild({
+        dependencies: reflectionDependencies(async () => ({
+          statements: [{
+            statementKey: "statement:weekly-ack-loss",
+            text: "Radios came up across the week.",
+            statementKind: "cross_day_theme",
+            propositions: [{
+              propositionKey: "proposition:weekly-ack-loss",
+              normalizedProposition: "user repairs radios",
+              propositionKind: "synthesis",
+              epistemicRendering: "inferred",
+              supportEvidenceItemIds: [monday.evidenceItemId, tuesday.evidenceItemId],
+              baselineClaimIds: [],
+            }],
+          }],
+          candidateProposals: [],
+        })),
+        command: {
+          workflowCommandId: queued.workflowCommandId,
+          subjectId: OWNER,
+          sourceRevision: dateOrdinal(week!.windowStartDate),
+          claimBaselineDigest: "",
+          policyVersion: READINESS_POLICY,
+          expectedDataEpoch: queued.expectedDataEpoch,
+          scope: "weekly",
+          weekIdentifier: week!.weekIdentifier,
+          windowStartDate: week!.windowStartDate,
+          windowEndDate: week!.windowEndDate,
+          sourceDigest: week!.sourceDigest,
+        },
+      });
+    } finally {
+      commitSpy.mockRestore();
+    }
+    expect(result.outcome).toBe("built");
+    const state = await database!.pool.query<{
+      attempt_status: string;
+      command_status: string;
+      run_status: string;
+    }>(
+      `SELECT a.status AS attempt_status, c.status AS command_status,
+              r.status AS run_status
+       FROM model_run_attempts a
+       INNER JOIN generation_commands c
+         ON c.generation_command_id = a.generation_command_id
+       INNER JOIN reflection_runs r
+         ON r.model_run_attempt_id = a.model_run_attempt_id
+       WHERE c.generation_command_id = $1`,
+      [generationCommandId],
+    );
+    expect(state.rows).toHaveLength(1);
+    expect(state.rows[0]).toEqual({
+      attempt_status: "succeeded",
+      command_status: "succeeded",
+      run_status: "built",
+    });
+    const current = await database!.pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n
+       FROM reflections r
+       INNER JOIN reflection_versions v
+         ON v.reflection_version_id = r.current_version_id
+       WHERE r.user_id = $1 AND r.week_identifier = $2
+         AND v.status = 'committed'`,
+      [OWNER, week!.weekIdentifier],
+    );
+    expect(current.rows[0]!.n).toBe("1");
   });
 
   it("settles a terminal failure and keeps the consumed usage when the weekly Reflection commit throws (#257)", async () => {

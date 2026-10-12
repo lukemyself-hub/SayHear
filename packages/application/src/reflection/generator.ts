@@ -886,6 +886,7 @@ async function executeReflectionAttempt(input: Readonly<{
       return { kind: "persist_fenced", reason: persisted.reason };
     }
     const reflectionVersionId = persisted.reflectionVersionId;
+    committedVersionId = reflectionVersionId;
 
     // Shared validator (ADR-0132): the build may not commit current or derive
     // a Candidate until a completed `narrative.validate` command exists.
@@ -1017,7 +1018,9 @@ async function executeReflectionAttempt(input: Readonly<{
     };
   };
 
-  let domain: ReflectionDomainOutcome;
+  let domain: ReflectionDomainOutcome | null = null;
+  let committedAfterError: ReflectionDomainOutcome | null = null;
+  let committedVersionId: string | null = null;
   try {
     domain = await runDomainPhase();
   } catch (error) {
@@ -1027,46 +1030,72 @@ async function executeReflectionAttempt(input: Readonly<{
     ) {
       throw error;
     }
-    // The Provider call already succeeded and may have consumed tokens, but
-    // the post-Provider domain work threw. `unknown` is an existing terminal
-    // failure code (ADR-0132): it is not a Provider transport failure, so
-    // `planModelRoleRecovery` schedules no technical retry, and the issue
-    // decision adds no new code.
+    // COMMIT can succeed even when its acknowledgement is lost. Read back the
+    // authoritative current version before classifying the Provider attempt;
+    // a committed artifact remains the command result (ADR-0077).
     try {
-      await recordReflectionRunOutcome({
-        repository,
+      const current = await repository.readCurrentVersion({
         userId: input.userId,
-        frozen: input.frozen,
-        sourceRevision,
-        expectedDataEpoch: input.expectedDataEpoch,
-        generationCommandId,
-        modelRunAttemptId,
-        status: "failed",
-        outcomeDetail: "unknown",
-        statementCount: null,
-        candidateCount: null,
-        degradedEpisodeReason: input.degradedEpisodeReason,
-        errorCode: "unknown",
+        dailySessionId: input.frozen.dailySessionId,
+        weekIdentifier: input.frozen.weekIdentifier,
+        now: input.dependencies.clock(),
       });
+      if (
+        current.outcome === "ok" &&
+        current.status === "committed" &&
+        current.reflectionVersionId === committedVersionId
+      ) {
+        committedAfterError = { kind: "already_committed" };
+      }
     } catch {
-      // The independent run ledger must not mask the original domain failure.
+      // If read-back is unavailable, retain the existing terminal failure path.
     }
-    const settled = await settleAttempt("failed", "unknown");
-    const outcome: ReflectionBuildEntrypointResult["outcome"] =
-      settled.outcome === "discarded"
-        ? "fenced"
-        : settled.outcome === "retry_scheduled"
-          ? "retryable_failed"
-          : "failed";
-    return entrypointResult({
-      subjectId: String(subjectId),
-      scope: input.scope,
-      outcome,
-      errorCode: outcome === "fenced" ? (settled.reason ?? "unknown") : "unknown",
-    });
+    if (committedAfterError === null) {
+      // The Provider call already succeeded and may have consumed tokens, but
+      // the post-Provider domain work threw. `unknown` is an existing terminal
+      // failure code (ADR-0132): it is not a Provider transport failure, so
+      // `planModelRoleRecovery` schedules no technical retry, and the issue
+      // decision adds no new code.
+      try {
+        await recordReflectionRunOutcome({
+          repository,
+          userId: input.userId,
+          frozen: input.frozen,
+          sourceRevision,
+          expectedDataEpoch: input.expectedDataEpoch,
+          generationCommandId,
+          modelRunAttemptId,
+          status: "failed",
+          outcomeDetail: "unknown",
+          statementCount: null,
+          candidateCount: null,
+          degradedEpisodeReason: input.degradedEpisodeReason,
+          errorCode: "unknown",
+        });
+      } catch {
+        // The independent run ledger must not mask the original domain failure.
+      }
+      const settled = await settleAttempt("failed", "unknown");
+      const outcome: ReflectionBuildEntrypointResult["outcome"] =
+        settled.outcome === "discarded"
+          ? "fenced"
+          : settled.outcome === "retry_scheduled"
+            ? "retryable_failed"
+            : "failed";
+      return entrypointResult({
+        subjectId: String(subjectId),
+        scope: input.scope,
+        outcome,
+        errorCode: outcome === "fenced" ? (settled.reason ?? "unknown") : "unknown",
+      });
+    }
+  }
+  const resolvedDomain = committedAfterError ?? domain;
+  if (resolvedDomain === null) {
+    throw new Error("Reflection domain phase ended without an outcome");
   }
 
-  switch (domain.kind) {
+  switch (resolvedDomain.kind) {
     case "tier1_rejected": {
       const recorded = await settleAttempt("succeeded");
       if (recorded.outcome === "discarded") {
@@ -1081,8 +1110,8 @@ async function executeReflectionAttempt(input: Readonly<{
         subjectId: String(subjectId),
         scope: input.scope,
         outcome: "rejected",
-        rejectionCode: domain.rejectionCode,
-        errorCode: `tier1:${domain.rejectionCode}`,
+        rejectionCode: resolvedDomain.rejectionCode,
+        errorCode: `tier1:${resolvedDomain.rejectionCode}`,
       });
     }
     case "persist_fenced": {
@@ -1091,7 +1120,7 @@ async function executeReflectionAttempt(input: Readonly<{
         subjectId: String(subjectId),
         scope: input.scope,
         outcome: "fenced",
-        errorCode: domain.reason,
+        errorCode: resolvedDomain.reason,
       });
     }
     case "validator_failed": {
@@ -1099,8 +1128,8 @@ async function executeReflectionAttempt(input: Readonly<{
       return entrypointResult({
         subjectId: String(subjectId),
         scope: input.scope,
-        outcome: domain.outcome,
-        errorCode: domain.errorCode,
+        outcome: resolvedDomain.outcome,
+        errorCode: resolvedDomain.errorCode,
       });
     }
     case "validator_blocked": {
@@ -1109,7 +1138,7 @@ async function executeReflectionAttempt(input: Readonly<{
         subjectId: String(subjectId),
         scope: input.scope,
         outcome: "failed",
-        errorCode: domain.errorCode,
+        errorCode: resolvedDomain.errorCode,
       });
     }
     case "commit_fenced": {
@@ -1118,7 +1147,7 @@ async function executeReflectionAttempt(input: Readonly<{
         subjectId: String(subjectId),
         scope: input.scope,
         outcome: "fenced",
-        errorCode: domain.reason,
+        errorCode: resolvedDomain.reason,
       });
     }
     case "already_committed": {
@@ -1149,8 +1178,8 @@ async function executeReflectionAttempt(input: Readonly<{
         subjectId: String(subjectId),
         scope: input.scope,
         outcome: "built",
-        statementCount: domain.statementCount,
-        candidateCount: domain.candidateCount,
+        statementCount: resolvedDomain.statementCount,
+        candidateCount: resolvedDomain.candidateCount,
         degradedEpisodeReason: input.degradedEpisodeReason,
       });
     }
