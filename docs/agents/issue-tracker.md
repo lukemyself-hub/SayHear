@@ -52,17 +52,34 @@ GitHub shares one number space across issues and PRs, so resolve an ambiguous `#
 
 ### 执行占用与派发互斥
 
-`ongoing` 表示该 Issue 已被一个实现 Agent 认领，交付链路尚未结束（包括等待审核、
-等待修改和三轮暂停前的处理）。它与 `ready-for-agent` 互斥。
+`ongoing` 表示该 Issue 当前由一个实现或审核 Agent 处理。稳定状态下它与
+`ready-for-agent` 互斥；PR 审核进入终态后必须清除 `ongoing`，不能把它留给后续调度猜测。
+GitHub 标签更新不是原子操作；交接时可先写入 `ready-for-agent`，再移除 `ongoing`。
+调度器必须重读标签，只派发不带 `ongoing` 的 Issue。
 
 - 开始或恢复执行：先添加 `ongoing`、移除 `ready-for-agent`，再修改文件或派发子任务。
-- 审查要求修改、转人工、三轮暂停或任务完成：按对应规则移除 `ongoing`，再设置
-  `ready-for-agent`、`ready-for-human` 或关闭 Issue。GitHub 因 PR 合入自动关闭
-  Issue 时，恢复扫描负责清理遗留的 `ongoing`。
-- 自动调度 Agent 只派发 `ready-for-agent` 且无 `ongoing`、无暂停记录、无活动 PR 的
-  Issue；看到 `ongoing` 不得重复实施。
-- 标签是协调信号，不是原子锁。调度方派发前重读，执行者认领后再次确认；发现另一个
-  执行者已认领时立即停止，保留现场并报告，不并行修改同一 Issue。
+- Gate 因 PR Validate 尚在 queued/in_progress、缺失或状态未知而返回
+  `awaiting_verification`，或审核上下文报告
+  `repository_merge_busy`、`github_context_unavailable`、`stale_review`、
+  `policy_version_mismatch`、`incomplete_diff` 等可重试状态时，审核仍在等待，保持
+  `ongoing`，留给下一轮核验。`trusted_identity_unconfigured`、
+  `review_author_unavailable`、`branch_protection_unreadable`、
+  `production_deploy_behavior_unknown` 等终态阻断不属于等待；回写说明后交回
+  `ready-for-agent`，需要维护者处理的内容由暂停/人工决定规则阻止自动修改。
+- Gate 给出终态非批准结果（`request_changes`、终态 `awaiting_verification` 或
+  `human_decision`）时，先确认对应审核评论已写入，再设置 `ready-for-agent`、移除
+  `ongoing` 和其他互斥分诊状态，并回读最终标签。标签更新失败时保持交接未完成，不能
+  声称已重新派发。暂停标记仍优先阻止自动修改；评论要求维护者决定时，接续 Agent
+  必须等待维护者决定。
+- 审核通过后，确认 GitHub auto-merge 已启用或 PR 已合入，再移除 `ongoing` 和互斥分诊
+  状态、关闭 Issue，并回读确认已关闭。GitHub 因 PR 合入自动关闭 Issue 时也清理遗留标签。
+- 自动调度 Agent 只派发开放、带 `ready-for-agent`、无 `ongoing`、无暂停记录且依赖已解除的
+  Issue。若恰好有一个开放关联 PR，接续该 PR 和原分支；没有关联 PR 才创建新的 PR。
+  多个开放关联 PR 或其他执行者会造成冲突，必须停止并报告。
+- `ongoing`、`ready-for-agent` 是协调信号，不是原子锁。调度方派发前重读，执行者认领后
+  再次确认；发现另一个执行者已认领时立即停止，不并行修改同一 Issue。
+- 本仓库没有实现 Issue 扫描、派发或接续 PR 的调度器；上面的接续要求是外部调度器必须
+  遵守的契约。仅修改文档或 gate 不代表已验证外部调度器会按此行为运行。
 
 ### 实现 Agent 提交审核
 
@@ -100,13 +117,12 @@ GitHub shares one number space across issues and PRs, so resolve an ambiguous `#
 
 ### 缺少验收证据时
 
-CI 仍在运行时等待，不派发重复修改。必要专项证据缺失时，审批 Agent 保持
-“待验证”，在对应 Issue 记录目标 SHA、所缺检查和通过条件，由实现 Agent 补齐。
-交回补证时按“执行占用与派发互斥”移除 `ongoing` 并设置 `ready-for-agent`，让调度
-Agent 能重新派发。补证不能只提供“已测试”的自述，应附可核验的报告、运行记录或
-交互证据。缺证据不等于已确认代码缺陷，不为此发送虚假的 `request changes`，也不
-增加上述三轮修改失败计数。无法在已有授权内补齐时报告阻塞，不擅自调用额外付费
-模型 API 或读取生产私人数据。
+CI 仍在排队或运行时等待，不派发重复修改。必要专项证据缺失且 Validate 已结束时，审批
+Agent 保持“待验证”，在对应 Issue 记录目标 SHA、所缺检查和通过条件，确认评论写入后
+移除 `ongoing` 并设置 `ready-for-agent`，由实现 Agent 接续原 PR 补证。补证不能只提供
+“已测试”的自述，应附可核验的报告、运行记录或交互证据。缺证据不等于已确认代码缺陷，
+不为此发送虚假的 `request changes`，也不增加上述三轮修改失败计数。无法在已有授权内
+补齐时报告阻塞，不擅自调用额外付费模型 API 或读取生产私人数据。
 
 ## When a skill says "publish to the issue tracker"
 
