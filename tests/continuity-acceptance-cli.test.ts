@@ -91,6 +91,25 @@ describe("continuity acceptance CLI", { timeout: 120_000 }, () => {
         expect(started.code).toBe(4);
         expect(started.output).toContain("OPENCODE_GO_API_KEY");
         expect(started.output).not.toMatch(/S01: (PASS|NOT-RUN|FAIL|NEEDS-REVIEW)/);
+
+        // The credential can be taken from a local profile file: that one
+        // variable only, and never echoed. With it the run gets past the
+        // credential gate and stops at the next one (no database configured).
+        const profile = path.join(path.dirname(ledger), "profile.env");
+        writeFileSync(
+          profile,
+          'DATABASE_URL=postgresql://owner:db-secret@db.example.com/sayhear\nOPENCODE_GO_API_KEY="profile-credential-value"\nDEEPSEEK_API_KEY=other-secret\n',
+        );
+        const withProfile = run(
+          ["run-case", "S01", "--mode", "real-model", "--ledger", ledger, "--provider-credential-file", profile],
+          { SAYHEAR_ACCEPTANCE_REAL_MODEL: "enabled" },
+        );
+        expect(withProfile.code).toBe(3);
+        expect(withProfile.output).toContain("REFUSED");
+        expect(withProfile.output).toContain("never falls back to DATABASE_URL");
+        for (const secret of ["profile-credential-value", "db-secret", "other-secret"]) {
+          expect(withProfile.output).not.toContain(secret);
+        }
       },
     );
   });

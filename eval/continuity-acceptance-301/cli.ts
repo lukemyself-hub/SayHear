@@ -547,6 +547,7 @@ async function main(): Promise<number> {
       mode: { type: "string" },
       out: { type: "string" },
       pack: { type: "string" },
+      "provider-credential-file": { type: "string" },
       review: { type: "string" },
       run: { type: "string" },
       "verify-reset": { type: "boolean" },
@@ -554,6 +555,15 @@ async function main(): Promise<number> {
   });
   const command = positionals[0];
   if (values.ledger) ledgerFile = path.resolve(values.ledger);
+  if (values["provider-credential-file"]) {
+    // Only this one variable is taken from the profile file; nothing else in
+    // it is read into the environment, and the value is never printed.
+    const line = readFileSync(path.resolve(values["provider-credential-file"]), "utf8")
+      .split("\n")
+      .find((candidate) => candidate.startsWith(`${PROVIDER_CREDENTIAL_VARIABLE}=`));
+    const value = line?.slice(PROVIDER_CREDENTIAL_VARIABLE.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2");
+    if (value) process.env[PROVIDER_CREDENTIAL_VARIABLE] = value;
+  }
   if (values.pack) {
     const chosen = PACKS[values.pack];
     if (!chosen) throw new UsageError(`Unknown pack ${values.pack}. Known: ${Object.keys(PACKS).join(", ")}`);
