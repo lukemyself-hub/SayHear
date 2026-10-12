@@ -1,0 +1,62 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "H02",
+    "committedMs": 13226.560083,
+    "firstVisibleTextMs": 12497.189125,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 1588,
+    "reasoningTokens": 1476,
+    "runId": "run-7741f152-8782-4ac7-95a2-bc2ffe085787",
+    "stepId": "said",
+    "streamClosedMs": 13226.696917000001,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "H02",
+    "committedMs": 11769.877125000003,
+    "firstVisibleTextMs": 11064.512875,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 1350,
+    "reasoningTokens": 1239,
+    "runId": "run-7741f152-8782-4ac7-95a2-bc2ffe085787",
+    "stepId": "happened",
+    "streamClosedMs": 11769.944709000003,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "H02",
+    "committedMs": 2845.3684170000015,
+    "firstVisibleTextMs": 2325.7339580000007,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 133,
+    "reasoningTokens": 68,
+    "runId": "run-7741f152-8782-4ac7-95a2-bc2ffe085787",
+    "stepId": "when",
+    "streamClosedMs": 2845.424332999999,
+    "withinContract": true
+  },
+  {
+    "appState": "warm",
+    "caseId": "H02",
+    "committedMs": 5325.9231660000005,
+    "firstVisibleTextMs": 4630.128124999996,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 546,
+    "reasoningTokens": 483,
+    "runId": "run-7741f152-8782-4ac7-95a2-bc2ffe085787",
+    "stepId": "market-when",
+    "streamClosedMs": 5325.988124999996,
+    "withinContract": false
+  }
+]

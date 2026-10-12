@@ -1,0 +1,65 @@
+{
+  "caseId": "H08",
+  "findings": [
+    {
+      "criterionId": "S-meaning",
+      "itemId": "a-small-now",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-meaning",
+      "itemId": "a-own-say",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-meaning",
+      "itemId": "f-sister-motive",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-meaning",
+      "itemId": "f-ferry",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "a-small-now",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-advice",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-fixed-trait",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-cheerlead",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-0c957252-dcb5-4f8e-a9ab-b484f56c2356",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

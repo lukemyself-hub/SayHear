@@ -1,0 +1,285 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 998400,
+    "inputTokenUpperBound": 256000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 768000,
+    "paidRequestUpperBound": 16,
+    "remainingUsdMicros": 8828128,
+    "requestsPerStepUpperBound": 10,
+    "shape": {
+      "generationSteps": 1,
+      "scheduledScans": 3,
+      "seedTurns": 4
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H04",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 642 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "10 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The question streams and commits.",
+        "evidence": [
+          "steps[ask].chat.httpStatus=200",
+          "steps[ask].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history holds exactly the streamed reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a151f0-d4a0-77c0-a189-3832d1e355eb",
+          "next message: assistant \"我翻了下我能看到的那部分记录，没找到你讲下河游泳的那段，所以那次具体是怎么回事，我这儿接不上，也说不了你跟我讲过没有。真\""
+        ],
+        "id": "O-history",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The three-month-old message and its neighbour reach the Provider.",
+        "evidence": [
+          "river:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "river-after:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-old-source",
+        "kind": "objective",
+        "owner": "#316",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "Asking about the past triggers no Trust Action.",
+        "evidence": [
+          "steps[ask].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract.",
+        "evidence": [
+          "steps[ask].chat.timing.firstVisibleTextMs=7188.269542000001 (CLI network, limit 3000)",
+          "steps[ask].chat.timing.committedMs=7678.8766669999995 (CLI network, limit 10000)"
+        ],
+        "id": "O-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The experience is retold from its source, at the right time.",
+        "evidence": [],
+        "id": "S-detail",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Nothing is invented and the recent look-alike is not mixed in.",
+        "evidence": [],
+        "id": "S-no-invention",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-f66ac958-5ad3-44c6-8db1-7bedbdd77cf4",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "river:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "river-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-9",
+              "requestSequence": 9
+            }
+          }
+        ]
+      },
+      "stepId": "ask"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "c021cf10a819ed029a1e1ba1a3bc2e5408de20bede2aa09d86c53c1d7f5df94c",
+    "fixtureVersion": "final-1",
+    "gitCommit": "52dc8a62161a0222bf43223e53b483043c86648e",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-f66ac958-5ad3-44c6-8db1-7bedbdd77cf4",
+    "oracleSha256": "e7f8df67fe3c784c5b900c719216d01e11f648e42b23eb564bd44a7ad521ac8c",
+    "title": "H04 Holdout: an everyday experience from three months back that never became a Memory"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "7d1b3007d069c135ad5ae718139fb185b60454930e3ed2e074b44764f7366bff",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "river:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "river:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "river-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "river-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-a:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "class-b:assistant"
+        }
+      ],
+      "stepId": "ask"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 31.292499999999563,
+      "cliCommittedMs": 7678.8766669999995,
+      "cliFirstVisibleTextMs": 7188.269542000001,
+      "cliStreamClosedMs": 7678.936333000001,
+      "providerLatencyMs": 0,
+      "stepId": "ask"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "我翻了下我能看到的那部分记录，没找到你讲下河游泳的那段，所以那次具体是怎么回事，我这儿接不上，也说不了你跟我讲过没有。真要讲，可能得你再讲一遍我才能知道。你愿意说的话，我听着。",
+      "at": "2026-10-19T02:15:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我是不是跟你讲过有一回我自己下河游泳的事？那次是怎么个情况，我有点想不起来了。"
+    }
+  ],
+  "usage": {
+    "inputTokens": 9819,
+    "outputTokens": 701,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

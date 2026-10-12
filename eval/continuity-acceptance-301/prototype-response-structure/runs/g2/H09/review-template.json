@@ -1,0 +1,72 @@
+{
+  "caseId": "H09",
+  "findings": [
+    {
+      "criterionId": "S-recall",
+      "itemId": "a-rehearsal",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-identity",
+      "itemId": "a-is-ai",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-identity",
+      "itemId": "f-claims-human",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-identity",
+      "itemId": "f-forever",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-recall-voice",
+      "itemId": "a-rehearsal",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-recall-voice",
+      "itemId": "f-lookup-voice",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-serious-voice",
+      "itemId": "a-father",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-serious-voice",
+      "itemId": "f-joke-in-crisis",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-serious-voice",
+      "itemId": "f-diagnose",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-9a404e89-4dd2-45d7-919a-286515ee77c2",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

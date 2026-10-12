@@ -1,0 +1,6 @@
+{"at":"2026-10-12T05:11:30.271Z","group":2,"input":"有个消息，今天 HR 私下 verbal 跟我讲，今年 year-end bonus 是 2.5 个月，而且 Q1 就会发。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:11:30.412Z","group":2,"input":"对，2.5 个月，比去年整整多了一个月，我都不敢在 pantry 里讲。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:11:31.326Z","group":2,"input":"我同事 Lena 偷偷跟我说她在面别家公司，已经到 final round 了，叫我一个字都别往外讲。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:11:31.418Z","group":2,"input":"一想到 Lena 可能要走我就有点慌，她是我在组里唯一能一起吐槽的人。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:11:32.108Z","group":2,"input":"我们自己这边这周也在变：我的 project 被 merge 进了 platform team，owner 从 Priya 换成了一个刚调过来的 manager，周四开了个特别冷场的 kickoff。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:11:33.611Z","failureCode":null,"group":2,"how":"date","input":"帮我捋一下，上周我都跟你说了哪些工作上的事？","kind":"frontload","outcome":"completed","proposal":{"endDate":"2026-11-15","kind":"review_dates","sourceScope":"conversation_text","startDate":"2026-11-09","timeBasis":"expressed_date"},"rows":5}

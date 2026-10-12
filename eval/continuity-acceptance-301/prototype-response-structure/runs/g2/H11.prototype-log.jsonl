@@ -1,0 +1,7 @@
+{"at":"2026-10-12T05:09:08.883Z","group":2,"input":"今天从救助站领回来一只三个月大的橘猫，一路上在包里叫得撕心裂肺，到家反倒一声不吭了。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:09:09.868Z","group":2,"input":"它在沙发底下躲了两天没露面，不过碗里的粮每天早上都是空的，看来是半夜出来偷吃。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:09:10.596Z","group":2,"input":"周四下班带它去打了第二针疫苗，医生顺便看了看耳朵，说有点耳螨，开了一小瓶滴耳液。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:09:11.380Z","group":2,"input":"周六下午头一回给它滴耳药，按不住，手背上被挠了一道，药倒是滴进去了。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:09:12.184Z","failureCode":null,"group":2,"how":"date","input":"上周五，也就是二十三号那天，我跟你说过什么没有？","kind":"frontload","outcome":"completed","proposal":{"endDate":"2026-10-23","kind":"review_dates","sourceScope":"conversation_text","startDate":"2026-10-23","timeBasis":"expressed_date"},"rows":0}
+{"at":"2026-10-12T05:09:20.927Z","group":2,"input":"那十月头几天呢，咱们都聊了些什么？","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T05:09:24.293Z","group":2,"input":"我头一回跟你提到猫是在什么时候？","kind":"frontload","outcome":"no_clue_words"}

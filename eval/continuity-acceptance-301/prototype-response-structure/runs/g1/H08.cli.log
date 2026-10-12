@@ -1,0 +1,10 @@
+ledger: 2 live request(s), 4792 in / 407 out, 1926 USD micros (upper bound)
+H08: FAIL
+  FAIL              O-meaning-source — A required source did not reach the Provider request for this turn.
+  NEEDS-REVIEW      S-meaning — No independent review was supplied for this answer.
+  NEEDS-REVIEW      P-stance — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1/H08
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H08 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

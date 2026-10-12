@@ -1,0 +1,792 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 1123200,
+    "inputTokenUpperBound": 288000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 864000,
+    "paidRequestUpperBound": 18,
+    "remainingUsdMicros": 8891803,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 3,
+      "scheduledScans": 3,
+      "seedTurns": 10
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H03",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 10 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 1685 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "26 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first question streams and commits.",
+        "evidence": [
+          "steps[night].chat.httpStatus=200",
+          "steps[night].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second question streams and commits.",
+        "evidence": [
+          "steps[order].chat.httpStatus=200",
+          "steps[order].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-order",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The third question streams and commits.",
+        "evidence": [
+          "steps[trip].chat.httpStatus=200",
+          "steps[trip].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-trip",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The conversation that crossed midnight and the clock change stays one Daily Session dated 24 October.",
+        "evidence": [
+          "seed.turns[n1] -> session 01a17016-b9e0-7e91-a2aa-a1c7c7ec65b3 logicalDate 2026-10-24 (expected 2026-10-24)",
+          "seed.turns[n2] -> session 01a17016-b9e0-7e91-a2aa-a1c7c7ec65b3 logicalDate 2026-10-24 (expected 2026-10-24)",
+          "seed.turns[n7] -> session 01a17016-b9e0-7e91-a2aa-a1c7c7ec65b3 logicalDate 2026-10-24 (expected 2026-10-24)"
+        ],
+        "id": "O-one-session",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every message is owned by the expected Daily Session date.",
+        "status": "pass"
+      },
+      {
+        "description": "The message sent from Singapore is filed under its own local date.",
+        "evidence": [
+          "seed.turns[landing] -> session 01a15a1c-cf80-767c-9501-76ba5cbff58c logicalDate 2026-10-21 (expected 2026-10-21)"
+        ],
+        "id": "O-travel-ownership",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every message is owned by the expected Daily Session date.",
+        "status": "pass"
+      },
+      {
+        "description": "Messages from both sides of midnight reach the Provider for the first question.",
+        "evidence": [
+          "n1:user: providerRequest=present, inspector.referencedEvents=present",
+          "n2:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-night-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Both messages being ordered reach the Provider.",
+        "evidence": [
+          "n5:user: providerRequest=present, inspector.referencedEvents=present",
+          "n7:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The arrival message reaches the Provider for the question about the trip.",
+        "evidence": [
+          "landing:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-travel-source",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the first question.",
+        "evidence": [
+          "steps[night].chat.timing.firstVisibleTextMs=2982.1685420000003 (CLI network, limit 3000)",
+          "steps[night].chat.timing.committedMs=4043.840000000001 (CLI network, limit 10000)"
+        ],
+        "id": "O-night-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the second question.",
+        "evidence": [
+          "steps[order].chat.timing.firstVisibleTextMs=1506.1220000000012 (CLI network, limit 3000)",
+          "steps[order].chat.timing.committedMs=1806.7008750000005 (CLI network, limit 10000)"
+        ],
+        "id": "O-order-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the third question.",
+        "evidence": [
+          "steps[trip].chat.timing.firstVisibleTextMs=1346.675333000001 (CLI network, limit 3000)",
+          "steps[trip].chat.timing.committedMs=1559.0231250000015 (CLI network, limit 10000)"
+        ],
+        "id": "O-trip-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "The night is divided at the real midnight.",
+        "evidence": [],
+        "id": "S-midnight",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Order follows real time through the repeated hour.",
+        "evidence": [],
+        "id": "S-repeated-hour",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The arrival day is given with its timezone, and no zone is invented where none was recorded.",
+        "evidence": [],
+        "id": "S-travel",
+        "kind": "semantic",
+        "owner": null,
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-4fbfb38d-ffb0-4bbe-89b3-57b04ebc9066",
+    "status": "needs-review"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-24 (expected 2026-10-24)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "n1:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-16",
+              "requestSequence": 16
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 3",
+              "time of message 3: 2026-10-25 (expected 2026-10-25)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "n2:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-16",
+              "requestSequence": 16
+            }
+          }
+        ]
+      },
+      "stepId": "night"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 10",
+              "time of message 10: 2026-10-25 (expected 2026-10-25)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "n5:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-17",
+              "requestSequence": 17
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 12",
+              "time of message 12: 2026-10-25 (expected 2026-10-25)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "n7:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-17",
+              "requestSequence": 17
+            }
+          }
+        ]
+      },
+      "stepId": "order"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-21 (expected 2026-10-21)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "landing:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-18",
+              "requestSequence": 18
+            }
+          }
+        ]
+      },
+      "stepId": "trip"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "5527ee501bbdd8dc71ce8a190c8d649dda64ed7af66e27ffe8a0d915fb6db99f",
+    "fixtureVersion": "final-1",
+    "gitCommit": "52dc8a62161a0222bf43223e53b483043c86648e",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-4fbfb38d-ffb0-4bbe-89b3-57b04ebc9066",
+    "oracleSha256": "c7bc9f6fd880c19497ab3b6acdf2db87c021aaae685f9a648191fc8636714da7",
+    "title": "H03 Holdout: one sitting across midnight and a repeated autumn hour, a message from abroad and one with no recorded zone"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "e70439c440bfaa071d294b6d7f663c7b60dae41e4fab9a0e1feb0f0541fb9818",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "landing:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "landing:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "legacy:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "legacy:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n1:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n6:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n8:assistant"
+        }
+      ],
+      "stepId": "night"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "landing:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "landing:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "legacy:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "legacy:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n1:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n6:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n8:assistant"
+        }
+      ],
+      "stepId": "order"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "landing:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "landing:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "legacy:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "legacy:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n1:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n1:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n2:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n2:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n3:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n3:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n4:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n4:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n5:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n5:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n6:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n6:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n7:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "n7:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n8:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "n8:assistant"
+        }
+      ],
+      "stepId": "trip"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 42.829625000000306,
+      "cliCommittedMs": 4043.840000000001,
+      "cliFirstVisibleTextMs": 2982.1685420000003,
+      "cliStreamClosedMs": 4043.9280420000005,
+      "providerLatencyMs": 0,
+      "stepId": "night"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 25.427332999999635,
+      "cliCommittedMs": 1806.7008750000005,
+      "cliFirstVisibleTextMs": 1506.1220000000012,
+      "cliStreamClosedMs": 1806.8051250000008,
+      "providerLatencyMs": 0,
+      "stepId": "order"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 21.709500000000844,
+      "cliCommittedMs": 1559.0231250000015,
+      "cliFirstVisibleTextMs": 1346.675333000001,
+      "cliStreamClosedMs": 1559.0883330000015,
+      "providerLatencyMs": 0,
+      "stepId": "trip"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "On Saturday at 23:45 you said the last guests from your dad's seventieth had just gone, that you'd washed something like forty glasses and were sitting in the kitchen next to an empty cake stand — and in the same message you added it was gone twelve now, that Callum had stayed behind with the end of the port and the two of you had dragged chairs out onto the patio. At 00:10, past midnight, you said he'd just told you he was taking the job in Aberdeen in the new year, and that you weren't ready for how much that would sting. Then at 00:35 you said he'd gone up to bed and you were stacking the folding chairs in the hall, slowly, one at a time, and at 01:00 that you'd found one last sausage roll under a sheet of foil and eaten it cold, standing over the bin.",
+      "at": "2026-10-26T12:00:00.000Z",
+      "stepId": "night",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "What did I tell you on Saturday night before midnight, and what came once it was past midnight?"
+    },
+    {
+      "assistant": "The sausage roll came first. You mentioned it at 01:00, and the clocks going back — the cooker saying quarter past one all over again, handing you the hour twice — came at 01:25.",
+      "at": "2026-10-26T12:02:00.000Z",
+      "stepId": "order",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Which did I mention first, the last sausage roll or the clocks going back?"
+    },
+    {
+      "assistant": "You wrote \"Landed at Changi at last\" on Wednesday 21 October, at 00:20 Singapore time. Same message as the suitcase with the missing wheel.",
+      "at": "2026-10-26T12:04:00.000Z",
+      "stepId": "trip",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "And what day did my flight get in on that trip?"
+    }
+  ],
+  "usage": {
+    "inputTokens": 14402,
+    "outputTokens": 262,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}

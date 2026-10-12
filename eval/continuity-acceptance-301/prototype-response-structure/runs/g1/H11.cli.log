@@ -1,0 +1,13 @@
+ledger: 6 live request(s), 20347 in / 724 out, 6973 USD micros (upper bound)
+H11: FAIL
+  FAIL              O-earliest-source — A required source did not reach the Provider request for this turn.
+  NOT-RUN           O-read-failure — Not exercised: the runner cannot yet inject a history read failure or a partial read for a single turn. This is a missing harness capability, not a product verdict.
+  FAIL              O-older-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  NEEDS-REVIEW      S-empty — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-older — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-earliest — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1/H11
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H11 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

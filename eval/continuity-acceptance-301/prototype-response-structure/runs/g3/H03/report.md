@@ -1,0 +1,123 @@
+# H03 Holdout: one sitting across midnight and a repeated autumn hour, a message from abroad and one with no recorded zone — H03: FAIL
+
+> This run is **not** a completed acceptance pass. Only `PASS` on every criterion counts.
+
+## Identity
+
+- Run: `run-af670a39-d369-429f-9eb7-5cb2fa71c7c0` · mode `real-model` · model `opencode-go/deepseek-v4.1-flash`
+- Commit: `52dc8a62161a0222bf43223e53b483043c86648e` (working tree dirty)
+- Fixture: version `final-1`, sha256 `5527ee501bbdd8dc71ce8a190c8d649dda64ed7af66e27ffe8a0d915fb6db99f`
+- Oracle: sha256 `c7bc9f6fd880c19497ab3b6acdf2db87c021aaae685f9a648191fc8636714da7`
+- Recent-context governance: `active`
+- Reproducibility digest: `09149b6c4d38fd958fa80bbc71a41098647465556fb1dad4c6e1451054025b03`
+- Reviewer: none
+
+## Criteria
+
+| Criterion | Kind | Status | Owner | Reason |
+| --- | --- | --- | --- | --- |
+| `INV-seed-readback` Seeded history is read back verbatim through the normal history API. | invariant | **PASS** | — | All 10 seeded turns are present exactly once. |
+| `INV-oracle-not-in-outbound` No oracle text, scenario title or expected answer appears in any Provider request. | invariant | **PASS** | — | Scanned 1769 outbound strings; none carries oracle text. |
+| `INV-no-duplicate-messages` Authoritative history contains every message exactly once. | invariant | **PASS** | — | 26 messages, no duplicates. |
+| `O-commit` The first question streams and commits. | objective | **PASS** | — | The turn streamed text and committed. |
+| `O-commit-order` The second question streams and commits. | objective | **PASS** | — | The turn streamed text and committed. |
+| `O-commit-trip` The third question streams and commits. | objective | **PASS** | — | The turn streamed text and committed. |
+| `O-one-session` The conversation that crossed midnight and the clock change stays one Daily Session dated 24 October. | objective | **PASS** | — | Every message is owned by the expected Daily Session date. |
+| `O-travel-ownership` The message sent from Singapore is filed under its own local date. | objective | **PASS** | — | Every message is owned by the expected Daily Session date. |
+| `O-night-sources` Messages from both sides of midnight reach the Provider for the first question. | objective | **PASS** | — | Every required source reached the Provider and is recorded by the Inspector. |
+| `O-sources` Both messages being ordered reach the Provider. | objective | **PASS** | — | Every required source reached the Provider and is recorded by the Inspector. |
+| `O-travel-source` The arrival message reaches the Provider for the question about the trip. | objective | **PASS** | — | Every required source reached the Provider and is recorded by the Inspector. |
+| `O-night-deadline` Response-time contract for the first question. | objective | **FAIL** | #319 | CLI-observed timings exceed the limits or the turn never completed. |
+| `O-order-deadline` Response-time contract for the second question. | objective | **PASS** | #319 | CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement. |
+| `O-trip-deadline` Response-time contract for the third question. | objective | **FAIL** | #319 | CLI-observed timings exceed the limits or the turn never completed. |
+| `S-midnight` The night is divided at the real midnight. | semantic | **NEEDS-REVIEW** | — | No independent review was supplied for this answer. |
+| `S-repeated-hour` Order follows real time through the repeated hour. | semantic | **NEEDS-REVIEW** | — | No independent review was supplied for this answer. |
+| `S-travel` The arrival day is given with its timezone, and no zone is invented where none was recorded. | semantic | **NEEDS-REVIEW** | — | No independent review was supplied for this answer. |
+
+## Evidence for every non-passing criterion
+
+### `O-night-deadline` — FAIL
+
+- steps[night].chat.timing.firstVisibleTextMs=36664.404708 (CLI network, limit 3000)
+- steps[night].chat.timing.committedMs=38539.825874999995 (CLI network, limit 10000)
+
+### `O-trip-deadline` — FAIL
+
+- steps[trip].chat.timing.firstVisibleTextMs=4115.439250000003 (CLI network, limit 3000)
+- steps[trip].chat.timing.committedMs=4716.472333000005 (CLI network, limit 10000)
+
+## Diagnosis (where a required source was lost)
+
+- `night`: read state `unread`, payload told the model `nothing`
+  - `n1:user` → **undetermined** (Provider call `gate-request-16`, request #16, unknown stage)
+    - authoritative history: present
+    - inspector.sources: no history branch
+    - provider payload: message 5
+    - time of message 5: 2026-10-24 (expected 2026-10-24)
+    - semantic review: none yet; the source reached the model intact, its use is not judged
+  - `n2:user` → **undetermined** (Provider call `gate-request-16`, request #16, unknown stage)
+    - authoritative history: present
+    - inspector.sources: no history branch
+    - provider payload: message 7
+    - time of message 7: 2026-10-25 (expected 2026-10-25)
+    - semantic review: none yet; the source reached the model intact, its use is not judged
+- `order`: read state `unread`, payload told the model `nothing`
+  - `n5:user` → **undetermined** (Provider call `gate-request-17`, request #17, unknown stage)
+    - authoritative history: present
+    - inspector.sources: no history branch
+    - provider payload: message 10
+    - time of message 10: 2026-10-25 (expected 2026-10-25)
+    - semantic review: none yet; the source reached the model intact, its use is not judged
+  - `n7:user` → **undetermined** (Provider call `gate-request-17`, request #17, unknown stage)
+    - authoritative history: present
+    - inspector.sources: no history branch
+    - provider payload: message 12
+    - time of message 12: 2026-10-25 (expected 2026-10-25)
+    - semantic review: none yet; the source reached the model intact, its use is not judged
+- `trip`: read state `unread`, payload told the model `nothing`
+  - `landing:user` → **undetermined** (Provider call `gate-request-18`, request #18, unknown stage)
+    - authoritative history: present
+    - inspector.sources: no history branch
+    - provider payload: message 1
+    - time of message 1: 2026-10-21 (expected 2026-10-21)
+    - semantic review: none yet; the source reached the model intact, its use is not judged
+
+## Transcript
+
+- `night` (say) @ 2026-10-26T12:00:00.000Z — ended `assistant_committed`
+  - user: "What did I tell you on Saturday night before midnight, and what came once it was past midnight?"
+  - assistant: "On Saturday night, at a quarter to midnight, you told me the last guests from your dad's seventieth had just gone, that you'd washed something like forty glasses, and that you were sitting in the kitchen next to an empty cake stand. Then, once it was past midnight, the rest came in a run: just after twelve, Callum stayed behind with the end of the port and the two of you dragged chairs out onto the patio; at twenty-five past midnight the news that he's taking the Aberdeen job in the new year, and how much that stung; at one o'clock, him off to bed and you stacking the folding chairs in the hall slowly, one at a time; at twenty-five past, the last sausage roll found under foil and eaten cold standing over the bin; at ten to two, you wondering who would do Sunday lunch with your dad once Callum has moved; then the clocks going back, the cooker saying quarter past one all over again so you got that hour twice. At twenty to two you said that was you, lights off."
+- `order` (say) @ 2026-10-26T12:02:00.000Z — ended `assistant_committed`
+  - user: "Which did I mention first, the last sausage roll or the clocks going back?"
+  - assistant: "The sausage roll. That was in the message about the folding chairs — you found it under the foil and ate it cold over the bin. The clocks going back came later, in the message after the one about Sunday lunch with your dad."
+- `trip` (say) @ 2026-10-26T12:04:00.000Z — ended `assistant_committed`
+  - user: "And what day did my flight get in on that trip?"
+  - assistant: "You told me you'd landed at Changi in a message that came in at twenty past midnight on Wednesday 21 October, Singapore time. That's the date I have — you didn't say the day itself, but a \"landed at last\" message sent just after midnight means you'd have touched down around then, in the small hours of the Wednesday."
+
+## Source manifest (what reached the Provider)
+
+- `night`: 20 of 20 seeded sources reached the request — `landing:user`, `landing:assistant`, `legacy:user`, `legacy:assistant`, `n1:user`, `n1:assistant`, `n2:user`, `n2:assistant`, `n3:user`, `n3:assistant`, `n4:user`, `n4:assistant`, `n5:user`, `n5:assistant`, `n6:user`, `n6:assistant`, `n7:user`, `n7:assistant`, `n8:user`, `n8:assistant`
+- `order`: 14 of 20 seeded sources reached the request — `landing:user`, `landing:assistant`, `legacy:user`, `legacy:assistant`, `n1:user`, `n1:assistant`, `n2:user`, `n3:user`, `n4:user`, `n5:user`, `n6:user`, `n7:user`, `n8:user`, `n8:assistant`
+- `trip`: 14 of 20 seeded sources reached the request — `landing:user`, `landing:assistant`, `legacy:user`, `legacy:assistant`, `n1:user`, `n1:assistant`, `n2:user`, `n3:user`, `n4:user`, `n5:user`, `n6:user`, `n7:user`, `n8:user`, `n8:assistant`
+
+## Timing (CLI network; not browser rendering)
+
+| Step | App | Accepted | First visible text | Committed | Stream closed | Provider |
+| --- | --- | --- | --- | --- | --- | --- |
+| `night` | warm | 28 ms | 36664 ms | 38540 ms | 38540 ms | 0 ms |
+| `order` | warm | 29 ms | 2996 ms | 3365 ms | 3365 ms | 0 ms |
+| `trip` | warm | 21 ms | 4115 ms | 4716 ms | 4717 ms | 0 ms |
+
+First visible text is only a candidate for the first meaningful response; reasoning, tool calls and waiting hints do not count, and that judgement is semantic.
+
+## Usage and budget
+
+- Provider requests in follow-up steps: 4
+- Tokens recorded: input 22756, output 6095
+- Paid cost this run: unknown
+- Budget: cap 10000000 USD micros, remaining 8863766, ledger entries of unknown cost 0
+
+## Remaining risks
+
+- The working tree had uncommitted changes; the commit alone does not identify the code that ran.
+- Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser).

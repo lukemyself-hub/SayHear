@@ -1,0 +1,100 @@
+{
+  "caseId": "H02",
+  "findings": [
+    {
+      "criterionId": "S-said",
+      "itemId": "t-market",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "t-tyre",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "t-mentor",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "tm-said-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-said",
+      "itemId": "f-market-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-happened",
+      "itemId": "a-repair-done",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-happened",
+      "itemId": "f-market-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-happened",
+      "itemId": "f-meal-dated",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-market-when",
+      "itemId": "tm-market-day",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-market-when",
+      "itemId": "f-market-wrong-anchor",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-when",
+      "itemId": "tm-meal-undated",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-when",
+      "itemId": "f-meal-dated",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-when",
+      "itemId": "f-meal-unknown",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-0a3a7b29-d040-449b-81e3-13c5e2279867",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

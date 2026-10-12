@@ -1,0 +1,413 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 2620800,
+    "inputTokenUpperBound": 672000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 2016000,
+    "paidRequestUpperBound": 42,
+    "remainingUsdMicros": 7889937,
+    "requestsPerStepUpperBound": 10,
+    "shape": {
+      "generationSteps": 4,
+      "scheduledScans": 1,
+      "seedTurns": 2
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "HL1",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 2 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 761 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "11 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The reply to the replaced question is neither shown nor stored.",
+        "evidence": [
+          "steps[ask].chat.events types=[\"user_committed\",\"response_failed\"]",
+          "message following 01a13634-ea80-7490-aeef-9f939eb3b1b8: user"
+        ],
+        "id": "O-replaced-never-shown",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "The retired reply was neither shown nor stored.",
+        "status": "pass"
+      },
+      {
+        "description": "History holds the addition once, followed by exactly its reply.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a13635-09c0-736f-a00d-be22f9e74f38",
+          "next message: assistant \"You went with your nephew Theo.\\n\\nThe canoe at Alouette Lake,\""
+        ],
+        "id": "O-addition-commits",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "The replaced question still reaches the Provider with the addition.",
+        "evidence": [
+          "steps[ask].input.text: providerRequest=present"
+        ],
+        "id": "O-addition-keeps-earlier-question",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The message naming the companion reaches the Provider.",
+        "evidence": [
+          "fair:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-addition-sources",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "With the product's own budget, a request whose Provider never answers ends with a timeout by 30 seconds (31 allowed for the client to see it), commits nothing late and leaves nothing running.",
+        "evidence": [
+          "steps[stall].chat last event=assistant_committed category=none",
+          "steps[stall].chat.timing.streamClosedMs=46703.513708 (CLI network, limit 31000)",
+          "steps[stall].inspection.commandStatus=succeeded attemptStatus=succeeded",
+          "message following 01a13636-bf40-74d3-9477-be97f2fa8163: assistant"
+        ],
+        "id": "O-stall-stops",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "The stalled request was not stopped with a timeout inside the limit.",
+        "status": "fail"
+      },
+      {
+        "description": "The next message is answered normally.",
+        "evidence": [
+          "finalHistory has 1 message(s) with id 01a13638-9400-7fb2-9766-e58fabb43876",
+          "next message: assistant \"I can't tell you that one — I've got no way to check the wea\""
+        ],
+        "id": "O-after-stall",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Authoritative history holds the user message once, followed by exactly the streamed reply.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the addition.",
+        "evidence": [
+          "steps[supplement].chat.timing.firstVisibleTextMs=1954.0787500000001 (CLI network, limit 3000)",
+          "steps[supplement].chat.timing.committedMs=2248.1643339999996 (CLI network, limit 10000)"
+        ],
+        "id": "O-supplement-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the message after the stall.",
+        "evidence": [
+          "steps[after].chat.timing.firstVisibleTextMs=3541.530666999999 (CLI network, limit 3000)",
+          "steps[after].chat.timing.committedMs=4113.762124999994 (CLI network, limit 10000)"
+        ],
+        "id": "O-after-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The addition is answered as asked, in ordinary words.",
+        "evidence": [],
+        "id": "S-addition",
+        "kind": "semantic",
+        "owner": "#319",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-4f8b81c0-289b-4ff4-ad0c-9a902f77458d",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-10 (expected 2026-10-10)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "fair:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-5",
+              "requestSequence": 5
+            }
+          }
+        ]
+      },
+      "stepId": "supplement"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "5bd7013d8eb5d70eeb95c280801eb9d024d44f504f6e0fe2171dcbab156341a1",
+    "fixtureVersion": "final-1",
+    "gitCommit": "52dc8a62161a0222bf43223e53b483043c86648e",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-4f8b81c0-289b-4ff4-ad0c-9a902f77458d",
+    "oracleSha256": "d0c5bcd200a45b03dd3bec51a575dc78e206d1ce7c233e317742c4dea0d21523",
+    "title": "HL1 Holdout: typing on while a reply is prepared, and a Provider that never answers, at the product's own 30 second budget"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "d6476e8415915546f6c379bee57956faddc5c56c796dd6dd24969c9a14e1efdb",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "canoe:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "canoe:assistant"
+        }
+      ],
+      "stepId": "ask"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "canoe:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "canoe:assistant"
+        }
+      ],
+      "stepId": "supplement"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "canoe:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "canoe:assistant"
+        }
+      ],
+      "stepId": "stall"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "fair:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "canoe:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "canoe:assistant"
+        }
+      ],
+      "stepId": "after"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 43.9406670000003,
+      "cliCommittedMs": null,
+      "cliFirstVisibleTextMs": null,
+      "cliStreamClosedMs": 37707.044333000005,
+      "providerLatencyMs": 8000,
+      "stepId": "ask"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 26.714124999999967,
+      "cliCommittedMs": 2248.1643339999996,
+      "cliFirstVisibleTextMs": 1954.0787500000001,
+      "cliStreamClosedMs": 2248.2353339999995,
+      "providerLatencyMs": 0,
+      "stepId": "supplement"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 28.799957999995968,
+      "cliCommittedMs": 46703.474,
+      "cliFirstVisibleTextMs": 46562.54637499999,
+      "cliStreamClosedMs": 46703.513708,
+      "providerLatencyMs": 0,
+      "stepId": "stall"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 28.34124999999767,
+      "cliCommittedMs": 4113.762124999994,
+      "cliFirstVisibleTextMs": 3541.530666999999,
+      "cliStreamClosedMs": 4113.845499999996,
+      "providerLatencyMs": 0,
+      "stepId": "after"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "",
+      "at": "2026-10-13T17:00:00.000Z",
+      "stepId": "ask",
+      "terminalEvent": "response_failed",
+      "type": "say",
+      "user": "What did I tell you about the fall fair?"
+    },
+    {
+      "assistant": "You went with your nephew Theo.\n\nThe canoe at Alouette Lake, the way your uncle used to take you — that's a nice thing to have in the back of your mind for the drive home.",
+      "at": "2026-10-13T17:00:08.000Z",
+      "stepId": "supplement",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Actually, all I want to know is who I went with."
+    },
+    {
+      "assistant": "You said you and Theo talked about renting a canoe at Alouette Lake before it gets too cold — the way your uncle used to take you when you were young.",
+      "at": "2026-10-13T17:02:00.000Z",
+      "stepId": "stall",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "And what was it we said about the canoe?"
+    },
+    {
+      "assistant": "I can't tell you that one — I've got no way to check the weather up there or when the rentals at Alouette shut down for the season. That's a real-world thing to call and ask.\n\nWhat I can hold onto is your own words: you wanted to get the canoe in before it gets too cold. You'd know better than me how much of that window is left.",
+      "at": "2026-10-13T17:04:00.000Z",
+      "stepId": "after",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Never mind that. Is it too late in the year to plan the lake trip?"
+    }
+  ],
+  "usage": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}

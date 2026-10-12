@@ -1,0 +1,93 @@
+{
+  "caseId": "H01",
+  "findings": [
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-car",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-timetable",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-hearing-aid",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-exam",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "t-study",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "tm-yesterday",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "f-today-lab",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-topics",
+      "itemId": "f-decided",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-duplicate",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "a-colleague",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-today-lab",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-detail",
+      "itemId": "f-gym-cause",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-924fc740-b10a-4d8a-a104-916bbb0e42d4",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

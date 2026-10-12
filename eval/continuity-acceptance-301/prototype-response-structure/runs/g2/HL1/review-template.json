@@ -1,0 +1,30 @@
+{
+  "caseId": "HL1",
+  "findings": [
+    {
+      "criterionId": "S-addition",
+      "itemId": "a-companion",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-addition",
+      "itemId": "f-technical",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-addition",
+      "itemId": "f-whole-fair",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-fd6ccf59-4272-4b1f-8e0f-52c9637bc15e",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

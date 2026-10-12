@@ -1,0 +1,10 @@
+ledger: 6 live request(s), 21595 in / 1279 out, 8014 USD micros (upper bound)
+H03: NEEDS-REVIEW
+  NEEDS-REVIEW      S-midnight — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-repeated-hour — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-travel — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1/H03
+[ELIFECYCLE] Command failed with exit code 2.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H03 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

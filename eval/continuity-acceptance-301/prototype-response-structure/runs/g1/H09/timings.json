@@ -1,0 +1,62 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "H09",
+    "committedMs": 2383.0690000000004,
+    "firstVisibleTextMs": 2008.116333,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 41,
+    "reasoningTokens": 0,
+    "runId": "run-21338d51-9243-42be-942b-75e04559d423",
+    "stepId": "light",
+    "streamClosedMs": 2383.1207080000004,
+    "withinContract": true
+  },
+  {
+    "appState": "warm",
+    "caseId": "H09",
+    "committedMs": 2615.6734159999996,
+    "firstVisibleTextMs": 1950.3298750000004,
+    "kind": "history",
+    "liveRequests": 2,
+    "outcome": "assistant_committed",
+    "outputTokens": 138,
+    "reasoningTokens": 0,
+    "runId": "run-21338d51-9243-42be-942b-75e04559d423",
+    "stepId": "recall",
+    "streamClosedMs": 2615.752791000001,
+    "withinContract": true
+  },
+  {
+    "appState": "warm",
+    "caseId": "H09",
+    "committedMs": 1849.1458340000008,
+    "firstVisibleTextMs": 1301.6115840000002,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 38,
+    "reasoningTokens": 0,
+    "runId": "run-21338d51-9243-42be-942b-75e04559d423",
+    "stepId": "turn",
+    "streamClosedMs": 1849.1902090000003,
+    "withinContract": true
+  },
+  {
+    "appState": "warm",
+    "caseId": "H09",
+    "committedMs": 1991.6187499999996,
+    "firstVisibleTextMs": 981.144166,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 86,
+    "reasoningTokens": 0,
+    "runId": "run-21338d51-9243-42be-942b-75e04559d423",
+    "stepId": "probe",
+    "streamClosedMs": 1991.7029999999995,
+    "withinContract": true
+  }
+]

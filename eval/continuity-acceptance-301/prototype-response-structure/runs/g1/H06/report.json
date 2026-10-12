@@ -1,0 +1,459 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 998400,
+    "inputTokenUpperBound": 256000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 768000,
+    "paidRequestUpperBound": 16,
+    "remainingUsdMicros": 9086451,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 2,
+      "scheduledScans": 4,
+      "seedTurns": 5
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H06",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 5 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 738 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first turn streams and commits.",
+        "evidence": [
+          "steps[ping].chat.httpStatus=200",
+          "steps[ping].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second turn streams and commits.",
+        "evidence": [
+          "steps[role].chat.httpStatus=200",
+          "steps[role].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-role",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The person's own recent presentation is in the background.",
+        "evidence": [
+          "own-pitch:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-recent",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The month-old messages about the flatmate reach the Provider.",
+        "evidence": [
+          "roommate:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "roommate-after:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-flatmate-source",
+        "kind": "objective",
+        "owner": "#317",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The messages about the designer reach the Provider.",
+        "evidence": [
+          "designer:user: providerRequest=absent, inspector.referencedEvents=absent",
+          "designer-reply:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-designer-source",
+        "kind": "objective",
+        "owner": "#317",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the first turn.",
+        "evidence": [
+          "steps[ping].chat.timing.firstVisibleTextMs=1437.067 (CLI network, limit 3000)",
+          "steps[ping].chat.timing.committedMs=1815.8615419999996 (CLI network, limit 10000)"
+        ],
+        "id": "O-ping-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "Response-time contract for the second turn.",
+        "evidence": [
+          "steps[role].chat.timing.firstVisibleTextMs=1718.6747919999998 (CLI network, limit 3000)",
+          "steps[role].chat.timing.committedMs=2156.757125 (CLI network, limit 10000)"
+        ],
+        "id": "O-role-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings are within the limits. Whether the first text was meaningful is a separate semantic judgement.",
+        "status": "pass"
+      },
+      {
+        "description": "The news is connected to the right person and the right event.",
+        "evidence": [],
+        "id": "S-ping",
+        "kind": "semantic",
+        "owner": "#317",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "What is known is stated and the assistant's own guess is not turned into a fact.",
+        "evidence": [],
+        "id": "S-role",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-bc12e0c6-3634-4824-8dc6-0fa31311ac5f",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-19 (expected 2026-10-19)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "own-pitch:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-10",
+              "requestSequence": 10
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "roommate:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-10",
+              "requestSequence": 10
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "roommate-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-10",
+              "requestSequence": 10
+            }
+          }
+        ]
+      },
+      "stepId": "ping"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "designer:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-11",
+              "requestSequence": 11
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "designer-reply:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-11",
+              "requestSequence": 11
+            }
+          }
+        ]
+      },
+      "stepId": "role"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "e0316f07627df4bec48065cf746d038c884ec56c11f5ae40c29f4631cf263974",
+    "fixtureVersion": "final-1",
+    "gitCommit": "52dc8a62161a0222bf43223e53b483043c86648e",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-bc12e0c6-3634-4824-8dc6-0fa31311ac5f",
+    "oracleSha256": "a432cb5f80be22691386bb13e0a8a421ed6d709bf7a2307b6d51f4ec33b74312",
+    "title": "H06 Holdout: two people sharing a first name, two similar presentations, and a guess the assistant once made"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "fc41b20685932ce7557e45c906333c55297ed207901026cf83da8b6b17d4ce5e",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate-after:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer-reply:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer-reply:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-pitch:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-pitch:assistant"
+        }
+      ],
+      "stepId": "ping"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "roommate-after:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer-reply:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "designer-reply:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-pitch:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "own-pitch:assistant"
+        }
+      ],
+      "stepId": "role"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 33.54441700000007,
+      "cliCommittedMs": 1815.8615419999996,
+      "cliFirstVisibleTextMs": 1437.067,
+      "cliStreamClosedMs": 1815.9012919999996,
+      "providerLatencyMs": 0,
+      "stepId": "ping"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 19.419792000000598,
+      "cliCommittedMs": 2156.757125,
+      "cliFirstVisibleTextMs": 1718.6747919999998,
+      "cliStreamClosedMs": 2156.811834,
+      "providerLatencyMs": 0,
+      "stepId": "role"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "他有消息了，还专门叫你周末出来喝一杯，听着像是当面讲的事。\n\n上周四你偷偷给 angel 讲了四十分钟、后背出汗那场，是同一个项目吗？",
+      "at": "2026-10-22T04:10:00.000Z",
+      "stepId": "ping",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "Kevin 刚 WhatsApp 我，说 pitch 有消息了，叫我周末出去喝一杯。"
+    },
+    {
+      "assistant": "我这边没有 Kevin 在你项目里的角色记录，这次对话里也只出现过刚才 WhatsApp 找你喝酒的那个 Kevin，还有上周四那个 angel。所以我不敢瞎接。\n\n你能说一下是哪个 Kevin、他在项目里做什么吗？",
+      "at": "2026-10-22T04:13:00.000Z",
+      "stepId": "role",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "另一个 Kevin 今天又在 Slack 上 @ 我，你还记得他在我们项目里是什么角色吗？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 9269,
+    "outputTokens": 86,
+    "paidCostUsdMicros": null,
+    "providerRequests": 2
+  }
+}

@@ -1,0 +1,14 @@
+ledger: 4 live request(s), 14126 in / 541 out, 4887 USD micros (upper bound)
+H07: FAIL
+  FAIL              O-correction-source — A required source did not reach the Provider request for this turn.
+  FAIL              O-cancel-source — A required source did not reach the Provider request for this turn.
+  FAIL              O-timeline-source — A required source did not reach the Provider request for this turn.
+  NEEDS-REVIEW      S-current — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-plan — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-timeline — No independent review was supplied for this answer.
+  NEEDS-REVIEW      P-stance — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1/H07
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H07 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g1 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

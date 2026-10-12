@@ -1,0 +1,10 @@
+ledger: 5 live request(s), 11363 in / 2280 out, 68545 USD micros (upper bound)
+HL1: FAIL
+  FAIL              O-stall-stops — The stalled request was not stopped with a timeout inside the limit.
+  FAIL              O-after-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  NEEDS-REVIEW      S-addition — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g2/HL1
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case HL1 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g2 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

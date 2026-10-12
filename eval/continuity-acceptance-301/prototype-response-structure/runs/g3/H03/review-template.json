@@ -1,0 +1,65 @@
+{
+  "caseId": "H03",
+  "findings": [
+    {
+      "criterionId": "S-midnight",
+      "itemId": "a-before",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-midnight",
+      "itemId": "a-after",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-midnight",
+      "itemId": "tm-split",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-midnight",
+      "itemId": "f-all-one-day",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-repeated-hour",
+      "itemId": "tm-pastry-first",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-repeated-hour",
+      "itemId": "f-wall-clock-order",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-travel",
+      "itemId": "tm-arrival",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-travel",
+      "itemId": "f-invented-zone",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-af670a39-d369-429f-9eb7-5cb2fa71c7c0",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

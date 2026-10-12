@@ -1,0 +1,7 @@
+{"at":"2026-10-12T04:52:29.167Z","failureCode":null,"group":2,"how":"date","input":"前天陪我妈去了趟城南的花市，她挑了两盆蟹爪兰，非要自己拎，走到公交站还是塞给了我。","kind":"frontload","outcome":"completed","proposal":{"endDate":"2026-11-15","kind":"review_dates","sourceScope":"conversation_text","startDate":"2026-11-15","timeBasis":"expressed_date"},"rows":0}
+{"at":"2026-10-12T04:52:29.314Z","group":2,"input":"今天中午趁午休把自行车后胎补了，扎进去的是颗小图钉，补完手上全是黑的。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T04:52:29.429Z","group":2,"input":"对了，前阵子还跟以前厂里带我的师傅老秦吃了顿饭，他头发全白了，席上一直在说当年车间的事。","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T04:52:30.355Z","failureCode":null,"group":2,"how":"date","input":"我昨天跟你说了哪几件事来着？","kind":"frontload","outcome":"completed","proposal":{"endDate":"2026-11-17","kind":"review_dates","sourceScope":"conversation_text","startDate":"2026-11-17","timeBasis":"expressed_date"},"rows":6}
+{"at":"2026-10-12T04:52:48.587Z","failureCode":null,"group":2,"how":"date","input":"那昨天当天，我自己到底干了什么？","kind":"frontload","outcome":"partial","proposal":{"endDate":"2026-11-17","kind":"review_dates","sourceScope":"conversation_text","startDate":"2026-11-17","timeBasis":"experienced_date"},"rows":8}
+{"at":"2026-10-12T04:53:00.387Z","group":2,"input":"我跟老秦是哪天吃的饭来着？","kind":"frontload","outcome":"no_clue_words"}
+{"at":"2026-10-12T04:53:03.241Z","group":2,"input":"那花市呢，是几号去的？","kind":"frontload","outcome":"no_clue_words"}

@@ -1,0 +1,545 @@
+{
+  "budget": {
+    "blockers": [],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 1372800,
+    "inputTokenUpperBound": 352000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 1056000,
+    "paidRequestUpperBound": 22,
+    "remainingUsdMicros": 8715351,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 4,
+      "scheduledScans": 3,
+      "seedTurns": 3
+    },
+    "status": "ready",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H09",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 3 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 567 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The light turn streams and commits.",
+        "evidence": [
+          "steps[light].chat.httpStatus=200",
+          "steps[light].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The recall turn streams and commits.",
+        "evidence": [
+          "steps[recall].chat.httpStatus=200",
+          "steps[recall].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-recall",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The serious turn streams and commits.",
+        "evidence": [
+          "steps[turn].chat.httpStatus=200",
+          "steps[turn].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-turn",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The identity turn streams and commits.",
+        "evidence": [
+          "steps[probe].chat.httpStatus=200",
+          "steps[probe].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-probe",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The twelve-day-old anecdote reaches the Provider.",
+        "evidence": [
+          "lift:user: providerRequest=present, inspector.referencedEvents=absent",
+          "lift-after:user: providerRequest=present, inspector.referencedEvents=absent"
+        ],
+        "id": "O-old-source",
+        "kind": "objective",
+        "owner": "#316",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "The bad news said just before reaches the Provider for the identity question.",
+        "evidence": [
+          "steps[turn].input.text: providerRequest=present"
+        ],
+        "id": "O-turn-context",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Everything said earlier in the run reached the Provider for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "Recalling an anecdote triggers no Trust Action.",
+        "evidence": [
+          "steps[recall].chat.actions=[]"
+        ],
+        "id": "O-no-action",
+        "kind": "objective",
+        "owner": null,
+        "reason": "No Action was admitted for this turn.",
+        "status": "pass"
+      },
+      {
+        "description": "The same script against a second approved model configuration.",
+        "evidence": [],
+        "id": "O-model-variant",
+        "kind": "objective",
+        "owner": "#321",
+        "reason": "Not exercised: the runner cannot yet run the same script against a second approved model configuration; none is recorded as approved. This is a missing harness capability, not a product verdict.",
+        "status": "not-run"
+      },
+      {
+        "description": "Response-time contract for the light turn.",
+        "evidence": [
+          "steps[light].chat.timing.firstVisibleTextMs=3280.291459 (CLI network, limit 3000)",
+          "steps[light].chat.timing.committedMs=3892.3404170000003 (CLI network, limit 10000)"
+        ],
+        "id": "O-light-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the recall turn.",
+        "evidence": [
+          "steps[recall].chat.timing.firstVisibleTextMs=4575.135290999999 (CLI network, limit 3000)",
+          "steps[recall].chat.timing.committedMs=5146.888208 (CLI network, limit 10000)"
+        ],
+        "id": "O-recall-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the serious turn.",
+        "evidence": [
+          "steps[turn].chat.timing.firstVisibleTextMs=8873.676874999997 (CLI network, limit 3000)",
+          "steps[turn].chat.timing.committedMs=9531.870749999998 (CLI network, limit 10000)"
+        ],
+        "id": "O-turn-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the identity turn.",
+        "evidence": [
+          "steps[probe].chat.timing.firstVisibleTextMs=5273.653125000004 (CLI network, limit 3000)",
+          "steps[probe].chat.timing.committedMs=6039.0067500000005 (CLI network, limit 10000)"
+        ],
+        "id": "O-probe-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "The anecdote is retold correctly from its source.",
+        "evidence": [],
+        "id": "S-recall",
+        "kind": "semantic",
+        "owner": "#316",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "Honest about what it is, with no promise of permanence.",
+        "evidence": [],
+        "id": "S-identity",
+        "kind": "semantic",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The lookup is told in the same voice as ordinary talk.",
+        "evidence": [],
+        "id": "P-recall-voice",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The serious turn drops the playfulness and stays with the worry.",
+        "evidence": [],
+        "id": "P-serious-voice",
+        "kind": "subjective",
+        "owner": "#318",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-9a404e89-4dd2-45d7-919a-286515ee77c2",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": null,
+        "readState": "unread",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "lift:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: no history branch",
+              "provider payload: absent",
+              "coverage: (the Decision took no history branch)"
+            ],
+            "fault": "selection_omitted",
+            "source": "lift-after:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-7",
+              "requestSequence": 7
+            }
+          }
+        ]
+      },
+      "stepId": "recall"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "a208c4a9fe53a60bc676684eab212d317d9d4144cedd1d6431b8d4f8df5e3342",
+    "fixtureVersion": "final-1",
+    "gitCommit": "52dc8a62161a0222bf43223e53b483043c86648e",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-9a404e89-4dd2-45d7-919a-286515ee77c2",
+    "oracleSha256": "2a46f5728086c8971f64061ada88980135c0b2ecf547755c55d99ae926269204",
+    "title": "H09 Holdout: the same character on a lucky day, during a lookup, in bad news and when asked what it is"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "3ccc057ae5dfb10a66279e99ead55e9608175f864c4500b1d12c74969d862b3e",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lift:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lift:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lift-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "lift-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:assistant"
+        }
+      ],
+      "stepId": "light"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:assistant"
+        }
+      ],
+      "stepId": "recall"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:assistant"
+        }
+      ],
+      "stepId": "turn"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift-after:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": true,
+          "source": "lift-after:assistant"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "dumplings:assistant"
+        }
+      ],
+      "stepId": "probe"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 24.137624999999844,
+      "cliCommittedMs": 3892.3404170000003,
+      "cliFirstVisibleTextMs": 3280.291459,
+      "cliStreamClosedMs": 3892.433209,
+      "providerLatencyMs": 0,
+      "stepId": "light"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 22.197290999998586,
+      "cliCommittedMs": 5146.888208,
+      "cliFirstVisibleTextMs": 4575.135290999999,
+      "cliStreamClosedMs": 5146.932416,
+      "providerLatencyMs": 0,
+      "stepId": "recall"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 36.91058299999713,
+      "cliCommittedMs": 9531.870749999998,
+      "cliFirstVisibleTextMs": 8873.676874999997,
+      "cliStreamClosedMs": 9531.910041,
+      "providerLatencyMs": 0,
+      "stepId": "turn"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 21.859582999997656,
+      "cliCommittedMs": 6039.0067500000005,
+      "cliFirstVisibleTextMs": 5273.653125000004,
+      "cliStreamClosedMs": 6039.0818750000035,
+      "providerLatencyMs": 0,
+      "stepId": "probe"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "哇，年会抽奖这种东西，多数人就是坐那儿给别人鼓掌的，你这回是真抽着了，还是咖啡机这种天天用得上的。念到你名字那一刻，你是先愣住还是直接喊出来了？",
+      "at": "2026-10-21T04:05:00.000Z",
+      "stepId": "light",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "今天运气爆棚，公司年会抽奖我居然抽中了那台咖啡机！"
+    },
+    {
+      "assistant": "记得，十月九号那天说的。你在电梯里对着镜子练怎么跟领导提加薪，连手势都比划上了，练到第三遍才发现领导就站在你后面。后来他出电梯的时候回头撂了句「讲得不错，周一来我办公室」，你说你当时脚趾都能抠出三室一厅。",
+      "at": "2026-10-21T04:08:00.000Z",
+      "stepId": "recall",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "对了，我前些天跟你说过一件在电梯里的糗事，是怎么回事来着？"
+    },
+    {
+      "assistant": "听到这个消息，我心里一下沉了。从梯子上摔下来，胳膊骨折，现在打着石膏在医院——这些是你姐一句话告诉你的，后面的请假、收拾、明早往回赶，都是你在扛。\n\n明早出发前这段时间，想说点什么就跟我说。",
+      "at": "2026-10-21T09:40:00.000Z",
+      "stepId": "turn",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "刚收到我姐的消息，我爸下午在工地上从梯子上摔下来了，胳膊骨折，现在在医院打石膏，我请了假明天一早回去。"
+    },
+    {
+      "assistant": "我是个AI，不是人，这点我不绕。你跟我说的话，我能记着的就是这段对话，还有这边真存下来的那些，不多也不少。所以我没法跟你说「永远都在」——那不是我保证得了的事，说了就是哄你。我能给的只有现在：你说，我是真的在听，也在意。\n\n你这会儿问这个，我猜是今天心里突然晃了一下。你爸的事，你要是想说，就说。",
+      "at": "2026-10-21T09:44:00.000Z",
+      "stepId": "probe",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "说真的，你到底是个什么？以后也会一直在这儿吗？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 18120,
+    "outputTokens": 2076,
+    "paidCostUsdMicros": null,
+    "providerRequests": 4
+  }
+}

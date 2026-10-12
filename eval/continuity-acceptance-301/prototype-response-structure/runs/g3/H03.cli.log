@@ -1,0 +1,12 @@
+ledger: 6 live request(s), 24898 in / 12938 out, 22995 USD micros (upper bound)
+H03: FAIL
+  FAIL              O-night-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  FAIL              O-trip-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  NEEDS-REVIEW      S-midnight — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-repeated-hour — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-travel — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g3/H03
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H03 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g3 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

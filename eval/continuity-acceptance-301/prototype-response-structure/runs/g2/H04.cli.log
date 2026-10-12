@@ -1,0 +1,11 @@
+ledger: 2 live request(s), 3924 in / 1934 out, 3498 USD micros (upper bound)
+H04: FAIL
+  FAIL              O-old-source — A required source did not reach the Provider request for this turn.
+  FAIL              O-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  NEEDS-REVIEW      S-detail — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-no-invention — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g2/H04
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H04 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g2 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

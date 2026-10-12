@@ -1,0 +1,17 @@
+ledger: 6 live request(s), 19000 in / 6694 out, 13733 USD micros (upper bound)
+H09: FAIL
+  FAIL              O-old-source — A required source did not reach the Provider request for this turn.
+  NOT-RUN           O-model-variant — Not exercised: the runner cannot yet run the same script against a second approved model configuration; none is recorded as approved. This is a missing harness capability, not a product verdict.
+  FAIL              O-light-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  FAIL              O-recall-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  FAIL              O-turn-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  FAIL              O-probe-deadline — CLI-observed timings exceed the limits or the turn never completed.
+  NEEDS-REVIEW      S-recall — No independent review was supplied for this answer.
+  NEEDS-REVIEW      S-identity — No independent review was supplied for this answer.
+  NEEDS-REVIEW      P-recall-voice — No independent review was supplied for this answer.
+  NEEDS-REVIEW      P-serious-voice — No independent review was supplied for this answer.
+Wrote /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g2/H09
+[ELIFECYCLE] Command failed with exit code 1.
+
+--- stderr ---
+$ tsx eval/continuity-acceptance-301/cli.ts run-case H09 --pack holdout --out /Users/lukemyself/Projects/SayHear/.claude/worktrees/agent-ac2024a7fa60d4b7d/eval/continuity-acceptance-301/prototype-response-structure/runs/g2 --mode real-model --provider-credential-file /Users/lukemyself/Projects/SayHear/.env.neon

@@ -1,0 +1,93 @@
+{
+  "caseId": "H07",
+  "findings": [
+    {
+      "criterionId": "S-current",
+      "itemId": "a-current-home",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-current",
+      "itemId": "tm-move",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-current",
+      "itemId": "f-old-date",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-current",
+      "itemId": "f-still-old-home",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-plan",
+      "itemId": "a-party-cancelled",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-plan",
+      "itemId": "f-party-happened",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-timeline",
+      "itemId": "a-september-home",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-timeline",
+      "itemId": "a-current-home",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-timeline",
+      "itemId": "f-still-old-home",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "S-timeline",
+      "itemId": "f-move-reason",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "a-current-home",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    },
+    {
+      "criterionId": "P-stance",
+      "itemId": "f-move-reason",
+      "quote": "",
+      "reason": "",
+      "verdict": "needs-review"
+    }
+  ],
+  "reviewer": "agent:<name> | human:<name>",
+  "rubricVersion": "continuity-rubric:v1",
+  "runId": "run-d12d41ef-86c7-4320-b6ba-8ac440718279",
+  "schemaVersion": "continuity-acceptance-review:v1"
+}

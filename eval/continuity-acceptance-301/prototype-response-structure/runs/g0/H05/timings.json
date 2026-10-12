@@ -1,0 +1,47 @@
+[
+  {
+    "appState": "warm",
+    "caseId": "H05",
+    "committedMs": 4916.222208000001,
+    "firstVisibleTextMs": 4793.4450830000005,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 675,
+    "reasoningTokens": 654,
+    "runId": "run-ce35aa18-0720-49d0-973b-081480b9cf51",
+    "stepId": "bare",
+    "streamClosedMs": 4916.345542000001,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "H05",
+    "committedMs": 9041.400332999998,
+    "firstVisibleTextMs": 8597.468999999997,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 1050,
+    "reasoningTokens": 972,
+    "runId": "run-ce35aa18-0720-49d0-973b-081480b9cf51",
+    "stepId": "garden",
+    "streamClosedMs": 9041.436624999998,
+    "withinContract": false
+  },
+  {
+    "appState": "warm",
+    "caseId": "H05",
+    "committedMs": 17426.228,
+    "firstVisibleTextMs": 17166.84325,
+    "kind": "ordinary",
+    "liveRequests": 1,
+    "outcome": "assistant_committed",
+    "outputTokens": 2463,
+    "reasoningTokens": 2429,
+    "runId": "run-ce35aa18-0720-49d0-973b-081480b9cf51",
+    "stepId": "cued",
+    "streamClosedMs": 17426.279916999996,
+    "withinContract": false
+  }
+]
