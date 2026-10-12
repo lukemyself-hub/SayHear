@@ -8,6 +8,7 @@ import {
   createModelRoleProviderEgress,
   createModelRoleRegistry,
   dateOrdinal,
+  runReflectionAttempt,
   runReflectionDailyBuild,
   runReflectionWeeklyBuild,
   weekWindowId,
@@ -563,7 +564,10 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     return { generationCommandId, reflectionRunId };
   }
 
-  async function seedWeekActivity(logicalDates: readonly string[]): Promise<void> {
+  async function seedWeekActivity(
+    logicalDates: readonly string[],
+  ): Promise<Awaited<ReturnType<typeof seedSession>>[]> {
+    const sessions: Awaited<ReturnType<typeof seedSession>>[] = [];
     for (const logicalDate of logicalDates) {
       const session = await seedSession({ logicalDate });
       await seedDateOutcome({
@@ -574,7 +578,9 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
         dailySessionId: session.dailySessionId,
         outcome: "published",
       });
+      sessions.push(session);
     }
+    return sessions;
   }
 
   /**
@@ -1926,6 +1932,238 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       [committedVersion.reflection_version_id, OWNER, monday.evidenceItemId],
     );
     expect(Number(lineage.rows[0]!.count)).toBe(1);
+  });
+
+  it("rebuilds the frozen Weekly week identifier on a technical retry instead of discarding source_changed (issue #274)", async () => {
+    const sessions = await seedWeekActivity(["2026-09-07", "2026-09-08"]);
+    const monday = sessions[0]!;
+    const tuesday = sessions[1]!;
+    const weeks = await reflectionRepository!.listDueWeekWindows({
+      now: new Date(Date.parse("2026-09-14T06:00:00.000Z")),
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    expect(weeks).toHaveLength(1);
+    const week = weeks[0]!;
+    expect(week.weekIdentifier).toBe("2026-W37");
+    const queued = await reflectionRepository!.queueWeeklyReflection({
+      userId: OWNER as never,
+      weekIdentifier: week.weekIdentifier,
+      windowStartDate: week.windowStartDate,
+      windowEndDate: week.windowEndDate,
+      sourceDigest: week.sourceDigest,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") {
+      throw new Error("unreachable");
+    }
+    const commandRevision = dateOrdinal(week.windowStartDate);
+
+    // attempt1: the Provider times out, so the attempt is scheduled as a
+    // technical retry and the frozen run ledger row is left in place.
+    const first = await runReflectionWeeklyBuild({
+      dependencies: reflectionDependencies(async () => {
+        const error = new Error("weekly provider timeout");
+        (error as { category?: string }).category = "timeout";
+        throw error;
+      }),
+      command: {
+        workflowCommandId: queued.workflowCommandId,
+        subjectId: OWNER,
+        sourceRevision: commandRevision,
+        claimBaselineDigest: "",
+        policyVersion: READINESS_POLICY,
+        expectedDataEpoch: queued.expectedDataEpoch,
+        scope: "weekly",
+        weekIdentifier: week.weekIdentifier,
+        windowStartDate: week.windowStartDate,
+        windowEndDate: week.windowEndDate,
+        sourceDigest: week.sourceDigest,
+      },
+    });
+    expect(first.outcome).toBe("retryable_failed");
+
+    const command = await database!.pool.query<{ generation_command_id: string }>(
+      `SELECT generation_command_id FROM generation_commands
+       WHERE user_id = $1 AND model_role = 'reflection.weekly'
+       ORDER BY created_at DESC LIMIT 1`,
+      [OWNER],
+    );
+    expect(command.rows).toHaveLength(1);
+    const generationCommandId = command.rows[0]!.generation_command_id;
+    const retryAttempt = await database!.pool.query<{
+      model_run_attempt_id: string;
+      attempt_no: string;
+    }>(
+      `SELECT model_run_attempt_id, attempt_no::text FROM model_run_attempts
+       WHERE generation_command_id = $1 AND attempt_no = 2`,
+      [generationCommandId],
+    );
+    expect(retryAttempt.rows).toHaveLength(1);
+    expect(retryAttempt.rows[0]!.attempt_no).toBe("2");
+
+    // The frozen run ledger row still carries the first attempt's identity.
+    const storedRun = await database!.pool.query<{ source_digest: string }>(
+      `SELECT source_digest FROM reflection_runs WHERE generation_command_id = $1`,
+      [generationCommandId],
+    );
+    expect(storedRun.rows[0]!.source_digest).toBe(week.sourceDigest);
+
+    // attempt2 rebuilds the frozen input from the run ledger. Before the fix
+    // the week identifier came back empty, the recomputed digest differed, and
+    // the retry was discarded as source_changed.
+    const context = await reflectionRepository!.readAttemptContext({
+      generationCommandId: asGenerationCommandId(generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(
+        retryAttempt.rows[0]!.model_run_attempt_id,
+      ),
+    });
+    expect(context.outcome).toBe("evaluated");
+    if (context.outcome !== "evaluated") {
+      throw new Error("unreachable");
+    }
+    expect(context.frozen.weekIdentifier).toBe(week.weekIdentifier);
+    const reconstructed = await reflectionRepository!.readWeeklySnapshot({
+      userId: OWNER as never,
+      weekIdentifier: context.frozen.weekIdentifier!,
+      windowStartDate: context.frozen.windowStartDate!,
+      windowEndDate: context.frozen.windowEndDate!,
+      sourceDigest: context.frozen.sourceDigest!,
+      policyVersion: READINESS_POLICY,
+    });
+    expect(reconstructed.outcome).toBe("evaluated");
+    expect(reconstructed.outcome === "evaluated" &&
+      reconstructed.frozen.sourceDigest).toBe(week.sourceDigest);
+
+    narrativeScript = () => ({ propositions: [], coverageKeys: [] });
+    const retried = await runReflectionAttempt({
+      dependencies: reflectionDependencies(async () => ({
+        statements: [
+          {
+            statementKey: "statement:1",
+            text: "Radios came up on two separate days this week.",
+            statementKind: "cross_day_theme",
+            propositions: [
+              {
+                propositionKey: "proposition:1",
+                normalizedProposition:
+                  "user returned to radio repair across the week",
+                propositionKind: "synthesis",
+                epistemicRendering: "inferred",
+                supportEvidenceItemIds: [
+                  monday.evidenceItemId,
+                  tuesday.evidenceItemId,
+                ],
+                baselineClaimIds: [],
+              },
+            ],
+          },
+        ],
+        candidateProposals: [],
+      })),
+      command: {
+        generationCommandId,
+        modelRunAttemptId: retryAttempt.rows[0]!.model_run_attempt_id,
+        attemptNo: 2,
+        attemptKind: "technical_retry",
+        rolloutPin: weeklyRoleConfiguration.rolloutPin,
+      },
+    });
+    expect(retried.outcome).toBe("built");
+    expect(retried.errorCode).not.toBe("source_changed");
+
+    const run = await database!.pool.query<{ status: string }>(
+      `SELECT status FROM reflection_runs WHERE generation_command_id = $1`,
+      [generationCommandId],
+    );
+    expect(run.rows[0]!.status).toBe("built");
+  });
+
+  it("fails closed when a Weekly retry run is missing its window start, without writing domain rows", async () => {
+    await seedWeekActivity(["2026-09-07", "2026-09-08"]);
+    const weeks = await reflectionRepository!.listDueWeekWindows({
+      now: new Date(Date.parse("2026-09-14T06:00:00.000Z")),
+      policyVersion: READINESS_POLICY,
+      limit: 10,
+    });
+    const week = weeks[0]!;
+    const queued = await reflectionRepository!.queueWeeklyReflection({
+      userId: OWNER as never,
+      weekIdentifier: week.weekIdentifier,
+      windowStartDate: week.windowStartDate,
+      windowEndDate: week.windowEndDate,
+      sourceDigest: week.sourceDigest,
+      policyVersion: READINESS_POLICY,
+    });
+    if (queued.outcome !== "queued") throw new Error("unreachable");
+    const first = await runReflectionWeeklyBuild({
+      dependencies: reflectionDependencies(async () => {
+        const error = new Error("weekly provider timeout");
+        (error as { category?: string }).category = "timeout";
+        throw error;
+      }),
+      command: {
+        workflowCommandId: queued.workflowCommandId,
+        subjectId: OWNER,
+        sourceRevision: dateOrdinal(week.windowStartDate),
+        claimBaselineDigest: "",
+        policyVersion: READINESS_POLICY,
+        expectedDataEpoch: queued.expectedDataEpoch,
+        scope: "weekly",
+        weekIdentifier: week.weekIdentifier,
+        windowStartDate: week.windowStartDate,
+        windowEndDate: week.windowEndDate,
+        sourceDigest: week.sourceDigest,
+      },
+    });
+    expect(first.outcome).toBe("retryable_failed");
+    const run = await database!.pool.query<{ generation_command_id: string }>(
+      "SELECT generation_command_id FROM reflection_runs WHERE user_id = $1",
+      [OWNER],
+    );
+    const generationCommandId = run.rows[0]!.generation_command_id;
+    await database!.pool.query(
+      "UPDATE reflection_runs SET window_start_date = '2026-09-09' WHERE generation_command_id = $1",
+      [generationCommandId],
+    );
+    const attempt = await database!.pool.query<{ model_run_attempt_id: string }>(
+      "SELECT model_run_attempt_id FROM model_run_attempts WHERE generation_command_id = $1 AND attempt_no = 2",
+      [generationCommandId],
+    );
+    const before = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM reflections WHERE user_id = $1",
+      [OWNER],
+    );
+    const context = await reflectionRepository!.readAttemptContext({
+      generationCommandId: asGenerationCommandId(generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(attempt.rows[0]!.model_run_attempt_id),
+    });
+    expect(context.outcome).toBe("not_found");
+    const prepareResult = await reflectionRepository!.prepareAttempt({
+      userId: OWNER as never,
+      scopeType: "date_range",
+      dailySessionId: null,
+      weekIdentifier: null,
+      windowStartDate: week.windowStartDate,
+      windowEndDate: week.windowEndDate,
+      sourceRevision: 0,
+      sourceDigest: week.sourceDigest,
+      claimBaselineDigest: "",
+      policyVersion: READINESS_POLICY,
+      expectedDataEpoch: queued.expectedDataEpoch,
+      generationCommandId: asGenerationCommandId(generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(attempt.rows[0]!.model_run_attempt_id),
+      now: new Date(),
+    });
+    expect(prepareResult).toEqual({
+      outcome: "fenced",
+      reason: "missing_week_window",
+    });
+    const after = await database!.pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM reflections WHERE user_id = $1",
+      [OWNER],
+    );
+    expect(after.rows[0]!.count).toBe(before.rows[0]!.count);
   });
 
   it("rejects a claimVersionId cited as a baseline claim before any draft, current, candidate, or validator call", async () => {
