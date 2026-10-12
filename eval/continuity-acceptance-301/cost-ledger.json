@@ -40,6 +40,16 @@
       "outputTokens": 564,
       "costUsdMicros": 1317,
       "note": "One real DeepSeek V4.1 Flash request recorded in eval/conversation-time-307/README.md. The Provider reported no monetary cost. Upper bound assigned on 2026-10-11 (T08 #321) at the conservative rate above: 2,131 x $0.30/M + 564 x $1.20/M = $0.0013161, rounded up."
+    },
+    {
+      "costUsdMicros": 5422,
+      "date": "2026-10-12",
+      "inputTokens": 5068,
+      "note": "S01 (development, fixture 2d0e724ded65) real-model run; conservative peak, uncached list price",
+      "outputTokens": 3251,
+      "requests": 2,
+      "runId": "run-e69cb26f-1f50-4fa6-a6a8-32c9b9840aee",
+      "ticket": "#321"
     }
   ]
 }

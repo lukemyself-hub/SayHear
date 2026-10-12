@@ -655,8 +655,20 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
       for (const request of stub.requests().slice(seedRequestsBefore)) {
         if (request.stepLabel === null) collectStrings(request.body, backgroundProviderStrings);
       }
+      await environment.gate?.settled();
+      const backgroundRequests = environment.gate
+        ?.requests()
+        .slice(seedRequestsBefore)
+        .filter((request) => request.stepLabel === null)
+        .map((request) => ({
+          instructionsStart: request.instructions.slice(0, 160),
+          response: request.response,
+          sequence: request.sequence,
+          transport: request.transport,
+        }));
       return {
         backgroundProviderStrings,
+        ...(backgroundRequests ? { backgroundRequests } : {}),
         caseId: fixture.id,
         environmentErrors: [],
         finalHistory: await readSessions(),

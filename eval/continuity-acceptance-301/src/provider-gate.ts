@@ -159,6 +159,7 @@ export function summarizeProviderAnswer(input: {
   let firstReasoningMs: number | null = null;
   const calls = new Map<number, { arguments: string; name: string }>();
   let pending = "";
+  let sawDone = false;
   for (const chunk of input.chunks) {
     pending += chunk.text;
     let boundary: number;
@@ -167,7 +168,10 @@ export function summarizeProviderAnswer(input: {
       pending = pending.slice(boundary + 1);
       if (!line.startsWith("data:")) continue;
       const data = line.slice(5).trim();
-      if (data === "[DONE]") continue;
+      if (data === "[DONE]") {
+        sawDone = true;
+        continue;
+      }
       let event: Record<string, unknown> | null;
       try {
         event = record(JSON.parse(data));
@@ -222,7 +226,9 @@ export function summarizeProviderAnswer(input: {
     firstContentMs,
     firstReasoningMs,
     model,
-    outcome: input.outcome,
+    // The adapter stops reading at the terminal marker and releases the
+    // stream; that is a complete answer, not an abandoned one.
+    outcome: input.outcome === "cancelled" && sawDone ? "complete" : input.outcome,
     providerRequestId: input.providerRequestId,
     reasoning,
     sentMs: input.sentMs,

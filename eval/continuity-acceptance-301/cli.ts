@@ -46,6 +46,7 @@ import {
   renderMarkdown,
   suiteStatus,
 } from "./src/report";
+import { renderTranscript, stepTimings } from "./src/transcript";
 import { combinedVersion } from "./src/versions";
 import { openCaseSession, playStep, reproducibilityDigest, runCase } from "./src/runner";
 
@@ -262,6 +263,10 @@ function writeRun(input: {
   const observationText = `${JSON.stringify(input.observation, null, 2)}\n`;
   write("observation.json", observationText);
   write(OBSERVATION_SEAL_FILE, `${sealObservation(observationText)}\n`);
+  if (input.observation.mode === "real-model") {
+    write("transcript.md", renderTranscript(input.observation));
+    write("timings.json", stepTimings(input.observation));
+  }
   // The exact stack this run exercised (T08 #321).
   write("versions.json", combinedVersion());
   write("report.json", report);

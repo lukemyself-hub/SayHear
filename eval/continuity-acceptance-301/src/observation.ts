@@ -179,6 +179,17 @@ export type CaseObservation = Readonly<{
    * model roles started by scheduled scans. Real egress, scanned for leaks.
    */
   backgroundProviderStrings: readonly string[];
+  /**
+   * T08 #321, real-model runs: every request made outside a follow-up turn
+   * after seeding (background model roles), with how it was answered and what
+   * it cost. They are paid calls and are part of the run's ledger entry.
+   */
+  backgroundRequests?: readonly Readonly<{
+    instructionsStart: string;
+    response: GateResponse | null;
+    sequence: number;
+    transport: GateTransport;
+  }>[];
   caseId: string;
   /** Failures of the harness itself, never of the product under test. */
   environmentErrors: readonly string[];
