@@ -39,6 +39,12 @@ export type AppServerInput = Readonly<{
    * can be shown to stop without a 30 second wait (#319).
    */
   requestBudgetMs?: number;
+  /**
+   * The deployment switch for the history review branch. Omitted or true: on,
+   * as every history case needs. False reproduces a deployment where the
+   * branch is closed (T08 #321 diagnostic runs).
+   */
+  historyRecallEnabled?: boolean;
   provider:
     | Readonly<{
         apiKey: string;
@@ -137,7 +143,7 @@ export function buildAppEnvironment(
     SAYHEAR_FAST_PATH_EXTRACTION_ENABLED: "false",
     // Issue 314: the controlled read-only history review is what the history
     // cases exercise; it is default-off in every other deployment.
-    SAYHEAR_HISTORY_RECALL_ENABLED: "true",
+    SAYHEAR_HISTORY_RECALL_ENABLED: input.historyRecallEnabled === false ? "false" : "true",
     SAYHEAR_INACTIVITY_TIMEOUT_MS: String(ACCEPTANCE_INACTIVITY_TIMEOUT_MS),
     SAYHEAR_JOURNAL_PUBLISH_ENABLED: "false",
     SAYHEAR_MEMORY_CONSOLIDATION_ENABLED: "false",

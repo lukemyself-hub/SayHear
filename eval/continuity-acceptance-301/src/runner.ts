@@ -283,7 +283,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
   // Seeding is destructive to this schema's baseline: prove ownership first.
   await environment.assertOwned();
   const recentContextGovernance = await environment.enableRecentContext();
-  await environment.enableHistoryRecall();
+  const historyRecallGovernance = await environment.enableHistoryRecall();
 
   async function inspect(
     generationCommandId: string | null,
@@ -678,6 +678,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
           gitCommit: identity.commit,
           gitDirty: identity.dirty,
           model: environment.model,
+          historyRecallGovernance,
           recentContextGovernance,
           runId: environment.runId,
         },

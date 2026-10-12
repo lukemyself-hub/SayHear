@@ -150,6 +150,8 @@ export async function createAcceptanceEnvironment(input: {
    * requests after seeding reach the real Provider with this credential.
    */
   provider?: Readonly<{ apiKey: string; kind: "opencode-go"; live: boolean }>;
+  /** False runs the app with the history review branch closed (diagnostic). */
+  historyRecallEnabled?: boolean;
   /** Overrides the deterministic request budget (latency measurements, #319). */
   requestBudgetMs?: number;
   target: IsolationTarget;
@@ -225,6 +227,7 @@ export async function createAcceptanceEnvironment(input: {
           : { requestBudgetMs: input.requestBudgetMs }
         : { requestBudgetMs: input.requestBudgetMs ?? DETERMINISTIC_REQUEST_BUDGET_MS }),
       databaseUrl: database.connectionString,
+      ...(input.historyRecallEnabled === false ? { historyRecallEnabled: false } : {}),
       markerDatabaseUrl: markerDatabase.connectionString,
       provider: realProvider
         ? {
@@ -302,6 +305,7 @@ export async function createAcceptanceEnvironment(input: {
     },
     async enableHistoryRecall() {
       if (!app) throw new Error("The SayHear app is not running.");
+      if (input.historyRecallEnabled === false) return "closed";
       const response = await fetch(`${app.origin}/api/internal/operator/history-recall`, {
         body: JSON.stringify({ action: "enable" }),
         headers: {

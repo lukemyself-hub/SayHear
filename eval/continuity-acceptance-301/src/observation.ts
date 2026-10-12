@@ -200,6 +200,8 @@ export type CaseObservation = Readonly<{
     gitCommit: string;
     gitDirty: boolean;
     model: string;
+    /** `active`, or `closed` for a diagnostic run with the branch shut (T08). */
+    historyRecallGovernance?: string;
     recentContextGovernance: string;
     runId: string;
   }>;

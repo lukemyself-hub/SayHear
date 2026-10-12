@@ -46,6 +46,7 @@ import {
   renderMarkdown,
   suiteStatus,
 } from "./src/report";
+import { renderSummaryMarkdown, summarizeRuns } from "./src/summary";
 import { renderTranscript, stepTimings } from "./src/transcript";
 import { combinedVersion } from "./src/versions";
 import { openCaseSession, playStep, reproducibilityDigest, runCase } from "./src/runner";
@@ -69,6 +70,7 @@ const HELP = `Continuity acceptance CLI (T00 #313)
   suite     [--case ID ...] [--mode MODE] [--out DIR] [--expect-known-red [--regression-only]]
   chat      ID [--mode MODE]                   seed the case, then talk to it interactively
   report    --run DIR [--review FILE]          re-score a stored, sealed run (for example with a review)
+  summary   --run DIR                          per-turn timings and non-passing criteria over stored real-model runs
   rebind    [--case ID ...]                  re-point oracles at deliberately changed development fixtures
   calibrate                                    prove the checker catches prefabricated bad transcripts
   versions                                     the combined version of the continuity stack, with a fingerprint (#320)
@@ -127,6 +129,9 @@ function requireValid(cases: readonly LoadedCase[]): void {
     throw new UsageError(`Refusing to run invalid cases:\n- ${problems.join("\n- ")}`);
   }
 }
+
+/** `--history-recall off`: run with the history review branch closed (diagnostic). */
+let historyRecallClosed = false;
 
 /** The shared cost ledger, or the file named by `--ledger`. */
 let ledgerFile: string | undefined;
@@ -324,6 +329,7 @@ async function runOne(
     environment = await createAcceptanceEnvironment({
       initialNow: initialNow(loaded),
       ...realProvider(runPlan),
+      ...(historyRecallClosed ? { historyRecallEnabled: false } : {}),
       target,
     });
     const run = () =>
@@ -553,6 +559,7 @@ async function main(): Promise<number> {
       out: { type: "string" },
       pack: { type: "string" },
       "provider-credential-file": { type: "string" },
+      "history-recall": { type: "string" },
       review: { type: "string" },
       run: { type: "string" },
       "verify-reset": { type: "boolean" },
@@ -568,6 +575,12 @@ async function main(): Promise<number> {
       .find((candidate) => candidate.startsWith(`${PROVIDER_CREDENTIAL_VARIABLE}=`));
     const value = line?.slice(PROVIDER_CREDENTIAL_VARIABLE.length + 1).trim().replace(/^(["'])(.*)\1$/, "$2");
     if (value) process.env[PROVIDER_CREDENTIAL_VARIABLE] = value;
+  }
+  if (values["history-recall"] !== undefined) {
+    if (values["history-recall"] !== "off" && values["history-recall"] !== "on") {
+      throw new UsageError("--history-recall must be on or off.");
+    }
+    historyRecallClosed = values["history-recall"] === "off";
   }
   if (values.pack) {
     const chosen = PACKS[values.pack];
@@ -678,6 +691,13 @@ async function main(): Promise<number> {
     });
     printCase(report);
     return exitCodeForStatus(report.status);
+  }
+
+  if (command === "summary") {
+    if (!values.run) throw new UsageError("summary needs --run DIR (a directory holding stored real-model runs).");
+    const summary = summarizeRuns(path.resolve(values.run));
+    console.log(renderSummaryMarkdown(summary));
+    return 0;
   }
 
   if (command === "latency") {
