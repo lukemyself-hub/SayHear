@@ -10,6 +10,10 @@
   `pnpm acceptance:continuity … --mode real-model` 的真实路径验证。
 - 样本取自 holdout 案例，已被看过两轮；评审人是搭工具的同一个 Agent，要点检查只是正则粗筛。
 
+> **发布前注意**：本目录（尤其 `results/`，约 3.4 MB）位于 `eval/` 下，`apps/web/next.config.ts` 的
+> `outputFileTracingIncludes: eval/**/*` 会把它带进部署 trace。发布前需从部署 trace 排除，或把结果移出 `eval/`
+> （同 `evidence-321/` 的处理，见交接笔记）。
+
 ## 用法
 
 ```bash
@@ -195,7 +199,8 @@ b 把被更正的那条挪到更正日，回答里随之出现「13 号你把奖
 - V1（本分支 `f734290` 已实现）是保底：改动最小，方向正确率相同，但推理量是 V2 的两倍，长案例上方差最大。
 - V4 与 V2 相当，但把材料伪装成一条 user 消息，来源角色不干净，不建议。
 
-落到产品里要改的地方见协调报告；这一步尚未做。本基准之后，选定的布局仍需走真实对话路径验证。
+V2 + a + 完整规则已落到产品（`history-reading:v3`，见 `docs/architecture/08-10-conversation-runtime.md` §8.4.6），真实对话路径的验证在
+[`../evidence-321-presentation/`](../evidence-321-presentation/README.md)。
 
 ### 局限
 

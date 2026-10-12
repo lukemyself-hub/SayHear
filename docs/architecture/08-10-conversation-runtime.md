@@ -318,24 +318,41 @@ Posture / 关系边界各 section——三条路径与普通回复由同一个 `
 在途/历史结果按 v1 原样重放，未知版本失败关闭。Inspector 只给 `correctionMarks` 计数与规则版本。真实模型是否据此把更正后的说法当作现状，
 由 C12 的 `S-controls` 裁定（T08）。
 
-**原文与更正就地标记（`history-reading:v3`，SPEC #301 呈现修复）。**v2 之前，被引用的较早原文作为普通 user / assistant 消息排在当前对话前面，
-消息本身没有标记，“哪条是什么时候说的”只在 Times 序号表里；更正标记则写在回执末尾、按序号指回消息。真实模型因此反复确认“回执说 N 条已引用，
-但认不出是哪些”，并把更正时刻之前的旧说法复述读成改口（原型对照 `prototype-response-structure/Findings.md`）。v3 改为在消息文本第一行就地写一条
-方括号说明（`message-presentation.ts`），确定性生成、只含时间：
+**较早原文作为材料块、更正就地说明（`history-reading:v3`，SPEC #301 呈现修复）。**v2 及之前，被引用的较早原文作为普通
+user / assistant 消息排在当前对话前面，消息本身没有标记，“哪条是什么时候说的”只在 Times 序号表里；更正标记写在回执末尾、按序号指回消息。
+真实模型因此反复确认“回执说 N 条已引用，但认不出是哪些”，有时直接答“内容看不到”，并把更正时刻之前的旧说法复述读成改口。布局由
+`eval/continuity-acceptance-301/presentation-bench`（直接调用 Provider 的设计用基准，不是验收证据）在 8 个 fixture、6 种布局上选定：
+现状的回答调用推理中位 3,420 token，材料块布局 506，更正方向从 1/5 到 21/21。v3 的呈现（`message-presentation.ts`）：
 
-- History Answer 引用的每条较早消息以 `[Earlier message. They said this on <本地时间>.]`（Assistant 行为 `You replied this on`）开头；回执与阅读规则
-  改为指向这行，不再引用 Times 表，也不再按序号写“第 N 条是更正”。
-- 被用户更正过的消息就地写明这是更正后的说法及更正时刻；“写下时刻早于该更正时刻”的其他用户消息（未更正的取表达时间，已更正的取其更正时刻）
-  就地写明它写于该更正之前、不是之后的改口。不比较内容、不判断是否同一件事，不出站更正前的原文，不排除、不重排任何消息；Correction / Forget
-  的既有控制语义（ADR-0149）不变。被更正消息当时生成的 Assistant 回复继续按既有关联排除，所以它后面没有相邻 Assistant 行。
-- 同一呈现问题也存在于七天近期背景与同一 Daily Session 内（更正后的文字同样留在原位置、原时间，且此前完全没有标记）。两个来源
-  （`postgres-recent-context-source.ts`、`loadContextSource`）现在返回更正时刻，上述两类消息以 `[Note. …]` 开头；只有在确实发出这类说明时，
-  `time_context` 段才追加一行读法规则（预算相应加 128 token）。没有更正的 Context 逐字节不变。
-- 规则要求模型不得把方括号说明念出、复述或提及。
-- 冻结与重放：更正时刻冻结在已签名的 `time_context` 元数据条目上（可选字段 `correctedAt`，无更正时不存在）；是否给引用消息加标记由回执快照里的
-  `readingRulesVersion` 决定，v1 / v2 冻结的结果按原样逐字节重放（夹具 `history-answer-context-reading-v2-f179b3d.json`）。
-- Times 表保留：它按出站序号覆盖全部消息并参与完整性校验，与就地标记取自同一字段、同一时区，不构成第二套时间。
-- 就地说明的 token 不计入各段 `selectedTokens`（每条约 15–60 token），属已知的小额低估。
+- **材料块。**History Answer 引用的消息不再进 `messages`。它们由冻结的 `history_recall_context` 事件与已签名的 `time_context` 元数据确定性
+  渲染成一个有边界的块，追加在指令末尾：标题 `EARLIER MESSAGES (…)`、一行“Now is …”、按天分组（检索路径在 occasion 计数与实际条数
+  对得上时再按 occasion 分组）、逐条编号、每条带说出的时刻、正文逐行以 `> ` 开头（正文里的任何文字都无法冒充条目或块尾）、
+  结尾 `END OF EARLIER MESSAGES (N in total).`，计数与可见条目一致。没有引用时不发块，回执也不指向块。
+- **时间。**标题用人读的日期与“N 天前”；条目时刻取该消息自己的时区，与当前请求时区不同才写出时区名。同一本地日内出现不同 GMT 偏移
+  （夏令时重复的那个小时）时，该日条目带 GMT 偏移；消息没有随请求保存时区时注明 `(time zone assumed)`，对应原来 Times 表的 `s=s`。
+  Times 序号表只列真正作为对话轮次发出的消息并重新编号；元数据条目本身仍覆盖全部消息并参与完整性校验。
+- **更正。**被用户更正过的条目就地写明这是更正后的说法及更正时刻；“写下时刻早于该更正时刻”的其他用户消息（未更正的取表达时间，已更正的
+  取其更正时刻）就地写明它写于该更正之前、不是之后的改口。不比较内容、不判断是否同一件事，不出站更正前的原文，不排除、不重排任何消息；
+  Correction / Forget 的既有控制语义（ADR-0149）不变。被更正消息当时生成的 Assistant 回复继续按既有关联排除，所以它后面没有相邻
+  Assistant 条目。基准里另一种呈现（按“这句话写下的时刻”重排）方向同样全对，但更常把旧数字带回来，未采用。
+- **七天近期背景与同一 Daily Session。**同一问题在那里同样存在（更正后的文字留在原位置、原时间，此前完全没有标记）。两个来源
+  （`postgres-recent-context-source.ts`、`loadContextSource`）返回更正时刻，这两类对话轮次以 `[Note. …]` 开头；只有确实发出这类说明时，
+  `time_context` 段才追加一行读法规则（预算相应加 128 token）。没有更正的 Context 逐字节不变，功能关闭时的普通聊天基线不受影响。
+- **回执与规则。**回执的回答要求指向“指令末尾标题为 EARLIER MESSAGES 的块”，不再引用 Times 表，也不再按序号写“第 N 条是更正”；
+  另加一行说明其后的对话是当前对话、不属于该块、照常可用（基准里模型在“被问时段内的消息有的在对话里、不在引用里”处犹豫）。
+  阅读规则保持完整版：基准里精简规则没有降低推理量，反而更常复述被更正掉的数字。规则要求不得把标题、编号、方括号说明念出或提及。
+- **冻结与重放。**更正时刻冻结在 `time_context` 元数据条目上（可选字段 `correctedAt`，无更正时不存在）。是否用材料块由回执快照里的
+  `readingRulesVersion` 决定：v1 / v2 冻结的结果仍把引用消息作为对话轮次、按原样逐字节重放
+  （夹具 `history-answer-context-reading-v2-f179b3d.json`）。块文本不进入任何段的 content，段摘要与 HMAC 不变。
+- **已知的小额低估。**块的标题、编号与说明行以及 `[Note.]` 行的 token 不计入各段 `selectedTokens`（每条约 10–40 token）。
+- **来源围栏不变。**块里的条目就是原来作为轮次发出的那些修订，仍经编译时重新过资格、Egress 重推导与提交前复查；Inspector、Purge 面不变。
+
+**Decision 函数说明（`history-recall:v5`）。**有线索的自然接续里，模型曾把来信归到七天背景里可见的另一件事，依据“较早背景已在对话中就不要用”
+而不查。函数说明补充：对话里可见的事与当前消息给出的来信方、到达方式、所涉对象不吻合时，不算已在对话中，用这些细节去查。说明里取自开发
+案例的例句已换成不取自任何案例的例子。**启用步骤**：策略版本写在治理授权行里，代码升到 v5 后需要一条 v5 的授权行才启用——部署后由具备
+权限的操作者 `POST /api/internal/operator/history-recall {"action":"enable"}`；若环境里已有旧版本的生效行，先 `{"action":"disable"}`
+（同一请求排空未结算的 History Answer），`GET` 读到 `historyAnswers.unsettled: 0` 后再 `enable`，并用 `GET` 与 `effective-runtime-config` 的
+`policy.history_recall_governance_version` 核对。
 
 #### 8.4.7 历史路径的来源控制、诊断与独立关闭（#320）
 
@@ -363,7 +380,7 @@ Provider 结果落定（`recordProviderCompletion`）与提交（`commitComplete
 原文展开沿用 `conversation_content:read` + 近期 step-up：`GET /api/internal/inspection/conversation-content` 对历史 command 额外返回
 `historySources`（按模型所见顺序，仅返回当前仍允许的来源；被排除/清除的不返回）；拒绝只给固定原因码，不含查询、人物或范围。
 验收 harness 的 `diagnose` 用三处真实边界判定五类问题（无来源 / 选漏 / 时间丢失 / 读取失败 / 生成错误）：权威历史、Inspector、实际出站请求
-（含其 `Times:` 列表）；Provider 请求 id 把 Inspector 的 command 与实际 payload 对上；生成错误只能由语义裁定产生，缺裁定为 `undetermined`。
+（含其 `Times:` 列表与指令末尾的较早原文块）；Provider 请求 id 把 Inspector 的 command 与实际 payload 对上；生成错误只能由语义裁定产生，缺裁定为 `undetermined`。
 
 #### 8.4.1 Action Capability 元模型
 
