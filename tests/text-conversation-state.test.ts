@@ -381,8 +381,8 @@ describe("stopping and superseding a reply (issue #319)", () => {
     ).toMatchObject({ preserveDraft: false, showError: false });
   });
 
-  it("tells the person plainly when the 30 second stop condition ended the request", () => {
-    expect(CLIENT_REQUEST_DEADLINE_MS).toBe(32_000);
+  it("tells the person plainly when the 60 second stop condition ended the request", () => {
+    expect(CLIENT_REQUEST_DEADLINE_MS).toBe(62_000);
     expect(
       requestEndedPlan({ endedBy: "timeout", hasPartialText: false, userCommitted: true }),
     ).toMatchObject({ kind: "timeout", showError: true, preserveDraft: false });

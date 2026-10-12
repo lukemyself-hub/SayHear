@@ -9,11 +9,11 @@ export const SESSION_COOKIE_NAME = "sayhear.session-token";
 
 /**
  * How long the CLI watches one chat request before giving up. It is a client
- * observation limit, not a product behavior: it sits just above the 30 second
- * request budget (and the Portal's own 32 second client stop) so a server that
+ * observation limit, not a product behavior: it sits just above the 60 second
+ * request budget (and the Portal's own 62 second client stop) so a server that
  * honors its deadline is seen ending the request itself (#319).
  */
-export const CHAT_OBSERVATION_LIMIT_MS = 33_000;
+export const CHAT_OBSERVATION_LIMIT_MS = 63_000;
 
 export type StreamEventRecord = Readonly<{
   elapsedMs: number;

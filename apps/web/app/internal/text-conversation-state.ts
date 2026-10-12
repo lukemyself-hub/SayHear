@@ -275,11 +275,11 @@ export function reduceScrollFollow(
 
 /**
  * Client-side stop condition (issue #319, ADR-0152). The server ends a request
- * at 30 seconds; the client waits two seconds longer so it normally hears the
+ * at 60 seconds; the client waits two seconds longer so it normally hears the
  * server's own terminal event, and gives up on its own after that even if the
  * connection is silent.
  */
-export const CLIENT_REQUEST_DEADLINE_MS = 32_000;
+export const CLIENT_REQUEST_DEADLINE_MS = 62_000;
 
 export type RequestEndedBy = "stop" | "superseded" | "timeout";
 

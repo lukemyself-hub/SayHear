@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { CaseObservation } from "./observation";
-import type { StepTiming } from "./transcript";
+import { COMMIT_LIMIT_MS, LATENCY_PASS_SHARE, type StepTiming } from "./transcript";
 
 /**
  * One table over a set of stored real-model runs (T08 #321): every turn the
@@ -80,7 +80,7 @@ function seconds(value: number | null): string {
 
 export function renderSummaryMarkdown(summary: RunSummary): string {
   const lines = [
-    "| run | case | turn | kind | app | outcome | first text s | committed s | within 3/10 | live requests | output tokens (reasoning) |",
+    "| run | case | turn | kind | app | outcome | first text s | committed s | committed ≤ 15 s | live requests | output tokens (reasoning) |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const row of summary.timings) {
@@ -92,7 +92,7 @@ export function renderSummaryMarkdown(summary: RunSummary): string {
   const within = answered.filter((row) => row.withinContract).length;
   lines.push(
     "",
-    `Turns answered by the real Provider (cancelled ones excluded): ${answered.length}. Within both limits: ${within}. Outside or never completed: ${answered.length - within}.`,
+    `Turns sent to the real Provider (cancelled ones excluded): ${answered.length}. Committed within ${COMMIT_LIMIT_MS / 1000} s: ${within}${answered.length === 0 ? "" : ` (${((within / answered.length) * 100).toFixed(0)}%)`}. Outside or never committed: ${answered.length - within}. Latency gate (at least ${LATENCY_PASS_SHARE * 100}% within): ${answered.length === 0 ? "no samples" : within / answered.length >= LATENCY_PASS_SHARE ? "met" : "NOT met"}.`,
     "",
     "| run | case | status | turns with no committed reply | criteria not passing |",
     "| --- | --- | --- | --- | --- |",

@@ -403,8 +403,8 @@ describe("runtime safety configuration", () => {
     };
     const defaults = loadRuntimeConfiguration(base);
     expect(defaults.conversationRequest).toEqual({
-      budgetMs: 30_000,
-      providerTimeoutMs: 30_000,
+      budgetMs: 60_000,
+      providerTimeoutMs: 60_000,
     });
     // The shared role timeout is untouched by the conversation path.
     expect(defaults.provider.timeoutMs).toBe(60_000);
@@ -417,7 +417,7 @@ describe("runtime safety configuration", () => {
     });
     expect(longRoles.provider.timeoutMs).toBe(180_000);
     expect(longRoles.provider.roleAdapters["opencode-go"]?.timeoutMs).toBe(180_000);
-    expect(longRoles.conversationRequest.providerTimeoutMs).toBe(30_000);
+    expect(longRoles.conversationRequest.providerTimeoutMs).toBe(60_000);
 
     const tighter = loadRuntimeConfiguration({
       ...base,
@@ -431,7 +431,7 @@ describe("runtime safety configuration", () => {
     expect(tighter.provider.timeoutMs).toBe(60_000);
 
     // The product stop condition can be tightened, never loosened.
-    for (const value of ["30001", "0", "-5", "1.5", "abc"]) {
+    for (const value of ["60001", "0", "-5", "1.5", "abc"]) {
       expect(() =>
         loadRuntimeConfiguration({
           ...base,
@@ -442,7 +442,7 @@ describe("runtime safety configuration", () => {
     expect(() =>
       loadRuntimeConfiguration({
         ...base,
-        SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS: "60000",
+        SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS: "60001",
       }),
     ).toThrow("SAYHEAR_CONVERSATION_PROVIDER_TIMEOUT_MS");
   });

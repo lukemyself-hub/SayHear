@@ -317,7 +317,7 @@ export function loadRuntimeConfiguration(environment: Environment) {
   // Issue #319: a chat request has its own end-to-end budget and its own
   // Provider timeout, separate from SAYHEAR_PROVIDER_TIMEOUT_MS, which the
   // background roles share (memory extraction legitimately needs minutes).
-  // Both can only be tightened below the ADR-0152 stop condition (30 s).
+  // Both can only be tightened below the ADR-0152 stop condition (60 s).
   const conversationRequestBudgetMs = boundedMilliseconds(
     environment,
     "SAYHEAR_CONVERSATION_REQUEST_BUDGET_MS",
@@ -615,8 +615,8 @@ function parseDeterministicChunks(value: string): readonly string[] {
   return parsed;
 }
 
-/** ADR-0152: a chat request is stopped end to end after 30 seconds. */
-export const CONVERSATION_REQUEST_MAX_MS = 30_000;
+/** ADR-0152 (2026-10-12 revision): a chat request is stopped end to end after 60 seconds. */
+export const CONVERSATION_REQUEST_MAX_MS = 60_000;
 
 function boundedMilliseconds(
   environment: Readonly<Record<string, string | undefined>>,

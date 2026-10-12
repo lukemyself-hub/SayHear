@@ -22,7 +22,7 @@ Journal publish、current Reflection 等要求 exact head；只要原 Evidence �
 版本文本列，而不是 `freshness_policy` 的新取值：`freshness_policy` 的 CHECK 属于受 G1 schema 守卫保护的约束，
 不能为此修改，所以新规则以独立、可空、带版本名的列表达，守卫也不需要为它开例外：
 
-- **`request_deadline_at`**：请求被接受时冻结的绝对截止时刻（整体请求 30 秒，ADR-0152）。各阶段共用
+- **`request_deadline_at`**：请求被接受时冻结的绝对截止时刻（整体请求 60 秒，ADR-0152 2026-10-12 修订；此前为 30 秒）。各阶段共用
   剩余时间，不重新领取：截止后不再开始新步骤（Provider 派发、技术重试与退避、历史回答、提交），不展示、
   不提交迟到结果。Finalization 与 History Answer 从 Decision 命令复制该列。技术重试只在重试时刻早于
   截止时才被安排；请求已结束（截止或取消）永不重试。恢复扫描遇到截止已过的未结算命令直接终止它，

@@ -125,7 +125,7 @@ pnpm acceptance:continuity latency --repeats 0 --stall-ms 40000 --budget-ms 3000
 `latency` 对 ordinary / cross_day_recall / trust_action / recall_with_correction_in_history（以及可选的
 stalled_provider）各跑 1 次首轮 + N 次暖轮，输出每次的客户端首段文本、提交、流关闭时间，桩 Provider 自身耗时
 （逐请求记录）和 SayHear 自身开销（流关闭 − 桩耗时），并给出暖轮的中位数与最大值，不用平均数掩盖慢样本。
-它只说明 SayHear 管线本身的耗时，**不是**真实模型的 3/10 秒证据（T08 #321）。比较改动前后时，用同一
+它只说明 SayHear 管线本身的耗时，**不是**真实模型的时延证据（T08 #321）。比较改动前后时，用同一
 fixture、同一桩延迟参数在两个提交上各跑一次。
 
 任何运行命令都接受 `--dry-run`（只做计划）。输出默认写到
@@ -186,7 +186,9 @@ pnpm acceptance:continuity summary --run <运行目录>                       # 
   带决定记录的 `owner-waived`、账本有单价、无未知费用条目、上界不超过余额、未到 `pauseAtSpentUsdMicros`、
   进程里有 `OPENCODE_GO_API_KEY`（或用 `--provider-credential-file` 只读入这一个变量）。
 - 每次运行结束（无论通过、失败还是出错）自动向 `cost-ledger.json` 追加一条；usage 未知的请求按规划上界计费。
-- 请求预算是产品默认的 30 秒，不使用 deterministic 的缩短值。
+- 请求预算是产品默认的 60 秒，不使用 deterministic 的缩短值。
+- 时延判据（ADR-0152 2026-10-12 修订）：回答 15 秒内提交算在时延内；发给真实模型的回合（取消的除外）至少 90% 在时延内为通过，
+  没有提交的回合算在时延外。`summary.md` 末尾给出占比和是否达到。
 - 每个运行目录多出 `transcript.md`（含模型自己的工具调用、推理时长和用量）、`timings.json`、`versions.json`。
 - 诊断开关（**不是验收配置**，结果必须单独标注）：`--history-recall off` 关闭历史回顾分支；
   `--experiment reasoning-effort=low|high|max` 给真实请求加推理强度，受影响的请求带 `experiment` 标记。
@@ -253,9 +255,9 @@ L01 是 #319 的垂直验收：回答准备期间用户继续输入（`continueI
 旧回答不得展示/保存（`replaced_reply_never_shown`），新输入仍带着被取代的前一问进入 Provider
 （`outbound_includes_input`），以及 Provider 卡住时请求在预算内以 timeout 结束、不迟到提交、不留 running
 （`stopped_at_deadline`）。deterministic 运行把被测应用的整体请求预算缩短为
-`DETERMINISTIC_REQUEST_BUDGET_MS`（6 秒，`src/environment.ts`），避免真等 30 秒；产品默认仍是 30 秒。
-**real-model 运行（T08）不得使用这个缩短值。** CLI 观察上限 `CHAT_OBSERVATION_LIMIT_MS` 为 33 秒，略大于 30 秒预算和
-Portal 自身的 32 秒客户端停止，否则 CLI 会抢在服务端之前放弃。
+`DETERMINISTIC_REQUEST_BUDGET_MS`（6 秒，`src/environment.ts`），避免真等 60 秒；产品默认仍是 60 秒。
+**real-model 运行（T08）不得使用这个缩短值。** CLI 观察上限 `CHAT_OBSERVATION_LIMIT_MS` 为 63 秒，略大于 60 秒预算和
+Portal 自身的 62 秒客户端停止，否则 CLI 会抢在服务端之前放弃。
 
 ## T08 #321 需人工裁定的少量输出（#318 提交）
 

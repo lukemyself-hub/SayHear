@@ -7,7 +7,7 @@ export const WATCHDOG_GRACE_MS = 500;
  * Streams conversation events to the client as NDJSON (the Web/BFF transport
  * shared by the chat and Retry routes).
  *
- * `requestBudgetMs` is the end-to-end budget of the request (ADR-0152: 30
+ * `requestBudgetMs` is the end-to-end budget of the request (ADR-0152: 60
  * seconds). The service enforces it at every step; this boundary adds its own
  * last line of defense: if the service has still not finished shortly after
  * the budget (for example a database call that never returns), the stream

@@ -35,8 +35,8 @@ export type AppServerInput = Readonly<{
   markerDatabaseUrl: string;
   /**
    * End-to-end chat request budget for this run. Omitted keeps the product
-   * default (30 s); the deterministic mode shortens it so a stalled Provider
-   * can be shown to stop without a 30 second wait (#319).
+   * default (60 s); the deterministic mode shortens it so a stalled Provider
+   * can be shown to stop without a 60 second wait (#319).
    */
   requestBudgetMs?: number;
   /**

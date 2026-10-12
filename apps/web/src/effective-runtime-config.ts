@@ -702,7 +702,7 @@ export function buildEffectiveRuntimeConfiguration(
     defaultValue: PROVIDER_DEFAULT_TIMEOUT_MS,
   });
   // Issue #319: the chat path's own budget and Provider timeout, separate from
-  // the background roles' shared deadline above (ADR-0152: 30 s stop).
+  // the background roles' shared deadline above (ADR-0152: 60 s stop).
   add({
     category: "deadline-budgets",
     critical: true,

@@ -34,6 +34,15 @@ export type StepTiming = Readonly<{
   withinContract: boolean;
 }>;
 
+/**
+ * Latency acceptance (ADR-0152, 2026-10-12 revision): a turn is inside the
+ * limit when its reply is committed within 15 seconds, and a run passes when
+ * at least 90% of the turns sent to the real Provider are. A turn that never
+ * committed is outside.
+ */
+export const COMMIT_LIMIT_MS = 15_000;
+export const LATENCY_PASS_SHARE = 0.9;
+
 /** One row per turn the real Provider answered: the formal latency samples. */
 export function stepTimings(observation: CaseObservation): StepTiming[] {
   const rows: StepTiming[] = [];
@@ -71,8 +80,7 @@ export function stepTimings(observation: CaseObservation): StepTiming[] {
         runId: observation.identity.runId,
         stepId: step.id,
         streamClosedMs: step.chat.timing.streamClosedMs,
-        withinContract:
-          first !== null && committed !== null && first <= 3_000 && committed <= 10_000,
+        withinContract: committed !== null && committed <= COMMIT_LIMIT_MS,
       });
     }
     if (step.type === "say" || step.type === "resend") previousWasRestart = false;
