@@ -475,6 +475,29 @@ export type EpisodeBuilderRepository = Readonly<{
     | Readonly<{ outcome: "not_found" }>
   >;
   /**
+   * Reads the authoritative built-run projection after a commit error. Matches
+   * the exact command and attempt while rechecking owner epoch and source head.
+   */
+  readCommittedBuild(input: {
+    userId: UserId;
+    dailySessionId: DailySessionId;
+    sourceRevision: number;
+    policyVersion: string;
+    expectedDataEpoch: number;
+    generationCommandId: GenerationCommandId;
+    modelRunAttemptId: ModelRunAttemptId;
+  }): Promise<
+    | Readonly<{
+        outcome: "built";
+        candidateCount: number;
+        acceptedCount: number;
+        unresolvedCount: number;
+        rejectedCount: number;
+      }>
+    | Readonly<{ outcome: "not_built" }>
+    | Readonly<{ outcome: "fenced" }>
+  >;
+  /**
    * The single fenced domain commit for one daily build: verifies the owner
    * epoch, the session head, and the active `episode.build` rollout pin
    * inside one transaction; absorbs replays of an already-built key. The

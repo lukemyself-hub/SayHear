@@ -36,6 +36,7 @@ import {
   isModelRoleAttemptKind,
   type ModelRoleAttemptKind,
   type ModelRoleCommandService,
+  type ModelRoleFailureCode,
   type ModelRoleProviderEgress,
 } from "../model-role-runtime";
 import {
@@ -125,7 +126,7 @@ export function createEpisodeBuilderScanService(input: Readonly<{
  */
 export function classifyEpisodeProviderError(
   error: unknown,
-): import("../model-role-runtime").ModelRoleFailureCode {
+): ModelRoleFailureCode {
   const category =
     typeof error === "object" && error !== null && "category" in error
       ? String((error as { category?: unknown }).category)
@@ -473,17 +474,131 @@ async function executeEpisodeAttempt(input: Readonly<{
   // Commit the authoritative domain result before settling the attempt. If a
   // worker dies in the gap, recovery replays this idempotent commit and then
   // settles the attempt without losing the Episode result.
-  const committed = await input.repository.commitEpisodeAdmission({
-    userId: input.userId,
-    dailySessionId: input.dailySessionId,
-    sourceRevision: input.sourceRevision,
-    policyVersion: input.policyVersion,
-    expectedDataEpoch: input.expectedDataEpoch,
-    generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
-    modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
-    proposals: proposals.slice(0, MAX_PROPOSALS_PER_BUILD),
-    dedupeFingerprintSecret: input.dedupeFingerprintSecret,
-  });
+  //
+  // Guard the whole post-Provider path up to the attempt settlement (issue
+  // #257): any unexpected throw here must still settle the attempt and record
+  // the usage the already-successful Provider call consumed, instead of
+  // leaving the attempt `running`. The repository rolls back its own
+  // transaction before rethrowing, so no partial Episode can survive. The
+  // failure code stays an existing terminal one (`unknown`): it is not a
+  // Provider transport failure, so `planModelRoleRecovery` schedules no
+  // technical retry, and the issue decision adds no new code.
+  let committed: Awaited<
+    ReturnType<EpisodeBuilderRepository["commitEpisodeAdmission"]>
+  >;
+  try {
+    committed = await input.repository.commitEpisodeAdmission({
+      userId: input.userId,
+      dailySessionId: input.dailySessionId,
+      sourceRevision: input.sourceRevision,
+      policyVersion: input.policyVersion,
+      expectedDataEpoch: input.expectedDataEpoch,
+      generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+      proposals: proposals.slice(0, MAX_PROPOSALS_PER_BUILD),
+      dedupeFingerprintSecret: input.dedupeFingerprintSecret,
+    });
+  } catch (error) {
+    if (
+      error instanceof RecoveryGateClosedError &&
+      error.result.status === "unavailable"
+    ) {
+      throw error;
+    }
+    let authoritative: Awaited<
+      ReturnType<EpisodeBuilderRepository["readCommittedBuild"]>
+    > = { outcome: "not_built" };
+    try {
+      authoritative = await input.repository.readCommittedBuild({
+        userId: input.userId,
+        dailySessionId: input.dailySessionId,
+        sourceRevision: input.sourceRevision,
+        policyVersion: input.policyVersion,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+      });
+    } catch {
+      // If read-back is unavailable, retain the existing terminal failure path.
+    }
+    if (authoritative.outcome === "built") {
+      const settled = await input.modelRoleCommandService.recordAttemptResult({
+        userId: input.userId,
+        generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+        role: "episode.build",
+        attemptNo: input.admitted.attemptNo,
+        technicalRetriesUsed: input.technicalRetriesUsed,
+        semanticRepairsUsed: 0,
+        outcome: "succeeded",
+        currentSourceRevision: input.sourceRevision,
+        expectedDataEpoch: input.expectedDataEpoch,
+        now: input.clock(),
+        usage: normalizeModelRoleCallUsage(callUsage),
+      });
+      if (settled.outcome === "discarded") {
+        return { dailySessionId: input.dailySessionId, outcome: "fenced", candidateCount: 0, acceptedCount: 0, unresolvedCount: 0, rejectedCount: 0, errorCode: settled.reason ?? "already_settled" };
+      }
+      return {
+        dailySessionId: input.dailySessionId,
+        outcome: "built",
+        candidateCount: authoritative.candidateCount,
+        acceptedCount: authoritative.acceptedCount,
+        unresolvedCount: authoritative.unresolvedCount,
+        rejectedCount: authoritative.rejectedCount,
+        errorCode: null,
+      };
+    }
+    const failureCode: ModelRoleFailureCode = "unknown";
+    const settled = await input.modelRoleCommandService.recordAttemptResult({
+      userId: input.userId,
+      generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+      modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+      role: "episode.build",
+      attemptNo: input.admitted.attemptNo,
+      technicalRetriesUsed: input.technicalRetriesUsed,
+      semanticRepairsUsed: 0,
+      outcome: "failed",
+      failureCode,
+      currentSourceRevision: input.sourceRevision,
+      expectedDataEpoch: input.expectedDataEpoch,
+      now: input.clock(),
+      usage: normalizeModelRoleCallUsage(callUsage),
+    });
+    const outcome: EpisodeBuildEntrypointResult["outcome"] =
+      settled.outcome === "discarded"
+        ? "fenced"
+        : settled.outcome === "retry_scheduled"
+          ? "retryable_failed"
+          : "failed";
+    if (outcome !== "fenced") {
+      await input.repository.recordBuildRunOutcome({
+        userId: input.userId,
+        dailySessionId: input.dailySessionId,
+        sourceRevision: input.sourceRevision,
+        policyVersion: input.policyVersion,
+        expectedDataEpoch: input.expectedDataEpoch,
+        generationCommandId: asGenerationCommandId(input.admitted.generationCommandId),
+        modelRunAttemptId: asModelRunAttemptId(input.admitted.modelRunAttemptId),
+        status: outcome,
+        outcomeDetail: failureCode,
+        candidateCount: 0,
+        acceptedCount: 0,
+        unresolvedCount: 0,
+        rejectedCount: 0,
+        errorCode: failureCode,
+      });
+    }
+    return {
+      dailySessionId: input.dailySessionId,
+      outcome,
+      candidateCount: 0,
+      acceptedCount: 0,
+      unresolvedCount: 0,
+      rejectedCount: 0,
+      errorCode: outcome === "fenced" ? (settled.reason ?? failureCode) : failureCode,
+    };
+  }
   if (committed.outcome === "fenced") {
     await input.modelRoleCommandService.recordAttemptResult({
       userId: input.userId,
