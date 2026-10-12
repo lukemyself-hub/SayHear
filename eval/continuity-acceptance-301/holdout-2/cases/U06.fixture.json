@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U06",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "code-switch",
+  "defaults": {
+    "locale": "zh-CN",
+    "timezone": "Asia/Singapore"
+  },
+  "history": [
+    {
+      "key": "roommate",
+      "at": "2026-09-06T11:15:00.000Z",
+      "user": "我大学 roommate Vivian 报了十二月初在 Taipei 的 full marathon，这是她第一次跑 42K。今天早上我陪她在 East Coast Park 跑 long run，其实是我骑 bike 跟在旁边帮她拿水。",
+      "assistant": "她跑 long run，你骑车当补给站，这个 support crew 很称职。"
+    },
+    {
+      "key": "roommate-after",
+      "at": "2026-09-06T11:22:00.000Z",
+      "user": "她说最怕 30K 之后撞墙，所以 training plan 排得超满。可惜 race day 我飞不过去，只能在 app 上 track 她。",
+      "assistant": "人到不了，在 app 上看着那个小点一路往前挪，也算是陪跑了。"
+    },
+    {
+      "key": "neighbour",
+      "at": "2026-09-27T12:40:00.000Z",
+      "user": "楼下新搬来一个邻居，也叫 Vivian。今天在 lift 里碰到，她背着一个超大的 foam roller，看了一眼我的跑鞋，说我 heel strike 太重，鞋跟外侧都磨平了。",
+      "assistant": "看一眼鞋底就讲得出 heel strike，她会不会是做 physio 的？"
+    },
+    {
+      "key": "neighbour-reply",
+      "at": "2026-09-27T12:44:00.000Z",
+      "user": "哈哈不知道，我还没来得及问，lift 就到她那层了。",
+      "assistant": "那就下次碰到再问，反正住楼上楼下。"
+    },
+    {
+      "key": "own-run",
+      "at": "2026-12-05T02:30:00.000Z",
+      "user": "跟你讲个秘密，我上周日自己偷偷去跑了一个 10K 的 fun run，谁都没告诉。68 分钟 finish，膝盖到现在还是酸的。",
+      "assistant": "谁都没说就自己跑完了 10K，膝盖酸也是有来历的酸。"
+    }
+  ],
+  "steps": [
+    {
+      "id": "ping",
+      "type": "say",
+      "at": "2026-12-07T04:10:00.000Z",
+      "text": "Vivian 刚 text 我，说她 finish 了！还问我这个周末要不要一起吃 brunch 庆祝一下。"
+    },
+    {
+      "id": "role",
+      "type": "say",
+      "at": "2026-12-07T04:13:00.000Z",
+      "text": "对了，楼下那个 Vivian，她到底是做什么工作的来着？"
+    }
+  ]
+}

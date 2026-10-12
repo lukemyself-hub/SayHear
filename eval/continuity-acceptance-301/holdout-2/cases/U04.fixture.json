@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U04",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": {
+    "locale": "en-US",
+    "timezone": "America/Los_Angeles"
+  },
+  "history": [
+    {
+      "key": "wheel",
+      "at": "2026-06-21T02:30:00.000Z",
+      "user": "I went to a drop-in wheel-throwing class on my own this afternoon, the first time I have touched clay since school. My bowl collapsed twice, and the teacher, Ines, who had clay right up to her elbows, finally came over and had me make a very small cup instead.",
+      "assistant": "Two collapses and then a small cup. Starting smaller is how most people get one to stand."
+    },
+    {
+      "key": "wheel-after",
+      "at": "2026-06-21T02:38:00.000Z",
+      "user": "The cup leans to one side like it is listening to something. I picked a glaze called seafoam and they will fire it next week. My forearms are aching already, and I have not felt this pleased with myself in months.",
+      "assistant": "A cup that leans in to listen, in seafoam. The aching arms sound well earned."
+    },
+    {
+      "key": "camp-a",
+      "at": "2026-09-23T23:10:00.000Z",
+      "user": "Signed Milo up for the Saturday ceramics club at the community centre this week. There were only twelve places, and I was refreshing the page at seven in the morning to get one.",
+      "assistant": "Seven in the morning for one of twelve places. That is a keen parent and, with luck, a keen potter."
+    },
+    {
+      "key": "camp-b",
+      "at": "2026-09-26T20:15:00.000Z",
+      "user": "First session today. He rolled out a coil pot, got bored, and turned it into a dinosaur with a very long neck. He carried it to the car on a paper plate as though it were a wedding cake.",
+      "assistant": "A coil pot that grew a neck. And carried with all the ceremony it deserved."
+    }
+  ],
+  "steps": [
+    {
+      "id": "ask",
+      "type": "say",
+      "at": "2026-09-28T17:15:00.000Z",
+      "text": "Didn't I tell you once about a time I had a go at pottery myself? How did that go? I can barely remember it now."
+    }
+  ]
+}

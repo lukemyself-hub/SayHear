@@ -77,8 +77,9 @@ const HELP = `Continuity acceptance CLI (T00 #313)
   latency   [--repeats N] [--provider-delay-ms N] [--stall-ms N] [--budget-ms N] [--out DIR]
                                                same-method chat latency profiles against the stand-in Provider (#319)
 
-Add --pack holdout to work on the frozen final fixtures instead of the
-development ones, and --ledger FILE to use another cost ledger.
+Add --pack holdout (or --pack holdout-2, the second unseen set) to work on
+frozen final fixtures instead of the development ones, and --ledger FILE to
+use another cost ledger.
 
 MODE is deterministic (default) or real-model. Any command accepts --dry-run
 to stop after planning. Database: SAYHEAR_ACCEPTANCE_DATABASE_URL and
@@ -91,13 +92,18 @@ class UsageError extends Error {}
 /**
  * Which case pack a command works on. The default pack is the development
  * one; `--pack holdout` selects the frozen final fixtures a real-model
- * acceptance run is judged on (T08 #321).
+ * acceptance run is judged on (T08 #321), and `--pack holdout-2` the second
+ * set, written once the first had been seen too often to count as unseen.
  */
 const PACKS: Readonly<Record<string, { cases: string; oracle: string }>> = {
   development: { cases: path.join(packRoot, "cases"), oracle: path.join(packRoot, "oracle") },
   holdout: {
     cases: path.join(packRoot, "holdout/cases"),
     oracle: path.join(packRoot, "holdout/oracle"),
+  },
+  "holdout-2": {
+    cases: path.join(packRoot, "holdout-2/cases"),
+    oracle: path.join(packRoot, "holdout-2/oracle"),
   },
 };
 let pack = PACKS["development"]!;

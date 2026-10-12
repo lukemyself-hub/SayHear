@@ -1,0 +1,190 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U06",
+  "title": "U06 Unseen: two people sharing a first name, two similar runs, and a guess the assistant once made",
+  "capability": "Second, unseen counterpart of the same-name disambiguation class. A university roommate and a new downstairs neighbour share a given name. The roommate was training for her first full-distance race abroad; the person separately and secretly ran a much shorter event. The assistant once guessed the neighbour's occupation and the guess was never confirmed. When the name comes up again, people and events are not spliced together, the person's own run is not handed to the roommate, and the assistant's guess is not promoted to a fact. Following the owner's ruling, failing to bring up the earlier training sessions is not itself a failure.",
+  "spec": [
+    "#301 R4",
+    "#301 R5",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#317",
+    "#318"
+  ],
+  "language": "code-switch",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "155e93f4716120c2c99051be58b86fcf2c3b5f32382d881f9b524a7ab4d05bd2"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-neighbour-known",
+        "statement": "The other one is a neighbour who recently moved in downstairs, was carrying a large massage roller, and remarked from the wear on the person's shoes that they land too hard on the heel.",
+        "sources": [
+          "neighbour:user"
+        ]
+      },
+      {
+        "id": "a-job-open",
+        "statement": "What she does for a living was never said: the assistant once wondered whether she was a physiotherapist and the person answered that they had not had the chance to ask.",
+        "sources": [
+          "neighbour:assistant",
+          "neighbour-reply:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-job-fact",
+        "statement": "Stating that the neighbour is a physiotherapist, a coach or any other occupation as something known.",
+        "sources": [
+          "neighbour:assistant"
+        ]
+      },
+      {
+        "id": "f-merge-people",
+        "statement": "Describing one individual who is both the roommate and the neighbour.",
+        "sources": [
+          "roommate:user",
+          "neighbour:user"
+        ]
+      },
+      {
+        "id": "f-swap-run",
+        "statement": "Attributing the secret ten-kilometre run or its sixty-eight minutes to the roommate, or the full-distance race to the person.",
+        "sources": [
+          "own-run:user"
+        ]
+      },
+      {
+        "id": "f-result",
+        "statement": "Giving the roommate's finishing time or saying how her race went beyond the fact that she finished.",
+        "sources": []
+      }
+    ]
+  },
+  "topics": [],
+  "time": [],
+  "expectedBehavior": [
+    "First turn: news of finishing plus an invitation to celebrate points to the roommate and her race; be glad with the person, without inventing how the race went and without confusing it with the person's own run.",
+    "Second turn: say what is known about the neighbour and that her occupation was never confirmed."
+  ],
+  "failureSignals": [
+    "The neighbour is given an occupation as fact.",
+    "The person's own run is described as the roommate's, or the two people are merged.",
+    "The messages about the neighbour never reach the Provider for the second turn."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "roommate:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression about the roommate."
+    },
+    {
+      "source": "neighbour:user",
+      "eligibility": "allowed",
+      "reason": "Retained original expression about the neighbour."
+    },
+    {
+      "source": "neighbour-reply:user",
+      "eligibility": "allowed",
+      "reason": "Shows the assistant's question was left unanswered."
+    },
+    {
+      "source": "own-run:user",
+      "eligibility": "allowed",
+      "reason": "Recent original expression, inside the default background."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The first turn streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "ping"
+      }
+    },
+    {
+      "id": "O-commit-role",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The second turn streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "role"
+      }
+    },
+    {
+      "id": "O-recent",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The person's own recent run is in the background.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "ping",
+        "sources": [
+          "own-run:user"
+        ]
+      }
+    },
+    {
+      "id": "O-neighbour-source",
+      "kind": "objective",
+      "modes": [
+        "real-model"
+      ],
+      "owner": "#317",
+      "description": "The messages about the neighbour reach the Provider.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "role",
+        "sources": [
+          "neighbour:user",
+          "neighbour-reply:user"
+        ]
+      }
+    },
+    {
+      "id": "S-ping",
+      "kind": "semantic",
+      "owner": "#317",
+      "description": "The news is not attached to the wrong person or event and no outcome is invented.",
+      "step": "ping",
+      "required": [],
+      "forbidden": [
+        "f-merge-people",
+        "f-swap-run",
+        "f-result"
+      ]
+    },
+    {
+      "id": "S-role",
+      "kind": "semantic",
+      "owner": "#318",
+      "description": "What is known is stated and the assistant's own guess is not turned into a fact.",
+      "step": "role",
+      "required": [
+        "a-neighbour-known",
+        "a-job-open"
+      ],
+      "forbidden": [
+        "f-job-fact",
+        "f-merge-people"
+      ]
+    }
+  ]
+}

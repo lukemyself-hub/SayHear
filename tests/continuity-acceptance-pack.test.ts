@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -79,32 +80,54 @@ describe("continuity acceptance case pack", () => {
     expect(validateCase(unscripted)).toEqual([]);
   });
 
-  it("ships a frozen holdout pack: final, unscripted, valid, in all three languages, sharing no text with development", () => {
-    const holdoutDirectories = {
-      cases: path.join(packRoot, "holdout/cases"),
-      oracle: path.join(packRoot, "holdout/oracle"),
-    };
-    const holdout = listCaseIds(holdoutDirectories.cases).map((id) => loadCase(id, holdoutDirectories));
-    expect(holdout.map((loaded) => loaded.fixture.id)).toEqual([
-      "H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09", "H10", "H11", "H12", "HL1",
-    ]);
-    expect(validateLanguageCoverage(holdout)).toEqual([]);
-    const developmentProse = new Set(
-      cases.flatMap((loaded) => [
+  it.each([
+    { pack: "holdout", ids: ["H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09", "H10", "H11", "H12", "HL1"] },
+    { pack: "holdout-2", ids: ["U01", "U02", "U03", "U04", "U05", "U06", "U07", "U08", "U09", "U10", "U11", "U12", "UL1"] },
+  ])("ships the frozen $pack pack: final, unscripted, valid, in all three languages, unchanged since its freeze, sharing no text with any other pack", ({ pack, ids }) => {
+    const directories = (name: string) => ({
+      cases: path.join(packRoot, name, "cases"),
+      oracle: path.join(packRoot, name, "oracle"),
+    });
+    const load = (name: string) => listCaseIds(directories(name).cases).map((id) => loadCase(id, directories(name)));
+    const prose = (loadedCases: readonly LoadedCase[]) =>
+      loadedCases.flatMap((loaded) => [
         ...loaded.fixture.history.flatMap((turn) => [turn.user, turn.assistant]),
         ...loaded.fixture.steps.flatMap((step) => ("text" in step ? [step.text] : [])),
-      ]),
-    );
-    for (const loaded of holdout) {
+      ]);
+    const frozenPack = load(pack);
+    expect(frozenPack.map((loaded) => loaded.fixture.id)).toEqual(ids);
+    expect(validateLanguageCoverage(frozenPack)).toEqual([]);
+
+    const freeze = JSON.parse(readFileSync(path.join(packRoot, pack, "FREEZE.json"), "utf8")) as {
+      cases: Record<string, { fixtureSha256: string; oracleSha256: string }>;
+    };
+    const digest = (file: string) => sha256(readFileSync(file, "utf8"));
+    expect(
+      Object.fromEntries(
+        ids.map((id) => [
+          id,
+          {
+            fixtureSha256: digest(path.join(directories(pack).cases, `${id}.fixture.json`)),
+            oracleSha256: digest(path.join(directories(pack).oracle, `${id}.oracle.json`)),
+          },
+        ]),
+      ),
+    ).toEqual(freeze.cases);
+
+    const otherProse = new Set([
+      ...prose(cases),
+      ...["holdout", "holdout-2"].filter((name) => name !== pack).flatMap((name) => prose(load(name))),
+    ]);
+    for (const loaded of frozenPack) {
       expect(validateCase(loaded), loaded.fixture.id).toEqual([]);
       expect(loaded.fixture.stage).toBe("final");
       expect(scriptedDecisionHindsight(loaded.fixture)).toEqual([]);
       // Different people, wording and timing: no message is reused.
       for (const turn of loaded.fixture.history) {
-        expect(developmentProse.has(turn.user), `${loaded.fixture.id} ${turn.key}`).toBe(false);
+        expect(otherProse.has(turn.user), `${loaded.fixture.id} ${turn.key}`).toBe(false);
       }
       for (const step of loaded.fixture.steps) {
-        if ("text" in step) expect(developmentProse.has(step.text), `${loaded.fixture.id} ${step.id}`).toBe(false);
+        if ("text" in step) expect(otherProse.has(step.text), `${loaded.fixture.id} ${step.id}`).toBe(false);
       }
     }
   });

@@ -17,7 +17,8 @@ Runnable eval artifact。非权威评测制品（ADR-0020 / ADR-0073）：只使
 - 默认 `deterministic` 模式，不产生任何付费调用。`real-model` 模式已接通真实 Provider（T08 #321，见下文
   「real-model 模式」）；门禁、预算或凭据不满足时以退出码 4 明确 blocked，绝不降级为桩后报结果。
 - 真实模型验收的结论与证据在 [`evidence-321/`](evidence-321/README.md)：**未通过**。冻结的最终样本在
-  [`holdout/`](holdout/README.md)。
+  [`holdout/`](holdout/README.md)；第二套未见样本（2026-10-12 冻结，判据已按 owner 裁定与 15 秒 / 90% 时延口径写成）在
+  [`holdout-2/`](holdout-2/README.md)。
 - [`known-red.json`](known-red.json) 目前为空：T00 登记的 15 条客观判据失败已由 T01–T07 逐条修复并在同一改动里
   移出账本。这**不是**验收通过：deterministic 模式下全部语义/主观判据是 `not-run`，Decision 由 fixture 脚本
   提供（见下文「deterministic 模式证明什么」），真实模型结论归 T08 #321。

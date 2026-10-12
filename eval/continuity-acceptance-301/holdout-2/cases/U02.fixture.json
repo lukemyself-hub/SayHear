@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "U02",
+  "fixtureVersion": "final-2",
+  "stage": "final",
+  "languageVariant": "en",
+  "defaults": {
+    "locale": "en-US",
+    "timezone": "America/Denver"
+  },
+  "history": [
+    {
+      "key": "springs",
+      "at": "2026-10-06T18:40:00.000Z",
+      "user": "The day before yesterday I drove my dad up to the hot springs at Glenwood. He insisted he could manage the steps down to the big pool by himself, and then held on to my elbow the whole way without either of us mentioning it.",
+      "assistant": "He said he could manage, and took your elbow anyway. Neither of you had to say it."
+    },
+    {
+      "key": "latch",
+      "at": "2026-10-06T18:47:00.000Z",
+      "user": "This morning before work I finally fixed the latch on the side gate. The screw holes had rotted out, so I packed them with matchsticks and wood glue the way my grandfather used to, and now it closes with a click.",
+      "assistant": "Matchsticks and glue, and a gate that clicks. Your grandfather would recognise the method."
+    },
+    {
+      "key": "coach",
+      "at": "2026-10-06T18:55:00.000Z",
+      "user": "Oh, and a while back I ran into Mrs Halvorsen, who coached me at the pool when I was a kid, at the farmers' market. She uses a cane now, and she spent ten minutes telling me about the relay team we had in ninth grade.",
+      "assistant": "Ten minutes on a ninth-grade relay. She has kept that team with her all these years."
+    }
+  ],
+  "steps": [
+    {
+      "id": "said",
+      "type": "say",
+      "at": "2026-10-07T18:20:00.000Z",
+      "text": "What were the things I told you about yesterday?"
+    },
+    {
+      "id": "happened",
+      "type": "say",
+      "at": "2026-10-07T18:22:00.000Z",
+      "text": "And what did I actually do yesterday, on the day itself?"
+    },
+    {
+      "id": "when",
+      "type": "say",
+      "at": "2026-10-07T18:24:00.000Z",
+      "text": "Which day was it that I ran into Mrs Halvorsen?"
+    },
+    {
+      "id": "springs-when",
+      "type": "say",
+      "at": "2026-10-07T18:26:00.000Z",
+      "text": "And the hot springs, what date was that?"
+    }
+  ]
+}

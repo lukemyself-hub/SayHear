@@ -1,0 +1,286 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "U02",
+  "title": "U02 Unseen: what was said yesterday versus what took place yesterday",
+  "capability": "Second, unseen counterpart of the said-versus-happened class. Yesterday (Tuesday 6 October) the person mentioned three things: an outing with a parent that took place two days before it was told, a small repair done that same morning, and a chance meeting whose date was never given. Asked what was talked about yesterday, all three count. Asked what the person actually did yesterday, only the repair does. Asked when the meeting was, the honest answer is that no date was given. Asked for the date of the outing, the relative day is resolved from when it was said.",
+  "spec": [
+    "#301 R1",
+    "#301 R2",
+    "#307",
+    "ADR-0152"
+  ],
+  "ownerTickets": [
+    "#314",
+    "#315"
+  ],
+  "language": "en",
+  "fixture": {
+    "version": "final-2",
+    "sha256": "ce1a8a38e8c130771a8815ca259ab16222a011e92946f463214c904789bd2d38"
+  },
+  "facts": {
+    "allowed": [
+      {
+        "id": "a-repair-done",
+        "statement": "Yesterday morning before work the person mended the fastening on a side gate by packing the rotted screw holes with slivers of wood and glue.",
+        "sources": [
+          "latch:user"
+        ]
+      }
+    ],
+    "forbidden": [
+      {
+        "id": "f-springs-yesterday",
+        "statement": "Saying the drive to the thermal pools with the father took place yesterday.",
+        "sources": [
+          "springs:user"
+        ]
+      },
+      {
+        "id": "f-springs-wrong-anchor",
+        "statement": "Giving 5 October for that drive, which is what counting two days back from the day of the question would produce.",
+        "sources": [
+          "springs:user"
+        ]
+      },
+      {
+        "id": "f-coach-dated",
+        "statement": "Giving any specific day for the meeting with the former swimming teacher, including yesterday or the day of the drive.",
+        "sources": [
+          "coach:user"
+        ]
+      },
+      {
+        "id": "f-coach-unknown",
+        "statement": "Saying nothing is known about that meeting at all; it was mentioned, only without a date.",
+        "sources": [
+          "coach:user"
+        ]
+      }
+    ]
+  },
+  "topics": [
+    {
+      "id": "t-springs",
+      "statement": "Taking the father to thermal pools, where he leaned on the person's arm on the way down to the water.",
+      "sources": [
+        "springs:user"
+      ]
+    },
+    {
+      "id": "t-latch",
+      "statement": "Mending the fastening of a garden gate.",
+      "sources": [
+        "latch:user"
+      ]
+    },
+    {
+      "id": "t-coach",
+      "statement": "Meeting a former swimming teacher, now walking with a stick, who reminisced about a school relay squad.",
+      "sources": [
+        "coach:user"
+      ]
+    }
+  ],
+  "time": [
+    {
+      "id": "tm-said-yesterday",
+      "statement": "All three were said on Tuesday 6 October, the day before the questions.",
+      "sources": [
+        "springs:user",
+        "latch:user",
+        "coach:user"
+      ]
+    },
+    {
+      "id": "tm-springs-day",
+      "statement": "The drive happened two days before it was told, that is Sunday 4 October, counted from when it was said and not from when it is asked about.",
+      "sources": [
+        "springs:user"
+      ]
+    },
+    {
+      "id": "tm-coach-undated",
+      "statement": "The meeting was only described as some time ago; its date is unknown and must be reported as not given.",
+      "sources": [
+        "coach:user"
+      ]
+    }
+  ],
+  "expectedBehavior": [
+    "For what was said: list all three subjects.",
+    "For what the person did yesterday: the gate repair only, optionally noting that the other two were told yesterday but happened at other times.",
+    "For which day the meeting was: say that only a vague earlier time was mentioned and no date was given.",
+    "For the date of the drive: 4 October."
+  ],
+  "failureSignals": [
+    "The drive is reported as yesterday's activity.",
+    "A date is invented for the meeting.",
+    "The relative day of the drive is resolved against the day of the question instead of the day it was said."
+  ],
+  "sourceEligibility": [
+    {
+      "source": "springs:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    },
+    {
+      "source": "latch:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    },
+    {
+      "source": "coach:user",
+      "eligibility": "allowed",
+      "reason": "Yesterday's original expression."
+    }
+  ],
+  "criteria": [
+    {
+      "id": "O-commit",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The first question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "said"
+      }
+    },
+    {
+      "id": "O-commit-happened",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The second question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "happened"
+      }
+    },
+    {
+      "id": "O-commit-when",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The third question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "when"
+      }
+    },
+    {
+      "id": "O-commit-springs-when",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The fourth question streams and commits.",
+      "check": {
+        "type": "turn_committed",
+        "step": "springs-when"
+      }
+    },
+    {
+      "id": "O-sources",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "All three of yesterday's messages reach the Provider for the question about what happened.",
+      "check": {
+        "type": "outbound_includes",
+        "step": "happened",
+        "sources": [
+          "springs:user",
+          "latch:user",
+          "coach:user"
+        ]
+      }
+    },
+    {
+      "id": "O-ownership",
+      "kind": "objective",
+      "modes": [
+        "deterministic",
+        "real-model"
+      ],
+      "description": "The messages are filed under the day they were said.",
+      "check": {
+        "type": "session_ownership",
+        "expect": [
+          {
+            "source": "springs:user",
+            "logicalDate": "2026-10-06"
+          },
+          {
+            "source": "coach:user",
+            "logicalDate": "2026-10-06"
+          }
+        ]
+      }
+    },
+    {
+      "id": "S-said",
+      "kind": "semantic",
+      "description": "What was talked about yesterday: three subjects, none presented as yesterday's event unless it was.",
+      "step": "said",
+      "required": [
+        "t-springs",
+        "t-latch",
+        "t-coach",
+        "tm-said-yesterday"
+      ],
+      "forbidden": [
+        "f-springs-yesterday"
+      ]
+    },
+    {
+      "id": "S-happened",
+      "kind": "semantic",
+      "description": "What the person did yesterday: the repair, with the drive placed on its own day.",
+      "step": "happened",
+      "required": [
+        "a-repair-done"
+      ],
+      "forbidden": [
+        "f-springs-yesterday",
+        "f-coach-dated"
+      ]
+    },
+    {
+      "id": "S-when",
+      "kind": "semantic",
+      "description": "The undated meeting stays undated.",
+      "step": "when",
+      "required": [
+        "tm-coach-undated"
+      ],
+      "forbidden": [
+        "f-coach-dated",
+        "f-coach-unknown"
+      ]
+    },
+    {
+      "id": "S-springs-when",
+      "kind": "semantic",
+      "owner": "#307",
+      "description": "A relative day inside an old message is resolved from when it was said.",
+      "step": "springs-when",
+      "required": [
+        "tm-springs-day"
+      ],
+      "forbidden": [
+        "f-springs-wrong-anchor"
+      ]
+    }
+  ]
+}
