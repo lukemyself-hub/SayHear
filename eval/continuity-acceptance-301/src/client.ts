@@ -23,6 +23,11 @@ export type StreamEventRecord = Readonly<{
 export type ChatSubmission = Readonly<{
   /** Abort the client connection after this many assistant deltas. */
   abortAfterDeltas?: number;
+  /**
+   * Abort the client connection this long after submitting, unless the turn
+   * has already ended: the person gives up while the reply is being prepared.
+   */
+  abortAfterMs?: number;
   clientEventId: string;
   clientTurnId: string;
   locale: string;
@@ -156,6 +161,14 @@ export function createAcceptanceClient(input: {
       let generationCommandId: string | null = null;
       let clientAborted = false;
       let httpStatus = 0;
+      const giveUp =
+        submission.abortAfterMs === undefined
+          ? null
+          : setTimeout(() => {
+              if (terminalEvent !== null) return;
+              clientAborted = true;
+              controller.abort();
+            }, submission.abortAfterMs);
       try {
         const response = await fetch(
           new URL("/api/internal/conversation/responses", input.origin),
@@ -225,6 +238,7 @@ export function createAcceptanceClient(input: {
         clientAborted = true;
       } finally {
         clearTimeout(timeout);
+        if (giveUp) clearTimeout(giveUp);
       }
       return {
         clientAborted,

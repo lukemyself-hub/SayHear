@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "continuity-acceptance-fixture:v1",
+  "id": "H12",
+  "fixtureVersion": "final-1",
+  "stage": "final",
+  "languageVariant": "code-switch",
+  "defaults": { "locale": "zh-CN", "timezone": "Asia/Taipei" },
+  "history": [
+    { "key": "bonus", "at": "2026-11-11T12:00:00.000Z", "user": "有个消息，今天 HR 私下 verbal 跟我讲，今年 year-end bonus 是 2.5 个月，而且 Q1 就会发。", "assistant": "2.5 个月还 Q1 就发，听起来你今天心情不错。" },
+    { "key": "bonus-echo", "at": "2026-11-11T12:04:00.000Z", "user": "对，2.5 个月，比去年整整多了一个月，我都不敢在 pantry 里讲。", "assistant": "多了一个月又只能憋着，这种高兴还挺难藏的。" },
+    { "key": "lena", "at": "2026-11-12T13:30:00.000Z", "user": "我同事 Lena 偷偷跟我说她在面别家公司，已经到 final round 了，叫我一个字都别往外讲。", "assistant": "她把这件事只告诉了你，这份信任挺重的。" },
+    { "key": "lena-echo", "at": "2026-11-12T13:35:00.000Z", "user": "一想到 Lena 可能要走我就有点慌，她是我在组里唯一能一起吐槽的人。", "assistant": "唯一能吐槽的人要走，换谁心里都会空一下。" },
+    { "key": "merge", "at": "2026-11-13T11:20:00.000Z", "user": "我们自己这边这周也在变：我的 project 被 merge 进了 platform team，owner 从 Priya 换成了一个刚调过来的 manager，周四开了个特别冷场的 kickoff。", "assistant": "项目被并走、owner 也换了，再加一场冷场的 kickoff，这周够你消化的。" }
+  ],
+  "steps": [
+    { "id": "fix", "type": "correct", "at": "2026-11-13T11:45:00.000Z", "target": "bonus", "text": "有个消息，今天 HR 私下 verbal 跟我讲，今年 year-end bonus 是 1.5 个月，而且 Q1 就会发。" },
+    { "id": "forget-colleague", "type": "forget", "at": "2026-11-14T09:00:00.000Z", "targets": ["lena", "lena-echo"] },
+    { "id": "work", "type": "say", "at": "2026-11-16T12:00:00.000Z", "text": "帮我捋一下，上周我都跟你说了哪些工作上的事？" }
+  ]
+}

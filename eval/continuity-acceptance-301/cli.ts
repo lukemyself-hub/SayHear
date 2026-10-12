@@ -24,6 +24,7 @@ import {
 import {
   listCaseIds,
   loadCase,
+  packRoot,
   scriptedDecisionHindsight,
   validateCase,
   validateLanguageCoverage,
@@ -73,6 +74,9 @@ const HELP = `Continuity acceptance CLI (T00 #313)
   latency   [--repeats N] [--provider-delay-ms N] [--stall-ms N] [--budget-ms N] [--out DIR]
                                                same-method chat latency profiles against the stand-in Provider (#319)
 
+Add --pack holdout to work on the frozen final fixtures instead of the
+development ones, and --ledger FILE to use another cost ledger.
+
 MODE is deterministic (default) or real-model. Any command accepts --dry-run
 to stop after planning. Database: SAYHEAR_ACCEPTANCE_DATABASE_URL and
 SAYHEAR_ACCEPTANCE_MARKER_DATABASE_URL, else TEST_DATABASE_URL and
@@ -81,13 +85,37 @@ TEST_PURGE_MARKER_DATABASE_URL. DATABASE_URL is never used.
 
 class UsageError extends Error {}
 
+/**
+ * Which case pack a command works on. The default pack is the development
+ * one; `--pack holdout` selects the frozen final fixtures a real-model
+ * acceptance run is judged on (T08 #321).
+ */
+const PACKS: Readonly<Record<string, { cases: string; oracle: string }>> = {
+  development: { cases: path.join(packRoot, "cases"), oracle: path.join(packRoot, "oracle") },
+  holdout: {
+    cases: path.join(packRoot, "holdout/cases"),
+    oracle: path.join(packRoot, "holdout/oracle"),
+  },
+};
+let pack = PACKS["development"]!;
+
+/** A stored run names only its case id; find the pack that holds it. */
+function loadCaseFromAnyPack(caseId: string): LoadedCase {
+  for (const candidate of Object.values(PACKS)) {
+    if (existsSync(candidate.cases) && listCaseIds(candidate.cases).includes(caseId)) {
+      return loadCase(caseId, candidate);
+    }
+  }
+  throw new UsageError(`Unknown case ${caseId}.`);
+}
+
 function selectCases(ids: readonly string[] | undefined): LoadedCase[] {
-  const all = listCaseIds();
+  const all = listCaseIds(pack.cases);
   const chosen = ids && ids.length > 0 ? [...ids] : all;
   for (const id of chosen) {
     if (!all.includes(id)) throw new UsageError(`Unknown case ${id}. Known: ${all.join(", ")}`);
   }
-  return chosen.map((id) => loadCase(id));
+  return chosen.map((id) => loadCase(id, pack));
 }
 
 function requireValid(cases: readonly LoadedCase[]): void {
@@ -518,6 +546,7 @@ async function main(): Promise<number> {
       "stall-ms": { type: "string" },
       mode: { type: "string" },
       out: { type: "string" },
+      pack: { type: "string" },
       review: { type: "string" },
       run: { type: "string" },
       "verify-reset": { type: "boolean" },
@@ -525,6 +554,11 @@ async function main(): Promise<number> {
   });
   const command = positionals[0];
   if (values.ledger) ledgerFile = path.resolve(values.ledger);
+  if (values.pack) {
+    const chosen = PACKS[values.pack];
+    if (!chosen) throw new UsageError(`Unknown pack ${values.pack}. Known: ${Object.keys(PACKS).join(", ")}`);
+    pack = chosen;
+  }
   if (values.help || !command) {
     console.log(HELP);
     return command ? 0 : EXIT_USAGE;
@@ -615,7 +649,7 @@ async function main(): Promise<number> {
       return 3;
     }
     const observation = JSON.parse(observationText) as CaseObservation;
-    const loaded = loadCase(observation.caseId);
+    const loaded = loadCaseFromAnyPack(observation.caseId);
     if (loaded.fixtureSha256 !== observation.identity.fixtureSha256) {
       throw new UsageError("The stored run used a different fixture than the one on disk; it cannot be re-scored against this oracle.");
     }

@@ -1,6 +1,10 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import { createOpenCodeGoConversationTextModel } from "@sayhear/ai";
 import { describe, expect, it } from "vitest";
 
+import { createAcceptanceClient } from "../eval/continuity-acceptance-301/src/client";
 import {
   OPENCODE_GO_ENDPOINT,
   createTappedFetch,
@@ -162,6 +166,42 @@ describe("egress tap on the app's own fetch", () => {
     ).rejects.toThrow("network down");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(JSON.parse(failing.calls.at(-1)!.body!)).toMatchObject({ outcome: "error", status: null });
+  });
+});
+
+/**
+ * A real model's reply cannot be slowed down by script, so "the person
+ * cancels while the answer is still being prepared" is a cancel after a fixed
+ * time rather than after a scripted number of deltas.
+ */
+describe("acceptance client cancellation by elapsed time", () => {
+  it("abandons the request after the given time and reports it as a client abort", async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/x-ndjson" });
+      response.write(`${JSON.stringify({ generationCommandId: "command-1", type: "user_committed" })}\n`);
+      // The answer is never sent: the reply is still being prepared.
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const client = createAcceptanceClient({ origin: `http://127.0.0.1:${port}`, sessionToken: "token" });
+      const observed = await client.chat({
+        abortAfterMs: 150,
+        clientEventId: "event",
+        clientTurnId: "turn",
+        locale: "en-US",
+        text: "What did I tell you?",
+        timezone: "UTC",
+      });
+      expect(observed.clientAborted).toBe(true);
+      expect(observed.terminalEvent).toBeNull();
+      expect(observed.generationCommandId).toBe("command-1");
+      expect(observed.timing.streamClosedMs).toBeGreaterThanOrEqual(140);
+      expect(observed.timing.streamClosedMs).toBeLessThan(2_000);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

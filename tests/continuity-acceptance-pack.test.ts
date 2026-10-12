@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { loadLedger, planRun } from "../eval/continuity-acceptance-301/src/budget";
@@ -9,6 +11,7 @@ import { evaluateCase, type CaseReport } from "../eval/continuity-acceptance-301
 import {
   listCaseIds,
   loadCase,
+  packRoot,
   scriptedDecisionHindsight,
   sha256,
   validateCase,
@@ -56,6 +59,54 @@ describe("continuity acceptance case pack", () => {
       "C01", "C02", "C03", "C04", "C05", "C06", "C07", "C08", "C09", "C10", "C11", "C12", "C13", "C16", "L01",
       "S01", "S02", "S03",
     ]);
+  });
+
+  it("refuses a final fixture that carries a scripted Decision", () => {
+    // A final (holdout) fixture is what the real model is judged on. A script
+    // was written by someone who knows the history; it has no place there.
+    const base = cases.find((loaded) => loaded.fixture.id === "C04")!;
+    const final = withFixture(base, (fixture) => ({ ...fixture, stage: "final" }));
+    expect(validateCase(final).join("\n")).toMatch(/step ask.*scripted Decision.*final/);
+    const unscripted = withFixture(base, (fixture) => ({
+      ...fixture,
+      stage: "final",
+      steps: fixture.steps.map((step) => {
+        if (step.type !== "say") return step;
+        const { historyReview: _script, ...rest } = step;
+        return rest;
+      }),
+    }));
+    expect(validateCase(unscripted)).toEqual([]);
+  });
+
+  it("ships a frozen holdout pack: final, unscripted, valid, in all three languages, sharing no text with development", () => {
+    const holdoutDirectories = {
+      cases: path.join(packRoot, "holdout/cases"),
+      oracle: path.join(packRoot, "holdout/oracle"),
+    };
+    const holdout = listCaseIds(holdoutDirectories.cases).map((id) => loadCase(id, holdoutDirectories));
+    expect(holdout.map((loaded) => loaded.fixture.id)).toEqual([
+      "H01", "H02", "H03", "H04", "H05", "H06", "H07", "H08", "H09", "H10", "H11", "H12", "HL1",
+    ]);
+    expect(validateLanguageCoverage(holdout)).toEqual([]);
+    const developmentProse = new Set(
+      cases.flatMap((loaded) => [
+        ...loaded.fixture.history.flatMap((turn) => [turn.user, turn.assistant]),
+        ...loaded.fixture.steps.flatMap((step) => ("text" in step ? [step.text] : [])),
+      ]),
+    );
+    for (const loaded of holdout) {
+      expect(validateCase(loaded), loaded.fixture.id).toEqual([]);
+      expect(loaded.fixture.stage).toBe("final");
+      expect(scriptedDecisionHindsight(loaded.fixture)).toEqual([]);
+      // Different people, wording and timing: no message is reused.
+      for (const turn of loaded.fixture.history) {
+        expect(developmentProse.has(turn.user), `${loaded.fixture.id} ${turn.key}`).toBe(false);
+      }
+      for (const step of loaded.fixture.steps) {
+        if ("text" in step) expect(developmentProse.has(step.text), `${loaded.fixture.id} ${step.id}`).toBe(false);
+      }
+    }
   });
 
   it("covers Chinese, English and code-switched conversation", () => {

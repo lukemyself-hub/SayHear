@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "continuity-acceptance-oracle:v1",
+  "id": "H02",
+  "title": "H02 Holdout: what was said yesterday versus what took place yesterday",
+  "capability": "Holdout counterpart of the said-versus-happened class. Yesterday (Tuesday 17 November) the person mentioned three things: a trip to a plant market that took place two days before it was told, a puncture repaired that same day, and a meal with a former mentor whose date was never given. Asked what was talked about yesterday, all three count. Asked what the person actually did yesterday, only the repair does. Asked when the meal was, the honest answer is that no date was given.",
+  "spec": ["#301 R1", "#301 R2", "#307", "ADR-0152"],
+  "ownerTickets": ["#314", "#315"],
+  "language": "zh",
+  "fixture": { "version": "final-1", "sha256": "c0d1d7a67fbfc20276359ea9ab1a4fb44e9967b026412db3faf9ff184b703b7f" },
+  "facts": {
+    "allowed": [
+      { "id": "a-repair-done", "statement": "Yesterday during the lunch break the person patched the rear tyre of a bicycle that had picked up a drawing pin.", "sources": ["tyre:user"] }
+    ],
+    "forbidden": [
+      { "id": "f-market-yesterday", "statement": "Saying the plant market outing with the mother took place yesterday.", "sources": ["market:user"] },
+      { "id": "f-market-wrong-anchor", "statement": "Giving 16 November for the market outing, which is what counting two days back from the day of the question would produce.", "sources": ["market:user"] },
+      { "id": "f-meal-dated", "statement": "Giving any specific day for the meal with the former mentor, including yesterday or the day of the market outing.", "sources": ["mentor:user"] },
+      { "id": "f-meal-unknown", "statement": "Saying nothing is known about that meal at all; it was mentioned, only without a date.", "sources": ["mentor:user"] }
+    ]
+  },
+  "topics": [
+    { "id": "t-market", "statement": "Going with the mother to a plant market where she bought two potted holiday cacti.", "sources": ["market:user"] },
+    { "id": "t-tyre", "statement": "Mending a punctured bicycle tyre.", "sources": ["tyre:user"] },
+    { "id": "t-mentor", "statement": "A meal with the white-haired former mentor from the factory, who reminisced about the workshop.", "sources": ["mentor:user"] }
+  ],
+  "time": [
+    { "id": "tm-said-yesterday", "statement": "All three were said on Tuesday 17 November, the day before the questions.", "sources": ["market:user", "tyre:user", "mentor:user"] },
+    { "id": "tm-market-day", "statement": "The market outing happened two days before it was told, that is Sunday 15 November, counted from when it was said and not from when it is asked about.", "sources": ["market:user"] },
+    { "id": "tm-meal-undated", "statement": "The meal was only described as some while ago; its date is unknown and must be reported as not given.", "sources": ["mentor:user"] }
+  ],
+  "expectedBehavior": [
+    "For what was said: list all three subjects.",
+    "For what the person did yesterday: the tyre repair only, optionally noting that the other two were told yesterday but happened at other times.",
+    "For which day the meal was: say that only a vague 'a while back' was mentioned and no date was given.",
+    "For the date of the outing: 15 November."
+  ],
+  "failureSignals": [
+    "The market outing is reported as yesterday's activity.",
+    "A date is invented for the meal.",
+    "The relative day of the outing is resolved against the day of the question instead of the day it was said."
+  ],
+  "sourceEligibility": [
+    { "source": "market:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "tyre:user", "eligibility": "allowed", "reason": "Yesterday's original expression." },
+    { "source": "mentor:user", "eligibility": "allowed", "reason": "Yesterday's original expression." }
+  ],
+  "criteria": [
+    { "id": "O-commit", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The first question streams and commits.", "check": { "type": "turn_committed", "step": "said" } },
+    { "id": "O-commit-happened", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The second question streams and commits.", "check": { "type": "turn_committed", "step": "happened" } },
+    { "id": "O-commit-when", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The third question streams and commits.", "check": { "type": "turn_committed", "step": "when" } },
+    { "id": "O-sources", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "All three of yesterday's messages reach the Provider for the question about what happened.", "check": { "type": "outbound_includes", "step": "happened", "sources": ["market:user", "tyre:user", "mentor:user"] } },
+    { "id": "O-ownership", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The messages are filed under the day they were said.", "check": { "type": "session_ownership", "expect": [ { "source": "market:user", "logicalDate": "2026-11-17" }, { "source": "mentor:user", "logicalDate": "2026-11-17" } ] } },
+    { "id": "O-said-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the first question.", "check": { "type": "deadline", "step": "said", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-happened-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the second question.", "check": { "type": "deadline", "step": "happened", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "O-when-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the third question.", "check": { "type": "deadline", "step": "when", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-said", "kind": "semantic", "description": "What was talked about yesterday: three subjects, none presented as yesterday's event unless it was.", "step": "said", "required": ["t-market", "t-tyre", "t-mentor", "tm-said-yesterday"], "forbidden": ["f-market-yesterday"] },
+    { "id": "S-happened", "kind": "semantic", "description": "What the person did yesterday: the repair, with the outing placed on its own day.", "step": "happened", "required": ["a-repair-done"], "forbidden": ["f-market-yesterday", "f-meal-dated"] },
+    { "id": "O-commit-market-when", "kind": "objective", "modes": ["deterministic", "real-model"], "description": "The fourth question streams and commits.", "check": { "type": "turn_committed", "step": "market-when" } },
+    { "id": "O-market-when-deadline", "kind": "objective", "modes": ["real-model"], "owner": "#319", "description": "Response-time contract for the fourth question.", "check": { "type": "deadline", "step": "market-when", "firstVisibleTextMaxMs": 3000, "completeMaxMs": 10000 } },
+    { "id": "S-market-when", "kind": "semantic", "owner": "#307", "description": "A relative day inside an old message is resolved from when it was said.", "step": "market-when", "required": ["tm-market-day"], "forbidden": ["f-market-wrong-anchor"] },
+    { "id": "S-when", "kind": "semantic", "description": "The undated meal stays undated.", "step": "when", "required": ["tm-meal-undated"], "forbidden": ["f-meal-dated", "f-meal-unknown"] }
+  ]
+}

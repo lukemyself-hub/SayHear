@@ -83,6 +83,8 @@ export type HistoryTurn = Readonly<{
 export type SayStep = Readonly<{
   /** Abort the client connection after this many assistant deltas. */
   abortAfterDeltas?: number;
+  /** Abort the client connection this long after submitting (see the client). */
+  abortAfterMs?: number;
   at: string;
   /**
    * Start the request and move on to the next step without waiting for it, as
@@ -583,6 +585,11 @@ export function validateCase(loaded: LoadedCase): string[] {
       if (typeof step.text !== "string" || !step.text.trim()) problems.push(`step ${step.id} needs text`);
       if (step.timezone !== undefined && !isValidTimezone(step.timezone)) {
         problems.push(`step ${step.id} has an invalid IANA timezone ${JSON.stringify(step.timezone)}`);
+      }
+      if (fixture.stage === "final" && (step.historyReview !== undefined || step.toolCall !== undefined)) {
+        problems.push(
+          `step ${step.id} carries a scripted Decision, which a final fixture must not: the real model makes its own`,
+        );
       }
     } else if (step.type === "resend") {
       if (!sayStepIds.has(step.of)) problems.push(`step ${step.id} resends unknown or later step ${step.of}`);

@@ -259,6 +259,7 @@ export type CaseSession = Readonly<{
   resend(id: string, of: string, at: Date): Promise<ObservedStep>;
   say(step: {
     abortAfterDeltas?: number;
+    abortAfterMs?: number;
     at: Date;
     continueInBackground?: boolean;
     id: string;
@@ -405,6 +406,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
     at: Date,
     submission: {
       abortAfterDeltas?: number;
+      abortAfterMs?: number;
       background?: boolean;
       clientEventId: string;
       clientTurnId: string;
@@ -433,6 +435,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         ...(submission.abortAfterDeltas === undefined
           ? {}
           : { abortAfterDeltas: submission.abortAfterDeltas }),
+        ...(submission.abortAfterMs === undefined ? {} : { abortAfterMs: submission.abortAfterMs }),
       })
       .catch((error) => {
         problems.push(`Chat request failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -704,6 +707,7 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
         text: step.text,
         timezone: step.timezone ?? fixture.defaults.timezone,
         ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
+        ...(step.abortAfterMs === undefined ? {} : { abortAfterMs: step.abortAfterMs }),
         ...(step.continueInBackground ? { background: true } : {}),
         ...(step.providerFault ? { providerFault: step.providerFault } : {}),
         ...(step.historyReview ? { historyReview: step.historyReview } : {}),
@@ -726,6 +730,7 @@ export function playStep(
       id: step.id,
       text: step.text,
       ...(step.abortAfterDeltas === undefined ? {} : { abortAfterDeltas: step.abortAfterDeltas }),
+      ...(step.abortAfterMs === undefined ? {} : { abortAfterMs: step.abortAfterMs }),
       ...(step.continueInBackground ? { continueInBackground: true } : {}),
       ...(step.locale ? { locale: step.locale } : {}),
       ...(step.providerFault ? { providerFault: step.providerFault } : {}),
