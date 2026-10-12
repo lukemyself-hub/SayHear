@@ -45,6 +45,9 @@ import {
 } from "@sayhear/application";
 import type { Pool, PoolClient } from "pg";
 
+import type { RecoveryDerivedLatency } from "./postgres-continuous-exchange-repository";
+export type { RecoveryDerivedLatency } from "./postgres-continuous-exchange-repository";
+
 import { createUuidV7 } from "./uuid-v7";
 import {
   findTerminalCandidateByFingerprintWithin,
@@ -160,6 +163,14 @@ function isoOrNull(value: Date | null): string | null {
 }
 
 function isoWeekIdentifierOf(monday: string): string {
+  const date = new Date(`${monday}T00:00:00.000Z`);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== monday ||
+    date.getUTCDay() !== 1
+  ) {
+    return "";
+  }
   // ISO week-numbering year: the week's Thursday anchors the ISO year.
   const thursday = addDaysToDateString(monday, 3);
   const thursdayDate = new Date(`${thursday}T00:00:00.000Z`);
@@ -338,6 +349,56 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     private readonly pool: Pool,
     private readonly registry: ReflectionRegistryLookup,
   ) {}
+
+  public async readDerivedLatency(
+    now: Date,
+    policyVersion: string,
+  ): Promise<RecoveryDerivedLatency> {
+    const result = await this.pool.query<{
+      oldest_pending_seconds: number | null;
+      pending_sessions: number;
+    }>(
+      `WITH pending_sessions AS (
+         SELECT s.daily_session_id,
+                GREATEST(0, FLOOR(EXTRACT(EPOCH FROM ($1::timestamptz - s.quiescent_at))))::int AS pending_seconds
+         FROM daily_sessions s
+         INNER JOIN app_users owner ON owner.user_id = s.user_id
+         LEFT JOIN daily_session_date_outcomes outcome
+           ON outcome.daily_session_id = s.daily_session_id
+           AND outcome.source_revision = s.source_revision
+         LEFT JOIN LATERAL (
+           SELECT status FROM reflection_runs run
+           WHERE run.daily_session_id = s.daily_session_id
+             AND run.source_revision = s.source_revision
+             AND run.policy_version = $2
+             AND run.scope_type = 'daily_session'
+             AND run.status = 'built'
+           ORDER BY run.updated_at DESC LIMIT 1
+         ) reflection ON true
+         WHERE s.activity_state = 'quiescent'
+           AND s.quiescent_at IS NOT NULL
+           AND owner.status = 'active'
+           AND outcome.outcome IS DISTINCT FROM 'no_activity'
+           AND EXISTS (
+             SELECT 1 FROM evidence_source_snapshots snap
+             INNER JOIN evidence_items item
+               ON item.evidence_source_snapshot_id = snap.evidence_source_snapshot_id
+             WHERE snap.daily_session_id = s.daily_session_id
+               AND snap.source_revision = s.source_revision
+               AND item.status = 'active'
+           )
+           AND reflection.status IS DISTINCT FROM 'built'
+       )
+       SELECT MAX(pending_seconds)::int AS oldest_pending_seconds,
+              COUNT(*)::int AS pending_sessions
+       FROM pending_sessions`,
+      [now, policyVersion],
+    );
+    return {
+      oldestPendingSeconds: result.rows[0]?.oldest_pending_seconds ?? 0,
+      pendingSessions: result.rows[0]?.pending_sessions ?? 0,
+    };
+  }
 
   public async readPolicyVersion(): Promise<string | null> {
     const result = await this.pool.query<{ policy_version: string }>(
@@ -1625,14 +1686,14 @@ export class PostgresReflectionRepository implements ReflectionRepository {
       const dailySessionId = run.daily_session_id
         ? asDailySessionId(run.daily_session_id)
         : null;
-      let windowStartDate = "";
-      let windowEndDate = "";
+      let windowStartDate: string | null = null;
+      let windowEndDate: string | null = null;
       if (dailySessionId) {
         const dayRow = await client.query<{ logical_date: string }>(
           "SELECT logical_date::text FROM daily_sessions WHERE daily_session_id = $1",
           [dailySessionId],
         );
-        windowStartDate = dayRow.rows[0]?.logical_date ?? "";
+        windowStartDate = dayRow.rows[0]?.logical_date ?? null;
         windowEndDate = windowStartDate;
         if (!windowStartDate) {
           await client.query("COMMIT");
@@ -1658,12 +1719,35 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         }
         windowStartDate = window.window_start_date;
         windowEndDate = window.window_end_date;
+        if (!isoWeekIdentifierOf(windowStartDate)) {
+          await client.query("COMMIT");
+          return { outcome: "not_found" };
+        }
+      }
+      if (!windowStartDate || !windowEndDate) {
+        await client.query("COMMIT");
+        return { outcome: "not_found" };
       }
       const dayRows = await this.readWindowDaysWithin(client, commandRow.user_id, {
         startDate: windowStartDate,
         endDate: windowEndDate,
         dailySessionId,
       });
+      // The Weekly retry must reconstruct the exact week identity the first
+      // attempt froze. `reflection_runs` has no week_identifier column, but the
+      // stored window start is always the week Monday the identifier was
+      // derived from, so recompute it here. An empty string would change the
+      // `reflection-week-window:v2` digest and the retry would be discarded as
+      // `source_changed` forever (issue #274).
+      const weekIdentifier = dailySessionId
+        ? null
+        : windowStartDate
+          ? isoWeekIdentifierOf(windowStartDate) || null
+          : null;
+      if (!dailySessionId && !weekIdentifier) {
+        await client.query("COMMIT");
+        return { outcome: "not_found" };
+      }
       const frozen = await this.freezeWindowInputWithin(client, {
         userId: commandRow.user_id,
         scopeType: dailySessionId ? "daily_session" : "date_range",
@@ -1674,7 +1758,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         },
         dayRows,
         sourceDigest: dailySessionId ? null : run.source_digest,
-        weekIdentifier: dailySessionId ? null : "",
+        weekIdentifier,
         windowStartDate,
         windowEndDate,
         setDayHead: Boolean(dailySessionId),
@@ -1720,6 +1804,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (
+        input.scopeType === "date_range" &&
+        (!input.weekIdentifier ||
+          !input.windowStartDate ||
+          !input.windowEndDate)
+      ) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "missing_week_window" };
+      }
       if (!(await modelRoleAttemptIsRunning(client, input))) {
         await client.query("ROLLBACK");
         return { outcome: "fenced", reason: "attempt_settled" };
@@ -1763,10 +1856,18 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           return { outcome: "fenced", reason: "baseline_changed" };
         }
       } else {
+        if (
+          !input.weekIdentifier ||
+          !input.windowStartDate ||
+          !input.windowEndDate
+        ) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "missing_week_window" };
+        }
         const digest = await this.weeklyWindowDigestWithin(client, input.userId, {
-          weekIdentifier: input.weekIdentifier ?? "",
-          windowStartDate: input.windowStartDate ?? "",
-          windowEndDate: input.windowEndDate ?? "",
+          weekIdentifier: input.weekIdentifier,
+          windowStartDate: input.windowStartDate,
+          windowEndDate: input.windowEndDate,
         });
         if (!digest || digest !== input.sourceDigest) {
           await client.query("ROLLBACK");
@@ -1791,8 +1892,8 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           input.userId,
           input.scopeType,
           input.dailySessionId,
-          input.weekIdentifier
-            ? computeWeekWindowId(input.userId, input.weekIdentifier)
+          input.scopeType === "date_range"
+            ? computeWeekWindowId(input.userId, input.weekIdentifier!)
             : null,
           input.windowStartDate,
           input.windowEndDate,
@@ -1835,7 +1936,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
             ]
           : [
               input.userId,
-              computeWeekWindowId(input.userId, input.weekIdentifier ?? ""),
+              computeWeekWindowId(input.userId, input.weekIdentifier!),
               input.sourceDigest,
               input.policyVersion,
             ],
@@ -1870,7 +1971,7 @@ export class PostgresReflectionRepository implements ReflectionRepository {
               ]
             : [
                 input.userId,
-                computeWeekWindowId(input.userId, input.weekIdentifier ?? ""),
+                computeWeekWindowId(input.userId, input.weekIdentifier!),
                 input.sourceDigest,
                 input.policyVersion,
                 input.generationCommandId,
@@ -1898,6 +1999,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (
+        input.scopeType === "date_range" &&
+        (!input.weekIdentifier ||
+          !input.windowStartDate ||
+          !input.windowEndDate)
+      ) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "missing_week_window" };
+      }
       if (!(await modelRoleAttemptIsRunning(client, input))) {
         await client.query("ROLLBACK");
         return { outcome: "fenced", reason: "attempt_settled" };
@@ -1935,11 +2045,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           return { outcome: "fenced", reason: "baseline_changed" };
         }
       } else {
-        const weekMonday = input.windowStartDate ?? "";
-        if (!weekMonday) {
+        if (
+          !input.weekIdentifier ||
+          !input.windowStartDate ||
+          !input.windowEndDate
+        ) {
           await client.query("ROLLBACK");
-          return { outcome: "fenced", reason: "digest_changed" };
+          return { outcome: "fenced", reason: "missing_week_window" };
         }
+        const weekMonday = input.windowStartDate;
         const dayRows = await this.readWindowDaysWithin(client, input.userId, {
           startDate: weekMonday,
           endDate: addDaysToDateString(weekMonday, 6),
@@ -1947,9 +2061,9 @@ export class PostgresReflectionRepository implements ReflectionRepository {
         });
         const digest = dayRows.length
           ? await this.weeklyWindowDigestWithin(client, input.userId, {
-              weekIdentifier: input.weekIdentifier ?? "",
+              weekIdentifier: input.weekIdentifier,
               windowStartDate: weekMonday,
-              windowEndDate: addDaysToDateString(weekMonday, 6),
+              windowEndDate: input.windowEndDate,
             })
           : null;
         if (!digest || digest !== input.sourceDigest) {
@@ -1974,7 +2088,19 @@ export class PostgresReflectionRepository implements ReflectionRepository {
            WHERE scope_type = 'daily_session' AND deleted_at IS NULL
          DO UPDATE SET reflection_id = reflections.reflection_id
          RETURNING reflection_id, current_version_id`,
-        [createUuidV7(now), input.userId, input.scopeType, input.dailySessionId, input.weekIdentifier ? computeWeekWindowId(input.userId, input.weekIdentifier) : null, input.weekIdentifier, input.windowStartDate, input.windowEndDate, now],
+        [
+          createUuidV7(now),
+          input.userId,
+          input.scopeType,
+          input.dailySessionId,
+          input.scopeType === "date_range"
+            ? computeWeekWindowId(input.userId, input.weekIdentifier!)
+            : null,
+          input.weekIdentifier,
+          input.windowStartDate,
+          input.windowEndDate,
+          now,
+        ],
       );
       const reflection = reflectionRow.rows[0]!;
       const revisionRow = await client.query<{ next: number }>(
@@ -2080,8 +2206,8 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           input.userId,
           input.scopeType,
           input.dailySessionId,
-          input.weekIdentifier
-            ? computeWeekWindowId(input.userId, input.weekIdentifier)
+          input.scopeType === "date_range"
+            ? computeWeekWindowId(input.userId, input.weekIdentifier!)
             : null,
           input.windowStartDate,
           input.windowEndDate,
@@ -2118,6 +2244,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (
+        input.frozen.scopeType === "date_range" &&
+        (!input.frozen.weekIdentifier ||
+          !input.frozen.windowStartDate ||
+          !input.frozen.windowEndDate)
+      ) {
+        await client.query("ROLLBACK");
+        return { outcome: "fenced", reason: "missing_week_window" };
+      }
       if (!(await modelRoleAttemptIsRunning(client, input))) {
         await client.query("ROLLBACK");
         return { outcome: "fenced", reason: "attempt_settled" };
@@ -2156,7 +2291,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           return { outcome: "fenced", reason: "baseline_changed" };
         }
       } else {
-        const weekMonday = input.frozen.windowStartDate ?? "";
+        if (
+          !input.frozen.weekIdentifier ||
+          !input.frozen.windowStartDate ||
+          !input.frozen.windowEndDate
+        ) {
+          await client.query("ROLLBACK");
+          return { outcome: "fenced", reason: "missing_week_window" };
+        }
+        const weekMonday = input.frozen.windowStartDate;
         const dayRows = await this.readWindowDaysWithin(client, input.userId, {
           startDate: weekMonday,
           endDate: addDaysToDateString(weekMonday, 6),
@@ -2170,9 +2313,9 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           client,
           input.userId,
           {
-            weekIdentifier: input.frozen.weekIdentifier ?? "",
+            weekIdentifier: input.frozen.weekIdentifier,
             windowStartDate: weekMonday,
-            windowEndDate: addDaysToDateString(weekMonday, 6),
+            windowEndDate: input.frozen.windowEndDate,
           },
         );
         if (digest !== input.sourceDigest) {
@@ -2523,6 +2666,15 @@ export class PostgresReflectionRepository implements ReflectionRepository {
     try {
       await client.query("BEGIN");
       if (
+        input.scopeType === "date_range" &&
+        (!input.weekIdentifier ||
+          !input.windowStartDate ||
+          !input.windowEndDate)
+      ) {
+        await client.query("ROLLBACK");
+        return { applied: false };
+      }
+      if (
         input.generationCommandId &&
         input.modelRunAttemptId &&
         !(await modelRoleAttemptIsRunning(client, {
@@ -2563,8 +2715,8 @@ export class PostgresReflectionRepository implements ReflectionRepository {
           input.userId,
           input.scopeType,
           input.dailySessionId,
-          input.weekIdentifier
-            ? computeWeekWindowId(input.userId, input.weekIdentifier)
+          input.scopeType === "date_range"
+            ? computeWeekWindowId(input.userId, input.weekIdentifier!)
             : null,
           input.windowStartDate,
           input.windowEndDate,

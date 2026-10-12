@@ -138,16 +138,25 @@ describe("release closure aggregation", () => {
       ciRuns: [successRun(99)],
       requiredChecks: { status: "enabled", detail: "required status check enabled" },
       deploymentIdentity: {
-        production: {
-          status: "verified",
-          commit: fixtureBaseCommit(),
-          deploymentId: "dpl_production",
-          reason: "read from the authenticated release-identity endpoint",
-        },
+          production: {
+            status: "verified",
+            commit: fixtureBaseCommit(),
+            deploymentId: "dpl_production",
+            projectId: "prj_KJD7fJhlIxlOMc4W4goUsIhOaLly",
+            teamId: "team_production",
+            businessTargetHash: "b".repeat(64),
+            purgeMarkerTargetHash: "c".repeat(64),
+            reason: "read from the authenticated release-identity endpoint",
+          },
+
         candidate: {
           status: "verified",
           commit: CANDIDATE_SHA,
           deploymentId: "dpl_candidate",
+          projectId: "prj_candidate",
+          teamId: "team_candidate",
+          businessTargetHash: "e".repeat(64),
+          purgeMarkerTargetHash: "f".repeat(64),
           reason: "read from the authenticated release-identity endpoint",
         },
       },
@@ -372,6 +381,9 @@ describe("gh reader", () => {
           ],
         });
       }
+      if (joined.startsWith("gh variable get RECOVERY_SCAN_URL")) {
+        return { stdout: "https://say-hear-web.vercel.app/api/internal/recovery/scan\n", stderr: "", exitCode: 0 };
+      }
       if (joined.includes("--workflow internal-recovery-scan.yml")) {
         return ghJson(schedulerRuns);
       }
@@ -393,8 +405,28 @@ describe("gh reader", () => {
       throw new Error(`unexpected command: ${joined}`);
     };
 
+    const releaseIdentity = {
+      version: "1a3b-g1-hosted-release-identity:v1",
+      commit: fixtureBaseCommit(),
+      environment: "production",
+      projectId: "prj_KJD7fJhlIxlOMc4W4goUsIhOaLly",
+      teamId: "team_production",
+      businessTargetHash: "b".repeat(64),
+      purgeMarkerTargetHash: "c".repeat(64),
+    };
+    let identityRequest: { url: string; authorization: string | null } | null = null;
     const input = await collectReleaseClosureInput({
       runner,
+      environment: {
+        CRON_SECRET: "closure-cron-secret",
+      },
+      fetcher: async (url, init) => {
+        identityRequest = {
+          url: String(url),
+          authorization: new Headers(init?.headers).get("authorization"),
+        };
+        return Response.json(releaseIdentity);
+      },
       repository: "lukemyself-hub/SayHear",
       pullRequestNumber: 285,
       integrationBranch: "integration/spec-275",
@@ -411,8 +443,126 @@ describe("gh reader", () => {
     expect(input.schedulers.map((entry) => entry.workflowId)).toEqual([
       336293901, 349048917,
     ]);
-    expect(input.deploymentIdentity.production.status).toBe("unverified");
+    expect(identityRequest).toEqual({
+      url: "https://say-hear-web.vercel.app/api/internal/inspection/release-identity",
+      authorization: "Bearer closure-cron-secret",
+    });
+    expect(input.deploymentIdentity.production).toEqual({
+      status: "verified",
+      commit: fixtureBaseCommit(),
+      deploymentId: null,
+      projectId: "prj_KJD7fJhlIxlOMc4W4goUsIhOaLly",
+      teamId: "team_production",
+      businessTargetHash: "b".repeat(64),
+      purgeMarkerTargetHash: "c".repeat(64),
+      reason: "read from the authenticated release-identity endpoint",
+    });
+    expect(buildReleaseClosureReport(input).blockers.map((blocker) => blocker.id)).not.toContain(
+      "production-deployment-identity",
+    );
+    const report = buildReleaseClosureReport(input);
+    expect(() => assertReleaseClosureContentFree(report)).not.toThrow();
     expect(input.acceptance).toHaveLength(14);
+    for (const response of [
+      new Response("{}", { status: 503 }),
+      Response.json({ ...releaseIdentity, privateBody: "must not be recorded" }),
+    ]) {
+      const rejected = await collectReleaseClosureInput({
+        runner,
+        environment: {
+          CRON_SECRET: "closure-cron-secret",
+          RECOVERY_SCAN_URL: "https://say-hear-web.vercel.app/api/internal/recovery/scan",
+        },
+        fetcher: async () => response,
+        repository: "lukemyself-hub/SayHear",
+        pullRequestNumber: 285,
+        integrationBranch: "integration/spec-275",
+        baseBranch: "main",
+        collectedAt: "2026-10-08T07:30:00Z",
+        promotionReportPath: null,
+        visualResult: "not run in this process",
+      });
+      expect(rejected.deploymentIdentity.production.status).toBe("unverified");
+      expect(JSON.stringify(rejected)).not.toContain("must not be recorded");
+    }
+  });
+
+  it("keeps production identity unverified without the existing operator secret", async () => {
+    const ghJson = (payload: unknown): CommandResult => ({
+      stdout: JSON.stringify(payload),
+      stderr: "",
+      exitCode: 0,
+    });
+    const runner: CommandRunner = async (command, args) => {
+      const joined = [command, ...args].join(" ");
+      if (joined.startsWith("gh variable get RECOVERY_SCAN_URL")) {
+        return { stdout: "", stderr: "not found", exitCode: 1 };
+      }
+      if (joined.startsWith("gh pr view")) {
+        return ghJson({
+          number: 285,
+          url: "https://github.com/lukemyself-hub/SayHear/pull/285",
+          baseRefName: "main",
+          headRefName: "integration/spec-275",
+          isDraft: true,
+          headRefOid: fixtureIntegrationCommit(),
+          baseRefOid: fixtureBaseCommit(),
+        });
+      }
+      if (joined.startsWith("git rev-parse HEAD")) return { stdout: `${fixtureIntegrationCommit()}\n`, stderr: "", exitCode: 0 };
+      if (joined.startsWith("git rev-parse main")) return { stdout: `${fixtureBaseCommit()}\n`, stderr: "", exitCode: 0 };
+      if (joined.startsWith("gh run list")) return ghJson([]);
+      if (joined.includes("branches/main/protection")) return { stdout: "", stderr: "forbidden", exitCode: 1 };
+      if (joined.includes("actions/workflows")) return ghJson({ workflows: [] });
+      if (joined.startsWith("git cat-file")) return { stdout: "", stderr: "", exitCode: 0 };
+      throw new Error(`unexpected command: ${joined}`);
+    };
+    let fetchCalls = 0;
+
+    const input = await collectReleaseClosureInput({
+      runner,
+      environment: { RECOVERY_SCAN_URL: "https://say-hear-web.vercel.app/api/internal/recovery/scan" },
+      fetcher: async () => {
+        fetchCalls += 1;
+        throw new Error("fetch should not run without CRON_SECRET");
+      },
+      repository: "lukemyself-hub/SayHear",
+      pullRequestNumber: 285,
+      integrationBranch: "integration/spec-275",
+      baseBranch: "main",
+      workflowDirectory: "/missing/workflows",
+    });
+
+    expect(fetchCalls).toBe(0);
+    expect(input.deploymentIdentity.production).toMatchObject({
+      status: "unverified",
+      commit: null,
+      reason: "CRON_SECRET is unavailable for the authenticated production identity read.",
+    });
+
+    const missingEndpoint = await collectReleaseClosureInput({
+      runner: async (command, args) => {
+        const joined = [command, ...args].join(" ");
+        if (joined.startsWith("gh variable get RECOVERY_SCAN_URL")) {
+          return { stdout: "", stderr: "not found", exitCode: 1 };
+        }
+        return runner(command, args);
+      },
+      environment: { CRON_SECRET: "closure-cron-secret" },
+      fetcher: async () => {
+        throw new Error("fetch should not run without a production endpoint");
+      },
+      repository: "lukemyself-hub/SayHear",
+      pullRequestNumber: 285,
+      integrationBranch: "integration/spec-275",
+      baseBranch: "main",
+      workflowDirectory: "/missing/workflows",
+    });
+    expect(missingEndpoint.deploymentIdentity.production).toMatchObject({
+      status: "unverified",
+      commit: null,
+      reason: "RECOVERY_SCAN_URL is unavailable for resolving the production release-identity endpoint.",
+    });
   });
 
   it("fails rather than falling back to a SPEC-specific identity when the head cannot be established", async () => {

@@ -35,6 +35,17 @@ function serviceBlocks(workflow: string): string[] {
   return blocks;
 }
 
+function namedStepBlock(workflow: string, name: string): string {
+  const lines = workflow.split("\n");
+  const start = lines.findIndex((line) => line.trim() === `- name: ${name}`);
+  if (start < 0) throw new Error(`Missing workflow step: ${name}`);
+
+  const nextStep = lines.findIndex(
+    (line, index) => index > start && /^ {6}- (?:name|uses):/.test(line),
+  );
+  return lines.slice(start, nextStep < 0 ? undefined : nextStep).join("\n");
+}
+
 describe("PR validate workflow", () => {
   it("runs every step of the validate composition, so CI cannot silently drift", async () => {
     const rootPackage = JSON.parse(
@@ -131,6 +142,50 @@ describe("PR validate workflow", () => {
     expect(workflow).toContain(
       "run: pnpm ci:assert-system-suites artifacts/vitest-report.json\n",
     );
+  });
+
+  it("runs independent checks after a failure without continuing cancelled runs", async () => {
+    const workflow = await readRepositoryFile(
+      ".github/workflows/pr-validate.yml",
+    );
+    const installCondition =
+      "if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' }}";
+    const databaseCondition =
+      "if: ${{ !cancelled() && steps.install_dependencies.outcome == 'success' && steps.verify_test_databases.outcome == 'success' }}";
+
+    expect(namedStepBlock(workflow, "Install dependencies")).toContain(
+      "id: install_dependencies",
+    );
+    expect(
+      namedStepBlock(workflow, "Verify the two test databases"),
+    ).toContain(installCondition);
+    expect(namedStepBlock(workflow, "Unit and system tests")).toContain(
+      databaseCondition,
+    );
+    expect(
+      namedStepBlock(workflow, "Assert the expected system suites ran"),
+    ).toContain(databaseCondition);
+
+    for (const name of [
+      "Typecheck",
+      "Purge surface inventory",
+      "Schema extensions",
+      "Module boundaries",
+      "Runtime version",
+      "Build",
+    ]) {
+      expect(namedStepBlock(workflow, name)).toContain(installCondition);
+      expect(namedStepBlock(workflow, name)).not.toContain(
+        "steps.unit_tests.outcome",
+      );
+    }
+
+    expect(namedStepBlock(workflow, "Upload the vitest report")).toContain(
+      "if: ${{ !cancelled() }}",
+    );
+    expect(workflow).not.toContain("if: always()");
+    expect(workflow).not.toContain("continue-on-error: true");
+    expect(workflow).toContain("cancel-in-progress: true");
   });
 
   it("cites the pinned system suite count so the workflow comment cannot go stale", async () => {

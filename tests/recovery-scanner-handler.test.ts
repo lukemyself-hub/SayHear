@@ -21,6 +21,7 @@ function createHandler(
     outboxDispatcherService: {
       dispatchPending: async () => ({ dispatched: 0, failed: 0, reclaimed: 0 }),
     } as never,
+    readDerivedLatency: async () => ({ oldestPendingSeconds: 0, pendingSessions: 0 }),
   });
 }
 
@@ -44,6 +45,7 @@ describe("recovery scanner handler", () => {
       outboxDispatcherService: {
         dispatchPending: async () => ({ dispatched: 5, failed: 0, reclaimed: 1 }),
       } as never,
+      readDerivedLatency: async () => ({ oldestPendingSeconds: 7310, pendingSessions: 2 }),
     });
 
     const response = await handler(
@@ -64,6 +66,7 @@ describe("recovery scanner handler", () => {
       consolidation: { daily: 0, weekly: 0, sweeper: 0, reArmed: 0 },
       episode: { buildsQueued: 0, maintenanceQueued: 0 },
       reflection: { dailyQueued: 0, weeklyQueued: 0, maintenanceQueued: 0 },
+      derivedLatency: { oldestPendingSeconds: 7310, pendingSessions: 2 },
       candidateRemaps: { remapCommandsCreated: 0 },
       outbox: { dispatched: 5, failed: 0, reclaimed: 1 },
     });
@@ -90,6 +93,7 @@ describe("recovery scanner handler", () => {
           reclaimed: 0,
         }),
       } as never,
+      readDerivedLatency: async () => ({ oldestPendingSeconds: 0, pendingSessions: 0 }),
     });
 
     const response = await handler(
