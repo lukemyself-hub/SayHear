@@ -1212,8 +1212,14 @@ describe("Authenticated Internal Text Conversation System Seam", () => {
       compiledContext: {
         compilerVersion: TIME_AWARE_CONTEXT_COMPILER_VERSION,
         // The compile never waits on the fast path: the committed User Event's
-        // extraction command is still pending (issue #113).
-        degradedReason: "fast_path_pending",
+        // extraction command is still pending (issue #113). This case runs
+        // through the spawned server on the real clock, so on a slow runner the
+        // 200 ms retrieval deadline can lapse first and outrank that reason;
+        // tests/system/fast-path-extraction.system.test.ts pins the reason
+        // where no retrieval deadline is in play.
+        degradedReason: expect.stringMatching(
+          /^(fast_path_pending|memory_retrieval_failed)$/,
+        ),
         dialogueRevision: 1,
         id: expect.any(String),
         integrity: {
