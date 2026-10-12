@@ -64,6 +64,27 @@ describe("history review function guidance", () => {
   });
 });
 
+describe("history review function guidance: a visible matter that does not fit", () => {
+  const text = HISTORY_REVIEW_FUNCTION.description;
+
+  it("does not take a similar matter in the conversation as the earlier context when the current message's details do not fit it", () => {
+    // The existing stop rule stays.
+    expect(text).toMatch(/Do not use it when the earlier context is already in the conversation/);
+    // What "already in the conversation" means: it has to fit what was just said.
+    expect(text).toMatch(/only if it fits what the current message actually says/i);
+    expect(text).toMatch(/who something came from, how it arrived or what it concerns/i);
+    expect(text).toMatch(/does not match those details/i);
+    expect(text).toMatch(/search with those details/i);
+  });
+
+  it("uses no sentence taken from an acceptance case as an example", () => {
+    // 'They finally wrote back.' is the cued sentence of development case C05.
+    expect(text).not.toMatch(/wrote back/i);
+    // The holdout counterpart's wording must not appear either.
+    expect(text).not.toMatch(/got back to me|finally answered|on the mat|committee|allotment|choir/i);
+  });
+});
+
 describe("history reading rules", () => {
   for (const [name, proposal] of Object.entries(proposals)) {
     it(`reach the model on the ${name} path when messages are quoted`, () => {

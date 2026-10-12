@@ -72,7 +72,7 @@ Harness Policy、Adapter conformance 与领域不变量测试实现。
   所以此类查询读取“说过的话”作为线索，结果恒为 `partial`，不得宣称完整或“没发生”。表达日期与经历日期的
   回答不混用。
 - 日期范围上限、读取页数/行数/token 预算与时间块覆盖选取随 `history-recall` 策略版本化（#315 引入时为 `history-recall:v2`，
-  此后随 #316–#318 递增，当前代码为 `history-recall:v4`，即 `HISTORY_RECALL_POLICY_VERSION`；architecture 08-10
+  此后随 #316–#318 及 SPEC #301 呈现修复（函数说明措辞）递增，当前代码为 `history-recall:v5`，即 `HISTORY_RECALL_POLICY_VERSION`；architecture 08-10
   §8.4.3）。仍是一次只读查询、不进 Catalog、不扩大 Action；细节追问重新调用同一函数，不依赖助手上一轮摘要。
 - 读取范围包含当前 Daily Session 中属于该范围的消息（跨午夜会话），仅排除请求本身，编译时按 revision 去重。
 

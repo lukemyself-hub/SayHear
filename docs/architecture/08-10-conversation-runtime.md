@@ -296,7 +296,7 @@ insufficient_coverage / channel_failed）；回执只用这些事实：无匹配
 #### 8.4.6 用历史理解当前变化：阅读合同与同一人格（#318）
 
 不新增阶段、表、迁移或人格。日期回顾、较早查询与自然接续三条路径只要引用了原文，回执（`history_recall_receipt`）末尾都带同一段
-`History reading rules (history-reading:v2)`（`renderHistoryReadingRules`，无引用时不带）：引用是用户当时的原话，时间是表达时间；
+`History reading rules (history-reading:v3)`（`renderHistoryReadingRules`，无引用时不带）：引用是用户当时的原话，时间是表达时间；
 同一事上后说的才是现在、先说的只作过去；只有用户自己的更正能改写其先前说法，没有更正含义的新说法不改变其他原话，也不触发排除；
 被取消/无后文的计划不当作已发生；Assistant 行不是用户陈述；不补离职原因、他人动机；一时感受不固化为人格或标签；与当下无关的
 旧事不因“检索到了”而提起，联系只作为助手自己的试探性理解；不给建议。身份、语气与安全仍只来自 Canonical Persona / Safety
@@ -317,6 +317,25 @@ Posture / 关系边界各 section——三条路径与普通回复由同一个 `
 覆盖时适用。不做语义匹配、不扩大排除范围，复述仍是允许来源（ADR-0149）。规则版本随结果冻结在快照的 `readingRulesVersion`；没有该字段的
 在途/历史结果按 v1 原样重放，未知版本失败关闭。Inspector 只给 `correctionMarks` 计数与规则版本。真实模型是否据此把更正后的说法当作现状，
 由 C12 的 `S-controls` 裁定（T08）。
+
+**原文与更正就地标记（`history-reading:v3`，SPEC #301 呈现修复）。**v2 之前，被引用的较早原文作为普通 user / assistant 消息排在当前对话前面，
+消息本身没有标记，“哪条是什么时候说的”只在 Times 序号表里；更正标记则写在回执末尾、按序号指回消息。真实模型因此反复确认“回执说 N 条已引用，
+但认不出是哪些”，并把更正时刻之前的旧说法复述读成改口（原型对照 `prototype-response-structure/Findings.md`）。v3 改为在消息文本第一行就地写一条
+方括号说明（`message-presentation.ts`），确定性生成、只含时间：
+
+- History Answer 引用的每条较早消息以 `[Earlier message. They said this on <本地时间>.]`（Assistant 行为 `You replied this on`）开头；回执与阅读规则
+  改为指向这行，不再引用 Times 表，也不再按序号写“第 N 条是更正”。
+- 被用户更正过的消息就地写明这是更正后的说法及更正时刻；“写下时刻早于该更正时刻”的其他用户消息（未更正的取表达时间，已更正的取其更正时刻）
+  就地写明它写于该更正之前、不是之后的改口。不比较内容、不判断是否同一件事，不出站更正前的原文，不排除、不重排任何消息；Correction / Forget
+  的既有控制语义（ADR-0149）不变。被更正消息当时生成的 Assistant 回复继续按既有关联排除，所以它后面没有相邻 Assistant 行。
+- 同一呈现问题也存在于七天近期背景与同一 Daily Session 内（更正后的文字同样留在原位置、原时间，且此前完全没有标记）。两个来源
+  （`postgres-recent-context-source.ts`、`loadContextSource`）现在返回更正时刻，上述两类消息以 `[Note. …]` 开头；只有在确实发出这类说明时，
+  `time_context` 段才追加一行读法规则（预算相应加 128 token）。没有更正的 Context 逐字节不变。
+- 规则要求模型不得把方括号说明念出、复述或提及。
+- 冻结与重放：更正时刻冻结在已签名的 `time_context` 元数据条目上（可选字段 `correctedAt`，无更正时不存在）；是否给引用消息加标记由回执快照里的
+  `readingRulesVersion` 决定，v1 / v2 冻结的结果按原样逐字节重放（夹具 `history-answer-context-reading-v2-f179b3d.json`）。
+- Times 表保留：它按出站序号覆盖全部消息并参与完整性校验，与就地标记取自同一字段、同一时区，不构成第二套时间。
+- 就地说明的 token 不计入各段 `selectedTokens`（每条约 15–60 token），属已知的小额低估。
 
 #### 8.4.7 历史路径的来源控制、诊断与独立关闭（#320）
 
