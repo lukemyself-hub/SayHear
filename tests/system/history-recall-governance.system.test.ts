@@ -366,20 +366,28 @@ describe("a History Answer left pending by a dead process is settled when the br
     await seedLife(harness);
     // The first answer attempt times out and is retried; the process dies while
     // the second attempt is on the wire.
+    let retryOnTheWire = false;
     harness.state.hooks.beforeFirstDelta = async () => {
-      harness.state.hooks.beforeFirstDelta = () => new Promise<never>(() => undefined);
+      harness.state.hooks.beforeFirstDelta = () => {
+        retryOnTheWire = true;
+        return new Promise<never>(() => undefined);
+      };
       throw new ProviderDispatchError("timeout");
     };
     void askVia(harness, "date").catch(() => undefined);
+    // Wait for the retry to be parked inside the Provider call, not just for its
+    // attempt row: until then the "dead" process is still moving, and the scan
+    // below would race it for the row and for the hook.
     for (let waited = 0; waited < 200; waited += 1) {
       const attempts = await harness.rows(
         `SELECT 1 FROM model_run_attempts attempt
          INNER JOIN generation_commands command ON command.generation_command_id = attempt.generation_command_id
          WHERE command.generation_stage = 'history_answer' AND attempt.attempt_no = 2`,
       );
-      if (attempts.length > 0) break;
+      if (attempts.length > 0 && retryOnTheWire) break;
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
+    expect(retryOnTheWire).toBe(true);
     harness.rebuild();
     harness.setNow("2026-09-15T02:20:00.000Z");
     expect(await harness.built.service.scanPendingHistoryAnswers?.()).toBe(1);
