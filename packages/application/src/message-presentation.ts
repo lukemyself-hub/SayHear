@@ -30,6 +30,8 @@ export type PresentedMessage = Readonly<{
   correctedAt?: string | null;
   expressedAt: string | null;
   timezone: string | null;
+  /** False when the zone is a fallback and was not recorded with the message. */
+  timezoneRecorded?: boolean;
 }>;
 
 function parts(
@@ -62,6 +64,11 @@ export function formatLocalMinute(iso: string, timezone: string): string {
 function clock(iso: string, timezone: string): string {
   const p = parts(iso, timezone, { hour: "2-digit", hourCycle: "h23", minute: "2-digit" });
   return `${p.hour}:${p.minute}`;
+}
+
+/** "GMT-7" at that instant in the given IANA zone. */
+function gmtOffset(iso: string, timezone: string): string {
+  return parts(iso, timezone, { timeZoneName: "shortOffset" }).timeZoneName ?? "GMT";
 }
 
 /** "Monday 14 September 2026" in the given IANA zone. */
@@ -198,6 +205,29 @@ export function renderEarlierMessagesBlock(input: {
     zone === anchorZone ? clock(iso, zone) : `${clock(iso, zone)} (${zone})`;
   const dayAndTime = (iso: string, zone: string, joiner: string) =>
     `${humanDay(iso, zone)}${joiner}${at(iso, zone)}`;
+  // A local day on which the clocks changed holds the same hour twice: the
+  // entries of such a day carry their GMT offset so the order stays readable.
+  const offsetsByDay = new Map<string, Set<string>>();
+  for (const entry of input.entries) {
+    if (entry.expressedAt === null) continue;
+    const zone = zoneOf(entry);
+    const day = `${zone} ${localDate(entry.expressedAt, zone)}`;
+    offsetsByDay.set(
+      day,
+      (offsetsByDay.get(day) ?? new Set()).add(gmtOffset(entry.expressedAt, zone)),
+    );
+  }
+  const entryTime = (entry: PresentedMessage) => {
+    if (entry.expressedAt === null) return "time not recorded";
+    const zone = zoneOf(entry);
+    const ambiguous =
+      (offsetsByDay.get(`${zone} ${localDate(entry.expressedAt, zone)}`)?.size ?? 0) > 1;
+    return `${clock(entry.expressedAt, zone)}${
+      ambiguous ? ` ${gmtOffset(entry.expressedAt, zone)}` : ""
+    }${zone === anchorZone ? "" : ` (${zone})`}${
+      entry.timezoneRecorded === false ? " (time zone assumed)" : ""
+    }`;
+  };
   const sizes = input.occasionSizes ?? [];
   const occasionOf =
     sizes.length > 0 &&
@@ -242,7 +272,7 @@ export function renderEarlierMessagesBlock(input: {
       }
     }
     lines.push(
-      `[${index + 1}] ${entry.expressedAt === null ? "time not recorded" : at(entry.expressedAt, zone)}, ${who}:`,
+      `[${index + 1}] ${entryTime(entry)}, ${who}:`,
     );
     for (const line of entry.text.split("\n")) lines.push(`> ${line}`);
   });

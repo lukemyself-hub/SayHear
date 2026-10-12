@@ -40,6 +40,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { sentMessages } from "../support/earlier-messages-block";
 
 /**
  * Issue #315: date-based history review (time blocks, experienced dates, honest coverage) on top of the #314 controlled review, end to end through the
@@ -136,7 +137,8 @@ const model: ConversationTextModel = {
     requests.push({
       functionNames: (request.functions ?? []).map((definition) => definition.name),
       instructions: request.instructions,
-      messages: request.messages.map((message) => `${message.role}:${message.text}`),
+      // Quoted earlier messages (the block in the instructions), then the turns sent.
+      messages: sentMessages(request),
       toolsDisabled: request.toolsDisabled === true,
     });
     const offered = (request.functions ?? []).some(
@@ -545,8 +547,9 @@ describe("date review through the real conversation path", () => {
     const joined = answerRequest().messages.join("\n");
     expect(joined).not.toContain("十月最后一天夜里");
     expect(joined).not.toContain("新的一天零点整");
-    expect(answerRequest().instructions).toContain("01:15:00 GMT-7");
-    expect(answerRequest().instructions).toContain("01:10:00 GMT-8");
+    // The repeated hour is told apart by its GMT offset on the quoted entries.
+    expect(answerRequest().instructions).toMatch(/\[\d+\] 01:15 GMT-7, they said:\n> 现在是第一次的一点一刻。/);
+    expect(answerRequest().instructions).toMatch(/\[\d+\] 01:10 GMT-8, they said:\n> 钟拨回去了，又是一点十分。/);
   });
 
   it("includes a message whose request timezone was never kept and marks its time as a fallback", async () => {
@@ -559,7 +562,9 @@ describe("date review through the real conversation path", () => {
     await ask("九月十号我说了什么？", "2026-09-15T02:10:00.000Z");
     expect(answerRequest().messages.join("\n")).toContain("这条是很早以前存下来的，没有时区。");
     // No request timezone was kept: the time is marked as the Session-start fallback.
-    expect(answerRequest().instructions).toContain("1=2026-09-10 20:00:00 GMT+8;z=0;s=s");
+    expect(answerRequest().instructions).toContain(
+      "Thursday 10 September 2026 (5 days ago)\n[1] 20:00 (time zone assumed), they said:\n> 这条是很早以前存下来的，没有时区。",
+    );
     const [result] = await frozenResults();
     expect(result!.status).toBe("completed");
   });

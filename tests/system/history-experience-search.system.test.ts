@@ -42,6 +42,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { sentMessages } from "../support/earlier-messages-block";
 
 /**
  * Issue #316: finding an ordinary older experience from the original words,
@@ -141,7 +142,8 @@ const model: ConversationTextModel = {
     requests.push({
       functionNames: (request.functions ?? []).map((definition) => definition.name),
       instructions: request.instructions,
-      messages: request.messages.map((message) => `${message.role}:${message.text}`),
+      // Quoted earlier messages (the block in the instructions), then the turns sent.
+      messages: sentMessages(request),
       toolsDisabled: request.toolsDisabled === true,
     });
     const offered = (request.functions ?? []).some(
@@ -439,7 +441,8 @@ describe("original-text experience search through the real conversation path", (
     ]);
     // Not another occasion, and the recent default background is unchanged.
     expect(answer.messages.join("\n")).not.toContain("右手老出错");
-    expect(answer.instructions).toContain("1=2026-06-13 16:40:00 GMT+8");
+    // The quoted entries sit under their occasion and day, each with its time.
+    expect(answer.instructions).toMatch(/\nOccasion 1 — Saturday 13 June 2026 \(about 3 months ago\)\n\[1\] 16:40, they said:\n/);
     expect(answer.instructions).toContain("Found 1 separate occasion(s)");
     expect(answer.instructions).toContain("Occasion 1: around 2026-06-13");
 

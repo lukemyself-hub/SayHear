@@ -35,6 +35,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { sentMessages } from "../support/earlier-messages-block";
 
 /**
  * Issue #318: older messages are read as past and present, corrections and
@@ -134,7 +135,8 @@ const model: ConversationTextModel = {
   async *stream(request) {
     requests.push({
       instructions: request.instructions,
-      messages: request.messages.map((message) => `${message.role}:${message.text}`),
+      // Quoted earlier messages (the block in the instructions), then the turns sent.
+      messages: sentMessages(request),
       toolsDisabled: request.toolsDisabled === true,
     });
     const offered = (request.functions ?? []).some(
@@ -506,8 +508,11 @@ describe("each registered model configuration compiles the same contract", () =>
       });
       expect(events.at(-1)?.type).toBe("assistant_committed");
       const answer = requests[1]!;
+      // The rules end where the quoted earlier messages begin.
+      const quotedAt = answer.instructions.indexOf("\nEARLIER MESSAGES (");
+      expect(quotedAt).toBeGreaterThan(0);
       readingBlocks.push(
-        answer.instructions.slice(answer.instructions.indexOf("History reading rules")),
+        answer.instructions.slice(answer.instructions.indexOf("History reading rules"), quotedAt),
       );
       personaBlocks.push(
         answer.instructions.slice(

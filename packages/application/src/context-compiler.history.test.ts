@@ -373,6 +373,34 @@ describe("earlier messages are a bounded block at the end of the instructions (h
     expect(payload.instructions).toContain("END OF EARLIER MESSAGES (1 in total).");
   });
 
+  it("tells a repeated daylight-saving hour apart by its GMT offset, and names a zone other than the current one", async () => {
+    const clockChange: ContextSourceHistoryRecall = {
+      ...historyRecall,
+      events: [
+        // 01:15 before the clocks went back, then 01:10 after: the later one reads earlier.
+        { ...historyRecall.events[0]!, expressedAt: "2026-11-01T08:15:00.000Z", expressionTimezone: "America/Los_Angeles", text: "第一句" },
+        { ...historyRecall.events[0]!, expressedAt: "2026-11-01T09:10:00.000Z", expressionTimezone: "America/Los_Angeles", revisionId: restated, sequence: 3, text: "第二句" },
+      ],
+    };
+    const { compile, compiler, saved } = build("history_answer", clockChange);
+    await compile();
+    const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
+    expect(payload.instructions).toContain(
+      "[1] 01:15 GMT-7 (America/Los_Angeles), they said:\n> 第一句\n[2] 01:10 GMT-8 (America/Los_Angeles), they said:\n> 第二句",
+    );
+  });
+
+  it("says when an entry's time zone was not recorded with the message", async () => {
+    const fallback: ContextSourceHistoryRecall = {
+      ...historyRecall,
+      events: [{ ...historyRecall.events[0]!, expressionTimezoneSource: "session_start_fallback" }],
+    };
+    const { compile, compiler, saved } = build("history_answer", fallback);
+    await compile();
+    const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
+    expect(payload.instructions).toContain("[1] 18:30 (time zone assumed), they said:");
+  });
+
   it("sends no block when nothing was quoted", async () => {
     const empty: ContextSourceHistoryRecall = {
       ...historyRecall,

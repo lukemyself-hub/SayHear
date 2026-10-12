@@ -44,6 +44,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { sentMessages } from "../support/earlier-messages-block";
 
 /**
  * Issue #317: the current talk naturally picks up an older matter from the original words,
@@ -143,7 +144,8 @@ const model: ConversationTextModel = {
     requests.push({
       functionNames: (request.functions ?? []).map((definition) => definition.name),
       instructions: request.instructions,
-      messages: request.messages.map((message) => `${message.role}:${message.text}`),
+      // Quoted earlier messages (the block in the instructions), then the turns sent.
+      messages: sentMessages(request),
       toolsDisabled: request.toolsDisabled === true,
     });
     const offered = (request.functions ?? []).some(

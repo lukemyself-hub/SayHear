@@ -94,7 +94,7 @@ async function evidenceOf(
     recall: diagnosticRecall,
     requests: harness.state.requests.map((request, index) => ({
       instructions: request.instructions,
-      messages: request.messages.map((message) => {
+      messages: request.turns.map((message) => {
         const split = message.indexOf(":");
         return { role: message.slice(0, split), text: message.slice(split + 1) };
       }),
@@ -212,15 +212,17 @@ describe("the other faults", () => {
     await start();
     expect(terminal(await askVia(harness, "date"))).toBe("assistant_committed");
     const evidence = await evidenceOf([BAG]);
-    // Remove the Times list from the payload that actually left, and, in a
-    // second case, shift the date: both are a time that did not arrive intact.
+    // Remove the day headings of the quoted entries from the payload that
+    // actually left, and, in a second case, shift the date: both are a time
+    // that did not arrive intact.
     const withoutTimes: DiagnosticEvidence = {
       ...evidence,
       requests: evidence.requests.map((request) => ({
         ...request,
-        instructions: request.instructions.replace(/Times:[\s\S]*$/, ""),
+        instructions: request.instructions.replace(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+ \d{4} \(.*\)$/gm, ""),
       })),
     };
+    expect(withoutTimes.requests.at(-1)!.instructions).not.toBe(evidence.requests.at(-1)!.instructions);
     expect(diagnoseStep(withoutTimes).sources[0]!.fault).toBe("time_lost");
     const shifted: DiagnosticEvidence = {
       ...evidence,

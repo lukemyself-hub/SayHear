@@ -119,6 +119,54 @@ export function parseTimesList(instructions: string): ReadonlyMap<number, string
   return times;
 }
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June", "July", "August",
+  "September", "October", "November", "December",
+];
+
+/**
+ * Where a History Answer quotes the text since history-reading:v3: an entry of
+ * the "EARLIER MESSAGES" block at the end of the instructions, under a day
+ * heading such as "Thursday 20 August 2026 (about 4 weeks ago)". Returns the
+ * entry number and the local date of its heading (`null` when the heading
+ * carries no date), or `null` when the text is not in the block.
+ */
+export function findEarlierMessagesEntry(
+  instructions: string,
+  text: string,
+): Readonly<{ entry: number; localDate: string | null }> | null {
+  const start = instructions.lastIndexOf("\nEARLIER MESSAGES (");
+  if (start < 0) return null;
+  let localDate: string | null = null;
+  let entry = 0;
+  let body: string[] = [];
+  const quoted = text.split("\n");
+  const holds = () => entry > 0 && body.join("\n").includes(quoted.join("\n"));
+  for (const line of instructions.slice(start + 1).split("\n")) {
+    const numbered = /^\[(\d+)\] /.exec(line);
+    if (numbered || line === "" || line.startsWith("END OF EARLIER MESSAGES")) {
+      if (holds()) return { entry, localDate };
+      body = [];
+      if (numbered) entry = Number(numbered[1]);
+      continue;
+    }
+    if (line.startsWith("> ")) {
+      body.push(line.slice(2));
+      continue;
+    }
+    const heading = /^(?:Occasion \d+ — )?[A-Z][a-z]+ (\d{1,2}) ([A-Z][a-z]+) (\d{4})\b/.exec(line);
+    if (heading) {
+      const month = MONTHS.indexOf(heading[2]!) + 1;
+      localDate = month === 0 ? null : `${heading[3]}-${String(month).padStart(2, "0")}-${heading[1]!.padStart(2, "0")}`;
+      entry = 0;
+    } else if (line === "Time not recorded") {
+      localDate = null;
+      entry = 0;
+    }
+  }
+  return holds() ? { entry, localDate } : null;
+}
+
 /** `Read status: partial (code).` from the History Answer receipt, if present. */
 export function parsePayloadReadStatus(instructions: string): string | null {
   const match = /Read status: ([a-z_]+)/.exec(instructions);
@@ -184,11 +232,37 @@ export function diagnoseStep(evidence: DiagnosticEvidence): StepDiagnosis {
     const messageIndex = request
       ? request.messages.findIndex((message) => message.text.includes(wanted.text)) + 1
       : 0;
+    // Since history-reading:v3 a quoted source is an entry of the block at
+    // the end of the instructions, with its day as the heading above it.
+    const quotedEntry =
+      request && messageIndex === 0
+        ? findEarlierMessagesEntry(request.instructions, wanted.text)
+        : null;
     const inContext = evidence.recall?.sourceRevisionIds.includes(wanted.revisionId) ?? false;
     notes.push(
       `inspector.sources: ${evidence.recall ? (inContext ? "present" : "absent") : "no history branch"}`,
-      `provider payload: ${messageIndex > 0 ? `message ${messageIndex}` : "absent"}`,
+      `provider payload: ${messageIndex > 0 ? `message ${messageIndex}` : quotedEntry ? `earlier-messages entry ${quotedEntry.entry}` : "absent"}`,
     );
+    if (quotedEntry !== null) {
+      notes.push(
+        `day of entry ${quotedEntry.entry}: ${quotedEntry.localDate ?? "missing"} (expected ${wanted.expectedLocalDate ?? "any"})`,
+      );
+      if (
+        quotedEntry.localDate === null ||
+        (wanted.expectedLocalDate !== null && quotedEntry.localDate !== wanted.expectedLocalDate)
+      ) {
+        return { evidence: notes, fault: "time_lost", source: wanted.source, trace };
+      }
+      if (evidence.semanticVerdict === "fail") {
+        notes.push("semantic review: the answer is wrong although the source and its time arrived intact");
+        return { evidence: notes, fault: "generation_error", source: wanted.source, trace };
+      }
+      if (evidence.semanticVerdict === "pass") {
+        return { evidence: notes, fault: "none", source: wanted.source, trace };
+      }
+      notes.push("semantic review: none yet; the source reached the model intact, its use is not judged");
+      return { evidence: notes, fault: "undetermined", source: wanted.source, trace };
+    }
     if (messageIndex === 0) {
       const omitted = evidence.recall
         ? ` omitted=${JSON.stringify(evidence.recall.omitted)} enumerationComplete=${String(evidence.recall.enumerationComplete)}`

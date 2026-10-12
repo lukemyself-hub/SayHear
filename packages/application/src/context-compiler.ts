@@ -1746,6 +1746,7 @@ function presentedMessages(timeContext: ContextTimeMetadata) {
     correctedAt: entry.correctedAt ?? null,
     expressedAt: entry.expressedAt,
     timezone: entry.expressionTimezone,
+    timezoneRecorded: entry.expressionTimezoneSource === "request",
   }));
 }
 

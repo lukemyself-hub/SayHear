@@ -41,6 +41,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { sentMessages } from "./earlier-messages-block";
 
 /**
  * Shared in-process assembly of the whole history path for the #320 system
@@ -97,6 +98,7 @@ export type CapturedRequest = Readonly<{
   functionNames: readonly string[];
   instructions: string;
   messages: readonly string[];
+  turns: readonly string[];
   /** The id this stand-in Provider answers the request with. */
   providerResponseId: string;
   toolsDisabled: boolean;
@@ -169,7 +171,10 @@ export function createHistoryPathHarness(testDatabaseUrl: string) {
       state.requests.push({
         functionNames: (request.functions ?? []).map((definition) => definition.name),
         instructions: request.instructions,
-        messages: request.messages.map((message) => `${message.role}:${message.text}`),
+        // Quoted earlier messages (the block in the instructions), then the turns sent.
+      messages: sentMessages(request),
+        // Only the conversation turns actually sent, for suites that need the raw payload.
+        turns: request.messages.map((message) => `${message.role}:${message.text}`),
         providerResponseId,
         toolsDisabled: request.toolsDisabled === true,
       });

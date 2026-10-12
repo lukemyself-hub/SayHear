@@ -41,6 +41,7 @@ import {
   fixedInternalOwnerPrincipal,
   type IsolatedPostgresSchema,
 } from "@sayhear/test-support";
+import { sentMessages } from "../support/earlier-messages-block";
 
 /**
  * Issue #314: the controlled read-only history review, end to end through the
@@ -137,7 +138,8 @@ const model: ConversationTextModel = {
     requests.push({
       functionNames: (request.functions ?? []).map((definition) => definition.name),
       instructions: request.instructions,
-      messages: request.messages.map((message) => `${message.role}:${message.text}`),
+      // Quoted earlier messages (the block in the instructions), then the turns sent.
+      messages: sentMessages(request),
       toolsDisabled: request.toolsDisabled === true,
     });
     const offered = (request.functions ?? []).some(
@@ -404,8 +406,11 @@ describe("controlled history review through the real conversation path", () => {
     const outbound = answer.messages.join("\n") + answer.instructions;
     expect(outbound).not.toContain("奥斯陆的雨");
     expect(outbound).not.toContain("茉莉");
-    expect(answer.instructions).toContain("1=2026-08-20 18:30:00 GMT+8");
-    expect(answer.instructions).toContain("3=2026-08-20 19:20:00 GMT+8");
+    // Each quoted entry says when it was said, under its day.
+    expect(answer.instructions).toContain("\nThursday 20 August 2026 (about 4 weeks ago)\n[1] 18:30, they said:\n> 路过修鞋摊，师傅教我缝了帆布包。\n");
+    expect(answer.instructions).toContain("\n[3] 19:20, they said:\n> 回家后决定以后东西坏了先自己补。\n");
+    // The numbered Times table lists only the turns that are sent.
+    expect(answer.instructions).not.toMatch(/\d+=2026-08-20 /);
     expect(answer.instructions).toContain("History review result");
 
     // Exactly two commands for the turn; neither is left running.
