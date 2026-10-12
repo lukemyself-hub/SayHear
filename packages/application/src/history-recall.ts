@@ -273,9 +273,12 @@ function cleanSearchStrings(
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u001f\u007f]/.test(trimmed)) return null;
     const length = [...trimmed.normalize("NFKC")].length;
-    if (length < SEARCH_LIMITS.minChars || length > SEARCH_LIMITS.maxChars) {
-      return null;
-    }
+    if (length > SEARCH_LIMITS.maxChars) return null;
+    // A clue too short to search for is left out, not a reason to refuse the
+    // whole lookup: models routinely add a one-character word (猫, 河) next to
+    // usable ones. The minimum itself is unchanged; a call left with no usable
+    // clue is still invalid (the caller checks for an empty result).
+    if (length < SEARCH_LIMITS.minChars) continue;
     const key = trimmed.normalize("NFKC").toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

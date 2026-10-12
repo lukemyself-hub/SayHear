@@ -53,6 +53,38 @@ describe("history review proposal", () => {
   });
 });
 
+describe("history search clues that are too short to search for", () => {
+  // T08 #321: these are the arguments the real model sent. One single-character
+  // clue among usable ones used to make the whole call invalid, so the turn
+  // ended with a technical failure and no reply.
+  it("drops a clue that is too short and searches with the rest", () => {
+    const normalized = normalizeHistoryReviewCall({
+      rawArguments:
+        '{"search_terms":["猫", "橘猫", "救助站", "领养", "猫粮"],"start_date":"2026-07-01","end_date":"2026-10-27"}',
+    });
+    expect(normalized).toMatchObject({
+      proposal: { kind: "search_experience", terms: ["橘猫", "救助站", "领养", "猫粮"] },
+    });
+    expect(
+      normalizeHistoryReviewCall({
+        rawArguments: '{"search_terms":["下河", "游泳", "河", "游泳圈", "小时候"],"people":["我","表弟"]}',
+      }),
+    ).toMatchObject({
+      proposal: { people: ["表弟"], terms: ["下河", "游泳", "游泳圈", "小时候"] },
+    });
+  });
+
+  it("still refuses a search with no usable clue, and malformed clues", () => {
+    for (const rawArguments of [
+      '{"search_terms":["猫"]}',
+      '{"search_terms":["猫", 7]}',
+      `{"search_terms":["${"长".repeat(33)}", "橘猫"]}`,
+    ]) {
+      expect(normalizeHistoryReviewCall({ rawArguments })).toEqual({ invalid: true });
+    }
+  });
+});
+
 describe("history review time basis", () => {
   it("keeps the expressed date and the experienced date as different questions", () => {
     expect(
