@@ -6,6 +6,8 @@ import {
   asInteractionTurnId,
   asUserId,
 } from "@sayhear/domain";
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -189,7 +191,7 @@ describe("Context Compiler History Answer (issue #314)", () => {
       ["current_user_input", inputRevisionId],
     ]);
     const payload = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
-    expect(payload.messages.map((message) => [message.role, message.text])).toEqual([
+    expect(payload.messages.map((message) => [message.role, message.text.split("\n").at(-1)])).toEqual([
       ["user", "老师傅教我缝帆布包。"],
       ["assistant", "被夸手稳挺开心的。"],
       ["user", "八月二十号我说了什么？"],
@@ -201,39 +203,12 @@ describe("Context Compiler History Answer (issue #314)", () => {
     expect(payload.instructions).not.toContain("老师傅教我缝帆布包");
   });
 
-  it("marks a quoted message that is the person's own correction, with when it was made, and replays it", async () => {
-    const corrected: ContextSourceHistoryRecall = {
-      ...historyRecall,
-      events: [
-        { ...historyRecall.events[0]!, correctedAt: "2026-08-22T03:15:00.000Z" },
-        historyRecall.events[1]!,
-      ],
-    };
-    const { compile, compiler, saved } = build("history_answer", corrected);
-    await compile();
-    const manifest = saved();
-    const payload = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
-    // Message 1 in the Times list is the corrected message.
-    expect(payload.instructions).toMatch(/1=2026-08-20 18:30/);
-    expect(payload.instructions).toContain(
-      "Message 1 is the person's own correction of what they first wrote at that point; they made the correction at 2026-08-22 11:15 (Asia/Shanghai).",
-    );
-    expect(payload.instructions).toContain("History reading rules (history-reading:v2)");
-    // The frozen reference carries the mark without any message text.
-    const receipt = manifest.sections.find((section) => section.key === "history_recall_receipt")!;
-    expect(JSON.parse(receipt.reference)).toMatchObject({
-      corrections: [{ correctedAt: "2026-08-22T03:15:00.000Z", messageIndex: 1, timezone: "Asia/Shanghai" }],
-      readingRulesVersion: "history-reading:v2",
-    });
-    expect(receipt.reference).not.toContain("帆布包");
-  });
-
   it("marks nothing when no quoted message was corrected", async () => {
     const { compile, compiler, saved } = build("history_answer", historyRecall);
     await compile();
     const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
     expect(payload.instructions).not.toMatch(/is the person's own correction of what they first wrote/);
-    expect(payload.instructions).toContain("History reading rules (history-reading:v2)");
+    expect(payload.instructions).toContain("History reading rules (history-reading:v3)");
   });
 
   it("renders an empty or failed review honestly and still compiles", async () => {
@@ -295,5 +270,105 @@ describe("Context Compiler History Answer (issue #314)", () => {
     expect(() => compiler.renderPermittedPayload(withIntegrity({ referencedEvents: droppedEvent }))).toThrow(
       CompiledContextIntegrityError,
     );
+  });
+});
+
+const restated = asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566ea");
+const afterwards = asConversationEventRevisionId("01984477-59a9-7d20-9d97-e588769566eb");
+
+/**
+ * The first message was corrected two days after it was said; a restatement of
+ * the old wording sits right after it, and one more message came after the
+ * correction was made.
+ */
+const correctedRecall: ContextSourceHistoryRecall = {
+  ...historyRecall,
+  events: [
+    { ...historyRecall.events[0]!, correctedAt: "2026-08-22T03:15:00.000Z", text: "老师傅教我缝皮包。" },
+    historyRecall.events[1]!,
+    {
+      ...historyRecall.events[0]!,
+      expressedAt: "2026-08-20T10:34:00.000Z",
+      revisionId: restated,
+      sequence: 3,
+      text: "对，帆布包，缝了一下午。",
+    },
+    {
+      ...historyRecall.events[0]!,
+      expressedAt: "2026-08-23T01:00:00.000Z",
+      revisionId: afterwards,
+      sequence: 4,
+      text: "今天又去了一趟。",
+    },
+  ],
+};
+
+describe("earlier messages are marked where they stand (history-reading:v3)", () => {
+  it("puts a recognisable mark with the local time it was said on every quoted earlier message, and none on the current one", async () => {
+    const { compile, compiler, saved } = build("history_answer", historyRecall);
+    await compile();
+    const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
+    expect(payload.messages.map((message) => [message.role, message.text])).toEqual([
+      ["user", "[Earlier message. They said this on 2026-08-20 18:30.]\n老师傅教我缝帆布包。"],
+      ["assistant", "[Earlier message. You replied this on 2026-08-20 18:30.]\n被夸手稳挺开心的。"],
+      ["user", "八月二十号我说了什么？"],
+    ]);
+    // The mark and the Times row of the same message state the same local minute.
+    expect(payload.instructions).toMatch(/1=2026-08-20 18:30/);
+    expect(JSON.stringify(payload.messages)).not.toMatch(/corrected it on|before they made/);
+  });
+
+  it("says on the corrected message itself that it is the corrected wording and when it was corrected", async () => {
+    const { compile, compiler, saved } = build("history_answer", correctedRecall);
+    await compile();
+    const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
+    expect(payload.messages[0]!.text).toBe(
+      "[Earlier message. They said this on 2026-08-20 18:30, then corrected it on 2026-08-22 11:15: the wording below is their corrected one and is what they stand by.]\n老师傅教我缝皮包。",
+    );
+    // The mark lives on the message; the instructions no longer point at it by number.
+    expect(payload.instructions).not.toMatch(/Message \d+ is the person's own correction/);
+    expect(payload.instructions).toContain("History reading rules (history-reading:v3)");
+  });
+
+  it("says on a message written before the correction was made that it came before it, and not on one written after", async () => {
+    const { compile, compiler, saved } = build("history_answer", correctedRecall);
+    await compile();
+    const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
+    expect(payload.messages.map((message) => message.text).slice(1)).toEqual([
+      "[Earlier message. You replied this on 2026-08-20 18:30.]\n被夸手稳挺开心的。",
+      "[Earlier message. They said this on 2026-08-20 18:34, before they made the 2026-08-22 11:15 correction to their 2026-08-20 18:30 message. It is not a later change of mind: where it differs from that corrected message on the same point, the corrected message is how it stands.]\n对，帆布包，缝了一下午。",
+      "[Earlier message. They said this on 2026-08-23 09:00.]\n今天又去了一趟。",
+      "八月二十号我说了什么？",
+    ]);
+  });
+
+  it("freezes when each wording was corrected without any message text, and replays the same payload", async () => {
+    const { compile, compiler, saved } = build("history_answer", correctedRecall);
+    await compile();
+    const manifest = saved();
+    const receipt = manifest.sections.find((section) => section.key === "history_recall_receipt")!;
+    expect(JSON.parse(receipt.reference)).toMatchObject({
+      corrections: [{ correctedAt: "2026-08-22T03:15:00.000Z", messageIndex: 1, timezone: "Asia/Shanghai" }],
+      readingRulesVersion: "history-reading:v3",
+    });
+    for (const section of manifest.sections) {
+      expect(section.reference).not.toMatch(/帆布包|皮包/);
+    }
+    const first = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
+    const second = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
+    expect(second).toEqual(first);
+  });
+
+  it("replays a result frozen with history-reading:v2 byte for byte: unmarked messages, the numbered correction line and the v2 rules", async () => {
+    const { compiler } = build("history_answer", historyRecall);
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/history-answer-context-reading-v2-f179b3d.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { manifest: Parameters<typeof compiler.renderPermittedPayload>[0]; payload: unknown };
+    expect(compiler.renderPermittedPayload(fixture.manifest)).toEqual(fixture.payload);
+    expect(JSON.stringify(fixture.payload)).toContain("History reading rules (history-reading:v2)");
+    expect(JSON.stringify(fixture.payload)).not.toContain("[Earlier message.");
   });
 });

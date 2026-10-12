@@ -20,10 +20,12 @@ import type {
   InteractionTurnId,
   UserId,
 } from "@sayhear/domain";
+import { renderMessageNotes, withMessageNote } from "./message-presentation";
 import {
   decodeHistoryRecallReceipt,
   encodeHistoryRecallReceipt,
   HISTORY_READING_RULES_VERSION,
+  historyReadingRulesMarkMessages,
   renderHistoryRecallReceipt,
   HISTORY_RECALL_RESULT_VERSION,
   type HistoryRecallReceiptSnapshot,
@@ -489,6 +491,12 @@ type ContextTimeEntry = Readonly<{
   messageIndex: number;
   occurredAt: string | null;
   revisionId: string;
+  /**
+   * Set when the message's wording is the person's own correction: the
+   * instant the correction was made. Absent otherwise, so a Context without
+   * corrections freezes exactly as before.
+   */
+  correctedAt?: string;
 }>;
 
 type ContextTimeMetadata = Readonly<{
@@ -764,6 +772,13 @@ export function createContextCompiler(dependencies: {
               (currentInput.expressionTimezoneSource === "request"
                 ? currentInput.expressionTimezone ?? null
                 : null),
+            correctedAt: new Map(
+              (source.historyRecall?.events ?? []).flatMap((event) =>
+                event.actor === "user" && event.correctedAt !== undefined
+                  ? [[String(event.revisionId), event.correctedAt] as const]
+                  : [],
+              ),
+            ),
             events: referencedEvents,
           })
         : undefined;
@@ -1260,6 +1275,32 @@ export function createContextCompiler(dependencies: {
         throw new CompiledContextIntegrityError();
       }
 
+      const outboundEvents = [
+        ...(historyRecall?.events ?? []),
+        ...(recentContext?.events ?? []),
+        ...history,
+        currentInput,
+      ];
+      // In-place notes are part of the frozen reading rules: a result frozen
+      // before history-reading:v3 replays its messages exactly as they were.
+      const marksQuotedMessages =
+        historyRecall !== undefined &&
+        historyReadingRulesMarkMessages(historyRecall.receipt.readingRulesVersion);
+      const messageNotes =
+        timeContext === undefined
+          ? []
+          : renderMessageNotes({
+              anchorTimezone: timeContext.anchor.timezone,
+              messages: timeContext.entries.map((entry) => ({
+                actor: entry.actor,
+                correctedAt: entry.correctedAt ?? null,
+                expressedAt: entry.expressedAt,
+                timezone: entry.expressionTimezone,
+              })),
+              quotedCount: marksQuotedMessages
+                ? historyRecall!.events.length
+                : 0,
+            });
       return {
         ...(source.actionReferenceHandles === undefined
           ? {}
@@ -1275,15 +1316,10 @@ export function createContextCompiler(dependencies: {
           .map((section) => section.content)
           .join("\n") +
           renderActionReferenceInstructions(source.actionReferenceHandles),
-        messages: [
-          ...(historyRecall?.events ?? []),
-          ...(recentContext?.events ?? []),
-          ...history,
-          currentInput,
-        ].map((event) => ({
+        messages: outboundEvents.map((event, index) => ({
           revisionId: event.revisionId,
           role: event.actor,
-          text: event.text,
+          text: withMessageNote(messageNotes[index] ?? null, event.text),
         })),
       };
     },
@@ -1538,6 +1574,8 @@ function createContextTimeMetadata(input: {
   currentInput: CompiledContextReferencedEvent;
   currentRequestInstant: Date | null;
   currentRequestTimezone: string | null;
+  /** Correction instants by revision, for user messages only. */
+  correctedAt?: ReadonlyMap<string, string>;
   events: readonly CompiledContextReferencedEvent[];
 }): ContextTimeMetadata {
   const eventInstant = input.currentInput.expressedAt ?? null;
@@ -1562,6 +1600,10 @@ function createContextTimeMetadata(input: {
       messageIndex: index + 1,
       occurredAt: event.occurredAt ?? null,
       revisionId: String(event.revisionId),
+      ...(event.actor === "user" &&
+      input.correctedAt?.get(String(event.revisionId)) !== undefined
+        ? { correctedAt: input.correctedAt.get(String(event.revisionId))! }
+        : {}),
     })),
     version: 1,
   };
@@ -1608,7 +1650,11 @@ function decodeContextTimeMetadata(reference: string): ContextTimeMetadata {
       !(entry.occurredAt === null || typeof entry.occurredAt === "string") ||
       (entry.expressionTimezoneSource !== "request" &&
         entry.expressionTimezoneSource !== "session_start_fallback" &&
-        entry.expressionTimezoneSource !== "unknown")
+        entry.expressionTimezoneSource !== "unknown") ||
+      !(entry.correctedAt === undefined ||
+        (typeof entry.correctedAt === "string" &&
+          entry.actor === "user" &&
+          !Number.isNaN(Date.parse(entry.correctedAt))))
     ) {
       throw new Error("Invalid frozen Context time metadata entry.");
     }
@@ -1620,6 +1666,9 @@ function decodeContextTimeMetadata(reference: string): ContextTimeMetadata {
       messageIndex: entry.messageIndex as number,
       occurredAt: entry.occurredAt,
       revisionId: entry.revisionId,
+      ...(entry.correctedAt === undefined
+        ? {}
+        : { correctedAt: entry.correctedAt as string }),
     };
   });
   return {
