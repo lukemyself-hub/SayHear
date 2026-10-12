@@ -51,7 +51,11 @@ export type CombinedVersion = Readonly<{
    * leave it unchanged, so runs made before and after such a commit can be
    * shown to have exercised the same product.
    */
-  product: Readonly<{ fingerprint: string; trees: Readonly<Record<string, string>> }>;
+  product: Readonly<{
+    fingerprint: string;
+    trees: Readonly<Record<string, string>>;
+    uncommittedChanges: boolean;
+  }>;
   schemaVersion: typeof COMBINED_VERSION_SCHEMA;
   switches: Readonly<Record<string, string>>;
 }>;
@@ -118,7 +122,14 @@ export function combinedVersion(): CombinedVersion {
     lockfile: git("rev-parse", "HEAD:pnpm-lock.yaml"),
     packages: git("rev-parse", "HEAD:packages"),
   };
-  const product = { fingerprint: sha256(JSON.stringify({ database, trees, versions })), trees };
+  const product = {
+    fingerprint: sha256(JSON.stringify({ database, trees, versions })),
+    trees,
+    // The trees are those of HEAD; this says whether the working copy of the
+    // product matched them when the run was made.
+    uncommittedChanges:
+      git("status", "--porcelain", "--", "apps", "packages", "pnpm-lock.yaml").length > 0,
+  };
   const fingerprint = sha256(
     JSON.stringify({ acceptancePack, commit: git_.commit, database, switches, versions }),
   );
