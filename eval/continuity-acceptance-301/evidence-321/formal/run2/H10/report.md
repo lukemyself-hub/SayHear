@@ -114,7 +114,7 @@ First visible text is only a candidate for the first meaningful response; reason
 - Provider requests in follow-up steps: 5
 - Tokens recorded: input unknown, output unknown
 - Paid cost this run: unknown
-- Budget: cap 10000000 USD micros, remaining 9314656, ledger entries of unknown cost 0
+- Budget: cap 10000000 USD micros, remaining 9155596, ledger entries of unknown cost 0
 
 ## Remaining risks
 

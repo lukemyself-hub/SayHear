@@ -14,8 +14,10 @@ Runnable eval artifact。非权威评测制品（ADR-0020 / ADR-0073）：只使
   `pnpm acceptance:continuity run-case C04`。
 - 12 类连续记忆案例 C01–C12 加 3 个低成本 smoke（S01–S03）已冻结为
   **fixture（模型可见输入）** 与 **oracle（独立预期账本）** 两份文件。
-- 默认 `deterministic` 模式，不产生任何付费调用。`real-model` 只有门禁与预算检查，
-  前置未满足时以退出码 4 明确 blocked，绝不降级为桩后报结果。
+- 默认 `deterministic` 模式，不产生任何付费调用。`real-model` 模式已接通真实 Provider（T08 #321，见下文
+  「real-model 模式」）；门禁、预算或凭据不满足时以退出码 4 明确 blocked，绝不降级为桩后报结果。
+- 真实模型验收的结论与证据在 [`evidence-321/`](evidence-321/README.md)：**未通过**。冻结的最终样本在
+  [`holdout/`](holdout/README.md)。
 - [`known-red.json`](known-red.json) 目前为空：T00 登记的 15 条客观判据失败已由 T01–T07 逐条修复并在同一改动里
   移出账本。这**不是**验收通过：deterministic 模式下全部语义/主观判据是 `not-run`，Decision 由 fixture 脚本
   提供（见下文「deterministic 模式证明什么」），真实模型结论归 T08 #321。
@@ -159,6 +161,37 @@ fixture、同一桩延迟参数在两个提交上各跑一次。
 只能属于 deterministic 运行，不能自称 `real-model`（语义判据只对 real-model 评分）。摘要不是签名：它挡住事后
 改动与手工拼装的目录，挡不住同时重写两个文件的人。
 
+## real-model 模式（T08 #321）
+
+被测 app 使用生产的 OpenCode Go 适配器和它写死的端点，产品代码不为验收做任何改动。验收工具在 app 进程里
+用 `node --import` 加载 [`src/egress-tap.mjs`](src/egress-tap.mjs)，只对发往该端点的 `fetch` 生效：
+
+1. 请求正文（不含请求头，凭据不离开真实请求）先交给 CLI 侧的 gate（[`src/provider-gate.ts`](src/provider-gate.ts)）记录；
+2. 种子历史由 gate 本地回放 fixture 里“当时的回复”，不付费；注入的故障也在这里回应；
+3. 其余请求原样发往真实 Provider，答复连同到达时间抄回 gate。
+
+每个请求记为 `live` / `served` / `fault`。只有 `live` 的回答才算模型回答：其余的语义判据与时延判据一律 `not-run`。
+gate 不可达时请求不会发出（fail closed），所以不会有未记账的付费调用。脚本化 Decision 在这个模式下不生效，
+final fixture 也不允许携带脚本。
+
+```bash
+pnpm acceptance:continuity plan --pack holdout --mode real-model          # 请求/token/费用上界与余额
+SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled pnpm acceptance:continuity run-case H04 --pack holdout \
+  --mode real-model --provider-credential-file <含 OPENCODE_GO_API_KEY 的本地 profile>
+pnpm acceptance:continuity summary --run <运行目录>                       # 每回合时延与未通过判据
+```
+
+- 启动条件：`--mode real-model`、`SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled`、账本前置全部 `verified` 或
+  带决定记录的 `owner-waived`、账本有单价、无未知费用条目、上界不超过余额、未到 `pauseAtSpentUsdMicros`、
+  进程里有 `OPENCODE_GO_API_KEY`（或用 `--provider-credential-file` 只读入这一个变量）。
+- 每次运行结束（无论通过、失败还是出错）自动向 `cost-ledger.json` 追加一条；usage 未知的请求按规划上界计费。
+- 请求预算是产品默认的 30 秒，不使用 deterministic 的缩短值。
+- 每个运行目录多出 `transcript.md`（含模型自己的工具调用、推理时长和用量）、`timings.json`、`versions.json`。
+- 诊断开关（**不是验收配置**，结果必须单独标注）：`--history-recall off` 关闭历史回顾分支；
+  `--experiment reasoning-effort=low|high|max` 给真实请求加推理强度，受影响的请求带 `experiment` 标记。
+- 无付费彩排：`tests/system/continuity-acceptance.system.test.ts` 的「Real-model transport rehearsal」用假凭据、
+  全部本地回应走完整条路径。
+
 ## deterministic 模式证明什么
 
 deterministic 模式下不仅回复是桩句子，**Decision 也不是模型做的**：是否查历史、查哪天、检索词、人物线索、
@@ -241,8 +274,7 @@ deterministic 不评分语义与人格；以下输出由人按 ADR-0110 裁定�
 - 计时是 CLI 网络观测（请求发出前起算的单调时钟）：服务端接受、首段可见文本、
   权威提交、流关闭。首段可见文本只是“首个有意义回应”的候选；浏览器呈现时间由
   T08 #321 另测。应用重启后的首轮标记为 `cold`。
-- `real-model` 的线上传输未接线：门禁通过后仍以 blocked 结束，等首次获准的付费运行
-  （T08）再接。预算上界是规划用的保守数字，T08 冻结实际值。
+- `real-model` 的预算上界是规划用的保守数字（每请求 16,000 入 / 12,000 出）；实际用量记在账本里。
 - runner 尚不能：经产品路径创建 Forget（由模型决定的 Trust Action；`forget` step 只是 seed 直接写关联）、并发 Full Purge、
   注入历史读取失败或部分读取、对第二个获准模型配置重复运行。相关判据是 `not-run`。
 - Action handle 过期等少数路径使用数据库墙钟而非受控时间。

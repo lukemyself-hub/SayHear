@@ -13,7 +13,7 @@ const here = import.meta.dirname;
 const repositoryRoot = path.resolve(here, "../../..");
 const source = path.resolve(process.argv[2]);
 const reviews = JSON.parse(fs.readFileSync(path.join(here, "reviews.json"), "utf8"));
-const groups = ["formal", "supplementary"];
+const groups = ["formal", "supplementary", "diagnostic", "reverify"];
 
 function caseDirectories(root) {
   const found = [];

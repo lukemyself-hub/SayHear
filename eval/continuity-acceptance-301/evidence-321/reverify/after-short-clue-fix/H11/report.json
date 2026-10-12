@@ -1,0 +1,586 @@
+{
+  "budget": {
+    "blockers": [
+      "Real-model mode must be explicitly enabled with SAYHEAR_ACCEPTANCE_REAL_MODEL=enabled in addition to --mode real-model."
+    ],
+    "capUsdMicros": 10000000,
+    "estimatedCostUsdMicros": 384000,
+    "inputTokenUpperBound": 320000,
+    "mode": "real-model",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "outputTokenUpperBound": 240000,
+    "paidRequestUpperBound": 20,
+    "remainingUsdMicros": 9155596,
+    "requestsPerStepUpperBound": 4,
+    "shape": {
+      "generationSteps": 3,
+      "scheduledScans": 4,
+      "seedTurns": 4
+    },
+    "status": "blocked",
+    "unknownCostEntries": 0,
+    "waivedPreconditions": [
+      {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed.",
+        "id": "issue-307-online-acceptance"
+      }
+    ]
+  },
+  "case": {
+    "caseId": "H11",
+    "criteria": [
+      {
+        "description": "Seeded history is read back verbatim through the normal history API.",
+        "evidence": [],
+        "id": "INV-seed-readback",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "All 4 seeded turns are present exactly once.",
+        "status": "pass"
+      },
+      {
+        "description": "No oracle text, scenario title or expected answer appears in any Provider request.",
+        "evidence": [],
+        "id": "INV-oracle-not-in-outbound",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "Scanned 831 outbound strings; none carries oracle text.",
+        "status": "pass"
+      },
+      {
+        "description": "Authoritative history contains every message exactly once.",
+        "evidence": [],
+        "id": "INV-no-duplicate-messages",
+        "kind": "invariant",
+        "owner": null,
+        "reason": "14 messages, no duplicates.",
+        "status": "pass"
+      },
+      {
+        "description": "The first question streams and commits.",
+        "evidence": [
+          "steps[empty].chat.httpStatus=200",
+          "steps[empty].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The second question streams and commits.",
+        "evidence": [
+          "steps[older].chat.httpStatus=200",
+          "steps[older].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-older",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The third question streams and commits.",
+        "evidence": [
+          "steps[earliest].chat.httpStatus=200",
+          "steps[earliest].chat.terminalEvent=assistant_committed"
+        ],
+        "id": "O-commit-earliest",
+        "kind": "objective",
+        "owner": null,
+        "reason": "The turn streamed text and committed.",
+        "status": "pass"
+      },
+      {
+        "description": "The asked-about Friday is recorded as read completely and empty.",
+        "evidence": [
+          "steps[empty].inspection.dateCoverage[2026-10-23] empty=true readBounded=false candidateRows=0"
+        ],
+        "id": "O-empty-verified",
+        "kind": "objective",
+        "owner": "#315",
+        "reason": "Recorded coverage for the date matches the expectation.",
+        "status": "pass"
+      },
+      {
+        "description": "The days either side of the empty one reach the Provider.",
+        "evidence": [
+          "late-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "late-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-neighbours",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The older stretch is actually read and found non-empty.",
+        "evidence": [
+          "steps[older].inspection.dateCoverage[2026-10-02] empty=false readBounded=false candidateRows=2"
+        ],
+        "id": "O-range-read",
+        "kind": "objective",
+        "owner": "#315",
+        "reason": "Recorded coverage for the date matches the expectation.",
+        "status": "pass"
+      },
+      {
+        "description": "Both early-October messages reach the Provider.",
+        "evidence": [
+          "early-a:user: providerRequest=present, inspector.referencedEvents=present",
+          "early-b:user: providerRequest=present, inspector.referencedEvents=present"
+        ],
+        "id": "O-older-source",
+        "kind": "objective",
+        "owner": "#315",
+        "reason": "Every required source reached the Provider and is recorded by the Inspector.",
+        "status": "pass"
+      },
+      {
+        "description": "The true first mention reaches the Provider before a 'first time' is named.",
+        "evidence": [
+          "early-a:user: providerRequest=absent, inspector.referencedEvents=absent"
+        ],
+        "id": "O-earliest-source",
+        "kind": "objective",
+        "owner": "#315",
+        "reason": "A required source did not reach the Provider request for this turn.",
+        "status": "fail"
+      },
+      {
+        "description": "A failed or partial history read for a single turn.",
+        "evidence": [],
+        "id": "O-read-failure",
+        "kind": "objective",
+        "owner": null,
+        "reason": "Not exercised: the runner cannot yet inject a history read failure or a partial read for a single turn. This is a missing harness capability, not a product verdict.",
+        "status": "not-run"
+      },
+      {
+        "description": "Response-time contract for the first question.",
+        "evidence": [
+          "steps[empty].chat.timing.firstVisibleTextMs=4388.864874999999 (CLI network, limit 3000)",
+          "steps[empty].chat.timing.committedMs=4740.619916999989 (CLI network, limit 10000)"
+        ],
+        "id": "O-empty-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the second question.",
+        "evidence": [
+          "steps[older].chat.timing.firstVisibleTextMs=14119.615834000011 (CLI network, limit 3000)",
+          "steps[older].chat.timing.committedMs=14512.477875000011 (CLI network, limit 10000)"
+        ],
+        "id": "O-older-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "Response-time contract for the third question.",
+        "evidence": [
+          "steps[earliest].chat.timing.firstVisibleTextMs=8838.763084000006 (CLI network, limit 3000)",
+          "steps[earliest].chat.timing.committedMs=9391.856583999994 (CLI network, limit 10000)"
+        ],
+        "id": "O-earliest-deadline",
+        "kind": "objective",
+        "owner": "#319",
+        "reason": "CLI-observed timings exceed the limits or the turn never completed.",
+        "status": "fail"
+      },
+      {
+        "description": "A verified empty day is called empty, without invention.",
+        "evidence": [],
+        "id": "S-empty",
+        "kind": "semantic",
+        "owner": "#315",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The older stretch is retold, not declared empty.",
+        "evidence": [],
+        "id": "S-older",
+        "kind": "semantic",
+        "owner": "#315",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      },
+      {
+        "description": "The first mention is the true earliest one.",
+        "evidence": [],
+        "id": "S-earliest",
+        "kind": "semantic",
+        "owner": "#315",
+        "reason": "No independent review was supplied for this answer.",
+        "status": "needs-review"
+      }
+    ],
+    "mode": "real-model",
+    "pipelineOnly": [],
+    "reviewer": null,
+    "runId": "run-4ba0017f-7265-4b4b-bc9d-fe54cc068e8c",
+    "status": "fail"
+  },
+  "diagnosis": [
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "empty",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-22 (expected 2026-10-22)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "late-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-10",
+              "requestSequence": 10
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: message 3",
+              "time of message 3: 2026-10-24 (expected 2026-10-24)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "late-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-10",
+              "requestSequence": 10
+            }
+          }
+        ]
+      },
+      "stepId": "empty"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [],
+        "payloadReadStatus": "completed",
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 1",
+              "time of message 1: 2026-10-02 (expected 2026-10-02)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "early-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-12",
+              "requestSequence": 12
+            }
+          },
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: present",
+              "provider payload: message 3",
+              "time of message 3: 2026-10-04 (expected 2026-10-04)",
+              "semantic review: none yet; the source reached the model intact, its use is not judged"
+            ],
+            "fault": "undetermined",
+            "source": "early-b:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-12",
+              "requestSequence": 12
+            }
+          }
+        ]
+      },
+      "stepId": "older"
+    },
+    {
+      "diagnosis": {
+        "disagreements": [
+          "The Inspector records a history read but the answering payload carries none."
+        ],
+        "payloadReadStatus": null,
+        "readState": "complete",
+        "sources": [
+          {
+            "evidence": [
+              "authoritative history: present",
+              "inspector.sources: absent",
+              "provider payload: absent",
+              "coverage: omitted={} enumerationComplete=true"
+            ],
+            "fault": "selection_omitted",
+            "source": "early-a:user",
+            "trace": {
+              "commandStage": null,
+              "providerResponseId": "gate-request-14",
+              "requestSequence": 14
+            }
+          }
+        ]
+      },
+      "stepId": "earliest"
+    }
+  ],
+  "identity": {
+    "fixtureSha256": "a9172e11797d24d0250329c53fa06033dede10be762e4cad5e1c6c2656863ef0",
+    "fixtureVersion": "final-1",
+    "gitCommit": "a4c02ed1e51de85b9bb62db2134152231977699b",
+    "gitDirty": true,
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "historyRecallGovernance": "active",
+    "recentContextGovernance": "active",
+    "runId": "run-4ba0017f-7265-4b4b-bc9d-fe54cc068e8c",
+    "oracleSha256": "0f4122e18fcc0ae4d7deccdd0de29911078d96263cdcd7852fed6e08f8d8f007",
+    "title": "H11 Holdout: a day with nothing on it, an older stretch, and the first mention"
+  },
+  "remainingRisks": [
+    "The working tree had uncommitted changes; the commit alone does not identify the code that ran.",
+    "Timings are CLI network observations, not browser rendering times (T08 #321 covers the browser)."
+  ],
+  "reproducibilityDigest": "7819ddffaeeb54efbb74f252d1e93001dc576de747dd16206fe7cf660c1871df",
+  "schemaVersion": "continuity-acceptance-report:v1",
+  "sourceManifest": [
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-b:assistant"
+        }
+      ],
+      "stepId": "empty"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "early-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "early-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "early-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "early-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-b:assistant"
+        }
+      ],
+      "stepId": "older"
+    },
+    {
+      "rows": [
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": false,
+          "inProviderRequest": false,
+          "source": "early-b:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-a:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-a:assistant"
+        },
+        {
+          "eligibility": "allowed",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-b:user"
+        },
+        {
+          "eligibility": "unspecified",
+          "inInspector": true,
+          "inProviderRequest": true,
+          "source": "late-b:assistant"
+        }
+      ],
+      "stepId": "earliest"
+    }
+  ],
+  "timings": [
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 30.924333999995724,
+      "cliCommittedMs": 4740.619916999989,
+      "cliFirstVisibleTextMs": 4388.864874999999,
+      "cliStreamClosedMs": 4740.666124999989,
+      "providerLatencyMs": 0,
+      "stepId": "empty"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 32.0109999999986,
+      "cliCommittedMs": 14512.477875000011,
+      "cliFirstVisibleTextMs": 14119.615834000011,
+      "cliStreamClosedMs": 14512.521959000005,
+      "providerLatencyMs": 0,
+      "stepId": "older"
+    },
+    {
+      "appState": "warm",
+      "cliAcceptedMs": 23.598375000001397,
+      "cliCommittedMs": 9391.856583999994,
+      "cliFirstVisibleTextMs": 8838.763084000006,
+      "cliStreamClosedMs": 9392.068083999999,
+      "providerLatencyMs": 0,
+      "stepId": "earliest"
+    }
+  ],
+  "transcript": [
+    {
+      "assistant": "我翻了翻我这边能看到的，十月二十三号那天没有你留下的消息，什么都没找到。这只能说明我这儿没存到那天的东西，不等于你那天没说过什么，也不等于什么都没发生。",
+      "at": "2026-10-27T12:00:00.000Z",
+      "stepId": "empty",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "上周五，也就是二十三号那天，我跟你说过什么没有？"
+    },
+    {
+      "assistant": "十月头几天里，你留话的只有十月二号晚上和十月四号晚上，各两条；一号、三号，还有五号到十号那几天，我这边都没有你的消息。那两天具体说的是什么，我这儿看不到内容，没法念给你听，也就不替你编一个出来。所以你问的那些，我现在能给到的只有有还是没有，给不到内容本身。",
+      "at": "2026-10-27T12:03:00.000Z",
+      "stepId": "older",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "那十月头几天呢，咱们都聊了些什么？"
+    },
+    {
+      "assistant": "我能找到的、最早提到猫的，是十月二十二号晚上八点十分左右，那天你留了两条。再往前的，我这儿没有能拿出来的东西，所以我不能说那就是头一回——我只能说，我翻到的里头这是最早的一处，那两条具体写了什么，我看不到内容，也就不替你补。",
+      "at": "2026-10-27T12:06:00.000Z",
+      "stepId": "earliest",
+      "terminalEvent": "assistant_committed",
+      "type": "say",
+      "user": "我头一回跟你提到猫是在什么时候？"
+    }
+  ],
+  "usage": {
+    "inputTokens": 9088,
+    "outputTokens": 2784,
+    "paidCostUsdMicros": null,
+    "providerRequests": 6
+  }
+}

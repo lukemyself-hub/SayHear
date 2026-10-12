@@ -10,7 +10,7 @@
     "model": "opencode-go/deepseek-v4.1-flash",
     "outputTokenUpperBound": 240000,
     "paidRequestUpperBound": 20,
-    "remainingUsdMicros": 9314656,
+    "remainingUsdMicros": 9155596,
     "requestsPerStepUpperBound": 4,
     "shape": {
       "generationSteps": 3,

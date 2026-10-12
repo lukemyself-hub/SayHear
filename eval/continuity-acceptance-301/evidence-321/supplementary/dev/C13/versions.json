@@ -8,9 +8,9 @@
     "migrationDigest": "a66b971ae8d68dde3485f25be1d09818014d1eac040936bc89004f7920d9b0ea",
     "newestMigration": "0081_history_recall_governance.sql"
   },
-  "fingerprint": "e5245b875f85ed0bf619d82fbb11c7cf1763f0c5846282fd1ca0b5c03c19389c",
+  "fingerprint": "fce5456324f2708f4243c3a20987ea4e72bb38665cf57fb8e1c9aaa5215705ac",
   "git": {
-    "commit": "8867386e9d3772bf9f1b26539ac6655a63ffb104",
+    "commit": "a4c02ed1e51de85b9bb62db2134152231977699b",
     "dirty": true
   },
   "path": {
@@ -30,11 +30,11 @@
     "recentContextSelection": "recent-context-selection-policy:v1"
   },
   "product": {
-    "fingerprint": "9e5d6eacc13efa6257abc266d91960ebe559f3aaee5c7dbbcb0713caaa62e1cc",
+    "fingerprint": "3b84caaae250156c1d8f0ef1527a5a693e58b6ca518da4167f3576c89b087902",
     "trees": {
       "apps": "a473c327404867cab1f63f2e3238a783343de12a",
       "lockfile": "54719980168e6dfe15f77daec7895f6733990ca7",
-      "packages": "f7f4e45508ab607399445ae62840c481fd94efa9"
+      "packages": "9897347a25ac8153ca4aff6bb539891b8e8f714c"
     },
     "uncommittedChanges": false
   },
