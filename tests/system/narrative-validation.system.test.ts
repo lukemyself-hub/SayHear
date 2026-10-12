@@ -399,12 +399,16 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
     return { generationCommandId, modelRunAttemptId };
   }
 
-  it("returns and settles a persisted verdict when commit acknowledgement is lost (#257)", async () => {
+  it.each(["accepted", "blocked"] as const)("returns and settles a persisted %s verdict when commit acknowledgement is lost (#257)", async (verdict) => {
     const reported: ModelRoleCallUsage = {
       cachedTokens: 3, inputTokens: 90, outputTokens: 40,
       reasoningTokens: 9, totalTokens: 142,
     };
-    const deps = dependencies(providerFor(() => acceptedOutput(), reported));
+    let calls = 0;
+    const deps = dependencies(providerFor(() => {
+      calls += 1;
+      return acceptedOutput();
+    }, reported));
     const draftRef = `bio-version:${randomUUID()}`;
     const repository = deps.repository;
     const realCommit = repository.commitResult.bind(repository);
@@ -417,7 +421,22 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
       result = await runNarrativeValidation({
         dependencies: deps,
         command: {
-          request: cleanRequest(draftRef),
+          request: cleanRequest(draftRef, {
+            // An empty manifest intentionally exercises Bio's blocking
+            // generator-under-report verdict; the accepted fixture declares
+            // the exact proposition recovered by the independent validator.
+            generatorManifest: verdict === "accepted" ? [{
+              statementKey: "statement:1",
+              text: "The user repairs radios.",
+              propositionStatements: [{
+                propositionKey: "proposition:1",
+                normalizedProposition: "The user repairs radios.",
+                propositionKind: "fact",
+                epistemicRendering: "confirmed",
+                supportKeys: ["claim:1"],
+              }],
+            }] : [],
+          }),
           expectedDataEpoch: 1,
         },
       });
@@ -425,14 +444,15 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
       commitSpy.mockRestore();
     }
     expect(result.outcome).toBe("completed");
-    expect(result.verdict).toBe("accepted");
+    expect(result.verdict).toBe(verdict);
+    expect(calls).toBe(1);
     expect(result.generationCommandId).toBeTruthy();
     expect(result.modelRunAttemptId).toBeTruthy();
 
     const attempt = await database!.pool.query<{
-      status: string; input_tokens: number | null; output_tokens: number | null;
-      reasoning_tokens: number | null; cached_tokens: number | null;
-      total_tokens: number | null; attempts: string;
+      status: string; input_tokens: string | null; output_tokens: string | null;
+      reasoning_tokens: string | null; cached_tokens: string | null;
+      total_tokens: string | null; attempts: string;
     }>(
       `SELECT a.status, a.input_tokens, a.output_tokens, a.reasoning_tokens,
               a.cached_tokens, a.total_tokens,
@@ -443,15 +463,19 @@ systemDescribe("Shared narrative.validate validator — 1A.3b A2 (issue #198)", 
       [result.modelRunAttemptId],
     );
     expect(attempt.rows[0]).toMatchObject({
-      status: "succeeded", input_tokens: 90, output_tokens: 40,
-      reasoning_tokens: 9, cached_tokens: 3, total_tokens: 142, attempts: "1",
+      status: "succeeded", input_tokens: "90", output_tokens: "40",
+      reasoning_tokens: "9", cached_tokens: "3", total_tokens: "142", attempts: "1",
     });
     const persisted = await readNarrativeValidationOutcome({
       repository, userId, artifactKind: "bio", draftRef, now: baseTime,
     });
     expect(persisted.outcome).toBe("ok");
     if (persisted.outcome === "ok") {
-      expect(persisted.result.result.outcome).toBe("accepted");
+      expect(persisted.result.result.outcome).toBe(result.verdict);
+      if (verdict === "blocked") {
+        expect(persisted.result.result.blockingFindings.map((finding) => finding.findingCode))
+          .toContain("manifest_mismatch");
+      }
       expect(persisted.result.generationCommandId).toBe(result.generationCommandId);
       expect(persisted.result.modelRunAttemptId).toBe(result.modelRunAttemptId);
     }

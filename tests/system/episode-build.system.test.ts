@@ -746,9 +746,9 @@ systemDescribe("Episode admission transaction", () => {
     expect(result.acceptedCount).toBe(1);
     expect(calls).toBe(1);
     const attempt = await database!.pool.query<{
-      generation_command_id: string; status: string; input_tokens: number | null;
-      output_tokens: number | null; reasoning_tokens: number | null;
-      cached_tokens: number | null; total_tokens: number | null;
+      generation_command_id: string; status: string; input_tokens: string | null;
+      output_tokens: string | null; reasoning_tokens: string | null;
+      cached_tokens: string | null; total_tokens: string | null;
     }>(
       `SELECT a.generation_command_id::text, a.status, a.input_tokens,
               a.output_tokens, a.reasoning_tokens, a.cached_tokens, a.total_tokens
@@ -759,8 +759,8 @@ systemDescribe("Episode admission transaction", () => {
       [session.dailySessionId],
     );
     expect(attempt.rows[0]).toMatchObject({
-      status: "succeeded", input_tokens: 80, output_tokens: 35,
-      reasoning_tokens: 8, cached_tokens: 2, total_tokens: 125,
+      status: "succeeded", input_tokens: "80", output_tokens: "35",
+      reasoning_tokens: "8", cached_tokens: "2", total_tokens: "125",
     });
     expect((await database!.pool.query(
       `SELECT status FROM episode_build_runs WHERE daily_session_id = $1`,
