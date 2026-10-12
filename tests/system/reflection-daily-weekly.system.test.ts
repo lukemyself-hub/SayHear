@@ -2529,9 +2529,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     if (queued.outcome !== "queued") throw new Error("unreachable");
     narrativeScript = () => ({ propositions: [], coverageKeys: [] });
     const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
+    let generationCommandId: string | undefined;
     const commitSpy = vi
       .spyOn(reflectionRepository!, "commitReflection")
       .mockImplementationOnce(async (input) => {
+        generationCommandId = input.generationCommandId;
         await commit(input);
         throw new Error("commit acknowledgement lost");
       });
@@ -2573,6 +2575,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     }
 
     expect(result.outcome).toBe("built");
+    expect(generationCommandId).toBeDefined();
     const attempt = await database!.pool.query<{ status: string }>(
       `SELECT a.status FROM model_run_attempts a
        INNER JOIN generation_commands c ON c.generation_command_id = a.generation_command_id
@@ -2605,8 +2608,8 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     }>(
       `SELECT c.status, c.recovery_status FROM generation_commands c
        INNER JOIN model_run_attempts a ON a.generation_command_id = c.generation_command_id
-       WHERE c.user_id = $1 AND c.intent_key = $2`,
-      [OWNER, `reflection-daily:${session.dailySessionId}:1:${digest!}`],
+       WHERE c.user_id = $1 AND c.generation_command_id = $2`,
+      [OWNER, generationCommandId],
     );
     expect(command.rows[0]).toMatchObject({
       status: "succeeded",
@@ -2841,9 +2844,11 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
     if (queued.outcome !== "queued") throw new Error("unreachable");
     narrativeScript = () => ({ propositions: [], coverageKeys: [] });
     const commit = reflectionRepository!.commitReflection.bind(reflectionRepository!);
+    let generationCommandId: string | undefined;
     const commitSpy = vi
       .spyOn(reflectionRepository!, "commitReflection")
       .mockImplementationOnce(async (input) => {
+        generationCommandId = input.generationCommandId;
         await commit(input);
         throw new Error("weekly commit acknowledgement lost");
       });
@@ -2884,6 +2889,7 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
       commitSpy.mockRestore();
     }
     expect(result.outcome).toBe("built");
+    expect(generationCommandId).toBeDefined();
     const state = await database!.pool.query<{
       attempt_status: string;
       command_status: string;
@@ -2896,8 +2902,8 @@ systemDescribe("Daily / Weekly Reflection — 1A.3b A3 (issue #199)", () => {
          ON c.generation_command_id = a.generation_command_id
        INNER JOIN reflection_runs r
          ON r.model_run_attempt_id = a.model_run_attempt_id
-       WHERE c.user_id = $1 AND c.intent_key = $2`,
-      [OWNER, `reflection-weekly:${OWNER}:${week!.weekIdentifier}:${week!.sourceDigest}`],
+       WHERE c.user_id = $1 AND c.generation_command_id = $2`,
+      [OWNER, generationCommandId],
     );
     expect(state.rows).toHaveLength(1);
     expect(state.rows[0]).toEqual({
