@@ -1231,26 +1231,43 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       generationStage: "decision",
     });
 
-    // The ordinary turn is byte for byte what the integration baseline
-    // (84adc42, before the SPEC #301 review fixes) compiled and sent for the
-    // same input: history work must not change ordinary chat or its
-    // seven-day background, whether the history branch is on or off.
-    const baseline: unknown = JSON.parse(
+    // The same input compiled at the integration baseline (84adc42, before
+    // the SPEC #301 review fixes, numbered Times table) still replays byte for
+    // byte: a Context frozen before a release is sent as it was compiled.
+    const baseline = JSON.parse(
       readFileSync(
         new URL("./fixtures/ordinary-turn-context-84adc42.json", import.meta.url),
         "utf8",
       ),
-    );
-    expect(manifest.compilerVersion).toBe("context-compiler:recent-time:v3");
-    expect(JSON.parse(JSON.stringify({ manifest, payload }))).toEqual(baseline);
+    ) as { manifest: typeof manifest; payload: unknown };
+    expect(baseline.manifest.compilerVersion).toBe("context-compiler:recent-time:v3");
+    expect(
+      JSON.parse(
+        JSON.stringify(
+          compiler.renderPermittedPayload({
+            ...baseline.manifest,
+            generationStage: "decision",
+          }),
+        ),
+      ),
+    ).toEqual(baseline.payload);
 
+    // From v4 each user message says when it was written; the instructions
+    // hold no table of times to count into.
+    expect(manifest.compilerVersion).toBe("context-compiler:recent-time:v4");
     expect(payload.instructions).toContain("current request anchor");
     expect(payload.instructions).toContain("local=2026-11-01 01:30:00 GMT-8");
-    expect(payload.instructions).toContain("0=America/Los_Angeles");
-    expect(payload.instructions).toContain("1=Asia/Shanghai");
-    expect(payload.instructions).toContain("1=2026-10-31 22:30:00 GMT+8;z=1;s=r");
-    expect(payload.instructions).toContain("2=2026-10-31 23:55:00 GMT-7;z=0;s=r");
-    expect(payload.instructions).toContain("3=2026-11-01 01:30:00 GMT-7;z=0;s=r");
+    expect(payload.instructions).toContain("Now is Sunday 1 November 2026, 01:30.");
+    expect(payload.instructions).not.toContain("Times:");
+    expect(payload.instructions).not.toMatch(/^\d+=/m);
+    // Another zone is named; the hour the clocks repeated carries its offset.
+    expect(payload.messages.map((message) => message.text.split("\n")[0])).toEqual([
+      "[written Saturday 31 October 2026, yesterday, 22:30 (Asia/Shanghai)]",
+      "[written Saturday 31 October 2026, yesterday, 23:55]",
+      // The assistant's own turn (01:30 GMT-7) carries no line.
+      "You said it was 1:30.",
+      "[written Sunday 1 November 2026, today, 01:30 GMT-8]",
+    ]);
     expect(payload.instructions).toContain("experience time");
     expect(timeSection?.selectedTokens).toBeGreaterThan(0);
     expect(manifest.totalTokens).toBe(
@@ -1301,7 +1318,12 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
     });
 
     expect(payload.instructions).toContain("timezone=unknown");
-    expect(payload.instructions).toContain("1=unknown;z=?;s=?");
+    expect(payload.instructions).toContain(
+      "Now is Thursday 13 August 2026, 19:00 UTC; the user's time zone is not recorded.",
+    );
+    expect(payload.messages.map((message) => message.text)).toEqual([
+      "[written at an unrecorded time]\nI cannot provide the exact time.",
+    ]);
   });
 
   it("replays the frozen compact v2 request without adding v3 date rules", () => {
@@ -1575,8 +1597,13 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
       sequence: 9,
       text: "Anyway, long day.",
     };
+    /** The messages without the line that says when each was written. */
+    const spoken = (payload: { messages: readonly { text: string }[] }) =>
+      payload.messages.map((message) =>
+        message.text.replace(/^\[written [^\n]*\]\n/, ""),
+      );
     const NOTE_RULE =
-      'A message that opens with a bracketed line starting "[Note." carries a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.';
+      'A bracketed line starting "[Note." at the top of a message is a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.';
     const render = async (
       recent: Parameters<typeof createCompilerWithRecent>[0],
       events: NonNullable<ContextSourceSnapshot["events"]>,
@@ -1614,11 +1641,19 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         ],
         [restatement, reply, currentInput],
       );
-      expect(payload.messages.map((message) => message.text)).toEqual([
+      expect(spoken(payload)).toEqual([
         "[Note. They corrected this message on 2026-11-04 00:30 (Asia/Shanghai): the wording below is their corrected one and is what they stand by.]\nThe bonus is one and a half months.",
         "[Note. They wrote this before they made the 2026-11-04 00:30 (Asia/Shanghai) correction to their 2026-11-02 11:00 (Asia/Shanghai) message. It is not a later change of mind: where it differs from that corrected message on the same point, the corrected message is how it stands.]\nYes, two and a half months.",
         "That is a good bonus.",
         "Anyway, long day.",
+      ]);
+      // The note sits under the line saying when the message was written; the
+      // assistant's own turn carries neither.
+      expect(payload.messages.map((message) => message.text.split("\n")[0])).toEqual([
+        "[written Monday 2 November 2026, yesterday, 11:00 (Asia/Shanghai)]",
+        "[written Tuesday 3 November 2026, today, 08:00]",
+        "That is a good bonus.",
+        "[written Tuesday 3 November 2026, today, 10:00]",
       ]);
       expect(payload.instructions).toContain(NOTE_RULE);
       // The frozen Context carries the instant, never the text.
@@ -1633,7 +1668,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         [],
         [{ ...restatement, correctedAt: "2026-11-03T17:00:00.000Z" }, reply, currentInput],
       );
-      expect(payload.messages.map((message) => message.text)).toEqual([
+      expect(spoken(payload)).toEqual([
         "[Note. They corrected this message on 2026-11-03 09:00: the wording below is their corrected one and is what they stand by.]\nYes, two and a half months.",
         "That is a good bonus.",
         "Anyway, long day.",
@@ -1656,7 +1691,7 @@ describe("Context Compiler — recent-source freeze/replay (#293)", () => {
         ],
         [restatement, reply, currentInput],
       );
-      expect(payload.messages.map((message) => message.text)).toEqual([
+      expect(spoken(payload)).toEqual([
         "The bonus is one and a half months.",
         "Yes, two and a half months.",
         "That is a good bonus.",

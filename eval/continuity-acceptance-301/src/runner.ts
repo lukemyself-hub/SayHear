@@ -54,6 +54,16 @@ function text(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+/**
+ * What a conversation message says, without the system's leading
+ * "[written ...]" line (context-compiler:time:v4).
+ */
+function spokenText(value: string | undefined): string | undefined {
+  if (value === undefined || !value.startsWith("[written ")) return value;
+  const end = value.indexOf("\n");
+  return end === -1 ? value : value.slice(end + 1);
+}
+
 function number(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -520,8 +530,8 @@ export async function openCaseSession(input: RunCaseInput): Promise<CaseSession>
               // the request is this turn's text. (A continuation after a tool
               // call appends assistant and tool messages after it.)
               conversationTurn: viaGate
-                ? lastUser?.text === submission.text
-                : messages.at(-1)?.role === "user" && messages.at(-1)?.text === submission.text,
+                ? spokenText(lastUser?.text) === submission.text
+                : messages.at(-1)?.role === "user" && spokenText(messages.at(-1)?.text) === submission.text,
               instructions: viaGate
                 ? viaGate.instructions
                 : (text(record(request.body)?.["instructions"]) ?? ""),

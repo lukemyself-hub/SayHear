@@ -193,7 +193,7 @@ describe("Context Compiler History Answer (issue #314)", () => {
     const payload = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
     // The quoted messages are material in the instructions; the conversation is only the live talk.
     expect(payload.messages.map((message) => [message.role, message.text])).toEqual([
-      ["user", "八月二十号我说了什么？"],
+      ["user", "[written Tuesday 15 September 2026, today, 10:10]\n八月二十号我说了什么？"],
     ]);
     expect(payload.instructions).toContain("History review result");
     expect(payload.instructions).toContain("2026-08-20");
@@ -321,16 +321,21 @@ describe("earlier messages are a bounded block at the end of the instructions (h
         "END OF EARLIER MESSAGES (2 in total).",
       ].join("\n"),
     )).toBe(true);
-    expect(payload.messages.map((message) => message.text)).toEqual(["八月二十号我说了什么？"]);
+    expect(payload.messages.map((message) => message.text)).toEqual([
+      "[written Tuesday 15 September 2026, today, 10:10]\n八月二十号我说了什么？",
+    ]);
   });
 
-  it("lists only the conversation's own messages in the numbered Times table", async () => {
+  it("says when a message was written only on the conversation's own messages", async () => {
     const { compile, compiler, saved } = build("history_answer", historyRecall);
     await compile();
     const payload = compiler.renderPermittedPayload({ ...saved(), generationStage: "history_answer" });
-    // One message is sent, so the table has one row: the current message.
-    expect(payload.instructions).toMatch(/\nTimes:\n1=2026-09-15 10:10:00 GMT\+8;z=0;s=r\n(?!\d+=)/);
-    expect(payload.instructions).not.toMatch(/\d+=2026-08-20 18:30/);
+    // One message is sent and it carries its time; the quoted messages carry
+    // theirs inside the block, and the instructions hold no table of times.
+    expect(payload.messages).toHaveLength(1);
+    expect(payload.instructions).not.toContain("Times:");
+    expect(payload.instructions.match(/\[written /g)).toBeNull();
+    expect(payload.instructions).toContain("Now is Tuesday 15 September 2026, 10:10.");
   });
 
   it("says on the corrected entry that it is the corrected wording and when it was corrected, and on an entry written before the correction that it came first", async () => {
@@ -431,6 +436,34 @@ describe("earlier messages are a bounded block at the end of the instructions (h
     const first = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
     const second = compiler.renderPermittedPayload({ ...manifest, generationStage: "history_answer" });
     expect(second).toEqual(first);
+  });
+
+  it("replays a History Answer frozen with the numbered Times table (history-time:v1, d026280) byte for byte", async () => {
+    const { compiler } = build("history_answer", correctedRecall);
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL("./fixtures/history-answer-context-time-v1-d026280.json", import.meta.url),
+        "utf8",
+      ),
+    ) as { manifest: Parameters<typeof compiler.renderPermittedPayload>[0]; payload: { instructions: string; messages: { text: string }[] } };
+    expect(fixture.manifest.compilerVersion).toBe("context-compiler:history-time:v1");
+    expect(compiler.renderPermittedPayload(fixture.manifest)).toEqual(fixture.payload);
+    expect(fixture.payload.instructions).toMatch(/\nTimes:\n1=/);
+    expect(fixture.payload.instructions).toContain("EARLIER MESSAGES");
+    expect(fixture.payload.messages.every((message) => !message.text.startsWith("[written "))).toBe(true);
+  });
+
+  it("refuses a Context whose version label was changed to another time format", async () => {
+    const { compile, compiler, saved } = build("history_answer", correctedRecall);
+    await compile();
+    expect(saved().compilerVersion).toBe("context-compiler:history-time:v2");
+    expect(() =>
+      compiler.renderPermittedPayload({
+        ...saved(),
+        compilerVersion: "context-compiler:history-time:v1",
+        generationStage: "history_answer",
+      }),
+    ).toThrow(CompiledContextIntegrityError);
   });
 
   it("replays a result frozen with history-reading:v2 byte for byte: unmarked messages, the numbered correction line and the v2 rules", async () => {

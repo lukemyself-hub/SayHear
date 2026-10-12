@@ -125,6 +125,30 @@ const MONTHS = [
 ];
 
 /**
+ * Local dates of a request's messages since context-compiler:time:v4, where
+ * each user message opens with `[written Tuesday 17 November 2026, ...]` and a
+ * reply carries no line of its own: it was written right after the message it
+ * answers, so it takes that message's date. Keys are 1-based message positions.
+ */
+export function parseMessageTimeStamps(
+  messages: readonly Readonly<{ role: string; text: string }>[],
+): ReadonlyMap<number, string> {
+  const times = new Map<number, string>();
+  let answered: string | null = null;
+  messages.forEach((message, index) => {
+    if (message.role === "user") {
+      const stamp = /^\[written [A-Z][a-z]+ (\d{1,2}) ([A-Z][a-z]+) (\d{4})\b/.exec(message.text);
+      const month = stamp ? MONTHS.indexOf(stamp[2]!) + 1 : 0;
+      answered = stamp && month > 0
+        ? `${stamp[3]}-${String(month).padStart(2, "0")}-${stamp[1]!.padStart(2, "0")}`
+        : null;
+    }
+    if (answered !== null) times.set(index + 1, answered);
+  });
+  return times;
+}
+
+/**
  * Where a History Answer quotes the text since history-reading:v3: an entry of
  * the "EARLIER MESSAGES" block at the end of the instructions, under a day
  * heading such as "Thursday 20 August 2026 (about 4 weeks ago)". Returns the
@@ -190,7 +214,8 @@ function answeringRequest(requests: readonly DiagnosticRequest[]): DiagnosticReq
 
 export function diagnoseStep(evidence: DiagnosticEvidence): StepDiagnosis {
   const request = answeringRequest(evidence.requests);
-  const times = request ? parseTimesList(request.instructions) : new Map<number, string>();
+  const listed = request ? parseTimesList(request.instructions) : new Map<number, string>();
+  const times = listed.size > 0 || !request ? listed : parseMessageTimeStamps(request.messages);
   const payloadReadStatus = request ? parsePayloadReadStatus(request.instructions) : null;
   const readState = readStateOf(evidence.recall);
   const disagreements: string[] = [];

@@ -680,6 +680,66 @@
       "requests": 72,
       "runId": "decision-bench-d2-29fccd1f",
       "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 544550,
+      "date": "2026-10-12",
+      "inputTokens": 1026596,
+      "note": "presentation-bench Decision benchmark round t1: variants v5,v5@T1,v5@T2,v5@T3 x 12 fixture(s), repeat 4; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t1/decision-calls.jsonl",
+      "outputTokens": 197071,
+      "requests": 192,
+      "runId": "decision-bench-t1-d9a8131a",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 192734,
+      "date": "2026-10-12",
+      "inputTokens": 387745,
+      "note": "presentation-bench Decision benchmark round t2: variants v5@T4 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t2/decision-calls.jsonl",
+      "outputTokens": 63646,
+      "requests": 72,
+      "runId": "decision-bench-t2-edff9223",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 60377,
+      "date": "2026-10-12",
+      "inputTokens": 128355,
+      "note": "presentation-bench Decision benchmark round t2: variants v5@T2 x 12 fixture(s), repeat 2; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t2/decision-calls.jsonl",
+      "outputTokens": 18218,
+      "requests": 24,
+      "runId": "decision-bench-t2-09f5891e",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 189486,
+      "date": "2026-10-12",
+      "inputTokens": 382990,
+      "note": "presentation-bench Decision benchmark round t3: variants v5@T5 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t3/decision-calls.jsonl",
+      "outputTokens": 62131,
+      "requests": 72,
+      "runId": "decision-bench-t3-c938dfb7",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 190078,
+      "date": "2026-10-12",
+      "inputTokens": 388152,
+      "note": "presentation-bench Decision benchmark round t4: variants v6@T5 x 12 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t4/decision-calls.jsonl",
+      "outputTokens": 61329,
+      "requests": 72,
+      "runId": "decision-bench-t4-29192859",
+      "ticket": "#301-presentation"
+    },
+    {
+      "costUsdMicros": 95804,
+      "date": "2026-10-12",
+      "inputTokens": 181399,
+      "note": "presentation-bench Decision benchmark round t5: variants v6a@T5 x 5 fixture(s), repeat 6; direct Provider calls, design benchmark, not acceptance; conservative peak, uncached list price; per-call detail in presentation-bench/results/t5/decision-calls.jsonl",
+      "outputTokens": 34476,
+      "requests": 30,
+      "runId": "decision-bench-t5-4e26b3de",
+      "ticket": "#301-presentation"
     }
   ]
 }

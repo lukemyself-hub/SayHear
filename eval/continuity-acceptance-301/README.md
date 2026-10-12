@@ -303,5 +303,5 @@ deterministic 不评分语义与人格；以下输出由人按 ADR-0110 裁定�
   `S-controls` 只在真实模型加独立裁定下运行；**C12 的真实模型报告目前不存在**，归 T08 #321。历史出站里更正消息带“用户更正及其时间”的标记
   （`history-reading:v2`）是让模型能分辨两者的手段，其效果同样只有 T08 能证明。
 - **报告里的 Diagnosis 段**（`report.md` / `report.json`）：对每个要求来源到达的步骤，给出 `none | undetermined | no_source | selection_omitted | time_lost | read_failed | generation_error`，
-  依据权威历史、Inspector 和实际出站请求（含其 `Times:` 列表），并给出对应的 Provider 请求 id。`generation_error` 只来自语义裁定；没有裁定时是 `undetermined`。
+  依据权威历史、Inspector 和实际出站请求（消息第一行的时间行；旧版本为 `Times:` 列表），并给出对应的 Provider 请求 id。`generation_error` 只来自语义裁定；没有裁定时是 `undetermined`。
 - `O-purge-race` 仍是 `not-run`：Full Purge 会撤销该 owner 的 Web 会话，CLI 无法读回；进程内证明见 `tests/system/history-purge-recovery.system.test.ts`。

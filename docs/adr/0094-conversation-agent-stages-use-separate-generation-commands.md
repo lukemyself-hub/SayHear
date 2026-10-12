@@ -44,7 +44,7 @@ Command 开始，重新取得状态、选择和 reservation。
   `history_recall_results`：计划、状态、内容无关覆盖统计与有序 revision 引用，**不含正文**）、
   创建 History Answer Command 及其第一个 ModelRunAttempt。幂等键 `history-answer/<decision command id>`。
 - History Answer 是独立阶段：自己的 Prompt（`task-instruction-history-answer:v1`）、冻结的
-  CompiledContext（版本 `context-compiler:history-time:v1`，含 `history_recall_receipt` 与
+  CompiledContext（版本 `context-compiler:history-time:v2`，引入时为 `history-time:v1`；含 `history_recall_receipt` 与
   `history_recall_context` 两个 section）、预算与 `tools_disabled=true`，沿既有完整 Response 接受点提交
   唯一的 Assistant Event。历史查询**不是** ModelRunAttempt 重试；各阶段内的技术重试仍只增加各自 Command
   下的 ModelRunAttempt（查询不重跑）。重派同一阶段不重复提交 Assistant Event（接受点

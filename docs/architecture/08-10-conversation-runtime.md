@@ -350,12 +350,20 @@ user / assistant 消息排在当前对话前面，消息本身没有标记，“
 **空正文重试。**回复调用完成但没有可见正文时，同一 Command 的第一次尝试按 ADR-0083（2026-10-12 修订）做一次技术重试，
 仍为空则 `invalid_response` 失败关闭；重试走普通派发路径，来源与治理复查全部重跑（`tests/system/empty-reply-retry.system.test.ts`）。
 
-**Decision 函数说明（`history-recall:v5`）。**有线索的自然接续里，模型曾把来信归到七天背景里可见的另一件事，依据“较早背景已在对话中就不要用”
+**Decision 函数说明（`history-recall:v5` 起，现行 `history-recall:v6`）。**有线索的自然接续里，模型曾把来信归到七天背景里可见的另一件事，依据“较早背景已在对话中就不要用”
 而不查。函数说明补充：对话里可见的事与当前消息给出的来信方、到达方式、所涉对象不吻合时，不算已在对话中，用这些细节去查。说明里取自开发
-案例的例句已换成不取自任何案例的例子。**启用步骤**：策略版本写在治理授权行里，代码升到 v5 后需要一条 v5 的授权行才启用——部署后由具备
+案例的例句已换成不取自任何案例的例子。v6 再把“单独调用”改为“只做这一次调用，不做第二次；按日期的调用也覆盖该时段的细节”，因为长对话的细节
+追问常同时提出两个查询，而第二个历史提案仍按 ADR-0093 判 `invalid_response`。**启用步骤**：策略版本写在治理授权行里，代码每升一版（现为 v6）需要一条该版本的授权行才启用——部署后由具备
 权限的操作者 `POST /api/internal/operator/history-recall {"action":"enable"}`；若环境里已有旧版本的生效行，先 `{"action":"disable"}`
 （同一请求排空未结算的 History Answer），`GET` 读到 `historyAnswers.unsettled: 0` 后再 `enable`，并用 `GET` 与 `effective-runtime-config` 的
 `policy.history_recall_governance_version` 核对。
+
+**时间就地标注（`context-compiler:time:v4` / `recent-time:v4` / `history-time:v2`，ADR-0093 2026-10-12 修订）。**所有回合的 Context 不再输出
+`Times:` 序号表：每条用户消息的第一行是系统加的 `[written Tuesday 17 November 2026, yesterday, 19:40]`（用户本地时间；同一本地日出现多个
+GMT 偏移时附偏移，时区与锚点不同时附时区名，时区未记录或假定时写明，时间缺失时写 `at an unrecorded time`），助手消息不标；`time_context`
+段只留锚点、现在时刻和读法说明。更正说明行排在时间行之后。原因是 Decision 调用为把消息与序号表对齐而大量推理并超时。上文凡提到 Times 序号表
+之处，描述的是 `time:v3` / `recent-time:v3` / `history-time:v1` 及更早版本；这些版本冻结的 Context 仍按原格式逐字节重放。已知缺口：时间行
+（每条约 15 token）与更正说明行一样不计入 manifest 的 token 核算。
 
 #### 8.4.7 历史路径的来源控制、诊断与独立关闭（#320）
 
@@ -373,8 +381,8 @@ Provider 结果落定（`recordProviderCompletion`）与提交（`commitComplete
 （ADR-0093 / ADR-0094 的 SPEC #301 评审修订）。部署开关关闭或治理撤销后，崩溃遗留的 History Answer 由恢复扫描失败关闭结算，已过请求
 截止的不等恢复窗口。
 
-**关闭后的普通回复。**分支关闭、未部署或 Retry 退化时，回复是不带回执的普通回复，Context 与没有历史分支时逐字节相同
-（`context-compiler:time:v3` / `recent-time:v3`）。已知缺口：没有确定性约束阻止模型据近期背景断言“没聊过”，见 ADR-0093 的 SPEC #301 评审修订。
+**关闭后的普通回复。**分支关闭、未部署或 Retry 退化时，回复是不带回执的普通回复，Context 的编译方式与分支开启时相同
+（`context-compiler:time:v4` / `recent-time:v4`；差别只在是否提供历史函数）。已知缺口：没有确定性约束阻止模型据近期背景断言“没聊过”，见 ADR-0093 的 SPEC #301 评审修订。
 `effective-runtime-config` 增加 `switch.history_recall_governance_enabled` / `policy.history_recall_governance_version`，探针缺失时报 `unverified`。
 
 **诊断。**受控 Inspector 增加 `turn`（同一 Turn 全部 command 的阶段、状态、Provider Egress 处置、Provider 请求 id，以及最终处置
@@ -383,7 +391,7 @@ Provider 结果落定（`recordProviderCompletion`）与提交（`commitComplete
 原文展开沿用 `conversation_content:read` + 近期 step-up：`GET /api/internal/inspection/conversation-content` 对历史 command 额外返回
 `historySources`（按模型所见顺序，仅返回当前仍允许的来源；被排除/清除的不返回）；拒绝只给固定原因码，不含查询、人物或范围。
 验收 harness 的 `diagnose` 用三处真实边界判定五类问题（无来源 / 选漏 / 时间丢失 / 读取失败 / 生成错误）：权威历史、Inspector、实际出站请求
-（含其 `Times:` 列表与指令末尾的较早原文块）；Provider 请求 id 把 Inspector 的 command 与实际 payload 对上；生成错误只能由语义裁定产生，缺裁定为 `undetermined`。
+（含消息第一行的时间行——旧版本为 `Times:` 列表——与指令末尾的较早原文块）；Provider 请求 id 把 Inspector 的 command 与实际 payload 对上；生成错误只能由语义裁定产生，缺裁定为 `undetermined`。
 
 #### 8.4.1 Action Capability 元模型
 

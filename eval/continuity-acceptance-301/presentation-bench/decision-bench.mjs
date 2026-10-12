@@ -109,9 +109,63 @@ const fixtures = () =>
     .map((name) => JSON.parse(readFileSync(path.join(fixtureDir, name), "utf8")))
     .filter((fixture) => !values.fixture || values.fixture.split(",").includes(fixture.id));
 
-function requestBody(fixture, variant, sessionId) {
+/**
+ * Time layouts (`variant@layout`, default the product's table):
+ *   T1  the numbered Times table is removed; every message starts with the raw local time it was written
+ *   T2  as T1, in words with the weekday and how many days ago
+ *   T3  as T2, on the user's messages only
+ *   T5  as T3, keeping the GMT offset when the messages do not all share one; says your replies were written right after
+ *   T4  as T2, keeping the GMT offset when the messages do not all share one, and saying when the earliest shown message was written
+ */
+const TIME_ROW = /^(\d+)=(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):\d{2} (GMT[+-][\d:]+);z=\d+;s=\w$/;
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function withTimeLayout(fixture, layout) {
+  if (!layout) return { instructions: fixture.instructions, messages: fixture.messages };
+  const lines = fixture.instructions.split("\n");
+  const rows = lines.map((line) => TIME_ROW.exec(line)).filter(Boolean);
+  if (rows.length !== fixture.messages.length) throw new Error(`${fixture.id}: ${rows.length} time rows for ${fixture.messages.length} messages`);
+  const anchor = /local=(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(fixture.instructions);
+  const day = (year, month, date) => Date.UTC(Number(year), Number(month) - 1, Number(date));
+  const today = day(anchor[1], anchor[2], anchor[3]);
+  const words = (year, month, date) => {
+    const at = day(year, month, date);
+    const ago = Math.round((today - at) / 86_400_000);
+    const relative = ago === 0 ? "today" : ago === 1 ? "yesterday" : `${ago} days ago`;
+    return `${WEEKDAYS[new Date(at).getUTCDay()]} ${Number(date)} ${MONTHS[Number(month) - 1]} ${year}, ${relative}`;
+  };
+  const userOnly = layout === "T3" || layout === "T5";
+  const mixedOffsets = (layout === "T4" || layout === "T5") && new Set(rows.map((row) => row[7])).size > 1;
+  const clock = (row) => `${row[5]}:${row[6]}${mixedOffsets ? ` ${row[7]}` : ""}`;
+  const stamp = (row) =>
+    layout === "T1"
+      ? `[written ${row[2]}-${row[3]}-${row[4]} ${row[5]}:${row[6]} ${row[7]}]`
+      : `[written ${words(row[2], row[3], row[4])}, ${clock(row)}]`;
+  const earliest =
+    layout === "T4"
+      ? ` The earliest message below was written ${words(rows[0][2], rows[0][3], rows[0][4])}, ${clock(rows[0])}; nothing they wrote before that is shown here.`
+      : "";
+  const kept = lines.filter((line) => !TIME_ROW.test(line) && !/^(Zones: |Times:$)/.test(line));
+  const instructions = kept
+    .join("\n")
+    .replace(
+      /Expression times are when messages were written, in provider message order[^\n]*/,
+      `${userOnly ? "Each of the user's messages" : "Each message"} below begins with a bracketed line saying when it was written, in the user's local time. That line is added by the system: it is not part of what was said, and you never write one yourself.${layout === "T5" ? " Each of your replies was written right after the message it answers." : ""}${layout === "T1" ? "" : ` Now is ${words(anchor[1], anchor[2], anchor[3]).replace(", today", "")}, ${anchor[4]}:${anchor[5]}.`}${earliest}`,
+    );
+  if (instructions === kept.join("\n")) throw new Error(`${fixture.id}: time preamble not found`);
+  return {
+    instructions,
+    messages: fixture.messages.map((message, index) =>
+      userOnly && message.role === "assistant" ? message : { ...message, text: `${stamp(rows[index])}\n${message.text}` },
+    ),
+  };
+}
+
+function requestBody(fixtureAsRecorded, variantAndLayout, sessionId) {
+  const [variant, layout] = variantAndLayout.split("@");
   const description = variants[variant]?.description;
   if (typeof description !== "string") throw new Error(`Unknown variant ${variant}`);
+  const fixture = withTimeLayout(fixtureAsRecorded, layout);
   return {
     messages: [
       {
@@ -209,6 +263,7 @@ if (values["dry-run"]) {
     const body = requestBody(job.fixture, job.variant, randomUUID());
     console.log(`\n######## ${job.variant} ${job.fixture.id} (${job.fixture.expect}; ~${approxTokens(body)} input tokens)`);
     console.log(body.tools.find((tool) => tool.function.name === REVIEW).function.description);
+    if (job.variant.includes("@")) console.log(body.messages[0].content.slice(body.messages[0].content.indexOf("current request anchor")));
     for (const message of body.messages.slice(1)) console.log(`--- ${message.role}: ${message.content.slice(0, 160)}`);
   }
   const estimate = jobs.reduce((sum, job) => sum + approxTokens(requestBody(job.fixture, job.variant, "x")) * INPUT_USD_MICROS_PER_TOKEN + 1500 * OUTPUT_USD_MICROS_PER_TOKEN, 0);

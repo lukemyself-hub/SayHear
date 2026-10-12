@@ -21,9 +21,12 @@ import type {
   UserId,
 } from "@sayhear/domain";
 import {
+  formatHumanMinute,
   MESSAGE_NOTE_MARK,
+  MESSAGE_TIME_MARK,
   renderEarlierMessagesBlock,
   renderMessageNotes,
+  renderMessageTimeStamps,
   withMessageNote,
 } from "./message-presentation";
 import {
@@ -463,7 +466,15 @@ export const RECENT_CONTEXT_COMPILER_VERSION =
 export const PREVIOUS_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v1" as const;
 
+/**
+ * v4 writes when a message was written on the message itself (the first line
+ * of each user turn) instead of in a numbered table in the instructions.
+ */
 export const TIME_AWARE_CONTEXT_COMPILER_VERSION =
+  "context-compiler:time:v4" as const;
+
+/** The numbered Times table; replay only. */
+const INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION =
   "context-compiler:time:v3" as const;
 
 const COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION =
@@ -474,6 +485,9 @@ export const PREVIOUS_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v1" as const;
 
 export const RECENT_CONTEXT_TIME_COMPILER_VERSION =
+  "context-compiler:recent-time:v4" as const;
+
+const INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION =
   "context-compiler:recent-time:v3" as const;
 
 const COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION =
@@ -485,7 +499,15 @@ const COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION =
  * must fail closed if such a section is grafted onto it.
  */
 export const HISTORY_RECALL_TIME_COMPILER_VERSION =
+  "context-compiler:history-time:v2" as const;
+
+/** A History Answer Context with the numbered Times table; replay only. */
+const INDEXED_HISTORY_RECALL_TIME_COMPILER_VERSION =
   "context-compiler:history-time:v1" as const;
+
+const isHistoryRecallTimeCompilerVersion = (version: string): boolean =>
+  version === HISTORY_RECALL_TIME_COMPILER_VERSION ||
+  version === INDEXED_HISTORY_RECALL_TIME_COMPILER_VERSION;
 
 export const HISTORY_RECALL_CONTEXT_SECTION_KEY =
   "history_recall_context" as const;
@@ -500,6 +522,8 @@ const CONTEXT_TIME_NOTE_RULE_TOKEN_BUDGET = 128;
  * quote (seven-day background, same Daily Session). Present only when such a
  * note is sent, so a Context without corrections is unchanged.
  */
+/** The same rule where the note follows the line saying when the message was written. */
+const INLINE_MESSAGE_NOTE_RULE = `A bracketed line starting "${MESSAGE_NOTE_MARK}" at the top of a message is a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.`;
 const MESSAGE_NOTE_RULE = `A message that opens with a bracketed line starting "${MESSAGE_NOTE_MARK}" carries a note for you about that message, not something anyone said: never read it out, repeat it or mention it. A message noted as their corrected wording is what they stand by; a message noted as written before that correction is how they put it earlier, not a later change of mind.`;
 
 type ContextTimeEntry = Readonly<{
@@ -1000,22 +1024,31 @@ export function createContextCompiler(dependencies: {
       const compactTimeFormat =
         source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
         source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION;
+      const indexedTimeFormat =
+        source.compilerVersion === INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+        source.compilerVersion ===
+          INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+        source.compilerVersion === INDEXED_HISTORY_RECALL_TIME_COMPILER_VERSION;
       const versionAccepted =
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
-          source.compilerVersion === HISTORY_RECALL_TIME_COMPILER_VERSION &&
+          isHistoryRecallTimeCompilerVersion(source.compilerVersion) &&
           source.generationStage === "history_answer" &&
           hasTimeMetadata &&
           hasHistoryMetadata) ||
         (!hasHistoryMetadata &&
           source.generationStage !== "history_answer" &&
-          source.compilerVersion !== HISTORY_RECALL_TIME_COMPILER_VERSION &&
+          !isHistoryRecallTimeCompilerVersion(source.compilerVersion) &&
           ((dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+            source.compilerVersion ===
+              INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
             source.compilerVersion === COMPACT_TIME_AWARE_CONTEXT_COMPILER_VERSION) &&
           hasTimeMetadata &&
           !hasRecentMetadata) ||
         (dependencies.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION &&
           (source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+            source.compilerVersion ===
+              INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
             source.compilerVersion === COMPACT_RECENT_CONTEXT_TIME_COMPILER_VERSION) &&
           hasTimeMetadata &&
           hasRecentMetadata) ||
@@ -1179,6 +1212,10 @@ export function createContextCompiler(dependencies: {
       if (
         (source.compilerVersion === TIME_AWARE_CONTEXT_COMPILER_VERSION ||
           source.compilerVersion === RECENT_CONTEXT_TIME_COMPILER_VERSION ||
+          source.compilerVersion ===
+            INDEXED_TIME_AWARE_CONTEXT_COMPILER_VERSION ||
+          source.compilerVersion ===
+            INDEXED_RECENT_CONTEXT_TIME_COMPILER_VERSION ||
           compactTimeFormat ||
           previousTimeFormat) &&
         !timeContext
@@ -1250,7 +1287,9 @@ export function createContextCompiler(dependencies: {
                 ? "legacy"
                 : compactTimeFormat
                   ? "compact-v2"
-                  : "compact",
+                  : indexedTimeFormat
+                    ? "compact"
+                    : "inline",
             }),
         history,
         locale: source.locale,
@@ -1317,6 +1356,13 @@ export function createContextCompiler(dependencies: {
         currentInput,
       ];
       const messageNotes = renderOutboundMessageNotes(timeContext, quotedCount);
+      const messageTimeStamps =
+        timeContext === undefined ||
+        previousTimeFormat ||
+        compactTimeFormat ||
+        indexedTimeFormat
+          ? []
+          : renderOutboundMessageTimeStamps(timeContext, quotedCount);
       const earlierMessagesBlock =
         quoted !== undefined && timeContext !== undefined
           ? renderEarlierMessagesBlock({
@@ -1351,7 +1397,10 @@ export function createContextCompiler(dependencies: {
         messages: outboundEvents.map((event, index) => ({
           revisionId: event.revisionId,
           role: event.actor,
-          text: withMessageNote(messageNotes[index] ?? null, event.text),
+          text: withMessageNote(
+            messageTimeStamps[index] ?? null,
+            withMessageNote(messageNotes[index] ?? null, event.text),
+          ),
         })),
       };
     },
@@ -1788,6 +1837,65 @@ function renderOutboundMessageNotes(
   });
 }
 
+const EXPERIENCE_TIME_RULE =
+  "Expression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.";
+const RELATIVE_DATE_RULE =
+  "For recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.";
+
+/**
+ * The time section of the current format: the request anchor and how to read
+ * the line each user message carries. The times themselves are on the
+ * messages (`renderOutboundMessageTimeStamps`).
+ */
+function renderInlineContextTimeMetadata(
+  metadata: ContextTimeMetadata,
+  includeMessageNoteRule: boolean,
+): string {
+  const anchor = formatContextInstant(
+    metadata.anchor.expressedAt,
+    metadata.anchor.timezone,
+  );
+  const now =
+    metadata.anchor.expressedAt === null
+      ? ""
+      : ` Now is ${formatInstantInWords(metadata.anchor.expressedAt, metadata.anchor.timezone)}${
+          metadata.anchor.timezone === null
+            ? " UTC; the user's time zone is not recorded"
+            : ""
+        }.`;
+  return [
+    `current request anchor: instant=${metadata.anchor.expressedAt ?? "unknown"}; timezone=${metadata.anchor.timezone ?? "unknown"}; local=${anchor}; source=${metadata.anchor.instantSource}.`,
+    `Each of the user's messages below begins with a bracketed line starting "${MESSAGE_TIME_MARK.trim()}" that says when it was written, in the user's local time. That line is added by the system: it is not part of what was said, and you never write one yourself. Each of your replies was written right after the message it answers.${now}`,
+    EXPERIENCE_TIME_RULE,
+    RELATIVE_DATE_RULE,
+    ...(includeMessageNoteRule ? [INLINE_MESSAGE_NOTE_RULE] : []),
+  ].join("\n");
+}
+
+function formatInstantInWords(instant: string, timezone: string | null): string {
+  try {
+    return formatHumanMinute(instant, timezone ?? "UTC");
+  } catch {
+    return formatContextInstant(instant, timezone);
+  }
+}
+
+/**
+ * When each outbound conversation message was written, in provider order;
+ * `null` for the assistant's turns. Messages presented as the
+ * earlier-messages block carry their times there.
+ */
+function renderOutboundMessageTimeStamps(
+  timeContext: ContextTimeMetadata,
+  quotedCount: number,
+): readonly (string | null)[] {
+  return renderMessageTimeStamps({
+    anchorTimezone: timeContext.anchor.timezone,
+    messages: presentedMessages(timeContext).slice(quotedCount),
+    now: timeContext.anchor.expressedAt,
+  });
+}
+
 function renderContextTimeMetadata(
   metadata: ContextTimeMetadata,
   includeRelativeDateRules: boolean,
@@ -1831,13 +1939,9 @@ function renderContextTimeMetadata(
       );
       return `${quotedCount === 0 ? entry.messageIndex : index + 1}=${local};z=${zoneCode};s=${sourceCode}`;
     }),
-    "Expression time does not establish when a described event happened. Use experience time only when the message or explicit evidence states it; do not infer it from expression time or the Daily Session date.",
+    EXPERIENCE_TIME_RULE,
   ];
-  if (includeRelativeDateRules) {
-    lines.push(
-      "For recall of today/yesterday, compare each expression instant in the current anchor's timezone. A same-session message may be from yesterday; Session ownership never proves absence. Resolve relative dates in historical text using that message's expression time.",
-    );
-  }
+  if (includeRelativeDateRules) lines.push(RELATIVE_DATE_RULE);
   if (includeMessageNoteRule) lines.push(MESSAGE_NOTE_RULE);
   return lines.join("\n");
 }
@@ -1847,14 +1951,21 @@ function createBoundedContextTimeMetadata(input: {
   maximumMessageCount: number;
   includeMessageNoteRule: boolean;
   includeRelativeDateRules: boolean;
+  /** The times are on the messages; the section holds no table. */
+  inline: boolean;
   quotedCount: number;
 }): Readonly<{ budgetTokens: number; content: string }> {
-  const content = renderContextTimeMetadata(
-    input.metadata,
-    input.includeRelativeDateRules,
-    input.includeMessageNoteRule,
-    input.quotedCount,
-  );
+  const content = input.inline
+    ? renderInlineContextTimeMetadata(
+        input.metadata,
+        input.includeMessageNoteRule,
+      )
+    : renderContextTimeMetadata(
+        input.metadata,
+        input.includeRelativeDateRules,
+        input.includeMessageNoteRule,
+        input.quotedCount,
+      );
   const zoneCount = new Set(
     [
       input.metadata.anchor.timezone,
@@ -2258,7 +2369,8 @@ function createSections(input: {
     reference: string;
   }>;
   timeContext?: ContextTimeMetadata;
-  timeContextFormat?: "compact" | "compact-v2" | "legacy";
+  /** Absent means the current format, `inline`. */
+  timeContextFormat?: "compact" | "compact-v2" | "inline" | "legacy";
 }): readonly (CompiledContextSection & Readonly<{ content: string }>)[] {
   // While the Safety Posture is active, enforcement is compilation: the
   // ordinary behavior anchors are swapped for the versioned reduced variant,
@@ -2295,6 +2407,9 @@ function createSections(input: {
               ).some((note) => note?.startsWith(MESSAGE_NOTE_MARK) === true),
               quotedCount: quotedBlockCount(input.historyRecall),
               includeRelativeDateRules: input.timeContextFormat !== "compact-v2",
+              inline:
+                input.timeContextFormat === undefined ||
+                input.timeContextFormat === "inline",
               maximumMessageCount:
                 input.rawEventTokenBudget +
                 (input.recentContext?.budgetTokens ?? 0) +

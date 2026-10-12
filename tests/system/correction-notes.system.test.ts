@@ -36,7 +36,7 @@ const OFFER_NEW = "猎头透了底，那家 startup 给的 base 是 38k，外加
 const STANDS = "the wording below is their corrected one and is what they stand by.]";
 const NOT_A_CHANGE_OF_MIND =
   "It is not a later change of mind: where it differs from that corrected message on the same point, the corrected message is how it stands.]";
-const NOTE_RULE = 'A message that opens with a bracketed line starting "[Note."';
+const NOTE_RULE = 'A bracketed line starting "[Note." at the top of a message is a note for you';
 
 describe("a correction is noted on the messages of an ordinary turn", () => {
   it("in the seven-day background: the corrected message says so, and the restatement written before it says it came first", async () => {
@@ -102,6 +102,15 @@ describe("a correction is noted on the messages of an ordinary turn", () => {
       `assistant:${OFFER_OLD_REPLY}`,
       "user:今天有点累。",
     ]);
+    // As actually sent, each of the user's messages opens with the line saying
+    // when it was written; the reply carries none.
+    expect(request.turns).toHaveLength(3);
+    expect(request.turns[0]).toMatch(
+      new RegExp(`^user:\\[written [A-Z][a-z]+ 9 September 2026, 3 days ago, \\d{2}:\\d{2}\\]\\n${OFFER_OLD}$`),
+    );
+    expect(request.turns[1]).toBe(`assistant:${OFFER_OLD_REPLY}`);
+    expect(request.turns[2]).toMatch(/^user:\[written [A-Z][a-z]+ 12 September 2026, today, \d{2}:\d{2}\]\n今天有点累。$/);
     expect(request.instructions).not.toContain("[Note.");
+    expect(request.instructions).not.toContain("Times:");
   });
 });

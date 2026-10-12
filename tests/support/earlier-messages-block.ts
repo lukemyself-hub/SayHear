@@ -43,13 +43,29 @@ export function quotedEarlierMessages(instructions: string): string[] {
   return quoted.map((entry) => `${entry.role}:${entry.lines.join("\n")}`);
 }
 
-/** Everything the model is given to read as messages: quoted entries, then the turns sent. */
+/**
+ * A conversation turn without the system's leading "[written ...]" line
+ * (context-compiler:time:v4): what the person said, plus any "[Note." line.
+ * The line itself is asserted where it is defined, in
+ * `packages/application/src/message-presentation.test.ts`, and on the real
+ * path in `tests/system/correction-notes.system.test.ts`.
+ */
+export function withoutTimeLine(text: string): string {
+  if (!text.startsWith("[written ")) return text;
+  const end = text.indexOf("\n");
+  return end === -1 ? text : text.slice(end + 1);
+}
+
+/**
+ * Everything the model is given to read as messages: quoted entries, then the
+ * turns sent, each without its "[written ...]" line.
+ */
 export function sentMessages(request: {
   instructions: string;
   messages: readonly { role: string; text: string }[];
 }): string[] {
   return [
     ...quotedEarlierMessages(request.instructions),
-    ...request.messages.map((message) => `${message.role}:${message.text}`),
+    ...request.messages.map((message) => `${message.role}:${withoutTimeLine(message.text)}`),
   ];
 }

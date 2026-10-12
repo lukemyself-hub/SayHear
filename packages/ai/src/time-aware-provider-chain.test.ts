@@ -348,29 +348,26 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
     expect(messages?.[0]?.["content"]).toContain(
       "local=2026-11-01 01:30:00 GMT-8",
     );
+    // From context-compiler:time:v4 the instructions hold no table of times:
+    // each user message says when it was written.
+    expect(messages?.[0]?.["content"]).not.toContain("Times:");
     expect(messages?.[0]?.["content"]).toContain(
-      "2026-10-31 23:55:00 GMT-7",
+      "Now is Sunday 1 November 2026, 01:30.",
     );
-    expect(messages?.[0]?.["content"]).toContain(
-      "2026-11-01 01:30:00 GMT-7",
+    const sent = messages?.slice(1).map((message) => String(message["content"])) ?? [];
+    expect(sent[0]).toBe(
+      "[written Saturday 31 October 2026, yesterday, 22:30 (Asia/Shanghai)]\nI visited the garden yesterday.",
     );
-    expect(messages?.[0]?.["content"]).toContain(
-      "1=2026-10-31 22:30:00 GMT+8;z=1;s=r",
+    expect(sent[1]).toBe("[written at an unrecorded time]\nx");
+    expect(sent[2]).toBe("[written Saturday 31 October 2026, yesterday, 21:01]\nx");
+    expect(sent[101]).toBe(
+      "[written Saturday 31 October 2026, yesterday, 23:55]\nI went to bed late.",
     );
-    expect(messages?.[0]?.["content"]).toContain(
-      "2=unknown;z=?;s=?",
-    );
-    expect(messages?.[0]?.["content"]).toContain(
-      "3=2026-10-31 21:01:00 GMT-7;z=0;s=r",
-    );
-    expect(messages?.[0]?.["content"]).toContain(
-      "102=2026-10-31 23:55:00 GMT-7;z=0;s=r",
-    );
-    expect(messages?.[0]?.["content"]).toContain(
-      `103=2026-11-01 01:30:00 GMT-7;z=0;s=r`,
-    );
-    expect(messages?.[0]?.["content"]).toContain(
-      `104=2026-11-01 01:30:00 GMT-8;z=0;s=r`,
+    // The assistant's own turn carries no line; the hour the clocks repeated
+    // carries its offset on the user's message.
+    expect(sent[102]).toBe("You said it was 1:30.");
+    expect(sent[103]).toBe(
+      "[written Sunday 1 November 2026, today, 01:30 GMT-8]\nWhat did I say yesterday?",
     );
     expect(messages?.[0]?.["content"]).toContain("Expression time does not establish when a described event happened");
     expect(messages?.[0]?.["content"]).toContain(
@@ -379,7 +376,7 @@ describe("time-aware Context to OpenCode Go provider chain", () => {
     expect(messages?.[0]?.["content"]).toContain(
       "Resolve relative dates in historical text using that message's expression time.",
     );
-    expect(messages?.slice(1).map((message) => message["content"])).toEqual([
+    expect(sent.map((text) => text.replace(/^\[written [^\n]*\]\n/, ""))).toEqual([
       "I visited the garden yesterday.",
       ...Array.from({ length: 100 }, () => "x"),
       "I went to bed late.",

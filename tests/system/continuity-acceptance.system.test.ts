@@ -127,7 +127,8 @@ describe("Continuity acceptance over the real chat path", () => {
     const turn = step.providerRequests.find((request) => request.conversationTurn);
     expect(turn).toBeDefined();
     expect(turn?.strings.some((value) => value.includes("SayHear"))).toBe(true);
-    expect(turn?.strings).toContain(smoke.fixture.history[0]!.user);
+    // The words arrive after the line saying when they were written.
+    expect(turn?.strings.some((value) => value.endsWith(`]\n${smoke.fixture.history[0]!.user}`))).toBe(true);
 
     // Nothing the scorer knows reached the model: not the title, the
     // capability, an expected fact or a failure signal.
@@ -344,7 +345,8 @@ describe("Real-model transport rehearsal over the real chat path", () => {
     const turn = step.providerRequests.find((request) => request.conversationTurn);
     expect(turn).toMatchObject({ response: null, transport: "served" });
     expect(turn?.instructions).toContain("SayHear");
-    expect(turn?.strings).toContain(smoke.fixture.history[0]!.user);
+    // The words arrive after the line saying when they were written.
+    expect(turn?.strings.some((value) => value.endsWith(`]\n${smoke.fixture.history[0]!.user}`))).toBe(true);
 
     const { byId } = statuses(observation, "S01");
     for (const id of ["INV-seed-readback", "INV-oracle-not-in-outbound", "O-commit", "O-history", "O-background"]) {

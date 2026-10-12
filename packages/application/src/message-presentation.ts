@@ -178,6 +178,81 @@ export function withMessageNote(note: string | null, text: string): string {
   return note === null ? text : `${note}\n${text}`;
 }
 
+/** Opens the line saying when a user's conversation message was written. */
+export const MESSAGE_TIME_MARK = "[written ";
+
+/**
+ * When each outbound conversation message was written, as the first line of
+ * the message itself; `null` for the assistant's own turns.
+ *
+ * The times used to sit in a numbered table in the instructions. The model
+ * then had to count conversation turns to find a message's row, and
+ * consecutive user messages read as one block, so the count rarely matched:
+ * Decision calls spent thousands of reasoning tokens re-deriving which time
+ * belonged to which message. Chosen with
+ * `eval/continuity-acceptance-301/presentation-bench` (time layout T5).
+ *
+ * Only the user's messages carry the line. A reply is written right after the
+ * message it answers, and a line on the assistant's own earlier turns would
+ * show the model replies that begin with one.
+ */
+export function renderMessageTimeStamps(input: {
+  anchorTimezone: string | null;
+  messages: readonly PresentedMessage[];
+  now: string | null;
+}): readonly (string | null)[] {
+  const anchorZone = input.anchorTimezone ?? "UTC";
+  const zoneOf = (message: PresentedMessage) => message.timezone ?? anchorZone;
+  // A local day on which the clocks changed holds the same hour twice: the
+  // messages of such a day carry their GMT offset.
+  const offsetsByDay = new Map<string, Set<string>>();
+  const dayKey = (iso: string, zone: string) => `${zone} ${localDate(iso, zone)}`;
+  for (const message of input.messages) {
+    if (message.expressedAt === null) continue;
+    const zone = zoneOf(message);
+    try {
+      const key = dayKey(message.expressedAt, zone);
+      offsetsByDay.set(
+        key,
+        (offsetsByDay.get(key) ?? new Set()).add(gmtOffset(message.expressedAt, zone)),
+      );
+    } catch {
+      // An unusable zone or instant: that message says its time is unrecorded.
+    }
+  }
+  const unrecorded = `${MESSAGE_TIME_MARK}at an unrecorded time]`;
+  return input.messages.map((message) => {
+    if (message.actor !== "user") return null;
+    if (message.expressedAt === null) return unrecorded;
+    const zone = zoneOf(message);
+    try {
+      const relative =
+        input.now === null
+          ? ""
+          : `, ${ago(input.now, anchorZone, message.expressedAt, zone)}`;
+      const ambiguous =
+        (offsetsByDay.get(dayKey(message.expressedAt, zone))?.size ?? 0) > 1;
+      return `${MESSAGE_TIME_MARK}${humanDay(message.expressedAt, zone)}${relative}, ${clock(message.expressedAt, zone)}${
+        ambiguous ? ` ${gmtOffset(message.expressedAt, zone)}` : ""
+      }${
+        // No zone is known for the message or the request: the clock is UTC.
+        message.timezone === null && input.anchorTimezone === null
+          ? " UTC"
+          : zone === anchorZone
+            ? ""
+            : ` (${zone})`
+      }${message.timezoneRecorded === false ? " (time zone assumed)" : ""}]`;
+    } catch {
+      return unrecorded;
+    }
+  });
+}
+
+/** "Wednesday 18 November 2026, 19:26" in the given IANA zone. */
+export function formatHumanMinute(iso: string, timezone: string): string {
+  return `${humanDay(iso, timezone)}, ${clock(iso, timezone)}`;
+}
+
 export const EARLIER_MESSAGES_BLOCK_TITLE = "EARLIER MESSAGES";
 
 /**
