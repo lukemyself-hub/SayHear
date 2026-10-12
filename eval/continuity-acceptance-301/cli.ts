@@ -4,7 +4,13 @@ import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 
 import { ACCEPTANCE_INACTIVITY_TIMEOUT_MS, repositoryRoot } from "./src/app-server";
-import { loadLedger, planRun, type RunPlan } from "./src/budget";
+import {
+  appendLedgerEntry,
+  ledgerEntryForRun,
+  loadLedger,
+  planRun,
+  type RunPlan,
+} from "./src/budget";
 import { calibrationCase, calibrationSamples } from "./src/calibration";
 import { createAcceptanceEnvironment, type AcceptanceEnvironment } from "./src/environment";
 import {
@@ -228,6 +234,8 @@ function writeRun(input: {
   const observationText = `${JSON.stringify(input.observation, null, 2)}\n`;
   write("observation.json", observationText);
   write(OBSERVATION_SEAL_FILE, `${sealObservation(observationText)}\n`);
+  // The exact stack this run exercised (T08 #321).
+  write("versions.json", combinedVersion());
   write("report.json", report);
   write("report.md", renderMarkdown(report));
   write("review-template.json", reviewTemplate(input.loaded, input.observation));
@@ -242,7 +250,11 @@ function initialNow(loaded: LoadedCase): Date {
   return new Date(loaded.fixture.history[0]?.at ?? loaded.fixture.steps[0]!.at);
 }
 
-function environmentFailure(loaded: LoadedCase, error: unknown): CaseObservation {
+function environmentFailure(
+  loaded: LoadedCase,
+  error: unknown,
+  mode: CaseObservation["mode"],
+): CaseObservation {
   return {
     backgroundProviderStrings: [],
     caseId: loaded.fixture.id,
@@ -257,7 +269,7 @@ function environmentFailure(loaded: LoadedCase, error: unknown): CaseObservation
       recentContextGovernance: "unknown",
       runId: "not-started",
     },
-    mode: "deterministic",
+    mode,
     scheduledScans: [],
     schemaVersion: "continuity-acceptance-observation:v1",
     seed: { providerStrings: [], readback: [], turns: [] },
@@ -276,7 +288,11 @@ async function runOne(
   try {
     // Isolation is decided before anything is created or dropped.
     const target = resolveIsolationTarget(process.env);
-    environment = await createAcceptanceEnvironment({ initialNow: initialNow(loaded), target });
+    environment = await createAcceptanceEnvironment({
+      initialNow: initialNow(loaded),
+      ...realProvider(runPlan),
+      target,
+    });
     const run = () =>
       runCase({
         environment: environment!,
@@ -286,6 +302,9 @@ async function runOne(
       });
     observation = await run();
     digest = reproducibilityDigest(observation, loaded.fixture);
+    if (options.verifyReset && runPlan.mode === "real-model") {
+      throw new UsageError("--verify-reset replays the case and is for deterministic runs only.");
+    }
     if (options.verifyReset) {
       await environment.reset();
       const again = reproducibilityDigest(await run(), loaded.fixture);
@@ -301,9 +320,10 @@ async function runOne(
       }
     }
   } catch (error) {
-    if (error instanceof IsolationError) throw error;
-    observation = environmentFailure(loaded, error);
+    if (error instanceof IsolationError || error instanceof UsageError) throw error;
+    observation = environmentFailure(loaded, error, runPlan.mode);
   } finally {
+    recordSpend(loaded, environment);
     await environment?.dispose().catch(() => {});
   }
   return writeRun({
@@ -316,6 +336,40 @@ async function runOne(
   });
 }
 
+/** The app's production adapter and the real Provider, for a real-model plan. */
+function realProvider(runPlan: RunPlan) {
+  return runPlan.mode === "real-model"
+    ? {
+        provider: {
+          apiKey: process.env[PROVIDER_CREDENTIAL_VARIABLE] ?? "",
+          kind: "opencode-go" as const,
+          live: true,
+        },
+      }
+    : {};
+}
+
+/**
+ * Every live request is entered in the shared ledger as soon as the run ends,
+ * whether it passed, failed or broke: a paid call is never left unrecorded.
+ */
+function recordSpend(loaded: LoadedCase, environment: AcceptanceEnvironment | null): void {
+  const usage = environment?.gate?.usage();
+  if (!environment || !usage || usage.liveRequests === 0) return;
+  const entry = ledgerEntryForRun({
+    date: new Date().toISOString().slice(0, 10),
+    ledger: loadLedger(ledgerFile),
+    note: `${loaded.fixture.id} (${loaded.fixture.stage}, fixture ${loaded.fixtureSha256.slice(0, 12)}) real-model run; conservative peak, uncached list price`,
+    runId: environment.runId,
+    ticket: "#321",
+    usage,
+  });
+  appendLedgerEntry(entry, ledgerFile);
+  console.log(
+    `ledger: ${entry.requests} live request(s), ${entry.inputTokens} in / ${entry.outputTokens} out, ${entry.costUsdMicros} USD micros (upper bound)`,
+  );
+}
+
 function printCase(report: CaseReport): void {
   console.log(`${report.caseId}: ${report.status.toUpperCase()}`);
   for (const criterion of report.criteria) {
@@ -326,7 +380,11 @@ function printCase(report: CaseReport): void {
 
 async function commandChat(loaded: LoadedCase, runPlan: RunPlan, outDirectory: string): Promise<number> {
   const target = resolveIsolationTarget(process.env);
-  const environment = await createAcceptanceEnvironment({ initialNow: initialNow(loaded), target });
+  const environment = await createAcceptanceEnvironment({
+    initialNow: initialNow(loaded),
+    ...realProvider(runPlan),
+    target,
+  });
   const open = () =>
     openCaseSession({
       environment,
@@ -438,6 +496,7 @@ async function commandChat(loaded: LoadedCase, runPlan: RunPlan, outDirectory: s
       }
     }
   } finally {
+    recordSpend(loaded, environment);
     await environment.dispose().catch(() => {});
   }
   return 0;

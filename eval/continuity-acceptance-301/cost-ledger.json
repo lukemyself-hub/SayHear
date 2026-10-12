@@ -1,18 +1,33 @@
 {
   "schemaVersion": "continuity-cost-ledger:v1",
   "capUsdMicros": 10000000,
+  "pauseAtSpentUsdMicros": 5000000,
   "model": {
     "provider": "opencode-go",
     "model": "deepseek-v4.1-flash",
-    "inputUsdMicrosPerMillionTokens": null,
-    "outputUsdMicrosPerMillionTokens": null
+    "inputUsdMicrosPerMillionTokens": 300000,
+    "outputUsdMicrosPerMillionTokens": 1200000,
+    "priceBasis": {
+      "retrievedOn": "2026-10-11",
+      "sources": [
+        "https://opencode.ai/docs/go/ (page dated Oct 11, 2026): DeepSeek V4.1 Flash, Peak, per 1M tokens: input $0.30, output $1.20, cached read $0.006; Off-Peak: $0.15 / $0.60 / $0.003",
+        "https://api-docs.deepseek.com/quick_start/pricing: deepseek-flash (DeepSeek-V4.1-Flash), Peak: input cache miss $0.30, output $1.20; Off-peak: $0.15 / $0.60"
+      ],
+      "rule": "Conservative upper bound: the higher (Peak) rate of both price lists, every input token treated as a cache miss, completion tokens as reported by the Provider (reasoning tokens are part of them). The two lists agree, so the higher of the two is the same figure.",
+      "subscription": "OpenCode Go is a subscription (Go $10/month) whose usage is metered against these per-token prices. Whether a call consumes plan allowance or new cash is not visible to this tool; the budget gate counts every call at the list price above regardless. Plan allowance consumed and new cash are therefore not separable here: actual new cash is at most the figure recorded and may be zero."
+    }
   },
   "preconditions": [
     {
       "id": "issue-307-online-acceptance",
       "description": "The #307 time-input fix is deployed to production and its online acceptance is recorded as complete (ADR-0152, 2026-10-09 addendum). Set to verified only with a link to that record.",
-      "status": "unverified",
-      "evidence": null
+      "status": "owner-waived",
+      "evidence": null,
+      "decision": {
+        "by": "Luke",
+        "date": "2026-10-11",
+        "statement": "Relayed to the T08 agent by the coordinating agent as Luke's words: \"#307 的遗留问题,应当在 T01–T07 开发期间解决了(包括耗时问题和回忆历史消息等),因此 T08 可以正常启动\" and \"授权 T08 调用 OpenCode Go 跑真实 DeepSeek V4.1 Flash 模型\". This is a decision to proceed. It is not a record that the #307 online acceptance was completed: #307 was closed with its online acceptance not passed."
+      }
     }
   ],
   "entries": [
@@ -23,8 +38,8 @@
       "requests": 1,
       "inputTokens": 2131,
       "outputTokens": 564,
-      "costUsdMicros": null,
-      "note": "One real DeepSeek V4.1 Flash request recorded in eval/conversation-time-307/README.md. The Provider reported no monetary cost, so the amount is kept as unknown rather than assumed to be zero."
+      "costUsdMicros": 1317,
+      "note": "One real DeepSeek V4.1 Flash request recorded in eval/conversation-time-307/README.md. The Provider reported no monetary cost. Upper bound assigned on 2026-10-11 (T08 #321) at the conservative rate above: 2,131 x $0.30/M + 564 x $1.20/M = $0.0013161, rounded up."
     }
   ]
 }

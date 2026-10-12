@@ -44,6 +44,14 @@ export type CombinedVersion = Readonly<{
   fingerprint: string;
   git: Readonly<{ commit: string; dirty: boolean }>;
   path: Readonly<Record<string, string>>;
+  /**
+   * T08 #321: identity of the product under test alone — the git trees of
+   * `apps` and `packages` plus the lockfile, the migrations and the policy
+   * versions. Commits that only touch the acceptance tool, tests or documents
+   * leave it unchanged, so runs made before and after such a commit can be
+   * shown to have exercised the same product.
+   */
+  product: Readonly<{ fingerprint: string; trees: Readonly<Record<string, string>> }>;
   schemaVersion: typeof COMBINED_VERSION_SCHEMA;
   switches: Readonly<Record<string, string>>;
 }>;
@@ -105,6 +113,12 @@ export function combinedVersion(): CombinedVersion {
     newestMigration: migrations.at(-1) ?? "none",
   };
   const acceptancePack = { caseCount: cases.length, fixtureDigest };
+  const trees = {
+    apps: git("rev-parse", "HEAD:apps"),
+    lockfile: git("rev-parse", "HEAD:pnpm-lock.yaml"),
+    packages: git("rev-parse", "HEAD:packages"),
+  };
+  const product = { fingerprint: sha256(JSON.stringify({ database, trees, versions })), trees };
   const fingerprint = sha256(
     JSON.stringify({ acceptancePack, commit: git_.commit, database, switches, versions }),
   );
@@ -114,6 +128,7 @@ export function combinedVersion(): CombinedVersion {
     fingerprint,
     git: git_,
     path: versions,
+    product,
     schemaVersion: COMBINED_VERSION_SCHEMA,
     switches,
   };
